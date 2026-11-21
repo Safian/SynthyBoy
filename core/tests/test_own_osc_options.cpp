@@ -175,7 +175,10 @@ Out scenarioRanges()
 // fix c118bf3c (merged in 5748b16b, 2026-11-20: the taper condition and the cosine start of the top fifth of the mip levels) changed the sound of every table render on purpose: the old
 // values (saw d2c89411914ab6a6, polylegato 327c6603c38fb5a3, untracked ac25d77096e199a7, two 1a5c86e3433d0d8b, ranges bf3638ec3320d16b) matched up to 3ee1b5ca, the parent before that merge,
 // and the new ones are those of the merge itself (a bisect over the first parent chain from 5589bd9e), so nothing else changed them.
-constexpr uint64_t kGoldenSaw = 0x32f5d84863c090dcull, kGoldenPolyLegato = 0x37cc04676d2854b7ull, kGoldenUntracked = 0x5af5f9de70207243ull, kGoldenTwo = 0x157d6ab4245a5ea7ull, kGoldenRanges = 0xe8bcee2fbc6c19ffull;
+// kGoldenTwo re-recorded 2026-11-21 (was 0x157d6ab4245a5ea7): scenarioTwoOscillators uses osc1.warp.type=1 (Sync), which the PolyBLEP/PolyBLAMP at the master wrap (plan
+// distortion-antialiasing.md O3/O4, owner decisions D1-D5) changes on purpose. Proof: with aa::kBlep | aa::kBlamp switched off the render gives the old 0x157d6ab4245a5ea7 bit for
+// bit (kBlep alone gives 0x0d4ab882f367e1d7, since the Sync event also carries the slope jump); the other four goldens are unchanged either way.
+constexpr uint64_t kGoldenSaw = 0x32f5d84863c090dcull, kGoldenPolyLegato = 0x37cc04676d2854b7ull, kGoldenUntracked = 0x5af5f9de70207243ull, kGoldenTwo = 0x8c227dcce42cab3full, kGoldenRanges = 0xe8bcee2fbc6c19ffull;
 } // namespace
 
 TEST (own_osc_options_defaults_keep_the_render_bit_identical)
