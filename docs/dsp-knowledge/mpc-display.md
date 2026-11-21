@@ -33,6 +33,12 @@
 - 838 files `temp_<hex>.img` on tmpfs (`/var/tmp` -> `/var/volatile/tmp`, 8 GB), mode 0644 root:root. Raw pixels, no header: the size equals w*h*4. 85 files are exactly 3,215,360 B = 1280x628x4 (a full tab page), 90 are 2,419,200 B, 52 are 576,000 B.
 - The stock skins carry full-page backgrounds as plain PNGs: of the 211 PNGs over 60 kB under `/usr/share/Akai`, 62 are 1280x629 and 8 are 1280x630 (the stock synth skins, `Plugin Skins`), a few 1280x628 (MPC60, SP1200, MPC3000 skins, Program Edit). So the host accepts full-page images and a decoded full page costs 3.2 MB in the cache.
 
+## Host redraw rate of native widgets (XL, measured 2026-11-21, shim stage 1 + DRM poll)
+
+- Page with 32 native Meters bound to plugin parameters (self-test 25 steps/s): the host commits **a fixed 20 frames/s** (199 commits in 10 s, 1199 in 60 s, gaps 50.0 ms median, 44.7..55.2), each commit flags 0x1 with 23 items. With the plugin page hidden: 0 commits. So the host redraws a visible page at 20 fps only while something on it changes, nothing when idle.
+- About 80 % of the 25/s steps are visible (201 distinct states in 10 s; 41 gaps of 80 ms and 9 of 90 ms); one torn frame (a bar half-updated, the host's software render read mid-draw) was seen.
+- Decision (owner / coordinator, 2026-11-21): level and gain-reduction meters may use host Meters (20 fps is enough, correct popup z-order); moving playhead dots and drawn curves stay on our plane (30 fps, no tearing).
+
 ## Decisions
 
 - g117: full takeover, one plane, one writer: the shim merges the helper's finished buffer
