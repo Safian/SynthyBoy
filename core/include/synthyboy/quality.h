@@ -103,6 +103,10 @@ struct Quality
     /** The budget of the Spectral start ledger, in microseconds of start work per block. 0 (default): the built-in `kStartBudgetUs` (core/spectral start_ledger.h). Any value > 0 is the budget
         itself (bench / measurement, e.g. tier_bench --start-budget-us); the profiles do not set it. */
     int spectralStartBudgetUs = 0;
+    /** The start cache of the Spectral oscillator (core/spectral start_cache.h, docs/plans/spectral-start-cache.md): the first frames of a note are kept in a process-wide table of 3.2 MB and a note
+        struck again with the same settings takes them from it. The sound is bit-identical to the cache off (only the work differs). 0 (default): off, the start of before. 1: on (bench / measurement,
+        tier_bench --start-cache). */
+    int spectralStartCache = 0;
 };
 
 /** The economy groups a quality runs with (see Quality::economy). */

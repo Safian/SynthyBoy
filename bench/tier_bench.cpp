@@ -7,7 +7,7 @@
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
 //                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
-//                        [--evict] [--first-blocks N] [--start-budget-us N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]
+//                        [--evict] [--first-blocks N] [--start-budget-us N] [--start-cache] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -31,6 +31,7 @@
 //                   --seconds defaults to 2 here. With --rt a run that the health rules mark INVALID is repeated (--retry-invalid).
 //   --module-group G  only the cases of one group: fx, filter, warp, morph, unison or osc (default all)
 //   --module-reps N   repetitions of every case (default 3)
+//   --start-cache        Quality::spectralStartCache on: a note struck again takes its first Spectral frames from the process-wide start cache (docs/plans/spectral-start-cache.md).
 //   --start-budget-us N  the budget of the Spectral start ledger in microseconds per block (Quality::spectralStartBudgetUs, N >= 1); without it the built-in default.
 //   --first-blocks N  no steady run: for every profile and load a fresh engine, the time of prepare (), then the first N blocks (1 .. 64) with the chord struck in block 0 and no
 //                   warm-up, each with its time and its minor page faults: the first-note and first-touch cost that a long run hides
@@ -291,6 +292,7 @@ struct Options
     bool evict = false;      // --evict
     int firstBlocks = 0;     // --first-blocks
     int startBudgetUs = 0;   // --start-budget-us: Quality::spectralStartBudgetUs (0 = the default budget)
+    int startCache = 0;      // --start-cache: Quality::spectralStartCache (the process-wide cache of the Spectral start frames)
     bool modules = false;    // --modules
     int moduleReps = 3;      // --module-reps
     std::string moduleGroup = "all"; // --module-group
@@ -467,6 +469,7 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     setOwnSavingsOff (*engine, o.savingsOff);
     Quality quality = synthyboy_mpc::profileQuality (profile);
     quality.spectralStartBudgetUs = o.startBudgetUs;
+    quality.spectralStartCache = o.startCache;
     quality.realtime = true; // as the shell: the audio thread never waits for a helper thread
     engine->prepare (o.sampleRate, o.block, quality);
 
@@ -678,6 +681,7 @@ std::vector<float> renderForVerify (const Options& o, const synthyboy_mpc::Profi
     setOwnSavingsOff (*engine, off);
     Quality quality = synthyboy_mpc::profileQuality (profile);
     quality.spectralStartBudgetUs = o.startBudgetUs;
+    quality.spectralStartCache = o.startCache;
     quality.realtime = false;
     engine->prepare (o.sampleRate, o.block, quality);
     std::vector<float> out, l (static_cast<size_t> (o.block)), r (static_cast<size_t> (o.block));
@@ -766,7 +770,7 @@ long currentKhz (int cpu)
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
                           "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
-                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--start-budget-us N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]\n", message);
+                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--start-budget-us N] [--start-cache] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -978,6 +982,7 @@ void runFirstBlocks (const Options& o, const synthyboy_mpc::Profile& profile, co
     setOwnSavingsOff (*engine, o.savingsOff);
     Quality quality = synthyboy_mpc::profileQuality (profile);
     quality.spectralStartBudgetUs = o.startBudgetUs;
+    quality.spectralStartCache = o.startCache;
     quality.realtime = true;
     const auto p0 = std::chrono::steady_clock::now();
     engine->prepare (o.sampleRate, o.block, quality);
@@ -1082,6 +1087,7 @@ int main (int argc, char** argv)
         else if (a == "--module-group") o.moduleGroup = next();
         else if (a == "--module-reps") o.moduleReps = std::atoi (next());
         else if (a == "--first-blocks") o.firstBlocks = std::atoi (next());
+        else if (a == "--start-cache") o.startCache = 1;
         else if (a == "--start-budget-us") { o.startBudgetUs = std::atoi (next()); if (o.startBudgetUs < 1) usage ("--start-budget-us needs N >= 1"); }
         else usage (("unknown argument " + a).c_str());
     }
@@ -1270,6 +1276,7 @@ int main (int argc, char** argv)
             Quality warmQuality = synthyboy_mpc::profileQuality (profiles[0]);
             warmQuality.realtime = true;
             warmQuality.spectralStartBudgetUs = o.startBudgetUs;
+            warmQuality.spectralStartCache = o.startCache;
             warmEngine->prepare (o.sampleRate, o.block, warmQuality);
         }
         std::string helperText;

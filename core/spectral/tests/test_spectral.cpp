@@ -4,6 +4,7 @@
 
 #include "synthyboy/spectral/spectral.h"
 #include "synthyboy/spectral/kernels.h"
+#include "synthyboy/spectral/start_cache.h"
 #include "synthyboy/sampleosc/sample_data.h"
 
 #include <chrono>
@@ -11,6 +12,7 @@
 #include <limits>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -1773,3 +1775,111 @@ TEST (spectral_the_start_work_by_quad_is_what_the_voice_makes)
             }
 }
 
+
+// docs/plans/spectral-start-cache.md: the start cache returns the bits the computation makes. A note is struck again on other start offsets (the quarter moves with the note serial): the cache
+// must answer every frame (no new miss, the voice computes no frame), and the output must be the memcmp-identical output of the voice with the cache off. Smear and external warps do not use the cache.
+TEST (spectral_the_start_cache_is_bit_identical_and_the_second_strike_makes_no_frame)
+{
+    StartCache& cache = StartCache::instance();
+    cache.prepare();
+    Tone mono (rich (220.0, 1.2));
+    std::vector<float> l (static_cast<size_t> (1.2 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = 0.4f * static_cast<float> (std::sin (2.0 * kPi * 196.0 * static_cast<double> (i) / kSr));
+        r[i] = 0.4f * static_cast<float> (std::sin (2.0 * kPi * 330.0 * static_cast<double> (i) / kSr)) + 0.1f * static_cast<float> (std::sin (2.0 * kPi * 1000.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    std::vector<float> gains (kBins);
+    for (int k = 0; k < kBins; ++k)
+        gains[static_cast<size_t> (k)] = 0.3f + 0.7f * static_cast<float> (std::fabs (std::sin (0.05 * k)));
+
+    struct Row { bool stereo, lock, filter, smear; float ratio; };
+    const Row rows[] = {
+        { false, false, false, false, 1.0f },    { false, true, false, false, 1.2599f }, { true, true, true, false, 0.7071f },
+        { true, false, true, false, 1.5f },      { false, true, true, true, 1.0f },
+    };
+    const int offsets[] = { 0, 256, 128, 384, 0 };
+    for (const Row& row : rows)
+    {
+        cache.clearForTest();
+        const Analysis& an = row.stereo ? stereo : mono.analysis;
+        const int channels = row.stereo ? 2 : 1;
+        Scratch sOff, sOn;
+        sOn.startCache = true;
+        SpectralParams p = frozen (0.4f);
+        p.manual = false;
+        p.scanSpeed = 0.5f;
+        p.pitchRatio = row.ratio;
+        p.phaseLock = row.lock;
+        p.filterGain = row.filter ? gains.data() : nullptr;
+        if (row.smear)
+        {
+            p.warpType[0] = static_cast<int> (Warp::smear);
+            p.warpAmount[0] = 0.5f;
+        }
+        SpectralParams pOff = p, pOn = p;
+        pOff.scratch = &sOff;
+        pOn.scratch = &sOn;
+        uint64_t missesAfterFirst = 0;
+        for (size_t rep = 0; rep < std::size (offsets); ++rep)
+        {
+            SpectralVoice vOff, vOn;
+            vOff.prepare (kSr);
+            vOn.prepare (kSr);
+            vOff.noteOn (&an, pOff, 0.1f, offsets[rep]);
+            vOn.noteOn (&an, pOn, 0.1f, offsets[rep]);
+            std::vector<float> offR, onR;
+            const std::vector<float> offL = render (vOff, pOff, 4096, 128, &offR);
+            const std::vector<float> onL = render (vOn, pOn, 4096, 128, &onR);
+            CHECK (offL.size() == onL.size() && std::memcmp (offL.data(), onL.data(), sizeof (float) * offL.size()) == 0);
+            CHECK (offR.size() == onR.size() && std::memcmp (offR.data(), onR.data(), sizeof (float) * offR.size()) == 0);
+            int fOff = 0, sOffN = 0, fOn = 0, sOnN = 0;
+            vOff.startCountersForTest (fOff, sOffN);
+            vOn.startCountersForTest (fOn, sOnN);
+            CHECK_EQ (fOff, 3 * channels);
+            const StartCache::Stats st = cache.statsForTest();
+            if (row.smear)
+            {
+                CHECK_EQ (fOn, fOff);               // Smear: today's path, the cache is not asked
+                CHECK_EQ (st.hits + st.misses, uint64_t (0));
+            }
+            else if (rep == 0)
+            {
+                CHECK_EQ (fOn, fOff);               // the first strike computes all of its frames and stores them
+                CHECK_EQ (st.hits, uint64_t (0));
+                CHECK_EQ (st.misses, uint64_t (3 * channels));
+                missesAfterFirst = st.misses;
+            }
+            else
+            {
+                CHECK_EQ (fOn, 0);                  // a repeat on any other offset makes no frame and no shaping
+                CHECK_EQ (sOnN, 0);
+                CHECK_EQ (st.misses, missesAfterFirst);
+                CHECK_EQ (st.hits, uint64_t (3 * channels * rep));
+            }
+        }
+    }
+    // other inputs are other keys: a pitch, a filter or a start position that differs is a miss, never a wrong hit
+    cache.clearForTest();
+    Scratch sOn;
+    sOn.startCache = true;
+    SpectralParams p = frozen (0.4f);
+    p.manual = false;
+    p.scratch = &sOn;
+    SpectralVoice v;
+    v.prepare (kSr);
+    v.noteOn (&mono.analysis, p, 0.1f, 0);
+    const uint64_t m1 = cache.statsForTest().misses;
+    p.pitchRatio = 1.0001f;
+    v.noteOn (&mono.analysis, p, 0.1f, 0);
+    p.pitchRatio = 1.0f;
+    v.noteOn (&mono.analysis, p, 0.2f, 0);
+    p.filterGain = gains.data();
+    v.noteOn (&mono.analysis, p, 0.1f, 0);
+    CHECK (cache.statsForTest().misses >= m1 * 4);
+    CHECK_EQ (cache.statsForTest().hits, uint64_t (0));
+}

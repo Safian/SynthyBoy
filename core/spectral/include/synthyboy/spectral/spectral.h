@@ -68,6 +68,8 @@ public:
     int channels() const noexcept { return channels_; }
     double fileRate() const noexcept { return fileRate_; }
     bool truncated() const noexcept { return truncated_; }
+    /** Unique per build() (0: never built): the identity of the content for the start cache, a pointer is reused after a reload. A copy keeps the id with the content. */
+    uint64_t id() const noexcept { return id_; }
     int64_t fileFrames() const noexcept { return fileFrames_; }
     const float* magnitude (int ch, int frame) const noexcept { return data_.data() + offset (ch, frame); }
     const float* phase (int ch, int frame) const noexcept { return data_.data() + offset (ch, frame) + kBins; }
@@ -85,6 +87,7 @@ private:
     int64_t fileFrames_ = 0;
     double fileRate_ = 44100.0;
     bool truncated_ = false;
+    uint64_t id_ = 0;
 };
 
 /** The work arrays of one frame: they are not state, so the voices of an oscillator share one (the oscillator owns it; about 82 KB, with the start ledger of the engine). */
@@ -108,6 +111,8 @@ struct Scratch
     bool bandSmooth = false;
     // the admission of the note starts over the blocks (start_ledger.h): one per engine, the oscillators ask it, it does nothing while it is disabled
     StartLedger start;
+    // the start cache (start_cache.h): the voices of this engine use the process-wide table while this is on (Quality::spectralStartCache); off: the start of before
+    bool startCache = false;
 };
 
 /** The per block settings of a voice. */

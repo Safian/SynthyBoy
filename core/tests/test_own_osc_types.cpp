@@ -20,6 +20,7 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/offline_render.h"
+#include "synthyboy/spectral/start_cache.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/wave_convert.h"
@@ -1901,4 +1902,59 @@ TEST (own_sample_loop_exit_leaves_loop_on_release)
     // osc3: loop_exit 0 vs 1 must differ during release
     const Out o3_0 = renderSample (3, 0.0f), o3_1 = renderSample (3, 1.0f);
     CHECK (diffDb (o3_0, o3_1, offSample) > -20.0);
+}
+
+// docs/plans/spectral-start-cache.md: a chord struck again (the note serials move on, so the voices start on other quarters) renders the same bits with the start cache on as with it off, and its
+// second strike makes no start frame: every (inputs, channel, frame) is answered by the cache (the engine's ledger books the same either way, so the timing is the one of the cache off).
+TEST (own_spectral_start_cache_repeated_chord_is_bit_identical_and_second_strike_hits)
+{
+    spectral::StartCache& cache = spectral::StartCache::instance();
+    cache.prepare();
+    constexpr int kStrikeFrames = 30000;
+    auto run = [&] (bool cacheOn, uint64_t& missesAfter1, uint64_t& hitsAfter1, uint64_t& missesAfter2, uint64_t& hitsAfter2) -> Out
+    {
+        cache.clearForTest();
+        Quality q = lowStagger (true);
+        q.spectralStartCache = cacheOn ? 1 : 0;
+        SpecRig r (q, 2);
+        Out all;
+        for (int strike = 0; strike < 2; ++strike)
+        {
+            Out o;
+            o.l.assign (static_cast<size_t> (kStrikeFrames), 0.0f);
+            o.r.assign (static_cast<size_t> (kStrikeFrames), 0.0f);
+            for (int pos = 0; pos < kStrikeFrames; pos += 128)
+            {
+                Event ev[8];
+                int ne = 0;
+                if (pos == 0)
+                    for (int i = 0; i < 4; ++i)
+                        ev[ne++] = sbtest::noteOn (0, kSpecKeys[i], 1.0f);
+                if (pos == 15360)
+                    for (int i = 0; i < 4; ++i)
+                        ev[ne++] = sbtest::noteOff (0, kSpecKeys[i]);
+                r.e->process (ev, ne, o.l.data() + pos, o.r.data() + pos, 128);
+            }
+            all.l.insert (all.l.end(), o.l.begin(), o.l.end());
+            all.r.insert (all.r.end(), o.r.begin(), o.r.end());
+            const spectral::StartCache::Stats st = cache.statsForTest();
+            (strike == 0 ? missesAfter1 : missesAfter2) = st.misses;
+            (strike == 0 ? hitsAfter1 : hitsAfter2) = st.hits;
+        }
+        return all;
+    };
+    uint64_t m1 = 0, h1 = 0, m2 = 0, h2 = 0, om1 = 0, oh1 = 0, om2 = 0, oh2 = 0;
+    const Out off = run (false, om1, oh1, om2, oh2);
+    const Out on = run (true, m1, h1, m2, h2);
+    CHECK (sbtest::allFinite (off.l) && sbtest::allFinite (on.l));
+    CHECK (rmsOfRange (on.l, 2000, 8000) > 1.0e-4);
+    CHECK_EQ (om2 + oh2, uint64_t (0));        // the cache off never asks it
+    CHECK (m1 > 0);                            // the first strike computes (and stores) its frames
+    CHECK_EQ (m2, m1);                         // the second strike computes none
+    CHECK (h2 > h1);                           // and every frame of it is a hit
+    CHECK (fnv1a (off) == fnv1a (on));
+    std::printf ("SPECSTART-CHECKSUM chord4x2_twice_cache_off %016llx\nSPECSTART-CHECKSUM chord4x2_twice_cache_on %016llx\n", static_cast<unsigned long long> (fnv1a (off)),
+                 static_cast<unsigned long long> (fnv1a (on)));
+    std::printf ("start cache: strike 1 misses %llu hits %llu, strike 2 misses %llu hits %llu\n", static_cast<unsigned long long> (m1), static_cast<unsigned long long> (h1),
+                 static_cast<unsigned long long> (m2), static_cast<unsigned long long> (h2));
 }
