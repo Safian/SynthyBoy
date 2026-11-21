@@ -31,3 +31,9 @@
 - XL (RK3588): zones package, bigcore0, bigcore2, littlecore, center, gpu, npu (step_wise). Passive trips at 85 C on bigcore0, bigcore2, littlecore and gpu; the center zone has two ACTIVE trips (75 C and 85 C: the pwm-fan, cooling device0, max state 3); every zone has a critical trip at 115 C. Cooling devices: pwm-fan, cpufreq cpu0 / cpu4 / cpu6 (max 4 / 6 / 6), devfreq gpu (max 7). Idle-ish reading 62.8-64.7 C (load average 3), fan state 0.
 - GPU devfreq (`fb000000.gpu`): simple_ondemand, 300..1000 MHz in 100 MHz steps.
 - Rule for every device run (owner, 2026-11-21): record the start and end temperature of all zones; stop the run and cool down if any zone comes within 10 C of its first passive trip point: XL 75 C (the fan's first active trip is also 75 C), Key 61 85 C (our own limit, see platform-key61.md).
+
+## Overlay thread split on the Key 61 (2026-11-21)
+
+- Measured with an instrumented package (CPU scope timer per section, overhead about 0.25 pt of a core): the sb-overlay thread costs 5.4-9.7 % of one core, the helper 5-7 %; the FFT is 40 % of the thread on Macros (2.7 pt of a core), 0 elsewhere; `view.update` + `describe` are 45-88 % of the thread; about 83 % of a Macros / FX picture's wall time is `glFinish` (GPU-bound). The full table: `docs/plans/overlay-static-anim-layers.md` ('Measured baseline').
+- A GPU-compute FFT is not worth it: it would save at most 2.7 pt of a core and adds driver CPU and latency.
+

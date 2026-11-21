@@ -194,6 +194,32 @@ Not in scope: the Distortion level dots (they sit on our curve: stay on our plan
 
 A block whose on/off switch is OFF (Sub, Noise, Osc A/B/C, Filter 1/2, every FX slot, any other toggled block) is drawn entirely grey and takes no touch except its own switch (central `disabled` state in `shell-mpc/ui/`, bound per page to the block's `*.on` parameter; TODO.md has the full rule). For this plan: a disabled block needs NO animation, its live parts are not drawn and its AnimGate (T1) stays closed; switching it on invalidates the block's cells (colour and live parts return at once).
 
+
+## Measured baseline (Key 61, 2026-11-21, develop aa4d18f7, 3 held notes MIDI 48 55 60, Acid Saw Reso; raw `.hw-local/mpc-perf/key61-night-2026-11-21/overlay-split/`)
+
+Every step of this plan is measured against this table (same method: instrumented package with a CPU scope timer per section, overhead about 0.25 pt; no perf on the device).
+
+| Page | sb-overlay thread, % of one core | helper process % | pictures/s |
+|---|---|---|---|
+| Macros | 6.5 | 7.0 | ~28.7 |
+| FX | 5.4 | 6.7 | ~28.7 |
+| Play | 9.3-9.7 | 5.2 | ~28.7 |
+
+Split of the sb-overlay thread, % of the thread:
+
+| section | Macros | FX | Play |
+|---|---|---|---|
+| FFT (`SpectrumCurve::analyse`) | 40.1 | 0 | 0 |
+| rest of `view.update` (parameter reads, UI state, smoothing, hash) | 33.0 | 59.7 | 56.5 |
+| scene build (`describe`) | 9.5 | 17.4 | 29.2 |
+| draw, other | 2.5 | 3.5 | 2.1 |
+| show / submit to the helper | 1.4 | 3.2 | 2.5 |
+| other (page detect, status file, gpu poll, touch) | 13.5 | 17.9 | 9.9 |
+
+Helper per picture (wall clock, us): Macros build 885, submit 434, glFinish 11426, tail 996 = 13745; FX 822 / 431 / 11224 / 1044 = 13527; Play 62 / 444 / 2693 / 965 = 4175. About 83 % of a Macros / FX picture is `glFinish` (the picture is GPU-bound); the helper's real CPU is 5-7 % of a core (about 2.4 ms per picture).
+
+Conclusions (coordinator, 2026-11-21): a GPU-compute FFT is NOT worth it (the FFT is at most 2.7 pt of one core, on Macros only). The real costs are `view.update` + `describe` (45-88 % of the overlay thread) and the GPU time per picture. Priorities: (1) skip `view.update` / `describe` when the instance data and the input did not change (a dirty check per page), (2) the static / anim split, (3) host-skin backgrounds (less to draw on the GPU), (4) the disabled-block rule (a switched-off block draws nothing live). A slot that the FX cost budget of tier low (in work) bypasses is shown greyed with a small 'CPU' mark: plan it with the disabled-block rule.
+
 ## Owner decisions (relayed 2026-11-21, verbatim sources in the coordinator's notes)
 
 * Q1: the background and the zoom / Expand button are NOT on the animation path: drawn once as static cells, not removed.
