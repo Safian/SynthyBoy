@@ -5,8 +5,7 @@
 #
 # Usage: python3 scripts/run-gen-ui.py [--sdk DIR] <gen_ui.py options>        (--sdk defaults to $MPC_SDK)
 #
-# gen_ui.py (MAX_PAGES = 32) makes one tab of every page of ui.json. The layout variant with 34 tabs (scripts/mpc-ui-pages-v34.json, "tabLimit" 34) is a test
-# of the device: whether the sub-tabs count in the limit of 32 tabs of the SDK (ui-reference 3.5) is not known. For up to 32 pages this script is exactly
+# gen_ui.py (MAX_PAGES = 32) makes one tab of every page of ui.json. For up to 32 pages this script is exactly
 # gen_ui.py; with more it sets gen_ui.MAX_PAGES to the number of pages in the file given with --ui and says so. The SDK itself is not changed.
 
 import argparse

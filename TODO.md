@@ -128,7 +128,6 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - 18. A mérőprogram más `libm`-et használ, mint az eszközön futó plugin; kivételkezelés és RTTI bekapcsolva a DSP-könyvtárakban.
 
 ## Wave 2 összefésülés (2026-11-21): nyitott piros tesztek
-- `test_mpc_skin_subtabs.LayoutFileTests.test_v34_and_v32_hold_the_same_parameters` (synthyboy_release_scripts): a 32 füles tartalék elrendezés (`scripts/mpc-ui-pages-v32.json`) nem tartalmazza az FX Filter `fx_filter_2` oldalát (7 vezérlő: Key Tracking, Comb Blend, Formant X/Y/Resonance/Spread/Transpose), amióta az f06bde5d a kulcsokat `ownEngine: true`-ra állította. A `Flt+Dist` fülre nem fér (24 hely a 16-ból); 32 fülhöz még egy összevonás kell (pl. Env vagy LFO fülek), ez UX döntés. Kész, ha az owner dönt az elrendezésről és a teszt zöld.
 - `synthyboy_param_audit_scan` (1 órás időkorlát) a wave 2 összefésülésén nem futott le. Kész, ha egyszer végigfutott az összefésült fán.
 
 ## Funkcióhiányok (átnézés 2026-11-21: a Vital nyilvános funkciólistája és a `docs/ui-design` GAP-sorai a mai kóddal összevetve)

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Per tab "LFO N" (sub-tabs of the function key LFO, scripts/mpc-ui-pages.json): the picture PICTURE (600 x 240, centred in the upper two rows of the 4 x 4 grid, above the
+# Per tab "LFO N" (sub-tabs of the function key LFO, scripts/overlay-skin/mpc-ui-pages-overlay.json): the picture PICTURE (600 x 240, centred in the upper two rows of the 4 x 4 grid, above the
 # frames of the lower two rows) and the 8 controls of lfoN in rows 3-4 (Shape, Sync, Rate, Division / Trigger, Phase, Fade In, Delay). The Q-Link map of the tab is rewritten
 # so that those controls are Q-Link 1-8 in the rows seen on the screen (Bank Direction "Column": Q-Link 4*(3-row)+col+1, row 0 = top), as on the tabs Env 1-4 and Osc 1-3.
 #

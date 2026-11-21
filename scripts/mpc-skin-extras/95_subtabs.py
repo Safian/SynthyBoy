@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# The SDK generator makes one function key (fnKeyIndex) with one tab (fnKeySubIndex 0) of every page. The layout file (scripts/mpc-ui-pages.json) groups
+# The SDK generator makes one function key (fnKeyIndex) with one tab (fnKeySubIndex 0) of every page. The layout file (scripts/overlay-skin/mpc-ui-pages-overlay.json) groups
 # pages into function keys: skin-meta.json lists them ("fnKeys": [{"name", "tabs": [page names]}]). This module gives the tabs of one key the same
 # fnKeyIndex and the sub-tab indexes 0 .. k - 1 (the host steps through them when the key is pressed again; the key shows the tabName of the current
 # sub-tab, observed on the Key 61), puts the tab list in that order and renumbers Q-Links.json: Tab = fnKeyIndex + 1, SubTab = fnKeySubIndex + 1,
