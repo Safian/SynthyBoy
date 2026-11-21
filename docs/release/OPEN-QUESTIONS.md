@@ -128,8 +128,8 @@ Lines found: 80 in 9 files.
 - docs/NAMING.md:29 [Still open]: ## Still open (owner / counsel – not done)
 ### docs/PARAMETERS.md
 
-- docs/PARAMETERS.md:3225 [pending]: * **Sample oscillator**: pending (Phase 4): it needs content packs (docs/ARCHITECTURE.md section 6). The engine has one; the noise oscillator above is its bu...
-- docs/PARAMETERS.md:3226 [pending]: * **Free-form LFO shapes / wavetable editing**: pending (Phase 5, UI): LFOs use the built-in shape list and oscillators the built-in wavetables; there is no ...
+- docs/PARAMETERS.md:3226 [pending]: * **Sample oscillator**: pending (Phase 4): it needs content packs (docs/ARCHITECTURE.md section 6). The engine has one; the noise oscillator above is its bu...
+- docs/PARAMETERS.md:3227 [pending]: * **Free-form LFO shapes / wavetable editing**: pending (Phase 5, UI): LFOs use the built-in shape list and oscillators the built-in wavetables; there is no ...
 ### docs/QUALITY.md
 
 - docs/QUALITY.md:54 [pending]: per-key values go from -35 dB to below -90 dB, depending on where the first partial above Nyquist falls). The cause is visible in the
@@ -142,7 +142,35 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 88.
+Commits found: 95.
+
+### cc4c0d75 (2026-11-21) TODO: develop reds found by the batch 6 build (shell_clap segfault, distortion mix 0 not dry, three 
+
+- matching line: TODO: develop reds found by the batch 6 build (shell_clap segfault, distortion mix 0 not dry, three audit clicks)
+
+### 7bb4677a (2026-11-21) TODO + plan: disabled blocks rule (grey, not tappable)
+
+- matching line: TODO + plan: disabled blocks rule (grey, not tappable)
+
+### e1307bfb (2026-11-21) TODO: start cache on at tier low (owner ok), disabled look and no touch for switched-off blocks (own
+
+- matching line: TODO: start cache on at tier low (owner ok), disabled look and no touch for switched-off blocks (owner)
+
+### 7d64fb66 (2026-11-21) TODO: Key 61 CPU comparison against a stock Akai synth
+
+- matching line: TODO: Key 61 CPU comparison against a stock Akai synth
+
+### 2e01f2c9 (2026-11-21) TODO: no total CPU budget for stacked effect instances on tier low
+
+- matching line: TODO: no total CPU budget for stacked effect instances on tier low
+
+### 17bacf1c (2026-11-21) feat(core): make master.transpose a modulation destination (kMod)
+
+- matching line: Untouched: TODO.md, core/vital-import/ (clean room).
+
+### a89c8b96 (2026-11-21) TODO: tab order with Play and Macros on the first function key
+
+- matching line: TODO: tab order with Play and Macros on the first function key
 
 ### 9267257d (2026-11-21) TODO: overlay thread time split on the Key 61
 
