@@ -1552,8 +1552,8 @@ TEST (own_spectral_start_ledger_runs_with_the_control_grid_only_at_tier_low)
 }
 
 // ---- docs/plans/spectral-start.md S5: the Spectral note start is spread over the blocks at tier low --------------------------------------------------------------------------------------
-// The numbers are those of the cost model at the budget of 2400 us a block (spectral::kStartBudgetUs, fixed by the device measurement; the plan's first figures were for 810 us): a voice's
-// start work is 156 .. 245 us warm (mono), so 11 voices of a chord start at once (2250 us) and the others in the next quad; a tick = a control period = 32 samples = 0.7256 ms at 44.1 kHz,
+// The numbers are those of the cost model at the budget of 1700 us a block (spectral::kStartBudgetUs, fixed by the device budget sweep of 2026-11-21; the plan's first figures were for 810 us): a voice's
+// start work is 156 .. 245 us warm (mono), so 8 voices of a chord start at once (1604 us) and the others in the next quads; a tick = a control period = 32 samples = 0.7256 ms at 44.1 kHz,
 // a quad = 4 ticks = 128 samples = 2.9025 ms.
 namespace
 {
@@ -1660,8 +1660,8 @@ TEST (own_spectral_chord_start_is_spread_by_the_budget)
         { 1, 4, true, 4, 0, 0 },      // a single note of unison 4: 802 us, never delayed
         { 3, 2, false, 6, 0, 0 },     // 1203 us
         { 4, 2, false, 8, 0, 0 },     // 1604 us: the chord of the three Spectral presets starts whole (it waited 8 ticks = 5.8 ms at the budget of 810)
-        { 3, 4, true, 11, 1, 4 },     // 12 voices: the 12th waits one quad (4 ticks = 2.9 ms)
-        { 8, 2, false, 11, 5, 4 },    // 16 voices: 11 at once (2250 us), 5 in the next quad
+        { 3, 4, true, 8, 4, 4 },      // 12 voices: 8 at once, the other 4 wait one quad (4 ticks = 2.9 ms)
+        { 8, 2, false, 8, 8, 8 },     // 16 voices: 8 at once (1604 us), 4 in the next quad, 4 in the one after (max wait 8 ticks = 5.8 ms)
     };
     for (const Row& row : rows)
     {
@@ -1729,12 +1729,12 @@ TEST (own_spectral_a_waiting_voice_is_silent)
 
 TEST (own_spectral_kill_burst_keeps_the_start_work_of_the_survivors_only)
 {
-    // 16 notes struck together, polyphony 4, Kill mode: the notes 12 .. 15 survive. Notes 0 .. 5 got their start at the note-on (11 voices); the work booked for the given up voices of
-    // the later quads is given back, so the survivors start in the next quad (4 ticks); without cancelSerial they would wait 8.
+    // 16 notes struck together, polyphony 4, Kill mode: the notes 12 .. 15 survive. Notes 0 .. 3 got their start at the note-on (8 voices); the work booked for the given up voices of
+    // the later quads is given back, so the survivors start in the next quad (4 ticks); without cancelSerial four of them would wait 8.
     SpecRig r (lowStagger (true), 2, 4, false, true);
     r.render (16, 2048, 128);
     const auto& l = r.ledger();
-    CHECK_EQ (l.grantedNowForTest(), 11u);
+    CHECK_EQ (l.grantedNowForTest(), 8u);
     CHECK_EQ (l.grantedLaterForTest(), 8u);
     CHECK_EQ (l.maxWaitTicksForTest(), 4u);
     CHECK_EQ (l.waitingForTest(), 0);
@@ -1753,16 +1753,16 @@ TEST (own_spectral_start_is_block_size_independent_and_repeats)
             first = h;
         else
             CHECK (h == first);
-        CHECK (r.ledger().maxWaitTicksForTest() == 4u);
+        CHECK (r.ledger().maxWaitTicksForTest() == 8u);
     }
 }
 
 TEST (own_spectral_note_off_while_waiting)
 {
-    // the last note (its voices wait until tick 4 = frame 128) is released at frame 40, the others at 0.4 s
+    // the last note (its voices wait until tick 8 = frame 256) is released at frame 40, the others at 0.4 s
     SpecRig r (lowStagger (true), 2);
     const Out o = r.render (8, 2 * 44100, 128, 40, 17640);
-    CHECK_EQ (r.ledger().maxWaitTicksForTest(), 4u);
+    CHECK_EQ (r.ledger().maxWaitTicksForTest(), 8u);
     CHECK (sbtest::allFinite (o.l) && sbtest::allFinite (o.r));
     CHECK (rmsOfRange (o.l, 2000, 8000) > 1.0e-4);
     CHECK (peakOf (o.l, 60000, o.l.size()) < 1.0e-4);
@@ -1801,7 +1801,7 @@ TEST (own_spectral_start_checksums_and_what_must_not_change)
     CHECK (singleOn == singleOff);     // a single note is never delayed
     CHECK (c3On == c3Off);             // a chord that fits the budget is the sound of before
     CHECK (c4On == c4Off);             // so is the chord of the three Spectral presets (1604 us)
-    CHECK (c8On != c8Off);             // 16 voices do not fit: five start a quad late (before the change: equal)
+    CHECK (c8On != c8Off);             // 16 voices do not fit: eight start a quad or two late (before the change: equal)
     CHECK (h8 == h8Flag);              // nothing changes at the other tiers
 }
 

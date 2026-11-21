@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The expected grant ticks are those of the cost model of docs/plans/spectral-start.md section 3.4 (89 us a frame, 67 us a shaping) at the
-// budget of 2400 us a block that the device measurement fixed (cold factor 0.94, fixed cold penalty 0.070 ms); a loop over the pattern table
-// gave them, the engine is not involved. Tick = one control period (32 samples), quad = 4 ticks = one 128 frame host block.
+// budget of 1700 us a block that the device budget sweep of 2026-11-21 fixed (.hw-local/mpc-perf/noteon-burst/budget-sweep-results.md); a loop over the pattern table
+// (a python port of StartLedger::request / beginTick / cancelSerial, checked against the old budget of 2400 first) gave them, the engine is not involved. Tick = one control period (32 samples), quad = 4 ticks = one 128 frame host block.
 
 #include "synthyboy/spectral/start_ledger.h"
 
@@ -17,7 +17,7 @@ using namespace synthyboy::spectral;
 
 namespace
 {
-constexpr int kBudget = 2400;
+constexpr int kBudget = 1700;
 
 // the mono patterns of the start by offset (spectral-start.md section 1.2: 156 = 1 frame + 1 shaping, 245 = 2 frames + 1 shaping)
 StartPattern patternOf (int offset)
@@ -145,8 +145,8 @@ TEST (start_ledger_chord_grant_ticks)
         { 3, 2, repeatTicks (6, 0) },                                     // 1203
         { 4, 2, repeatTicks (8, 0) },                                     // 1604: the chord of the three Spectral presets starts whole
         { 8, 1, repeatTicks (8, 0) },
-        { 8, 2, join (repeatTicks (11, 0), repeatTicks (5, 4)) },         // 11 voices fit (2250 us), the last 5 start in the next quad
-        { 3, 4, join (repeatTicks (11, 0), { 4 }) },
+        { 8, 2, join (repeatTicks (8, 0), join (repeatTicks (4, 4), repeatTicks (4, 8))) }, // 8 voices fit (1604 us; a 9th adds >= 156 us: 1760 > 1700), 4 start in the next quad, 4 in the one after
+        { 3, 4, join (repeatTicks (8, 0), repeatTicks (4, 4)) },
     };
     for (const auto& row : rows)
     {
@@ -169,14 +169,14 @@ TEST (start_ledger_chord_grant_ticks)
     {
         StartLedger l = makeLedger();
         const auto vs = runChord (l, 8, 2, first, 0);
-        CHECK (grantTicks (vs) == join (repeatTicks (11, 0), repeatTicks (5, 4)));
+        CHECK (grantTicks (vs) == join (repeatTicks (8, 0), join (repeatTicks (4, 4), repeatTicks (4, 8))));
     }
     // a chord struck phi ticks into its quad waits phi ticks less for the next quad
     for (int phi = 1; phi <= 3; ++phi)
     {
         StartLedger l = makeLedger();
         const auto vs = runChord (l, 8, 2, 0, phi);
-        CHECK (grantTicks (vs) == join (repeatTicks (11, 0), repeatTicks (5, 4 - phi)));
+        CHECK (grantTicks (vs) == join (repeatTicks (8, 0), join (repeatTicks (4, 4 - phi), repeatTicks (4, 8 - phi))));
     }
 }
 
@@ -248,10 +248,10 @@ TEST (start_ledger_cancel_gives_back_the_future_bookings)
         CHECK_EQ (l.waitingForTest(), 0);
         CHECK (l.maxBookedForTest() <= static_cast<uint32_t> (kBudget));
     }
-    {   // the control: the same without cancelSerial: the work booked for the given up voices holds the survivors back a quad longer
+    {   // the control: the same without cancelSerial: the work booked for the given up voices holds the survivors back a quad longer (4 of them)
         StartLedger l = makeLedger();
         const auto vs = runChord (l, 16, 2, 0, 0, 4, false);
-        CHECK (grantTicks (vs, true) == join (repeatTicks (6, 4), repeatTicks (2, 8)));
+        CHECK (grantTicks (vs, true) == join (repeatTicks (4, 4), repeatTicks (4, 8)));
     }
 }
 
