@@ -131,6 +131,16 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - `test_mpc_skin_subtabs.LayoutFileTests.test_v34_and_v32_hold_the_same_parameters` (synthyboy_release_scripts): a 32 füles tartalék elrendezés (`scripts/mpc-ui-pages-v32.json`) nem tartalmazza az FX Filter `fx_filter_2` oldalát (7 vezérlő: Key Tracking, Comb Blend, Formant X/Y/Resonance/Spread/Transpose), amióta az f06bde5d a kulcsokat `ownEngine: true`-ra állította. A `Flt+Dist` fülre nem fér (24 hely a 16-ból); 32 fülhöz még egy összevonás kell (pl. Env vagy LFO fülek), ez UX döntés. Kész, ha az owner dönt az elrendezésről és a teszt zöld.
 - `synthyboy_param_audit_scan` (1 órás időkorlát) a wave 2 összefésülésén nem futott le. Kész, ha egyszer végigfutott az összefésült fán.
 
+## Funkcióhiányok (átnézés 2026-11-21: a Vital nyilvános funkciólistája és a `docs/ui-design` GAP-sorai a mai kóddal összevetve)
+A `docs/ui-design` kb. 300 GAP-sorának nagy része elavult (a motor 2634/2637 kulcsra hat, a G01–G84 tételek többsége kész). Ami valóban hiányzik, értékrendben (az MPC-s érték a mi becslésünk):
+- MPC-n nincs szerkesztő a Velocity/Note görbékhez (`curve.velocity.*`, `curve.note.*`, motor `voice.cpp:806-819`) és a PZ SVF rajzolt szűrőgörbéhez (`content.filterCurves`); csak a JUCE-felületen vannak (`ModVelNotePanel.cpp`, `FilterViews.h`). Kész, ha az MPC-rétegen szerkeszthetők.
+- MPC-n nincs hullámtábla-szerkesztő és nincs `.vital`/`.serum` preset-importálás (a mag megvan: `core/wavetable-edit`, `vital_plugin_import.h`, `tools/vital-import`). Owner-döntés: kell-e a gépen (legalább a preset-import). Kész, ha döntött, és a döntés megvalósult.
+- LFO fázis rácsra illesztése (`LfoPanel.cpp`, kis UI-tétel). Kész, ha van.
+- Hullámtábla-export: `.256` 8 bites, „mind egyciklusú hullámként", kijelölés exportja; sztereó kettős import; ciklushossz hangnévvel; a Vital import-stílusai (Splice, Vocoded, Time-to-Wavetable, Pitched, `docs/ui-design/03-wavetable.md:111`). Asztali munkafolyamat, MPC-n kis érték. Kész, ha megvan vagy owner-döntéssel kihagyva (és a doksi így írja).
+- Zár (lock) és MIDI learn az MPC-n nincs (Q-Link fedi). Kész, ha owner-döntéssel kihagyva vagy megvan.
+- Apróságok: nagyfelbontású hullámtábla opció, „Round Robin" hangprioritás, MTS-ESP kliens (`libMTSClient` nincs linkelve), burkoló-kezdőpont a PHASE-tól külön, hullámtábla-keret küldése a zaj-oszcillátorba. Kész, ha megvan vagy owner-döntéssel kihagyva.
+- A `docs/ui-design/0*.md` és `10-coverage-matrix.md` GAP-oszlopai elavultak. Kész, ha a státuszok a mai állapotot mutatják (vagy a fájlok történeti jelölést kapnak, és a `16-COVERAGE-FINAL.md` az élő lista).
+
 ## Tudás és ügynök-eszközök
 - Tudásmappa (`docs/dsp-knowledge/`, 2026-11-21 megkezdve): a szakirodalmi forrásokat (Bristow-Johnson, Brandt, Dattorro, Bencina, Zavalishin, MPE, SFZ, ARM Cortex-A17) meg kell nyitni, és a `sources.md`-be idézettel bevezetni; a meglévő tervekből (`docs/plans/`) az ellenőrzött tényeket a témafájlokba kell átvinni. Kész, ha minden témafájl minden állítása mért, megnyitott forrás vagy teszt, és a `sources.md` nem üres.
 - A `.hw-local/synth-knowledge/vital/code` (405 fájl) és `sources/` Vital-forráskódot tartalmaz: a saját motor munkáihoz tiltani kell, vagy el kell vinni onnan (owner döntése).
