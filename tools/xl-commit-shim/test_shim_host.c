@@ -799,6 +799,42 @@ static void test_stage3_failing_merged_fallback(void) {
     printf("test_stage3_failing_merged_fallback PASSED\n");
 }
 
+static void test_stage3_test_only_host_commit_not_merged(void) {
+    printf("Running test_stage3_test_only_host_commit_not_merged...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    assert(req != NULL);
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req, 34, 1000 + i, 2000 + i);
+    }
+    void *host_userdata = (void *)0xfacefeed;
+    // The host's own commit is TEST_ONLY: it applies nothing, so it must be forwarded as it is.
+    int ret = drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_TEST_ONLY, host_userdata);
+    assert(ret == 0);
+    assert(g_fake_commit_count == 1);
+    assert(g_fake_commits[0].flags == (DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_TEST_ONLY));
+    assert(g_fake_commits[0].user_data == host_userdata);
+    assert(g_fake_commits[0].item_count == 15);   // no plane 46 items added
+    assert(drmModeAtomicGetCursor(req) == 15);    // the host's request is untouched
+    // Stage 3 stays on, and the following live frame commit still merges (the TEST_ONLY one did not set the plane-active state).
+    drmModeAtomicReqPtr req2 = drmModeAtomicAlloc();
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req2, 34, 1000 + i, 2000 + i);
+    }
+    ret = drmModeAtomicCommit(fd, req2, DRM_MODE_PAGE_FLIP_EVENT, host_userdata);
+    assert(ret == 0);
+    assert(g_fake_commit_count == 2);
+    assert(g_fake_commits[1].item_count == 25);
+
+    drmModeAtomicFree(req);
+    drmModeAtomicFree(req2);
+    printf("test_stage3_test_only_host_commit_not_merged PASSED\n");
+}
+
 static void test_stage3_cursor_commit_unmerged(void) {
     printf("Running test_stage3_cursor_commit_unmerged...\n");
     fake_reset();
@@ -1001,6 +1037,7 @@ int main(void) {
     test_stage3_on_merged_frame_commit();
     test_stage3_failing_merged_fallback();
     test_stage3_cursor_commit_unmerged();
+    test_stage3_test_only_host_commit_not_merged();
     test_stage3_off_disables_plane_and_frees_fb();
     test_stage3_70_items_not_merged();
     test_item_list_logged_on_count_change();

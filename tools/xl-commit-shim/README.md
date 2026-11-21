@@ -165,3 +165,11 @@ tools/xl-commit-shim/xlshim.sh recover
 # Normal restore (removes runtime drop-in and restarts MPC):
 tools/xl-commit-shim/xlshim.sh stop
 ```
+
+## Review notes (2026-11-21)
+- A host commit that is itself `DRM_MODE_ATOMIC_TEST_ONLY` (0x100) is never merged into (it applies nothing; merging would set the plane-active state for a plane that was not set and let the disable path free a framebuffer still scanned out). Host test: `test_stage3_test_only_host_commit_not_merged`.
+- Any merged-commit failure, including a transient EBUSY, disables stage 3 for the rest of the run (conservative; the log line names the errno).
+- If the disabling merge itself keeps failing, every frame does a failed merged commit plus the original (two commits per frame) until it succeeds: a retry cap is a TODO for the generalised (Key 61) version.
+- The constants (CRTC 82, plane 46, 400x300 at (200,200)) are XL-only; the Key 61 version discovers them at run time.
+- `recover` relies on the restart of the `acvs` service closing the DRM file descriptor: the kernel then removes the framebuffer and disables the plane.
+- The aarch64 build (`build.sh`) uses `debian:12-slim` and installs the cross compiler in the container.

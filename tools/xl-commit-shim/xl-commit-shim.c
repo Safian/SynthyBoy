@@ -655,7 +655,9 @@ int drmModeAtomicCommit(int fd, drmModeAtomicReqPtr req, uint32_t flags, void *u
     bool need_disable = (!s3_active && s3_plane_active);
 
     bool do_merge = false;
-    if (call_site == CALL_SITE_FRAME && (s3_active || need_disable)) {
+    // A host commit that is itself TEST_ONLY applies nothing: never merge into it (the plane-active flag would claim a plane that was not set,
+    // and the disable path would free a framebuffer that is still scanned out).
+    if (call_site == CALL_SITE_FRAME && !(flags & DRM_MODE_ATOMIC_TEST_ONLY) && (s3_active || need_disable)) {
         bool complete = (track != NULL) && (cursor >= 0 ? ((uint32_t)cursor == recorded_count) : true);
         if (item_count <= 64 && recorded_count <= 64 && complete) {
             ensure_stage_initialized(fd);
