@@ -82,7 +82,7 @@ struct Fixtures
 class Rig
 {
 public:
-    explicit Rig (synthyboy::EngineKind kind = synthyboy::EngineKind::vital, double sampleRate = kSr, synthyboy::Tier tier = synthyboy::Tier::high);
+    explicit Rig (synthyboy::EngineKind kind = synthyboy::EngineKind::own, double sampleRate = kSr, synthyboy::Tier tier = synthyboy::Tier::high);
     synthyboy::IEngine& engine() { return *engine_; }
     bool ok() const { return engine_ != nullptr; }
     /** All keys back to the defaults of the table, then `ov`. */

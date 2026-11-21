@@ -761,14 +761,13 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
     // golden hashes of golden_audio.h (commit 9c97a69): the default patch and the busy patch
     const struct { EngineKind kind; bool busy; uint64_t hash; } golden[] = {
         { EngineKind::own, false, 0xc3e433c23a7f89a5ull }, { EngineKind::own, true, 0x44f50232b180c48dull },
-        { EngineKind::vital, false, 0x765f4bc243b189c1ull }, { EngineKind::vital, true, 0x0ecaf6456c563d02ull },
     };
     for (const auto& g : golden)
     {
         if (! isEngineAvailable (g.kind))
             continue;
         const auto doc = asVersion2 (saveState (g.busy ? busyValues() : ParamValues::defaults()));
-        // a previous version 3 patch: every new key holds some other value. An engine that acts on the new keys (engine-vital since WP2/WP3)
+        // a previous version 3 patch: every new key holds some other value. An engine that acts on the new keys
         // would sound different with them, so it is loaded over the defaults (R5: the defaults reproduce the version 2 sound)
         auto values = ParamValues::defaults(); // both engines act on the keys of version 3 now (the own engine since the parity work)
         CHECK (loadState (doc.data(), doc.size(), values).status == LoadStatus::ok);

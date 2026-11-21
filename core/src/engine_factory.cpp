@@ -1,12 +1,8 @@
-// SynthyBoy - core: engine factory (selects between the own engine and, if built in, the Vital-derived one).
+// SynthyBoy - core: engine factory (the own engine; EngineKind::vital is its old name, docs/plans/vital-removal.md V7).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "synthyboy/engine.h"
-
-#if SYNTHYBOY_HAS_VITAL
- #include "vital_engine.h" // core/engine-vital/adapter, only on the include path when SYNTHYBOY_WITH_VITAL=ON
-#endif
 
 namespace synthyboy
 {
@@ -14,13 +10,8 @@ bool isEngineAvailable (EngineKind kind) noexcept
 {
     switch (kind)
     {
-        case EngineKind::own:   return true;
-        case EngineKind::vital:
-#if SYNTHYBOY_HAS_VITAL
-            return true;
-#else
-            return false;
-#endif
+        case EngineKind::own:
+        case EngineKind::vital: return true;
     }
     return false;
 }
@@ -29,8 +20,8 @@ const char* engineName (EngineKind kind) noexcept
 {
     switch (kind)
     {
-        case EngineKind::own:   return "own";
-        case EngineKind::vital: return "vital";
+        case EngineKind::own:
+        case EngineKind::vital: return "own";
     }
     return "unknown";
 }
@@ -43,16 +34,8 @@ std::unique_ptr<IEngine> createEngine (EngineKind kind, const char** errorMessag
     switch (kind)
     {
         case EngineKind::own:
+        case EngineKind::vital: // saved settings and old callers: the parameter table is shared, the own engine plays the state
             return createOwnEngine();
-
-        case EngineKind::vital:
-#if SYNTHYBOY_HAS_VITAL
-            return createVitalEngine();
-#else
-            if (errorMessage != nullptr)
-                *errorMessage = "this engine is not part of the build (configured with SYNTHYBOY_WITH_VITAL=OFF)";
-            return nullptr;
-#endif
     }
 
     if (errorMessage != nullptr)

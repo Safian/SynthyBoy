@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The formulas are those of core/engine-vital/adapter/vital_tables.cpp (our own code, which cannot be linked here: the importer is
-// Vital free). core/vital-import/tests cross-checks the two when the Vital engine is built (SYNTHYBOY_WITH_VITAL).
+// Reference formulas for built-in tables and LFO shapes; the importer is Vital free.
 
 #include <algorithm>
 #include <cmath>
@@ -186,8 +185,8 @@ void builtinWavetableFrame (int table, double t, float* out)
 void builtinLfoShape (int shape, float* out) noexcept
 {
     // SPEC-GAP: shapes 0..4 are Vital's own initial lines whose exact orientation the design leaves to black-box goldens (11, C.2); the
-    // choices here: sine 0.5 + 0.5 sin, triangle 0 -> 1 -> 0, saws, square high in the first half. Shapes 5..11 are the lines of
-    // core/engine-vital/adapter/vital_tables.cpp (applyLfoShape, our code).
+    // choices here: sine 0.5 + 0.5 sin, triangle 0 -> 1 -> 0, saws, square high in the first half. Shapes 5..11 are the stepped/custom
+    // reference shapes (applyLfoShape).
     const auto steps = [] (const float* levels, int n, double x) { return static_cast<float> (levels[std::min (n - 1, static_cast<int> (x * n))]); };
     static const float up[4] = { 0.0f, 1.0f / 3, 2.0f / 3, 1.0f };
     static const float down[4] = { 1.0f, 2.0f / 3, 1.0f / 3, 0.0f };

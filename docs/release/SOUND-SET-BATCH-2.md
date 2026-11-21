@@ -222,7 +222,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 | Chord Cloud Pad | 109 | Spectral Vowel Freeze | 89 | Spectral Vowel Freeze | 89 |
 | Vowel Scrub Choir | 88 | Infinite Horizon | 85 | Marimba Layer Keys | 87 |
 | Frozen Pluck Drone | 83 | Spectral Vowel Freeze | 74 | Spectral Vowel Freeze | 74 |
-| Gong Grain Swarm | 98 | Rising Grain Riser | 80 | Rising Grain Riser | 80 |
+| Gong Grain Swarm | 98 | Rising Grain Riser | 81 | Rising Grain Riser | 81 |
 | Stutter Grain Kit | 70 | Glass Ping Pluck | 67 | Glass Ping Pluck | 67 |
 | Rising Grain Riser | 78 | Bell Chime Lead | 75 | Glass Ping Pluck | 76 |
 | Nylon Zone Pluck | 97 | Glass Ping Pluck | 83 | Glass Ping Pluck | 83 |
@@ -230,9 +230,9 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 | Glass Zone Bells | 69 | Glass Ping Pluck | 35 | Glass Ping Pluck | 35 |
 | Dusty Rhodes Keys | 88 | Ladder FM Bass | 74 | Ladder FM Bass | 74 |
 | Glass Ping Pluck | 67 | Glass Zone Bells | 35 | Glass Zone Bells | 35 |
-| Breakbeat Slice Keys | 68 | Gritty Square Bass | 67 | Glass Ping Pluck | 69 |
+| Breakbeat Slice Keys | 68 | Dirty Distortion Bass | 67 | Glass Ping Pluck | 69 |
 | Bowed MPE Strings | 108 | Bowed Pressure Strings | 74 | Reverse Gong Swell | 107 |
-| Reverse Gong Swell | 59 | Trance Short Pluck | 51 | Glass Ping Pluck | 70 |
+| Reverse Gong Swell | 59 | Acoustic Style Pluck | 51 | Glass Ping Pluck | 70 |
 | Breath Flute Lead | 83 | Vowel Table Lead | 72 | Vowel Table Lead | 72 |
 | Spectral Vowel Freeze | 77 | Spectral Gong Pad | 54 | Spectral Gong Pad | 54 |
 | Spectral Bowed Glass | 86 | Vowel Table Lead | 76 | Vowel Table Lead | 76 |
@@ -242,7 +242,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 | Vowel Table Lead | 74 | MPE Pressure Lead | 69 | Breath Flute Lead | 72 |
 | Drawbar Organ Keys | 93 | Ladder FM Bass | 82 | Ladder FM Bass | 82 |
 | Throat Singer Drone | 75 | Dark Cinema Drone | 68 | Ladder FM Bass | 72 |
-| Ladder FM Bass | 60 | EMS Squelch Bass | 57 | Reese Dual Phase Bass | 59 |
+| Ladder FM Bass | 60 | Dirty Distortion Bass | 56 | Reese Dual Phase Bass | 59 |
 
 ## 6. The presets
 
@@ -296,7 +296,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 
 *Macros.* Sparse (audible: 1.8 dB, -1.0 dB level, +0.03 oct; by LF -6.1 dB); Pitch Chaos (audible: 4.0 dB, -0.3 dB level, +0.17 oct); Scatter (audible: 2.0 dB, -2.3 dB level, +0.32 oct); Short Grains (audible: 5.2 dB, -4.2 dB level, +0.57 oct); Echo Cloud (audible: 2.8 dB, +3.6 dB level, -0.35 oct); Dark (audible: 8.9 dB, -3.0 dB level, -1.08 oct).
 
-*Measured.* Level -20.0 dBFS at the sustain (XL), -19.2 (Key 61); the real preset at 1 s: -20.8. Four-note chord peak -7.8 dBFS raw = 10.2 at +18 dB. Single note: mono sum -2.3 dB vs stereo, worst band -3.2 dB at 318 Hz; DC 0.0000, click ratio 0.0, tail 7.31 s; centroid 902 Hz, moving 0.56 oct and 18.9 dB over the note. Controls (0 -> 100): wheel: 1.9 dB (+2.5 dB, -0.40 oct); pressure: 1.9 dB (-0.0 dB, +0.09 oct); velocity route: 1.3 dB (+0.2 dB, +0.27 oct). Without the content pack: chord -27.8 dBFS. Nearest preset: Rising Grain Riser (80).
+*Measured.* Level -20.0 dBFS at the sustain (XL), -19.2 (Key 61); the real preset at 1 s: -20.8. Four-note chord peak -7.8 dBFS raw = 10.2 at +18 dB. Single note: mono sum -2.3 dB vs stereo, worst band -3.2 dB at 318 Hz; DC 0.0000, click ratio 0.0, tail 7.31 s; centroid 902 Hz, moving 0.56 oct and 18.9 dB over the note. Controls (0 -> 100): wheel: 1.9 dB (+2.5 dB, -0.40 oct); pressure: 1.9 dB (-0.0 dB, +0.09 oct); velocity route: 1.3 dB (+0.2 dB, +0.27 oct). Without the content pack: chord -27.8 dBFS. Nearest preset: Rising Grain Riser (81).
 
 *Spends.* polyphony 4; 1: Granular x2; 2: Bell Partials x3; filter Analog; effects delay, reverb, eq. Not measured: CPU, the 8-note velocity-127 peak, the register and velocity report.
 
@@ -408,7 +408,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 
 *Macros.* Smash (audible: 18.4 dB, +0.3 dB level, +0.00 oct); Room (audible: 6.8 dB, -2.8 dB level, +0.00 oct); Shift (audible: 7.2 dB, -0.0 dB level, +0.00 oct); Dark (audible: 3.8 dB, -1.6 dB level, +0.00 oct); Snap (audible: 13.3 dB, -27.2 dB level, +0.00 oct); Sub Layer (audible: 17.0 dB, +17.5 dB level, -0.00 oct).
 
-*Measured.* Level -20.0 dBFS at the sustain (XL), -21.4 (Key 61); the real preset at 1 s: -20.0. Four-note chord peak -5.7 dBFS raw = 12.3 at +18 dB. Single note: mono sum -0.0 dB vs stereo, worst band -6.3 dB at 159 Hz; DC 0.0002, click ratio 0.7, tail 0.71 s; centroid 67 Hz, moving 0.08 oct and 1.5 dB over the note. Controls (0 -> 100): wheel: 16.8 dB (+0.2 dB, +0.00 oct); velocity route: 1.7 dB (+0.0 dB, +0.00 oct). Without the content pack: chord -26.1 dBFS. Nearest preset: Gritty Square Bass (67).
+*Measured.* Level -20.0 dBFS at the sustain (XL), -21.4 (Key 61); the real preset at 1 s: -20.0. Four-note chord peak -5.7 dBFS raw = 12.3 at +18 dB. Single note: mono sum -0.0 dB vs stereo, worst band -6.3 dB at 159 Hz; DC 0.0002, click ratio 0.7, tail 0.71 s; centroid 67 Hz, moving 0.08 oct and 1.5 dB over the note. Controls (0 -> 100): wheel: 16.8 dB (+0.2 dB, +0.00 oct); velocity route: 1.7 dB (+0.0 dB, +0.00 oct). Without the content pack: chord -26.1 dBFS. Nearest preset: Dirty Distortion Bass (67).
 
 *Spends.* polyphony 6; 1: Sample x1; 2: Sine x1; filter Analog; effects distortion, compressor, convolve. Not measured: CPU, the 8-note velocity-127 peak, the register and velocity report.
 
@@ -436,7 +436,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 
 *Macros.* Slow Down (audible: 4.9 dB, -7.5 dB level, -0.20 oct); Shimmer (weak in the measure: 1.6 dB, +0.4 dB level, -0.08 oct; route osc1.unison.detune +80 %: a texture or scan control, check by ear); Air (audible: 8.2 dB, +4.2 dB level, -0.01 oct); Space (audible: 2.7 dB, -0.8 dB level, +0.10 oct; by LF -5.2 dB); Bright (audible: 8.0 dB, +1.5 dB level, +1.28 oct).
 
-*Measured.* Level -20.0 dBFS at the sustain (XL), -19.7 (Key 61); the real preset at 1 s: -20.0. Four-note chord peak -8.9 dBFS raw = 9.1 at +18 dB. Single note: mono sum -1.8 dB vs stereo, worst band -2.7 dB at 635 Hz; DC 0.0000, click ratio 0.0, tail 3.47 s; centroid 369 Hz, moving 0.74 oct and 11.7 dB over the note. Controls (0 -> 100): wheel: 4.9 dB (-7.5 dB, -0.20 oct); velocity route: 4.0 dB (+1.8 dB, +0.42 oct). Without the content pack: chord -28.2 dBFS. Nearest preset: Trance Short Pluck (51).
+*Measured.* Level -20.0 dBFS at the sustain (XL), -19.7 (Key 61); the real preset at 1 s: -20.0. Four-note chord peak -8.9 dBFS raw = 9.1 at +18 dB. Single note: mono sum -1.8 dB vs stereo, worst band -2.7 dB at 635 Hz; DC 0.0000, click ratio 0.0, tail 3.47 s; centroid 369 Hz, moving 0.74 oct and 11.7 dB over the note. Controls (0 -> 100): wheel: 4.9 dB (-7.5 dB, -0.20 oct); velocity route: 4.0 dB (+1.8 dB, +0.42 oct). Without the content pack: chord -28.2 dBFS. Nearest preset: Acoustic Style Pluck (51).
 
 *Spends.* polyphony 4; 1: Sample x2; noise; filter Analog; effects reverb, eq, convolve. Not measured: CPU, the 8-note velocity-127 peak, the register and velocity report.
 
@@ -576,7 +576,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 
 *Macros.* Ratio (audible: 31.4 dB, -0.3 dB level, +2.32 oct); Snap Length (audible: 15.1 dB, +0.2 dB level, +0.96 oct); Drive (audible: 33.0 dB, +9.0 dB level, +0.83 oct); Sub (audible: 6.7 dB, +6.5 dB level, +0.01 oct); Cutoff (audible: 0.1 dB, +0.0 dB level, +0.02 oct; by HF +18.6 dB); Decay (audible: 6.1 dB, +4.2 dB level, +0.00 oct).
 
-*Measured.* Level -20.0 dBFS at the sustain (XL), -20.0 (Key 61); the real preset at 1 s: -20.0. Four-note chord peak -8.5 dBFS raw = 9.5 at +18 dB. Single note: mono sum 0.0 dB vs stereo, worst band 0.0 dB at 32 Hz; DC 0.0001, click ratio 0.9, tail 0.14 s; centroid 167 Hz, moving 0.80 oct and 2.2 dB over the note. Controls (0 -> 100): wheel: 33.4 dB (+7.9 dB, +1.99 oct); pressure: 0.1 dB (+0.0 dB, +0.02 oct); velocity route: 24.1 dB (+1.0 dB, +1.20 oct). Without the content pack: chord -20.7 dBFS. Nearest preset: EMS Squelch Bass (57).
+*Measured.* Level -20.0 dBFS at the sustain (XL), -20.0 (Key 61); the real preset at 1 s: -20.0. Four-note chord peak -8.5 dBFS raw = 9.5 at +18 dB. Single note: mono sum 0.0 dB vs stereo, worst band 0.0 dB at 32 Hz; DC 0.0001, click ratio 0.9, tail 0.14 s; centroid 167 Hz, moving 0.80 oct and 2.2 dB over the note. Controls (0 -> 100): wheel: 33.4 dB (+7.9 dB, +1.99 oct); pressure: 0.1 dB (+0.0 dB, +0.02 oct); velocity route: 24.1 dB (+1.0 dB, +1.20 oct). Without the content pack: chord -20.7 dBFS. Nearest preset: Dirty Distortion Bass (56).
 
 *Spends.* polyphony 4; 1: Preset table x1; sub; filter Analog; effects distortion, eq. Not measured: CPU, the 8-note velocity-127 peak, the register and velocity report.
 
@@ -586,7 +586,7 @@ The survey's similarity measure (`scripts/survey-presets.py`): the number of par
 
 Everything below was seen in a render or in the code, with the numbers; nothing was worked around silently (the workaround, where there is one, is named). Items 1 and 2 of the list of batch 1 (Ladder at the top, Direct out and `master.volume`) and the other engine items of that list are being fixed elsewhere and are not repeated; batch 1's item 13 ("could not be shown") is what this batch closes.
 
-1. **A missing content file is not replaced by anything.** `docs/ARCHITECTURE.md` section 6 says the plugin tolerates absence and that a sound is produced either way. Measured with an empty store: before the presets got their wavetable layers, Frozen Pluck Drone, Gong Grain Swarm, Stutter Grain Kit, Rising Grain Riser, Spectral Chord Morph and Breakbeat Slice Keys were **silent** (chord RMS -180 dBFS: a Sample, Granular, Spectral or Multisample oscillator without its file produces nothing, docs/engine-spec/07 section 1), Convolve without its impulse does not convolve, a `Preset table` plays the saw. Nothing tells the player: there is no `missing_content` indicator on the MPC. Consequence for the set: every batch 2 preset has a plain wavetable layer (level 10 .. 30 % of its oscillator) that is what you hear if the packs are not installed (the table's column "Without the pack" shows -17.9 .. -32.8 dBFS), and the `synthyboy_preset_sanity` gate (Vital engine, no store by default) would fail "silent" for them; its CMake call now passes `--content-dir` to a store of links to the packs.
+1. **A missing content file is not replaced by anything.** `docs/ARCHITECTURE.md` section 6 says the plugin tolerates absence and that a sound is produced either way. Measured with an empty store: before the presets got their wavetable layers, Frozen Pluck Drone, Gong Grain Swarm, Stutter Grain Kit, Rising Grain Riser, Spectral Chord Morph and Breakbeat Slice Keys were **silent** (chord RMS -180 dBFS: a Sample, Granular, Spectral or Multisample oscillator without its file produces nothing, docs/engine-spec/07 section 1), Convolve without its impulse does not convolve, a `Preset table` plays the saw. Nothing tells the player: there is no `missing_content` indicator on the MPC. Consequence for the set: every batch 2 preset has a plain wavetable layer (level 10 .. 30 % of its oscillator) that is what you hear if the packs are not installed (the table's column "Without the pack" shows -17.9 .. -32.8 dBFS), and the `synthyboy_preset_sanity` gate (no store by default) would fail "silent" for them; its CMake call now passes `--content-dir` to a store of links to the packs.
 2. **`synthyboy_sound_lab` and `synthyboy_tier_bench` could not load content** (no `setContentStore`), so batch 1 could not show these paths and this batch could not use them for the CPU and the full report; fixed in the sources, needs a rebuild (section 1).
 3. **The root note and the loop points of a WAV (`smpl` chunk) are ignored by the Sample, Granular and Spectral oscillators**: `lib_osc.cpp` pitches by `oscN.sample.root` (default 60) and loops by the oscillator's own `sample.loop_start / loop_end` in percent of the file; `WavInfo::rootNote`, `loopStart` and `loopEnd` are read by the file loader (the UI copies the root to the parameter when it loads a file) but not used by a preset that names the file. So a preset must carry `sample.root` and the loop percentages itself (the bowed tone's 14.3 .. 77.7 % are computed from its frames); the chunk in the pack's files is information for other tools. Also `ref.name` is passed to the WAV reader and a note suffix in it ("_C3", " F#2") overrides the chunk's root: the pack's names have none.
 4. **`oscN.multi.timbre` barely changes what you hear with an instrument of stretched zones.** It moves the *lookup key* of the zone (`timbreKey`: `key + t * (127 - 2 key)`), not the pitch: the note stays in tune and a zone from another register is stretched to it. Measured on Nylon Zone Pluck at MIDI 36 (lookup key 91 at +100 %, zone root 81, a shift of 45 semitones): the fundamental stays 65 Hz, the centroid 556 -> 520 Hz, the spectral distance 1.3 dB; on MIDI 60 and +25 / 50 / 100 % it is exactly 0.0 dB because 60 .. 67 are one zone. It is a working control for an instrument with different recordings per zone (the marimba's Zone Shift: 2.0 dB at the Bass note), not for the pluck. The macro of Nylon Zone Pluck was changed to a unison double for that reason.
@@ -601,7 +601,7 @@ Everything below was seen in a render or in the code, with the numbers; nothing 
 ## 8. Not shown, and why
 
 - CPU of every preset (section 4) and the eight-note velocity-127 peak, the register / velocity / long-hold report of `sound-lab.py`: need the rebuilt tools.
-- The `Vital` engine (what `synthyboy_preset_sanity` runs) was not rendered: the numbers are those of the own engine the MPC runs.
+- The numbers are those of the own engine the MPC runs.
 - Wavetable warps and morphs: not used (4x warp costs 7 .. 9 % of the XL block per oscillator; batch 1 spent them). The filter models Sample Hold, New Wsp, EQ 6 dB, Misc stay unused; the Spectral filter (`spec.flt_use`) and the drawn spectral mask, the multisample envelope override (`multi.override`), key switches and round robin in an SFZ, release triggers: not used.
 - Per-note effects are not possible (batch 1, item 8); the Key 61 loses Convolve, reverb, flanger, Hyper/Dimension and Bode.
 

@@ -31,7 +31,7 @@ struct LiveValues
         stage (0 .. 1). */
     float envStage[kNumEnvs] = {};
     float envPosition[kNumEnvs] = {};
-    /** The same envelopes, finer (own engine only; zero from the Vital engine): stage 0 idle, 1 delay, 2 attack, 3 hold, 4 decay, 5 sustain, 6 release, 7 finished or killed, and the
+    /** The same envelopes, finer (zero from an engine without the finer stages): stage 0 idle, 1 delay, 2 attack, 3 hold, 4 decay, 5 sustain, 6 release, 7 finished or killed, and the
         fraction 0 .. 1 of that stage that has run (the sustain has none: 0). */
     float envFineStage[kNumEnvs] = {};
     float envFineFraction[kNumEnvs] = {};
@@ -58,11 +58,10 @@ struct LiveValues
         that has run, of envelope n + 1 in voice v; stage 0 for a slot without a voice. The running dots of the envelope display (one per sounding voice). */
     float envVoiceStage[kNumEnvs][kReadVoices] = {};
     float envVoiceFraction[kNumEnvs][kReadVoices] = {};
-    /** The cycle position (as lfoPhase: 0 .. 1, the x of the cursor of the LFO display) of LFO n + 1 in the newest voices (newest first, own engine only); only the first numLfoVoices voices are valid (the Vital
-        engine writes none). The running cursors of the LFO display (one per sounding voice). */
+    /** The cycle position (as lfoPhase: 0 .. 1, the x of the cursor of the LFO display) of LFO n + 1 in the newest voices (newest first, own engine only); only the first numLfoVoices voices are valid. The running cursors of the LFO display (one per sounding voice). */
     float lfoVoicePhase[kNumLfos][kReadVoices] = {};
     int numLfoVoices = 0;
-    /** The level meters of the mixer (own engine only; the Vital engine leaves them at 0): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of the signal on a scale of 60 dB:
+    /** The level meters of the mixer (zero from an engine without meters): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of the signal on a scale of 60 dB:
         0 = -60 dBFS .. 1 = full scale, with a fast attack and a release of about 300 ms. The sources are measured at their own output (the power sum of the voices), the buses before their racks, the master at
         the output of the engine. Written by the audio thread into atomics at the end of a block, read lock free by the display thread. */
     static constexpr int kMaxStrips = 10;

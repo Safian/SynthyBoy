@@ -4,7 +4,7 @@
 
 find_package(Threads REQUIRED)
 
-# Also used by core/engine-vital/tests (the Vital-specific tests), which link the Vital library as well:
+# Helper to register a test target with CTest:
 #   synthyboy_add_test(name sources... [LINK libs...])
 function(synthyboy_add_test name)
     cmake_parse_arguments(ARG "" "" "LINK" ${ARGN})

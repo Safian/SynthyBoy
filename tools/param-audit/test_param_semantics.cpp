@@ -25,7 +25,7 @@ bool verbose() { return std::getenv ("SYNTHYBOY_AUDIT_VERBOSE") != nullptr; }
 
 Rig& rig()
 {
-    static Rig r (EngineKind::vital);
+    static Rig r (EngineKind::own);
     return r;
 }
 
@@ -444,10 +444,32 @@ TEST (envelope_times_follow_the_display)
         checkProportional ("env1.attack (90 % level)", xs, m, 0.87, 1.03, 1.1, 50.0f);
     }
     {
-        const auto xs = std::vector<float> { 50.0f, 100.0f, 200.0f, 400.0f, 800.0f, 1500.0f };
+        // Own law (docs/engine-spec/03-envelopes-lfos.md 1.4: release v = v0 (1 - P (x, curve)), P (x, p) = (e^{px} - 1) / (e^p - 1); the amplitude is v^2, section 1.5; the table default of
+        // env1.release_curve is -3, core/src/param_table.cpp). -40 dB re the level at the note off is v = 0.1, P = 0.9: x = -ln (1 - 0.9 (1 - e^-3)) / 3 = 0.644 of the display. The level is
+        // the RMS over 8 ms centred on the instant (one period of the 130.8 Hz test note is 7.65 ms): the 1 ms RMS the attack and decay checks use rides on the ripple of that low sine,
+        // which put the first crossing of -40 dB up to 0.15 of the display too early and made the ratio drift by x1.104 (Vital's own constant was 0.49).
+        const auto xs = std::vector<float> { 100.0f, 200.0f, 400.0f, 800.0f, 1500.0f };
         const auto m = sweep (pure(), "env1.release", xs, heldNote (0.5, 3.0), [] (const Audio& a, float)
-                              { const auto e = envelopeDb (a); const size_t off = 500; const double ref = e[off - 5]; size_t i = off; while (i < e.size() && e[i] > ref - 40.0) ++i; return static_cast<double> (i - off); });
-        checkProportional ("env1.release (-40 dB)", xs, m, 0.44, 0.56, 1.1, 50.0f);
+                              {
+                                  const size_t half = static_cast<size_t> (0.004 * kSr), off = at (0.5);
+                                  auto levelDb = [&] (size_t centre)
+                                  {
+                                      double acc = 0.0;
+                                      for (size_t j = centre - half; j < centre + half; ++j)
+                                      {
+                                          const double v = 0.5 * (static_cast<double> (a.l[j]) + a.r[j]);
+                                          acc += v * v;
+                                      }
+                                      return 10.0 * std::log10 (std::max (acc / static_cast<double> (2 * half), 1.0e-18));
+                                  };
+                                  const double ref = levelDb (off - 3 * half);
+                                  size_t i = off;
+                                  while (i + half < a.l.size() && levelDb (i) > ref - 40.0)
+                                      i += static_cast<size_t> (0.0005 * kSr);
+                                  return 1000.0 * static_cast<double> (i - off) / kSr;
+                              });
+        const double expected = -std::log (1.0 - 0.9 * (1.0 - std::exp (-3.0))) / 3.0;
+        checkProportional ("env1.release (-40 dB)", xs, m, expected - 0.04, expected + 0.04, 1.1, 100.0f);
     }
     {
         const auto xs = std::vector<float> { 50.0f, 100.0f, 200.0f, 400.0f, 800.0f, 1500.0f };
@@ -584,13 +606,22 @@ TEST (voice_control_detune_and_pan_per_voice)
 
 TEST (polyphony_limits_the_number_of_voices)
 {
-    // eight notes held, master.polyphony 1 .. 16: the power of the sum of equal sine voices at different pitches grows with the voice count: 10 log10 (min (n, 8)), tolerance 1 dB
+    // eight notes held, master.polyphony 1 .. 16 (one voice per note, equal levels, different pitches: the powers add): with the voice-count gain n^-alpha of the own engine
+    // (docs/release/VOICE-COUNT-GAIN-SPEC.md, kVoiceCountAlphaDefault = 0.5) the power re one voice is 10 log10 (min (n, 8)^(1 - 2 alpha)): alpha 0 is the plain growth 10 log10 (min (n, 8)) and
+    // proves the limit, the default alpha 0.5 is flat (a chord as loud as a note). Tolerance 1.5 dB for both.
     const auto xs = range (1.0f, 16.0f, 16);
-    const auto m = sweep (cat (pure(), { { "master.volume", -18.0f } }), "master.polyphony", xs, scriptByName ("chord8"), [] (const Audio& a, float) { return rmsDbOf (a.l, at (0.25), at (0.58)); });
-    std::vector<double> rel;
-    for (double v : m)
-        rel.push_back (v - m.front());
-    checkCurve ("master.polyphony (power re one voice, dB)", xs, rel, [] (float n) { return 10.0 * std::log10 (std::min (static_cast<double> (n), 8.0)); }, 1.5, "dB");
+    Rig& r = rig();
+    for (const float alpha : { 0.0f, kVoiceCountAlphaDefault })
+    {
+        CHECK (setOwnVoiceCountAlpha (r.engine(), alpha));
+        const auto m = sweep (cat (pure(), { { "master.volume", -18.0f } }), "master.polyphony", xs, scriptByName ("chord8"), [] (const Audio& a, float) { return rmsDbOf (a.l, at (0.25), at (0.58)); });
+        std::vector<double> rel;
+        for (double v : m)
+            rel.push_back (v - m.front());
+        checkCurve (alpha == 0.0f ? "master.polyphony (power re one voice, dB, alpha 0)" : "master.polyphony (power re one voice, dB, default alpha)", xs, rel,
+                    [alpha] (float n) { return 10.0 * std::log10 (std::pow (std::min (static_cast<double> (n), 8.0), 1.0 - 2.0 * static_cast<double> (alpha))); }, 1.5, "dB");
+    }
+    CHECK (setOwnVoiceCountAlpha (r.engine(), kVoiceCountAlphaDefault));
 }
 
 TEST (wavetable_frame_position_morphs_the_spectrum_monotonically)
@@ -638,6 +669,16 @@ TEST (effect_mix_zero_is_the_dry_signal)
         {
             sbtest::check (std::fabs (mz.rmsDb - md.rmsDb) < 0.3 && worstBand < 0.5, (std::string (fx) + " mix 0 has the level and spectrum of the off render").c_str(), __FILE__, __LINE__);
         }
+        else if (std::string (fx) == "hyperdim")
+        {
+            // Own law (core/fx-serum-a/src/hyper_dimension.cpp, docs/engine-spec/06-effects.md 1): mix 0 with the dimension mix 0 is the dry sum, bit for bit, once the mix has glided from its
+            // previous value (the default 50 %) across the first chunk: those 30 samples differ by up to -59.5 dB re peak (measured), every later sample is identical.
+            double late = 0.0;
+            for (size_t i = 64; i < zero.l.size(); ++i)
+                late = std::max ({ late, std::fabs (static_cast<double> (zero.l[i]) - dry.l[i]), std::fabs (static_cast<double> (zero.r[i]) - dry.r[i]) });
+            sbtest::check (late == 0.0, "hyperdim mix 0 is bit-identical to the off render after the first chunk", __FILE__, __LINE__);
+            sbtest::check (diff (zero, dry) < kNoiseFloorDb + 3.0, "hyperdim mix 0: the first chunk's glide stays below -57 dB re peak", __FILE__, __LINE__);
+        }
         else
             sbtest::check (diff (zero, dry) < kNoiseFloorDb, (std::string (fx) + " mix 0 is dry").c_str(), __FILE__, __LINE__);
         sbtest::check (std::string (fx) == "bode" || diff (full, dry) > kNoiseFloorDb, (std::string (fx) + " mix 100 differs").c_str(), __FILE__, __LINE__);
@@ -648,13 +689,15 @@ TEST (effect_mix_zero_is_the_dry_signal)
 
 TEST (delay_time_is_the_echo_spacing)
 {
-    // a 40 ms sine burst through the delay at mix 100, feedback 0, free time: the first sound arrives `delay.time` ms after the note on (Vital manual: Delay - time in ms); tolerance 3 ms
+    // a 40 ms sine burst through the delay at mix 100, feedback 0, free time: the first sound arrives `delay.time` ms after the note on (docs/engine-spec/06-effects.md 3: mix is equal power, dry cos,
+    // wet sin: at 100 % no dry); tolerance 3 ms. The first 3 ms are not searched: the mix of the effect glides from its previous value across the first chunk (6 Parameter smoothing, "the
+    // others interpolate linearly across the chunk"), which leaves a burst of dry (-22 dB) in the first millisecond; from the second millisecond to the echo the output is -160 dB.
     const auto xs = std::vector<float> { 40.0f, 60.0f, 90.0f, 130.0f, 200.0f, 300.0f, 450.0f, 700.0f, 1000.0f, 1500.0f };
     Script sc = heldNote (0.04, 2.2);
     for (auto& e : sc.events)
         e.key = 72;
     const auto m = sweep (cat (pure(), { { "delay.on", 1.0f }, { "delay.mix", 100.0f }, { "delay.feedback", 0.0f }, { "delay.sync", 0.0f }, { "delay.style", 0.0f }, { "env1.release", 5.0f } }), "delay.time", xs, sc, [] (const Audio& a, float)
-                          { const auto e = envelopeDb (a); size_t i = 0; while (i < e.size() && e[i] < -60.0) ++i; return static_cast<double> (i); });
+                          { const auto e = envelopeDb (a); size_t i = 3; while (i < e.size() && e[i] < -60.0) ++i; return static_cast<double> (i); });
     checkCurve ("delay.time (first sound after, ms)", xs, m, [] (float t) { return static_cast<double> (t); }, 3.0, "ms");
 }
 
@@ -1029,7 +1072,7 @@ TEST (reverb_force_enable_overrides_the_tier_mask)
     const auto sc = scriptByName ("long");
     auto levelTail = [&] (Tier tier, float force, float reverb)
     {
-        Rig r (EngineKind::vital, kSr, tier);
+        Rig r (EngineKind::own, kSr, tier);
         r.begin ({ { "reverb.on", reverb }, { "reverb.mix", 100.0f }, { "reverb.force_enable", force }, { "reverb.decay", 3000.0f } });
         return rmsDbOf (r.render (sc).l, at (1.0), at (1.9));
     };

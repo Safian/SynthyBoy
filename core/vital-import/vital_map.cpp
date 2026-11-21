@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // docs/ui-design/11-vital-preset-import.md 1.2.0: key = our parameter, control = the name of the setting in a .vital file (a format fact),
-// conv/a/b = the conversion OUR value -> file value (core/engine-vital/adapter/vital_bindings.cpp, our code); the importer applies the
+// conv/a/b = the conversion OUR value -> file value; the importer applies the
 // exact inverse (vital_import.cpp, fromFile). Rows are in the order of docs/params.json. Generated-style table: edit by regenerating,
 // the cross-check test (vital-import tests, table_vs_params) re-verifies every key against the parameter table.
 // Owner approval for shipping the names in the binary: docs/ui-design/12-decisions.md Q33.

@@ -6,7 +6,7 @@
   "build": 1,
   "kind": "instrument",
   "author": "Safian Szabolcs",
-  "description": "Wavetable synthesizer (CLAP and VST3) with an engine derived from Vital.",
+  "description": "Wavetable synthesizer (CLAP and VST3) with its own engine.",
   "license": "AGPL-3.0-or-later",
   "homepage": "https://github.com/Safian/SynthyBoy",
   "clap_id": "com.safian.synthyboy",

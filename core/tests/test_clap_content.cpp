@@ -254,32 +254,40 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     CHECK_EQ (std::string (listed.sha256), std::string (item.sha256));
     CHECK_EQ (ext->get (plugin, SYNTHYBOY_CONTENT_SAMPLE, 1, &listed), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
 
-    // not attached: the Sample oscillator is silent; attached: it plays the file at the key pitch, 880 Hz an octave up
+    // Own-engine law (core/tests/test_own_content_policy.cpp, docs/MPC.md "State and missing files"): a Sample oscillator without its file is NOT silent, it plays the oscillator's
+    // built-in wavetable (the Vital-derived engine, removed, was silent). Attached: it plays the file (a sine of 440 Hz), which is a different waveform from that wavetable.
     const auto base = [] { return std::vector<clap_event_param_value_t> {
         paramEvent ("osc1.type", 1.0), paramEvent ("osc1.unison.voices", 1.0), paramEvent ("osc1.random_phase", 0.0), paramEvent ("osc1.sample.loop_mode", 1.0),
         paramEvent ("filter1.on", 0.0), paramEvent ("osc1.level", 100.0) }; };
-    const bool sampleOsc = isEngineAvailable (EngineKind::vital); // the own engine (builds without Vital) has no Sample oscillator
-    if (sampleOsc)
-        CHECK (rmsOf (play (plugin, 69, 0.8, base()), 0.3, 0.7) < 1.0e-4);
+    const auto maxDifference = [] (const std::vector<float>& x, const std::vector<float>& y, double t0, double t1) {
+        double worst = 0.0;
+        for (size_t i = static_cast<size_t> (t0 * 48000.0); i < static_cast<size_t> (t1 * 48000.0) && i < x.size() && i < y.size(); ++i)
+            worst = std::max (worst, std::fabs (static_cast<double> (x[i]) - static_cast<double> (y[i])));
+        return worst;
+    };
+    auto asWavetable = base();
+    asWavetable[0] = paramEvent ("osc1.type", 0.0);
+    const auto builtin = play (plugin, 69, 0.8, asWavetable);
+    plugin->reset (plugin);
+    CHECK (rmsOf (builtin, 0.3, 0.7) > 0.05);
+    const auto notAttached = play (plugin, 69, 0.8, base());
+    CHECK (maxDifference (notAttached, builtin, 0.3, 0.7) < 1.0e-6);
     plugin->reset (plugin);
     CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0, 4), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
     CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0, 1), SYNTHYBOY_CONTENT_OK);
-    if (sampleOsc)
-    {
-        const auto a4 = play (plugin, 69, 1.0);
-        CHECK (rmsOf (a4, 0.3, 0.9) > 0.05);
-        CHECK_NEAR (crossingHz (a4, 0.3, 0.9), 440.0, 6.0);
-        plugin->reset (plugin);
-        CHECK_NEAR (crossingHz (play (plugin, 81, 1.0), 0.3, 0.9), 880.0, 12.0);
-    }
+    const auto a4 = play (plugin, 69, 1.0);
+    CHECK (rmsOf (a4, 0.3, 0.9) > 0.05);
+    CHECK_NEAR (crossingHz (a4, 0.3, 0.9), 440.0, 6.0);
+    CHECK (maxDifference (a4, builtin, 0.3, 0.7) > 0.05); // not the built-in wavetable: the file plays
+    plugin->reset (plugin);
+    CHECK_NEAR (crossingHz (play (plugin, 81, 1.0), 0.3, 0.9), 880.0, 12.0);
 
-    // the reference is in the state, so a saved project finds the file again; removing the file makes it a missing one (silence)
+    // the reference is in the state, so a saved project finds the file again; removing the file makes it a missing one (the built-in wavetable plays again, flagged by the engine)
     CHECK_EQ (ext->remove (plugin, SYNTHYBOY_CONTENT_SAMPLE, 3), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
     CHECK_EQ (ext->remove (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0), SYNTHYBOY_CONTENT_OK);
     CHECK_EQ (ext->count (plugin, SYNTHYBOY_CONTENT_SAMPLE), 0u);
     plugin->reset (plugin);
-    if (sampleOsc)
-        CHECK (rmsOf (play (plugin, 69, 0.8), 0.3, 0.7) < 1.0e-4);
+    CHECK (maxDifference (play (plugin, 69, 0.8), builtin, 0.3, 0.7) < 1.0e-6);
 
     // a wavetable by path (a WAV of 2048 sample cycles) and an impulse response
     std::vector<float> frames (2048 * 2);

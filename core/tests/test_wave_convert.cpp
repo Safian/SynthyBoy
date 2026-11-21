@@ -1,5 +1,5 @@
 // SynthyBoy - core tests of GROUPD (WP-14 / WP-15 / WP-16, 13-new-keys.md 4.40): sample region -> wavetable, wavetable frame <-> LFO shape, the audio of a render
-// as WAV, and the offline render driver on the own engine (the engine of the mobile shell). The Vital engine's parts are in engine-vital/tests/test_groupd.cpp.
+// as WAV, and the offline render driver on the own engine (the engine of the mobile shell).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <algorithm>

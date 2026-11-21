@@ -19,11 +19,7 @@ SynthyBoyClap::SynthyBoyClap (const clap_host_t* h)
 {
     events.reserve (256);
     quality.realtime = true; // live: the audio thread never waits for the engine's helper thread (Quality::realtime)
-#if SYNTHYBOY_HAS_VITAL
-    engine = createEngine (EngineKind::vital);
-#else
     engine = createEngine (EngineKind::own);
-#endif
 
     contentStore.addPackRoot ((std::filesystem::path (userDir) / "packs").string()); // installed content packs
     itemLibrary = std::make_unique<UserLibrary> (userDir);

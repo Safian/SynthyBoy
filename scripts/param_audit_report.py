@@ -172,7 +172,7 @@ def main():
     ap.add_argument("--mode", default="quick")
     ap.add_argument("--wall", type=float, default=0.0)
     ap.add_argument("--keys-regex", default="")
-    ap.add_argument("--engine", default="vital")
+    ap.add_argument("--engine", default="own")
     a = ap.parse_args()
 
     rows = load(a.indir)

@@ -11,11 +11,6 @@ endif()
 # With SYNTHYBOY_STATIC_UI the plug-in under test is the finished static library synthyboy_static_ui (the one the iOS app links), linked into the test and entered through
 # synthyboy_clap_get_entry, not a .clap that is loaded: the same tests, the same goldens, the code of the iOS archive (namespaced JUCE, partial link). On iOS they run in the simulator
 # (scripts/test-ios-static-ui.sh); on a Mac they are ordinary ctest tests.
-# The own engine (SYNTHYBOY_WITH_VITAL=OFF: the engine of iOS) does not act on most keys the GUI shows: the few assertions about the SOUND of an edit say so (SYNTHYBOY_HARNESS_OWN_ENGINE).
-set(_engine_definitions "")
-if(NOT SYNTHYBOY_WITH_VITAL)
-    set(_engine_definitions SYNTHYBOY_HARNESS_OWN_ENGINE=1)
-endif()
 set(_static_ui FALSE)
 if(TARGET synthyboy_static_ui)
     set(_static_ui TRUE)
@@ -29,7 +24,6 @@ function(synthyboy_add_bitmap_gui_test name)
     endif()
     target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/shell-clap")
     target_link_libraries(${name} PRIVATE ${CMAKE_DL_LIBS})
-    target_compile_definitions(${name} PRIVATE ${_engine_definitions})
     if(_static_ui)
         target_link_libraries(${name} PRIVATE synthyboy_static_ui_link)
         target_compile_definitions(${name} PRIVATE SYNTHYBOY_HARNESS_STATIC_ENTRY=1)
@@ -54,12 +48,8 @@ endfunction()
 
 synthyboy_add_bitmap_gui_test(synthyboy_test_bitmap_gui test_bitmap_gui.cpp)
 synthyboy_add_bitmap_gui_test(synthyboy_test_bitmap_golden test_bitmap_golden.cpp)
-# The pictures depend on what the engine can do (the UI dims the keys it cannot): one set per engine, golden/ for the Vital-derived engine, golden-own/ for the own engine (docs/ui-design/OWN-ENGINE-GAP.md).
-if(SYNTHYBOY_WITH_VITAL)
-    target_compile_definitions(synthyboy_test_bitmap_golden PRIVATE SYNTHYBOY_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
-else()
-    target_compile_definitions(synthyboy_test_bitmap_golden PRIVATE SYNTHYBOY_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden-own")
-endif()
+# The pictures depend on what the engine can do (the UI dims the keys it cannot): one set, golden-own/ for the own engine (docs/ui-design/OWN-ENGINE-GAP.md).
+target_compile_definitions(synthyboy_test_bitmap_golden PRIVATE SYNTHYBOY_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden-own")
 
 if(_static_ui)
     return() # the bench loads the module and the export check reads a .clap: neither exists in this build

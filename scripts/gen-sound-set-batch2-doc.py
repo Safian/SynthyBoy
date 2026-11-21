@@ -426,7 +426,7 @@ def main():
       "before the presets got their wavetable layers, Frozen Pluck Drone, Gong Grain Swarm, Stutter Grain Kit, Rising Grain Riser, Spectral Chord Morph and Breakbeat Slice Keys were **silent** (chord RMS -180 dBFS: a Sample, Granular, Spectral or Multisample oscillator without its file produces nothing, "
       "docs/engine-spec/07 section 1), Convolve without its impulse does not convolve, a `Preset table` plays the saw. Nothing tells the player: there is no `missing_content` indicator on the MPC. "
       "Consequence for the set: every batch 2 preset has a plain wavetable layer (level 10 .. 30 % of its oscillator) that is what you hear if the packs are not installed (the table's column \"Without the pack\" shows -17.9 .. -32.8 dBFS), and "
-      "the `synthyboy_preset_sanity` gate (Vital engine, no store by default) would fail \"silent\" for them; its CMake call now passes `--content-dir` to a store of links to the packs.")
+      "the `synthyboy_preset_sanity` gate (no store by default) would fail \"silent\" for them; its CMake call now passes `--content-dir` to a store of links to the packs.")
     w("2. **`synthyboy_sound_lab` and `synthyboy_tier_bench` could not load content** (no `setContentStore`), so batch 1 could not show these paths and this batch could not use them for the CPU and the full report; fixed in the sources, needs a rebuild (section 1).")
     w("3. **The root note and the loop points of a WAV (`smpl` chunk) are ignored by the Sample, Granular and Spectral oscillators**: `lib_osc.cpp` pitches by `oscN.sample.root` (default 60) and loops by the oscillator's own `sample.loop_start / loop_end` in percent of the file; "
       "`WavInfo::rootNote`, `loopStart` and `loopEnd` are read by the file loader (the UI copies the root to the parameter when it loads a file) but not used by a preset that names the file. "
@@ -453,7 +453,7 @@ def main():
     w("## 8. Not shown, and why")
     w("")
     w("- CPU of every preset (section 4) and the eight-note velocity-127 peak, the register / velocity / long-hold report of `sound-lab.py`: need the rebuilt tools.")
-    w("- The `Vital` engine (what `synthyboy_preset_sanity` runs) was not rendered: the numbers are those of the own engine the MPC runs.")
+    w("- The numbers are those of the own engine the MPC runs.")
     w("- Wavetable warps and morphs: not used (4x warp costs 7 .. 9 % of the XL block per oscillator; batch 1 spent them). The filter models Sample Hold, New Wsp, EQ 6 dB, Misc stay unused; the Spectral filter (`spec.flt_use`) and the drawn spectral mask, the multisample envelope override (`multi.override`), key switches and round robin in an SFZ, release triggers: not used.")
     w("- Per-note effects are not possible (batch 1, item 8); the Key 61 loses Convolve, reverb, flanger, Hyper/Dimension and Bode.")
     w("")

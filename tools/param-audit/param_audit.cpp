@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_param_audit [--engine vital|own] [--quick | --full] [--keys REGEX] [--group PREFIX] [--shard I/N [--claims DIR]] [--part I/N] [--out DIR] [--keep-wavs DIR]
+//   synthyboy_param_audit [--quick | --full] [--keys REGEX] [--group PREFIX] [--shard I/N [--claims DIR]] [--part I/N] [--out DIR] [--keep-wavs DIR]
 //                         [--seed N] [--list-keys] [--list-contexts KEY] [--verbose]
 //
 // For every key of the table that the engine supports: put the key's context in place (tools/param-audit/contexts.cpp: the first state of a ladder in which the key is audible),
@@ -35,7 +35,7 @@ namespace
 {
 struct Options
 {
-    EngineKind engine = EngineKind::vital;
+    EngineKind engine = EngineKind::own; // the only engine
     Density density = Density::full;
     std::string keysRegex, group, out = ".", wavs, listContexts, claims, repeatKey;
     int repeatContext = 0, part = 0, parts = 1;
@@ -511,9 +511,7 @@ int main (int argc, char** argv)
     {
         const std::string a = argv[i];
         auto next = [&] () -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
-        if (a == "--engine")
-            o.engine = next() == "own" ? EngineKind::own : EngineKind::vital;
-        else if (a == "--quick")
+        if (a == "--quick")
             o.density = Density::quick;
         else if (a == "--full")
             o.density = Density::full;

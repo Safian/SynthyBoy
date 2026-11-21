@@ -4,8 +4,10 @@ Status: design, written 2026-11-04 on top of the verified spike (`403ea61`, VST3
 Items marked **(unverified)** are assumptions that must be checked before they are relied on;
 items marked **(owner)** are decisions that belong to the project owner.
 
-SynthyBoy is a Serum-class wavetable synthesizer built on the source of [Vital](https://github.com/mtytel/vital)
-(`mtytel/vital`, GPL-3.0), released under **AGPL-3.0-or-later** under its own name. It is the first
+**Update 2026-11-21: the Vital-derived engine has been removed** (owner decision: one engine; plan and decisions: [plans/vital-removal.md](plans/vital-removal.md)). The engine is `core/engine-own` in every build. Section 2 and the notes on `engine-vital` and its CMake switch below describe the take-over as it was and are kept as history; [UPSTREAM.md](UPSTREAM.md) is its record. The licence stays AGPL-3.0-or-later.
+
+SynthyBoy is a Serum-class wavetable synthesizer with its own engine (it was first built on the source of [Vital](https://github.com/mtytel/vital),
+`mtytel/vital`, GPL-3.0; that engine is removed), released under **AGPL-3.0-or-later** under its own name. It is the first
 own plugin of the Kick ecosystem (Kick DAW/sampler, Akai MPC Key 61, mobile app), but it is developed,
 built, tested and released **without any Kick source**.
 
@@ -106,7 +108,7 @@ core/                  synthyboy_core   static lib, C++17, no JUCE, no OS API, n
   include/synthyboy/   Engine interface, ParamInfo, StateIO, Quality, events, EngineCaps, ContentStore (public API)
   src/                 params (1484 keys), state (JSON, versioned, v3), content section, content store, engine glue
   engine-own/          our engine (spike engine; always built; the only engine on iOS)
-  engine-vital/        Vital-derived DSP + adapter (optional: SYNTHYBOY_WITH_VITAL, OFF for iOS)
+  engine-vital/        (history: the removed Vital-derived DSP + adapter)
   tuning/              .scl / .kbm / .tun parsers, 128-key table, the MTS-ESP seam (ITuningSource; the library is not linked)
   formula/             wavetable formula compiler (bytecode) and frame renderer (grammar: formula/GRAMMAR.md)
   shapes/              custom LFO shapes and the velocity / note curves (point lists, baked tables)
@@ -238,7 +240,7 @@ library `synthyboy_static`, which stays free of JUCE and of the UI: the iOS rule
 Owner decision (2026-11-12, `14-morning-questions.md` 110): SynthyBoy on iOS has the same UI as everywhere, drawn by the plug-in through the bitmap GUI extension, with the own engine (no Vital-derived
 code, 2.2). The Kick app on iOS is a JUCE 7.0.12 application and links SynthyBoy statically, so JUCE 7 (Kick) and JUCE 8.0.17 (SynthyBoy's UI) are in one binary. That is not a matter of symbol
 visibility: a static link sees hidden symbols, and the Objective-C runtime registers classes by name. The target `synthyboy_static_ui` (CMake: `-DCMAKE_SYSTEM_NAME=iOS -DSYNTHYBOY_STATIC_UI=ON
--DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF`, `shell-clap/CMakeLists.txt`, `cmake/StaticUi.cmake`) therefore keeps the two apart in three layers:
+-DSYNTHYBOY_BUILD_PLUGIN=OFF`, `shell-clap/CMakeLists.txt`, `cmake/StaticUi.cmake`) therefore keeps the two apart in three layers:
 
 1. **A C++ namespace of its own for JUCE 8.** JUCE 8 has no namespace switch (`JUCE_NAMESPACE` is a deprecated macro that does nothing), so the build renames it: every translation unit of the build is
    compiled with `-Djuce=synthyboy_juce8` (`SYNTHYBOY_JUCE_NAMESPACE`, `cmake/JuceNamespace.cmake`). Every `juce::X` of the modules, of the third party code inside them (zlib, libpng, libjpeg, HarfBuzz, SheenBidi, the codecs) that
@@ -422,6 +424,6 @@ clap-validator: pin to a tag, built once and cached; it is blocking since its fi
 - **(owner)** Trademark/name clearance for "SynthyBoy" (docs/NAMING.md). iOS is decided: own engine (§2.2).
 - Exact CPU of the MPC Key 61 and its available toolchain/sysroot (cross-compile target) – read from the device.
 - Whether `clap-juce-extensions` implements the extensions needed in §4.1 at the pinned commit.
-- Vital engine in the shipped plugin: since Phase 3 it is the JUCE shell's default (own engine: `-DSYNTHYBOY_SHELL_ENGINE=own`, and when `SYNTHYBOY_WITH_VITAL=OFF`). The owner's listening tests (level, velocity curve and release time differ, `core/engine-vital/README.md`) and the MPC measurement are still open **(owner)**.
+- Vital engine in the shipped plugin: history. It was the JUCE shell's default from Phase 3 until it was removed (2026-11-21); the owner's listening tests and the MPC measurement of that engine are moot. The own engine is the engine of every build.
 - Upstream quirks recorded but not changed (`WaveFrame::removedDc`, the non-atomic seed counter): docs/UPSTREAM.md.
 - Spike gaps carried over: GUI never opened in a DAW; `-G Xcode` configure fails (Ninja is the supported generator); Linux/Windows builds untested until the first CI run is recorded; CLAP wrapper on Linux supports X11 only.

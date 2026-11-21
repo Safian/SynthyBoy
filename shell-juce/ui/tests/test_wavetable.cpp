@@ -172,8 +172,8 @@ TEST (ui_wavetable_model_and_operations)
     std::vector<float> buffer (wt.numFrames() * wtedit::kWaveformSize);
     CHECK (formula::renderFrames (multiForm, static_cast<int> (wt.numFrames()), buffer.data()).ok);
 
-    // 8. Vital component group
-    wtedit::vital::Group group;
+    // 8. component group (layers)
+    wtedit::layers::Group group;
     group.initFromWavetable (wt);
     CHECK (group.numComponents() >= 1);
     wtedit::Wavetable renderedWt ("Rendered");

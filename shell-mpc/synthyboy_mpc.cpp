@@ -1693,12 +1693,7 @@ struct PluginInstance
         applyTierTrim();
         outputStage.reset();
         applyOutputLimiter();
-        // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
-#if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
-        engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
-#else
         engine = synthyboy::createEngine(synthyboy::EngineKind::own);
-#endif
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         updateEnginePadPressure();
 #endif

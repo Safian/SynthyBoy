@@ -2,15 +2,13 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 44100] [--retrigger S] [--no-ftz]
+//   synthyboy_bench [--engine own] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 44100] [--retrigger S] [--no-ftz]
 //
 // K notes are held and retriggered every S seconds (default 1). The first second is rendered but not measured. Prints,
 // for the requested configuration and then once per quality tier (the tier's quality: voices, unison, oversampling, ...), the
 // real-time factor (audio seconds / seconds spent in process()), the mean, the 99th percentile and the worst block time.
-// Patches: "default" = the table's defaults (one saw oscillator, filter 1, no effects); "heavy" = three oscillators with 7
-// unison voices, two filters in series, three LFOs, an envelope and a velocity routing in the modulation matrix, all nine effects.
-// With --engine own the heavy patch is own_heavy_patch.h instead: the same idea with only parameters that engine-own implements (3 oscillators
-// x 7 unison with a morph and a warp, sub, noise, both filters, 4 LFOs and 7 matrix routes, the effects its tier allows). No assertions: the numbers are
+// Patches: "default" = the table's defaults (one saw oscillator, filter 1, no effects); "heavy" = own_heavy_patch.h: 3 oscillators
+// x 7 unison with a morph and a warp, sub, noise, both filters, 4 LFOs and 7 matrix routes, the effects its tier allows (--engine own is the only engine and is accepted for old command lines). No assertions: the numbers are
 // for looking at, on the machine they were taken on (docs/PERFORMANCE.md).
 
 #include <algorithm>
@@ -140,7 +138,6 @@ void enableFtz()
 
 struct Options
 {
-    EngineKind engine = EngineKind::own;
     double seconds = 10.0;
     bool secondsGiven = false;
     int block = 128;
@@ -177,61 +174,6 @@ void set (IEngine& engine, const char* key, float value)
         std::fprintf (stderr, "bench: unknown parameter %s\n", key);
 }
 
-void slot (IEngine& engine, int index, const char* sourceKey, const char* destinationKey, float amountPercent)
-{
-    const auto s = modSlotParams (index);
-    float source = 0.0f;
-    for (size_t k = 0; k < modSourceCount(); ++k)
-        if (std::strcmp (modSourceTable()[k].key, sourceKey) == 0)
-            source = static_cast<float> (k + 1);
-    const auto* destination = findParamByKey (destinationKey);
-    engine.setParam (paramTable()[s.source].id, source);
-    engine.setParam (paramTable()[s.destination].id, static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (destination->id)))));
-    engine.setParam (paramTable()[s.amount].id, amountPercent);
-}
-
-/** The heavy patch: 3 oscillators x 7 unison voices, 2 filters in series, 3 LFOs and an envelope in the matrix, all effects. */
-void heavyPatch (IEngine& engine)
-{
-    set (engine, "master.polyphony", 32.0f);
-    const float tables[] = { 1.0f, 2.0f, 5.0f }; // saw, square, saw to square
-    for (int i = 1; i <= 3; ++i)
-    {
-        const std::string k = "osc" + std::to_string (i) + ".";
-        set (engine, (k + "on").c_str(), 1.0f);
-        set (engine, (k + "wavetable").c_str(), tables[i - 1]);
-        set (engine, (k + "level").c_str(), 35.0f);
-        set (engine, (k + "unison.voices").c_str(), 7.0f);
-        set (engine, (k + "unison.detune").c_str(), 30.0f);
-        set (engine, (k + "transpose").c_str(), static_cast<float> ((i - 2) * 12));
-        set (engine, (k + "random_phase").c_str(), 100.0f);
-    }
-    set (engine, "osc1.morph.type", 1.0f);
-    set (engine, "filter1.model", 2.0f);
-    set (engine, "filter1.cutoff", 3000.0f);
-    set (engine, "filter1.resonance", 40.0f);
-    set (engine, "filter2.on", 1.0f);
-    set (engine, "filter2.model", 0.0f);
-    set (engine, "filter2.cutoff", 6000.0f);
-    set (engine, "filter.routing", 1.0f);
-    set (engine, "lfo1.sync", 0.0f);
-    set (engine, "lfo2.sync", 0.0f);
-    set (engine, "lfo3.sync", 0.0f);
-    set (engine, "lfo1.rate", 3.0f);
-    set (engine, "lfo2.rate", 0.7f);
-    set (engine, "lfo3.rate", 5.0f);
-    set (engine, "env2.attack", 300.0f);
-    slot (engine, 0, "lfo1", "filter1.cutoff", 30.0f);
-    slot (engine, 1, "lfo2", "osc1.frame", 50.0f);
-    slot (engine, 2, "lfo3", "osc2.pan", 40.0f);
-    slot (engine, 3, "env2", "filter2.cutoff", 40.0f);
-    slot (engine, 4, "velocity", "osc3.level", 30.0f);
-    for (const char* fx : { "chorus", "compressor", "delay", "distortion", "eq", "fxfilter", "flanger", "phaser", "reverb" })
-        set (engine, (std::string (fx) + ".on").c_str(), 1.0f);
-    set (engine, "distortion.drive", 6.0f);
-    set (engine, "eq.mid.gain", 4.0f);
-}
-
 /** A preset as the shell loads it: the parameter values go to the engine one by one (setParam) and the content section by setContent (shell-mpc, effSetChunk). */
 struct PresetData
 {
@@ -260,7 +202,7 @@ bool loadPresetFile (const std::string& path, PresetData& out)
 Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, const PresetData* preset = nullptr)
 {
     const int voices = o.idle ? 0 : voicesIn;
-    auto engine = createEngine (o.engine);
+    auto engine = createEngine (EngineKind::own);
     if (preset != nullptr)
     {
         const auto* table = paramTable();
@@ -268,10 +210,8 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
             engine->setParam (table[i].id, preset->values.plain[i]);
         engine->setContent (preset->content);
     }
-    else if (heavy && o.engine == EngineKind::own)
-        bench::ownHeavyPatch (*engine);
     else if (heavy)
-        heavyPatch (*engine);
+        bench::ownHeavyPatch (*engine);
     else
         set (*engine, "master.polyphony", 32.0f);
     if (o.unisonCap >= 0)
@@ -456,7 +396,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 44100] [--retrigger S] [--profile FILE] [--ftz] [--no-ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 44100] [--retrigger S] [--profile FILE] [--ftz] [--no-ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -471,9 +411,7 @@ int main (int argc, char** argv)
         if (a == "--engine")
         {
             const std::string v = next();
-            if (v == "own") o.engine = EngineKind::own;
-            else if (v == "vital") o.engine = EngineKind::vital;
-            else usage ("unknown engine");
+            if (v != "own") usage ("unknown engine (the own engine is the only one)");
         }
         else if (a == "--patch")
         {
@@ -519,13 +457,13 @@ int main (int argc, char** argv)
         return 2;
     }
     const char* error = nullptr;
-    if (createEngine (o.engine, &error) == nullptr)
+    if (createEngine (EngineKind::own, &error) == nullptr)
     {
-        std::fprintf (stderr, "engine %s not available: %s\n", engineName (o.engine), error != nullptr ? error : "?");
+        std::fprintf (stderr, "engine %s not available: %s\n", engineName (EngineKind::own), error != nullptr ? error : "?");
         return 1;
     }
 
-    std::printf ("synthyboy_bench: engine %s, %.0f Hz, block %d, %.1f s per run, retrigger every %.1f s\n", engineName (o.engine), o.sampleRate,
+    std::printf ("synthyboy_bench: engine %s, %.0f Hz, block %d, %.1f s per run, retrigger every %.1f s\n", engineName (EngineKind::own), o.sampleRate,
                  o.block, o.seconds, o.retrigger);
     if (o.presetFile != nullptr || o.presetDir != nullptr)
     {
@@ -583,8 +521,7 @@ int main (int argc, char** argv)
     {
         if ((heavy && ! o.heavyPatch) || (! heavy && ! o.defaultPatch))
             continue;
-        std::printf ("%s:\n", heavy ? (o.engine == EngineKind::own ? "heavy patch of the own engine (3 oscillators x 7 unison voices with morph and warp, sub, noise, 2 filters, 4 LFOs + 7 matrix routes, effects)"
-                                                                   : "heavy patch (3 oscillators x 7 unison voices, 2 filters, 3 LFOs + matrix, all effects)")
+        std::printf ("%s:\n", heavy ? "heavy patch of the own engine (3 oscillators x 7 unison voices with morph and warp, sub, noise, 2 filters, 4 LFOs + 7 matrix routes, effects)"
                                      : "default patch (one saw oscillator, filter 12 kHz, no effects)");
         Quality requested;
         requested.maxVoices = o.voices;

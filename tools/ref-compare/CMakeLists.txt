@@ -1,6 +1,6 @@
-# SynthyBoy - ref-compare: the render side of the reference comparison (docs/ui-design/REFCOMPARE-REPORT.md). Renders imported presets (.sbpreset) through the Vital-derived
+# SynthyBoy - ref-compare: the render side of the reference comparison (docs/ui-design/REFCOMPARE-REPORT.md). Renders imported presets (.sbpreset) through the own
 # engine with the same note script, block size and sample rate as tools/serum-reference uses for the real Serum 2. The comparison itself is tools/ref-compare/compare.py.
-# Added by the top level CMakeLists.txt when the tests and the Vital engine are part of the build.
+# Added by the top level CMakeLists.txt when the tests are part of the build.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 

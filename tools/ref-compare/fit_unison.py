@@ -5,7 +5,7 @@
 
 levels: the default saw of the plug-in, Unison N, detune 1.0 (the outer voices at +-200 cents, linear), stereo spread 0, blend 0 .. 100 %: the amplitude of the line of every voice (Blackman-Harris
         window, the power around the line) relative to the single voice; printed per count and blend: the centre voice(s) and the outer voices. The result of the 656 renders:
-        centre = c0(N) * sc(blend), outer = c0(N) * so(blend), c0 from 0.4384 (3 voices) to 0.3016 (16), 2 voices 0.320 each, shapes in core/engine-vital/.../synth_oscillator.cpp (kSerumCentre, kSerumOuter).
+        centre = c0(N) * sc(blend), outer = c0(N) * so(blend), c0 from 0.4384 (3 voices) to 0.3016 (16), 2 voices 0.320 each, shapes in the removed Vital-derived engine (kSerumCentre, kSerumOuter).
 pan:    3 voices, blend 100, the stereo spread 0 .. 100 %: the gain of the low voice in the left and the right channel (kSerumPanOwn / kSerumPanOther).
 detune: 3 voices, blend 100, the detune 0.02 .. 1 (file value): the outer voices in cents (200 * d ^ 1.25).
 Nothing is committed with audio; the renders go to tests/serum-reference/experiments (gitignored).

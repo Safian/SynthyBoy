@@ -43,11 +43,8 @@ sys.exit(0 if ok else 1)
 PY
 EXP=$(nm -gU "$LIB" | awk '{print $NF}' | sort | tr '\n' ' ')
 [ "$EXP" = "_VSTPluginMain " ] || { echo "exports: $EXP" | cut -c1-600; echo "ACCEPT FAIL: exported symbols must be only _VSTPluginMain"; exit 1; }
-# engine selection follows SYNTHYBOY_SHELL_ENGINE (configure-only checks of the compile definition)
-grep -q -- "-DSYNTHYBOY_MPC_ENGINE_VITAL=1" $B/build.ninja || { echo "ACCEPT FAIL: default build (SYNTHYBOY_SHELL_ENGINE=vital) must compile shell-mpc with -DSYNTHYBOY_MPC_ENGINE_VITAL=1"; exit 1; }
-cmake -S . -B $B-own -G Ninja $BASE_OPTS -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" > $B-own.configure.log 2>&1 || { tail -20 $B-own.configure.log; echo "ACCEPT FAIL: configure with SYNTHYBOY_SHELL_ENGINE=own"; exit 1; }
-grep -q -- "-DSYNTHYBOY_MPC_ENGINE_VITAL=0" $B-own/build.ninja || { echo "ACCEPT FAIL: with -DSYNTHYBOY_SHELL_ENGINE=own (and Vital in the build) shell-mpc must be compiled with -DSYNTHYBOY_MPC_ENGINE_VITAL=0"; exit 1; }
-grep -q "SYNTHYBOY_MPC_ENGINE_VITAL" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not use SYNTHYBOY_MPC_ENGINE_VITAL"; exit 1; }
+# the shell creates the own engine (a Vital engine switch is excluded by scripts/tests/test_vital_removal_cmake.py)
+grep -q "EngineKind::own" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not create the own engine"; exit 1; }
 # plugin folder / content path logic
 c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp && $B/paths_test > $B/paths.log 2>&1 || { cat $B/paths.log 2>/dev/null | tail -12; echo "ACCEPT FAIL: paths_test (shell-mpc/plugin_paths.h)"; exit 1; }
 # MPC manifest: only binaries that exist, version.xml
@@ -119,7 +116,7 @@ grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/prog
 LIVEINC="-I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework"
 live_build() { # name, cmake options...
     n=$1; shift
-    cmake -S . -B build-mpc-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "$@" > build-mpc-live-$n.configure.log 2>&1 && cmake --build build-mpc-live-$n --target synthyboy_mpc > build-mpc-live-$n.build.log 2>&1 || { tail -30 build-mpc-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
+    cmake -S . -B build-mpc-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "$@" > build-mpc-live-$n.configure.log 2>&1 && cmake --build build-mpc-live-$n --target synthyboy_mpc > build-mpc-live-$n.build.log 2>&1 || { tail -30 build-mpc-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
 }
 live_build off -DSYNTHYBOY_MPC_LFO_LIVE=OFF -DSYNTHYBOY_MPC_SPECTRUM=OFF
 live_build on
@@ -329,14 +326,12 @@ for d in specoff specself specself25; do
 done
 grep -q "Spectrum %d" "$(find build-mpc-live-on -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" || { echo "ACCEPT FAIL: the spectrum build has no spectrum code"; exit 1; }
 grep -q "Spectrum %d" "$(find build-mpc-live-specoff -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" && { echo "ACCEPT FAIL: trace of the spectrum in the build with SYNTHYBOY_MPC_SPECTRUM=OFF"; exit 1; }
-# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE, default ON): pad_pressure.h and the plugin in the own engine (the pressure opens the filter), in the Vital engine
-# (the two parameters exist, the audio ignores them), without the display parameters, and switched off (no trace of it: no names, no chunk member)
+# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE, default ON): pad_pressure.h and the plugin in the own engine (the pressure opens the filter), without the display parameters, and switched off (no trace of it: no names, no chunk member)
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/pad_pressure_host shell-mpc/tests/pad_pressure_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: pad_pressure_host build"; exit 1; }
 pp_lib() { find build-mpc-live-$1 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1; }
 $B/pad_pressure_host "$(pp_lib on)" own > $B/pad-pressure-own.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-own.log; echo "ACCEPT FAIL: pad_pressure_host (own engine)"; exit 1; }
 grep -E "^INFO" $B/pad-pressure-own.log
 $B/pad_pressure_host "$(pp_lib off)" own 0 > $B/pad-pressure-nodisplay.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-nodisplay.log; echo "ACCEPT FAIL: pad_pressure_host (no display parameters)"; exit 1; }
-$B/pad_pressure_host "$LIB" vital > $B/pad-pressure-vital.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-vital.log; echo "ACCEPT FAIL: pad_pressure_host (Vital engine)"; exit 1; }
 $B/pad_pressure_host "$(pp_lib padoff)" own off > $B/pad-pressure-off.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-off.log; echo "ACCEPT FAIL: pad_pressure_host (switched off)"; exit 1; }
 $B/pad_pressure_host "$OVLON" own overlay > $B/pad-pressure-ovlon.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-ovlon.log; echo "ACCEPT FAIL: pad_pressure_host with the overlay built in (Overlay Instance after the pad pressure parameters)"; exit 1; }
 # (the names are asked of the built plugin: the compiler may fold the literal into the copy, so no string of the binary says it)
@@ -354,7 +349,7 @@ c++ -std=c++17 -O1 -Wall -Wextra -I $MPC_SDK/framework -I shell-mpc -o $B/callba
 $B/callback_stats_host "$STATSLIB" $B/callback-stats.txt > $B/callback-stats.log 2>&1 || { grep -E "^FAIL" $B/callback-stats.log; echo "ACCEPT FAIL: callback_stats_host"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
 TL=build-mpc-live-tsan
-cmake -S . -B $TL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+cmake -S . -B $TL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on overlay > $TL/live.log 2>&1
@@ -429,7 +424,7 @@ grep -q "WARNING: ThreadSanitizer" $TL/close-stress.log && { grep -A14 "WARNING:
 grep -q "^FAIL" $TL/close-stress.log && { grep "^FAIL" $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host"; exit 1; }
 grep -q "^OK" $TL/close-stress.log || { tail -5 $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host did not finish"; exit 1; }
 AL=build-mpc-live-asan
-cmake -S . -B $AL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
+cmake -S . -B $AL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
 ALIB="$(find $AL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 ASCORE=$(find $AL/core -name '*.a' | tr '\n' ' ')
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }

@@ -101,7 +101,7 @@ constexpr int kWavetableSine = 0;
 constexpr int kWavetableSaw  = 1;
 constexpr int kWavetablePresetTable = 13;
 /** GROUPB WP-18 (13-new-keys.md 4.36): the choice appended after "Preset table": "Saw Down", the falling saw whose jump is at mid cycle (-saw (phase + 180 degrees)), the waveform of
-    Vital's Init table, a built-in single cycle table (needs kCapWavetableSawDown). */
+    the Init table of the wavetable format, a built-in single cycle table (needs kCapWavetableSawDown). */
 constexpr int kWavetableSawDown = 14;
 /** The built-in LFO shapes (the first choice names of lfoN.shape). */
 constexpr int kNumLfoShapes = 12;
