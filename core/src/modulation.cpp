@@ -72,9 +72,12 @@ struct DestinationLists
                 choiceOfParam[p] = count;
             }
         };
+        // master.transpose became modulatable after the numbers of all other destinations were stored in presets and states:
+        // it is appended as the LAST destination (choice value kNumModDestinations - 1) instead of taking its place in the table order.
+        const int transposeIndex = findIndexByKey ("master.transpose");
         for (size_t i = 0; i < paramCount(); ++i)
         {
-            if ((table[i].flags & kParamModulatable) != 0)
+            if ((table[i].flags & kParamModulatable) != 0 && static_cast<int> (i) != transposeIndex)
                 add (static_cast<int> (i));
             // block B20 (G1, G3): the appended destinations follow the last modulatable key of the table as it was at B20, so the choice
             // numbers (stored in presets) of every later modulatable key are stable: 454 .. 517 = mod01.amount .. mod64.amount,
@@ -91,6 +94,7 @@ struct DestinationLists
                 add (findIndexByKey ("master.polyphony"));
             }
         }
+        add (transposeIndex);
     }
 };
 

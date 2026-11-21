@@ -56,7 +56,7 @@ const Key kKeys[] = {
 TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
 {
     int position = 1544;
-    int destination = 425;
+    int destination = 424;
     for (const Key& k : kKeys)
     {
         const auto& p = byKey (k.key);
@@ -76,10 +76,10 @@ TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
         ++position;
     }
     CHECK_EQ (position, 1558);
-    CHECK_EQ (destination, 433);
+    CHECK_EQ (destination, 432);
     CHECK_EQ (static_cast<int> (paramCount()), 2637); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22, the 6 of B23, the 4 of B24, the 2 of B25 and the 62 of B26
-    CHECK_EQ (modDestinationParamIndex (425), 1546);
-    CHECK_EQ (modDestinationParamIndex (432), 1557);
+    CHECK_EQ (modDestinationParamIndex (424), 1546);
+    CHECK_EQ (modDestinationParamIndex (431), 1557);
     CHECK_EQ (positionOf ("splitter_ms.level"), 1483); // B12 is unchanged
     CHECK_EQ (positionOf ("fxfilter.clean_mode"), 1506); // B16 is unchanged
 }

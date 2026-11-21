@@ -250,9 +250,9 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         case ChoiceSet::modSource:
             return caps | sourceCaps (v);
         case ChoiceSet::modDestination:
-            if (v > 270)
+            if (v > 269)
             {
-                if (v >= 455)
+                if (v >= 454)
                     caps |= kCapModAmount;
                 const int target = modDestinationParamIndex (static_cast<size_t> (v));
                 caps |= target >= 0 ? requiredCaps (static_cast<size_t> (target)) : kCapNone;
@@ -335,7 +335,7 @@ EngineCaps2Mask requiredCapsForValue2 (size_t paramIndex, float plain) noexcept
     const int v = static_cast<int> (plain + 0.5f);
     if (info.choiceSet == ChoiceSet::modDestination)
     {
-        const int target = v > 270 ? modDestinationParamIndex (static_cast<size_t> (v)) : -1;
+        const int target = v > 269 ? modDestinationParamIndex (static_cast<size_t> (v)) : -1;
         return caps | (target >= 0 ? requiredCaps2 (static_cast<size_t> (target)) : kCap2None);
     }
     if (info.choiceSet != ChoiceSet::list)

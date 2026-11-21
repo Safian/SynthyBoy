@@ -179,7 +179,9 @@ TEST (first_880_keys_are_byte_identical_to_state_version_2)
     // computed with sbgolden::fingerprint (880) on commit 9c97a69 (golden_v2.h)
     // REFCOMPARE round 3 (B34, 13-new-keys.md 4.48), deliberate: the plain ranges of eq.low / mid / high.gain (+-15 -> +-24 dB), of the six compressor thresholds (-80 .. 0 -> -120 .. +12 dB) and of the three compressor gains (+-30 -> +-36 dB)
     // grew (the values of a v2 state stay valid); the fingerprint of the first 880 keys includes the ranges: 0xd0dcc938695354b2 before
-    CHECK_EQ (sbgolden::fingerprint (kNumKeysV2), 0xc87e9fbe8ddc33caull);
+    // master.transpose became modulatable (flags kAuto -> kMod): deliberate, the flags are part of the fingerprint; no stored value changes meaning, because
+    // the destination is appended LAST (choice 1249) and every other destination number stays (destination_numbers_of_version_2_do_not_move): 0xc87e9fbe8ddc33ca before
+    CHECK_EQ (sbgolden::fingerprint (kNumKeysV2), 0xa3fb0fe6e85bc2b4ull);
 }
 
 TEST (choice_lists_are_append_only)
@@ -295,36 +297,36 @@ TEST (mod_sources_are_extended_by_appending)
 
 TEST (destination_numbers_of_version_2_do_not_move)
 {
-    // the destination choice lists every modulatable key in table order: the 269 keys of version 2 keep 1..269
+    // the destination choice lists every modulatable key in table order: the 269 keys of version 2 keep 1..269 (master.transpose, modulatable since later, sits at the very end)
     size_t next = 1;
     for (size_t i = 0; i < kNumKeysV2; ++i)
-        if ((paramTable()[i].flags & kParamModulatable) != 0)
+        if ((paramTable()[i].flags & kParamModulatable) != 0 && std::strcmp (paramTable()[i].key, "master.transpose") != 0) // transpose is appended last (1249)
         {
             CHECK_EQ (modDestinationChoiceOf (i), next);
             CHECK_EQ (modDestinationParamIndex (next), static_cast<int> (i));
             ++next;
         }
-    CHECK_EQ (next, static_cast<size_t> (271));
+    CHECK_EQ (next, static_cast<size_t> (270));
 
     // 13-new-keys.md section 2: B01 270-273, B02 274-289, B04 290-319, B09 320-337, B10 338-356, B11 357-365, B12 366-403, B16 404-411, B14 412-423, B17 424-431, B18 432-441
     struct Range { const char* first; int firstChoice; const char* last; int lastChoice; };
     const Range ranges[] = {
-        { "macro.5", 271, "macro.8", 274 },
-        { "lfo9.rate", 275, "lfo10.keytrack_tune", 290 },
-        { "env1.delay_beats", 291, "env6.release_beats", 320 },
-        { "osc1.sample.scan", 321, "osc3.warp2.spread", 338 },
-        { "osc1.filter_blend", 339, "direct.level", 357 },
-        { "filter1.var", 358, "fxfilter.level", 366 },
-        { "hyperdim.rate", 367, "splitter_ms.level", 404 },
-        { "chorus.level", 405, "reverb.level", 412 }, // B16: the FX levels
-        { "osc1.pitch_coarse", 413, "osc3.unison.blend_shape", 424 }, // B14
-        { "compressor.crossover_low", 425, "reverb.diff_b", 432 }, // B17
-        { "sub.octave", 433, "noise.phase", 442 }, // B18
-        { "master.stereo_spread", 443, "lfo10.swing", 453 }, // B15
-        { "master.stereo_routing", 454, "master.stereo_routing", 454 }, // B20
-        { "mod01.amount", 455, "mod64.amount", 518 },
-        { "master.portamento.time", 519, "master.portamento.time", 519 },
-        { "master.polyphony", 520, "master.polyphony", 520 },
+        { "macro.5", 270, "macro.8", 273 },
+        { "lfo9.rate", 274, "lfo10.keytrack_tune", 289 },
+        { "env1.delay_beats", 290, "env6.release_beats", 319 },
+        { "osc1.sample.scan", 320, "osc3.warp2.spread", 337 },
+        { "osc1.filter_blend", 338, "direct.level", 356 },
+        { "filter1.var", 357, "fxfilter.level", 365 },
+        { "hyperdim.rate", 366, "splitter_ms.level", 403 },
+        { "chorus.level", 404, "reverb.level", 411 }, // B16: the FX levels
+        { "osc1.pitch_coarse", 412, "osc3.unison.blend_shape", 423 }, // B14
+        { "compressor.crossover_low", 424, "reverb.diff_b", 431 }, // B17
+        { "sub.octave", 432, "noise.phase", 441 }, // B18
+        { "master.stereo_spread", 442, "lfo10.swing", 452 }, // B15
+        { "master.stereo_routing", 453, "master.stereo_routing", 453 }, // B20
+        { "mod01.amount", 454, "mod64.amount", 517 },
+        { "master.portamento.time", 518, "master.portamento.time", 518 },
+        { "master.polyphony", 519, "master.polyphony", 519 },
     };
     for (const auto& r : ranges)
     {
@@ -340,7 +342,7 @@ TEST (destination_numbers_of_version_2_do_not_move)
 
     // every choice 1..453 names a modulatable parameter, in strictly increasing table order
     int previous = -1;
-    for (size_t c = 1; c <= 454; ++c)
+    for (size_t c = 1; c <= 453; ++c)
     {
         const int p = modDestinationParamIndex (c);
         CHECK (p > previous);
