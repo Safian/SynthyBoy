@@ -545,8 +545,7 @@ public:
         {
             if (compactNativePaint_[field] != nullptr)
                 compactNativePaint_[field]->setHostPainted (false);
-            const bool native = shown && items[field] != nullptr
-                             && (state.powered || state.layout == n::Sub || field == n::Power || field == n::Pan || field == n::Level);
+            const bool native = shown && items[field] != nullptr;
             compactNativePaint_[field] = native ? items[field]->c : nullptr;
             if (native)
             {

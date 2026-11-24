@@ -31,7 +31,7 @@ from components.native.selector.selector import (
     passive_layer,
     selector_definition,
 )
-from components.style import size as _style_size
+from components.style import size as _style_size, bind_control_active
 from native_skin_font import semibold
 from components.native.button.button import action_button, button, entry
 if __package__:
@@ -223,6 +223,10 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
     for field, kind in (("pan", "playOscPan"), ("level", "compactNativeDial")):
         remaps = (("Data", field), ("Caption", f"WithName[{field.upper()}]/{field}"))
         children.append(component(field, kind, rects[field], remaps))
+    definitions = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
+    for child in children:
+        if child["componentData"]["name"] != "power":
+            bind_control_active(child, "power", ctx, definitions)
     ctx.add_component_definition("playNativeOsc", passive_layer(children))
 
     replacements = tui["pageData"]["replacementStrings"]
@@ -251,6 +255,7 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
             # Place the cells directly on the tab, like the adjacent Play ENV dials.
             # The XL can show the buttons of a wrapper while nested widget bodies remain blank.
             rect = geometry["sub"]
+            first_item = len(items)
             items.append(button("Play Native OSC Sub power", rect["power"], "osc_native_power_on.png",
                                 "osc_native_power_off.png", remaps=(("Data", handles[0]),), gates=source_gates))
             items.append(action_button(ctx, "Play Native OSC Sub expand", rect["expand"], handles[1], icon="expand", gates=source_gates))
@@ -266,6 +271,8 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
                     ))
                 else:
                     items.append(component(name, widget, rect[field], bindings, source_gates))
+            for control in items[first_item + 1:]:
+                bind_control_active(control, handles[0], ctx, definitions)
         else:
             items.append(component(f"Play Native OSC {source}", "playNativeOsc", (0, 0, 432, 628),
                                    remaps, source_gates, "Children"))

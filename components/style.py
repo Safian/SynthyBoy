@@ -85,31 +85,6 @@ def native_color(name):
     return _token("colors.json", "native", name)
 
 
-def _disabled_button(data, skins_dir):
-    from PIL import Image
-
-    steps = max(2, data["numButtonsInGroup"])
-    lit = data["buttonId"]
-    on, off = data["onImage"], data["offImage"]
-    base = Path(off or on)
-    filename = base.with_name(f"{Path(off).stem}_{Path(on).stem}_{lit}of{steps}_disabled.png")
-    if skins_dir is not None:
-        root = Path(skins_dir)
-        with Image.open(root / base) as source:
-            frame_size = source.size
-        strip = Image.new("RGBA", (frame_size[0], frame_size[1] * steps))
-        for art_name, selected in ((off, False), (on, True)):
-            if art_name:
-                with Image.open(root / art_name) as art:
-                    frame = art.convert("RGBA").resize(frame_size, Image.Resampling.LANCZOS)
-                for index in range(steps):
-                    if (index == lit) == selected:
-                        strip.paste(frame, (0, frame.height * index))
-        _dim_artwork(strip).save(root / filename)
-    return {"version": 2, "imageType": "FilmStrip", "colour": "0",
-            "image": str(filename), "numFrames": steps, "handleName": data["handleName"]}
-
-
 def _dim_artwork(image):
     from PIL import ImageOps
     grey = ImageOps.colorize(image.convert("L"), color("inactive.preview.dark"), color("inactive.preview.light"))
@@ -118,7 +93,11 @@ def _dim_artwork(image):
 
 
 def apply_control_state(definition, skins_dir, *, active):
-    """Keep the native face, geometry and saved position without exposing an input."""
+    """Style the original native widgets; never replace controls with Images.
+
+    Input authority remains with the bound UI bank. The MPC schema has no
+    general enabled flag: remove actions/focus and knob drags in this state.
+    """
     if active:
         return definition
     from PIL import Image
@@ -129,29 +108,77 @@ def apply_control_state(definition, skins_dir, *, active):
     for child in result["componentsData"]:
         child["bounds"]["acceptsHWFocus"] = "No"
         widget = child["componentData"]
-        data = widget["data"]
-        if widget["type"] == "Button":
-            widget["type"] = "Image"
-            if data["onImage"] != data["offImage"]:
-                widget["data"] = _disabled_button(data, skins_dir)
+        data = widget.get("data", {})
+        if widget["type"] == "Knob":
+            data["dragOrientation"] = "None"
+        for key in ("image", "filmStrip", "onImage", "offImage", "foregroundImage", "backgroundImage"):
+            if not data.get(key):
                 continue
-            data = widget["data"] = {"version": 2, "imageType": "Regular", "colour": "0",
-                                     "image": data["offImage"]}
-        elif widget["type"] == "Knob":
-            widget["type"] = "Image"
-            data = widget["data"] = {"version": 2, "imageType": "FilmStrip", "colour": "0",
-                                     "image": data["filmStrip"], "numFrames": data["numFrames"],
-                                     "handleName": data["handleName"]}
-        if widget["type"] == "Image" and data["image"]:
-            asset = Path(data["image"])
+            asset = Path(data[key])
             disabled = asset.with_name(asset.stem + "_disabled.png")
-            data["image"] = str(disabled)
-            if skins_dir is None:
-                continue
-            path = Path(skins_dir) / asset
-            target = Path(skins_dir) / disabled
-            with Image.open(path) as img:
-                _dim_artwork(img).save(target)
-        elif widget["type"] == "Label":
+            data[key] = str(disabled)
+            if skins_dir is not None:
+                target = Path(skins_dir) / disabled
+                if not target.exists():
+                    with Image.open(Path(skins_dir) / asset) as image:
+                        _dim_artwork(image).save(target)
+        if widget["type"] == "Label":
             data["textStyle"]["colour"] = argb("text.status.off")
     return result
+
+
+def bind_control_active(entry, active_handle, ctx, definitions):
+    """Bind a native component's two presentation states to a boolean handle.
+
+    Both states use the same native control subtree and value bindings. The
+    shared family owns this SDK IndexedEnabling implementation; callers only
+    supply Active. The bound UI bank must reject writes while inactive.
+    """
+    import hashlib
+    from components.native.button.button import entry as native_entry
+    from components.native.selector.selector import passive_layer
+
+    lookup = {d["key"]: d["value"] for d in definitions}
+    widget = entry["componentData"]
+    kind = widget["type"]
+    if kind in lookup:
+        base = lookup[kind]
+        identity = kind
+    else:
+        identity = kind + hashlib.sha256(json.dumps(widget.get("data", {}), sort_keys=True).encode()).hexdigest()[:12]
+        leaf = native_entry("Control", kind, copy.deepcopy(widget["data"]), (0, 0, 1, 1))
+        leaf["bounds"]["boundsType"] = "Proportional"
+        base = passive_layer([leaf])
+    state_name = "NativeActive " + identity
+
+    def inactive(name, source):
+        target = "NativeInactive " + name
+        if target not in lookup:
+            # Register before descending to handle shared subcomponents once.
+            result = apply_control_state(source, ctx.skins_dir, active=False)
+            lookup[target] = result
+            for child in result["componentsData"]:
+                data = child["componentData"]
+                if data["type"] in lookup:
+                    original = data["type"]
+                    data["type"] = inactive(original, lookup[original])
+            ctx.add_component_definition(target, result)
+        return target
+
+    if state_name not in lookup:
+        on_name = kind if kind in lookup else "NativeControl " + identity
+        if on_name not in lookup:
+            ctx.add_component_definition(on_name, base)
+        off_name = inactive(identity, base)
+        states = []
+        for value, type_name in ((0, off_name), (1, on_name)):
+            child = native_entry("State", type_name, {"version": 1, "handleName": "Data"},
+                                 (0, 0, 1, 1), gates=(f"IndexedEnabling/{value}/2/NativeActive",),
+                                 focus="No" if value == 0 else "Children")
+            child["bounds"]["boundsType"] = "Proportional"
+            states.append(child)
+        ctx.add_component_definition(state_name, passive_layer(states))
+    entry["componentData"] = {"version": 1, "name": widget["name"], "type": state_name,
+                              "data": {"version": 1, "handleName": "Data"}}
+    entry["handle remapping"]["map"].append({"key": "NativeActive", "value": active_handle})
+    return entry
