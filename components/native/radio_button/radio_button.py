@@ -29,7 +29,7 @@ def _vgrad(draw, x0, y0, x1, y1, c0, c1):
         draw.line([(x0, y), (x1, y)], fill=c)
 
 
-def render_segmented_button_art(label, active, width, height, *, scale=_style_size('radio_button.segmented_button_art.geometry')):
+def render_segmented_button_art(label, active, width, height, *, indicator=None, text_colour=None, scale=_style_size('radio_button.segmented_button_art.geometry')):
     """Render a segmented button with full active background."""
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h))
@@ -57,7 +57,14 @@ def render_segmented_button_art(label, active, width, height, *, scale=_style_si
     font_size = _style_size('font.option') * scale if len(label) <= 4 else _style_size('font.caption') * scale
     font = semibold(font_size)
     text_col = _style_color("radio.active.text") if active else _style_color("radio.text")
-    draw.text((w // 2, h // 2), label, fill=text_col, font=font, anchor="mm")
+    center = w // 2
+    if indicator is not None:
+        size = _style_size("radio.indicator.size") * scale
+        gap = _style_size("radio.indicator.gap") * scale
+        left = round((w - size - gap - font.getlength(label)) / 2)
+        im.alpha_composite(indicator.resize((size, size), Image.Resampling.LANCZOS), (left, (h - size) // 2))
+        center += (size + gap) // 2
+    draw.text((center, h // 2), label, fill=text_colour or text_col, font=font, anchor="mm")
 
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
@@ -102,15 +109,3 @@ def build_radio_button_entries(name, rect, labels, variant, handle, skins_dir, *
     if variant != VARIANT_SEGMENTED:
         raise ValueError(f"Unknown choice group variant: {variant!r}")
     return create_segmented_radio_button_group(name, rect, labels, handle, skins_dir, gates=gates, focus=focus)
-
-
-def render_segmented_status_art(label, selected, used, width, height):
-    """Shared segmented selection face with an optional source-in-use marker."""
-    image = render_segmented_button_art(label, selected, width, height)
-    if used:
-        geometry = _style_size("radio.status_dot")
-        radius, bottom = geometry["radius"], geometry["bottom"]
-        ImageDraw.Draw(image).ellipse((width // 2 - radius, height - bottom - 2 * radius,
-                                       width // 2 + radius, height - bottom),
-                                      fill=_style_color("radio.active.text" if selected else "accent.cyan"))
-    return image

@@ -288,8 +288,11 @@ protected:
             const bool on = state.activeFilter == 2 ? state.filter2On : state.filter1On;
             if (cData && cLen >= 2)
                 drawCurvePolyline (sb, in, cData, cLen, inactive_ ? inactiveRgb (filterColour (state.activeFilter)) : (on ? filterColour (state.activeFilter) : dimmed (filterColour (state.activeFilter))), inactive_ ? 0 : (on ? 34 : 0), on ? 1.0f : 0.7f);   // (`stroke` takes the half width: the line is 2 px, as the curves of the LFO and the FX displays)
-            std::snprintf (buf, sizeof buf, on ? "FILTER %d" : "FILTER %d  OFF", state.activeFilter);
-            p.textLeft ({ in.x + 8, in.y + 3, 160, 16 }, buf, T.fLabel - 2.0f, p.c (on ? T.textDim : T.textFaint, 255), T.fMin);
+            if (headerCorners_[0].empty())
+            {
+                std::snprintf (buf, sizeof buf, on ? "FILTER %d" : "FILTER %d  OFF", state.activeFilter);
+                p.textLeft ({ in.x + 8, in.y + 3, 160, 16 }, buf, T.fLabel - 2.0f, p.c (on ? T.textDim : T.textFaint, 255), T.fMin);
+            }
         }
 
         // 3. The voices: where each sounding voice has its cutoff (up to 8, faint)

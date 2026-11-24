@@ -25,7 +25,7 @@ def semibold(size):
     return ImageFont.truetype(str(FONT_FILE), size)
 
 
-def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon")):
+def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), icon_only=False):
     if Image is None:
         raise RuntimeError("Pillow is required for action_art")
     if bool(icon) == bool(text):
@@ -39,11 +39,12 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
         raise ValueError("Button width does not fit its content")
     image = Image.new("RGBA", (width * scale, height * scale))
     pen = ImageDraw.Draw(image)
-    pen.rounded_rectangle(
-        (0, 0, image.width - art['outline'], image.height - art['outline']),
-        radius=art['radius'] * scale,
-        fill=_style_color("button.surface"), outline=_style_color("button.border"), width=art['outline'] * scale,
-    )
+    if not icon_only:
+        pen.rounded_rectangle(
+            (0, 0, image.width - art['outline'], image.height - art['outline']),
+            radius=art['radius'] * scale,
+            fill=_style_color("button.surface"), outline=_style_color("button.border"), width=art['outline'] * scale,
+        )
 
     def stroke(points, stroke_width):
         ox, oy = art['origin']

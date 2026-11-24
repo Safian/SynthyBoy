@@ -113,7 +113,14 @@ def _write_selector_strip(directory, key, rect, frames):
     w, h = rect[2:]
     art = Image.new("RGBA", (w, h * len(frames)))
     for i, (label, selected, used) in enumerate(frames):
-        cell = ui_radio.render_segmented_status_art(label, selected, used, w, h)
+        indicator = None
+        text_colour = None
+        if label in ("F1", "F2"):
+            indicator = ui_button.action_art(icon="power", icon_only=True,
+                                             colour=style.color("accent.green" if used else "text.muted"))
+        elif used:
+            text_colour = style.color("radio.active.text" if selected else "accent.cyan")
+        cell = ui_radio.render_segmented_button_art(label, selected, w, h, indicator=indicator, text_colour=text_colour)
         art.paste(cell, (0, i * h))
     art.save(directory / file)
     return file
