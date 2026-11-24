@@ -393,35 +393,15 @@ public:
         return { r.x, r.bottom() - kNativeCell, r.w, kNativeCell };
     }
 
-    void draw (gpu::SceneBuilder& sb) const override
-    {
-        if (! nativeWidgets_)
-        {
-            Composite::draw (sb);
-            return;
-        }
-        if (numSlots_ == 0)
-            return;
-        Pen p (sb, enabled_, ! nativeDragEnabled);
-        Cell cell (sb, dragRect());
-        p.control (dragRect());
-        const auto& look = theme::L();
-        p.textCentered (dragRect(), "MOVE", look.fLabel - 2.0f, p.c (look.text, 255), look.fMin);
-    }
+    void draw (gpu::SceneBuilder&) const override {}
     bool nativeDragEnabled = false;
-    Change touchDown (int x, int y, double now) override
+    Change touchDown (int, int, double) override
     {
-        if (nativeWidgets_)
-        {
-            cap_ = nullptr;
-            return Change::none();
-        }
-        return Composite::touchDown (x, y, now);
+        cap_ = nullptr;
+        return Change::none();
     }
     int touchTargets (Rect* out, int max) const override
     {
-        if (! nativeWidgets_)
-            return Composite::touchTargets (out, max);
         if (max <= 0 || ! nativeDragEnabled)
             return 0;
         out[0] = dragRect();
@@ -467,66 +447,18 @@ public:
 protected:
     void layout() override
     {
-        if (nativeWidgets_)
-        {
-            for (int i = 0; i < kMaxSlots; ++i)
-                cards[i].place (nativeSlotRect (i));
-            backCard.place (nativeBackRect());
-            plusCard.place (nativeAddRect());
-            for (FxSlotCard& card : spare)
-                show (card, false);
-            return;
-        }
-        const int pad = 4;
-        const int gap = 6;
-        const int cardH = rect_.h - 2 * pad;
-        const int totalItems = numSlots_ + (numSlots_ < kMaxSlots ? 1 : 0) + (backShown_ ? 1 : 0);
-        // wide cards (the type name reads at its size); only when the chain is long do they shrink to the room
-        const int cardW = totalItems > 0 ? std::clamp ((rect_.w - 2 * pad - (totalItems - 1) * gap) / totalItems, 64, kCardW) : kCardW;
-        laidOut_ = true;
-
-        int x = rect_.x + pad;
-        if (backShown_)
-        {
-            backCard.place ({ x, rect_.y + pad, cardW, cardH });
-            x += cardW + gap;
-        }
-        for (int i = 0; i < numSlots_; ++i)
-        {
-            cards[i].place ({ x, rect_.y + pad, cardW, cardH });
-            x += cardW + gap;
-        }
-        if (numSlots_ < kMaxSlots)
-        {
-            plusCard.place ({ x, rect_.y + pad, cardW, cardH });
-            x += cardW + gap;
-        }
-        // the places that are still free, as far as they fit into the bar (at most kMaxSlots places in all)
-        int places = numSlots_ + (numSlots_ < kMaxSlots ? 1 : 0);   // (the back card is not a place of the chain)
         for (int i = 0; i < kMaxSlots; ++i)
-        {
-            const bool fits = places < kMaxSlots && x + cardW <= rect_.right() - pad;
-            show (spare[i], fits);
-            if (fits)
-            {
-                spare[i].place ({ x, rect_.y + pad, cardW, cardH });
-                x += cardW + gap;
-                ++places;
-            }
-        }
+            cards[i].place (nativeSlotRect (i));
+        backCard.place (nativeBackRect());
+        plusCard.place (nativeAddRect());
+        for (FxSlotCard& card : spare)
+            show (card, false);
     }
 
-    void drawUnder (Pen& p) const override
-    {
-        if (! nativeGround)
-        {
-            p.block (rect_, false);
-            p.rrect (rect_, 6.0f, p.c (theme::L().keyline, 140), 1.0f);
-        }
-    }
+    void drawUnder (Pen&) const override {}
 
 private:
-    bool nativeWidgets_ = false;
+    bool nativeWidgets_ = true;
     int numSlots_ = 6;
     bool laidOut_ = false, backShown_ = false;
 };

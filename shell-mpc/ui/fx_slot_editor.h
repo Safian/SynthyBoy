@@ -97,10 +97,10 @@ public:
         if (changed && nativeControls_ && rect_.w > 0)
             layout();
         rack.setEnabled (on); remove.setEnabled (on); display.setEnabled (on); bands.setEnabled (on);
-        bandSel.setEnabled (on && ! nativeBandShown());
+        bandSel.setEnabled (on);
         for (int i = 0; i < kMaxParams; ++i)
         {
-            const bool en = on && isLive (i) && nativeKindOf (i) == nativeui::kFxHidden;
+            const bool en = on && isLive (i);
             knobs[i].setEnabled (en); steppers[i].setEnabled (en); lists[i].setEnabled (en);
             toggles[i].setEnabled (en); numbers[i].setEnabled (en);
         }
@@ -124,6 +124,8 @@ public:
 
     Rect knobArea() const noexcept { return knobArea_; }
     Rect nativeControlsArea() const noexcept { return nativeLayout() != 0 ? knobArea_ : Rect {}; }
+    Rect nameRect() const noexcept { return { rect_.x + 78, rect_.y + 8, 420, kHeaderH }; }
+    Rect pathRect() const noexcept { return { rect_.x + 500, rect_.y + 8, 390, kHeaderH }; }
 
     template <typename Visit>
     void visitNativeControls (Visit&& visit) const
@@ -131,6 +133,8 @@ public:
         if (! nativeControls_)
             return;
         visit (power.rect());
+        visit (nameRect());
+        visit (pathRect());
         if (moduleEnabled_)
         {
             visit (rack.rect());
@@ -416,23 +420,7 @@ public:
     {
         if (isNativeControl (x, y))
             return Change::none();
-        const Change c = Composite::touchDown (x, y, nowMs);
-        if (cap_ == &bandSel)   // the selector's row is the Q group of its row too
-        {
-            const int v = rowOfControl (kSel);
-            if (v >= 0)
-                setActiveRow (v);
-        }
-        else if (cap_)   // a tap on a control makes its row the Q group
-            for (int i = 0; i < kMaxParams; ++i)
-                if (cap_ == &knobs[i] || cap_ == &steppers[i] || cap_ == &lists[i] || cap_ == &toggles[i] || cap_ == &numbers[i])
-                {
-                    const int v = rowOfControl (i);
-                    if (v >= 0)
-                        setActiveRow (v);
-                    break;
-                }
-        return c;
+        return Composite::touchDown (x, y, nowMs);
     }
 
     Change turnQ (int knobIndex, double delta) { return numVis_ > 0 ? groups[activeRow()].turn (knobIndex, delta) : Change::none(); }
@@ -539,21 +527,18 @@ protected:
                 }
                 onPage[p] = true;
             }
-        show (bandSel, onPage[kSel] && ! nativeBandShown());
-        bandSel.setEnabled (moduleEnabled_ && ! nativeBandShown());
+        show (bandSel, false);
+        bandSel.setEnabled (moduleEnabled_);
         bandSel.state.index = effBand_;
         bandSel.state.disabledMask = static_cast<uint8_t> ((bandsMode_ == 2 ? 1u : 0u) | (bandsMode_ == 1 ? 4u : 0u));   // High band: no low; Low band: no high
         for (int p = 0; p < kMaxParams; ++p)
         {
-            const bool overlay = nativeKindOf (p) == nativeui::kFxHidden;
-            const bool on = onPage[p] && ctl_[p].info != nullptr && overlay;
-            const bool live = moduleEnabled_ && ctl_[p].live && overlay;
-            show (knobs[p], on && ctl_[p].kind == Kind::Knob);
-            show (steppers[p], on && ctl_[p].kind == Kind::Stepper);
-            show (lists[p], on && ctl_[p].kind == Kind::List);
-            show (toggles[p], on && ctl_[p].kind == Kind::Toggle);
-            show (numbers[p], on && ctl_[p].kind == Kind::Number);
-            // what does nothing is not on the page at all (hidden, not dim); the waiting control of a cell takes no touch
+            show (knobs[p], false);
+            show (steppers[p], false);
+            show (lists[p], false);
+            show (toggles[p], false);
+            show (numbers[p], false);
+            const bool live = moduleEnabled_ && ctl_[p].live;
             knobs[p].setEnabled (live);
             steppers[p].setEnabled (live);
             lists[p].setEnabled (live);
@@ -563,37 +548,9 @@ protected:
         updateGroups();
     }
 
-    void drawUnder (Pen& p) const override
-    {
-        // the controls lie on a block of their own (the page of the effect)
-        if (nativeLayout() == 0)
-            p.block ({ knobArea_.x - 2, knobArea_.y - 2, knobArea_.w + 4, knobArea_.h + 4 }, false);
-    }
+    void drawUnder (Pen&) const override {}
 
-    void drawExtra (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        const int tx = rect_.x + 8 + 56 + 14, tw = std::max (0, rack.rect().x - tx - 8);
-        if (path_[0] != '\0')
-        {
-            p.textLeft ({ tx, rect_.y + 8, tw, 18 }, path_, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-            p.textLeft ({ tx, rect_.y + 8 + 14, tw, kHeaderH - 14 }, name_, T.fTitle, p.c (T.text, 255), T.fMin);
-        }
-        else
-            p.textLeft ({ tx, rect_.y + 8, tw, kHeaderH }, name_, T.fTitle, p.c (T.text, 255), T.fMin);
-        if (notice[0] != '\0')   // a notice in the header, right of the name (the missing impulse of Convolve): the name of a file loses its middle when it does not fit (content_name.h)
-        {
-            const int nx = tx + static_cast<int>(std::ceil (Pen::textWidth (name_, T.fTitle))) + 24;
-            const Rect box { nx, rect_.y + 8, std::max (0, rack.rect().x - 8 - nx), kHeaderH };
-            const float size = Pen::fitSize (notice, static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 2.0f, T.fMin);
-            if (size > 0.0f)
-            {
-                char fitted[96];   // the size of the pen's own buffer: middleFit cuts a name that would not go into it
-                contentname::middleFit (notice, size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
-                p.textRight (box, fitted, size, p.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
-            }
-        }
-    }
+    void drawExtra (Pen&) const override {}
 
 private:
     struct Ctl
@@ -733,13 +690,13 @@ private:
     /** Native header visibility and functional panel selection. */
     void updateHeaderVisibility()
     {
-        show (power, ! nativeControls_);
-        show (rack, ! nativeControls_);
-        show (remove, removable_ && ! nativeControls_);
+        show (power, false);
+        show (rack, false);
+        show (remove, false);
         const auto panels = fxl::panelsOf (kind_);
         tabs.setOptions (panels.names, panels.count);
         tabs.state.index = page_;
-        show (tabs, numPages() > 1 && ! nativeControls_);
+        show (tabs, false);
     }
 
     void applyPage()
@@ -791,7 +748,7 @@ private:
     bool removable_ = false;
     char name_[24] = {}, path_[72] = {};
     Rect knobArea_;
-    bool nativeControls_ = false, moduleEnabled_ = true;
+    bool nativeControls_ = true, moduleEnabled_ = true;
     int chainInset_ = 0;
     int peekInset_ = 0;
     int styleModel_ = 0;
