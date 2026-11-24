@@ -57,7 +57,6 @@ except ImportError:
     Image = ImageDraw = ImageFont = None
 
 from components.style import (
-    apply_control_state,
     argb as _style_argb,
     color as _style_color,
     rgb as _style_rgb,
@@ -241,7 +240,7 @@ def _label(
     return _entry(name, "Label", data, rect, remaps, gates, focus="No")
 
 
-def build_compact_dial_definition(caption: str, bipolar: bool = False, skins_dir: Optional[Path] = None) -> Dict[str, Any]:
+def build_compact_dial_definition(bipolar: bool = False, skins_dir: Optional[Path] = None) -> Dict[str, Any]:
     """Produces the SDK Composite definition for compact dial (PAN, B1, B2).
 
     Reuses public factory APIs from components.native.pan and components.native.level.
@@ -257,8 +256,6 @@ def build_compact_dial_definition(caption: str, bipolar: bool = False, skins_dir
     }
     for item in defn.get("componentsData", []):
         name = item["componentData"]["name"]
-        if name == "name":
-            item["componentData"]["data"].update(type="Text", handleName="Data", text=caption)
         if name in custom_rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % custom_rects[name]
     return defn
@@ -286,7 +283,12 @@ def build_mixer_strip_header_definition(variant: str) -> Dict[str, Any]:
         else TYPE_SOLO_MUTE_BUS if variant == VARIANT_BUS
         else TYPE_SOLO_MUTE_SOURCE
     )
-    sm_entry = _entry("solo_mute", sm_kind, {"version": 1, "handleName": "Data"}, rect_sm, (("Data", "Mute"),))
+    if variant == VARIANT_MASTER:
+        sm_remaps = (("FxEnable", "FxEnable"), ("Mute", "Mute"), ("FxVisual", "FxVisual"), ("MuteVisual", "MuteVisual"))
+    else:
+        sm_remaps = (("Solo", "Solo"), ("Mute", "Mute"), ("SoloVisual", "SoloVisual"), ("MuteVisual", "MuteVisual"))
+
+    sm_entry = _entry("solo_mute", sm_kind, {"version": 1, "handleName": "Data"}, rect_sm, sm_remaps)
 
     return {
         "version": 2,
@@ -627,9 +629,9 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
         TYPE_DESTINATION_56: build_destination_definition(),
         TYPE_FADER_LEVEL_198: build_fader_definition(TYPE_FADER_LEVEL_198, h_level_source, SCALE_PERCENT),
         TYPE_FADER_LEVEL_414: build_fader_definition(TYPE_FADER_LEVEL_414, h_level_bus, SCALE_SKEW_DB),
-        TYPE_SLIDER_PAN_56: build_compact_dial_definition("PAN", bipolar=True, skins_dir=skins_dir),
-        TYPE_SLIDER_B1_56: build_compact_dial_definition("B1", bipolar=False, skins_dir=skins_dir),
-        TYPE_SLIDER_B2_56: build_compact_dial_definition("B2", bipolar=False, skins_dir=skins_dir),
+        TYPE_SLIDER_PAN_56: build_compact_dial_definition(bipolar=True, skins_dir=skins_dir),
+        TYPE_SLIDER_B1_56: build_compact_dial_definition(bipolar=False, skins_dir=skins_dir),
+        TYPE_SLIDER_B2_56: build_compact_dial_definition(bipolar=False, skins_dir=skins_dir),
         TYPE_METER_BLOCK_SOURCE: build_meter_block_definition(TYPE_METER_BLOCK_SOURCE, width=meter_w, height=h_level_source, hold=True, with_clip=True),
         TYPE_METER_BLOCK_BUS: build_meter_block_definition(TYPE_METER_BLOCK_BUS, width=meter_w, height=h_level_bus, hold=True, with_clip=True),
         TYPE_HEADER_SOURCE: build_mixer_strip_header_definition(VARIANT_SOURCE),
@@ -649,34 +651,29 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
     rect_level_bus = tuple(_style_size("mixer_strip.rect.level_bus"))
     rect_meter_bus = tuple(_style_size("mixer_strip.rect.meter_bus"))
 
-    # The tab already draws each strip's own caption and calibrated fader scale.
-    clear = {"version": 1, "colour": _style_argb("ink.black", 0), "image": ""}
+    bg_source = {"version": 1, "colour": _style_argb("ink.black", 0), "image": BG_SOURCE_ASSET}
+    bg_bus = {"version": 1, "colour": _style_argb("ink.black", 0), "image": BG_BUS_ASSET}
+    bg_master = {"version": 1, "colour": _style_argb("ink.black", 0), "image": BG_MASTER_ASSET}
+
+    sm_remaps = (("Name", "Name"), ("Solo", "Solo"), ("Mute", "Mute"), ("SoloVisual", "SoloVisual"), ("MuteVisual", "MuteVisual"))
+    master_hdr_remaps = (("Name", "Name"), ("FxEnable", "FxEnable"), ("Mute", "Mute"), ("FxVisual", "FxVisual"), ("MuteVisual", "MuteVisual"))
 
     # SOURCE VARIANT
-    def source_control(name, kind, rect, parameter):
-        passive_kind = kind + "Off"
-        defs[passive_kind] = apply_control_state(defs[kind], skins_dir, active=False)
-        data = {"version": 1, "handleName": "Data"}
-        remaps = (("Data", parameter),)
-        return (
-            _entry(name, kind, data, rect, remaps, ("PowerOn",)),
-            _entry(name + " Off", passive_kind, data.copy(), rect, remaps, ("PowerOff",), focus="No"),
-        )
-
+    power_gate = ("IndexedEnabling/1/2/Power",)
     defs[TYPE_STRIP_SOURCE] = {
         "version": 2,
         "actions": [],
-        "backgroundData": {"version": 1, "focussed": clear.copy(), "unfocussed": clear.copy()},
+        "backgroundData": {"version": 1, "focussed": bg_source.copy(), "unfocussed": bg_source.copy()},
         "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "componentsData": [
-            _entry("header", TYPE_HEADER_SOURCE, {"version": 1, "handleName": "Data"}, rect_header, (("Data", "Name"),)),
-            *source_control("destination", TYPE_DESTINATION_56, rect_destination, "Destination"),
+            _entry("header", TYPE_HEADER_SOURCE, {"version": 1, "handleName": "Data"}, rect_header, sm_remaps),
+            _entry("destination", TYPE_DESTINATION_56, {"version": 1, "handleName": "Data"}, rect_destination, (("Data", "Destination"),), power_gate),
             _entry("level", TYPE_FADER_LEVEL_198, {"version": 1, "handleName": "Data"}, rect_level_source, (("Data", "Level"),)),
-            _entry("meter_block", TYPE_METER_BLOCK_SOURCE, {"version": 1, "handleName": "Data"}, rect_meter_source, (("Data", "PeakL"),)),
-            *source_control("pan", TYPE_SLIDER_PAN_56, rect_pan, "Pan"),
-            *source_control("send1", TYPE_SLIDER_B1_56, rect_send1, "Send1"),
-            *source_control("send2", TYPE_SLIDER_B2_56, rect_send2, "Send2"),
+            _entry("meter_block", TYPE_METER_BLOCK_SOURCE, {"version": 1, "handleName": "Data"}, rect_meter_source, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
+            _entry("pan", TYPE_SLIDER_PAN_56, {"version": 1, "handleName": "Data"}, rect_pan, (("Data", "Pan"),), power_gate),
+            _entry("send1", TYPE_SLIDER_B1_56, {"version": 1, "handleName": "Data"}, rect_send1, (("Data", "Send1"),), power_gate),
+            _entry("send2", TYPE_SLIDER_B2_56, {"version": 1, "handleName": "Data"}, rect_send2, (("Data", "Send2"),), power_gate),
         ],
     }
 
@@ -684,14 +681,14 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
     defs[TYPE_STRIP_BUS] = {
         "version": 2,
         "actions": [],
-        "backgroundData": {"version": 1, "focussed": clear.copy(), "unfocussed": clear.copy()},
+        "backgroundData": {"version": 1, "focussed": bg_bus.copy(), "unfocussed": bg_bus.copy()},
         "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "componentsData": [
-            _entry("header", TYPE_HEADER_BUS, {"version": 1, "handleName": "Data"}, rect_header, (("Data", "Name"),)),
+            _entry("header", TYPE_HEADER_BUS, {"version": 1, "handleName": "Data"}, rect_header, sm_remaps),
             _entry("destination", TYPE_DESTINATION_56, {"version": 1, "handleName": "Data"}, rect_destination, (("Data", "Destination"),)),
             _entry("level", TYPE_FADER_LEVEL_414, {"version": 1, "handleName": "Data"}, rect_level_bus, (("Data", "Level"),)),
-            _entry("meter_block", TYPE_METER_BLOCK_BUS, {"version": 1, "handleName": "Data"}, rect_meter_bus, (("Data", "PeakL"),)),
+            _entry("meter_block", TYPE_METER_BLOCK_BUS, {"version": 1, "handleName": "Data"}, rect_meter_bus, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
         ],
     }
 
@@ -699,13 +696,13 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
     defs[TYPE_STRIP_MASTER] = {
         "version": 2,
         "actions": [],
-        "backgroundData": {"version": 1, "focussed": clear.copy(), "unfocussed": clear.copy()},
+        "backgroundData": {"version": 1, "focussed": bg_master.copy(), "unfocussed": bg_master.copy()},
         "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "componentsData": [
-            _entry("header", TYPE_HEADER_MASTER, {"version": 1, "handleName": "Data"}, rect_header, (("Data", "Name"),)),
+            _entry("header", TYPE_HEADER_MASTER, {"version": 1, "handleName": "Data"}, rect_header, master_hdr_remaps),
             _entry("level", TYPE_FADER_LEVEL_414, {"version": 1, "handleName": "Data"}, rect_level_bus, (("Data", "Level"),)),
-            _entry("meter_block", TYPE_METER_BLOCK_BUS, {"version": 1, "handleName": "Data"}, rect_meter_bus, (("Data", "PeakL"),)),
+            _entry("meter_block", TYPE_METER_BLOCK_BUS, {"version": 1, "handleName": "Data"}, rect_meter_bus, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
         ],
     }
 
@@ -736,23 +733,17 @@ def create_mixer_strip_instance(
     )
 
     remaps = []
-    for k in ("Data", *required):
-        val = handles["Level" if k == "Data" else k]
+    for k in required:
+        val = handles[k]
         val_str = f"Parameter {val}" if isinstance(val, int) else str(val)
         remaps.append((k, val_str))
-
-    if variant == VARIANT_SOURCE:
-        power = handles["Power"]
-        power_handle = f"Parameter {power}" if isinstance(power, int) else power
-        remaps.extend((("PowerOn", f"IndexedEnabling/1/2/{power_handle}"),
-                       ("PowerOff", f"IndexedEnabling/0/2/{power_handle}")))
 
     inst_name = name or f"MixerStrip_{variant.capitalize()}_{rect[0]}_{rect[1]}"
 
     return _entry(
         name=inst_name,
         kind=type_name,
-        data={"version": 1, "handleName": "Data"},
+        data={"version": 1, "handleName": "Level"},
         rect=rect,
         remaps=remaps,
         gates=gates,

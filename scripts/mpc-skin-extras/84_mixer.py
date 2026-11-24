@@ -4,13 +4,6 @@
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-from mixer_tabs import (
-    MIXER_TABS,
-    MIXER_TAB_LABELS,
-    mixer_tab_rect,
-    render_mixer_tab_filmstrip,
-    render_mixer_tab_hit,
-)
 from native_skin_font import semibold
 from native_ui_params import (
     MIXER_STEREO_BASE, MIXER_STEREO_FIELDS,
@@ -23,6 +16,7 @@ from native_ui_params import (
     MIXER_PEEK_TARGETS,
     MIXER_SOLO_OFFSET,
     MIXER_SOLO_VISUAL,
+    MIXER_TABS,
     mixer_peek_index,
 )
 from components.style import color as _style_color, rgb as _style_rgb, size as _style_size
@@ -67,11 +61,33 @@ def button(name, parameter, rect, gates, index=1, count=1, art=("toggle_on.png",
 
 def tab_filmstrip_art(skins_dir, caption, tab_index):
     """Generates a 6-frame FilmStrip PNG highlighting tab `tab_index` when active."""
-    return render_mixer_tab_filmstrip(skins_dir, caption, tab_index)
+    font = semibold(_style_size("mixer_strip.font.sm"))
+    bw = _style_size("mixer_strip.tab.width")
+    bh = _style_size("mixer_strip.tab.height")
+    radius = _style_size("radius.field")
+    sheet = Image.new("RGBA", (bw, bh * MIXER_TABS), (0, 0, 0, 0))
+    for frame in range(MIXER_TABS):
+        active = (frame == tab_index)
+        img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        fill = _style_rgb("dial.value") if active else _style_rgb("button.surface")
+        outline = _style_rgb("accent.cyan") if active else _style_rgb("button.border")
+        draw.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=radius, fill=fill, outline=outline, width=1)
+        text_fill = _style_color("text.white") if active else _style_color("text.icon")
+        draw.text((bw // 2, bh // 2), caption, fill=text_fill, font=font, anchor="mm")
+        sheet.alpha_composite(img, (0, frame * bh))
+    slug = caption.lower().replace(" ", "_")
+    filename = f"mixer_tab_{slug}_states.png"
+    sheet.save(skins_dir / filename)
+    return filename
 
 
 def tab_hit_art(skins_dir):
-    return render_mixer_tab_hit(skins_dir)
+    bw = _style_size("mixer_strip.tab.width")
+    bh = _style_size("mixer_strip.tab.height")
+    filename = "mixer_tab_hit.png"
+    Image.new("RGBA", (bw, bh), (0, 0, 0, 0)).save(skins_dir / filename)
+    return filename
 
 
 def apply(tui, qlinks, ctx):
@@ -94,8 +110,6 @@ def apply(tui, qlinks, ctx):
         ctx.add_param_key(base + MIXER_HOLD_OFFSET + i, "shell.mixer_hold_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_CONTROL + MIXER_SOLO_OFFSET + i, "shell.mixer_solo_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_CONTROL + MIXER_MUTE_OFFSET + i, "shell.mixer_mute_%d" % (i + 1))
-        for field, name in enumerate(("peak_l", "peak_r", "hold_l", "hold_r", "clip_l", "clip_r")):
-            ctx.add_param_key(base + MIXER_STEREO_BASE + field * len(STRIPS) + i, f"shell.mixer_{name}_{i + 1}")
         ctx.add_param_key(base + MIXER_SOLO_VISUAL + i, "shell.mixer_solo_visual_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_MUTE_VISUAL + i, "shell.mixer_mute_visual_%d" % (i + 1))
 
@@ -188,12 +202,17 @@ def apply(tui, qlinks, ctx):
     # Native 6-tab navigation action row (MIXER=0, FLT 1=1, FLT 2=2, MAIN FX=3, BUS 1=4, BUS 2=5).
     # Gated on modal_gate (< 19) so tabs remain active in MIXER and all 5 docked editors (where
     # mixerPeek keeps Overlay Instance < 19), while hiding cleanly for full-screen modals (MODS/List).
-    all_tabs = MIXER_TAB_LABELS
+    all_tabs = ("MIXER", *PEEK_LABELS)
     supply_replacement_strings(tui, base, all_tabs)
+    peek_y = start_y + height + _style_size("mixer_strip.tab.gap_y")
+    bw = _style_size("mixer_strip.tab.width")
+    peek_h = _style_size("mixer_strip.tab.height")
+    tab_start_x = _style_size("mixer_strip.tab.start_x")
+    tab_span_x = _style_size("mixer_strip.tab.span_x")
     hit_png = tab_hit_art(Path(ctx.skins_dir)) if skins_dir else "toggle_off.png"
 
     for k, caption in enumerate(all_tabs):
-        rect = mixer_tab_rect(k)
+        x = tab_start_x + int(round(tab_span_x * (k / (MIXER_TABS - 1))))
         if skins_dir:
             film = tab_filmstrip_art(Path(skins_dir), caption, k)
             vis_data = {
@@ -205,6 +224,6 @@ def apply(tui, qlinks, ctx):
                 "handleName": "Data",
             }
             components.append(entry(f"{NATIVE}{caption} Tab Visual", "Image", vis_data,
-                                    rect, (("Data", base + MIXER_ACTIVE_TAB),), modal_gate, focus=False))
-        components.append(button(f"{NATIVE}{caption} Peek", base, rect, modal_gate,
+                                    (x, peek_y, bw, peek_h), (("Data", base + MIXER_ACTIVE_TAB),), modal_gate, focus=False))
+        components.append(button(f"{NATIVE}{caption} Peek", base, (x, peek_y, bw, peek_h), modal_gate,
                                  index=k, count=MIXER_TABS, art=(hit_png, hit_png)))

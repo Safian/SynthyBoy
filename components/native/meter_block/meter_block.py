@@ -78,10 +78,11 @@ def build_meter_block_definition(
                 assets=("mixer_meter_clip_idle.png", "mixer_meter_clip_peak.png") if clip else stereo_meter_assets(h - meter_y))
             data["peakHandle"] = "Clip" + channel if clip else "Peak" + channel
             data["peakHoldHandle"] = "" if clip or not hold else "Hold" + channel
+            names = ("Clip" + channel,) if clip else ("Peak" + channel, "Hold" + channel)
             components.append({
                 "version": 2,
                 "componentData": {"version": 1, "name": ("Clip " if clip else "Meter ") + channel, "type": "Meter", "data": data},
-                "handle remapping": {"version": 1, "map": []},
+                "handle remapping": {"version": 1, "map": [{"key": name, "value": name} for name in names]},
                 "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide",
                            "whenVisible": "Always", "boundsType": "Absolute",
                            "bounds": f"{x} {0 if clip else meter_y} {channel_w} {clip_h if clip else h - meter_y}"},

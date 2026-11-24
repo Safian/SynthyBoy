@@ -138,7 +138,7 @@ def build_fader_definition(
     slider_entry = {
         "version": 2,
         "componentData": {"version": 1, "name": "Slider", "type": "Slider", "data": slider_data},
-        "handle remapping": {"version": 1, "map": []},
+        "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Data"}]},
         "bounds": {
             "version": 1,
             "acceptsHWFocus": "Yes",
@@ -170,7 +170,7 @@ def build_fader_definition(
     value_entry = {
         "version": 2,
         "componentData": {"version": 1, "name": "Value", "type": "Label", "data": value_data},
-        "handle remapping": {"version": 1, "map": []},
+        "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Data"}]},
         "bounds": {
             "version": 1,
             "acceptsHWFocus": "No",

@@ -48,56 +48,6 @@ class UiScreenMixerTests(unittest.TestCase):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
-    def test_true_stereo_meter_contract(self):
-        """The generated native tree binds all ten stereo readouts without duplicating mono/RMS."""
-        from PIL import Image
-        from native_ui_params import MIXER_STEREO_BASE, NATIVE_PARAMS
-        self.assertEqual(self.code, 0, self.err)
-        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 960))
-        definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
-        entries = [e for e in tab["componentDefinition"]["componentsData"]
-                   if e["componentData"]["type"] in ("mixerStripSource", "mixerStripBus", "mixerStripMaster")]
-        self.assertEqual(len(entries), 10)
-        base_offset = mixer_peek_index(len(self.params)) + MIXER_STEREO_BASE
-        fields = ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")
-        bound = set()
-        for strip, entry in enumerate(entries):
-            handles = {m["key"]: m["value"] for m in entry["handle remapping"]["map"]}
-            for field, name in enumerate(fields):
-                value = f"Parameter {base_offset + field * 10 + strip}"
-                self.assertEqual(handles[name], value)
-                bound.add(value)
-            nested = next(c for c in definitions[entry["componentData"]["type"]]["componentsData"]
-                          if c["componentData"]["name"] == "meter_block")
-            self.assertEqual(nested["componentData"]["data"]["handleName"], "Data")
-            self.assertEqual({m["key"]: m["value"] for m in nested["handle remapping"]["map"]}, {name: name for name in fields})
-        self.assertEqual(len(bound), 60)
-        for name, signal_height in (("mixerMeterBlockSource", 192), ("mixerMeterBlockBus", 408)):
-            block = definitions[name]
-            self.assertTrue(block["ignoreMousePresses"])
-            self.assertEqual(block["actions"], [])
-            self.assertEqual(len(block["componentsData"]), 4)
-            for child in block["componentsData"]:
-                model = child["componentData"]
-                self.assertEqual(model["type"], "Meter")
-                data = model["data"]
-                self.assertEqual(data["rmsHandle"], "")
-                self.assertEqual(data["rmsImage"], "")
-                clip = model["name"].startswith("Clip")
-                right = model["name"].endswith("R")
-                self.assertEqual(child["bounds"]["bounds"], f"{10 if right else 0} {0 if clip else 6} 8 {4 if clip else signal_height}")
-                self.assertEqual(child["bounds"]["acceptsHWFocus"], "No")
-                self.assertEqual(data["peakHandle"], ("Clip" if clip else "Peak") + ("R" if right else "L"))
-                for image in (data["inactiveImage"], data["peakImage"]):
-                    with Image.open(self.skins / image) as artwork:
-                        self.assertEqual(artwork.size, (8, 4 if clip else signal_height))
-                if clip:
-                    self.assertEqual(data["peakHoldHandle"], "")
-                else:
-                    self.assertEqual(data["peakHoldHandle"], "Hold" + ("R" if right else "L"))
-                    self.assertEqual(data["peakHoldSize"], 2)
-
     def test_hook_discovery_and_execution_clean(self):
         """Verify apply-mpc-skin-extras runs with code 0 and no error."""
         self.assertEqual(self.code, 0, f"run_apply failed with stderr: {self.err}")
@@ -197,38 +147,6 @@ class UiScreenMixerTests(unittest.TestCase):
                 self.assertIn("SoloVisual", remap, f"{caption} strip must map SoloVisual")
             else:
                 self.assertIn("FxVisual", remap, f"{caption} strip must map FxVisual")
-
-    def test_disabled_source_controls_show_the_saved_values_without_editing(self):
-        defs = {row["key"]: row["value"] for row in
-                self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        children = {row["componentData"]["name"]: row for row in defs["mixerStripSource"]["componentsData"]}
-        for name in ("destination", "pan", "send1", "send2"):
-            with self.subTest(control=name):
-                active = children[name]
-                passive = children[name + " Off"]
-                self.assertEqual(passive["handle remapping"], active["handle remapping"])
-                self.assertEqual(passive["bounds"]["bounds"], active["bounds"]["bounds"])
-                self.assertEqual(passive["bounds"]["additionalInvalidatingHandles"], ["PowerOff"])
-                self.assertEqual(passive["bounds"]["acceptsHWFocus"], "No")
-                passive_def = defs[passive["componentData"]["type"]]
-                self.assertEqual(passive_def["actions"], [])
-                self.assertTrue(passive_def["ignoreMousePresses"])
-                self.assertTrue(passive_def["disableCoarseDataWheel"])
-                parts = {row["componentData"]["name"]: row for row in passive_def["componentsData"]}
-                self.assertEqual(parts["value"]["componentData"]["data"]["handleName"], "Data")
-                self.assertEqual(parts["value"]["componentData"]["data"]["type"], "Value")
-                for row in parts.values():
-                    self.assertEqual(row["bounds"]["acceptsHWFocus"], "No")
-                    self.assertIn(row["componentData"]["type"], ("Image", "Label"))
-                if name != "destination":
-                    knob = parts["knob"]["componentData"]["data"]
-                    self.assertEqual((knob["imageType"], knob["handleName"], knob["numFrames"]),
-                                     ("FilmStrip", "Data", 127))
-                    self.assertTrue((self.skins / knob["image"]).is_file())
-                    active_parts = {row["componentData"]["name"]: row for row in
-                                    defs[active["componentData"]["type"]]["componentsData"]}
-                    for part_name, row in parts.items():
-                        self.assertEqual(row["bounds"]["bounds"], active_parts[part_name]["bounds"]["bounds"])
 
     def test_mixer_peek_buttons_and_surfaces(self):
         """Verify the 6 persistent bottom tab buttons (0..5) and non-overlapping Filter/FX editor surfaces."""
