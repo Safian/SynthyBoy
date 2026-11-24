@@ -64,14 +64,9 @@ class EnvOwnComponentsTest(UiScreenEnvTest):
     def test_hooks_use_component_apis_without_duplicate_implementation(self):
         root = Path(__file__).resolve().parents[2]
         canonical = (root / "scripts/mpc-skin-extras/96_env_native.py").read_text()
-        fallback = (root / "scripts/mpc-skin-extras/99_ui_screen_env.py").read_text()
         self.assertIn("components.native.active_text", canonical)
         self.assertIn("components.native.level", canonical)
         self.assertNotIn("ImageDraw", canonical)
-        self.assertNotIn("ImageDraw", fallback)
-        self.assertNotIn("compact_dial_definition", fallback)
-        self.assertLess(len(fallback.splitlines()), 80,
-                        "Fallback must delegate to the one ENV installer")
 
 
 if __name__ == "__main__":

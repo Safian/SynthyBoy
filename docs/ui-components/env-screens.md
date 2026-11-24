@@ -67,8 +67,6 @@ approved native component factories:
 ### Implementation files
 - `scripts/mpc-skin-extras/96_env_native.py`: Single idempotent installer using
   public native component factories. No local ImageDraw drawing.
-- `scripts/mpc-skin-extras/99_ui_screen_env.py`: Small fallback delegator
-  (<35 lines) that discovers and calls the 96 installer via `importlib.util`.
 - `scripts/mpc-skin-extras/98_play_expanded.py`: Reuses ENV definitions for
   expanded Play via `full-controls/selector` extraction.
 

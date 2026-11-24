@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Targeted unit tests for the standalone Env screen integration (99_ui_screen_env.py)."""
+"""Targeted unit tests for the standalone Env screen integration (96_env_native.py)."""
 
 import json
 import subprocess
