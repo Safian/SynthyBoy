@@ -1,0 +1,112 @@
+"""Resolve actions, controls, bounds and parameter mappings from the installed TUI's definition tree."""
+import json
+import re
+from collections import Counter
+from pathlib import Path
+
+
+VIEW_IDS = {"Play": "play1", "Macros": "macros", "Osc": "osca", "Osc B": "oscb", "Osc C": "oscc",
+            "Sub": "oscsub", "Noise": "oscnoise", "Env": "env1", "LFO": "lfo1", "FX": "fx",
+            "Mix": "mixer", "Filter": "filter1", "Mod": "mod", "Master": "master", "Voice": "voice"}
+PASSIVE = {"Label", "Image", "Meter", "Indicator", "Focus"}
+ACTUATORS = {"Button", "Knob", "Slider", "MenuOverlay", "KnobOverlay", "NumericOverlay"}
+
+
+def resolve(value, mapping):
+    # A composed SDK handle applies its adapters from left to right to the final data handle.
+    head, sep, tail = value.rpartition("/")
+    return head + sep + mapping.get(tail, tail)
+
+
+def absolute_rect(bounds, parent):
+    px, py, pw, ph = parent
+    if bounds.get("boundsType") == "Relative":
+        variables = {"left": 0, "top": 0, "right": pw, "bottom": ph, "width": pw, "height": ph}
+        def coordinate(expression):
+            match = re.fullmatch(r"parent\.(\w+)(?:\s*([+-])\s*(\d+(?:\.\d+)?))?", expression.strip())
+            if match:
+                axis, sign, offset = match.groups()
+                return variables[axis] + (-1 if sign == "-" else 1) * float(offset or 0)
+            return float(expression)
+        left, top, right, bottom = [coordinate(v) for v in bounds["relativeBounds"].split(",")]
+        return tuple(round(v) for v in (px + left, py + top, right - left, bottom - top))
+    raw = tuple(float(v) for v in bounds["bounds"].split())
+    if len(raw) != 4:
+        raise ValueError("invalid TUI bounds: " + repr(bounds))
+    x, y, w, h = raw
+    if bounds.get("boundsType") == "Proportional":
+        # The host truncates each proportional offset and size separately. This is visible
+        # on the 216x128 Sub dial: 34.56px starts at pixel 34, while 146.88px occupies 146.
+        return px + int(x*pw), py + int(y*ph), int(w*pw), int(h*ph)
+    return tuple(round(v) for v in (px + x, py + y, w, h))
+
+
+def inventory(tui_path):
+    page = json.loads(Path(tui_path).read_text())["pageData"]
+    defs = {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}
+    tabs, controls = {}, []
+
+    def visit(defn, view, path, parent, mapping, gates, ancestors, disabled=False):
+        counts = Counter()
+        for item in defn.get("componentsData", []):
+            obj, bounds = item["componentData"], item["bounds"]
+            name, kind = obj["name"], obj["type"]
+            counts[name] += 1
+            suffix = f" [{counts[name]}]" if counts[name] > 1 else ""
+            identity = path + "/" + name + suffix
+            box = absolute_rect(bounds, parent)
+            own = {e["key"]: resolve(e["value"], mapping) for e in item.get("handle remapping", {}).get("map", [])}
+            local = dict(mapping, **own)
+            enabled = gates + [resolve(g, local) for g in bounds.get("additionalInvalidatingHandles", [])]
+            data = obj.get("data", {})
+            sub = defs.get(kind)
+            actions = (sub or data).get("actions", [])
+            inert = disabled or data.get("ignoreMousePresses") is True or data.get("dragOrientation") == "None"
+            disabled_variant = re.search(r"(Off|Inactive|Disabled)(?:$|[0-9_ ])|(?:^|[ _])(off|disabled|inactive)(?:$|[ _])", kind+" "+name)
+            if sub and disabled_variant and sub.get("ignoreMousePresses") and sub.get("disableCoarseDataWheel") and not actions:
+                inert = True
+            if actions or (sub is None and kind not in PASSIVE):
+                handles = {k: resolve(v, local) for k, v in data.items()
+                           if isinstance(v, str) and (k == "handleName" or k.endswith("Handle"))}
+                controls.append({"id": identity, "view": view, "type": kind, "rect": box, "gates": enabled,
+                                 "handles": handles, "maps": own, "actions": actions,
+                                 "data": {k: data[k] for k in ("buttonId", "numButtonsInGroup", "gestureBehaviour") if k in data},
+                                 "passive": inert, "known_type": kind in ACTUATORS or bool(actions)})
+            if sub is not None:
+                if kind in ancestors:
+                    raise ValueError("recursive component: " + identity)
+                visit(sub, view, identity, box, local, enabled, ancestors | {kind}, inert)
+
+    for tab in page["tabs"]:
+        view = VIEW_IDS[tab["tabName"]]
+        tabs[view] = {"name": tab["tabName"], "group": tab["fnKeyIndex"], "sub": tab["fnKeySubIndex"]}
+        visit(tab["componentDefinition"], view, view, (0, 110, 1280, 628), {}, [], set())
+    if set(tabs) != set(VIEW_IDS.values()):
+        raise ValueError(f"unexpected tab set: {sorted(tabs)}")
+    return tabs, controls
+
+
+def locate(controls, view, label, point=None):
+    hits = [c for c in controls if c["view"] == view and (c["id"] == label or label.casefold() in c["id"].casefold())]
+    exact = [c for c in hits if c["id"] == label]
+    if exact:
+        hits = exact
+    if point is not None:
+        x, y = point
+        hits = [c for c in hits if c["rect"][0] <= x < sum(c["rect"][::2]) and
+                c["rect"][1] <= y < sum(c["rect"][1::2])]
+    if len(hits) != 1:
+        raise ValueError(f"{view}: {label!r} matches {len(hits)} controls: {[c['id'] for c in hits[:5]]}")
+    return hits[0]
+
+
+def function_key(control):
+    """One visible-tab command, ignoring copies of its art and selector states."""
+    data = control["data"]
+    handles = sorted(set(control["handles"].values()) | set(control["maps"].values()))
+    actions = sorted((a.get("onAction", ""), a.get("handler", ""), a.get("additionalData", "")) for a in control["actions"])
+    name = control["id"].rsplit("/", 1)[-1]
+    signature = [control["view"], control["type"], handles, data.get("buttonId"), actions]
+    if not handles:
+        signature.append(name)
+    return json.dumps(signature, separators=(",", ":"))

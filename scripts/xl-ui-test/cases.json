@@ -1,0 +1,1787 @@
+[
+  {
+    "id": "osca.power",
+    "view": "osca",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "osca/Osc Native Surface/Osc Native Power/Osc Native Osc A Power"},
+      {"op": "expect", "target": "osc1.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "osca/Osc Native Surface/Osc Native Power/Osc Native Osc A Power", "if_changed": {"from": "baseline", "target": "osc1.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "oscb.power",
+    "view": "oscb",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "oscb/Osc Native Surface/Osc Native Power/Osc Native Osc B Power"},
+      {"op": "expect", "target": "osc2.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "oscb/Osc Native Surface/Osc Native Power/Osc Native Osc B Power", "if_changed": {"from": "baseline", "target": "osc2.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "oscc.power",
+    "view": "oscc",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "oscc/Osc Native Surface/Osc Native Power/Osc Native Osc C Power"},
+      {"op": "expect", "target": "osc3.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "oscc/Osc Native Surface/Osc Native Power/Osc Native Osc C Power", "if_changed": {"from": "baseline", "target": "osc3.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "oscsub.power",
+    "view": "oscsub",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "oscsub/Osc Native Surface/Osc Native Power/Osc Native Sub Power"},
+      {"op": "expect", "target": "sub.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "oscsub/Osc Native Surface/Osc Native Power/Osc Native Sub Power", "if_changed": {"from": "baseline", "target": "sub.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "oscnoise.power",
+    "view": "oscnoise",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"},
+      {"op": "expect", "target": "noise.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power", "if_changed": {"from": "baseline", "target": "noise.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "play.expand.env",
+    "view": "play1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "play1/Play Native EnvLfo ENV Expand 1-6"},
+      {"op": "expect", "status": {"view": "play1", "ui_depth": "1"}},
+      {"op": "expect", "ocr": ["CLOSE"], "rect": [58, 122, 96, 56]},
+      {"op": "tap", "x": 106, "y": 150},
+      {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "play.expand.lfo",
+    "view": "play1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "play1/Play Native EnvLfo LFO Expand 1-6"},
+      {"op": "expect", "status": {"view": "play1", "ui_depth": "1"}},
+      {"op": "expect", "ocr": ["CLOSE"], "rect": [968, 320, 96, 56]},
+      {"op": "tap", "x": 1016, "y": 348},
+      {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "play.expand.osc-a",
+    "view": "play1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "status": {"play_osc": "2"}},
+      {"op": "expect", "target": "osc1.on", "value": 1},
+      {"op": "tap", "control": "play1/Play Native OSC Osc A/expand"},
+      {"op": "expect", "status": {"ui_depth": "1"}},
+      {"op": "expect", "ocr": ["CLOSE"], "rect": [1152, 230, 120, 56]},
+      {"op": "tap", "x": 1212, "y": 258},
+      {"op": "expect", "status": {"ui_depth": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "lfo1.toggle",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.3.0/button"},
+      {"op": "expect", "target": "lfo1.smooth", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.3.0/button", "if_changed": {"from": "baseline", "target": "lfo1.smooth"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "voice.toggle",
+    "view": "voice",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "voice/Voice Rand Detune 10x/button"},
+      {"op": "expect", "target": "voicectl.rand.detune10x", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "voice/Voice Rand Detune 10x/button", "if_changed": {"from": "baseline", "target": "voicectl.rand.detune10x"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "master.mpe.power",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "expect", "ocr": ["MPE"], "rect": [640, 492, 230, 180]},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master MPE On"},
+      {"op": "expect", "target": "master.mpe.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master MPE On", "if_changed": {"from": "baseline", "target": "master.mpe.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "mixer.main-fx",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN Strip/header/solo_mute/FX Enable Button"},
+      {"op": "expect", "target": "main.fx_bypass", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MAIN Strip/header/solo_mute/FX Enable Button", "if_changed": {"from": "baseline", "target": "main.fx_bypass"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "mixer.filter-1.peek",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "ocr": ["CUTOFF"], "rect": [23, 579, 57, 18]},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.filter-2.peek",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "ocr": ["CUTOFF"], "rect": [23, 579, 57, 18]},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.main-fx.peek",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.bus-1.peek",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.bus-2.peek",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-1",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 1 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-2",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 2 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-3",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 3 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-4",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 4 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-5",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 5 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-6",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 6 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-7",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 7 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.targets-8",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "macros/Macro 8 Card/target"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "50"}},
+      {"op": "tap", "control": "macros/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "macros", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "env1.targets",
+    "view": "env1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "env1/Env Native Full Controls/Env Native Targets/Env Native Targets"},
+      {"op": "expect", "status": {"view": "env1", "page_top": "30"}},
+      {"op": "tap", "control": "env1/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "env1", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "lfo1.targets",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-6.5.1/TARGETS"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "41"}},
+      {"op": "tap", "control": "lfo1/Native Modulation Editor/BACK"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "lfo.editor.shapes",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.5.2/expand"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "40"}},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Editor SHAPES/SHAPES"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "42"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "lfo.editor.more",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.5.2/expand"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "40"}},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Editor MORE/MORE"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "42"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "lfo.editor.back",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.5.2/expand"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "40"}},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Editor BACK/BACK"},
+      {"op": "expect", "status": {"view": "lfo1", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mod.route-details",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "tap", "x": 1180, "y": 240},
+      {"op": "expect", "status": {"view": "mod", "page_top": "20"}},
+      {"op": "tap", "control": "mod/Mod Native Detail Back"},
+      {"op": "expect", "status": {"view": "mod", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.sub.disabled-sends",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "sub.on", "value": 0},
+      {"op": "expect", "ocr": ["PAN"], "rect": [59, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [59, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [59, 588, 35, 15], "alphabet": "B12"},
+      {"op": "drag", "x": 34, "y": 488, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 34, "y": 548, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 34, "y": 608, "dx": 0, "dy": 35},
+      {"op": "tap", "x": 67, "y": 225},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "ocr": ["PAN"], "rect": [59, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [59, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [59, 588, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.osc2.disabled-sends",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "osc2.on", "value": 0},
+      {"op": "expect", "ocr": ["PAN"], "rect": [313, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [313, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [313, 588, 35, 15], "alphabet": "B12"},
+      {"op": "drag", "x": 288, "y": 488, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 288, "y": 548, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 288, "y": 608, "dx": 0, "dy": 35},
+      {"op": "tap", "x": 321, "y": 225},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "ocr": ["PAN"], "rect": [313, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [313, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [313, 588, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.osc3.disabled-sends",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "osc3.on", "value": 0},
+      {"op": "expect", "ocr": ["PAN"], "rect": [440, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [440, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [440, 588, 35, 15], "alphabet": "B12"},
+      {"op": "drag", "x": 415, "y": 488, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 415, "y": 548, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 415, "y": 608, "dx": 0, "dy": 35},
+      {"op": "tap", "x": 448, "y": 225},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "ocr": ["PAN"], "rect": [440, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [440, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [440, 588, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.noise.disabled-sends",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "noise.on", "value": 0},
+      {"op": "expect", "ocr": ["PAN"], "rect": [567, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [567, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [567, 588, 35, 15], "alphabet": "B12"},
+      {"op": "drag", "x": 542, "y": 488, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 542, "y": 548, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 542, "y": 608, "dx": 0, "dy": 35},
+      {"op": "tap", "x": 575, "y": 225},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "ocr": ["PAN"], "rect": [567, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [567, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [567, 588, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "mixer.filter2.disabled-sends",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "filter2.on", "value": 0},
+      {"op": "expect", "ocr": ["PAN"], "rect": [821, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [821, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [821, 588, 35, 15], "alphabet": "B12"},
+      {"op": "drag", "x": 796, "y": 488, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 796, "y": 548, "dx": 0, "dy": 35},
+      {"op": "drag", "x": 796, "y": 608, "dx": 0, "dy": 35},
+      {"op": "tap", "x": 829, "y": 225},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "ocr": ["PAN"], "rect": [821, 468, 35, 15]},
+      {"op": "expect", "ocr": ["B1"], "rect": [821, 528, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "ocr": ["B2"], "rect": [821, 588, 35, 15], "alphabet": "B12"},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "filter.split.f1.power",
+    "view": "filter1",
+    "steps": [
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "ocr": ["NOTE"], "rect": [836, 143, 50, 21]},
+      {"op": "expect", "ocr": ["VELO"], "rect": [1019, 143, 50, 21]},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 44, "y": 222},
+      {"op": "expect", "target": "filter1.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 44, "y": 222, "if_changed": {"from": "baseline", "target": "filter1.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "x": 37, "y": 154}
+    ]
+  },
+  {
+    "id": "filter.split.f2.power",
+    "view": "filter1",
+    "steps": [
+      {"op": "tap", "x": 95, "y": 154},
+      {"op": "expect", "ocr": ["NOTE"], "rect": [836, 143, 50, 21]},
+      {"op": "expect", "ocr": ["VELO"], "rect": [1019, 143, 50, 21]},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 44, "y": 222},
+      {"op": "expect", "target": "filter2.on", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 44, "y": 222, "if_changed": {"from": "baseline", "target": "filter2.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "x": 37, "y": 154}
+    ]
+  },
+  {
+    "id": "fx.add-menu",
+    "view": "fx",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX Chain Add Menu"},
+      {"op": "expect", "ocr": ["FX ADD EFFECT"], "rect": [30, 20, 290, 64]},
+      {"op": "tap", "x": 106, "y": 49},
+      {"op": "expect", "status": {"view": "fx", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "play.osc-drawer",
+    "view": "play1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "play1/Play Osc Select"},
+      {"op": "expect", "ocr": ["Sub", "Osc A", "Osc B", "Osc C", "Noise"]},
+      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "macros.physical-q1",
+    "view": "macros",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "status": {"page_q_targets": "323 324 325 326"}},
+      {"op": "qlink", "index": 1, "delta": 1},
+      {"op": "expect", "target": "macro.1", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "qlink", "index": 1, "delta": -1, "if_changed": {"from": "baseline", "target": "macro.1"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "master.switch.quality.no_smoothing",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master No Smoothing"},
+      {"op": "expect", "target": "quality.no_smoothing", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master No Smoothing", "if_changed": {"from": "baseline", "target": "quality.no_smoothing"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.quality.oversample_4x",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Oversample 4X"},
+      {"op": "expect", "target": "quality.oversample_4x", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master Oversample 4X", "if_changed": {"from": "baseline", "target": "quality.oversample_4x"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.bend_down_link",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Bend Link"},
+      {"op": "expect", "target": "master.bend_down_link", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master Bend Link", "if_changed": {"from": "baseline", "target": "master.bend_down_link"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.legato",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Legato"},
+      {"op": "expect", "target": "master.legato", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master Legato", "if_changed": {"from": "baseline", "target": "master.legato"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.poly_legato",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Poly Legato"},
+      {"op": "expect", "target": "master.poly_legato", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master Poly Legato", "if_changed": {"from": "baseline", "target": "master.poly_legato"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.voice.phase_legato",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Voice Phase Legato"},
+      {"op": "expect", "target": "voice.phase_legato", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Voice Phase Legato", "if_changed": {"from": "baseline", "target": "voice.phase_legato"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.portamento.always",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Glide Always"},
+      {"op": "expect", "target": "master.portamento.always", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master Glide Always", "if_changed": {"from": "baseline", "target": "master.portamento.always"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.portamento.scaled",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel MAIN"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Glide Scaled"},
+      {"op": "expect", "target": "master.portamento.scaled", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master Glide Scaled", "if_changed": {"from": "baseline", "target": "master.portamento.scaled"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.tuning.mts_esp",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master MTS-ESP"},
+      {"op": "expect", "target": "master.tuning.mts_esp", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master MTS-ESP", "if_changed": {"from": "baseline", "target": "master.tuning.mts_esp"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.tuning.mts_note_on_only",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master MTS Note-On"},
+      {"op": "expect", "target": "master.tuning.mts_note_on_only", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master MTS Note-On", "if_changed": {"from": "baseline", "target": "master.tuning.mts_note_on_only"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.mpe.y_modwheel",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master MPE Y Modwheel"},
+      {"op": "expect", "target": "master.mpe.y_modwheel", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master MPE Y Modwheel", "if_changed": {"from": "baseline", "target": "master.mpe.y_modwheel"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.mpe.bend_to_x",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master MPE Bend to X"},
+      {"op": "expect", "target": "master.mpe.bend_to_x", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master MPE Bend to X", "if_changed": {"from": "baseline", "target": "master.mpe.bend_to_x"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "master.switch.master.mpe.y_bipolar",
+    "view": "master",
+    "steps": [
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master MPE Y Bipolar"},
+      {"op": "expect", "target": "master.mpe.y_bipolar", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "master/Master MPE Y Bipolar", "if_changed": {"from": "baseline", "target": "master.mpe.y_bipolar"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
+      {"op": "tap", "control": "master/Master Panel MAIN"}
+    ]
+  },
+  {
+    "id": "voice.scope.a",
+    "view": "voice",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc A"},
+      {"op": "expect", "target": "voicectl.osc.a", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc A", "if_changed": {"from": "baseline", "target": "voicectl.osc.a"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "voice.scope.b",
+    "view": "voice",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc B"},
+      {"op": "expect", "target": "voicectl.osc.b", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc B", "if_changed": {"from": "baseline", "target": "voicectl.osc.b"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "voice.scope.c",
+    "view": "voice",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc C"},
+      {"op": "expect", "target": "voicectl.osc.c", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc C", "if_changed": {"from": "baseline", "target": "voicectl.osc.c"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "voice.scope.sub",
+    "view": "voice",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc Sub"},
+      {"op": "expect", "target": "voicectl.osc.sub", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc Sub", "if_changed": {"from": "baseline", "target": "voicectl.osc.sub"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "voice.scope.noise",
+    "view": "voice",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc Noise"},
+      {"op": "expect", "target": "voicectl.osc.noise", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "voice/Voice Target Scope/Osc Noise", "if_changed": {"from": "baseline", "target": "voicectl.osc.noise"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "lfo.sync.key",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "lfo1.sync", "value": 0},
+      {"op": "tap", "x": 471, "y": 618},
+      {"op": "expect", "target": "lfo1.sync", "value": 4},
+      {"op": "expect", "target": "lfo1.sync", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 471, "y": 506, "if_changed": {"from": "baseline", "target": "lfo1.sync"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "lfo.sync.bpm",
+    "view": "lfo1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "expect", "target": "lfo1.sync", "value": 0},
+      {"op": "tap", "x": 471, "y": 562},
+      {"op": "expect", "target": "lfo1.sync", "value": 1},
+      {"op": "expect", "target": "lfo1.sync", "change": "only", "from": "baseline"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 471, "y": 506, "if_changed": {"from": "baseline", "target": "lfo1.sync"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
+    ]
+  },
+  {
+    "id": "route.mixer.mixer.flt-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.mixer.flt-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.mixer.main-fx",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.mixer.bus-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.mixer.bus-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-1.mixer",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-1.flt-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-1.main-fx",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-1.bus-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-1.bus-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-2.mixer",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-2.flt-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-2.main-fx",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-2.bus-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.flt-2.bus-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.main-fx.mixer",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.main-fx.flt-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.main-fx.flt-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.main-fx.bus-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.main-fx.bus-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-1.mixer",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-1.flt-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-1.flt-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-1.main-fx",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-1.bus-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-2.mixer",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-2.flt-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.2}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-2.flt-2",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native FLT 2 Peek"},
+      {"op": "expect", "vst": {"3575": 0.4}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-2.main-fx",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN FX Peek"},
+      {"op": "expect", "vst": {"3575": 0.6}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mixer.bus-2.bus-1",
+    "view": "mixer",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 2 Peek"},
+      {"op": "expect", "vst": {"3575": 1.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "tap", "control": "mixer/Mixer Native BUS 1 Peek"},
+      {"op": "expect", "vst": {"3575": 0.8}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "26"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mixer/Mixer Native MIXER Peek"},
+      {"op": "expect", "vst": {"3575": 0.0}},
+      {"op": "expect", "status": {"view": "mixer", "page_top": "0"}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.all.by-source",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "tap", "control": "mod/Mod Native Mode BY SOURCE/mode"},
+      {"op": "expect", "vst": {"2944": 0.6666666666666666}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.all.by-dest",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "tap", "control": "mod/Mod Native Mode BY DEST/mode"},
+      {"op": "expect", "vst": {"2944": 1.0}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.by-source.all",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode BY SOURCE/mode"},
+      {"op": "expect", "vst": {"2944": 0.6666666666666666}},
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.by-source.by-dest",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode BY SOURCE/mode"},
+      {"op": "expect", "vst": {"2944": 0.6666666666666666}},
+      {"op": "tap", "control": "mod/Mod Native Mode BY DEST/mode"},
+      {"op": "expect", "vst": {"2944": 1.0}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.by-dest.all",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode BY DEST/mode"},
+      {"op": "expect", "vst": {"2944": 1.0}},
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.by-dest.by-source",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode BY DEST/mode"},
+      {"op": "expect", "vst": {"2944": 1.0}},
+      {"op": "tap", "control": "mod/Mod Native Mode BY SOURCE/mode"},
+      {"op": "expect", "vst": {"2944": 0.6666666666666666}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.mod.delete-cancel",
+    "view": "mod",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "mod/Mod Native Mode ALL/mode"},
+      {"op": "expect", "vst": {"2944": 0.3333333333333333}},
+      {"op": "tap", "x": 1180, "y": 240},
+      {"op": "expect", "status": {"view": "mod", "page_top": "20"}},
+      {"op": "tap", "control": "mod/Mod Native Detail Delete/Delete unarmed"},
+      {"op": "expect", "vst": {"3574": 1}},
+      {"op": "tap", "control": "mod/Mod Native Detail Back"},
+      {"op": "expect", "status": {"view": "mod", "page_top": "0"}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.filter.f1.note.expand-collapse",
+    "view": "filter1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "vst": {"2850": 0.25}},
+      {"op": "tap", "x": 862, "y": 154},
+      {"op": "tap", "control": "filter1/Filter Native Split Right Note/Filter Native Split Expand Curve"},
+      {"op": "expect", "vst": {"2850": 0.75}},
+      {"op": "tap", "control": "filter1/Filter Native Curve Surface/Filter Native Collapse Curve"},
+      {"op": "expect", "vst": {"2850": 0.25}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "tap", "x": 862, "y": 154},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.filter.f1.velo.expand-collapse",
+    "view": "filter1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "vst": {"2850": 0.25}},
+      {"op": "tap", "x": 1044, "y": 154},
+      {"op": "tap", "control": "filter1/Filter Native Split Right Velo/Filter Native Split Expand Curve"},
+      {"op": "expect", "vst": {"2850": 1.0}},
+      {"op": "tap", "control": "filter1/Filter Native Curve Surface/Filter Native Collapse Curve"},
+      {"op": "expect", "vst": {"2850": 0.25}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "tap", "x": 862, "y": 154},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.filter.f2.note.expand-collapse",
+    "view": "filter1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 95, "y": 154},
+      {"op": "expect", "vst": {"2850": 0.5}},
+      {"op": "tap", "x": 862, "y": 154},
+      {"op": "tap", "control": "filter1/Filter Native Split Right Note/Filter Native Split Expand Curve"},
+      {"op": "expect", "vst": {"2850": 0.75}},
+      {"op": "tap", "control": "filter1/Filter Native Curve Surface/Filter Native Collapse Curve"},
+      {"op": "expect", "vst": {"2850": 0.5}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "tap", "x": 862, "y": 154},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.filter.f2.velo.expand-collapse",
+    "view": "filter1",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 95, "y": 154},
+      {"op": "expect", "vst": {"2850": 0.5}},
+      {"op": "tap", "x": 1044, "y": 154},
+      {"op": "tap", "control": "filter1/Filter Native Split Right Velo/Filter Native Split Expand Curve"},
+      {"op": "expect", "vst": {"2850": 1.0}},
+      {"op": "tap", "control": "filter1/Filter Native Curve Surface/Filter Native Collapse Curve"},
+      {"op": "expect", "vst": {"2850": 0.5}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "tap", "x": 862, "y": 154},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.fx.select-slot-1",
+    "view": "fx",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 168, "y": 206},
+      {"op": "expect", "vst": {"3234": 1}},
+      {"op": "tap", "x": 100, "y": 206},
+      {"op": "expect", "vst": {"3233": 1}},
+      {"op": "expect", "vst": {"3234": 0}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 100, "y": 206},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "route.fx.select-slot-2",
+    "view": "fx",
+    "steps": [
+      {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 100, "y": 206},
+      {"op": "expect", "vst": {"3233": 1}},
+      {"op": "tap", "x": 168, "y": 206},
+      {"op": "expect", "vst": {"3234": 1}},
+      {"op": "expect", "vst": {"3233": 0}},
+      {"op": "expect", "target": "*", "change": "unchanged"}
+    ],
+    "restore": [
+      {"op": "tap", "x": 100, "y": 206},
+      {"op": "navigate", "view": "play1"}
+    ]
+  },
+  {
+    "id": "project.copy.save-reload",
+    "view": "voice",
+    "steps": [
+      {"op": "save_reload", "copy_only": true},
+      {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}}
+    ],
+    "restore": [
+      {"op": "navigate", "view": "play1"}
+    ]
+  }
+]

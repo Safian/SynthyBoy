@@ -1,0 +1,474 @@
+[
+  {
+    "id": "oscnoise.enabled.keytrack",
+    "view": "oscnoise",
+    "steps": [
+      {
+        "op": "snapshot",
+        "name": "baseline"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "value": 0
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "change": "only"
+      },
+      {
+        "op": "expect",
+        "target": "noise.type",
+        "value": 0
+      },
+      {
+        "op": "snapshot",
+        "name": "powered"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.keytrack"
+      },
+      {
+        "op": "expect",
+        "target": "noise.keytrack",
+        "change": "only",
+        "from": "powered"
+      }
+    ],
+    "restore": [
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.keytrack",
+        "if_changed": {
+          "from": "baseline",
+          "target": "noise.keytrack"
+        }
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power",
+        "if_changed": {
+          "from": "baseline",
+          "target": "noise.on"
+        }
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "baseline"
+      }
+    ]
+  },
+  {
+    "id": "oscnoise.enabled.env1",
+    "view": "oscnoise",
+    "steps": [
+      {
+        "op": "snapshot",
+        "name": "baseline"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "value": 0
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "change": "only"
+      },
+      {
+        "op": "expect",
+        "target": "noise.type",
+        "value": 0
+      },
+      {
+        "op": "snapshot",
+        "name": "powered"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.env1"
+      },
+      {
+        "op": "expect",
+        "target": "noise.env1",
+        "change": "only",
+        "from": "powered"
+      }
+    ],
+    "restore": [
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.env1",
+        "if_changed": {
+          "from": "baseline",
+          "target": "noise.env1"
+        }
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power",
+        "if_changed": {
+          "from": "baseline",
+          "target": "noise.on"
+        }
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "baseline"
+      }
+    ]
+  },
+  {
+    "id": "oscnoise.sample-mode.controls",
+    "view": "oscnoise",
+    "steps": [
+      {
+        "op": "snapshot",
+        "name": "baseline"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "value": 0
+      },
+      {
+        "op": "expect",
+        "target": "noise.type",
+        "value": 0
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "change": "only",
+        "from": "baseline"
+      },
+      {
+        "op": "snapshot",
+        "name": "powered"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.type"
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "none"
+        }
+      },
+      {
+        "op": "tap",
+        "x": 115,
+        "y": 229
+      },
+      {
+        "op": "tap",
+        "x": 106,
+        "y": 49
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "oscnoise",
+          "state": "visible"
+        }
+      },
+      {
+        "op": "expect",
+        "target": "noise.type",
+        "change": "only",
+        "from": "powered"
+      },
+      {
+        "op": "snapshot",
+        "name": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.random_phase"
+      },
+      {
+        "op": "expect",
+        "target": "noise.random_phase",
+        "change": "only",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.random_phase"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.loop"
+      },
+      {
+        "op": "expect",
+        "target": "noise.loop",
+        "change": "only",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.loop"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.bounce"
+      },
+      {
+        "op": "expect",
+        "target": "noise.bounce",
+        "change": "only",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.bounce"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.keytrack [2]"
+      },
+      {
+        "op": "expect",
+        "target": "noise.keytrack",
+        "change": "only",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.keytrack [2]"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.env1 [2]"
+      },
+      {
+        "op": "expect",
+        "target": "noise.env1",
+        "change": "only",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.env1 [2]"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "sample_mode"
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.type [2]"
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "none"
+        }
+      },
+      {
+        "op": "tap",
+        "x": 115,
+        "y": 149
+      },
+      {
+        "op": "tap",
+        "x": 106,
+        "y": 49
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "oscnoise",
+          "state": "visible"
+        }
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "powered"
+      }
+    ],
+    "restore": [
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "baseline"
+      }
+    ]
+  },
+  {
+    "id": "oscnoise.sound.white-pink-white",
+    "view": "oscnoise",
+    "steps": [
+      {
+        "op": "snapshot",
+        "name": "baseline"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "value": 0
+      },
+      {
+        "op": "expect",
+        "target": "noise.type",
+        "value": 0
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"
+      },
+      {
+        "op": "expect",
+        "target": "noise.on",
+        "change": "only",
+        "from": "baseline"
+      },
+      {
+        "op": "snapshot",
+        "name": "powered"
+      },
+      {
+        "op": "expect",
+        "target": "noise.sample",
+        "value": 0
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.sample"
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "none"
+        }
+      },
+      {
+        "op": "tap",
+        "x": 115,
+        "y": 224
+      },
+      {
+        "op": "tap",
+        "x": 106,
+        "y": 49
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "oscnoise",
+          "state": "visible"
+        }
+      },
+      {
+        "op": "expect",
+        "target": "noise.sample",
+        "change": "only",
+        "from": "powered"
+      },
+      {
+        "op": "expect",
+        "target": "noise.sample",
+        "value": 1
+      },
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Settings/noise.sample"
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "none"
+        }
+      },
+      {
+        "op": "tap",
+        "x": 115,
+        "y": 148
+      },
+      {
+        "op": "tap",
+        "x": 106,
+        "y": 49
+      },
+      {
+        "op": "expect",
+        "status": {
+          "view": "oscnoise",
+          "state": "visible"
+        }
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "powered"
+      }
+    ],
+    "restore": [
+      {
+        "op": "tap",
+        "control": "oscnoise/Osc Native Surface/Osc Native Power/Osc Native Noise Power"
+      },
+      {
+        "op": "expect",
+        "target": "*",
+        "change": "restored",
+        "from": "baseline"
+      }
+    ]
+  }
+]
