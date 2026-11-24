@@ -127,7 +127,7 @@ def apply_control_state(definition, skins_dir, *, active):
     return result
 
 
-def bind_control_active(entry, active_handle, ctx, definitions, *, frames=None, frame_count=2):
+def bind_control_active(entry, active_handle, ctx, definitions, *, frames=None, frame_count=2, active_focus="Children"):
     """Bind a native component's two presentation states to a boolean handle.
 
     Both states use the same native control subtree and value bindings. The
@@ -151,8 +151,8 @@ def bind_control_active(entry, active_handle, ctx, definitions, *, frames=None, 
         base = passive_layer([leaf])
     state_frames = ((0, False), (1, True)) if frames is None else tuple(frames)
     state_name = "NativeActive " + identity
-    if frames is not None:
-        state_name += " " + hashlib.sha256(repr((state_frames, frame_count)).encode()).hexdigest()[:12]
+    if frames is not None or active_focus != "Children":
+        state_name += " " + hashlib.sha256(repr((state_frames, frame_count, active_focus)).encode()).hexdigest()[:12]
 
     def inactive(name, source):
         target = "NativeInactive " + name
@@ -178,7 +178,7 @@ def bind_control_active(entry, active_handle, ctx, definitions, *, frames=None, 
             type_name = on_name if active else off_name
             child = native_entry("State", type_name, {"version": 1, "handleName": "Data"},
                                  (0, 0, 1, 1), gates=(f"NativeActiveGate{value}",),
-                                 focus="Children" if active else "No")
+                                 focus=active_focus if active else "No")
             child["bounds"]["boundsType"] = "Proportional"
             states.append(child)
         ctx.add_component_definition(state_name, passive_layer(states))

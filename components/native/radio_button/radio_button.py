@@ -215,3 +215,15 @@ def create_radio_dot_group(name, rect, labels, handle, skins_dir, *, gates=(), f
     """Convenience factory for Variant 2: factory exclusionary radio buttons with cyan dot."""
     return build_radio_button_entries(name, rect, labels, VARIANT_RADIO_DOT, handle, skins_dir,
                                       gates=gates, focus=focus)
+
+
+def render_segmented_status_art(label, selected, used, width, height):
+    """Shared segmented selection face with an optional source-in-use marker."""
+    image = render_segmented_button_art(label, selected, width, height)
+    if used:
+        geometry = _style_size("radio.status_dot")
+        radius, bottom = geometry["radius"], geometry["bottom"]
+        ImageDraw.Draw(image).ellipse((width // 2 - radius, height - bottom - 2 * radius,
+                                       width // 2 + radius, height - bottom),
+                                      fill=_style_color("radio.active.text" if selected else "accent.cyan"))
+    return image

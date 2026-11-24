@@ -157,7 +157,7 @@ def _build_selector_definition(base_def):
                         "data": {"version": 1, "handleName": "Data"},
                     },
                     "handle remapping": {"version": 1, "map": []},
-                    "bounds": _bounds((6, 7, KNOB_W - 12, KNOB_H - 14)),
+                    "bounds": _bounds((style.size("fx.build_selector_definition.bounds.6"), style.size("fx.build_selector_definition.bounds.7"), KNOB_W - style.size("fx.build_selector_definition.bounds.12"), KNOB_H - style.size("fx.build_selector_definition.bounds.14"))),
                 },
             ],
         }
@@ -166,7 +166,8 @@ def _build_selector_definition(base_def):
         if cname == "focus":
             child["bounds"]["bounds"] = "0 0 %d %d" % (KNOB_W, KNOB_H)
         elif cname == "slider":
-            child["bounds"]["bounds"] = "6 7 %d %d" % (KNOB_W - 12, KNOB_H - 14)
+            x, y, right, bottom = style.size("fx.legacy.slider.insets")
+            child["bounds"]["bounds"] = f"{x} {y} {KNOB_W - right} {KNOB_H - bottom}"
     return defn
 
 
@@ -212,7 +213,7 @@ def _build_toggle_definition(base_def):
                         "version": 1,
                         "name": style.size("font.family"),
                         "style": style.size("font.style.semibold"),
-                        "height": 16.0,
+                        "height": style.size("fx.build_toggle_definition.height.16_0"),
                     },
                     "colour": style.argb("fx.legacy.6a6a6c"),
                     "justification": "horizontallyCentred verticallyCentred",
@@ -223,7 +224,7 @@ def _build_toggle_definition(base_def):
             },
         },
         "handle remapping": {"version": 1, "map": []},
-        "bounds": _bounds((4, 2, KNOB_W - 8, 22)),
+        "bounds": _bounds((style.size("fx.build_toggle_definition.bounds.4"), style.size("fx.build_toggle_definition.bounds.2"), KNOB_W - style.size("fx.build_toggle_definition.bounds.8"), style.size("fx.build_toggle_definition.bounds.22"))),
     }
 
     toggle_btn = None
@@ -389,10 +390,10 @@ def _add_native_popups(tui, ctx, gallery):
     markers = []
     for i, (x, rgb) in enumerate(FX_MENU_MARKERS, 1):
         filename = f"fx_editor_modal_marker_{i}.png"
-        Image.new("RGB", (6, 6), "#" + rgb).save(ctx.skins_dir / filename)
+        Image.new("RGB", (style.size("fx.add_native_popups.new.6"), style.size("fx.add_native_popups.new.6")), "#" + rgb).save(ctx.skins_dir / filename)
         marker = _native_entry(f"FX Native Popup Marker {i}", "Image",
                                {"version": 2, "imageType": "Regular", "colour": "0", "image": filename},
-                               (x, 120, 6, 6))
+                               (x, style.size("fx.add_native_popups.native_entry.120"), style.size("fx.add_native_popups.native_entry.6"), style.size("fx.add_native_popups.native_entry.6")))
         marker["bounds"]["showWhenDataModelInvalid"] = "Show"
         markers.append(marker)
     write_routing_assets(ctx.skins_dir)
@@ -405,10 +406,10 @@ def _add_native_popups(tui, ctx, gallery):
                 popup = _add_drawer(gallery)
             control = "Rack" if rack else "Add"
             filename = f"fx_{control.lower()}_popup_marker.png"
-            Image.new("RGB", (6, 6), "#f1ae47" if rack else "#ef72bf").save(ctx.skins_dir / filename)
+            Image.new("RGB", (style.size("fx.add_native_popups.new.6"), style.size("fx.add_native_popups.new.6")), "#f1ae47" if rack else "#ef72bf").save(ctx.skins_dir / filename)
             action = _native_entry(f"FX {control} Popup Marker", "Image",
                                    {"version": 2, "imageType": "Regular", "colour": "0", "image": filename},
-                                   (52 if rack else 64, 120, 6, 6))
+                                   (style.size("fx.add_native_popups.native_entry.52") if rack else style.size("fx.add_native_popups.native_entry.64"), style.size("fx.add_native_popups.native_entry.120"), style.size("fx.add_native_popups.native_entry.6"), style.size("fx.add_native_popups.native_entry.6")))
             action["bounds"]["showWhenDataModelInvalid"] = "Show"
             popup["componentsData"].append(action)
         else:
@@ -447,7 +448,7 @@ def _add_native_chain(tui, tab, ctx, contract, base):
 
     def labelled_button(name, kind, size, button_art):
         w, h = size
-        label = _native_label(kind, (2, h - 38, w - 4, 30), 15)
+        label = _native_label(kind, (style.size("fx.labelled_button.native_label.2"), h - style.size("fx.labelled_button.native_label.38"), w - style.size("fx.labelled_button.native_label.4"), style.size("fx.labelled_button.native_label.30")), style.size("fx.labelled_button.native_label.15"))
         target = button("button", None, (0, 0, w, h), (), button_art)
         definition = _native_definition([target, label])
         definition["backgroundData"] = _empty_bg()
@@ -503,8 +504,9 @@ def _add_native_chain(tui, tab, ctx, contract, base):
         select_card = button("select", None, (0, down, w, h), gates, idle, active, domain=2)
         select_card["handle remapping"]["map"] = [{"key": "Data", "value": "Select"}]
         card_widgets.append(select_card)
-        for handle, label_bounds, height in (("Select", (2, down + 3, w - 4, 27), 13),
-                                             ("Power", (2, down + 30, w - 4, 23), 12)):
+        for handle, offsets, height in style.size("fx.chain.card.labels"):
+            left, top, reserved, label_height = offsets
+            label_bounds = (left, down + top, w - reserved, label_height)
             label = _native_label("Value", label_bounds, height)
             label["handle remapping"]["map"] = [{"key": "Data", "value": handle}]
             label["componentData"]["data"]["textStyle"]["colour"] = style.argb("text.icon") if enabled else style.argb("fx.legacy.959595")
@@ -519,7 +521,7 @@ def _add_native_chain(tui, tab, ctx, contract, base):
              f"RangedEnabling/{increment(1)}/{slots}/{slots + 1}/Parameter {count}")
 
     add = contract["add"]
-    caption = _native_label("Text", (0, 0, add[2], add[3]), 16)
+    caption = _native_label("Text", (0, 0, add[2], add[3]), style.size("fx.add_native_chain.native_label.16"))
     caption["componentData"]["data"].update(text="+ ADD", handleName="Invalid")
     caption["bounds"]["showWhenDataModelInvalid"] = "Show"
     definition = _native_definition([caption], popup=FX_ADD_MENU)
@@ -568,13 +570,13 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
     power_images = []
     for name, colour in (("on", "text.status.on"), ("off", "text.status.off")):
         filename = f"fx_header_power_{name}.png"
-        in_slot(action_art(icon="power", colour=style.color(colour)), (56, 56)).save(ctx.skins_dir / filename)
+        in_slot(action_art(icon="power", colour=style.color(colour)), (style.size("fx.add_native_header.in_slot.56"), style.size("fx.add_native_header.in_slot.56"))).save(ctx.skins_dir / filename)
         power_images.append(filename)
-    children.append(native_button("power", (single["power"][0], 0, 56, 56), *power_images,
+    children.append(native_button("power", (single["power"][0], 0, style.size("fx.add_native_header.native_button.56"), style.size("fx.add_native_header.native_button.56")), *power_images,
                                   remaps=(("Data", "Power"),), gates=(f"NonZero/{layout_parameter}",)))
     rack_definition = _native_definition([
-        _native_label("Name", style.size("fx.add_native_header.rect.1"), 16),
-        _native_label("Value", style.size("fx.add_native_header.rect.2"), 20)], popup=FX_RACK_MENU)
+        _native_label("Name", style.size("fx.add_native_header.rect.1"), style.size("fx.add_native_header.native_label.16")),
+        _native_label("Value", style.size("fx.add_native_header.rect.2"), style.size("fx.add_native_header.native_label.20"))], popup=FX_RACK_MENU)
     rack_definition["componentsData"][0]["componentData"]["data"].update(type="Text", text="RACK", handleName="")
     rack_definition["disableCoarseDataWheel"] = True
     ctx.add_component_definition("fxNativeHeaderRack", rack_definition)
@@ -658,7 +660,7 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
     compressor = legacy_modules.index("Compressor")
     for item in range(FX_HEADER_ITEMS):
         parameter = base + FX_HEADER + 2 + item * FX_HEADER_FIELDS
-        entry = _native_entry(f"FX Native Header {item + 1}", layer, {"version": 1, "handleName": "Data"}, (0, y, 1280, 628-y),
+        entry = _native_entry(f"FX Native Header {item + 1}", layer, {"version": 1, "handleName": "Data"}, (0, y, style.size("fx.add_native_header.native_entry.1280"), style.size("fx.add_native_header.native_entry.628")-y),
                              gates=(f"IndexedEnabling/{item+1}/{FX_HEADER_ITEMS+1}/Parameter {base+FX_HEADER}",))
         entry["bounds"]["acceptsHWFocus"] = "Children"
         entry["handle remapping"]["map"] = [{"key": key, "value": f"Parameter {parameter+field}"}
@@ -702,8 +704,8 @@ def _apply_native_editor(tui, tab, ctx):
         row, col = divmod(slot, 4)
         if not 0 <= slot < min(FX_CELL_COUNT, rows * 4):
             raise ValueError(f"FX cell {slot} is outside layout {layout}")
-        row_h = (620 - top) // rows
-        rect = (8 + 318 * col, top + 16 + row_h * row, 310, max(72, row_h - 16))
+        row_h = (style.size("fx.apply_native_editor.row_h.620") - top) // rows
+        rect = (style.size("fx.apply_native_editor.rect.8") + style.size("fx.apply_native_editor.rect.318") * col, top + style.size("fx.apply_native_editor.rect.16") + row_h * row, style.size("fx.apply_native_editor.rect.310"), max(style.size("fx.apply_native_editor.rect.72"), row_h - style.size("fx.apply_native_editor.rect.16")))
         target = base + FX_VALUE_OFFSET + slot
         focus = True
         if kind in scalars:
@@ -759,8 +761,8 @@ def _apply_native_editor(tui, tab, ctx):
     mixer = next((t for t in tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer")), None)
     if mixer is not None:
         # Docked Mixer PEEK FX editor occupies (0, 0, 1280, 564) above the persistent bottom 6-tab bar.
-        docked_h = 564
-        docked_bottom = docked_h - 8  # 556
+        docked_h = style.size("fx.apply_native_editor.docked_h.564")
+        docked_bottom = docked_h - style.size("fx.apply_native_editor.docked_bottom.8")  # 556
         dock_items = []
         for comp in items:
             if comp["componentData"]["name"] == "FX Native Surface":
@@ -772,19 +774,35 @@ def _apply_native_editor(tui, tab, ctx):
         for layout_id, slot, cell_kind in manifest["widgets"]:
             top, rows = layouts[layout_id - 1]
             row, col = divmod(slot, 4)
-            dock_top = top - 64 if top >= 344 else top
+            dock_top = top - style.size("fx.apply_native_editor.dock_top.64") if top >= style.size("fx.apply_native_editor.dock_top.344") else top
             row_h = (docked_bottom - dock_top) // rows
-            cell_top = dock_top + 16 + row_h * row
-            cell_h = min(max(72, row_h - 16), max(56, docked_bottom - cell_top))
+            cell_top = dock_top + style.size("fx.apply_native_editor.cell_top.16") + row_h * row
+            cell_h = min(max(style.size("fx.apply_native_editor.cell_h.72"), row_h - style.size("fx.apply_native_editor.cell_h.16")), max(style.size("fx.apply_native_editor.cell_h.56"), docked_bottom - cell_top))
             dock_cell_rects[f"FX Cell {layout_id}.{slot + 1}.{cell_kind}"] = (
                 8 + 318 * col, cell_top, 310, cell_h
             )
+        dock_cells_kind = "mixerPeekFxParameterCells"
+        dock_cells_definition = _copy.deepcopy(cells_definition)
+        for child in dock_cells_definition["componentsData"]:
+            name = child["componentData"]["name"]
+            child["bounds"]["bounds"] = " ".join(map(str, dock_cell_rects[name]))
+        ctx.add_component_definition(dock_cells_kind, dock_cells_definition)
+        for index, child in enumerate(dock_children):
+            if child["componentData"]["name"] != "FX parameter cells":
+                continue
+            dock_cells = _native_entry("FX parameter cells", dock_cells_kind,
+                                       {"version": 1, "handleName": "Data"}, (0, 0, style.size("fx.apply_native_editor.native_entry.1280"), docked_h))
+            style.bind_control_active(dock_cells, f"Parameter {base + FX_HEADER + 1}", ctx, definitions,
+                                      frames=frames, frame_count=frame_count)
+            dock_cells["bounds"]["acceptsHWFocus"] = "Children"
+            dock_children[index] = dock_cells
+
         # Fit gallery rows cleanly in docked 564px space reusing the same fxNativeGalleryCard
         cards = manifest["chain"]["gallery"]
         columns = len(cards) // 2
         if columns > 0:
             for r_idx in (0, 1):
-                row_y = 182 if r_idx == 0 else 372
+                row_y = style.size("fx.apply_native_editor.row_y.182") if r_idx == 0 else style.size("fx.apply_native_editor.row_y.372")
                 row_def = _copy.deepcopy(tui["pageData"]["componentDefinitions"]["localComponentDefinitions"])
                 row_key = f"fxNativeGalleryRow{r_idx + 1}"
                 src_row_def = next((d["value"] for d in row_def if d["key"] == row_key), None)
@@ -802,7 +820,7 @@ def _apply_native_editor(tui, tab, ctx):
                             c["bounds"]["bounds"] = f"{cx} {row_y} {cw} 182"
 
         band_dock = manifest["chain"]["band"]
-        dock_band_rect = (band_dock[0], band_dock[1] - 64, band_dock[2], band_dock[3])
+        dock_band_rect = (band_dock[0], band_dock[1] - style.size("fx.apply_native_editor.dock_band_rect.64"), band_dock[2], band_dock[3])
         for c in dock_children:
             cname = c["componentData"]["name"]
             if cname in dock_cell_rects:
@@ -818,7 +836,7 @@ def _apply_native_editor(tui, tab, ctx):
         dock_def["backgroundData"] = _empty_bg()
         ctx.add_component_definition(dock_kind, dock_def)
         view = base + MIXER_PEEK_VIEW
-        peek = _native_entry("Mixer Native Peek FX", dock_kind, data, (0, 0, 1280, docked_h), view,
+        peek = _native_entry("Mixer Native Peek FX", dock_kind, data, (0, 0, style.size("fx.apply_native_editor.native_entry.1280"), docked_h), view,
                              (f"IndexedEnabling/2/3/Parameter {view}",))
         peek["bounds"]["acceptsHWFocus"] = "Children"
         mixer["componentDefinition"]["componentsData"].append(peek)

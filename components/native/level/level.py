@@ -824,3 +824,53 @@ def blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_r
                              _style_argb("text.value"), "left verticallyCentred")
     definition["componentsData"] = [focus, knob, name, value]
     return definition
+
+
+def master_control_definition(kind, w, h):
+    """Native master control composition with calibrated relative dial geometry."""
+    from components.native.button.button import entry
+    from components.native.name_value.name_value import _label_component
+    metrics = _style_size("level.master.control")
+    inset, half, label_h = metrics["padding"], metrics["half_padding"], metrics["label_height"]
+
+    def label(caption, rect):
+        child = _label_component("caption" if caption else "value", "Name" if caption else "Value",
+                                 "Caption" if caption else "Data", rect,
+                                 metrics["caption_font" if caption else "value_font"],
+                                 _style_argb("master.meter.scale.text" if caption else "text.icon"),
+                                 "horizontallyCentred verticallyCentred")
+        child["bounds"]["showWhenDataModelInvalid"] = "Hide"
+        return child
+
+    def action(trigger, handler, popup=""):
+        return {"version": 1, "onAction": trigger, "handler": handler,
+                "handleName": "Data", "additionalData": popup}
+
+    if kind.startswith("dial_"):
+        children = [label(True, (inset, 0, w - 2 * inset, label_h)),
+                    entry("dial", "Knob", {"version": 5, "knobType": "GenericNoLabel",
+                          "polarity": "BiPolar" if kind == "dial_bi" else "UniPolar",
+                          "dragOrientation": "Vertical", "handleName": "Data"},
+                          (inset, label_h, w - 2 * inset, h - 2 * label_h), focus="No"),
+                    label(False, (inset, h - label_h, w - 2 * inset, label_h))]
+        for child, relative in zip(children, metrics["relative_bounds"]):
+            bounds = child["bounds"]
+            bounds.pop("bounds")
+            bounds.update(boundsType="Relative", relativeBounds=relative)
+        actions = [action(trigger, "Show Overlay", "fx editor number menu")
+                   for trigger in ("Double Click", "Enter Pressed")]
+    else:
+        caption_width = w * 3 // 5
+        children = [label(True, (half, 0, caption_width - inset, h)),
+                    label(False, (caption_width, 0, w - caption_width - half, h))]
+        if kind == "selector":
+            children = [label(True, (inset, 0, w - 2 * inset, label_h)),
+                        label(False, (inset, label_h, w - 2 * inset, h - label_h))]
+        handler = "Toggle Switch" if kind == "toggle" else "Show Overlay"
+        popup = {"selector": "fx editor choice menu", "number": "fx editor number menu"}.get(kind, "")
+        actions = [action(trigger, handler, popup) for trigger in ("Mouse Down", "Enter Pressed")]
+    return {"version": 2, "actions": actions,
+            "backgroundData": {"version": 1,
+                "focussed": {"version": 1, "colour": _style_argb("field.focus"), "image": ""},
+                "unfocussed": {"version": 1, "colour": _style_argb("button.surface"), "image": ""}},
+            "ignoreMousePresses": False, "disableCoarseDataWheel": False, "componentsData": children}

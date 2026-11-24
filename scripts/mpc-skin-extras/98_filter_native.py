@@ -6,9 +6,8 @@ import copy
 import json
 from pathlib import Path
 import sys
-import tempfile
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -50,7 +49,7 @@ PZ_MODEL, PZ_ACTION = 21, 6
 EXPAND_FILTER_ACTION, CURVE_ACTION_BASE, EXPAND_CURVE_ACTION = 7, 8, 12
 FILTER_ACTION_COUNT = EXPAND_CURVE_ACTION + 1
 STYLE_DOMAIN = 21  # Native FX domains share their declared MODEL and STYLE lists with Filter.
-DIAL_SIZE = 60
+DIAL_SIZE = style.size("filter.layout.DIAL_SIZE.60")
 FILTER_KEYS = ("on", "cutoff", "resonance", "drive", "mix", "keytrack", "env1", "var", "comb_offset", "blend", None,
                "formant.x", "formant.y", "formant.transpose", "formant.resonance", "formant.spread", "clean_mode", "model", "style")
 
@@ -75,7 +74,7 @@ def _entry(name, kind, data, rect, parameter, gates, focus=False):
     }
 
 
-def _label(name, text, rect, parameter, gates, *, height=16, colour=None, align="horizontallyCentred"):
+def _label(name, text, rect, parameter, gates, *, height=style.size("filter.label.font"), colour=None, align="horizontallyCentred"):
     child = ui_name_value._label_component(
         NATIVE + name, "Value" if text is None else "Text", "Data" if text is None else "",
         rect, height, colour or style.argb("text.icon"), f"{align} verticallyCentred")
@@ -114,11 +113,7 @@ def _write_selector_strip(directory, key, rect, frames):
     w, h = rect[2:]
     art = Image.new("RGBA", (w, h * len(frames)))
     for i, (label, selected, used) in enumerate(frames):
-        cell = ui_radio.render_segmented_button_art(label, selected, w, h)
-        if used:
-            draw = ImageDraw.Draw(cell)
-            dot_col = style.color("radio.active.text") if selected else style.color("accent.cyan")
-            draw.ellipse((w // 2 - 3, h - 11, w // 2 + 3, h - 5), fill=dot_col)
+        cell = ui_radio.render_segmented_status_art(label, selected, used, w, h)
         art.paste(cell, (0, i * h))
     art.save(directory / file)
     return file
@@ -128,23 +123,7 @@ def _ensure_dial_assets(skins_dir):
     uni_on = ui_level.synthyboy_dial_data(skins_dir, frame_size=DIAL_SIZE, bipolar=False, active=True)
     bi_on = ui_pan.synthyboy_dial_data(skins_dir, frame_size=DIAL_SIZE, bipolar=True)
 
-    # Render single static frame (frame 0) for passive OFF display without leaving unreferenced strips in skins_dir
-    with tempfile.TemporaryDirectory(prefix="filter-dial-off-") as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        uni_off_data = ui_level.synthyboy_dial_data(tmp_path, frame_size=DIAL_SIZE, bipolar=False, active=False)
-        bi_off_strip = tmp_path / "filter_dial_60_bi_inactive.png"
-        ui_level.write_strip(bi_off_strip, frame_size=DIAL_SIZE, bipolar=True, active=False)
-        for src_name, out_name in ((uni_off_data["filmStrip"], "filter_dial_60_uni_off.png"),
-                                     (bi_off_strip.name, "filter_dial_60_bi_off.png")):
-            with Image.open(tmp_path / src_name) as src:
-                src.crop((0, 0, DIAL_SIZE, DIAL_SIZE)).save(skins_dir / out_name)
-
-    return {
-        "uni_on": uni_on,
-        "bi_on": bi_on,
-        "uni_off_img": "filter_dial_60_uni_off.png",
-        "bi_off_img": "filter_dial_60_bi_off.png",
-    }
+    return {"uni_on": uni_on, "bi_on": bi_on}
 
 
 def _write_action_slot_art(skins_dir, key, size, *, icon=None, text=None, colour=None):
@@ -153,7 +132,7 @@ def _write_action_slot_art(skins_dir, key, size, *, icon=None, text=None, colour
     label = text
     if label == "DELETE POINT" and w < 141:
         label = "DEL POINT"
-    art = ui_button.in_slot(ui_button.action_art(icon=icon, text=label, width=None if icon else max(48, w - 4), colour=fill), (w, h))
+    art = ui_button.in_slot(ui_button.action_art(icon=icon, text=label, width=None if icon else max(style.size("filter.write_action_slot_art.width.48"), w - style.size("filter.write_action_slot_art.width.4")), colour=fill), (w, h))
     filename = f"filter_native_{key}_{w}x{h}.png"
     art.save(skins_dir / filename)
     return filename
@@ -162,7 +141,7 @@ def _write_action_slot_art(skins_dir, key, size, *, icon=None, text=None, colour
 def _ensure_power_art(skins_dir):
     files = {}
     for state_key, colour_key in (("off", "accent.red"), ("on", "accent.green")):
-        art = ui_button.in_slot(ui_button.action_art(icon="power", colour=style.color(colour_key)), (56, 56))
+        art = ui_button.in_slot(ui_button.action_art(icon="power", colour=style.color(colour_key)), (style.size("filter.ensure_power_art.in_slot.56"), style.size("filter.ensure_power_art.in_slot.56")))
         filename = f"filter_native_power_{state_key}.png"
         art.save(skins_dir / filename)
         files[state_key] = filename
@@ -279,7 +258,7 @@ def _pz_toolbar(ctx, rects):
     x, y, _, height = rects[2]
     right = rects[3][0] + rects[3][2]
     film_name = "pz_draft_tools.png"
-    film = Image.new("RGBA", (right - x, height * 4))
+    film = Image.new("RGBA", (right - x, height * style.size("filter.pz_toolbar.new.4")))
     children = [_film("PZ draft state", film_name, (x, y, right - x, height), mode, (), 4)]
     for index, (label, rect) in enumerate(zip(("Back", "Reset", "Delete Point", "Apply"), rects), 1):
         gates = ()
@@ -301,7 +280,7 @@ def _pz_toolbar(ctx, rects):
     ctx.add_component_definition(kind, _readout_panel(children, style.native_color("transparent")))
     for source in (1, 2):
         entry = _entry(f"PZ Toolbar F{source}", kind, {"version": 1, "handleName": "Data"},
-                       (0, 0, 1280, 72), base + PZ_ACTIONS + source - 1,
+                       (0, 0, style.size("filter.pz_toolbar.entry.1280"), style.size("filter.pz_toolbar.entry.72")), base + PZ_ACTIONS + source - 1,
                        (f"IndexedEnabling/{source}/3/Parameter {base + PZ_SOURCE}",))
         entry["bounds"]["acceptsHWFocus"] = "Children"
         yield entry
@@ -599,7 +578,7 @@ def apply(tui, qlinks, ctx):
         "componentsData": filter_items,
     })
     data = {"version": 1, "handleName": "Data"}
-    surface = _entry("Editor Surface", kind, data, (0, 0, 1280, 628), state, expanded_filter_gates)
+    surface = _entry("Editor Surface", kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, expanded_filter_gates)
     surface["bounds"]["acceptsHWFocus"] = "Children"
     items.insert(0, surface)
 
@@ -608,20 +587,21 @@ def apply(tui, qlinks, ctx):
         # Docked Mixer PEEK editor occupies 0..564 above the persistent bottom 6-tab bar (y=566..622).
         import copy as _copy
         docked_items = []
-        docked_h = 564
-        tab_shift = 628 - docked_h
+        docked_h = style.size("filter.apply.docked_h.564")
+        middle_start, bottom_start, middle_height, second_row = style.size("filter.dock.thresholds")
+        tab_shift = style.size("filter.apply.tab_shift.628") - docked_h
         for comp in filter_items:
             c = _copy.deepcopy(comp)
             cx, cy, cw, ch = map(int, c["bounds"]["bounds"].split())
-            if cy >= 400:
+            if cy >= bottom_start:
                 cy -= tab_shift
-            elif 110 <= cy < 400 and ch >= 90:
+            elif middle_start <= cy < bottom_start and ch >= middle_height:
                 # Formant 2x2 middle block shrinks vertically to match FilterDisplay::layout() at 564px
-                mid_y = 76
-                band_top = 384 - 8
-                block_top = mid_y + 18 + 6
-                cell_h = max(48, (band_top - mid_y - 30 - 6) // 2)
-                row_idx = 0 if cy < 200 else 1
+                mid_y = style.size("filter.apply.mid_y.76")
+                band_top = style.size("filter.apply.band_top.384") - style.size("filter.apply.band_top.8")
+                block_top = mid_y + style.size("filter.apply.block_top.18") + style.size("filter.apply.block_top.6")
+                cell_h = max(style.size("filter.apply.cell_h.48"), (band_top - mid_y - style.size("filter.apply.cell_h.30") - style.size("filter.apply.cell_h.6")) // 2)
+                row_idx = 0 if cy < second_row else 1
                 cy = block_top + row_idx * (cell_h + 6)
                 ch = min(ch, cell_h)
             c["bounds"]["bounds"] = f"{cx} {cy} {cw} {ch}"
@@ -633,7 +613,7 @@ def apply(tui, qlinks, ctx):
             "componentsData": docked_items,
         })
         view = ctx.param_count + LEGACY_EXTRAS + MIXER_PEEK_VIEW
-        peek = _entry("Peek Filter", dock_kind, data, (0, 0, 1280, docked_h),
+        peek = _entry("Peek Filter", dock_kind, data, (0, 0, style.size("filter.apply.entry.1280"), docked_h),
                       view, (f"IndexedEnabling/1/3/Parameter {view}", *_state_gates(state, (1, 2))))
         peek["componentData"]["name"] = "Mixer Native Peek Filter"
         peek["bounds"]["acceptsHWFocus"] = "Children"
@@ -645,7 +625,7 @@ def apply(tui, qlinks, ctx):
     # Expanded Filter top bar (F1 | F2 | NOTE | VELO, dual) + Graph corner Expand & PZ Edit
     vx, vy, vw, vh = manifest["view"]
     for i, label in enumerate(SELECT):
-        rect = (vx + i * vw // 4, vy, vw // 4, vh)
+        rect = (vx + i * vw // style.size("filter.apply.rect.4"), vy, vw // style.size("filter.apply.rect.4"), vh)
         file = _write_selector_strip(ctx.skins_dir, label.lower(), rect, [(label, bool(k & 2), bool(k & 1)) for k in range(4)])
         # Expanded Curve keeps canonical "Filter Native F1..VELO" names on state 3..4;
         # Expanded Filter mounts them when NOT in Split (!note_ind[2..3] & !velo_ind[2..3])
@@ -682,7 +662,7 @@ def apply(tui, qlinks, ctx):
         "backgroundData": {"version": 1, "focussed": transparent, "unfocussed": transparent},
         "componentsData": curve_items,
     })
-    curve_surface = _entry("Curve Surface", curve_kind, data, (0, 0, 1280, 628), state, expanded_curve_gates)
+    curve_surface = _entry("Curve Surface", curve_kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, expanded_curve_gates)
     curve_surface["bounds"]["acceptsHWFocus"] = "Children"
     items.append(curve_surface)
 
@@ -783,7 +763,7 @@ def apply(tui, qlinks, ctx):
         "componentsData": split_left,
     })
     for tag, gates in (("Split Left Note", split_note_gates), ("Split Left Velo", split_velo_gates)):
-        entry = _entry(tag, split_left_kind, data, (0, 0, 1280, 628), state, gates)
+        entry = _entry(tag, split_left_kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, gates)
         entry["bounds"]["acceptsHWFocus"] = "Children"
         items.append(entry)
 
@@ -809,7 +789,7 @@ def apply(tui, qlinks, ctx):
         "componentsData": split_right,
     })
     for tag, gates in (("Split Right Note", split_note_gates), ("Split Right Velo", split_velo_gates)):
-        entry = _entry(tag, split_right_kind, data, (0, 0, 1280, 628), state, gates)
+        entry = _entry(tag, split_right_kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, gates)
         entry["bounds"]["acceptsHWFocus"] = "Children"
         items.append(entry)
 
