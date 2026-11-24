@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from screen_images import require_external_output, save_screen, screen_path
+from components.native.tab_bar.tab_bar import render_tab_bar
 from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
     render_mixer_full_screen_background,
@@ -100,24 +101,10 @@ def _render_mixer_tab_canvas(active_tab: int = 0, meter_readout=None) -> Image.I
         strip_img = render_mixer_strip(st["variant"], st)
         tab_bg.alpha_composite(strip_img, (start_x + stride * i, strip_y))
 
-    # Draw persistent 6-tab bottom bar matching 84_mixer.py geometry and colors verbatim
-    draw_tab = ImageDraw.Draw(tab_bg)
-    f_peek = semibold(_style_size("mixer_strip.font.sm"))
-    all_tabs = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
-    peek_y = strip_y + _style_size("mixer_strip.height") + _style_size("mixer_strip.tab.gap_y")
-    bw = _style_size("mixer_strip.tab.width")
-    bh = _style_size("mixer_strip.tab.height")
-    tab_x0 = _style_size("mixer_strip.tab.start_x")
-    tab_span = _style_size("mixer_strip.tab.span_x")
-    radius = _style_size("radius.field")
-    for k, caption in enumerate(all_tabs):
-        px = tab_x0 + int(round(tab_span * (k / (len(all_tabs) - 1))))
-        is_active = (k == active_tab)
-        fill = _style_rgb("dial.value") if is_active else _style_rgb("button.surface")
-        outline = _style_rgb("accent.cyan") if is_active else _style_rgb("button.border")
-        fg = _style_color("text.white") if is_active else _style_color("text.icon")
-        draw_tab.rounded_rectangle([px, peek_y, px + bw - 1, peek_y + bh - 1], radius=radius, fill=fill, outline=outline, width=1)
-        draw_tab.text((px + bw // 2, peek_y + bh // 2), caption, font=f_peek, fill=fg, anchor="mm")
+    labels = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
+    bar = render_tab_bar(labels, active_tab, _style_size("mixer_strip.tab.width"), _style_size("mixer_strip.tab.height"))
+    y = strip_y + _style_size("mixer_strip.height") + _style_size("mixer_strip.tab.gap_y")
+    tab_bg.alpha_composite(bar, (_style_size("mixer_strip.tab.start_x"), y))
 
     return tab_bg
 

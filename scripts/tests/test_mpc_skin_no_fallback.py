@@ -237,7 +237,7 @@ class NoFallbackTests(unittest.TestCase):
                 self.assertEqual(rm["FxVisual"], f"Parameter {native_base + 866}")
             self.assertEqual(rm["MuteVisual"], f"Parameter {native_base + 867 + i}")
 
-        # Persistent 6-tab bar (MIXER, FLT 1, FLT 2, MAIN FX, BUS 1, BUS 2) without modal gate
+        # Persistent 6-tab bar (MIXER, FLT 1, FLT 2, MAIN FX, BUS 1, BUS 2) gated together during full-screen dialogs
         all_tabs = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
         for i, caption in enumerate(all_tabs):
             btn = native[f"{caption} Peek"]
@@ -246,11 +246,13 @@ class NoFallbackTests(unittest.TestCase):
             self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]), (i, 6, "Instant"))
             self.assertEqual(remap(btn), {"Data": f"Parameter {native_base}"})
             self.assertEqual(btn["bounds"]["additionalInvalidatingHandles"], [modal])
-            vis = native[f"{caption} Tab Visual"]
-            self.assertEqual(vis["componentData"]["type"], "Image")
-            self.assertEqual(vis["componentData"]["data"]["numFrames"], 6)
-            self.assertEqual(remap(vis), {"Data": f"Parameter {native_base + 856}"})
-            self.assertEqual(vis["bounds"]["additionalInvalidatingHandles"], [modal])
+            self.assertEqual(btn["bounds"]["bounds"], f"{10 + 210 * i} 566 210 56")
+        vis = native["Tabs"]
+        self.assertEqual(vis["componentData"]["type"], "Image")
+        self.assertEqual(vis["bounds"]["bounds"], "10 566 1260 56")
+        self.assertEqual(vis["componentData"]["data"]["numFrames"], 6)
+        self.assertEqual(remap(vis), {"Data": f"Parameter {native_base + 856}"})
+        self.assertEqual(vis["bounds"]["additionalInvalidatingHandles"], [modal])
 
         menu = definitions["mixerDestination56"]["actions"]
         self.assertEqual([(a["onAction"], a["handler"], a["additionalData"]) for a in menu],

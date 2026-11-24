@@ -18,8 +18,7 @@ from native_ui_params import (
     mixer_peek_index,
 )
 from components.style import size as _style_size
-from components.native.button.button import TRANSPARENT_HIT, button, entry
-from components.native.radio_button.radio_button import write_segmented_strip
+from components.native.tab_bar.tab_bar import tab_bar
 
 from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
@@ -205,28 +204,7 @@ def apply(tui, qlinks, ctx):
     all_tabs = ("MIXER", *PEEK_LABELS)
     supply_replacement_strings(tui, base, all_tabs)
     peek_y = start_y + height + _style_size("mixer_strip.tab.gap_y")
-    bw = _style_size("mixer_strip.tab.width")
-    peek_h = _style_size("mixer_strip.tab.height")
-    tab_start_x = _style_size("mixer_strip.tab.start_x")
-    tab_span_x = _style_size("mixer_strip.tab.span_x")
-
-    for k, caption in enumerate(all_tabs):
-        x = tab_start_x + int(round(tab_span_x * (k / (MIXER_TABS - 1))))
-        if skins_dir:
-            slug = caption.lower().replace(" ", "_")
-            film = write_segmented_strip(
-                Path(skins_dir) / f"mixer_tab_{slug}_states.png", (bw, peek_h),
-                [(caption, frame == k) for frame in range(MIXER_TABS)],
-            )
-            vis_data = {
-                "version": 2,
-                "imageType": "FilmStrip",
-                "colour": "0",
-                "image": film,
-                "numFrames": MIXER_TABS,
-                "handleName": "Data",
-            }
-            components.append(entry(f"{NATIVE}{caption} Tab Visual", "Image", vis_data,
-                                    (x, peek_y, bw, peek_h), (("Data", f"Parameter {base + MIXER_ACTIVE_TAB}"),), modal_gate, focus="No"))
-        components.append(button(f"{NATIVE}{caption} Peek", (x, peek_y, bw, peek_h), TRANSPARENT_HIT,
-                                 index=k, count=MIXER_TABS, remaps=(("Data", f"Parameter {base}"),), gates=modal_gate))
+    rect = (_style_size("mixer_strip.tab.start_x"), peek_y, _style_size("mixer_strip.tab.width"),
+            _style_size("mixer_strip.tab.height"))
+    components.extend(tab_bar(NATIVE.rstrip(), all_tabs, rect, f"Parameter {base + MIXER_ACTIVE_TAB}",
+                              f"Parameter {base}", skins_dir, modal_gate))

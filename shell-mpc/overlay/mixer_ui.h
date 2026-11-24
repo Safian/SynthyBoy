@@ -364,11 +364,10 @@ public:
             else if (! hostBackground())
             {
                 // A native channel strip includes its header, meters and controls.
-                std::array<ui::Rect, ui::MixerFullScreen::kStrips + nativeui::kMixerTabs> holes;
+                std::array<ui::Rect, ui::MixerFullScreen::kStrips + 1> holes;
                 for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
                     holes[s] = screen_.strips[s].rect();
-                for (int t = 0; t < nativeui::kMixerTabs; ++t)
-                    holes[ui::MixerFullScreen::kStrips + t] = tabRect (t);
+                holes.back() = { 10, kTabY + 566, kCanvasW - 20, 56 };
                 ui::drawNativeCanvas (sb, screen_.rect(), holes);
             }
             if (listOpen_)
@@ -616,14 +615,6 @@ private:
     {
         return nativeWidgetsEnabled_ && w_ == page::kW && h_ == page::kH
             && (nativeWidgetsAvailable_ || hostConfirmed());
-    }
-
-    static ui::Rect tabRect (int tab) noexcept
-    {
-        if (tab < 0 || tab >= nativeui::kMixerTabs)
-            return {};
-        const int x = 10 + static_cast<int> (std::lround ((1258 - 96) * (static_cast<double> (tab) / (nativeui::kMixerTabs - 1))));
-        return { x, kTabY + 566, 96, 56 };
     }
 
     template <typename Visit>

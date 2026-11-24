@@ -838,7 +838,7 @@ static void assertAll36TabTransitionsAndTabBarExclusion()
             assert (inspectRect (pixels, tabBar).nonZero == 0);
             for (int k = 0; k < 6; ++k)
             {
-                const int bx = 10 + static_cast<int> ((1258 - 96) * (k / 5.0)) + 48;
+                const int bx = 10 + 210 * k + 105;
                 const int by = MixerUi::kTabY + 566 + 28;
                 assert (! r.ui.covers (bx, by));
             }
