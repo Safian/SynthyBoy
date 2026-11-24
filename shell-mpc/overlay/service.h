@@ -239,16 +239,7 @@ private:
         if (controller_)
             return;
         const std::string deviceModel = readDeviceModel();
-        ui::QGroup::setWideDevice (detectSixteenQLinks (deviceModel));   // the idle chips of the other mapped groups: knob numbers 5 .. 16 on the XL, 1 .. 4 (bank-relative) on the others
-        // Native XL controls already expose the current parameter name. Keep
-        // the overlay's yellow slot chips out of the normal picture; a hooks
-        // build may opt into them for visual diagnostics only.
-        bool wideBadges = false;
-#if defined(SYNTHYBOY_MPC_DEBUG_HOOKS) && SYNTHYBOY_MPC_DEBUG_HOOKS
-        if (const char* e = std::getenv ("SYNTHYBOY_MPC_Q_BADGES"))
-            wideBadges = std::atoi (e) != 0;
-#endif
-        ui::QGroup::setWideBadges (wideBadges);
+        ui::QGroup::setWideDevice (detectSixteenQLinks (deviceModel));
 #if defined(__linux__)
         display_ = std::make_shared<LinuxDisplay>();     // found at run time by the first use (discovery.h): the CRTC, the planes, the panel, the refresh
 #if SYNTHYBOY_MPC_INHOST_DRAW

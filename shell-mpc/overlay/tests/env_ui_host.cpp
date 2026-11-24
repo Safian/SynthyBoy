@@ -723,12 +723,10 @@ void testPlayViewRoutesTheElements()
         check (! pv.onWheel (r.x + 45, r.y + 54, 1, st, inst, in.nowMs), "native env dial owns its Play wheel");
     }
     std::vector<uint32_t> pixels (static_cast<size_t> (PlayView::kW) * PlayView::kH);
-    const bool wasWide = ui::QGroup::wideDevice(), hadBadges = ui::QGroup::wideBadges();
+    const bool wasWide = ui::QGroup::wideDevice();
     ui::QGroup::setWideDevice (true);
-    ui::QGroup::setWideBadges (false);   // the normal XL configuration
     pv.render (pixels.data(), PlayView::kW, PlayView::kH);
     ui::QGroup::setWideDevice (wasWide);
-    ui::QGroup::setWideBadges (hadBadges);
     bool clearDial = true;
     for (const ui::Rect& r : { nativeAtk, nativeDec, native, nativeRel })
         for (int y = r.y; y < r.bottom(); ++y)

@@ -143,7 +143,6 @@ static void test_qgroup_wide_device_and_idle_chips()
 
     // Wide device mode (MPC XL)
     QGroup::setWideDevice (true);
-    QGroup::setWideBadges (true);
     check (QGroup::wideDevice(), "Wide device flag is true");
 
     // In wide mode: drawIdle and drawWide produce no chips per owner visual rule
@@ -214,7 +213,6 @@ static void test_qgroup_wide_device_and_idle_chips()
     }
 
     QGroup::setWideDevice (false);
-    QGroup::setWideBadges (false);
 }
 
 static void test_qgroup_single_unnumbered_q_marker()

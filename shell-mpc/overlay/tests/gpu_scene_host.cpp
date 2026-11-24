@@ -259,7 +259,7 @@ int main()
     }
     {   // the Play view: three panels, drawn once through a sink for the CPU and for the scene; every sub-tab's highlight; the selected instances
         namespace ui = synthyboy_mpc::ui;
-        const bool wasWide = ui::QGroup::wideDevice(), hadBadges = ui::QGroup::wideBadges();
+        const bool wasWide = ui::QGroup::wideDevice();
         ui::QGroup::setWideDevice (false);
         FakeInstance inst;
         inst.set ("osc2.on", 1.0f);
@@ -355,7 +355,6 @@ int main()
         }
         {   // A full screen and its detail page cover the host controls. Compact Play keeps their apertures clear on the XL.
             ui::QGroup::setWideDevice (true);
-            ui::QGroup::setWideBadges (false);
             constexpr int tabY = play::kTabY;
             // The native selector and dial rectangles in scripts/mpc-skin-extras/82_play.py, in screen pixels.
             constexpr ui::Rect oscPan { 14, tabY + 510, 202, 108 }, oscLevel { 220, tabY + 510, 202, 108 };
@@ -401,7 +400,6 @@ int main()
                 check (unexpectedAlpha == 0, std::string (context) + " (" + std::to_string (unexpectedAlpha) + " unexpected alpha values)");
             }
             ui::QGroup::setWideDevice (wasWide);
-            ui::QGroup::setWideBadges (hadBadges);
         }
         {   // the host's Q-Link panel is up: our picture is TRANSPARENT in the strip x >= 1024 over the whole height (the panel shows through), in main and under a full screen; left of it everything is drawn
             for (int depth = 0; depth < 2; ++depth)

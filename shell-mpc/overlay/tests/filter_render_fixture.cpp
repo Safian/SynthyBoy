@@ -304,7 +304,6 @@ int main (int argc, char** argv)
     }
 
     synthyboy_mpc::ui::QGroup::setWideDevice (knobs == 16);
-    synthyboy_mpc::ui::QGroup::setWideBadges (false);
 
     FilterFixtureInstance inst;
     const int nativeBase = static_cast<int> (synthyboy::paramCount()) + 82;

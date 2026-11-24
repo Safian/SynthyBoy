@@ -150,7 +150,6 @@ int main (int argc, char** argv)
 
     // Enforce XL / Rule 5b: zero Q-Link badges or frames on compact Play.
     synthyboy_mpc::ui::QGroup::setWideDevice (true);
-    synthyboy_mpc::ui::QGroup::setWideBadges (false);
 
     // Documented fixture parameter state:
     // Sub active, Env 1 active, LFO 1 active, highlight on group 1 (Oscillator),

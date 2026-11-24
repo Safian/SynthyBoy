@@ -273,7 +273,6 @@ int main (int argc, char** argv)
     }
 
     synthyboy_mpc::ui::QGroup::setWideDevice (knobs == 16);
-    synthyboy_mpc::ui::QGroup::setWideBadges (false);
 
     ModFixtureInstance inst;
     int totalActive = 0;

@@ -26,9 +26,6 @@ public:
     /** The sixteen-knob device maps all four banks at once. The four-knob device has one active bank. */
     static void setWideDevice (bool wide) noexcept { wideFlag().store (wide, std::memory_order_relaxed); }
     static bool wideDevice() noexcept { return wideFlag().load (std::memory_order_relaxed); }
-    /** Legacy diagnostics keep their signatures; numbered decorations are no longer drawn. */
-    static void setWideBadges (bool on) noexcept { wideBadgesFlag().store (on, std::memory_order_relaxed); }
-    static bool wideBadges() noexcept { return wideBadgesFlag().load (std::memory_order_relaxed); }
     /** Which block of four knobs the group has while it is not the active one (QRouter::blockOfGroup): 0 the active group, 1 .. 3 the next groups of the page, -1 no knobs (the default). The page sets it for every group it publishes. */
     void setBlock (int block) noexcept { block_ = block; wideOffset_ = 0; }
     /** The XL has a continuous row of knobs. A short group can end partway through a block. */
@@ -164,7 +161,6 @@ public:
 
 private:
     static std::atomic<bool>& wideFlag() noexcept { static std::atomic<bool> f { false }; return f; }
-    static std::atomic<bool>& wideBadgesFlag() noexcept { static std::atomic<bool> f { false }; return f; }
     Rect frameRect_ = {};
     int block_ = -1, wideOffset_ = 0;
     bool frameless_ = false, inactive_ = false;
