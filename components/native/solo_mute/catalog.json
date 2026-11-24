@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 110,
+  "title": "SoloMutePair",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "hero",
+          "file": "catalog-solo-mute.png",
+          "alt": "SoloMutePair multi-state komponens (S/M, implicit némítás, Master FX)"
+        }
+      ]
+    }
+  ]
+}

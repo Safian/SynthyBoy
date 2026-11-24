@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Harmonic Sieve",
+ "category": "Spectral",
+ "description": "A saw with only every n-th harmonic kept, n = 1 to 16, two frames each: octaves, fifths, ghost chords.",
+ "frames": 32,
+ "seed": "harmonic_sieve",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "harmonic_sieve"
+  }
+ }
+}

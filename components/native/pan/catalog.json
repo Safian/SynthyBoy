@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 10,
+  "title": "Pan",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "hero",
+          "file": "pan-90.png",
+          "alt": "Pan"
+        }
+      ]
+    },
+    {
+      "heading": "Kompakt · {size:control.width} × {size:height.medium} px",
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "pan-native-40.png",
+          "alt": "Kompakt Pan: minimum, közép, maximum"
+        }
+      ]
+    }
+  ]
+}

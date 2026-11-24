@@ -1,0 +1,8 @@
+/* SynthyBoy - the only symbols a Linux .clap exports (GNU ld version script). Everything else, JUCE and the engine included, is local to the module. */
+{
+    global:
+        clap_entry;
+        synthyboy_clap_get_entry;
+    local:
+        *;
+};

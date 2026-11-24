@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 85,
+  "title": "MixerStrip",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "MixerStrip natív csatornasáv",
+          "file": "catalog-mixer-strip.png",
+          "alt": "MixerStrip natív csatornasáv"
+        },
+        {
+          "presentation": "sample",
+          "caption": "SOURCE, BUS, MASTER változatok (115 × 550 px)",
+          "file": "variants_comparison.png",
+          "alt": "MixerStrip változatok"
+        },
+        {
+          "presentation": "sample",
+          "caption": "Előtte / Utána összehasonlítás",
+          "file": "source_strip_before_after.png",
+          "alt": "MixerStrip előtte és utána"
+        }
+      ]
+    }
+  ]
+}

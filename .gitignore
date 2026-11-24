@@ -1,0 +1,27 @@
+# Build output and IDE files
+build/
+build-*/
+cmake-build-*/
+out/
+dist/
+.vs/
+.vscode/
+.idea/
+.cache/
+*.xcodeproj
+.DS_Store
+*.swp
+compile_commands.json
+CMakeUserPresets.json
+docs/ui-design/_manuals/
+tests/vital-presets/
+tests/serum-presets/
+__pycache__/
+*.pyc
+
+# Serum reference renders (licensed plug-in output, never committed) and comparison reports
+tests/serum-reference/
+build-mpc*.log
+
+# Worker reports are written here by convention and stay untracked
+/REPORT.md

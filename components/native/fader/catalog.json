@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 120,
+  "title": "Fader",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "hero",
+          "file": "catalog-fader.png",
+          "alt": "CalibratedFader TrackAndThumb vertikális csúszka és skála"
+        }
+      ]
+    }
+  ]
+}

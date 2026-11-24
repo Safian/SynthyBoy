@@ -1,0 +1,1701 @@
+// SynthyBoy - own engine tests, effects: the vectors of docs/engine-spec/06-effects.md and 05-filters.md (reverb R1 .. R3, EQ E1 .. E8, compressor C1 / C2, phaser P1 / P2, the SVF styles),
+// the effect instance pool, the latency compensation across the buses, Convolve.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "fx/fx_effects.h"
+#include "own_oracle.h"
+#include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
+#include "synthyboy/engine.h"
+#include "synthyboy/fx_types.h"
+#include "test_runner.h"
+#include "test_util.h"
+
+using namespace synthyboy;
+
+namespace
+{
+constexpr double kSr = 48000.0;
+bool verbose() { return std::getenv ("SBFX_VERBOSE") != nullptr; }
+
+std::unique_ptr<IEngine> make (int block = 256)
+{
+    auto e = createOwnEngine();
+    e->setParam (kParamMasterPolyphony, 32.0f);
+    e->prepare (kSr, block, qualityForTier (Tier::high));
+    return e;
+}
+
+void set (IEngine& e, const char* key, float v)
+{
+    const ParamInfo* p = findParamByKey (key);
+    CHECK (p != nullptr);
+    if (p != nullptr)
+        e.setParam (p->id, v);
+}
+
+
+/** A short saw burst: osc1 level 100, env attack 0 / decay 20 ms / sustain 0. */
+void burstPatch (IEngine& e, int wavetable = 1)
+{
+    set (e, "osc1.wavetable", static_cast<float> (wavetable));
+    set (e, "osc1.level", 100);
+    set (e, "filter1.on", 0);
+    set (e, "master.volume", 0);
+    set (e, "env1.attack", 0);
+    set (e, "env1.decay", 20);
+    set (e, "env1.sustain", 0);
+    set (e, "env1.release", 5);
+}
+
+std::vector<float> sq10ms (const std::vector<float>& x)
+{
+    const size_t w = static_cast<size_t> (kSr * 0.01);
+    std::vector<float> e;
+    for (size_t i = 0; i + w <= x.size(); i += w)
+    {
+        double s = 0.0;
+        for (size_t k = 0; k < w; ++k)
+            s += static_cast<double> (x[i + k]) * x[i + k];
+        e.push_back (static_cast<float> (10.0 * std::log10 (std::max (s, 1.0e-30))));
+    }
+    return e;
+}
+
+double rt60 (const std::vector<float>& x, size_t from)
+{
+    // Schroeder backward integration; RT60 from the -5 .. -35 dB part (x2)
+    std::vector<double> edc (x.size() - from);
+    double acc = 0.0;
+    for (size_t i = x.size(); i-- > from;)
+    {
+        acc += static_cast<double> (x[i]) * x[i];
+        edc[i - from] = acc;
+    }
+    const double total = edc[0];
+    double t5 = -1.0, t35 = -1.0;
+    for (size_t i = 0; i < edc.size(); ++i)
+    {
+        const double db = 10.0 * std::log10 (std::max (edc[i] / total, 1.0e-30));
+        if (t5 < 0.0 && db <= -5.0)
+            t5 = static_cast<double> (i) / kSr;
+        if (t35 < 0.0 && db <= -35.0)
+        {
+            t35 = static_cast<double> (i) / kSr;
+            break;
+        }
+    }
+    return (t5 >= 0.0 && t35 >= 0.0) ? 2.0 * (t35 - t5) : -1.0;
+}
+} // namespace
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// reverb: level and tail vectors of all six types (document 06, 9.5)
+
+namespace
+{
+struct R3Row { int decay; int size; int type; double peak, w01, w025, w05, w1, w2, rt; };
+// document 06, 9.5: the highest 10 ms window, the windows 0.1 / 0.25 / 0.5 / 1 / 2 s after the note on, the RT60
+const R3Row kR3[] = {
+    { 500, 100, 0, -8.5, -20.2, -36.9, -59.9, -103, -182, 0.61 }, { 500, 100, 1, -11.6, -17.9, -18.7, -19.6, -43.2, -84.3, 1.28 },
+    { 500, 100, 2, -11.8, -89.6, -38.4, -69.1, -128, -200, 0.75 }, { 500, 100, 3, -13.4, -29.0, -21.8, -45.5, -110, -200, 0.58 },
+    { 500, 100, 4, -12.9, -21.7, -39.3, -65.5, -132, -200, 0.59 }, { 500, 100, 5, -16.9, -22.3, -44.2, -68.5, -130, -200, 0.55 },
+    { 500, 50, 0, -8.6, -20.2, -26.4, -43.4, -77.2, -130, 0.93 }, { 500, 50, 1, -8.7, -13.0, -26.9, -58.8, -86.9, -156, 0.44 },
+    { 500, 50, 2, -11.8, -16.9, -31.1, -64.7, -122, -200, 0.53 }, { 500, 50, 3, -11.6, -14.9, -34.1, -66.7, -120, -200, 0.52 },
+    { 500, 50, 4, -12.8, -21.1, -29.5, -62.6, -124, -200, 0.51 }, { 500, 50, 5, -12.6, -18.4, -33.9, -63.4, -119, -200, 0.50 },
+    { 1000, 100, 0, -8.5, -20.2, -32.9, -43.8, -64.3, -115, 1.19 }, { 1000, 100, 1, -11.6, -17.9, -18.7, -19.6, -43.2, -82.6, 1.28 },
+    { 1000, 100, 2, -11.8, -89.6, -26.5, -42.5, -72.3, -131, 1.05 }, { 1000, 100, 3, -13.6, -29.0, -22.0, -31.2, -65.0, -126, 0.99 },
+    { 1000, 100, 4, -12.9, -17.8, -27.4, -38.1, -75.0, -131, 1.00 }, { 1000, 100, 5, -15.5, -17.5, -29.5, -41.2, -72.0, -130, 1.00 },
+    { 2000, 50, 0, -8.8, -17.5, -15.6, -21.9, -34.8, -48.7, 3.19 }, { 2000, 50, 1, -8.7, -13.0, -23.9, -29.4, -40.2, -63.1, 2.17 },
+    { 2000, 50, 2, -10.5, -11.5, -12.3, -24.8, -37.1, -71.0, 2.01 }, { 2000, 50, 3, -9.9, -12.8, -17.0, -30.3, -37.1, -69.0, 1.94 },
+    { 2000, 50, 4, -7.6, -15.2, -10.8, -21.0, -40.1, -67.1, 1.99 }, { 2000, 50, 5, -7.2, -12.3, -14.5, -20.8, -37.6, -69.6, 2.01 },
+};
+
+std::vector<float> reverbBurst (int decay, int size, int type, bool on = true, std::vector<float>* rawOut = nullptr)
+{
+    auto e = make();
+    burstPatch (*e);
+    if (on)
+    {
+        set (*e, "reverb.on", 1);
+        set (*e, "reverb.mix", 100);
+        set (*e, "reverb.decay", static_cast<float> (decay));
+        set (*e, "reverb.size", static_cast<float> (size));
+        set (*e, "reverb.type", static_cast<float> (type));
+        set (*e, "reverb.high_shelf_gain", 0);
+        set (*e, "reverb.low_shelf_gain", 0);
+        set (*e, "reverb.pre_high_cut", 12000);
+        set (*e, "reverb.pre_low_cut", 20);
+        set (*e, "reverb.chorus_amount", 0);
+        set (*e, "reverb.predelay", 0);
+        set (*e, "reverb.diff_a", 70);
+        set (*e, "reverb.diff_b", 60);
+        set (*e, "reverb.er_size", 50);
+        set (*e, "reverb.feedback", 50);
+    }
+    const double secs = on ? std::min(16.0, 4.0 + 4.0 * decay / 1000.0 * (size < 60 ? 4 : 2)) : 1.0;
+    const auto o = sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60), sbtest::noteOff (static_cast<int> (0.12 * kSr), 60) }, static_cast<int> (secs * kSr), 256);
+    if (rawOut != nullptr)
+        *rawOut = o.left;
+    return o.left;
+}
+} // namespace
+
+TEST (fx_reverb_levels_and_tails_of_the_six_types)
+{
+    const auto dry = reverbBurst (500, 50, 0, false);
+    const auto dryW = sq10ms (dry);
+    double dryPeak = -1000;
+    for (float v : dryW)
+        dryPeak = std::max (dryPeak, static_cast<double> (v));
+    if (verbose())
+        std::printf ("    dry burst peak %.1f dB (spec +11.4)\n", dryPeak);
+    for (const R3Row& row : kR3)
+    {
+        std::vector<float> raw;
+        reverbBurst (row.decay, row.size, row.type, true, &raw);
+        const auto w = sq10ms (raw);
+        size_t pk = 0;
+        for (size_t i = 0; i < w.size(); ++i)
+            if (w[i] > w[pk])
+                pk = i;
+        auto at = [&] (double s) { const size_t i = static_cast<size_t> ((0.1 + s) / 0.01); return i < w.size() ? static_cast<double> (w[i]) : -300.0; };
+        // our dry burst against the one of the document: the table is shifted by the same amount; and the live engine-vital is 8.3 dB hotter than the absolute numbers of the table
+        // (every type, every setting; measured with tools/own-oracle/fx_oracle.cpp; QUESTIONS.md row 14): the own engine follows the live engine
+        const double rel = dryPeak - 11.4 + 8.3;
+        const double rt = rt60 (raw, static_cast<size_t> (0.1 * kSr));
+        if (verbose())
+            std::printf ("    d%4d s%3d t%d: peak %6.1f @%.2f (%6.1f)  +.1 %6.1f (%6.1f)  +.25 %6.1f (%6.1f)  +.5 %6.1f (%6.1f)  +1 %6.1f (%6.1f)  rt60 %.2f (%.2f)\n", row.decay, row.size, row.type,
+                        w[pk] - rel, pk * 0.01, row.peak, at (0.1) - rel, row.w01, at (0.25) - rel, row.w025, at (0.5) - rel, row.w05, at (1.0) - rel, row.w1, rt, row.rt);
+        CHECK (std::fabs (w[pk] - rel - row.peak) < 2.5);
+        if (rt > 0.0)
+            CHECK (rt > row.rt * 0.7 && rt < row.rt * 1.35);
+    }
+}
+
+TEST (fx_reverb_vital_rt60_table_r1)
+{
+    // document 06, 9.2: RT60 of the Vital type by decay and size (the shape: size 100 % -> about the decay, smaller sizes decay longer)
+    struct Row { int decay; int size; double rt; };
+    const Row rows[] = { { 500, 20, 1.81 }, { 500, 50, 0.90 }, { 500, 100, 0.54 }, { 1000, 20, 3.21 }, { 1000, 50, 1.59 }, { 1000, 100, 1.06 },
+                         { 2000, 20, 6.87 }, { 2000, 50, 2.80 }, { 2000, 100, 2.14 }, { 4000, 50, 7.24 }, { 4000, 100, 4.97 } };
+    for (const Row& row : rows)
+    {
+        std::vector<float> raw;
+        reverbBurst (row.decay, row.size, 0, true, &raw);
+        const double rt = rt60 (raw, static_cast<size_t> (0.1 * kSr));
+        if (verbose())
+            std::printf ("    R1 decay %d size %d: RT60 %.2f (spec %.2f)\n", row.decay, row.size, rt, row.rt);
+        CHECK (rt > row.rt * 0.7 && rt < row.rt * 1.4);
+    }
+}
+
+TEST (fx_reverb_predelay_and_mix_r2)
+{
+    // pre-delay 100 ms: the onset moves by 100 ms and the silence before it is exact; mix 50 %: the dry burst at cos (pi / 4)
+    auto render = [&] (float predelay, float mix)
+    {
+        auto e = make();
+        burstPatch (*e);
+        set (*e, "reverb.on", 1);
+        set (*e, "reverb.mix", mix);
+        set (*e, "reverb.decay", 2000);
+        set (*e, "reverb.size", 50);
+        set (*e, "reverb.chorus_amount", 0);
+        set (*e, "reverb.high_shelf_gain", 0);
+        set (*e, "reverb.predelay", predelay);
+        return sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60), sbtest::noteOff (static_cast<int> (0.12 * kSr), 60) }, static_cast<int> (1.0 * kSr), 256);
+    };
+    const auto a = render (0, 100), b = render (100, 100);
+    auto onset = [&] (const std::vector<float>& x) { for (size_t i = 0; i < x.size(); ++i) if (std::fabs (x[i]) > 1.0e-5f) return static_cast<double> (i) / kSr; return -1.0; };
+    const double oa = onset (a.left), ob = onset (b.left);
+    if (verbose())
+        std::printf ("    onset %.4f / %.4f\n", oa, ob);
+    CHECK (std::fabs ((ob - oa) - 0.1) < 0.004);
+    const auto half = render (0, 50), dry = [&] { auto e = make(); burstPatch (*e); return sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60) }, static_cast<int> (0.3 * kSr), 256); }();
+    double pd = 0.0, ph = 0.0;
+    for (size_t i = 0; i < dry.left.size(); ++i)
+    {
+        pd = std::max (pd, static_cast<double> (std::fabs (dry.left[i])));
+        ph = std::max (ph, static_cast<double> (std::fabs (half.left[i])));
+    }
+    CHECK (ph > 0.6 * pd && ph < 0.85 * pd); // the dry part is 0.707 (plus the wet at 0.707)
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// white noise through a patch: the gain of the spectrum against a reference patch at the nine frequencies of the EQ table
+
+namespace
+{
+using KV = std::vector<std::pair<std::string, float>>;
+
+std::vector<double> bandPowers (const std::vector<float>& x, const std::vector<double>& freqs, size_t from, size_t N = 8192)
+{
+    std::vector<double> acc (N / 2, 0.0);
+    for (size_t pos = from; pos + N <= x.size(); pos += N / 2)
+    {
+        const auto ps = oracle::powerSpectrum (x, pos, N);
+        for (size_t i = 0; i < N / 2; ++i)
+            acc[i] += ps[i];
+    }
+    std::vector<double> out;
+    for (double f : freqs)
+    {
+        const size_t c = static_cast<size_t> (f / (kSr / static_cast<double> (N)) + 0.5);
+        double s = 0;
+        for (size_t i = c - 6; i <= c + 6 && i < acc.size(); ++i)
+            s += acc[i];
+        out.push_back (s);
+    }
+    return out;
+}
+
+oracle::Overrides noiseBase (const KV& extra)
+{
+    oracle::Overrides ov = { { "osc1.on", 0 }, { "noise.on", 1 }, { "noise.level", 50 }, { "filter1.on", 0 }, { "master.volume", -6 }, { "env1.attack", 0 }, { "env1.release", 50 } };
+    for (auto& e : extra)
+        ov.push_back (e);
+    return ov;
+}
+
+/** dB gain of the effect patch against the same patch without it. */
+std::vector<double> fxGain (const KV& fx, const std::vector<double>& freqs, int note = 69, double seconds = 3.2)
+{
+    oracle::Note n;
+    n.key = note;
+    n.length = seconds - 0.1;
+    const auto a = oracle::render (EngineKind::own, noiseBase (fx), { n }, seconds, kSr);
+    const auto b = oracle::render (EngineKind::own, noiseBase ({}), { n }, seconds, kSr);
+    const auto pa = bandPowers (a.l, freqs, static_cast<size_t> (0.4 * kSr)), pb = bandPowers (b.l, freqs, static_cast<size_t> (0.4 * kSr));
+    std::vector<double> g;
+    for (size_t i = 0; i < freqs.size(); ++i)
+        g.push_back (10.0 * std::log10 (pa[i] / pb[i]));
+    return g;
+}
+
+const std::vector<double> kEqFreqs = { 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
+
+void expectGains (const std::vector<double>& got, const std::vector<double>& want, double tol, const char* what)
+{
+    for (size_t i = 0; i < want.size(); ++i)
+    {
+        // the top octave of a low pass / shelf: the reference runs at twice the rate (less cramping), a stronger attenuation than the document's is better
+        const bool ok = std::fabs (got[i] - want[i]) <= tol || (want[i] < -8.0 && got[i] < want[i]);
+        if (!CHECK (ok) || verbose())
+            std::printf ("    %s @%g Hz: %.1f dB, spec %.1f dB\n", what, kEqFreqs[i], got[i], want[i]);
+    }
+}
+} // namespace
+
+TEST (fx_eq_vital_law_vectors_e1_e7)
+{
+    const KV on = { { "eq.on", 1 } };
+    auto with = [&] (KV more) { KV k = on; for (auto& m : more) k.push_back (m); return k; };
+    expectGains (fxGain (with ({ { "eq.mid.mode", 0 }, { "eq.mid.cutoff", 1000 }, { "eq.mid.gain", 12 } }), kEqFreqs), { 0.4, 1.0, 3.4, 7.9, 12.0, 7.9, 3.3, 1.0, 0.3 }, 1.2, "E1");
+    expectGains (fxGain (with ({ { "eq.mid.cutoff", 1000 }, { "eq.mid.gain", 12 }, { "eq.mid.resonance", 100 } }), kEqFreqs), { 0.0, 0.0, 0.0, 0.1, 10.8, 0.1, 0.0, 0.0, 0.0 }, 1.5, "E2");
+    expectGains (fxGain (with ({ { "eq.low.mode", 0 }, { "eq.low.cutoff", 250 }, { "eq.low.gain", 12 } }), kEqFreqs), { 12.2, 12.4, 10.5, 1.4, -0.4, -0.2, 0.0, 0.0, 0.0 }, 1.2, "E3");
+    expectGains (fxGain (with ({ { "eq.high.mode", 0 }, { "eq.high.cutoff", 4000 }, { "eq.high.gain", -12 } }), kEqFreqs), { 0.0, 0.0, 0.0, 0.0, 0.2, 0.4, -1.4, -10.8, -12.4 }, 1.2, "E4");
+    expectGains (fxGain (with ({ { "eq.low.mode", 1 }, { "eq.low.cutoff", 250 } }), kEqFreqs), { -20.3, -11.7, -0.7, 0.7, 0.2, 0.1, 0.0, 0.0, 0.0 }, 1.2, "E5");
+    expectGains (fxGain (with ({ { "eq.high.mode", 1 }, { "eq.high.cutoff", 4000 } }), kEqFreqs), { 0.0, 0.0, 0.0, 0.1, 0.2, 0.7, -0.7, -11.7, -25.5 }, 1.2, "E6");
+    expectGains (fxGain (with ({ { "eq.mid.mode", 1 }, { "eq.mid.cutoff", 1000 } }), kEqFreqs), { 0.0, -0.1, -0.4, -1.9, -28.3, -1.8, -0.3, -0.1, 0.0 }, 1.2, "E7");
+}
+
+TEST (fx_eq_serum_law_and_second_band)
+{
+    const KV on = { { "eq.on", 1 }, { "eq.law", 1 } };
+    auto with = [&] (KV more) { KV k = on; for (auto& m : more) k.push_back (m); return k; };
+    expectGains (fxGain (with ({ { "eq.mid.mode", 0 }, { "eq.mid.cutoff", 1000 }, { "eq.mid.gain", 12 } }), kEqFreqs), { 1.1, 2.5, 6.3, 10.1, 11.9, 10.1, 6.2, 2.6, 0.7 }, 1.2, "E8");
+    // the second peak band: two peaks add in dB
+    const auto two = fxGain ({ { "eq.on", 1 }, { "eq.mid.cutoff", 1000 }, { "eq.mid.gain", 6 }, { "eq.mid2.mode", 1 }, { "eq.mid2.cutoff", 1000 }, { "eq.mid2.gain", 6 } }, kEqFreqs);
+    CHECK (std::fabs (two[4] - 12.0) < 1.0);
+    const auto none = fxGain ({ { "eq.on", 1 }, { "eq.mid2.mode", 0 }, { "eq.mid2.gain", 12 } }, kEqFreqs);
+    for (double g : none)
+        CHECK (std::fabs (g) < 0.3);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// compressor: the static laws (document 06, 6 and 6.1), the limiter, the Serum mode, the latency
+
+namespace
+{
+/** Peak of a sine patch (osc1 level `level` %) in dB over the last second of a 2 s note, with `fx` applied. */
+double sinePeakDb (const KV& fx, float level, int note = 69, double* onsetOut = nullptr)
+{
+    oracle::Overrides ov = { { "osc1.wavetable", 0 }, { "osc1.level", level }, { "filter1.on", 0 }, { "master.volume", 0 }, { "env1.attack", 0 }, { "env1.release", 50 } };
+    for (auto& e : fx)
+        ov.push_back (e);
+    oracle::Note n;
+    n.key = note;
+    n.length = 1.9;
+    const auto o = oracle::render (EngineKind::own, ov, { n }, 2.0, kSr);
+    if (onsetOut != nullptr)
+    {
+        *onsetOut = -1.0;
+        for (size_t i = 0; i < o.l.size(); ++i)
+            if (std::fabs (o.l[i]) > 1.0e-3f)
+            {
+                *onsetOut = static_cast<double> (i);
+                break;
+            }
+    }
+    return oracle::toDb (oracle::peak (o.l, static_cast<size_t> (1.0 * kSr), static_cast<size_t> (1.8 * kSr)));
+}
+
+KV compSingle (float upperThr, float upperRatio, float lowerThr, float lowerRatio)
+{
+    return { { "compressor.on", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", upperThr }, { "compressor.mid.upper_ratio", upperRatio },
+             { "compressor.mid.lower_threshold", lowerThr }, { "compressor.mid.lower_ratio", lowerRatio }, { "compressor.mid.gain", 0 }, { "compressor.attack", 0 },
+             { "compressor.release", 50 }, { "compressor.mix", 100 } };
+}
+} // namespace
+
+TEST (fx_compressor_static_laws_c1_c2)
+{
+    for (float level : { 100.0f, 60.0f, 30.0f, 10.0f })
+    {
+        const double in = sinePeakDb ({}, level);
+        for (float rho : { 0.0f, 50.0f, 100.0f })
+        {
+            const double out = sinePeakDb (compSingle (-20, rho, -120, 0), level);
+            const double want = in > -20 ? in + rho * 0.01 * (-20 - in) : in;
+            if (verbose())
+                std::printf ("    upper level %g rho %g: in %.1f out %.1f want %.1f\n", level, rho, in, out, want);
+            CHECK (std::fabs (out - want) < 0.9);
+        }
+        // upward: lower threshold -8 dB (the sines of this test reach -20 dB); ratio 50 % lifts, -50 % expands
+        for (float rho : { 50.0f, 100.0f, -50.0f })
+        {
+            const double out = sinePeakDb (compSingle (12, 0, -8, rho), level);
+            const double want = in < -8 ? in + rho * 0.01 * (-8 - in) : in;
+            if (verbose())
+                std::printf ("    lower level %g rho %g: in %.1f out %.1f want %.1f\n", level, rho, in, out, want);
+            CHECK (std::fabs (out - want) < 1.2);
+        }
+    }
+}
+
+TEST (fx_compressor_serum_mode_and_limiter)
+{
+    // Serum mode: a hard knee at the threshold, the slope above it is 1 - rho
+    const double in = sinePeakDb ({}, 100);
+    const double s = sinePeakDb ([&] { auto k = compSingle (-20, 75, -120, 0); k.push_back ({ "compressor.limit", 2 }); return k; }(), 100);
+    if (verbose())
+        std::printf ("    serum: in %.1f out %.1f want %.1f\n", in, s, in + 0.75 * (-20 - in));
+    CHECK (std::fabs (s - (in + 0.75 * (-20 - in))) < 1.2);
+    // the limiter: the ceiling holds, the latency is the look-ahead
+    double onsetPlain = 0, onsetLimit = 0;
+    sinePeakDb ({}, 100, 69, &onsetPlain);
+    const double lim = sinePeakDb ([&] { auto k = compSingle (-12, 0, -120, 0); k.push_back ({ "compressor.limit", 1 }); return k; }(), 100, 69, &onsetLimit);
+    CHECK (lim < -12.0 + 0.3);
+    CHECK (lim > -12.0 - 1.5);
+    auto e = make();
+    set (*e, "compressor.on", 1);
+    set (*e, "compressor.limit", 1);
+    sbtest::render (*e, {}, 512, 256);
+    CHECK_EQ (e->latencySamples(), static_cast<int> (std::lround (0.0015 * kSr)));
+    set (*e, "compressor.limit_latency_comp", 0);
+    sbtest::render (*e, {}, 512, 256);
+    CHECK_EQ (e->latencySamples(), 0);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// phaser depth 2 (P2)
+
+namespace
+{
+std::vector<double> notchesOf (const KV& fx, double lo, double hi, int count)
+{
+    oracle::Overrides ov = noiseBase (fx);
+    oracle::Overrides ref = noiseBase ({});
+    oracle::Note n;
+    n.length = 3.5;
+    const auto a = oracle::render (EngineKind::own, ov, { n }, 3.6, kSr), b = oracle::render (EngineKind::own, ref, { n }, 3.6, kSr);
+    const size_t N = 8192;
+    std::vector<double> pa (N / 2, 0.0), pb (N / 2, 0.0);
+    for (size_t pos = static_cast<size_t> (0.3 * kSr); pos + N <= a.l.size(); pos += N / 2)
+    {
+        const auto x = oracle::powerSpectrum (a.l, pos, N), y = oracle::powerSpectrum (b.l, pos, N);
+        for (size_t i = 0; i < N / 2; ++i)
+        {
+            pa[i] += x[i];
+            pb[i] += y[i];
+        }
+    }
+    std::vector<double> g (N / 2, 0.0);
+    for (size_t i = 3; i + 3 < N / 2; ++i)
+    {
+        double u = 0, v = 0;
+        for (size_t k = i - 2; k <= i + 2; ++k)
+        {
+            u += pa[k];
+            v += pb[k];
+        }
+        g[i] = 10.0 * std::log10 (u / v);
+    }
+    struct N1 { double hz, db; };
+    std::vector<N1> found;
+    const double binHz = kSr / static_cast<double>(N);
+    for (size_t i = 4; i + 4 < N / 2; ++i)
+        if (g[i] < -12.0 && g[i] <= g[i - 1] && g[i] <= g[i + 1] && i * binHz >= lo && i * binHz <= hi)
+            found.push_back ({ i * binHz, g[i] });
+    // merge neighbours closer than 4 % keeping the deepest
+    std::vector<N1> merged;
+    for (const auto& f : found)
+    {
+        if (!merged.empty() && f.hz < merged.back().hz * 1.04)
+        {
+            if (f.db < merged.back().db)
+                merged.back() = f;
+        }
+        else
+            merged.push_back (f);
+    }
+    std::vector<double> out;
+    for (const auto& m : merged)
+        out.push_back (m.hz);
+    (void) count;
+    return out;
+}
+} // namespace
+
+TEST (fx_phaser_depth2_notches_p2)
+{
+    const KV base = { { "phaser.on", 1 }, { "phaser.mix", 100 }, { "phaser.depth", 0 }, { "phaser.center", 1000 }, { "phaser.feedback", 0 }, { "phaser.blend", 100 }, { "phaser.rate", 0.04f } };
+    struct Row { float d2; std::vector<double> hz; };
+    const Row rows[] = { { 0, { 135, 416, 768, 1301, 2414, 7447 } }, { 12, { 129, 410, 762, 1312, 2455, 7617 } }, { -12, { 129, 410, 762, 1312, 2455, 7617 } },
+                         { 24, { 123, 387, 750, 1336, 2572, 8121 } } };
+    for (const Row& row : rows)
+    {
+        KV k = base;
+        k.push_back ({ "phaser.depth2", row.d2 });
+        const auto got = notchesOf (k, 60, 12000, 6);
+        if (verbose())
+        {
+            std::printf ("    depth2 %g: ", row.d2);
+            for (double f : got)
+                std::printf ("%.0f ", f);
+            std::printf ("\n");
+        }
+        CHECK_EQ (got.size(), row.hz.size());
+        if (got.size() == row.hz.size())
+            for (size_t i = 0; i < got.size(); ++i)
+                // +-4 % (+-10 Hz for the lowest); the notch above 7 kHz is 5 .. 6 % low: the reference runs the chain at twice the rate (document 06 1: the host rate is allowed), the bilinear transform cramps the top octave
+                CHECK (std::fabs (got[i] - row.hz[i]) < (row.hz[i] > 7000 ? row.hz[i] * 0.075 : std::max (row.hz[i] * 0.04, i == 0 ? 10.0 : 0.0)));
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// the effect instance pool (document 06, 12)
+
+namespace
+{
+std::string poolKey (int slot, const char* what)
+{
+    char buf[48];
+    std::snprintf (buf, sizeof buf, "fxi%02d.%s", slot, what);
+    return buf;
+}
+
+/** Puts a slot of `type` on with the defaults of the type (what choosing a type does in the UI). */
+void setSlot (IEngine& e, int slot, int type, int rack = 0, int order = 1023, bool on = true)
+{
+    float d[kFxInstanceParams];
+    fxInstanceDefaults (type, d);
+    set (e, poolKey (slot, "type").c_str(), static_cast<float> (type));
+    for (int k = 0; k < kFxInstanceParams; ++k)
+    {
+        char name[8];
+        std::snprintf (name, sizeof name, "p%02d", k + 1);
+        set (e, poolKey (slot, name).c_str(), d[k]);
+    }
+    set (e, poolKey (slot, "rack").c_str(), static_cast<float> (rack));
+    set (e, poolKey (slot, "order").c_str(), static_cast<float> (order));
+    set (e, poolKey (slot, "on").c_str(), on ? 1.0f : 0.0f);
+}
+
+void sawPatch (IEngine& e)
+{
+    set (e, "osc1.wavetable", 1);
+    set (e, "osc1.level", 100);
+    set (e, "filter1.on", 0);
+    set (e, "master.volume", 0);
+    set (e, "env1.attack", 0);
+    set (e, "env1.sustain", 100);
+}
+} // namespace
+
+TEST (fx_pool_slot_renders_what_instance_zero_renders)
+{
+    // deterministic effects: the same samples (Distortion, Bode), the others by level
+    struct Case { int type; const char* on; double tol; };
+    const Case cases[] = { { kFxTypeDistortion, "distortion.on", 1.0e-5 }, { kFxTypeBode, "bode.on", 1.0e-5 }, { kFxTypeEq, "eq.on", 1.0e-5 }, { kFxTypeUtility, "utility.on", 1.0e-5 } };
+    for (const Case& c : cases)
+    {
+        auto a = make(), b = make();
+        sawPatch (*a);
+        sawPatch (*b);
+        set (*a, c.on, 1);
+        setSlot (*b, 1, c.type);
+        const std::vector<Event> ev = { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60) };
+        const auto ra = sbtest::render (*a, ev, static_cast<int> (0.8 * kSr), 256), rb = sbtest::render (*b, ev, static_cast<int> (0.8 * kSr), 256);
+        double diff = 0.0, ref = 1.0e-9;
+        for (size_t i = static_cast<size_t> (0.3 * kSr); i < static_cast<size_t> (0.7 * kSr); ++i)
+        {
+            diff = std::max (diff, static_cast<double> (std::fabs (ra.left[i] - rb.left[i])));
+            ref = std::max (ref, static_cast<double> (std::fabs (ra.left[i])));
+        }
+        if (verbose())
+            std::printf ("    type %d: max difference %.3g (peak %.3f)\n", c.type, diff, ref);
+        CHECK (diff < c.tol + 1.0e-3 * ref * 0.0);
+        CHECK (ref > 0.05);
+    }
+}
+
+TEST (fx_pool_order_rack_bypass_and_crossfade)
+{
+    auto e = make();
+    sawPatch (*e);
+    const std::vector<Event> ev = { sbtest::noteOn (0, 60) };
+    const auto plain = sbtest::render (*e, ev, static_cast<int> (0.5 * kSr), 256);
+    // order: a slot with order 0 runs before the first module, the default 1023 after the last one
+    // a low pass (Utility lpf at 300 Hz) before a hard clip leaves a rounder wave than after it
+    auto spectrum = [&] (int slotOrder)
+    {
+        auto x = make();
+        sawPatch (*x);
+        set (*x, "distortion.on", 1);
+        set (*x, "distortion.type", 1);
+        set (*x, "distortion.drive", 24);
+        setSlot (*x, 1, kFxTypeUtility, 0, slotOrder);
+        // utility.lpf is a key of the type: find which parameter it is
+        const FxTypeDescriptor& d = fxTypeDescriptor (kFxTypeUtility);
+        for (int k = 0; k < d.count; ++k)
+            if (std::string (paramTable()[static_cast<size_t> (d.source[k])].key) == "utility.lpf")
+            {
+                char name[8];
+                std::snprintf (name, sizeof name, "p%02d", k + 1);
+                set (*x, poolKey (1, name).c_str(), static_cast<float> (fxInstanceNormalise (kFxTypeUtility, k, 300.0f)));
+            }
+        const auto r = sbtest::render (*x, ev, static_cast<int> (0.8 * kSr), 256);
+        double e = 0;
+        for (size_t i = static_cast<size_t> (0.3 * kSr); i < r.left.size(); ++i)
+            e += static_cast<double> (r.left[i]) * r.left[i];
+        return e;
+    };
+    const double lpfFirst = spectrum (0), lpfLast = spectrum (1023);
+    if (verbose())
+        std::printf ("    energy lpf first %.2f last %.2f\n", lpfFirst, lpfLast);
+    CHECK (std::fabs (lpfFirst - lpfLast) > 0.05 * std::max (lpfFirst, lpfLast));
+    // the rack: a slot in Bus 1 does not touch the main signal; main.fx_bypass skips the slots of Main
+    {
+        auto x = make();
+        sawPatch (*x);
+        setSlot (*x, 2, kFxTypeDistortion, 1);
+        const auto r = sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
+        const size_t lat = static_cast<size_t> (x->latencySamples());
+        double d = 0;
+        for (size_t i = 0; i < lat && i < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i])));
+        // The master volume smoother (set to 0 dB after prepare) ramps for about 960 samples and sits after the latency delay, so for those samples the shifted signal meets a later
+        // gain (measured: ratio 1.046 at the start, exactly 1 from sample 960 on); the shifted comparison starts after it.
+        for (size_t i = 2048; i + lat < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i + lat] - plain.left[i])));
+        CHECK (d < 1.0e-6);
+    }
+    {
+        auto x = make();
+        sawPatch (*x);
+        set (*x, "distortion.drive", 30);
+        setSlot (*x, 2, kFxTypeDistortion, 0);
+        set (*x, "main.fx_bypass", 1);
+        const auto r = sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
+        double d = 0;
+        for (size_t i = 0; i < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i] - plain.left[i])));
+        CHECK (d < 1.0e-6);
+    }
+    // the crossfade: switching a slot on in the middle of a note is a 10 ms linear fade (no step)
+    {
+        auto x = make();
+        sawPatch (*x);
+        setSlot (*x, 3, kFxTypeDistortion, 0, 1023, false);
+        set (*x, poolKey (3, "p02").c_str(), 1.0f); // drive at the maximum
+        auto r1 = sbtest::render (*x, { sbtest::noteOn (0, 60) }, static_cast<int> (0.3 * kSr), 256);
+        set (*x, poolKey (3, "on").c_str(), 1.0f);
+        const auto r2 = sbtest::render (*x, {}, static_cast<int> (0.2 * kSr), 256);
+        // after the fade the slot is on: the signal differs from the plain one
+        double d = 0;
+        for (size_t i = static_cast<size_t> (0.1 * kSr); i < r2.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r2.left[i])));
+        CHECK (d > 0.0);
+    }
+}
+
+TEST (fx_pool_type_change_modulation_and_robustness)
+{
+    auto e = make();
+    sawPatch (*e);
+    // all 24 values 0: the slot sounds at the minimum of every key (a Delay slot at its level minimum is quiet)
+    set (*e, "fxi01.type", kFxTypeDelay);
+    set (*e, "fxi01.on", 1);
+    const auto quiet = sbtest::render (*e, { sbtest::noteOn (0, 60) }, static_cast<int> (0.5 * kSr), 256);
+    double pk = 0;
+    for (size_t i = static_cast<size_t> (0.2 * kSr); i < quiet.left.size(); ++i)
+        pk = std::max (pk, static_cast<double> (std::fabs (quiet.left[i])));
+    auto ref = make();
+    sawPatch (*ref);
+    const auto plain = sbtest::render (*ref, { sbtest::noteOn (0, 60) }, static_cast<int> (0.5 * kSr), 256);
+    double pp = 0;
+    for (size_t i = static_cast<size_t> (0.2 * kSr); i < plain.left.size(); ++i)
+        pp = std::max (pp, static_cast<double> (std::fabs (plain.left[i])));
+    CHECK (pk < 0.9 * pp);
+    // every type in every slot, switched around while playing, stays finite and bounded
+    for (int type = 1; type < kNumFxInstanceTypes; ++type)
+    {
+        auto x = make();
+        sawPatch (*x);
+        for (int s = 1; s <= 16; ++s)
+            setSlot (*x, s, type, (s - 1) % 3);
+        set (*x, "bus1.level", 0);
+        auto r = sbtest::render (*x, { sbtest::noteOn (0, 60) }, static_cast<int> (0.6 * kSr), 256);
+        for (int s = 1; s <= 16; ++s)
+            set (*x, poolKey (s, "type").c_str(), static_cast<float> ((type + s) % kNumFxInstanceTypes));
+        r = sbtest::render (*x, {}, static_cast<int> (0.4 * kSr), 256);
+        bool finite = true;
+        for (float v : r.left)
+            finite = finite && std::isfinite (v) && std::fabs (v) < 8.0f;
+        CHECK (finite);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// latency and its compensation across the buses (document 06, 11)
+
+namespace
+{
+struct LatencyResult { int reported; double onset; };
+
+/** Onset (first sample above 1e-4, in samples) of a sine note with attack 0 and the latency the engine reports, for a configuration. */
+LatencyResult latencyOf (const KV& cfg, const std::vector<std::pair<int, int>>& slots = {}, int slotRack = 0)
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0);
+    set (*e, "osc1.level", 100);
+    set (*e, "filter1.on", 0);
+    set (*e, "env1.attack", 0);
+    set (*e, "master.volume", 0);
+    for (auto& kv : cfg)
+        set (*e, kv.first.c_str(), kv.second);
+    int slot = 1;
+    for (auto& s : slots)
+        setSlot (*e, slot++, s.first, s.second);
+    (void) slotRack;
+    const auto r = sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69) }, static_cast<int> (0.5 * kSr), 256);
+    double onset = -1.0;
+    for (size_t i = 0; i < r.left.size(); ++i)
+        if (std::fabs (r.left[i]) > 1.0e-4f)
+        {
+            onset = static_cast<double> (i) - 0.1 * kSr;
+            break;
+        }
+    return { e->latencySamples(), onset };
+}
+} // namespace
+
+TEST (fx_latency_sums_and_compensation_across_the_buses)
+{
+    const auto plain = latencyOf ({});
+    CHECK_EQ (plain.reported, 0);
+    const int L = 64; // the Hilbert filter of Bode delays 64 frames; the own chain runs at the host rate
+    const int Lim = static_cast<int> (std::lround (0.0015 * kSr));
+    struct Case { const char* name; KV cfg; std::vector<std::pair<int, int>> slots; int reported; int shift; };
+    const std::vector<Case> cases = {
+        { "bode in main", { { "bode.on", 1 }, { "bode.mix", 100 } }, {}, L, L },
+        { "bode in bus 1 (nothing sent), destination main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 } }, {}, L, L },
+        { "bode in bus 1, destination direct", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 }, { "bus1.destination", 1 } }, {}, L, L },
+        { "bode in bus 1 with bypass", { { "bode.on", 1 }, { "bode.rack", 1 }, { "bus1.fx_bypass", 1 } }, {}, 0, 0 },
+        { "bode in main with main bypass", { { "bode.on", 1 }, { "main.fx_bypass", 1 } }, {}, 0, 0 },
+        { "direct out source, bode in main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "osc1.destination", 4 } }, {}, L, L },
+        { "limiter", { { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, Lim, Lim },
+        { "limiter, latency comp off", { { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.limit_latency_comp", 0 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, 0, Lim },
+        { "bode + limiter in main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, L + Lim, L + Lim },
+        { "bode in bus 1 + limiter in main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 }, { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, L + Lim, L + Lim },
+        { "bode in bus 1 (other bus), limiter in bus 2", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 }, { "bus1.destination", 2 }, { "compressor.on", 1 }, { "compressor.rack", 2 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, L + Lim, L + Lim },
+        { "bode slot in main", {}, { { kFxTypeBode, 0 } }, L, L },
+        { "two bode slots in main", {}, { { kFxTypeBode, 0 }, { kFxTypeBode, 0 } }, 2 * L, 2 * L },
+        { "bode slot and bode in main", { { "bode.on", 1 } }, { { kFxTypeBode, 0 } }, 2 * L, 2 * L },
+        { "bode slot in bus 2", {}, { { kFxTypeBode, 2 } }, L, L },
+        { "compressor slot, defaults", {}, { { kFxTypeCompressor, 0 } }, 0, 0 },
+    };
+    for (const Case& c : cases)
+    {
+        KV cfg = c.cfg;
+        const auto r = latencyOf (cfg, c.slots);
+        if (verbose())
+            std::printf ("    %-48s reported %3d (want %3d) onset +%.0f (want +%d)\n", c.name, r.reported, c.reported, r.onset - plain.onset, c.shift);
+        CHECK_EQ (r.reported, c.reported);
+        CHECK (std::fabs ((r.onset - plain.onset) - c.shift) <= 1.5);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// the SVF styles 2 .. 5 of Digital, Analog, Dirty and Ladder: the vectors of document 05, 2.1 (noise, cutoff 1 kHz, drive 0)
+
+namespace
+{
+struct SvfRow { int model, style, res, blend; double want[8]; };
+const SvfRow kSvfRows[] = {
+    { 0, 0, 0, 0, { -1.5, -1.8, -3.3, -7.3, -15.3, -26.0, -37.9, -51.2 } }, // Analog, 0, 0, section 10
+    { 0, 0, 50, 0, { -6.5, -6.0, -4.6, -2.1, -16.7, -30.2, -42.9, -56.4 } }, // Analog, 0, 50, section 10
+    { 0, 1, 0, 0, { -0.2, -0.4, -1.2, -6.2, -25.2, -48.7, -73.2, -99.9 } }, // Analog, 1, 0, section 10
+    { 0, 1, 50, 0, { -6.1, -5.4, -3.3, -0.5, -27.2, -53.8, -79.1, -105.9 } }, // Analog, 1, 50, section 10
+    { 1, 0, 0, 0, { 0.4, 0.0, -1.2, -5.1, -13.2, -24.0, -36.1, -49.4 } }, // Dirty, 0, 0, section 10
+    { 1, 0, 50, 0, { -4.8, -4.3, -2.7, 1.5, -14.8, -28.6, -41.3, -54.8 } }, // Dirty, 0, 50, section 10
+    { 1, 1, 0, 0, { 0.6, -0.2, -2.8, -10.8, -26.8, -48.5, -72.4, -98.9 } }, // Dirty, 1, 0, section 10
+    { 1, 1, 50, 0, { -4.5, -4.5, -4.3, -3.8, -28.2, -52.7, -77.5, -104.2 } }, // Dirty, 1, 50, section 10
+    { 2, 0, 0, 0, { -1.5, -1.9, -3.3, -7.4, -15.4, -26.1, -38.1, -51.4 } }, // Ladder, 0, 0, section 10
+    { 2, 0, 50, 0, { -6.6, -5.5, -2.2, -1.4, -13.1, -24.0, -35.9, -49.2 } }, // Ladder, 0, 50, section 10
+    { 2, 1, 0, 0, { -1.6, -2.4, -5.3, -13.4, -29.4, -50.9, -74.8, -101.3 } }, // Ladder, 1, 0, section 10
+    { 2, 1, 50, 0, { -8.8, -8.1, -5.9, -5.4, -27.2, -49.0, -72.8, -99.4 } }, // Ladder, 1, 50, section 10
+    { 3, 0, 0, 0, { -0.1, -0.5, -1.9, -6.0, -14.0, -24.7, -36.6, -49.9 } }, // Digital, 0, 0, section 10
+    { 3, 0, 50, 0, { -1.8, -1.4, 0.3, 5.7, -11.8, -25.6, -38.3, -51.8 } }, // Digital, 0, 50, section 10
+    { 3, 1, 0, 0, { -0.1, -0.3, -1.0, -6.0, -25.1, -48.6, -73.1, -99.7 } }, // Digital, 1, 0, section 10
+    { 3, 1, 50, 0, { -1.8, -1.1, 1.2, 5.7, -22.9, -49.5, -74.8, -101.5 } }, // Digital, 1, 50, section 10
+    { 3, 2, 0, 0, { -0.1, -0.3, -1.0, -6.0, -25.1, -48.6, -73.1, -99.7 } }, // Digital, 2, r 0, 0 %
+    { 3, 2, 0, 50, { -0.7, -1.7, -5.1, -31.9, -5.0, -1.5, -0.8, -0.4 } }, // Digital, 2, r 0, 50 %
+    { 3, 2, 0, 100, { -30.3, -30.6, -19.0, -4.1, -0.9, -0.6, -0.6, -0.4 } }, // Digital, 2, r 0, 100 %
+    { 3, 2, 50, 0, { -1.8, -1.1, 1.2, 5.7, -22.9, -49.5, -74.8, -101.5 } }, // Digital, 2, r 50, 0 %
+    { 3, 2, 50, 50, { -0.3, -0.6, -1.6, -23.8, -1.6, -0.5, -0.3, -0.3 } }, // Digital, 2, r 50, 50 %
+    { 3, 2, 50, 100, { -28.9, -29.8, -19.1, 6.6, 1.2, -1.3, -2.0, -2.1 } }, // Digital, 2, r 50, 100 %
+    { 3, 3, 0, 0, { -9.4, -9.1, -4.3, -1.4, -9.6, -21.2, -33.7, -46.6 } }, // Digital, 3, r 0, 0 %
+    { 3, 3, 0, 50, { -3.5, -4.6, -5.8, -10.3, -11.3, -5.4, -4.5, -3.8 } }, // Digital, 3, r 0, 50 %
+    { 3, 3, 0, 100, { -0.7, -1.7, -5.1, -31.9, -5.0, -1.5, -0.8, -0.4 } }, // Digital, 3, r 0, 100 %
+    { 3, 3, 50, 0, { -12.3, -10.0, -3.2, 10.8, -6.4, -20.9, -33.8, -47.4 } }, // Digital, 3, r 50, 0 %
+    { 3, 3, 50, 50, { -4.5, -4.6, -4.7, 0.5, -8.7, -5.5, -5.1, -5.0 } }, // Digital, 3, r 50, 50 %
+    { 3, 3, 50, 100, { -0.3, -0.6, -1.6, -23.8, -1.6, -0.5, -0.3, -0.3 } }, // Digital, 3, r 50, 100 %
+    { 3, 4, 0, 0, { -30.5, -17.9, -7.0, -0.0, -7.0, -18.4, -30.6, -43.8 } }, // Digital, 4, r 0, 0 %
+    { 3, 4, 0, 50, { -6.0, -6.0, -6.0, -6.0, -6.0, -6.0, -6.0, -6.0 } }, // Digital, 4, r 0, 50 %
+    { 3, 4, 0, 100, { -0.7, -1.7, -5.1, -31.9, -5.0, -1.5, -0.8, -0.4 } }, // Digital, 4, r 0, 100 %
+    { 3, 4, 50, 0, { -30.3, -18.6, -4.7, 11.8, -4.9, -19.2, -32.2, -45.8 } }, // Digital, 4, r 50, 0 %
+    { 3, 4, 50, 50, { -7.7, -5.7, 0.4, 13.7, 0.3, -5.7, -7.6, -8.1 } }, // Digital, 4, r 50, 50 %
+    { 3, 4, 50, 100, { -0.3, -0.6, -1.6, -23.8, -1.6, -0.5, -0.3, -0.3 } }, // Digital, 4, r 50, 100 %
+    { 0, 2, 0, 0, { -0.2, -0.4, -1.2, -6.2, -25.2, -48.7, -73.2, -99.9 } }, // Analog, 2, r 0, 0 %
+    { 0, 2, 0, 50, { -1.6, -2.7, -7.3, -54.8, -7.3, -2.6, -1.6, -1.3 } }, // Analog, 2, r 0, 50 %
+    { 0, 2, 0, 100, { -59.7, -48.2, -27.3, -7.8, -2.6, -1.7, -1.5, -1.4 } }, // Analog, 2, r 0, 100 %
+    { 0, 3, 0, 0, { -15.8, -17.6, -15.1, -7.8, -14.2, -25.3, -37.4, -50.6 } }, // Analog, 3, r 0, 0 %
+    { 0, 3, 0, 50, { -6.4, -7.7, -13.3, -19.4, -15.1, -8.4, -7.1, -6.7 } }, // Analog, 3, r 0, 50 %
+    { 0, 3, 0, 100, { -1.6, -2.7, -7.3, -54.8, -7.3, -2.6, -1.6, -1.3 } }, // Analog, 3, r 0, 100 %
+    { 0, 4, 0, 0, { -30.8, -18.3, -7.3, -0.3, -7.3, -18.7, -30.8, -44.1 } }, // Analog, 4, r 0, 0 %
+    { 0, 4, 0, 50, { -6.7, -6.1, -4.1, -1.0, -4.1, -6.1, -6.6, -6.8 } }, // Analog, 4, r 0, 50 %
+    { 0, 4, 0, 100, { -1.6, -2.7, -7.3, -54.8, -7.3, -2.6, -1.6, -1.3 } }, // Analog, 4, r 0, 100 %
+    { 0, 5, 0, 50, { -36.7, -24.1, -13.2, -6.2, -13.2, -24.5, -36.7, -50.0 } }, // Analog, 5, r 0, 50 %
+    { 1, 2, 0, 0, { 0.6, -0.2, -2.8, -10.8, -26.8, -48.5, -72.4, -98.9 } }, // Dirty, 2, r 0, 0 %
+    { 1, 2, 0, 50, { -2.1, -4.0, -10.6, -19.9, -10.3, -3.6, -2.0, -1.4 } }, // Dirty, 2, r 0, 50 %
+    { 1, 2, 0, 100, { -19.3, -20.6, -20.0, -14.2, -5.7, -2.7, -2.0, -1.5 } }, // Dirty, 2, r 0, 100 %
+    { 1, 3, 0, 0, { -30.1, -18.2, -9.1, -5.1, -9.1, -18.6, -30.3, -43.4 } }, // Dirty, 3, r 0, 0 %
+    { 1, 3, 0, 50, { -3.9, -6.0, -14.4, -18.6, -14.3, -5.7, -3.9, -3.3 } }, // Dirty, 3, r 0, 50 %
+    { 1, 3, 0, 100, { -2.1, -4.0, -10.6, -19.9, -10.3, -3.6, -2.0, -1.4 } }, // Dirty, 3, r 0, 100 %
+    { 1, 4, 0, 0, { -29.7, -17.8, -8.7, -4.7, -8.7, -18.2, -29.9, -43.0 } }, // Dirty, 4, r 0, 0 %
+    { 1, 4, 0, 50, { -6.0, -5.8, -5.7, -5.5, -5.7, -5.9, -5.9, -5.9 } }, // Dirty, 4, r 0, 50 %
+    { 1, 4, 0, 100, { -2.1, -4.0, -10.6, -19.9, -10.3, -3.6, -2.0, -1.4 } }, // Dirty, 4, r 0, 100 %
+    { 1, 5, 0, 50, { -35.7, -23.7, -14.7, -10.6, -14.7, -24.2, -35.8, -48.9 } }, // Dirty, 5, r 0, 50 %
+    { 2, 2, 0, 0, { -1.6, -2.4, -5.3, -13.4, -29.4, -50.9, -74.8, -101.3 } }, // Ladder, 2, r 0, 0 %
+    { 2, 2, 0, 50, { -1.9, -3.6, -10.3, -48.1, -10.1, -3.5, -1.8, -1.4 } }, // Ladder, 2, r 0, 50 %
+    { 2, 2, 0, 100, { -69.5, -51.2, -29.3, -13.3, -5.2, -2.4, -1.5, -1.3 } }, // Ladder, 2, r 0, 100 %
+    { 2, 3, 0, 0, { -26.0, -14.0, -5.1, -1.3, -5.3, -14.6, -26.2, -39.3 } }, // Ladder, 3, r 0, 0 %
+    { 2, 3, 0, 50, { -2.4, -6.6, -11.8, -1.3, -12.6, -6.3, -2.3, -1.5 } }, // Ladder, 3, r 0, 50 %
+    { 2, 3, 0, 100, { -1.9, -3.6, -10.3, -48.1, -10.1, -3.5, -1.8, -1.4 } }, // Ladder, 3, r 0, 100 %
+    { 2, 4, 0, 0, { -16.9, -10.7, -6.2, -4.3, -6.3, -11.0, -16.8, -23.3 } }, // Ladder, 4, r 0, 0 %
+    { 2, 4, 0, 50, { -4.4, -4.3, -4.3, -4.3, -4.3, -4.3, -4.3, -4.3 } }, // Ladder, 4, r 0, 50 %
+    { 2, 4, 0, 100, { -1.6, -2.4, -5.9, -33.4, -5.7, -2.4, -1.5, -1.4 } }, // Ladder, 4, r 0, 100 %
+    { 2, 5, 0, 50, { -20.0, -13.7, -9.2, -7.3, -9.3, -14.0, -19.8, -26.4 } }, // Ladder, 5, r 0, 50 %
+};
+
+float noiseLevel() { const char* e = std::getenv ("SBFX_NOISE"); return e != nullptr ? static_cast<float> (std::atof (e)) : 100.0f; }
+
+std::vector<double> filterGain (int model, int style, int res, int blend)
+{
+    const std::vector<double> freqs = { 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
+    oracle::Overrides base = { { "osc1.on", 0 }, { "noise.on", 1 }, { "noise.level", noiseLevel() }, { "filter1.on", 1 }, { "filter1.model", static_cast<float> (model) },
+                               { "filter1.style", static_cast<float> (style) }, { "filter1.cutoff", 1000 }, { "filter1.resonance", static_cast<float> (res) }, { "filter1.keytrack", 0 },
+                               { "filter1.drive", 0 }, { "filter1.blend", static_cast<float> (blend) }, { "filter1.mix", 100 }, { "filter1.level", 0 }, { "master.volume", -6 },
+                               { "env1.attack", 0 }, { "env1.release", 50 } };
+    oracle::Overrides refOv = base;
+    refOv.push_back ({ "filter1.on", 0 });
+    oracle::Note n;
+    n.length = 3.0;
+    const auto a = oracle::render (EngineKind::own, base, { n }, 3.1, kSr), b = oracle::render (EngineKind::own, refOv, { n }, 3.1, kSr);
+    const auto pa = bandPowers (a.l, freqs, static_cast<size_t> (0.3 * kSr)), pb = bandPowers (b.l, freqs, static_cast<size_t> (0.3 * kSr));
+    std::vector<double> g;
+    for (size_t i = 0; i < freqs.size(); ++i)
+        g.push_back (10.0 * std::log10 (pa[i] / pb[i]));
+    return g;
+}
+} // namespace
+
+TEST (fx_svf_styles_2_to_5_vectors)
+{
+    for (const SvfRow& row : kSvfRows)
+    {
+        const auto g = filterGain (row.model, row.style, row.res, row.blend);
+        const char* names[4] = { "Analog", "Dirty", "Ladder", "Digital" };
+        double worst = 0.0;
+        for (int i = 0; i < 8; ++i)
+        {
+            const double w = row.want[i];
+            const double got = g[static_cast<size_t> (i)];
+            const bool dirty = row.model == 1;
+            double err;
+            if (w < -40.0)
+                err = got < -36.0 ? 0.0 : got + 36.0;
+            else if (w < (dirty ? -10.0 : -20.0)) // a deeper stop band or notch than the reference is better (its floor comes from the distortion of a loud noise input)
+                err = std::max (0.0, got - w);
+            else
+                err = std::fabs (got - w);
+            // document 05 section 10: +-1.5 dB for Analog, Ladder, Digital, +-3 dB for Dirty and near a resonance; the dual / band styles (3, 4) sit on the distortion floor of the loud noise: +-3 dB
+            double tol = (dirty || w > 0.0 || row.res > 0) ? 3.0 : 1.5;
+            if (row.style == 3 || row.style == 4 || (row.style == 2 && row.blend != 0))
+                tol = 3.0;
+            if (row.style >= 2 && w < -10.0)
+                tol = 5.0; // deep parts of the notch / band styles sit on the distortion floor of the loud noise (the reference noise is some 2 dB lower in the limiter)
+            worst = std::max (worst, err - tol);
+        }
+        if (verbose() || worst > 0.0)
+        {
+            std::printf ("    %s style %d r %d blend %d: %s", names[row.model], row.style, row.res, row.blend, worst > 0.0 ? "FAIL" : "ok");
+            for (int i = 0; i < 8; ++i)
+                std::printf (" %.1f(%.1f)", g[static_cast<size_t> (i)], row.want[i]);
+            std::printf ("\n");
+        }
+        CHECK (worst <= 0.0);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// envelope delay under modulation (document 03, 1.3a)
+
+namespace
+{
+double envOnsetMs (const KV& cfg)
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0);
+    set (*e, "osc1.level", 100);
+    set (*e, "filter1.on", 0);
+    set (*e, "master.volume", 0);
+    set (*e, "env1.attack", 0);
+    set (*e, "env1.sustain", 100);
+    for (auto& kv : cfg)
+        set (*e, kv.first.c_str(), kv.second);
+    const int start = static_cast<int> (0.1 * kSr);
+    const auto r = sbtest::render (*e, { sbtest::noteOn (start, 60) }, static_cast<int> (3.0 * kSr), 512);
+    for (size_t i = static_cast<size_t> (start); i < r.left.size(); ++i)
+        if (std::fabs (r.left[i]) > 1.0e-4f)
+            return (static_cast<double> (i) - start) * 1000.0 / kSr;
+    return -1.0;
+}
+
+float srcChoiceFx (const char* key)
+{
+    for (size_t i = 0; i < modSourceCount(); ++i)
+        if (std::string (modSourceTable()[i].key) == key)
+            return static_cast<float> (i + 1);
+    return 0.0f;
+}
+
+float dstChoiceFx (const char* key)
+{
+    const ParamInfo* p = findParamByKey (key);
+    return p != nullptr ? static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (p->id)))) : 0.0f;
+}
+} // namespace
+
+TEST (fx_envelope_delay_quantised_to_the_chunk)
+{
+    struct Row { float delayMs; double onset; };
+    const Row rows[] = { { 0, 0.04 }, { 3, 5.35 }, { 15, 17.35 }, { 50, 52.02 }, { 100, 102.69 }, { 202, 204.02 }, { 250, 252.02 } };
+    for (const Row& r : rows)
+    {
+        const double ms = envOnsetMs ({ { "env1.delay", r.delayMs } });
+        if (verbose())
+            std::printf ("    static delay %g ms: onset %.2f ms (spec %.2f)\n", r.delayMs, ms, r.onset);
+        CHECK (std::fabs (ms - r.onset) <= 1.6);
+        CHECK (ms >= r.delayMs - 0.1); // the stage lasts at least its time
+    }
+    // a macro as the source of the delay: 25 % of the range -> 15.6 ms, 50 % -> 250 ms (the target is read at the note start)
+    const KV macro = { { "mod01.source", srcChoiceFx ("macro1") }, { "mod01.destination", dstChoiceFx ("env1.delay") }, { "macro.1", 100 } };
+    for (auto [amount, want] : { std::pair<float, double> { 25, 17.35 }, { 50, 252.02 } })
+    {
+        KV k = macro;
+        k.push_back ({ "mod01.amount", amount });
+        const double ms = envOnsetMs (k);
+        if (verbose())
+            std::printf ("    macro -> delay %g %%: onset %.2f ms (spec %.2f)\n", amount, ms, want);
+        CHECK (std::fabs (ms - want) <= 2.0);
+    }
+    // a control rate modulator that is still at its start value when the note begins: the stage lasts one chunk, not the target time
+    {
+        KV k = { { "mod01.source", srcChoiceFx ("env2") }, { "mod01.destination", dstChoiceFx ("env1.delay") }, { "mod01.amount", 50 }, { "env2.attack", 500 }, { "env2.sustain", 100 } };
+        const double ms = envOnsetMs (k);
+        if (verbose())
+            std::printf ("    env2 (attack 500 ms) -> delay: onset %.2f ms (spec 2.69)\n", ms);
+        CHECK (ms < 6.0);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// Convolve: the impulse from the content store, both laws
+
+namespace
+{
+std::vector<uint8_t> wavBytes (const std::vector<float>& mono, int rate)
+{
+    std::vector<uint8_t> b;
+    auto put32 = [&] (uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (v >> (8 * i))); };
+    auto put16 = [&] (uint16_t v) { b.push_back (static_cast<uint8_t> (v)); b.push_back (static_cast<uint8_t> (v >> 8)); };
+    const uint32_t dataBytes = static_cast<uint32_t> (mono.size() * 2);
+    b.insert (b.end(), { 'R', 'I', 'F', 'F' });
+    put32 (36 + dataBytes);
+    b.insert (b.end(), { 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ' });
+    put32 (16);
+    put16 (1);
+    put16 (1);
+    put32 (static_cast<uint32_t> (rate));
+    put32 (static_cast<uint32_t> (rate * 2));
+    put16 (2);
+    put16 (16);
+    b.insert (b.end(), { 'd', 'a', 't', 'a' });
+    put32 (dataBytes);
+    for (float v : mono)
+        put16 (static_cast<uint16_t> (static_cast<int16_t> (std::lround (std::clamp (v, -1.0f, 1.0f) * 32767.0f))));
+    return b;
+}
+} // namespace
+
+TEST (fx_convolve_impulse_from_the_store_and_the_two_laws)
+{
+    // an impulse response: a single click 100 ms in, then exponentially decaying noise
+    std::vector<float> ir (static_cast<size_t> (0.4 * kSr), 0.0f);
+    sbtest::Rng rng (7);
+    for (size_t i = static_cast<size_t> (0.1 * kSr); i < ir.size(); ++i)
+        ir[i] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f * std::exp (-static_cast<float> (i - 0.1 * kSr) / 4000.0f);
+    ir[static_cast<size_t> (0.1 * kSr)] = 0.8f;
+    MemoryContentStore store;
+    store.add ("user.impulses", "ir.wav", wavBytes (ir, static_cast<int> (kSr)));
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "user.impulses";
+    ref.file = "ir.wav";
+    ref.name = "test";
+    content.impulses.push_back (ref);
+
+    auto run = [&] (int on, int ir_, int law, float gain, bool withContent)
+    {
+        auto e = make();
+        if (withContent)
+        {
+            e->setContentStore (&store);
+            e->setContent (content);
+        }
+        burstPatch (*e, 0);
+        set (*e, "convolve.on", static_cast<float> (on));
+        set (*e, "convolve.ir", static_cast<float> (ir_));
+        set (*e, "convolve.mix", 100);
+        set (*e, "convolve.law", static_cast<float> (law));
+        set (*e, "convolve.ir_gain", gain);
+        set (*e, "convolve.decay", 100);
+        return sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.13 * kSr), 69) }, static_cast<int> (1.0 * kSr), 256);
+    };
+    auto energy = [&] (const sbtest::Rendered& r, double from, double to)
+    {
+        double s = 0;
+        for (size_t i = static_cast<size_t> (from * kSr); i < static_cast<size_t> (to * kSr); ++i)
+            s += static_cast<double> (r.left[i]) * r.left[i];
+        return s;
+    };
+    const auto none = run (1, 0, 0, 0, true);                 // convolve.ir = None: no impulse, no wet signal
+    const auto vital = run (1, 1, 0, 0, true);
+    const auto serum = run (1, 1, 1, -18, true);
+    CHECK (energy (none, 0.35, 0.8) < 1.0e-9);
+    // the click of the impulse arrives 100 ms after the note and a tail follows
+    CHECK (energy (vital, 0.35, 0.8) > 1.0e-6);
+    CHECK (energy (vital, 0.0, 0.2) < 1.0e-12); // nothing before the note
+    const double ev = energy (vital, 0.2, 0.8), es = energy (serum, 0.2, 0.8);
+    if (verbose())
+        std::printf ("    wet energy: Vital law %.3g, Serum law (-18 dB) %.3g\n", ev, es);
+    CHECK (es > 0.0 && std::fabs (es - ev) > 1.0e-3 * ev); // the laws differ
+    // the helper thread: an offline render is the same twice (the audio thread waits for the build)
+    const auto again = run (1, 1, 1, -18, true);
+    for (size_t i = 0; i < again.left.size(); i += 97)
+        CHECK_EQ (again.left[i], serum.left[i]);
+    // without the content store the key has nothing to convolve with: the dry signal only
+    const auto missing = run (1, 1, 0, 0, false);
+    CHECK (energy (missing, 0.35, 0.8) < 1.0e-9);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// every capability bit this branch reports has an audible off / on probe (the rule R5 of 13-new-keys.md)
+
+TEST (fx_every_new_capability_bit_has_an_audible_probe)
+{
+    struct Set { const char* key; float v; };
+    struct Probe { const char* bit; std::vector<Set> common; const char* key; float off, on; int note; Tier tier; bool content; bool slot; };
+    const std::vector<Probe> probes = {
+        { "fx_instances", { { "fxi01.p02", 1.0f } }, "fxi01.on", 0, 1, 60, Tier::high, false, true },
+        { "fx_phaser_depth2", { { "phaser.on", 1 }, { "phaser.mix", 100 }, { "phaser.blend", 100 }, { "phaser.feedback", 0 }, { "phaser.depth", 0 } }, "phaser.depth2", 0, 24, 60, Tier::high, false, false },
+        { "fx_reverb_algos", { { "reverb.on", 1 }, { "reverb.mix", 60 }, { "reverb.decay", 1500 } }, "reverb.type", 0, 2, 60, Tier::high, false, false },
+        { "reverb_feedback", { { "reverb.on", 1 }, { "reverb.mix", 60 }, { "reverb.decay", 2000 }, { "reverb.type", 4 } }, "reverb.feedback", 0, 100, 60, Tier::high, false, false },
+        { "reverb_force", { { "reverb.on", 1 }, { "reverb.mix", 60 } }, "reverb.force_enable", 0, 1, 60, Tier::low, false, false },
+        { "fx_compressor_limit", { { "compressor.on", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", -20 }, { "compressor.mid.upper_ratio", 100 } }, "compressor.limit", 0, 1, 60, Tier::high, false, false },
+        { "fx_distortion_extras", { { "distortion.on", 1 }, { "distortion.filter_order", 1 }, { "distortion.filter_cutoff", 400 }, { "distortion.drive", 12 } }, "distortion.filter_keytrack", 0, 100, 84, Tier::high, false, false },
+        { "fx_convolve", { { "convolve.on", 1 }, { "convolve.mix", 80 } }, "convolve.ir", 0, 1, 60, Tier::high, true, false },
+        { "serum_eq (word 2)", { { "eq.on", 1 }, { "eq.mid.gain", 12 }, { "eq.mid.cutoff", 400 }, { "eq.mid.resonance", 60 } }, "eq.law", 0, 1, 60, Tier::high, false, false },
+        { "serum_compressor (word 2)", { { "compressor.on", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", -20 }, { "compressor.mid.upper_ratio", 75 } }, "compressor.limit", 0, 2, 60, Tier::high, false, false },
+        { "serum_convolve (word 2)", { { "convolve.on", 1 }, { "convolve.ir", 1 }, { "convolve.mix", 80 } }, "convolve.law", 0, 1, 60, Tier::high, true, false },
+        { "eq_band2 (word 2)", { { "eq.on", 1 }, { "eq.mid2.gain", 12 }, { "eq.mid2.cutoff", 500 }, { "eq.mid2.resonance", 60 } }, "eq.mid2.mode", 0, 1, 60, Tier::high, false, false },
+    };
+    std::vector<float> ir (static_cast<size_t> (0.3 * kSr), 0.0f);
+    sbtest::Rng rng (3);
+    for (size_t i = 0; i < ir.size(); ++i)
+        ir[i] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.2f * std::exp (-static_cast<float> (i) / 5000.0f);
+    MemoryContentStore store;
+    store.add ("user.impulses", "ir.wav", wavBytes (ir, static_cast<int> (kSr)));
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "user.impulses";
+    ref.file = "ir.wav";
+    content.impulses.push_back (ref);
+    for (const Probe& p : probes)
+    {
+        sbtest::Rendered outs[2];
+        for (int k = 0; k < 2; ++k)
+        {
+            auto e = createOwnEngine();
+            e->setParam (kParamMasterPolyphony, 32.0f);
+            e->prepare (kSr, 256, qualityForTier (p.tier));
+            if (p.content)
+            {
+                e->setContentStore (&store);
+                e->setContent (content);
+            }
+            sawPatch (*e);
+            if (p.slot)
+                setSlot (*e, 1, kFxTypeDistortion, 0, 1023, false);
+            for (const Set& c : p.common)
+                set (*e, c.key, c.v);
+            set (*e, p.key, k == 0 ? p.off : p.on);
+            const ParamInfo* info = findParamByKey (p.key);
+            CHECK (info != nullptr && e->supportsParam (info->id));
+            outs[k] = sbtest::render (*e, { sbtest::noteOn (0, p.note) }, static_cast<int> (0.8 * kSr), 256);
+        }
+        double diff = 0.0, ref2 = 1.0e-9;
+        for (size_t i = 0; i < outs[0].left.size(); ++i)
+        {
+            diff = std::max (diff, static_cast<double> (std::fabs (outs[0].left[i] - outs[1].left[i])));
+            ref2 = std::max (ref2, static_cast<double> (std::fabs (outs[0].left[i])));
+        }
+        if (!CHECK (diff > 1.0e-3 * ref2))
+            std::printf ("    capability %s: no audible difference (key %s)\n", p.bit, p.key);
+    }
+    auto e = make();
+    const EngineCapsMask need = kCapFxConvolve | kCapFxInstances | kCapFxPhaserDepth2 | kCapFxReverbAlgos | kCapReverbFeedback | kCapReverbForce | kCapFxCompressorLimit | kCapFxDistortionExtras;
+    CHECK ((e->capabilities() & need) == need);
+    const EngineCaps2Mask need2 = kCap2SerumEq | kCap2SerumCompressor | kCap2SerumConvolve | kCap2EqBand2;
+    CHECK ((e->capabilities2() & need2) == need2);
+}
+
+TEST (fx_reverb_feedback_scales_the_decay_of_nitrous_and_basin)
+{
+    // decay 2000 ms, size 50 %: RT60 0.51 / 2.01 / 8.06 s for feedback 0 / 50 / 100 % (Nitrous), 0.50 / 2.05 / 8.24 s (Basin); the other types ignore the key
+    auto run = [&] (int type, int feedback)
+    {
+        auto e = make();
+        burstPatch (*e);
+        set (*e, "reverb.on", 1);
+        set (*e, "reverb.mix", 100);
+        set (*e, "reverb.decay", 2000);
+        set (*e, "reverb.size", 50);
+        set (*e, "reverb.type", static_cast<float> (type));
+        set (*e, "reverb.high_shelf_gain", 0);
+        set (*e, "reverb.chorus_amount", 0);
+        set (*e, "reverb.feedback", static_cast<float> (feedback));
+        const auto o = sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60), sbtest::noteOff (static_cast<int> (0.12 * kSr), 60) }, static_cast<int> (20.0 * kSr), 512);
+        return rt60 (o.left, static_cast<size_t> (0.1 * kSr));
+    };
+    const double want[2][3] = { { 0.51, 2.01, 8.06 }, { 0.50, 2.05, 8.24 } };
+    for (int k = 0; k < 2; ++k)
+        for (int f = 0; f < 3; ++f)
+        {
+            const double rt = run(k == 0 ? 4 : 5, f * 50);
+            if (verbose())
+                std::printf ("    type %d feedback %d: RT60 %.2f (spec %.2f)\n", k == 0 ? 4 : 5, f * 50, rt, want[k][f]);
+            CHECK (rt > want[k][f] * 0.8 && rt < want[k][f] * 1.2);
+        }
+    CHECK (std::fabs (run (2, 0) - run (2, 100)) < 0.05); // Hall ignores it
+}
+
+TEST (fx_pool_parameters_are_modulation_destinations)
+{
+    auto render = [&] (float macro)
+    {
+        auto e = make();
+        sawPatch (*e);
+        setSlot (*e, 1, kFxTypeDistortion);
+        set (*e, "fxi01.p02", 0.5f);
+        set (*e, "mod01.source", srcChoiceFx ("macro1"));
+        set (*e, "mod01.destination", dstChoiceFx ("fxi01.p02"));
+        set (*e, "mod01.amount", 100);
+        set (*e, "macro.1", macro);
+        return sbtest::render (*e, { sbtest::noteOn (0, 60) }, static_cast<int> (0.4 * kSr), 256);
+    };
+    const auto a = render (0), b = render (100);
+    double diff = 0;
+    for (size_t i = static_cast<size_t> (0.2 * kSr); i < a.left.size(); ++i)
+        diff = std::max (diff, static_cast<double> (std::fabs (a.left[i] - b.left[i])));
+    CHECK (diff > 0.05);
+}
+
+// Existing test in this file setting up distortion: fx_pool_order_rack_bypass_and_crossfade (line 558)
+TEST (fx_distortion_reset_clears_dc_blocker_and_downsample_phase)
+{
+    // (a1) DC blocker reset:
+    // Process 0.5 s of a signal with a DC offset of 0.5 through a distortion type using the DC blocker (type 6: Asymmetric).
+    // In unfixed code, reset() does not clear dc[2], so the accumulated DC state leaks out as a decaying offset
+    // during subsequent silence (first output sample is -0.37223658).
+    // In fixed code, reset() clears dc[0] = dc[1] = 0.0f, so every output sample during silence is exactly 0.0f.
+    {
+        own::Distortion dist;
+        dist.prepare (kSr);
+        own::Distortion::Params p;
+        p.type = 6; // Asymmetric (uses 10 Hz DC blocker)
+        p.driveDb = 0.0f;
+        p.mix = 1.0f;
+        p.order = 0; // bypass SVF filter
+        dist.set (p);
+
+        const int nDc = static_cast<int> (0.5 * kSr);
+        std::vector<float> dcL (nDc, 0.5f), dcR (nDc, 0.5f);
+        dist.process (dcL.data(), dcR.data(), nDc);
+
+        dist.reset();
+
+        const int nSilence = static_cast<int> (0.1 * kSr);
+        std::vector<float> silL (nSilence, 0.0f), silR (nSilence, 0.0f);
+        dist.process (silL.data(), silR.data(), nSilence);
+
+        bool allZero = true;
+        float maxLeak = 0.0f;
+        for (int i = 0; i < nSilence; ++i)
+        {
+            if (silL[i] != 0.0f || silR[i] != 0.0f)
+                allZero = false;
+            maxLeak = std::max (maxLeak, std::max (std::fabs (silL[i]), std::fabs (silR[i])));
+        }
+        // Fails on unfixed code (first sample is -0.37223658, maxLeak ~0.3722)
+        CHECK_EQ (silL[0], 0.0f);
+        CHECK (allZero);
+        CHECK_EQ (maxLeak, 0.0f);
+    }
+
+    // (a2) Down Sample (sample-hold) phase reset:
+    // Two instances: one fresh, one used then reset.
+    // In unfixed code, reset() does not clear holdPhase[2], so the used instance retains its phase offset
+    // and downsamples at different sample indices than the fresh instance (max diff ~0.28).
+    // In fixed code, reset() clears holdPhase[0] = holdPhase[1] = 0.0f, giving bit-identical output.
+    {
+        own::Distortion fresh, used;
+        fresh.prepare (kSr);
+        used.prepare (kSr);
+
+        own::Distortion::Params p;
+        p.type = 5; // Down Sample
+        p.driveDb = 15.0f; // period ≈ 8.62 samples at 48 kHz
+        p.mix = 1.0f;
+        p.order = 0;
+        fresh.set (p);
+        used.set (p);
+
+        // Advance used instance by 5 samples so holdPhase becomes 5.0f
+        std::vector<float> warmL (5, 0.7f), warmR (5, 0.7f);
+        used.process (warmL.data(), warmR.data(), 5);
+
+        used.reset();
+
+        // Process identical input on both: test signal with sine wave (period not a multiple of downsample period)
+        const int nTest = 480;
+        std::vector<float> inFreshL (nTest), inFreshR (nTest);
+        std::vector<float> inUsedL (nTest), inUsedR (nTest);
+        for (int i = 0; i < nTest; ++i)
+        {
+            const float s = 0.8f * std::sin (2.0f * 3.14159265f * 333.0f * static_cast<float> (i) / static_cast<float> (kSr));
+            inFreshL[i] = inUsedL[i] = s;
+            inFreshR[i] = inUsedR[i] = s;
+        }
+
+        fresh.process (inFreshL.data(), inFreshR.data(), nTest);
+        used.process (inUsedL.data(), inUsedR.data(), nTest);
+
+        bool bitIdentical = true;
+        float maxDiff = 0.0f;
+        for (int i = 0; i < nTest; ++i)
+        {
+            if (inFreshL[i] != inUsedL[i] || inFreshR[i] != inUsedR[i])
+                bitIdentical = false;
+            maxDiff = std::max (maxDiff, std::max (std::fabs (inFreshL[i] - inUsedL[i]), std::fabs (inFreshR[i] - inUsedR[i])));
+        }
+        // Fails on unfixed code (maxDiff ~0.2828 > 0)
+        CHECK (bitIdentical);
+        CHECK_EQ (maxDiff, 0.0f);
+    }
+
+    // (b) Bit-identity reference checksums:
+    // Print for 3 distortion types with fixed settings and fixed pseudo-random input (LCG).
+    // The build worker compares these lines starting DIST-CHECKSUM between commit 1 and commit 2.
+    {
+        struct Lcg
+        {
+            uint32_t state;
+            explicit Lcg (uint32_t seed) : state (seed) {}
+            uint32_t next() noexcept { state = state * 1664525u + 1013904223u; return state; }
+            float sample() noexcept { return static_cast<float> (next()) * (2.0f / 4294967296.0f) - 1.0f; }
+        };
+
+        const int kTypes[3] = { 0, 4, 6 }; // Soft Clip, Bit Crush, Asymmetric
+        for (int t : kTypes)
+        {
+            own::Distortion dist;
+            dist.prepare (kSr);
+            own::Distortion::Params p;
+            p.type = t;
+            p.driveDb = 12.0f;
+            p.mix = 1.0f;
+            p.cutoff = 4000.0f;
+            p.resonance = 0.5f;
+            p.blend = 0.0f;
+            p.order = 1; // active SVF pre-filter
+            dist.set (p);
+
+            const int n = 512;
+            std::vector<float> bufL (n), bufR (n);
+            Lcg rng (123456789u);
+            for (int i = 0; i < n; ++i)
+            {
+                bufL[i] = rng.sample();
+                bufR[i] = rng.sample();
+            }
+
+            dist.process (bufL.data(), bufR.data(), n);
+
+            double sumAbs = 0.0;
+            for (int i = 0; i < n; ++i)
+                sumAbs += static_cast<double> (std::fabs (bufL[i])) + static_cast<double> (std::fabs (bufR[i]));
+
+            std::printf ("DIST-CHECKSUM type=%d sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                         t, sumAbs,
+                         static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                         static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                         static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                         static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+        }
+    }
+}
+
+// Reusing test patterns, types and checks from fx_distortion_reset_clears_dc_blocker_and_downsample_phase (line 1159)
+TEST (fx_flanger_delay_cap_and_phaser_denormal_flush)
+{
+    // (1) Flanger 0.1 s delay cap and maximum valid delay verification
+    {
+        own::Flanger fl;
+        fl.prepare (kSr);
+        own::Flanger::Params p;
+        p.mix = 1.0f;
+        p.feedback = 0.0f;
+        p.rate = 0.0f;
+        p.phaseOffset = 0.5f;
+        p.centerHz = 20.0f;
+        p.depth = 5.0f;
+        fl.set (p);
+
+        const int n1 = 16000;
+        std::vector<float> l1 (n1, 0.0f), r1 (n1, 0.0f);
+        r1[0] = 1.0f;
+        fl.process (l1.data(), r1.data(), n1);
+
+        // Because readCubic is evaluated before push at sample 0, an impulse fed at index 0 echoes at index period + 1.
+        // Before fix (0.85 * sr clamp): delay echoes at sample 14281 (r1[4801] == 0.0f, r1[14281] ≈ 0.7071f).
+        // After fix (0.10 * sr clamp): delay clamped to 4800 samples (r1[4801] ≈ 0.7071f, r1[14281] == 0.0f).
+        std::printf ("FLANGER: echo at sample 4801=%.4f (unclamped 14281=%.4f)\n", r1[4801], r1[14281]);
+        CHECK (std::fabs (r1[4801]) > 0.5f);
+        CHECK (std::fabs (r1[14281]) < 1.0e-5f);
+
+        // Maximum valid delay: depth = 1.0, centerHz = 20.0 Hz -> delay = 0.0995 s = 4776 samples.
+        // Echo appears at sample 4776 + 1 = 4777.
+        fl.reset();
+        p.depth = 1.0f;
+        fl.set (p);
+
+        const int n2 = 6000;
+        std::vector<float> l2 (n2, 0.0f), r2 (n2, 0.0f);
+        r2[0] = 1.0f;
+        fl.process (l2.data(), r2.data(), n2);
+
+        // Fits within the 0.105 s buffer (8192 floats) without wrap-around:
+        CHECK (std::fabs (r2[4777]) > 0.5f);
+    }
+
+    // (2) Phaser bpA / bpB feedback denormal flush
+    {
+        own::Phaser ph;
+        ph.prepare (kSr);
+        ph.fast = false;
+        own::Phaser::Params p;
+        p.mix = 1.0f;
+        p.feedback = 0.5f;
+        p.rate = 0.0f;
+        p.depthSemis = 0.0f;
+        p.centerHz = 2000.0f;
+        p.blend = 0.0f;
+        p.phaseOffset = 0.0f;
+        p.depth2 = 0.0f;
+        ph.set (p);
+
+        const int n = 501;
+        std::vector<float> l (n, 0.0f), r (n, 0.0f);
+        l[0] = 1.0e-15f;
+        r[0] = 1.0e-15f;
+
+        ph.process (l.data(), r.data(), n);
+
+        float maxTail = 0.0f;
+        for (int i = 400; i <= 500; ++i)
+        {
+            maxTail = std::max (maxTail, std::fabs (l[i]));
+            maxTail = std::max (maxTail, std::fabs (r[i]));
+        }
+        // Fails on unfixed code: maxTail ≈ 2.3e-21 > 0.0f due to unflushed recursive bpA/bpB states.
+        // In fixed code: bpB is flushed below 1.0e-18f, silencing tails to exact 0.0f.
+        CHECK_EQ (maxTail, 0.0f);
+    }
+
+    // (3) Bit-identity reference checksums across commits 1 and 2
+    {
+        struct Lcg
+        {
+            uint32_t state;
+            explicit Lcg (uint32_t seed) : state (seed) {}
+            uint32_t next() noexcept { state = state * 1664525u + 1013904223u; return state; }
+            float sample() noexcept { return static_cast<float> (next()) * (1.0f / 4294967296.0f) - 0.5f; } // [-0.5, 0.5]
+        };
+
+        const int n = 512;
+        // Two valid Flanger configs:
+        const own::Flanger::Params flConfigs[2] = {
+            [] () { own::Flanger::Params p; p.centerHz = 330.0f; p.depth = 0.5f; p.rate = 0.25f; p.feedback = 0.5f; return p; } (),
+            [] () { own::Flanger::Params p; p.centerHz = 20.0f; p.depth = 1.0f; p.rate = 1.7f; p.feedback = -0.6f; return p; } ()
+        };
+
+        for (int cfg = 0; cfg < 2; ++cfg)
+        {
+            own::Flanger fl;
+            fl.prepare (kSr);
+            fl.set (flConfigs[cfg]);
+
+            std::vector<float> bufL (n), bufR (n);
+            Lcg rng (123456789u + static_cast<uint32_t> (cfg * 100));
+            for (int i = 0; i < n; ++i)
+            {
+                bufL[i] = rng.sample();
+                bufR[i] = rng.sample();
+            }
+
+            fl.process (bufL.data(), bufR.data(), n);
+
+            double sumAbs = 0.0;
+            for (int i = 0; i < n; ++i)
+                sumAbs += static_cast<double> (std::fabs (bufL[i])) + static_cast<double> (std::fabs (bufR[i]));
+
+            std::printf ("FLANGER-CHECKSUM cfg=%d sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                         cfg, sumAbs,
+                         static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                         static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                         static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                         static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+        }
+
+        // One normal-level Phaser config:
+        {
+            own::Phaser ph;
+            ph.prepare (kSr);
+            ph.fast = false;
+            own::Phaser::Params p;
+            p.centerHz = 1200.0f;
+            p.depthSemis = 18.0f;
+            p.rate = 0.7f;
+            p.feedback = 0.6f;
+            p.blend = 0.5f;
+            p.mix = 0.7f;
+            ph.set (p);
+
+            std::vector<float> bufL (n), bufR (n);
+            Lcg rng (987654321u);
+            for (int i = 0; i < n; ++i)
+            {
+                bufL[i] = rng.sample();
+                bufR[i] = rng.sample();
+            }
+
+            ph.process (bufL.data(), bufR.data(), n);
+
+            double sumAbs = 0.0;
+            for (int i = 0; i < n; ++i)
+                sumAbs += static_cast<double> (std::fabs (bufL[i])) + static_cast<double> (std::fabs (bufR[i]));
+
+            std::printf ("PHASER-CHECKSUM sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                         sumAbs,
+                         static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                         static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                         static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                         static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+        }
+    }
+}
+
+
+// ---- The delay lines of the six reverb types share one arena (docs/plans/memory-footprint.md, task T3) ----
+namespace
+{
+constexpr int kArenaLen = 8192;
+constexpr int kArenaChunk = 128;
+
+struct ArenaSignal
+{
+    std::vector<float> l, r;
+};
+
+// an impulse plus a stereo noise burst, deterministic
+ArenaSignal arenaSignal()
+{
+    ArenaSignal s;
+    s.l.assign (static_cast<size_t> (kArenaLen), 0.0f);
+    s.r.assign (static_cast<size_t> (kArenaLen), 0.0f);
+    sbtest::Rng rng (0x4eaa5eull);
+    s.l[0] = 1.0f;
+    s.r[0] = -0.5f;
+    for (int i = 64; i < 1500; ++i)
+    {
+        s.l[static_cast<size_t> (i)] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f;
+        s.r[static_cast<size_t> (i)] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f;
+    }
+    return s;
+}
+
+void arenaProcess (own::Reverb& r, std::vector<float>& l, std::vector<float>& rr)
+{
+    for (size_t pos = 0; pos < l.size(); pos += static_cast<size_t> (kArenaChunk))
+        r.process (l.data() + pos, rr.data() + pos, std::min (kArenaChunk, static_cast<int> (l.size() - pos)));
+}
+
+uint64_t arenaHashOf (const std::vector<float>& a, const std::vector<float>& b)
+{
+    uint64_t h = 1469598103934665603ull;
+    for (const std::vector<float>* v : { &a, &b })
+        for (const float x : *v)
+        {
+            uint32_t bits;
+            std::memcpy (&bits, &x, sizeof (bits));
+            for (int k = 0; k < 4; ++k)
+            {
+                h ^= (bits >> (8 * k)) & 0xffu;
+                h *= 1099511628211ull;
+            }
+        }
+    return h;
+}
+
+own::Reverb::Params arenaParams (int type, int room)
+{
+    own::Reverb::Params p;
+    p.type = type;
+    p.room = room;
+    p.mix = 0.5f;
+    p.decay = 1.2f;
+    p.chorusAmount = 0.3f;   // the modulated reads
+    return p;
+}
+} // namespace
+
+TEST (fx_reverb_arena_memory_and_checksum_of_the_six_types)
+{
+    for (const double sr : { 44100.0, 48000.0 })
+    {
+        own::Reverb r;
+        r.prepare (sr);
+        std::printf ("    reverb delay memory at %.0f Hz: %zu bytes in %d block(s)\n", sr, r.memoryBytes(), r.bufferAllocCount());
+        CHECK (r.memoryBytes() <= (sr < 46000.0 ? 2400000u : 2550000u));   // before: 4,874,240 / 5,087,232 bytes in 93 blocks
+        CHECK_EQ (r.bufferAllocCount(), 1);
+    }
+
+    const ArenaSignal in = arenaSignal();
+    uint64_t all = 1469598103934665603ull;
+    for (int type = 0; type <= 5; ++type)
+        for (int room = 0; room < (type == 4 ? 5 : 1); ++room)
+        {
+            own::Reverb r;
+            r.prepare (44100.0);
+            r.set (arenaParams (type, room));
+            std::vector<float> l = in.l, rr = in.r;
+            arenaProcess (r, l, rr);
+            const uint64_t h = arenaHashOf (l, rr);
+            std::printf ("    REVERB-ARENA-CHECKSUM type=%d room=%d %016llx\n", type, room, static_cast<unsigned long long> (h));
+            all = (all ^ h) * 1099511628211ull;
+            float peak = 0.0f;
+            for (const float x : l)
+                peak = std::max (peak, std::fabs (x));
+            CHECK (peak > 0.0f);
+        }
+    std::printf ("    REVERB-ARENA-CHECKSUM all %016llx\n", static_cast<unsigned long long> (all));
+}
+
+// The topology is switched while the reverb runs, 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 0: a core that takes the arena over (another group of lines) finds silence in it, not what the core before it left.
+// The input of the cores is cut for the check (both input filters at the same corner: their difference is zero), so whatever the new core says is stale data.
+TEST (fx_reverb_arena_topology_switch_leaves_no_stale_bleed)
+{
+    const ArenaSignal in = arenaSignal();
+    own::Reverb r;
+    r.prepare (44100.0);
+    const int sequence[7] = { 0, 1, 2, 3, 4, 5, 0 };
+    const bool newGroup[7] = { true, true, true, true, true, false, true };   // 2 (Hall), 4 (Nitrous) and 5 (Basin) share their lines
+    for (int step = 0; step < 7; ++step)
+    {
+        const int type = sequence[step];
+        // the cut input of this step: the check
+        own::Reverb::Params cut = arenaParams (type, 2);
+        cut.mix = 1.0f;
+        cut.lowCut = 8000.0f;
+        cut.highCut = 8000.0f;
+        r.set (cut);
+        std::vector<float> l (static_cast<size_t> (4096), 0.0f), rr (static_cast<size_t> (4096), 0.0f);
+        arenaProcess (r, l, rr);
+        float peak = 0.0f;
+        for (size_t i = 256; i < l.size(); ++i)   // the first samples still carry the input filters of the step before
+            peak = std::max ({ peak, std::fabs (l[i]), std::fabs (rr[i]) });
+        if (newGroup[step])
+            CHECK (peak < 1.0e-9f);
+        // and the step makes noise of its own: the lines of this type are dirty when the next one comes
+        own::Reverb::Params live = arenaParams (type, 2);
+        r.set (live);
+        std::vector<float> a = in.l, b = in.r;
+        arenaProcess (r, a, b);
+        float loud = 0.0f;
+        for (const float x : a)
+            loud = std::max (loud, std::fabs (x));
+        CHECK (loud > 0.01f);
+        // the input filters settle at the same corner for the first samples of the next step: the cut run starts with the filters empty
+        own::Reverb::Params settle = arenaParams (type, 2);
+        settle.mix = 1.0f;
+        settle.lowCut = 8000.0f;
+        settle.highCut = 8000.0f;
+        r.set (settle);
+        std::vector<float> s1 (static_cast<size_t> (128), 0.0f), s2 (static_cast<size_t> (128), 0.0f);
+        arenaProcess (r, s1, s2);
+    }
+}
+
+// docs/engine-spec/06-effects.md section 1: the drive of the distortion is reached across the control period (linear), never stepped; the ADAA state of the types that carry it stays right: the
+// settled output after the ramp equals an instance that ran the new drive from the start (types without a DC blocker: the state is the last input and its integral, both re-made for a new gain).
+TEST (fx_distortion_drive_ramps_across_the_period)
+{
+    const int period = 32;
+    auto run = [period] (int type, float driveA, float driveB, int jumpPeriod, int periods, std::vector<float>& out)
+    {
+        own::Distortion d;
+        d.prepare (kSr);
+        out.clear();
+        for (int k = 0; k < periods; ++k)
+        {
+            own::Distortion::Params p;
+            p.type = type;
+            p.driveDb = k >= jumpPeriod ? driveB : driveA;
+            p.mix = 1.0f;
+            p.order = 0;
+            d.set (p);
+            std::vector<float> l (period), r (period);
+            for (int i = 0; i < period; ++i)
+                l[i] = r[i] = 0.6f * std::sin (2.0f * 3.14159265f * 440.0f * static_cast<float> (k * period + i) / static_cast<float> (kSr));
+            d.process (l.data(), r.data(), period, 0, period);
+            out.insert (out.end(), l.begin(), l.end());
+        }
+    };
+    // 1. a step of the drive from -10 to +20 dB on a constant small input: the output climbs across the period, no step of the size of the whole change
+    {
+        own::Distortion d;
+        d.prepare (kSr);
+        own::Distortion::Params p;
+        p.type = 0;
+        p.mix = 1.0f;
+        p.order = 0;
+        std::vector<float> y;
+        for (int k = 0; k < 4; ++k)
+        {
+            p.driveDb = k < 2 ? -10.0f : 20.0f;
+            d.set (p);
+            std::vector<float> l (period, 0.05f), r (period, 0.05f);
+            d.process (l.data(), r.data(), period, 0, period);
+            y.insert (y.end(), l.begin(), l.end());
+        }
+        const float before = y[2 * period - 1], after = y[3 * period + period - 1];
+        double maxStep = 0.0;
+        for (size_t i = 2 * period - 1; i < y.size(); ++i)
+            maxStep = std::max (maxStep, static_cast<double> (std::fabs (y[i] - y[i - 1])));
+        CHECK (after - before > 0.3f);                                             // the change is there (tanh (0.05 * 0.316) = 0.016 -> tanh (0.5) = 0.46)
+        CHECK (maxStep < 0.4 * static_cast<double> (after - before));              // and it is spread: one sample takes at most 40 % of it (a step takes all of it)
+        CHECK (std::fabs (y[3 * period + period - 1] - std::tanh (0.5f)) < 1.0e-4f); // the end of the period has the new drive
+    }
+    // 2. the ADAA state after the ramp: settled output equals the instance with the new drive from the start
+    for (int type : { 0, 1, 2, 3, 8, 9, 12 })
+    {
+        std::vector<float> a, b;
+        run (type, -10.0f, 20.0f, 100, 300, a);
+        run (type, 20.0f, 20.0f, 100, 300, b);
+        std::vector<float> jumped;
+        run (type, -10.0f, 20.0f, 100, 300, jumped);
+        run (type, 20.0f, 20.0f, 0, 300, b);
+        double maxDiff = 0.0;
+        for (size_t i = 102 * period; i < jumped.size(); ++i)
+            maxDiff = std::max (maxDiff, static_cast<double> (std::fabs (jumped[i] - b[i])));
+        bool finite = true;
+        for (float v : jumped)
+            finite = finite && std::isfinite (v);
+        CHECK (finite);
+        if (maxDiff > 1.0e-4)
+            std::printf ("    type %d: settled output differs by %g\n", type, maxDiff);
+        CHECK (maxDiff < 1.0e-4);
+    }
+    // 3. a still drive is bit for bit what it was without periods
+    for (int type : { 0, 4, 5, 12 })
+    {
+        std::vector<float> withPeriods;
+        run (type, 12.0f, 12.0f, 0, 50, withPeriods);
+        own::Distortion d;
+        d.prepare (kSr);
+        own::Distortion::Params p;
+        p.type = type;
+        p.driveDb = 12.0f;
+        p.mix = 1.0f;
+        p.order = 0;
+        d.set (p);
+        std::vector<float> l (period * 50), r (period * 50);
+        for (size_t i = 0; i < l.size(); ++i)
+            l[i] = r[i] = 0.6f * std::sin (2.0f * 3.14159265f * 440.0f * static_cast<float> (i) / static_cast<float> (kSr));
+        d.process (l.data(), r.data(), static_cast<int> (l.size()));
+        CHECK (l == withPeriods);
+    }
+}

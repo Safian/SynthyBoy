@@ -1,0 +1,260 @@
+{
+  "controls": [
+    {
+      "name": "Voice Rand Pan",
+      "key": "voicectl.rand.pan",
+      "kind": "dial",
+      "type": "voiceNativePanDepth",
+      "rect": [
+        14,
+        408,
+        124,
+        130
+      ],
+      "caption": "PAN",
+      "block": 0
+    },
+    {
+      "name": "Voice Rand Detune",
+      "key": "voicectl.rand.detune",
+      "kind": "dial",
+      "type": "voiceNativeDial",
+      "rect": [
+        142,
+        408,
+        124,
+        130
+      ],
+      "caption": "DETUNE",
+      "block": 0
+    },
+    {
+      "name": "Voice Rand Cutoff",
+      "key": "voicectl.rand.cutoff",
+      "kind": "dial",
+      "type": "voiceNativeDial",
+      "rect": [
+        270,
+        408,
+        124,
+        130
+      ],
+      "caption": "CUTOFF",
+      "block": 0
+    },
+    {
+      "name": "Voice Rand Env",
+      "key": "voicectl.rand.env",
+      "kind": "dial",
+      "type": "voiceNativeDial",
+      "rect": [
+        398,
+        408,
+        124,
+        130
+      ],
+      "caption": "ENV",
+      "block": 0
+    },
+    {
+      "name": "Voice Rand Detune 10x",
+      "key": "voicectl.rand.detune10x",
+      "kind": "toggle",
+      "type": "voiceActive_detune10x",
+      "rect": [
+        14,
+        558,
+        172,
+        56
+      ],
+      "caption": "10x DETUNE",
+      "block": 0
+    },
+    {
+      "name": "Voice Scale Env",
+      "key": "voicectl.scale.env",
+      "kind": "dial",
+      "type": "voiceNativeScaleEnv",
+      "rect": [
+        542,
+        494,
+        180,
+        120
+      ],
+      "caption": "ENV TIME",
+      "block": 1
+    },
+    {
+      "name": "Voice Scale LFO",
+      "key": "voicectl.scale.lfo",
+      "kind": "dial",
+      "type": "voiceNativeScaleDial",
+      "rect": [
+        730,
+        494,
+        180,
+        120
+      ],
+      "caption": "LFO TIME",
+      "block": 1
+    },
+    {
+      "name": "Voice Scale LFO Mode",
+      "key": "voicectl.scale.lfo_mode",
+      "kind": "choice",
+      "type": "voiceNativeChoice",
+      "rect": [
+        542,
+        408,
+        368,
+        80
+      ],
+      "caption": "LFO MODE",
+      "block": 1
+    },
+    {
+      "name": "Voice Osc A",
+      "key": "voicectl.osc.a",
+      "kind": "toggle",
+      "type": "voiceActive_a",
+      "rect": [
+        930,
+        408,
+        166,
+        58
+      ],
+      "caption": "OSC A",
+      "block": 2
+    },
+    {
+      "name": "Voice Osc B",
+      "key": "voicectl.osc.b",
+      "kind": "toggle",
+      "type": "voiceActive_b",
+      "rect": [
+        1100,
+        408,
+        166,
+        58
+      ],
+      "caption": "OSC B",
+      "block": 2
+    },
+    {
+      "name": "Voice Osc C",
+      "key": "voicectl.osc.c",
+      "kind": "toggle",
+      "type": "voiceActive_c",
+      "rect": [
+        930,
+        482,
+        166,
+        58
+      ],
+      "caption": "OSC C",
+      "block": 2
+    },
+    {
+      "name": "Voice Osc Sub",
+      "key": "voicectl.osc.sub",
+      "kind": "toggle",
+      "type": "voiceActive_sub",
+      "rect": [
+        1100,
+        482,
+        166,
+        58
+      ],
+      "caption": "SUB",
+      "block": 2
+    },
+    {
+      "name": "Voice Osc Noise",
+      "key": "voicectl.osc.noise",
+      "kind": "toggle",
+      "type": "voiceActive_noise",
+      "rect": [
+        930,
+        556,
+        166,
+        58
+      ],
+      "caption": "NOISE",
+      "block": 2
+    },
+    {
+      "name": "Voice Length",
+      "key": "voicectl.length",
+      "kind": "number",
+      "type": "voiceNativeNumber",
+      "rect": [
+        884,
+        20,
+        180,
+        56
+      ],
+      "caption": "LENGTH",
+      "block": -1
+    }
+  ],
+  "sequence": [
+    [
+      "Voice Row List",
+      "voiceNativeRowList",
+      [
+        14,
+        106,
+        240,
+        208
+      ],
+      "ROW",
+      "row"
+    ],
+    [
+      "Voice Step Select",
+      "voiceNativeStepSelect",
+      [
+        668,
+        20,
+        208,
+        56
+      ],
+      "STEP",
+      "step"
+    ],
+    [
+      "Voice Step Value",
+      "voiceNativeStepValue",
+      [
+        1072,
+        20,
+        200,
+        56
+      ],
+      "VALUE",
+      "value"
+    ]
+  ],
+  "steps": {
+    "rect": [
+      268,
+      84,
+      1004,
+      236
+    ],
+    "pad": 4,
+    "gap": 6,
+    "diameter": 90,
+    "top": 32,
+    "value_gap": 12
+  },
+  "scope": {
+    "title": "PAN / DETUNE",
+    "rect": [
+      930,
+      388,
+      336,
+      18
+    ]
+  }
+}

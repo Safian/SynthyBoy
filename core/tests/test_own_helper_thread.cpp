@@ -1,0 +1,396 @@
+// SynthyBoy - own engine tests: the helper threads of the engine (CPU review T1). The wake-up flag (dsp/helper_thread.h) loses no wake-up and never waits on a timeout; the engine's effect
+// module builder thread wakes on a live type change, stops cleanly, and calls the shell's start hook on its own thread; the hook can be set and removed.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "dsp/helper_thread.h"
+#include "osc/wavetable_bank.h"
+#include "synthyboy/engine.h"
+#include "synthyboy/helper_thread_hook.h"
+#include "synthyboy/params.h"
+#include "synthyboy/quality.h"
+#include "test_runner.h"
+#include "test_util.h"
+
+using namespace synthyboy;
+using namespace std::chrono;
+
+namespace
+{
+/** Runs `fn` on a thread and waits up to `limitMs` for it; false (and the thread is released by `rescue`) when it does not finish: a lost wake-up shows as a failed check, not a hung test. */
+template <class Fn, class Rescue>
+bool finishesWithin (int limitMs, Fn fn, Rescue rescue)
+{
+    std::atomic<bool> done { false };
+    std::thread t ([&] { fn(); done.store (true); });
+    const auto end = steady_clock::now() + milliseconds (limitMs);
+    while (! done.load() && steady_clock::now() < end)
+        std::this_thread::sleep_for (milliseconds (1));
+    const bool ok = done.load();
+    if (! ok)
+        rescue();
+    t.join();
+    return ok;
+}
+} // namespace
+
+TEST (wake_signal_notify_before_wait_is_kept_and_several_notifies_are_one_wake)
+{
+    own::WakeSignal w;
+    w.notify();
+    w.notify();
+    w.notify();
+    CHECK (finishesWithin (2000, [&] { w.wait(); }, [&] { w.notify(); }));   // the flag was set before the wait
+    // the three notifies were one wake: a second wait blocks until the next notify
+    std::atomic<bool> woke { false };
+    std::thread t ([&] { w.wait(); woke.store (true); });
+    std::this_thread::sleep_for (milliseconds (40));
+    CHECK (! woke.load());
+    w.notify();
+    t.join();
+    CHECK (woke.load());
+}
+
+TEST (wake_signal_loses_no_wake_up_in_a_long_ping_pong)
+{
+    // the producer publishes work items and notifies; the consumer waits, then takes everything published. Whatever the interleaving, the consumer must see every item
+    // (a lost wake-up leaves items unseen while it sleeps without a timeout)
+    own::WakeSignal w;
+    std::atomic<int> published { 0 }, taken { 0 };
+    std::atomic<bool> stop { false };
+    const int total = 200000;
+    std::thread consumer ([&]
+    {
+        for (;;)
+        {
+            w.wait();
+            taken.store (published.load (std::memory_order_acquire), std::memory_order_release);
+            if (stop.load (std::memory_order_acquire) && taken.load() == total)
+                break;
+        }
+    });
+    for (int i = 1; i <= total; ++i)
+    {
+        published.store (i, std::memory_order_release);
+        w.notify();
+        if (i % 1000 == 0)
+            std::this_thread::yield();
+    }
+    stop.store (true, std::memory_order_release);
+    w.notify();
+    const auto end = steady_clock::now() + seconds (10);
+    while (taken.load() != total && steady_clock::now() < end)
+        std::this_thread::sleep_for (milliseconds (1));
+    CHECK_EQ (taken.load(), total);
+    if (taken.load() != total)
+        w.notify();   // rescue
+    consumer.join();
+}
+
+TEST (wake_signal_stop_wakes_a_sleeping_waiter_at_once)
+{
+    for (int round = 0; round < 50; ++round)
+    {
+        own::WakeSignal w;
+        std::atomic<bool> stop { false };
+        std::thread t ([&] { while (! stop.load (std::memory_order_acquire)) w.wait(); });
+        if (round % 2 == 0)
+            std::this_thread::sleep_for (milliseconds (2));   // sleeping, or not yet waiting: both must stop
+        stop.store (true, std::memory_order_release);
+        w.notify();
+        const auto t0 = steady_clock::now();
+        t.join();
+        CHECK (steady_clock::now() - t0 < seconds (2));
+    }
+}
+
+namespace
+{
+std::atomic<int> gHookCalls { 0 };
+std::atomic<std::thread::id> gHookThread;
+char gHookName[32];
+void testHook (const char* name)
+{
+    std::strncpy (gHookName, name, sizeof gHookName - 1);
+    gHookThread.store (std::this_thread::get_id());
+    gHookCalls.fetch_add (1);
+}
+
+void setKey (IEngine& e, const char* key, float v)
+{
+    const ParamInfo* p = findParamByKey (key);
+    CHECK (p != nullptr);
+    if (p != nullptr)
+        e.setParam (p->id, v);
+}
+} // namespace
+
+TEST (engine_fx_builder_thread_starts_with_the_hook_and_stops_cleanly)
+{
+    gHookCalls.store (0);
+    setHelperThreadStartHook (&testHook);
+    for (int i = 0; i < 20; ++i)
+    {
+        auto e = createOwnEngine();
+        Quality q;
+        q.realtime = true;
+        e->prepare (48000.0, 128, q);   // starts the builder thread
+        if (i % 3 == 0)
+            std::this_thread::sleep_for (milliseconds (3));
+        if (i % 5 == 0)
+            e->prepare (44100.0, 256, q);   // stops and starts it again
+        e.reset();                          // stops it: must not hang
+    }
+    setHelperThreadStartHook (nullptr);
+    CHECK (gHookCalls.load() >= 20);
+    CHECK (std::string (gHookName) == "sb-fx-build");
+    CHECK (gHookThread.load() != std::this_thread::get_id());   // it ran on the helper thread, not on the thread that created it
+    // offline: no builder thread, no hook call
+    gHookCalls.store (0);
+    setHelperThreadStartHook (&testHook);
+    {
+        auto e = createOwnEngine();
+        Quality q;
+        q.realtime = false;
+        e->prepare (48000.0, 128, q);
+    }
+    setHelperThreadStartHook (nullptr);
+    CHECK_EQ (gHookCalls.load(), 0);
+}
+
+// A live change of an effect slot's type: the builder thread (no timeout, woken by the setParam) makes the module and the audio thread takes it over; the output then differs from that of an engine
+// without the slot. A lost wake-up would leave the module unbuilt for ever.
+TEST (engine_live_fx_type_change_wakes_the_builder)
+{
+    auto make = [] (int mode)   // 0 no slot, 1 slot on with every parameter but no type (the control), 2 the slot with its type set live
+    {
+        auto e = createOwnEngine();
+        setKey (*e, "osc2.on", 0.0f);
+        setKey (*e, "filter1.on", 0.0f);
+        Quality q;
+        q.realtime = true;
+        e->prepare (48000.0, 128, q);
+        e->readyContent();
+        if (mode >= 1)
+        {
+            setKey (*e, "fxi01.on", 1.0f);
+            setKey (*e, "fxi01.p01", 1.0f);
+            setKey (*e, "fxi01.p02", 1.0f);
+        }
+        if (mode == 2)
+            setKey (*e, "fxi01.type", 4.0f);   // Distortion
+        return e;
+    };
+    auto a = make (2), b = make (0), c = make (1);
+    std::vector<float> la (128), ra (128), lb (128), rb (128), lc (128), rc (128);
+    bool differs = false, controlSame = true;
+    const auto t0 = steady_clock::now();
+    for (int blk = 0; blk < 4000 && ! differs; ++blk)
+    {
+        std::vector<Event> ev;
+        if (blk == 0)
+            ev.push_back (sbtest::noteOn (0, 48));
+        a->process (ev.data(), static_cast<int> (ev.size()), la.data(), ra.data(), 128);
+        b->process (ev.data(), static_cast<int> (ev.size()), lb.data(), rb.data(), 128);
+        c->process (ev.data(), static_cast<int> (ev.size()), lc.data(), rc.data(), 128);
+        controlSame = controlSame && std::memcmp (lb.data(), lc.data(), 128 * sizeof (float)) == 0;   // without a type the slot changes nothing
+        differs = std::memcmp (la.data(), lb.data(), 128 * sizeof (float)) != 0;
+        std::this_thread::sleep_for (microseconds (500));
+    }
+    std::printf ("    the slot's module took over after %.1f ms\n", duration<double, std::milli> (steady_clock::now() - t0).count());
+    CHECK (differs);
+    CHECK (controlSame);
+}
+
+// The wake-up flag is the lock-free 3-state word (plus a semaphore handle on the Mac and Windows): no std::mutex / std::condition_variable (120 bytes on libc++), so it is small and notify () never takes a lock.
+TEST (wake_signal_is_small_and_lock_free)
+{
+    CHECK (sizeof (own::WakeSignal) <= 16);
+}
+
+// Four producers notify at once while one consumer waits: every item published is seen (no lost wake-up), and the signal is destroyed cleanly afterwards.
+TEST (wake_signal_loses_no_wake_up_with_four_producers)
+{
+    own::WakeSignal w;
+    const int perProducer = sbtest::scaled (50000, 5000);
+    const int producers = 4;
+    const int total = perProducer * producers;
+    std::atomic<int> published { 0 }, taken { 0 };
+    std::atomic<bool> stop { false };
+    std::thread consumer ([&]
+    {
+        for (;;)
+        {
+            w.wait();
+            taken.store (published.load (std::memory_order_acquire), std::memory_order_release);
+            if (stop.load (std::memory_order_acquire) && taken.load() == total)
+                break;
+        }
+    });
+    std::vector<std::thread> prod;
+    for (int p = 0; p < producers; ++p)
+        prod.emplace_back ([&]
+        {
+            for (int i = 0; i < perProducer; ++i)
+            {
+                published.fetch_add (1, std::memory_order_release);
+                w.notify();
+                if (i % 1000 == 0)
+                    std::this_thread::yield();
+            }
+        });
+    for (auto& t : prod)
+        t.join();
+    stop.store (true, std::memory_order_release);
+    w.notify();
+    const auto end = steady_clock::now() + seconds (20);
+    while (taken.load() != total && steady_clock::now() < end)
+        std::this_thread::sleep_for (milliseconds (1));
+    CHECK_EQ (taken.load(), total);
+    if (taken.load() != total)
+        w.notify();   // rescue
+    consumer.join();
+}
+
+// The sound does not change: a 256-frame offline render with a Distortion on slot 1 gives the same bits as before the change (the build worker compares the printed line with the one of the old code).
+TEST (wake_signal_checksum_of_an_offline_distortion_render)
+{
+    auto e = createOwnEngine();
+    setKey (*e, "osc2.on", 0.0f);
+    setKey (*e, "filter1.on", 0.0f);
+    Quality q;
+    q.realtime = false;
+    e->prepare (48000.0, 128, q);
+    e->readyContent();
+    setKey (*e, "fxi01.on", 1.0f);
+    setKey (*e, "fxi01.p01", 1.0f);
+    setKey (*e, "fxi01.p02", 1.0f);
+    setKey (*e, "fxi01.type", 4.0f);   // Distortion
+    std::vector<float> l (128), r (128);
+    uint64_t h = 1469598103934665603ull;
+    for (int blk = 0; blk < 2; ++blk)
+    {
+        std::vector<Event> ev;
+        if (blk == 0)
+            ev.push_back (sbtest::noteOn (0, 48));
+        e->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 128);
+        for (const auto* v : { &l, &r })
+            for (float f : *v)
+            {
+                uint32_t bits = 0;
+                std::memcpy (&bits, &f, sizeof bits);
+                for (int b = 0; b < 4; ++b)
+                {
+                    h ^= (bits >> (8 * b)) & 0xffu;
+                    h *= 1099511628211ull;
+                }
+            }
+    }
+    std::printf ("WAKE-SIGNAL-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
+}
+
+namespace
+{
+std::atomic<unsigned> gSeenNames { 0 };   // bit 0 "sb-fx-build", bit 1 "sb-wt-build"
+std::atomic<std::thread::id> gWtThread;
+void maskHook (const char* name)
+{
+    if (std::strcmp (name, "sb-fx-build") == 0)
+        gSeenNames.fetch_or (1u);
+    else if (std::strcmp (name, "sb-wt-build") == 0)
+    {
+        gWtThread.store (std::this_thread::get_id());
+        gSeenNames.fetch_or (2u);
+    }
+}
+} // namespace
+
+// The wavetable bank's builder thread calls the start hook first thing (scheduling class and cores of the shell), like the effect builder: without it the thread inherits the audio thread's policy.
+TEST (wavetable_bank_builder_thread_starts_with_the_hook)
+{
+    own::resetBuiltinBankForTests();
+    gSeenNames.store (0);
+    gWtThread.store (std::thread::id());
+    setHelperThreadStartHook (&maskHook);
+    {
+        auto e = createOwnEngine();
+        Quality q;
+        q.realtime = true;
+        q.lazyTables = true;
+        e->prepare (48000.0, 128, q);   // starts the bank's builder thread
+        std::this_thread::sleep_for (milliseconds (20));
+    }                                   // stops and joins it
+    setHelperThreadStartHook (nullptr);
+    CHECK ((gSeenNames.load() & 2u) != 0u);
+    CHECK (gWtThread.load() != std::this_thread::get_id());
+    CHECK (gWtThread.load() != std::thread::id());
+}
+
+// Two engines ask for different tables with the same request slot number: both tables are built (the requests of different instances do not overwrite each other).
+TEST (wavetable_bank_requests_of_two_instances_with_the_same_slot_are_both_built)
+{
+    own::resetBuiltinBankForTests();
+    own::setBuiltinBuilderPausedForTests (true);
+    own::startBuiltinBankBackground();
+    own::requestBuiltinWavetable (0, 5);   // instance A
+    own::requestBuiltinWavetable (0, 6);   // instance B, the same slot
+    own::setBuiltinBuilderPausedForTests (false);
+    bool both = false;
+    for (int i = 0; i < 4000 && ! both; ++i)   // bounded wait (20 s)
+    {
+        both = own::builtinWavetableIfReady (5) != nullptr && own::builtinWavetableIfReady (6) != nullptr;
+        if (! both)
+            std::this_thread::sleep_for (milliseconds (5));
+    }
+    own::stopBuiltinBankBackground();
+    CHECK (both);
+    CHECK (own::builtinWavetableIfReady (5) != nullptr);
+    CHECK (own::builtinWavetableIfReady (6) != nullptr);
+}
+
+// The sound does not change: 256 frames of table 5 and of table 6 (all tables built offline) give the same bits as before the change (the build worker compares the printed line with the one of the old code).
+TEST (wavetable_bank_checksum_of_two_morph_tables)
+{
+    uint64_t h = 1469598103934665603ull;
+    for (float table : { 5.0f, 6.0f })
+    {
+        own::resetBuiltinBankForTests();
+        auto e = createOwnEngine();
+        setKey (*e, "osc2.on", 0.0f);
+        setKey (*e, "filter1.on", 0.0f);
+        setKey (*e, "osc1.wavetable", table);
+        Quality q;
+        q.realtime = false;
+        e->prepare (48000.0, 128, q);   // offline: ensureAllBuiltinWavetables
+        e->readyContent();
+        std::vector<float> l (128), r (128);
+        for (int blk = 0; blk < 2; ++blk)
+        {
+            std::vector<Event> ev;
+            if (blk == 0)
+                ev.push_back (sbtest::noteOn (0, 48));
+            e->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 128);
+            for (const auto* v : { &l, &r })
+                for (float f : *v)
+                {
+                    uint32_t bits = 0;
+                    std::memcpy (&bits, &f, sizeof bits);
+                    for (int b = 0; b < 4; ++b)
+                    {
+                        h ^= (bits >> (8 * b)) & 0xffu;
+                        h *= 1099511628211ull;
+                    }
+                }
+        }
+    }
+    std::printf ("WT-BANK-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
+}

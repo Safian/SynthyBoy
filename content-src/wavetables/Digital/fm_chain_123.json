@@ -1,0 +1,31 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "FM Chain 1-2-3",
+ "category": "Digital",
+ "description": "A three operator chain: carrier 1, modulator 2 (index 0 to 3) itself modulated by an operator at 3 (index 0 to 2.5): the sweep passes through brass-like and bell-like colours.",
+ "frames": 64,
+ "seed": "fm_chain_123",
+ "source": {
+  "type": "fm",
+  "params": {
+   "carrier": 1,
+   "r1": 2,
+   "i1": {
+    "law": "linear",
+    "from": 0,
+    "to": 3
+   },
+   "r2": 3,
+   "i2": {
+    "law": "linear",
+    "from": 0,
+    "to": 2.5
+   },
+   "r3": 0,
+   "i3": 0
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

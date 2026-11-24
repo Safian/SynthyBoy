@@ -1,0 +1,119 @@
+{
+  "format": "synthyboy-mpc-ui-pages",
+  "version": 2,
+  "variant": "overlay",
+  "pages": [
+    {
+      "name": "Play",
+      "fn": "Play",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "Macros",
+      "fn": "Play",
+      "kick": [
+        "macros",
+        "macros_2"
+      ]
+    },
+    {
+      "name": "Osc A",
+      "fn": "Osc",
+      "kick": [
+        "osc1_main"
+      ],
+      "label": "Osc"
+    },
+    {
+      "name": "Osc B",
+      "fn": "Osc",
+      "kick": [
+        "osc2_main"
+      ]
+    },
+    {
+      "name": "Osc C",
+      "fn": "Osc",
+      "kick": [
+        "osc3_main"
+      ]
+    },
+    {
+      "name": "Sub",
+      "fn": "Osc",
+      "kick": [
+        "sub_main"
+      ]
+    },
+    {
+      "name": "Noise",
+      "fn": "Osc",
+      "kick": [
+        "noise"
+      ]
+    },
+    {
+      "name": "Env",
+      "fn": "Env",
+      "kick": [
+        "env1"
+      ]
+    },
+    {
+      "name": "LFO",
+      "fn": "LFO",
+      "kick": [
+        "lfo1"
+      ]
+    },
+    {
+      "name": "FX",
+      "fn": "FX",
+      "kick": [
+        "fx_order_1",
+        "fx_switches"
+      ]
+    },
+    {
+      "name": "Mixer",
+      "fn": "Mix",
+      "kick": [
+        "mix_routing",
+        "mix_bus"
+      ],
+      "label": "Mix"
+    },
+    {
+      "name": "Filter",
+      "fn": "Filter",
+      "kick": [
+        "filter1_main"
+      ]
+    },
+    {
+      "name": "Mod",
+      "fn": "Mod",
+      "kick": [
+        "mod_slot_1",
+        "mod_slot_2"
+      ]
+    },
+    {
+      "name": "Master",
+      "fn": "Master",
+      "kick": [
+        "master_voicing",
+        "master_porta"
+      ]
+    },
+    {
+      "name": "Voice",
+      "fn": "Master",
+      "kick": [
+        "voice_global",
+        "voicectl_main"
+      ]
+    }
+  ]
+}

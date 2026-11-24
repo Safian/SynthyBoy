@@ -1,0 +1,24 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Cymbal Cloud",
+ "category": "Metallic",
+ "description": "Thirty-six partials scattered between the 6th and the 160th harmonic (seeded), each wobbling by up to 6 harmonics once over the scan: a shimmering, never repeating metal cloud.",
+ "frames": 64,
+ "seed": "cymbal_cloud",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "cloud",
+   "count": 36,
+   "lo": 6,
+   "hi": 160,
+   "rolloff": 0.5,
+   "wobble": 6.0,
+   "wobble_cycles": 1.0,
+   "seed": 7
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

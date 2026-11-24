@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "id": "com.safian.synthyboy.wavetables",
+  "name": "SynthyBoy Wavetables",
+  "version": "1.0.0",
+  "license": "CC0-1.0",
+  "attribution": "Safian Szabolcs",
+  "kind": "wavetables",
+  "requires_plugin": ">=0.1.0",
+  "description": "32 formula-generated wavetables in 4 categories (Analog, Digital, Spectral, Vowel) with Serum clm chunks.",
+  "files": [
+    {
+      "path": "Analog/Basic_shapes.wav",
+      "sha256": "29638efc453151261f50ebe314498066a4aaea9b5c7bb89319738d3f5ed8a791",
+      "size": 524390,
+      "category": "Analog",
+      "title": "Basic Shapes"
+    },
+    {
+      "path": "Analog/Casio_CZ_res.wav",
+      "sha256": "f95f8417fc39330af0c7af20cb0ea2b0c2a0056a6c58e0260ec9c80eb0c56ffc",
+      "size": 524390,
+      "category": "Analog",
+      "title": "Casio CZ Res"
+    },
+    {
+      "path": "Analog/Comb_filter_sweep.wav",
+      "sha256": "7dc02f3880eeefd7754486acb25887834e3eca81f7bedeb625465ce2bf60ac9c",
+      "size": 524390,
+      "category": "Analog",
+      "title": "Comb Filter Sweep"
+    },
+    {
+      "path": "Analog/Hypersaw_5x.wav",
+      "sha256": "e0d2733bd569873e390511830c724a1edaf5d4a53bd21f7b2b17b4f0020be6ff",
+      "size": 524390,
+      "category": "Analog",
+      "title": "Hypersaw 5x"
+    },
+    {
+      "path": "Analog/PWM_sweep.wav",
+      "sha256": "6b3d15057cea4946c4c27d56fca0cdeab6bf03388ca69b3f6e72b57d0a23e073",
+      "size": 524390,
+      "category": "Analog",
+      "title": "PWM Sweep"
+    },
+    {
+      "path": "Analog/Supersaw_stack.wav",
+      "sha256": "47edb60f5fc92338df4ceb563d877ff6cda5bb5782bd593cd25ffd9cbb75faeb",
+      "size": 524390,
+      "category": "Analog",
+      "title": "Supersaw Stack"
+    },
+    {
+      "path": "Analog/Tape_saturate.wav",
+      "sha256": "e4b858ee54925803c4921543247bf4629174498008a151a291526a6883799951",
+      "size": 524390,
+      "category": "Analog",
+      "title": "Tape Saturate"
+    },
+    {
+      "path": "Digital/Acid_303.wav",
+      "sha256": "77bb73a6c44ac0ace16e95efa2fad3cb25a637c914ccc15c71575d325083e47f",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Acid 303"
+    },
+    {
+      "path": "Digital/Bitcrush_sweep.wav",
+      "sha256": "7ee1eaac6180c66654382c6cc10e97f03dcaf2b708fcaa6aae486af3c72a6975",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Bitcrush Sweep"
+    },
+    {
+      "path": "Digital/Dirty_sync.wav",
+      "sha256": "8afbeded74979ab86f64e140ccd6fcb375162fce8b16b293869b18c4e5844057",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Dirty Sync"
+    },
+    {
+      "path": "Digital/DnbWave.wav",
+      "sha256": "89809346e0cf617cd9b9c10757f0f1ecb12fd53640a254b43f69c3a505c1d6a1",
+      "size": 8294,
+      "category": "Digital",
+      "title": "DnbWave"
+    },
+    {
+      "path": "Digital/DnbWave_drive.wav",
+      "sha256": "05b6df39e8112a9ee15fdf4bc4fe64b909d43fd7a8b84639ff003e1aecc9c5e0",
+      "size": 524390,
+      "category": "Digital",
+      "title": "DnbWave Drive"
+    },
+    {
+      "path": "Digital/DnbWave_sweep.wav",
+      "sha256": "70fa98e6bcfca6eb954416f7fead90df1f9efff1c6447af6c118c4d712a612b1",
+      "size": 524390,
+      "category": "Digital",
+      "title": "DnbWave Sweep"
+    },
+    {
+      "path": "Digital/Donk_bass.wav",
+      "sha256": "1e71b32e9f737cfa00e7fb62662156df28509da294684a221593647fc0ece85a",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Donk Bass"
+    },
+    {
+      "path": "Digital/FM_sweep.wav",
+      "sha256": "2e9d9cf284a6d74ed196f969144ef2339268706cd2b29490998118b4448e11a4",
+      "size": 524390,
+      "category": "Digital",
+      "title": "FM Sweep"
+    },
+    {
+      "path": "Digital/Hard_sync.wav",
+      "sha256": "cd3e64bb3e03f50714663bb3e0624a9e29601546deeaad151594fc6c92b69ca0",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Hard Sync"
+    },
+    {
+      "path": "Digital/Modern_talking.wav",
+      "sha256": "091dedc3047b6545065d5286cf78ca78f2c3c9a05046363e8f1fe6e5159d5126",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Modern Talking"
+    },
+    {
+      "path": "Digital/Monster_growl.wav",
+      "sha256": "9a1c033cebdf928c8213ea23cba22644a678590cf3957b0224113402992fb57d",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Monster Growl"
+    },
+    {
+      "path": "Digital/Neuro_squelch.wav",
+      "sha256": "f7f9250e16ba58225d827445b07b37aca8eaafbb1d390b32310bc66ced27357a",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Neuro Squelch"
+    },
+    {
+      "path": "Digital/Reese_detune.wav",
+      "sha256": "9778f0039a5b8f41e3ad6a22efce0c1aed433f1cfecc30200c861f8e88eb0e2e",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Reese Detune"
+    },
+    {
+      "path": "Digital/Sub_808_drop.wav",
+      "sha256": "314bf611492e07851218804f142dd5e3d0aba28529d1d97f208cc5d106ea7d7a",
+      "size": 524390,
+      "category": "Digital",
+      "title": "Sub 808 Drop"
+    },
+    {
+      "path": "Spectral/Acoustic_pluck.wav",
+      "sha256": "e6f278202f44de7bdbc73237fb9b1fb0c6e67e6db3ba02c54ef49ba6afa82e09",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Acoustic Pluck"
+    },
+    {
+      "path": "Spectral/Buchla_wavefold.wav",
+      "sha256": "4aa83f737671348e1697a45b639fe105a95032f7f3c46c0ca980f14e770b3041",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Buchla Wavefold"
+    },
+    {
+      "path": "Spectral/Chebyshev_fold.wav",
+      "sha256": "0f88cdb37d49991f90bb35e1be9874fc97c24184af6633de3667389f0ca6540b",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Chebyshev Fold"
+    },
+    {
+      "path": "Spectral/Chime_bells.wav",
+      "sha256": "81a0e8e2f57efdea1b1c80a2d004bf58b86bf6355e37c66df47f13536105b28c",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Chime Bells"
+    },
+    {
+      "path": "Spectral/Gamelan_gong.wav",
+      "sha256": "9aee5d779a4e7c1b0f6316291468725f06b6dc0638ade6aa6a9e6f2a35adbf8a",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Gamelan Gong"
+    },
+    {
+      "path": "Spectral/Harmonic_ladder.wav",
+      "sha256": "fcc9cb6bdda0e32e7aafa3f69f46635ab574fb3324135b5c93216571b1cd3752",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Harmonic Ladder"
+    },
+    {
+      "path": "Spectral/Metallic_comb.wav",
+      "sha256": "74b102e9ce16bde83c94f0f77e7ec94238767e0e5b6dd061c554834531ff2ae0",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Metallic Comb"
+    },
+    {
+      "path": "Spectral/Organ_drawbars.wav",
+      "sha256": "add7fdc48be9a64594f39ff7e6992ddea4889cc5f0e2bf794860fe0a288fd034",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Organ Drawbars"
+    },
+    {
+      "path": "Spectral/Shepard_riser.wav",
+      "sha256": "853cefcaa214acff87eaf6413b7861876211e70bc1daec222e76a6432f306c04",
+      "size": 524390,
+      "category": "Spectral",
+      "title": "Shepard Riser"
+    },
+    {
+      "path": "Vowel/Vowel_formant.wav",
+      "sha256": "45330cb3d765fef12148755550ac68446bf0977473f87686619c7d76bc5884eb",
+      "size": 524390,
+      "category": "Vowel",
+      "title": "Vowel Formant"
+    },
+    {
+      "path": "Vowel/Vowel_talkbox.wav",
+      "sha256": "a74c8b12c7fbcb6f863e53503aab6d5672921e50a66d02aa4c104677a45278d4",
+      "size": 524390,
+      "category": "Vowel",
+      "title": "Vowel Talkbox"
+    }
+  ]
+}

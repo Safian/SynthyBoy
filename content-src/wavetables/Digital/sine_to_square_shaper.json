@@ -1,0 +1,30 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Sine To Square Shaper",
+ "category": "Digital",
+ "description": "A sine pushed through a power-law shaper, the exponent falling 1.0 to 0.06: sine, rounded square, hard square.",
+ "frames": 64,
+ "seed": "sine_to_square_shaper",
+ "source": {
+  "type": "shape",
+  "params": {
+   "mode": "power",
+   "power": {
+    "law": "curve",
+    "from": 1.0,
+    "to": 0.06,
+    "power": 1.5
+   }
+  },
+  "input": {
+   "type": "classic",
+   "params": {
+    "sine": 1.0,
+    "saw": 0.0
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

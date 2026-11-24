@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 70,
+  "title": "MacroCard",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "{size:macro_card.width} × {size:macro_card.height} px",
+          "file": "catalog-macro-card.png",
+          "alt": "MacroCard {size:macro_card.width} × {size:macro_card.height} px"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Organ Drawbars",
+ "category": "Spectral",
+ "description": "Sixteen drawbar registrations of a tonewheel organ with an interpolated frame between each (31 frames); the cycle is the 16 foot fundamental: transpose +12.",
+ "frames": 31,
+ "seed": "organ_drawbars_16",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "organ_drawbars_16"
+  }
+ }
+}

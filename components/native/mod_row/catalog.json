@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 75,
+  "title": "ModRow",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "ModRow (1280 × 56 px)",
+          "file": "catalog-mod-row.png",
+          "alt": "ModRow 1280 × 56 px"
+        },
+        {
+          "presentation": "sample",
+          "caption": "Inaktív",
+          "file": "inactive.png",
+          "alt": "ModRow inaktív"
+        }
+      ]
+    }
+  ]
+}

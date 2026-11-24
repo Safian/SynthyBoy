@@ -1,0 +1,32 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Noise Notch Sweep",
+ "category": "Noise",
+ "description": "Frozen noise (slightly dark) with a deep notch (34 dB) sweeping from the 4th to the 250th harmonic: the phaser-on-noise sound.",
+ "frames": 64,
+ "seed": "noise_notch_sweep",
+ "source": {
+  "type": "spec",
+  "params": {
+   "band_center": {
+    "law": "curve",
+    "from": 4,
+    "to": 250,
+    "power": 2.0
+   },
+   "band_width": 0.3,
+   "band_gain_db": -34
+  },
+  "input": {
+   "type": "noise",
+   "params": {
+    "tilt": 0.5,
+    "seed": 4,
+    "count": 300
+   }
+  }
+ },
+ "post": {
+  "limit": 320
+ }
+}

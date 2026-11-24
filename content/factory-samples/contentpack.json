@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "id": "com.safian.synthyboy.factory-samples",
+  "name": "Factory Samples",
+  "version": "0.1.0",
+  "license": "CC0-1.0",
+  "attribution": "Safian Szabolcs",
+  "kind": "samples",
+  "requires_plugin": ">=0.1.0",
+  "description": "12 synthesised samples, 3 key-mapped instruments and 3 impulse responses made by scripts/gen-content-pack.py under CC0-1.0; 44.1 kHz, 16 bit.",
+  "files": [
+    {
+      "path": "impulses/cabinet_colour.wav",
+      "sha256": "60a0938cfd9d7321430b893f2ab898b20033ea97262bea5516254293cdf743dd",
+      "size": 23858
+    },
+    {
+      "path": "impulses/plate.wav",
+      "sha256": "97268d85277d3d7ccbfcef0b1df42c497df387883b359dcae2c944a3de0bad20",
+      "size": 383714
+    },
+    {
+      "path": "impulses/small_room.wav",
+      "sha256": "e60e854a561208102095f7138bb6d5033ef769653419a1edf60685a3482117c0",
+      "size": 185264
+    },
+    {
+      "path": "instruments/glass_bells/glass_bells.sfz",
+      "sha256": "2c5533762ae6621f61ed43bd48c052da9ce8eed8f839ac7ebbb5111b1722334b",
+      "size": 473
+    },
+    {
+      "path": "instruments/glass_bells/samples/glass_48.wav",
+      "sha256": "cab0e461b07189abfa7727fe7d7c8c3696d60cd7f7f5a079814d95be30078608",
+      "size": 211768
+    },
+    {
+      "path": "instruments/glass_bells/samples/glass_60.wav",
+      "sha256": "8b1b4c3f6c81c9abb343ed0cb1b2407fc74b81af8bf3de585e65b47424bc4871",
+      "size": 211768
+    },
+    {
+      "path": "instruments/glass_bells/samples/glass_72.wav",
+      "sha256": "19316001ceecfe0dee4ef3d44139f7f7c5c1a6a5f70caa52ebc7823e2d5c1e4f",
+      "size": 211768
+    },
+    {
+      "path": "instruments/glass_bells/samples/glass_84.wav",
+      "sha256": "294cc0fd2fb5930d3e2b7017000ea416139ca55c9600aa5add7ebe40bb890c87",
+      "size": 211768
+    },
+    {
+      "path": "instruments/mallet_marimba/mallet_marimba.sfz",
+      "sha256": "11d10cc84b8e35d443e307c33e7cfe1382da055f3c420a4215536f6e78922704",
+      "size": 1172
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_48_v1.wav",
+      "sha256": "9fe35a1736f31351ca0f2e2663fce8112c893f62161c52573e49005bdbcbe0f2",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_48_v2.wav",
+      "sha256": "7cb1e792858a939cfcd773834f95ab6eb211993880a0b23cfeff39bdb2e15533",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_57_v1.wav",
+      "sha256": "3316daadf2fca28e9187a7c4228d24a86d8894fbe0b163999728b0c74a1a103e",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_57_v2.wav",
+      "sha256": "133de69bd939a5e32fa0fa5761c7f54d286a8ca2b275aec8770753761b4cd9ee",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_66_v1.wav",
+      "sha256": "905b5b5c69fa0c7c5b80f96b6e6b51eec5af8a9ecef45e70b9018e6b12a7c470",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_66_v2.wav",
+      "sha256": "d155c7dd3679f6f043c97fb703605d42597b695ebb426df4d026563af5c08b7c",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_75_v1.wav",
+      "sha256": "e13a0dd941262ed4ff369686dcd706ffe1df7d2f0998b4a5a2bb68a61bfa9cc4",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_75_v2.wav",
+      "sha256": "e96c8d72b268efb331121bacdac67f632a5bc38297bfc03e9f8f8bfa804451b6",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_84_v1.wav",
+      "sha256": "f8570509179e0cdc3f2d0c4dce3e23a1ca1b111ffd1be731c91047bf5481c70f",
+      "size": 97108
+    },
+    {
+      "path": "instruments/mallet_marimba/samples/marimba_84_v2.wav",
+      "sha256": "bc5eba5add02bed65e3324e889674cfbcdb2bd8d21686041f5422891dac84ab1",
+      "size": 97108
+    },
+    {
+      "path": "instruments/pluck_nylon/pluck_nylon.sfz",
+      "sha256": "70f4f8df102d72d4941c72ba7f4bb4bb76ff7804501018f110375127f3a71ff2",
+      "size": 628
+    },
+    {
+      "path": "instruments/pluck_nylon/samples/pluck_36.wav",
+      "sha256": "d430da2fce6257144bcbac4da906c1e8ea948ebdd60180178383f71eb70600c7",
+      "size": 132388
+    },
+    {
+      "path": "instruments/pluck_nylon/samples/pluck_45.wav",
+      "sha256": "a4946042bbbc37aea09125975d7e0e90867eb6a5d3592d7ac1ab0caee95efc9c",
+      "size": 132388
+    },
+    {
+      "path": "instruments/pluck_nylon/samples/pluck_54.wav",
+      "sha256": "13c74809016d9a5f02bad986f385c23db46636e32eaf4d9c1b2bfd77e6754ffe",
+      "size": 132388
+    },
+    {
+      "path": "instruments/pluck_nylon/samples/pluck_63.wav",
+      "sha256": "efc948a7bd31937bf18238903bae84208525be56603c28ba467d5a0345bda0e1",
+      "size": 132388
+    },
+    {
+      "path": "instruments/pluck_nylon/samples/pluck_72.wav",
+      "sha256": "6a2c167222a9ebba81cfa146b034926c982b4371b912256d5b1150fa95529e6f",
+      "size": 132388
+    },
+    {
+      "path": "instruments/pluck_nylon/samples/pluck_81.wav",
+      "sha256": "fd9d81b981eb2c7c69d6532a97092e9b4f44b67554c27ecdf910fc928ec7372b",
+      "size": 132388
+    },
+    {
+      "path": "samples/bowed_tone.wav",
+      "sha256": "f9e1ca9e9a08029cf835d1898c121db2cbb28cfa30bd5965d335e8e26a7ebf16",
+      "size": 277942
+    },
+    {
+      "path": "samples/breath_noise_burst.wav",
+      "sha256": "186ac605ab9de29f146bf2e03448aa972f7ee60feb0b97af5f4d5769759830de",
+      "size": 105884
+    },
+    {
+      "path": "samples/chord_pad_sections.wav",
+      "sha256": "b15af53259a77f9a2b857e71643faf656f0d75c11943d44cd9fdd45dfe329844",
+      "size": 705688
+    },
+    {
+      "path": "samples/drum_loop_120bpm.wav",
+      "sha256": "2f8c799543c2127865cabb2ceb235f29ce331e6865a666bddff072d97a2f3a5e",
+      "size": 352912
+    },
+    {
+      "path": "samples/glass_ping.wav",
+      "sha256": "b8657c7e637cb33ce3ef74e712885f6d7d46c46e7e57dade57df99a29d022266",
+      "size": 264688
+    },
+    {
+      "path": "samples/gong_metal.wav",
+      "sha256": "48ff6b0da125e0e2c589fc7a8ec38e439be1c8130c7e917a194b113455c01c66",
+      "size": 352888
+    },
+    {
+      "path": "samples/mallet_marimba.wav",
+      "sha256": "ee5ef876eb30d84bdffe6e59977ca664fe1382d06c34b2013e3be105c8f3d714",
+      "size": 158848
+    },
+    {
+      "path": "samples/pluck_string.wav",
+      "sha256": "a5d4d7367b0c303e0e86300c77d0e68fb9e1c8b78e9dde99c12eadccbf72e320",
+      "size": 220588
+    },
+    {
+      "path": "samples/rising_texture.wav",
+      "sha256": "3db2d5ec1ebc819e75deef4fb9105b8fb8670c812c5043ae51fe78d3383fc04d",
+      "size": 529244
+    },
+    {
+      "path": "samples/vinyl_noise_bed.wav",
+      "sha256": "5685c6c0f8cabf1a9017b20710db7e13ace770ca481517e0147124789e2f0f60",
+      "size": 705712
+    },
+    {
+      "path": "samples/voice_sweep_aeiou.wav",
+      "sha256": "3757bea65ab8d546661e6276cc5bc198f3ff2750bf6910ea294f3d0e9d152fd3",
+      "size": 441088
+    },
+    {
+      "path": "samples/vowel_pad.wav",
+      "sha256": "8e2861913b286977afc930eb12298c36d4c01777699c2bb37b28cf1f5c1a91e4",
+      "size": 361732
+    }
+  ]
+}

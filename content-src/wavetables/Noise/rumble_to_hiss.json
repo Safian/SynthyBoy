@@ -1,0 +1,58 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Rumble To Hiss",
+ "category": "Noise",
+ "description": "A cross fade, level matched, from low rumble (noise below the 14th harmonic) to bright hiss (noise above the 120th): the energy moves from the bottom to the top.",
+ "frames": 64,
+ "seed": "rumble_to_hiss",
+ "source": {
+  "type": "mix",
+  "params": {
+   "g1": {
+    "law": "linear",
+    "from": 1,
+    "to": 0
+   },
+   "g2": {
+    "law": "linear",
+    "from": 0,
+    "to": 1
+   }
+  },
+  "inputs": [
+   {
+    "type": "spec",
+    "params": {
+     "lp_cut": 14,
+     "lp_poles": "4"
+    },
+    "input": {
+     "type": "noise",
+     "params": {
+      "tilt": 0.0,
+      "seed": 5,
+      "count": 300
+     }
+    }
+   },
+   {
+    "type": "spec",
+    "params": {
+     "hp_cut": 120,
+     "hp_res": 0.5
+    },
+    "input": {
+     "type": "noise",
+     "params": {
+      "tilt": 0.0,
+      "seed": 6,
+      "count": 300
+     }
+    }
+   }
+  ]
+ },
+ "post": {
+  "limit": 320
+ }
+}

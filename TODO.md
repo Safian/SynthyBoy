@@ -1,0 +1,313 @@
+# SynthyBoy — nyitott teendők
+
+
+
+- [ ] XL, Sbtest / Acid Saw Reso, 524946a1: a Macros nyolc tekerője és a Voice lépésvezérlői nem látszanak, a Mixer és Master elrendezése eltér a docs/screens referenciától, az LFO SOURCE menü sorai felirat nélküliek. Kész, ha ezek a mentett képpel és azonos állapottal egyeznek, és az RND név szerint kiválasztható. Képpárok: .hw-local/mpc-perf/xl-load-incident-7b5a79da/native-screen-comparison.
+- [ ] Key 61: az Sbtest szerkesztője a 7b5a79da skinnel üres. Az XL-en a 524946a1 skinnel megjelentek a Play vezérlői. A Key 61-re telepítés és megnyitás még hátravan.
+- [ ] A natív értékfelirat szerializálása négy komponensben azonos (selector, macro_card, level, pan), a macro_card a button négy függvénytörzsét is másolja (action_art, in_slot, button, action_button). A közös implementáció ugyanazt a skin-adatot adja ki az egyes komponensek saját stílus- és méretértékeivel.
+- [ ] A TUNE és a Name/Value külön build_name_value_definition függvénnyel számítja ugyanazt a mezőgeometriát. Egységesítéskor a TUNE használja a közös gyártót, és az eredeti méret-, érintési és paraméterkötési adatok maradjanak azonosak.
+- [ ] Egységes OFF/inaktív szabály a meglévő production képernyőkön (owner 2026-11-24): az érintett vezérlő/görbe szürke és nem fogad paraméterírást touch/drag/wheel/Q/késleltetett input útján; tárolt érték és visszakapcsolás megmarad, független modul és navigáció tovább használható. A Filter60/40 terv demonstrációja már ezt követi F1/F2 külön powerrel és független NOTE/VELO-val; a natív lapokon való teljes alkalmazás/ellenőrzés még nyitott, ENV másik sessioné.
+
+- [ ] Görbeablakok egységes sarkai (owner 2026-11-24): ahol tényleges modul-ON/OFF létezik, a saját natív power ikon a görbe BAL felső sarkában, a nagyítás/editor JOBB felül legyen; meglévő képernyőkön egyeztesd a Play mintával, valós56px hitbox/görbefogantyú/caption és OFF-visszakapcsolás megőrzésével. Aktiválás nélküli modulhoz nem hozunk létre új állapotot. A Filter60/40 terv már ezt követi, a meglévő production lapok megfelelősége még ellenőrzendő; ENV másik sessioné.
+
+
+
+- [ ] A `ddfa0c14` layout-lint jelentéséből 6 osca/oscc/oscnoise ellipsis-jelzés maradt tisztázandó. Kész, ha a valódi production UI-hoz képest javítva vagy forrásalapon helyesen osztályozva vannak; a lint nem rejti el a valódi vágást. Az ENV 42 coverage-jelzés külön sessionhez tartozik.
+
+
+
+- [ ] MPC-n igazold a Play SMOOTH ActiveText és időpoti bekötését (`044e1808`): ON kék/aktív, OFF szürke, 60×56 px feliratkapcsoló, OFF idő-írásvédelem érintés/adatkerék/Q-Link alatt, LFO-váltás és preset-visszatöltés; RND alatt rejtett. Az offline képek és 17 Python-teszt, valamint a Smooth hostállítások ellenőrizve.
+
+
+## Natív skin, lapváltás és a host ablakainak védelme
+
+- [ ] MPC XL összevont hardveres ellenőrzése a MixerStrip + 6-lapos navigációs sávhoz (halasztva az owner összevont XL körére a koordinátori integráció után, ág: `agy/gemini-worker-5d82d10bb1`):
+  - **Helyben lezárt és igazolt részek (2026-11-24)**:
+    - `MixerStrip` / `MixerStripHeader` / `SoloMutePair` / `CalibratedFader` / `MeterBlock` valódi példányosítása mind a 10 csatornasávban, zárásból számolt többállapotú `FilmStrip` + 56×56 érintési zónák, kalibrált `-60..0 dBFS` mérőskála, `components/colors.json` & `sizes.json` tokenek, `docs/screens/mixer.jpg` valódi definíciókból generálva.
+    - Állandó 6-lapos alsó sáv (`MIXER`, `FLT 1`, `FLT 2`, `MAIN FX`, `BUS 1`, `BUS 2`) mind a 36 nézetváltással és `y=566..622` kizárással a dokkolt Filter/FX szerkesztőkben (`0..564 px`).
+    - Appended read-only ABI (`856..876`, Mod `850..855` eltolása nélkül). Offline tesztek: `synthyboy_test_own_engine_fixes`, `mixfx_ui_host`, `mixer_native_ui_host`, `test_native_mixer_components.py`, `test_ui_screen_mixer/filter/fx.py`, `test_native_component_isolation.py`, `test_mpc_skin_no_fallback.py -k mixer` 100% zöld; ARM64 overlay csomag SDK-validálva: `/tmp/synthyboy-501/4158281046/mpc/package/Safian - VST - SynthyBoy` (`synthyboy-arm64.so` sha256 `212d4af423879873268751cfa0f370e039ec9965bc1708cb8a5e65b4de49e937`, `synthyboy-overlay-gpu-arm64` sha256 `0097a3272ea66f782ff50a8953e947e15d0e8929107eb14464e9fd7aa6871ad7`).
+  - **Nyitott fizikai MPC XL próba (összevont körben)**:
+    - Hardveres touch/vizuális próba (`xshot.sh`): Solo/Mute/Implicit Dim/Source OFF/Master FX FilmStrip állapotok (megjegyzés: transient `pressed` külön `Button` host paraméter hiányában hardveres visszajelzés nélkül), -60..0 dBFS mérők, és mind a 6 alsó tab átkapcsolása + fader/Q-Link megőrzése `FLT 1..BUS 2` nézetekből; előző visszautasított `/tmp/sb-mixer-recovery-xl` törölve, eszközre írás visszatartva.
+    - Natív filmstrip animációs alternatívák későbbi kutatása (külön késleltetett vizsgálat az owner kérése szerint, most nem indul).
+
+- [ ] A Macro-célzott ellenőrzés közben jelzett `layout_lint_host` ENV ADSR/SHAPE/TIME 0%-coverage hibák okát igazold/javítsd (`c572ea2d` archivált jelentés); a Macro lap 0 hibát adott. Kész, ha az ENV saját layout/coverage szerződése helyes és az érintett lint tiszta.
+
+
+
+
+
+
+
+
+
+
+- [ ] Natív JSON-közösítési információk (2026-11-24, a folyamatban lévő képernyőrefaktorhoz nem nyúlunk): `scripts/native_play/osc.py:243–244` két azonos Pan-definíciót regisztrál; `98_filter_native.py:309–342` a jelenlegi szerződésből 14 Knob+Label és 3 Button+Label párt épít; OSC/ENV-LFO 4+5 teljes menümásolatot készít; `53_lfo_smooth.py:184–190` négy hasonló CURVE/SCALE readoutot. Refaktor után értékelendő: közös Pan-típus, feliratos Level/Pan/Button és readout variáns, közös popup-alaptörzs; kész, ha a tényleges végső JSON-on igazolt a csökkenés, a marker/action/remap/gate/fókusz/Q viselkedés változatlan. A MacroCard és a teljes Filter-felület már közös definíciókat használ, ezek nem új JSON-megtakarítások.
+- [ ] Natív Python-kódmásolatok: MacroCard a Button hat függvényét másolja (103 sornyi azonos AST-jű függvény), Tune saját kb. 300 sornyi NameValue-családot tart fenn; Pan/Level filmstrip és felirat backend közel azonos; ENV telepítés két forrásban szerepel, de a guard megakadályozza a kétszeres JSON-kibocsátást. Az importtilalom eltörölve (`21b493e6`). Refaktor utáni közösítés akkor kész, ha publikus alapkomponens-API-kat használunk másolás helyett, a függőségek hordozható csomagolása megmarad, és nem számolunk Python-sorcsökkenést JSON-byte-megtakarításnak.
+- [ ] A `components/native/tune/tune.py:build_standalone_osc_tune_definitions` `skins_dir` esetén `with_button_art=False` mellett is meghívja a `_write_tune_button_assets` függvényt. Kész, ha a kapcsoló meghatározott szerződése szerint elmarad a tiltott/felesleges PNG-írás, és a definíciók által igényelt assetek továbbra is rendelkezésre állnak.
+
+
+- [ ] MPC-n ellenőrizd a kompakt Play/Sub OCT cím–érték mezőt és a szélesebb WAVE választót (`3f9f847b`): érintés/numerikus lista −4…4, Q-Link, OFF írásvédelem és natív/overlay érintési határok; OSC hullámválasztó és Noise FILTER mező változatlan. Kész, ha az aktuális csomaggal a gépen igazolt.
+
+
+
+- [ ] Play natív PAN/LEVEL fölötti LFO/modulációs animáció: `BasicControls::setNativePanLevel` a C++ potikat elrejti (`shell-mpc/ui/composite.h`), ezért a natív átállásnál külön igazolandó/megőrzendő a saját overlay modulációs íve és élő jelölője. Kész, ha az alapértéket és érintést a natív kék poti kezeli, az overlay csak a valós modulált kitérést rajzolja helyes geometriával, nincs dupla alaprajz/input, és OFF állapotban helyes.
+
+
+
+- [ ] A Play-worker skinvizsgálatában a Voice Native Grid Bar PAN 1 RangedEnabling gate elvárása eltért (`hidrogen-worker-27452a1d31` archivált jelentés); kész, ha a Voice felelőse igazolja a helyes gate-et és az érintett elvárást.
+
+- [ ] A Play aktuális, saját natív komponensekből készült teljes képernyőjét vesd össze a rendelkezésre álló komponensreferenciákkal a Smooth-bekötés után; a szomszédneves irány visszavonva.
+
+- [ ] A Level `compact_dial_definition()` és `build_native_smooth_dial_with_indicator_definition()` végső natív knob adata még `GenericLegacy`, miközben az elfogadott képek saját kék Levelt mutatnak (`components/native/level/level.py`; használók: `82_play.py`, `96_env_native.py`, `99_ui_screen_env.py`, `scripts/native_play/osc.py`). Kész, ha minden érintett végső skin-definíció és a becsomagolt képkészlet az elfogadott kék Level/Pan változatot használja, azonos kötésekkel; a preview-k javítása önmagában ezt nem oldja meg.
+
+- [ ] A képernyőintegrációk előtti, 2026-11-24-én mentett overlay csomag `Plugin Skins/TUI.json` fájlja 750 460 bájt volt; a Sub/Noise azonos generátorállapotú mérése 802702→805106 (+2404), ebből a MORE törlése −499 bájt; a korábbi Macro integrációval 806804 bájt. Az aktuális teljes generált LFO-csomag `f0d4b8aa` állapotában 886887 bájt (bizonyíték: `~/.local/state/agy-profiles/reports/f0d4b8aa106ccb226015576a5fb7dc750514b678/lfo-evidence`). A kapu szigorúan 750 000 bájt alatti méretet követel. Kész, ha a Play/OSC, TUNE, Voice és Macros változásokat tartalmazó tényleges release skin mérete a kapu alá kerül, és a közösítés megőrzi a fókuszt, a vezérlők kötéseit és az SDK ismételt JSON-kulcsait. (korábbi worker leállt, beolvasztott ága/worktree-je takarítva; helyi fájljai és a 750460 bájtos régi skin visszaállítható mentése: `~/.local/state/agy-profiles/archives/merged-worker-cleanup-20261124/screen-skin-size/`; a méretcsökkentés továbbra is nyitott)
+
+
+- [ ] MPC-n ellenőrizd a nyolc alsó makrókártyát (`ddfa0c14`, `c356ae0a`): hardveres bank1=makró1–4 és bank2=5–8 kiosztás érintés/fókusz után is fix, Gen1 számozatlan Q/keret és Gen2 keret nélkül. Nyisd meg mindkét makróbank négy célgombját. Kész, ha mind a nyolc a saját modulációs céllistáját nyitja, a visszalépés a Macros lapra visz, és egyik makró értéke sem változik.
+
+
+
+- [ ] MPC-n ellenőrizd az OSC A/B/C 48 px-es fejlécét. A PAN és LEVEL érintésre és fizikai Q-Linkkel csak a kijelölt oszcillátor saját paraméterét állítsa. A ROUTE az aktuális célt mutassa, a listából választott cél maradjon meg példányváltás után. OFF állapotban mindhárom vezérlő legyen védett.
+
+
+- [ ] Közös, balról nyíló natív listaválasztó a Gemini-kvóta visszatérése után: kösd be a Play OSC, ENV és LFO/RND modulfejléceibe, a WAVE és SHAPE értékmezőibe, valamint az önálló OSC modul- és forrásválasztóiba. A zárt WAVE mező 202 × 56 px, a környező hézag ezen felül értendő. A fejléc zártan az előző, aktuális és következő modul nevét mutatja; a SHAPE megtartja a feliratát, az értéket és a két léptetőnyilat. Középen érintve mind ugyanazt a gyári bal oldali listát nyitja: az adott választóhoz tartozó cím és nevek, pipa az aktuális soron, egy érintés választ és zár. Modulválasztáskor csak a szerkesztett példány változzon; WAVE/SHAPE választás csak az adott példány hullámformáját írja. A meglévő fizikai Q-Link-kötések maradjanak. Kész, ha a Play és az OSC lapokon a megfelelő lista nyílik és csak a kiválasztott példány vagy érték változik. Reprezentatív XL-próba egy modulfejléccel és egy értékmezővel.
+
+- [ ] MPC-n ellenőrizd az OSC A/B/C TUNE panelt. A numerikus választó és a fizikai Q-Link az aktív oszcillátort állítsa (OCT/SEM, FIN, CRS, TRACK), a másik kettő értékei maradjanak meg. A MORE utáni visszalépés ugyanarra az oszcillátorra vigyen. A `68f85518` elrendezést tartalmazó csomag azonosítóját, az MPC típusát és a kézi Q-Link-tekerés előtti és utáni paraméterértékeket mentsd a közös `.hw-local/mpc-perf/` alá.
+
+- [ ] XL-en ellenőrizd a natív Play/Sub standby-javítást egyperces kijelzőpihenővel és ébresztéssel. Kész, ha pihenőben megmarad az overlay, ébresztéskor ugyanaz a Play/Sub nézet és példány látszik. A korábbi hibát rögzítő mérés: `.hw-local/mpc-perf/xl-mainfx-20261123-G5hD/idle-result.md`.
+
+- [ ] A további lapok fix keretei, paneljei, feliratai és helyhez kötött Q-számai kerüljenek a natív skinbe; a szabványos gombokat, kapcsolókat, tekerőket, értékeket és listákat az MPC natív UI jelenítse meg és kezelje. A saját réteg a szükséges görbeanimációkat és a vezérlők körüli automatizációjelzést rajzolja. A Play lappal kezdve ellenőrizendő a natív érintés, Q-Link, presetváltás és az OFF állapot írásvédelme; vezérlőnként egyetlen bemeneti út legyen. Laponként váltási idő, CPU, helper µs/kép, fps és cache/indítás; Key 61 az XL után. `docs/plans/host-skin-background.md`.
+
+## Tulajdonosi döntések és meghallgatásra váró tételek
+
+- [ ] A gyári presetek meghallgatásánál vezesd át a még érvényes oktáv- és hangerőészrevételeket, és a kipróbált csomaggal együtt rögzítsd az elfogadást. A név szerinti munkalap: `docs/release/preset-todo.md`.
+- [ ] Vital V6: a külső referenciaanyag áthelyezésének tulajdonosi megerősítése (`docs/plans/vital-removal.md`, V6).
+- [ ] Döntsd el a Voice SCALING és TARGETS blokkok helyét a Master → VOICES nézetben, és rögzítsd az elrendezést a Master-tesztben (`SIMPLIFY.md`, M8).
+- [ ] Osc oldalak, owner-döntés: a tartalom-típusok (multiminta, minta, spektrális, szemcsés) Basic Q-csoportjában a 2. hely (a FORRÁS) üres, mert a forrás fájl, nem paraméter; a csoport most nem zár fel háromtagúra. Kész, ha az owner dönt (felzár / marad), és a `qslots_host` követi.
+- [ ] Válaszd ki a Play negyedik Q-csoportjának negyedik tagját (oszcillátor, envelope vagy LFO), és valósítsd meg virtuális Q-ként, 128 kattintásonként 5–10 bejegyzéssel.
+- [ ] Döntsd el, kell-e MPC-n hullámtábla-szerkesztő és .vital/.serum presetimport, majd valósítsd meg a jóváhagyott funkciókat.
+- [ ] `agy/g84-reduced-set-proposal` (csökkentett preset-készlet): az owner döntésére vár.
+- [ ] `work/sound-batch-3` (24 új preset): meghallgatásra vár.
+- [ ] Master GLIDE a VOICE OPTS helyett a Q-Linkeken (koordinátor-javaslat alapján alkalmazva, owner visszafordíthatja; `shell-mpc/ui/voice_master.h` `buildGroups`: a VEL TRACK, SAME NOTE, STEAL csak érintéssel). Kész, ha az owner jóváhagyta vagy visszafordította.
+- [ ] OSC POWER Q-Linkről: a 6 kattintásos lépés-szabály minden stepped célra egyforma (6 kattintás után az oszcillátor kikapcsol; 1 és 5 kattintás nem változtat, `shell-mpc/tests/q_step_rule_host.cpp` `testNudge`). Kész, ha az owner megerősíti, vagy kér erősebb küszöböt csak az OSC POWER-re (paraméterenkénti tábla a `q_step_rule.h`-ban).
+- [ ] 18 preset v127–v64 különbsége 14 dB fölött van (Breakbeat Slice Keys 18,6, Lo-Fi Rhodes 18,4, Nylon Zone Pluck 17,4, Glass Zone Bells 17,1 …): erősebb dinamika, mint a gyári 8–12 dB. Owner-döntés kell, kell-e kezelni.
+- [ ] A Key 61-en hasonlítsd össze hallásra egy 16 hangos Spectral akkord késő szólamait 900 és 1700 µs indítási kerettel. Rögzítsd a tulajdonos által elfogadott értéket.
+
+## Rajzolási költség, animáció és kijelző-architektúra
+
+- [ ] Statikus és animációs réteg szétválasztása a kijelzőn (owner, 2026-11-21): a nem változó elemek (keret, gombok, feliratok, pl. az LFO nagyítás-gombja, a kész hullámalak) egyszer rajzolódnak egy statikus képbe, és minden képkockán csak az animált elemek számolódnak újra: az LFO-nál szerkesztés közben a hullámvonal, lejátszáskor csak a futáspozíció pöttye; az FX-nél csak a görbe mozgatás közben. Állapotgép: egy elem „anim" állapotban az animációs rétegre rajzolódik, az animáció végén a végső (amúgy is beálló) állapota a statikus képbe kerül, és az animációs rétegről lekerül. Kész, ha a rajzoló így működik (statikus gyorsítótár + kis animált téglalapok), és a Key 61-en mérve kevesebb a GPU- és processzoridő képkockánként, ugyanazzal a látvánnyal. A g117 (közös sík, beillesztés) után, mert ugyanazokat a rajzoló-fájlokat érinti. Mérd meg a tényleges rajzolási időt XL-en is.
+
+## Hangszintezés, pad-dinamika és presetmérések
+
+- [ ] A Key 61 sweep CSV-jét és a hangszinttáblát összevetve tisztázd hat preset eltérését: Dyno Electric Piano, Lo-Fi Rhodes, Utility Width Keys, Vintage Electric Tine, Vocaloid Lead és Lorenz Garden. Rögzítsd az okot vagy a javítást (`.hw-local/mpc-perf/level-sweep-k61-full/verify-report.md`).
+- [ ] Mi volt az XL-en a „2/3" olvasat: a koordinátor szerint mentett, szerkesztett példány (−17,3 dB a gyári −13,6 helyett). A régi projekt és a frissen választott gyári preset nyers mérési sorait azonosítsd, hogy a különbség oka igazolható legyen.
+- [ ] Négy preset ütésről ütésre ingadozik (Lo-Fi Rhodes 5,2 dB, Spectral Vowel Freeze 3,2, Vintage Electric Tine 3,4, Lorenz Garden 1,8; véletlen fázis vagy moduláció; az első ütés a betöltés után 3 presetnél a leghangosabb). A szintezés egyetlen offline renderre épül, tehát a csúcsok és az akkord-korlát (−0,55 dBFS) egy húzásra szól. Kész, ha a szintező több húzás maximumával számol (vagy az ingadozás okát megszüntettük), és a limiter nélküli akkord-szabály mért tartalékkal teljesül.
+- [ ] Három preset állandóan eltér az offline táblától a Key 61-en: Vowel Table Lead +2,0 dB, Frozen Aurora +1,7 dB, Vocaloid Lead −2,5 dB (a `tierTrimDb` nem magyarázza: Vocaloid Leadnek 0 a trimje). Kész, ha az ok megvan (a `level_probe` `low` profilja eltér az eszköz tényleges beállításaitól?) és az offline szám egyezik az eszközzel 0,5 dB-en belül.
+- [ ] Pitch Drop 808: az 1. v64 ütés a betöltés után 4,25 dB különbséget adott, a további ütések 6,09 dB-et (offline 6,12): a betöltés utáni első ütésnek más a szintje. Kész, ha az ok ismert (`master.volume` rámpa vagy első-ütés hatás).
+- [ ] Key 61, 2026-11-20 20:21: a példány Master oldalán a `master.volume` +6,0 (Q-Link 1 végig felfelé, a play-log `setParameter 2703 (Q 1, real 0)` 44 lépés), a `lfo1.shape` 12, `quality.oversample_4x` 1, `quality.no_smoothing` 1, `master.voice_override` 1 is eltért a gyári presettől; a play-log egyiket sem mutatja `setParameter`-ként. A gyári Acid Saw Reso hook-os újratöltése után mind gyári (−4, 0, 0, 0, 0): a telepített preset rendben van. Kód szerint megerősítve: az overlay érintéses írásai a `PluginInstance::uiWrite` → `writeRealParam` útján mennek (`shell-mpc/synthyboy_mpc.cpp` kb. 1022. sor), ott nincs `PlayLog::line`; a play-log csak a host `setParameter` hívásait (kb. 3049–3109. sor) naplózza, ezért az owner érintéses szerkesztései (a kapcsolók, az LFO-szerkesztő V-alakja → `lfo1.shape` 12) nem látszanak benne; a `master.volume` +6,0 az owner szándékos Q-Link állítása volt: a play-log ne csak a host hívásait, hanem az overlay paraméter-írásokat is naplózza forrásmegjelöléssel. Kész, ha a log megmutatja, ki állított egy paramétert (host / Q-Link / overlay-érintés / hook).
+
+## Telepítőcsomag, licenc és eszközdiagnosztika
+
+- [ ] Régi `.hw-local/TODO-MPC.md` (2026-11-14) még nem ellenőrzött pontjai: burkoló-görbület összevetése a host `Envelope` Quadratic rajzával (`docs/MPC.md:436`), G2 csatorna-aftertouch (0xD0) a nyomás→cutoff rétegben (`docs/MPC.md:748`), G3/G5/G9, MPCe Q-Link Mode X/Y → Macro 1–2 (mérés kell, `docs/MPC.md:724`), pad-világítás plugin felől (`docs/MPC.md:724`), automatizálás-felvétel (`LFO n Cursor` / `Spectrum n`), kétsávos próba (második SynthyBoy-sáv a hardveren, `docs/MPC.md:922`), Serum-preset 1:1 minta (owner), és Open MPC katalógus megjelenés és metaadatok (owner). Kész, ha mindegyik igazolt vagy elavultnak minősítve törölve; utána a régi fájl törölhető.
+- [ ] Kiadásjelölt: a két architektúra csomagolását igazolni kell az Open MPC SDK `tools/release.py` útján valódi kiadási bemenettel.
+- [ ] A .hw-local és a worker-feladatsablonok fejlesztési és tesztparancsaiban csak a célgép architektúrája szerepeljen (Key 61: --arch arm32, XL: --arch arm64). A kettős build a kiadásjelölt és a kiadás feladata.
+- [ ] Az önteszt-build (`SYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON`, LFO_LIVE_HZ=25) betöltése után a preset neve mellett `Acid Saw Reso *` (módosított-jelző) jelent meg az XL-en, a normál csomaggal nem (mérés: `.hw-local`-független scratchpad meter-redraw/, 2026-11-21). Kész, ha az ok ismert: az önteszt paraméter-írása betöltéskor vagy a build állapota; ha az írás okozza, a kimeneti paraméterek írása nem jelölheti módosítottnak a projektet.
+
+## Valós idejű terhelés, szálak és spektrális indítás
+
+- [ ] A tier_bench a --retry-invalid kimerítése után is felhasználja az érvénytelen modulmérés mediánját (bench/tier_bench.cpp, runGated). A modul- és A/B-összesítés utasítsa el az érvénytelen mérést, és regresszióteszt igazolja ezt.
+- [ ] A Key 61-en futtasd a valós idejű ütemezést megkövetelő modulmérést és az interferencia-összehasonlítást. Rögzítsd a modulonkénti költséget, a p99 szórását, a CPU-affinitást és az ütemezést (scripts/perf-device.sh, modules és e1 fázis).
+- [ ] 18. A mérőprogram más `libm`-et használ, mint az eszközön futó plugin; kivételkezelés és RTTI bekapcsolva a DSP-könyvtárakban.
+
+## Memóriahasználat és motorvezérlés
+
+- [ ] Szűrőaréna T2: a visszavont 2c6f282b / f8b208f5 változatra a családváltási teszt a javítással is bukott. Azonosítani kell a maradó mintát és az érintett családot. Csak zöld állapotváltási teszt és mért memóriaelőny után integrálható. Lásd `docs/plans/memory-footprint.md` és `core/tests/test_own_filter_styles.cpp`.
+- [ ] 10. Memória: minden szűrő 14 késleltetővonalat foglal, a `LibOsc` hangonként előre lefoglal mindent; 60–80 MB munkakészlet, hideg gyorsítótár a Key 61-en.
+- [ ] A dekódolt oszcillátortartalom külön `ContentSet`-átvétele az `OwnEngine::process` elején változó publikáció alatt felső határ nélkül ismételheti a hazard-pointer ellenőrzést. Kész, ha a hangszál rögzített számú művelet után biztosan érvényes állapotot olvas, a hangszálon nincs felszabadítás, és a vizsgálat gyors párhuzamos publikációnál is igazolja ezt.
+- [ ] Key 61-en hasonlítsd össze a generikus ARMv7 kiadási beállítást a Cortex-A17-re hangolt, majd külön a -fno-math-errno és LTO változatokkal. Rögzítsd az A/B/A mérést és a renderelt hang egyezését a kapcsolók átvétele előtt.
+- [ ] 6. A `Voice` 33 KB, a forró és hideg mezők keverve; minden oszcillátornak saját 24,6 KB-os morph-munkaterülete van; kb. 3500 apró foglalás példányonként.
+- [ ] 7. Egyetlen paraméter mozdítása minden blokkban újramásolja mind a 2637 paramétert, újrafordítja a mátrixot és újraszámolja a hangolást (Q-Link tekerésnél tüske).
+- [ ] 8. Ellenőrizd az MPC-n futó motor denormális-védelmét a két ARM célon.
+- [ ] 11. Az importált presetek 4x túlmintavételezés-kapcsolója a „low" szinten nincs korlátozva; a „low" szint 5 effektet teljesen kihagy 31+ gyári presetnél, takarékos pótlék nélkül.
+- [ ] 12. `process()`: fölösleges nullázás és felülírás, néma buszok feldolgozása, egy `assign()`, ami túlméretes mono blokknál foglalhat.
+- [ ] 13. MPC shell: az eseménysor pörgő zárat használ; a preset betöltése 2637 paramétert egyenként ír (szakadozó hang presetváltáskor).
+- [ ] 14. Nulla hangerejű, de még aktív hangok teljes költséggel futnak; a kijelző-visszaolvasás `exp` / `log10` hívásokat végez a hangszálon.
+- [ ] 16. A saját motor SIMD-puffereinél mérd meg, melyik forró ciklus költsége függ az igazítástól. A `fastmath::log2` pozitív normál számot vár. Ellenőrizd a hívókat, beleértve a kompresszor `powG` útját, és a ténylegesen elérhető szélső értékekhez adj regressziót.
+
+## Oszcillátorok, szűrők és moduláció
+
+- [ ] Az own engine PZ SVF hangútja nem használja a presetben tárolt `content.filterCurves` pontokat. A `core/filters-serum/src/filter.cpp` PZSVF ága a BLEND-del az LP és a notch kimenet között kever. Kész, ha tiszta specifikáció alapján a tárolt görbe hallható hatását és a viselkedést render- és preset-regresszió igazolja.
+- [ ] Az O5 döntéséhez mérni kell a sávhatár költségét és a maradék aliasingot (`wt_osc.h`, `test_own_alias_warp_*.cpp`, `docs/plans/distortion-antialiasing.md`).
+- [ ] 1. (maradék) Diódalétra: a `gSafe <= 0.95` korlát ott megmaradt (10,67 kHz 44,1 kHz-en), mert a visszacsatolásában egy mintányi késleltetés van, és a korlát emelése instabillá tenné (`core/filters-serum/src/filter_dsp.h`, `DiodeLadder`). Kész, ha a visszacsatolás késleltetés nélküli megoldásra van átírva és a létrák stabilitási tesztjei rá is átmennek.
+- [ ] 2. A decimáló szűrő unison-hangonként fut, nem egyszer az összegen (`core/engine-own/osc/wt_osc.h`): nagy CPU-nyereség várható.
+- [ ] 4. Warp előtti sávhatár `3.2 * sampleRate` 4x túlmintavételezésnél. Szúrópróba: a szám megvan (`wt_osc.h:672`), de a 2–3,2 fs közti összetevők a hallható sáv fölé tükröződnek és a decimáló kiszűri őket; csak a nemlineáris warpok keverhetik vissza. Feltevés, mérés dönti el.
+- [ ] 5. Kemény nemlinearitások és hard sync csak túlmintavételezésre támaszkodnak (a „low" szinten 2x), és mintánként `libm` hívások futnak (`core/engine-own/osc/warp.h`): ADAA / BLEP és polinomos közelítés.
+- [ ] 9. Mintánkénti `pow` / `tan` / trigonometria és osztás a szűrők belső ciklusában (`core/engine-own/voice/filter_unit.h`, `core/filters-serum/src/filter_dsp.h`, `filter.cpp`, `classic_filters.h`).
+- [ ] 11. Nyers NEON lebegőpontos összehasonlítások maradtak (`wt_osc.h`, `core/spectral/src/kernels.cpp`), ARMv7-en skalárra esnek vissza.
+- [ ] 12. Spektrális morph: teljes 2048 pontos komplex IFFT a fél méretű valós helyett, magas hangoknál is.
+- [ ] 16. A szűrő vágási frekvenciája lineáris Hz-ben simít 5,5 ms-mal: elkeni a gyors szűrőburkolót.
+- [ ] 17. (maradék) Granulár hurok-átúsztatás, szélső esetek (`docs/review/GRANULAR-LOOP-CROSSFADE-ANALYSIS-2026-11-20.md`, Q6): ha a hurokhatár a fájl szélétől 1–2 mintán belül van, az interpoláció a fájlon kívüli (nulla) mintát is érinti; ha se a hurok előtt, se utána nincs elég anyag, az átúsztatás a rendelkezésre álló hosszra rövidül, teljes fájlos huroknál megszűnik. Eldöntendő, kell-e ezekre külön megoldás (pl. körbeforduló olvasás).
+- [ ] 21. Zajgenerátorok: 44,1 kHz-re rögzített együtthatók; a zajszűrő és a hangmagasság a 4–8. színt kihagyja; a sample-zaj mindig „high" minőségben fut.
+- [ ] 23. Mip-szint váltás átúsztatás nélkül: hallható ugrás hajlításnál.
+- [ ] Mérd meg a hangfrekvenciás mátrixmoduláció többletköltségét Key 61-en a jelenlegi 32 mintás lépéshez képest, váltott tier_bench futással. A mérés alapján valósítsd meg az XL kijelölt céljain (hangmagasság, vágás), és határozd meg a Key 61-en használható beállítást.
+- [ ] 25. (maradék) A tétlen globális LFO-k 0 hang mellett is lépnek (`core/engine-own/own_engine.cpp:1159-1178`).
+- [ ] 27. Ellenőrizd a skalár és NEON út bitazonosságát a motor összes vektorizált útján. A hullámtábla-oszcillátor (`wt_osc.h`) és a spektrális kernelek (`core/spectral/src/kernels.cpp`) is szerepeljenek a lefedettségben. Az azonos bemenetű összehasonlítás mellett a fordított kódon is ellenőrizd az FMA és a közelítő reciprok hiányát az érintett aritmetikában.
+
+## Effektek, zengető és kimenet
+
+- [ ] Zengető/Convolve: V0 rögzítés, `docs/plans/reverb-convolve-baseline.tsv`, az eszközös futások és a 2. köteg (R2, C3). Kész, ha a terv összes kötege a develop-ban van.
+- [ ] Torzító: a megvalósult ADAA, 2× OS és X-Shaper mérését a profilonkénti regressziók alapjaként használni. A még problémás spektrum vagy szint konkrét típusát azonosítani kell új algoritmus előtt. D1/E7–E9 az XL-profilon; mért kiindulás: `docs/dsp-knowledge/antialiasing.md`.
+- [ ] 4. Konvolúció: egyenletes 128 mintás partíciók (33,5 MB), komplex FFT valós adaton, impulzuscsere átúsztatás nélkül, adatverseny a `live.tone`-on (`core/fx-serum-b/convolve.cpp`, `fx_modules.cpp:1014`).
+- [ ] Zengető: a 2,36 MB-os közös aréna megtartásával ellenőrizni a mintánkénti trigonometria/osztás költségét és a Nitrous Space csillapítását. Bitazonos referencia és eszközmérés: `docs/plans/reverb-convolve.md`.
+- [ ] 6. Késleltető HQ mód: a 8 pontos Lagrange 56 osztást végez mintánként és csatornánként. Szúrópróba: igaz, beágyazott ciklus osztással (`core/engine-own/fx/fx_dsp.h:65-80`).
+- [ ] 7. (maradék) Bode frekvenciatoló: mintánként 64 egész modulo és 4 trigonometria (`core/fx-serum-b/bode.cpp`); a Hilbert-szűrő 800 Hz alatt gyenge.
+- [ ] 10. Szinte minden effekt 32 mintánként lépteti a paramétereit (lépcsőzaj); a „low" szinten a chorus 4, a phaser 8 mintáig tartja az értéket.
+- [ ] 12. Hyper / Dimension: 11 puffer ugyanazzal a jellel, mintánként akár 23 `sin` / `cos`; a Dimension 0% mixnél is fut.
+- [ ] 14. (maradék) Torzító: a szűrő Q-ja nem a specifikáció szerinti (lineáris `k = 2 - 1.9r` a `Q = 0.5 + 15.5 r^3` helyett: `core/engine-own/fx/fx_effects.h`, `Distortion`).
+- [ ] 15. EQ: osztás mintánként sávonként; mind a 4 sáv együtthatói 32 mintánként újraszámolódnak akkor is, ha nem változnak; torzulás a Nyquist közelében.
+- [ ] 16. (maradék) Effektlánc: bekapcsoláskor 0,73 ms-os felúsztatás, kikapcsoláskor nincs leúsztatás (kattanás, levágott lecsengés); sorrendváltásnál nincs átúsztatás; a 255 mintánál hosszabb késleltetés csendben csonkul; a némított splitter-sávok effektjei is futnak.
+- [ ] 17. Chorus: rögzített nedves szint a hangszámtól függetlenül (1 és 4 hang között szintugrás); phaser: nincs denormális-védelem a visszacsatolásban; a szinkronizált LFO-k nem igazodnak az ütemhez.
+- [ ] 18. Öt effekt (kompresszor, Hyper, Utility, Bode, konvolúció) 0% mixnél sem marad ki a „low" szinten; a lecsengés-tartás 20 másodperc minden típusra.
+
+## Halasztott funkciók (Release utáni MPC backlog)
+
+- [ ] Döntsd el, szükséges-e kiadás után a paraméterzár és a MIDI learn az MPC-n.
+- [ ] Bíráld el a nagyfelbontású hullámtábla, Round Robin hangprioritás, külön burkoló-kezdőpont és a zajoszcillátorba küldhető hullámtáblakeret igényét.
+
+## Integráció, mérési alapok és tudásanyag
+
+- [ ] A hangot érintő köteg végén add át az érintett preseteket és ellenőrizd az alapokat, a szinttáblát és a kaput. A fennmaradó motorfeladatok: spektrális külső FFT ritkítása, hullámtábla-pásztázás simítása, sample/granulár mip-választás, mátrix előszámolás, splitter késleltetés-kiegyenlítés, többsávos kompresszor fázisa, hangszám-erősítés a perióduson belüli leütéseknél.
+- [ ] Minden hangot változtató javítás után: a bitre azonos alapok (refcompare, paraméter-audit, arany renderek) és a preset-szintek újraellenőrzése egyszer, a javítási kör végén.
+- [ ] Tudásmappa (`docs/dsp-knowledge/`, 2026-11-21 megkezdve): a szakirodalmi forrásokat (Bristow-Johnson, Brandt, Dattorro, Bencina, Zavalishin, MPE, SFZ, ARM Cortex-A17) meg kell nyitni, és a `sources.md`-be idézettel bevezetni; a meglévő tervekből (`docs/plans/`) az ellenőrzött tényeket a témafájlokba kell átvinni. Kész, ha minden témafájl minden állítása mért, megnyitott forrás vagy teszt, és a `sources.md` nem üres.
+
+## Nyilvános kiadás és közösségi katalógus
+
+- [ ] A nyilvános pillanatkép előtt ellenőrizni kell a forrást, a hangtartalom és a csomagolt fájlok eredetét, a licenceket és a személyes vagy belső adatok kizárását. A tulajdonos ellenőrizze a SynthyBoy név használhatóságát (`docs/NAMING.md`).
+- [ ] A megtisztított pillanatkép első commitjához a publikus fiók helyi git-azonosítója szükséges. Az átadás feltétele a tulajdonos által jóváhagyott fa, a CI sikeres futása, a fiók és az ágak védelmének ellenőrzése, valamint a közreműködési dokumentumok véglegesítése.
+- [ ] A végleges csomagon ellenőrizni kell a kijelzőréteg kikapcsolását, a hiba okának megjelenítését és a használható host-felületet hiba esetén. A kiadási README, a magyar és angol telepítési útmutató, valamint a fejlesztői UI-leírás az elfogadott csomagot és annak mért adatait írja le.
+- [ ] A két végleges ZIP-hez rögzíteni kell a SHA-256 összeget. Telepítsd magából a ZIP-ből az armv7 csomagot a Key 61-re és az aarch64 csomagot az XL-re. A katalógusellenőrzés, a készüléken végzett CPU-próba és a két firmware-rel dokumentált teszt (`tested.json`) ugyanahhoz a kiadási verzióhoz tartozzon.
+- [ ] Kiadás után, tulajdonosi jóváhagyással véglegesítendő a katalógusbejegyzés a kiadási képpel és a taggel, majd következik az Open MPC PR és a közösségi bejelentés. A további közösségi feladatok és feltételeik az átadási lista C3–C8 soraiban vannak. Részletes átadási lista: `Akai/.hw-local/kiadas/kiadasi-ellenorzolista.md`.
+
+## Végső hardveres ellenőrzések — egy közös készülékteszt
+
+- [ ] Egyeztesd a docs/release/DEVICE-CHECKLIST.md nyitott készülékpróbáit a végleges csomag jegyzőkönyvével.
+
+- [ ] XL-en a telepített közös .xpl készlet böngészőcsempéjéről nyisd meg a listát és tölts be egy presetet; rögzítsd a csomagot, a firmware-t és az eredményt (`docs/RELEASE.md`, „Standalone .xpl generation”).
+- [ ] Ellenőrizd az XL USB-egér mutatójának kattintási pontját és rétegsorrendjét, valamint a Key 61-en a kattintást és a görgetést a plugin lapján (`docs/release/OPEN-QUESTIONS.md`, A5–A6).
+
+### Natív felület, lapváltás és rajzolási idő
+- XL-en és Key 61-en igazold az alap- és MORE-nézetek vezérlését és kompozit képét, majd mérd a helper, a GPU és a rajzolószál költségét az eredeti nézethez képest (docs/ui-map/bold-cut-mac-audit.md).
+
+- [ ] XL és Key 61, mentett OFF modulok: Play SINE/OCT/PAN/LEVEL, az önálló OSC A/B/C/Sub/Noise és Filter F1/F2, PEEK, FX slot-kártya és szerkesztő. Az OFF blokk szürke marad és az animációja áll, a piros POWER és az írásmentes forrásválasztás elérhető. Érintés, húzás és fizikai Q-Link ne nyisson tiltott szerkesztőt és ne írjon paramétert. Mentett OFF állapot visszatöltésekor a debug számlálók az azonos értékű írást is zárják ki. A projekt legyen byteazonos, módosításjelzés és mentési kérés nélkül. Visszakapcsoláskor legyen zöld a POWER és működjön a szerkesztés a megőrzött beállításokkal. Laponkénti előtte–utána galéria és komponensdokumentáció: `docs/ui-map/SIMPLIFY.md` A.4. Korábbi érintési próbák: `.hw-local/mpc-perf/native-mixer-fx-xl/final-blocks.md`.
+- [ ] XL: a Play és az önálló OSC oldalsó menüjén próbáld ki a választást, megszakítást és OFF forrásra navigálást; a gyári panel alatt ne lehessen értéket módosítani. Az OSC MORE oldalon megszakítás és preset- vagy forrásváltás után nyisd újra ugyanazt a Warp 2 menüt, és ellenőrizd, hogy csak az új választás ír. Natív OSC potin a rövid húzás egy értéket írjon, a 600 ms érintés írás nélkül a megfelelő modulációs célt nyissa. Az FX +ADD gyári listájából válassz effektet. A 32 kártyás lánc mindkét lapján ellenőrizd a 16 választót és POWER gombot, a 16/17 határon áthúzott MOVE-ot és a lapváltással egyidejű POWER/SELECT érintést (0 téves paraméterírás). A natív FX-menü takarja a saját réteget; kiválasztás csak a megnyitó effektpéldányba írjon, megszakítás és lap- vagy példányváltás után nulla írás történjen.
+- [ ] Standalone üres oszcillátornál a natív LOAD gomb kipróbálása Key 61 és XL hardveren: üres állapotban a gyári LOAD gomb megnyomásakor a minta/preset választó nyíljon meg, ne legyen téves paraméterírás, és betöltés után az oszcillátor adatai és natív vezérlői frissüljenek.
+- [ ] A közös natív TARGETS és modulációszerkesztő XL-próbája: hosszú nyomással a megérintett célpont nyíljon, hat sor fölött működjön a lapozás, az ADD és X, valamint a fizikai Q-Link. Bezárás, OFF és presetváltás után egyetlen korábbi művelet se írjon. A Mixer Filter PEEK-ben próbáld meg az F1 és F2 cutoff modulációját fizikai Q-Linkkel, majd a BACK után ellenőrizd a kijelölt szűrőt.
+- [ ] XL és Key 61, Play nagyított OSC/ENV/LFO/RND: nyisd a gyári EXPAND gombbal, ellenőrizd a natív vezérlők fókuszát és az élő görbét, válts presetet megnyitott szerkesztőnél, majd CLOSE után próbáld a kompakt érintést és a fizikai Q-Linkeket (16, illetve 4 potis kiosztás). Az OSC gyári menüjéből kapcsolj OFF forrásra, a POWER és a CLOSE legyen elérhető, a többi mező ne írjon.
+- [ ] A PZ SVF MPC-szerkesztő XL eszközpróbája hátra van. Ellenőrizd F1-en és F2-n a hozzáadást, húzást, törlést, Apply/Back működést, projekt-visszatöltést és az OFF alatti lezárást. A hallható DSP-viselkedés külön tétel.
+- [ ] XL, `5f006ab8`, Sbtest: az ENV/LFO/FX natív vezérlőit teljesen takarja az overlay; az OSC névlista nem nyílik; Filter/Mod bal marker sérül; Mixer Main és Voice Pan nem reagál; Master feliratok és potik fedik egymást, a felső poti transpose-t ír. Kész, ha a közös XL-ismétlésen a host+kompozit képek, célparaméter-különbségek és mind a 15 fül felismerése igazolja a javításokat. Korábbi nyers mérés: `.hw-local/mpc-perf/native-eleven-xl/README.md` a Safian könyvtárban. Mac-referencia: `docs/dsp-knowledge/mpc-display.md`, „Historical XL UI failures”.
+- [ ] XL, Sbtest indításakor a Play néhányszor háttér nélkülinek látszik. A host indulása és a projekt újranyitása külön próba: az első Play-kép előtt indított felvételen ellenőrizd a host hátterét és a plugin rétegének megjelenését. Kész, ha az érintett indulási út megismétlésekor nincs látható villanás.
+- [ ] A Macros referencia és natív kép pixel-összevetése két példánnyal (példányfüggő nevek, fix cím, host fogantyú). A Macros → Osc → Play bejáráson 0 régi kép és 0 elmaradt frissítés, a flip → friss overlay célja medián ≤40 ms, p90 ≤60 ms. Azonos három tartott hanggal (48/55/60, 30 s) hasonlítsd a képkockánkénti költséget, fps-t, szál-CPU-t és újrafestett területet a korábbi alaphoz (2485 µs/kép, 42 kép/s, 9,1% overlay CPU). Nyers minták: `.hw-local/mpc-perf/native-bg-xl-2026-11-21/`.
+- [ ] Oldalőr (g130, `shell-mpc/overlay/gpu/guard_state.h`): XL-en újramérni a Load-ablak próbákat (`.hw-local/mpc-perf/xl-playblank-2026-11-21/tools/worst*.sh`, `worst_an.py`): cél 0 újra-megjelenés host képernyő fölött a guard plane-off után. Kész, ha a próba 0 ilyet mutat, és a 12 oldalas bejárás (`tour2.sh`, 3 kör) nem hoz új villanást (az oldalváltás ára: üzenetátadás + szál-ébredés, a guard-jelentésre azonnali detektálás, legfeljebb 16 ms-onként).
+- [ ] Oldalőr (page guard): a (c) kérdés (felesleges plane-off a SETPLANE és a page_id publikálás között) a poller felbontásával (~0,3 ms) és a jelenlegi terheléssel nem dönthető el: a helper a host második commitja (~16 ms a flip után) UTÁN jelenít meg (~35 ms), a verseny ablaka sosem nyílt meg. Kész, ha egy terhelés/idzítés alatt a B (publikálás előbb) sorrend előnye vagy semlegessége mérve van (pl. mesterséges késleltetés a SETPLANE előtt).
+- [ ] Key 61-en (armv7 shim, plane 38, 90° forgatás) ismételd meg az oldalőr lapváltási és ötperces terhelési próbáját. Ellenőrizd az aktuális overlay_layout.json fülsorrenddel is, hogy az új lap fölött nulla régi overlay jelenik meg.
+- [ ] Futex wake of the guard flag (g133 D) is untested on a device: XL run with the guard trace must show flip -> `guard_flag_read` within a vblank and flip -> first present median <= 40 ms, p90 <= 60 ms.
+- [ ] Oldalváltás utáni overlay-késés (XL, 2026-11-21, g134 mérve: `.hw-local/mpc-perf/xl-g134-2026-11-21/`): flip -> első megjelenítés medián 53,1 / p90 53,2 ms (guard-trace: 56,8 / 66,2; cél <= 40 / <= 60, várt ~25 ms); a `page_ok_sent` -> első megjelenítés 35,1 ms maradt (az azonnali első kép NEM rövidítette), a trace-ben `page_ok_recv` -> első megjelenítés ~22 ms: a várakozás nem a pacer lépése, hanem a renderelés + vblank/glFinish. Kész, ha a 22 ms bontása ismert (render, glFinish, következő vblank, SETPLANE) időbélyegekkel, és a medián <= 40 ms; nyugalmi ébredések (loop_wakes +21/perc, főszál +20/perc, GuardWatcher +6) és a 3 s-os ellenőrzés mérve és rendben.
+- [ ] Key 61 oldalváltás-idő (S0 futás): csak a 0,5 s-os státuszfájlból mérve (medián 500 ms, p90 1079, max 1250; FX->MIX és Voice->Play ~1,2 s minden körben): újramérni a guard-trace-szel (`scripts/guard-trace-correlate.py`), mint az XL-en; az 1,2 s-os párok magyarázata (hideg oldalépítés? nagy oldalak?). Kész, ha a flip -> első megjelenítés eloszlása Key 61-en mérve és az 1,2 s-os esetek oka ismert.
+- [ ] A Key 61 `overlay-status.txt` `markers_read_*` sora a szerkesztőoldalon eltért a vártól (`left=723a2c right=3a7264` a várt `aa3a2c 3aaa64` helyett): megnézni a Track nézeten, hogy csak az oldal miatt volt-e.
+- [ ] Felugró ablakok szabálya (`docs/plans/overlay-static-anim-layers.md`, decfda15): a Q-Link gomb érintésekor megjelenő host-felület hatása (elmossa-e a lapot, hol takar) nincs mérve, mert csak a 16 hardvergomb valódi érintésével jön elő. Kész, ha az owner jelenlétében (vagy HID/MIDI úton) le van mérve, és a szabály ennek megfelelően kezeli.
+- [ ] A végső XL-próbán ellenőrizd a fizikai potik fölötti neveket és az írt célparamétereket lap-, PEEK- és nagy nézet váltásakor. Az LFO SMOOTH idő és kapcsoló egymás melletti Q4/Q5 legyen. A normál nézetnek a Mixer, a mátrix- és a modulációs sorok megnyitásakor is sárga sorszámok nélkül kell maradnia. A szomszédos vezérlők sorrendje kövesse a fizikai potikét.
+- [ ] **Aktuális közös XL-csomag – LFO/v6, natív hátterek, nyugalmi rajzolás és ébresztés.** A jelenleg telepített bináris és skin legyen a frissítés előtti referencia; a javítások egy közös csomagban kerüljenek az XL-re. Elsőként az LFO görbe/futópont és az FX alap/MORE grafikon útját mérjük. Három állapot: állókép, azonos tartott hang, szerkesztés és elengedés. A megállt kép egyezzen a referenciával, új hangra, Q-Linkre vagy presetváltásra frissüljön. Egy közös ARM64 build után XL-en rögzítsük a helper képszámát, ébredéseit, CPU- és képköltségét, valamint a GPU-újraindulások számát, azonos terheléssel. Mindkét változaton azonos sorrendben legyen nyugalom → aktivitás → nyugalom; a csomagszintű előtte/utána mérés a teljes együttes hatást mutatja. A 15 fül gyors bejárása ugyanennek a csomagnak a zárópróbája.
+- [ ] FX-pilot, eszközön mérendő: a rajzolószál költsége előtte / utána Key 61-en és XL-en (alap: `docs/MPC.md`, nyugalomban ~0,4 % mag, hanggal 0,6–0,9 %). Kész, ha a két mérés a `docs/MPC.md`-ben szerepel az FX alap- és MORE-nézetére (nem a g128 ág dolga).
+- [ ] A V csúcsánál a két szár átfedi egymást és kétszer keveredik: áttetsző vagy fénylő vonalnál világosabb folt lehet. Szemrevételezés eszközön.
+- [ ] A szerkesztő görbéje 256 pontról oszloponként egy pontra nőtt: a Key 61-en húzás közbeni képidő nincs megmérve (előtte / utána).
+- [ ] Key 61, gombtekerés közben: a GPU-s kép 99. percentilise 36–41 ms a 14 ms-os keret helyett (`docs/MPC.md` 19. próba).
+- [ ] XL: a kompakt POINT/X/Y/CURVE és SCALE soron próbáld az olvashatóságot, az érintést és a fizikai Q1–4-et. Igazold az együtt aktív CYCLE LINK és LOOP LINK szerkesztését, a preset visszatöltését és a hangerőmoduláció folytonosságát hallásra (4bb84e82).
+- [ ] XL, LFO lap: ellenőrizd a magasabb görbe és a nagyításgomb átfedését, az LFO/RND- és hullámforma-lista minden választását, a TARGETS elérését és a fizikai Q-Link kiosztást. A többi görbenézet nagyításikonját is egyeztesd.
+- [ ] Modulválasztók fennmaradó ellenőrzése: a Play ENV és LFO/RND fejlécében ellenőrizd a legördülő listát, a kijelölt és a hozzárendelt forrás megkülönböztetését. Ugyanabból a gyári menüből válts LFO 10 → RND 4 → LFO 10 sorrendben; a fejléc kövesse a nevet. HZ-ben a RATE, BPM-ben a DIVISION legyen szerkeszthető az XL fizikai Q10-es potijával (az LFO-csoport második helye), KEY-ben a tekerés ne írjon. Nyitott menüből presetváltás után a korábbi választás ne írjon az új presetbe. Az önálló és PEEK-nézetekben kikapcsolt modulból is működjön a navigáció. Az XL-en a választás közben az inaktív modul hang- és routingparaméterei maradjanak változatlanok.
+- [ ] XL, natív tízcsatornás Mixer: ellenőrizd a valós sávjelek peak/hold kijelzését, a kapcsolók, útvonalválasztók, panoráma, sendek és faderek érintését, a fizikai Q-Link kiosztást és a presetváltást. A MAIN/BUS 1/BUS 2 FX PEEK-ben ellenőrizd a látható kezelőt, a pontos célparamétert és bezáráskor a visszatérő Mixer-kiosztást. Mind az öt PEEK célon ellenőrizd a késői események írásmentességét. Mac-referencia: `805b6b98`, `ce5d30c1`.
+- [ ] Chorus MORE: a Gentle Flute Pad preseten a LESS fejléc alatt üres a vezérlőterület; jelenjenek meg és működjenek a natív delay, filter és output mezők. A Chorus MORE elrendezésében nincs grafikon. A fennmaradó modulváltozatok, miniatűrök, FX-nézetek és PEEK-panelek lefedését a tényleges rajzolási és elérési út alapján zárd le. Presetfüggő alakhoz két eltérő referencia, nyitott A→B→A, három újranyitott kontroll, preset- és modulazonosítás kell. Élő kijelzőhöz ismételhető bemenet kell. A statikus alak érintés és hang nélkül frissüljön, majd álljon le az újrarajzolás. Korábbi XL-bizonyítékok és lefedettség: `docs/dsp-knowledge/mpc-display.md`, „XL preset-curve checks”.
+- [ ] Filter-fül és az összevont 15 fül eszközellenőrzése (owner 2026-11-21; a Filter-fül kész a `work/step4-filter` ágon, host-tesztekkel és képekkel: `docs/ui-map/filter-bold-cut/README.md`): Key 61-en és XL-en: (1) mind a 15 fülön a funkciógombok szövegének, a markereknek és a Q-Linkeknek a részletes ellenőrzése; (2) a Filter fül négy állapota F1 | F2 | NOTE | VELO, a F1+F2 nézet (a gombok a kiválasztott szűrőt írják), a Formant és a Comb modell (COMB / VAR / CLEAN rejtve), az OUT blokk csak-olvasható jelzői; (3) a Q-Linkek követik az állapotot (F1/F2: MAIN, TRACK, OUT = BLEND/ROUTING/MODEL/STYLE, FORMANT; NOTE/VELO: EDIT és LEGATO+GRID, a két legato kulcs a Q2-n); (4) állapot-visszatöltés (projekt mentés és újratöltés a NOTE/VELO/F2 állapotban, a görbével együtt); (5) görbe szerkesztése és hallása/látása (pont húzása, hajlítás, LEGATO + GLIDE, INIT/UNDO, TARGETS -> ADD TARGET: a hatás hallható és látszik); (6) az élő x-jelölő (egy lenyomott billentyű/velocity vonala a görbén) és a `scalarCurvePoll` élő futása (a görbe beírása és a chunk-visszaolvasás a pluginon belül host-teszttel igazolt: `scalar_curve_chunk_host`). Kész, ha mind a hat pont eszközön látva.
+- [ ] Env- és LFO-fül eszközön (XL és Key 61): a választó (üres / részben használt / mind használt preset, `+` és az LFO `+` listája), a Q-Linkek követik a kiválasztott Env-et / LFO-t / R-t, a Play oldal ugyanazt mutatja, projekt-újratöltés után ugyanaz van kiválasztva, a HOST a TIMING blokkban, az EDIT csak DRAWN alakzatnál (és a DRAWN cella a látott alakzatból indul). Kész, ha a gépen igazolt (lépések: `docs/ui-map/env-lfo-bold-cut/README.md`).
+- [ ] Osc oldalak és Play (bold cut, 7. lépés, `work/step7-osc-play`) eszközön (XL és Key 61): a 8 alapnézet (hullámtábla, szemcsés, multiminta, minta, spektrális, Sub, Noise generált és minta) darabszáma és Q-csoportjai (a Q-csoport 1 mindenhol a felső sor), a MORE lap típusonként és az OPTIONS, a figyelmeztetés nélküli elrejtés (kikapcsolt warp erősítése), a LEVEL / PAN / cél csak kijelző, a Play Env- és LFO-választó (üres / részben használt / mind használt, `+`, a `+` lista), és a döntés: egy szerkesztetlen `+` választás a FÜLRŐL kilépéskor az utolsó használt elemre esik vissza (`uibind::fallbackSelection`). Kész, ha a gépen igazolt (lépések: `docs/ui-map/osc-play-bold-cut/README.md`).
+- [ ] Próbáld ki a VOLUME fizikai Q-Linket az XL-en és a Key 61-en.
+- [ ] Eszközön ellenőrzendő (XL és Key 61, `work/qlink-bounds`, csomag `.hw-local/owner-cand-b/`): `qlinkBoundsData: []` után a Play oldalon fizikai Q-Link tekerésnél (Q 9 = LFO 1 Shape) nincs kósza host-jelvény (3/7/4/8) az Env/LFO grafikonban, és a host nem rajzol semmilyen keretet a plugin-oldal fölé; a hardveres sáv a host megszokott módján nevet/értéket mutat (`0.23` tekerés közben a host saját viselkedése, mérés kell). Kész, ha mindkét eszközön fotóval/képernyőmentéssel igazolt.
+- [ ] Az XL Play lapján koppints az LFO Shape nyilára, és vizsgáld az overlay képkockáit az xl-s0-2026-11-21 módszerrel. Q9 kijelzése a 350 ms-os ablakban maradjon ugyanazon a rétegen.
+
+### Padok, hangszint és kimenet
+
+- [ ] Leütéserő az XL-en: a napló szerint az utolsó 16 hang mind 127-tel érkezett. Valódi padütéses próba (Full Level ki és be) az ownerrel; a Key 61 billentyűzet velocity-görbéje sincs megmérve.
+- [ ] A Key 61 padjei MIDI 72..98 hangot küldenek, egyik sem a 48-at (C3): a szintmérés `seqnote` hangot használ, nem padet. A dokumentált Key 61-próbán rögzítsd a fizikai padok hangszámait és velocity értékeit Full Level ki- és bekapcsolt állapotában (`docs/release/DEVICE-CHECKLIST.md`).
+- [ ] MPC kimenet 0 dBFS fölött (owner: track +7,06 dB, kimenet +7,11 dB mérve a Key 61-en, +6 dB plugin hangerő és +5,82 dB fader): mit csinál a gép (kemény vágás a konverternél vagy saját védelem): nem mérte senki. Kész, ha egy loopback vagy rögzített kimenet (a gép saját felvétele vagy külső visszahurkolás) megmutatja a vágás módját, és a doksiba kerül.
+- [ ] Key 61 sorban (koordinátor, 2026-11-21): CPU-összevetés a felhasználói kézikönyvhöz (csak mért állítás kerül bele): a MPC folyamat CPU-ja (és a host CPU-mérője, ha látszik) egy 8 hangú, 30 s-ig tartott akkordnál, váltott A/B/A egy munkamenetben: (a) egy stock Akai szintetizátor-track tipikus wavetable/multi-osc presettel (név+preset), (b) SynthyBoy összehasonlítható nehéz preset (wavetable + unison 3, szűrő, chorus/delay), (c) SynthyBoy könnyű preset, (d) üresjárat; (b)-nél az overlay oldal látható/nem látható al-eset; %-mag szórással, hőmérséklet, presetek; mentés nélkül, csak Sbtest. Kész, ha a táblázat jelentve van.
+- [ ] Kétsávos / többsávos próba valós hardveren: két különálló SynthyBoy-példány egyidejű futtatása és megszólaltatása két külön MPC sávon (`docs/MPC.md:922`, `docs/release/OPEN-QUESTIONS.md` A11).
+
+### Motor, valós idejű terhelés és memória
+
+- [ ] Key 61-en mérd meg a kimeneti fokozat blokkonként egyszer olvasott erősítéscéljának költségét a korábbi megoldással összevetve (Mac-regresszió: `b8fb6a12`).
+- [ ] Több SynthyBoy-példány egyszerre: a Spectral indítási keret (1700 µs) példányonként él (`core/spectral/include/synthyboy/spectral/spectral.h:110`, a `Scratch` része). Ha a host több példányt ugyanazon a hangszálon, egymás után számol, a csúcsok összeadódnak (két példány egyszerre ütött akkordja akár 2 x 1700 µs); ha külön szálon/magon, nem. Nem tudjuk, hogyan osztja a host a sávokat a szálakra (Key 61: a hangszálak mind a négy magon). Kész, ha a Key 61-en 2-4 sávval egyszerre ütött Spectral akkord csúcsa meg van mérve, és ha összeadódik, a keret folyamatszintű (közös a példányok között).
+- [ ] Memórialapok és tartalom: mérni, szükséges-e `mlock`, és meddig marad az elavult tartalom a memóriában. A meglévő `page_faults:` sor szál- és folyamatszámlálóit használd; a Key 61 startbudget-futásai tartalmazzák őket.
+- [ ] Key 61-en ismételd meg a negyedik SynthyBoy-sáv hozzáadását és memóriamérését. A host naplójával és másik pluginnal végzett kontrollal tisztázd a pluginlista görgetésekor tapasztalt összeomlást (docs/MPC.md, „Memory on the Key 61”).
+- [ ] Profilozd a Diode Saturated Bass létra- és diódaszűrőjét a Key 61-en szakaszonként és PMU-számlálókkal. A gyorsítást váltott méréssel igazold; hangváltozás esetén kérj tulajdonosi döntést.
+- [ ] FX-költségkeret: az engedélyezett effektláncok Key 61-es A/B/A visszamérése a meglévő 35%-os kerettel, a még nem mért konfigurációk költségével. Mérési lista: `docs/dsp-knowledge/fx-budget.md`.
+
+### Kiadási képek és dokumentáció
+
+- [ ] Kiadási képek (owner, 2026-11-21): ha a végleges eszköz-build fent van, pár jó kép a főképernyőről (a mi rétegünk, szép presettel), az XL-en és a Key 61-en. Kész, ha a képek a kiadási anyagok közt vannak (`docs/release/`), és az owner kiválasztotta őket.
+
+- [ ] MPC-n ellenőrizd a gazdanatív Mod mátrix és a teljesen gazdanatív EDIT részletező képernyőt: 7 soros mátrix, 56 px-es TrackAndThumb csúszka látható középponti nullával és negyedes/feles osztásokkal, kanonikus határok felett mindkét tengelyen centrált fejlécek (SOURCE, TARGET, AMOUNT, POLARITY, STATE), EDIT gomb (76×56 px), sáv-túlnyúlás és leolvasó alatti fehér vonal nélkül; a forrás/cél/AUX és új cél választó hostnatív, 7 soros, csoport- és lapváltással, az ALL SOURCES minden modulációforrást elér; a részletező képernyő 3 oszlopos (AUX/SHAPE/TIME) 90 px-es Level potikkal, BACK és megerősített DELETE gombokkal, normál módban 0 GPU overlay művelettel. Kész, ha Key 61 és XL hardveren igazolt a szerkesztés, törlés, Delay/Sync váltás és visszalépés.
+- [ ] Mod mátrix élő modulációs pont (live animated dot) kutatás és minimális csak-olvasható hídterv: a normál nézet gazdanatív (0 GPU művelet), stock pont nincs. Az MPC XL kézikönyv (350, 352–353. o.) vizsgálata alapján a host nem futtat 60 FPS GPU réteget a TUI fölött (XL ~20 fps, Key 61 ~8–12 fps). Nem igazolt feltételek a megvalósításhoz: (1) Mixerrel egyeztetett ABI-bővítés 7 db csak-olvasható élő eltolás handle-lel a `nativeui::mod`-ban (`synthyboy::LiveValues` bekötéssel); (2) skin oldali 16 px-es passzív Indicator widget a csúszkán (`ignoreMousePresses: true`); (3) hardveres mérés, hogy a host eseményciklusa akadozás nélkül képes-e követni a modulációt. Addig a funkció nem animáltnak tekintendő.
+
+- [ ] Natív katalógus méretpéldái: a Button `action_art` csak 48 px magas arcot készít, a Selector minimuma 48 px (név + érték: 56 px); a kért Small 32 px Selector és Small/High 32/56 px Button képekhez előbb tényleges komponensváltozat kell. Kész, ha a natív API, a méretpróba és a saját `img/` képek együtt támogatják ezeket, átméretezett utánzat nélkül.
+
+
+
+
+
+
+
+
+
+
+
+
+- [ ] Voice eszközös elfogadás XL/Key61: STEP gyári lista, mind a6sor/8lépés natív grid-drag (nincs többoszlopos overlay paint natív módban), ActiveText/10× egyszeri írás, Percent/Rate, fizikai Q-bank/fókusz, presetváltás és LFO/Noise-detune hangpróba. Offline bizonyíték: `docs/ui-map/voice-current/`; a hardveres próba még nincs meg.
+- [ ] Voice történeti előtte-képhez az eredeti host GenericNoLabel artwork offline nem áll rendelkezésre; azonos fixture-ű teljes hiteles before csak host/device capture-rel igazolható. A jelenlegi after TUI+C++ kompozit hiteles, nem kézi illusztráció.
+- [ ] Voice megmaradt teszt-/paritáskorlátok: all6ENV release/beats és random4ág independence/voice-steal regresszió külön még nincs; Serum seed/steal/reset/nonlinear/10× bitparitás és Vital közvetlen megfelelő nem igazolt. Következő kapcsolódó módosításkor célzottan ellenőrizendő, nem új baseline-kör. Lásd `docs/review/VOICE-CONTROL-REVIEW-2026-11-24.md`.
+- [ ] Voice utáni teljes generált TUI ugyanazon base/generátorral 886887→886157 bájt (−730), PNG +311915 bájt; a meglévő 750000-es globális méretkapu továbbra nyitott. A meglévő skin-size feladatba számítandó, korlát nem emelhető.
+
+- [ ] FX tabos felület eszközös elfogadása XL/Key61: Chorus egy panel, Reverb/Compressor3tab, feltételes mezők, OFF/slot/preset/staleinput, Gen1Q/Gen2keretnélkül és fizikaiQ; offlineforrás `docs/screens/fx.jpg`, átadás `5f02e1e2`. Hardverpróba még nem történt.
+- [ ] FX tabos változat azonos6016f24c baseline-nal TUI805951→815260 (+9309) és PNG+263392 bájt; a meglévő globális750000-es korlát nyitott, nem emeltük. Teljes egyesített végállapot következő indokolt csomaggenerálásakor újramérendő, nem új baseline teszt.
+- [ ] ENV saját natív változat eszközös elfogadása XL/Key61: BEATS/RETRIG egyszeri érintés, wheel/keyboard, TARGETS és választó gyári lista, presetváltás és overlay kompozit. Offline kép `docs/screens/env.jpg`, átadás `f143855b`; hardware működés még nem igazolt.
+
+
+- [ ] `ui_screen_host` compact Noise FILTER minimumszerződés: a megtartott natív elrendezés 202×72-es cellát ad a 208×56 minimumú side Knobnak (`ui/composite.h` BasicControls::layout, `ui/tests/ui_screen_host.cpp:305/314`). Kész, ha az elfogadott natív geometria és a minimumszerződés egyezik, a célzott méretellenőrzés átmegy.
+- [ ] `shell-mpc/ui/tests/ui_screen_host.cpp` 19 további Sub/Noise full-screen elvárása eltér az aktuális `OscillatorFullScreen` paneljeitől: Q-csoportszám, Basic-tagok, MORE, vezérlő/panelszám, Noise sample minimum. A Pan/Level fallback kivezetése ezt az implementációt nem módosította. Kész, ha az elfogadott natív képernyőszerződéshez igazított implementáció/teszt mellett a célzott ui_screen_host minden ellenőrzése átmegy.
+
+
+- [ ] A forrásazonos `play_env_lfo_host` futás két hibát ad a `shell-mpc/tests/play_env_lfo_host.cpp:545` Expand-állításán: ENV3/LFO4/RND2 közül két változatnál a full-size grafikon/native CLOSE összetett ellenőrzése bukik. A kimenet nem azonosítja a változatot és részfeltételt. Kész, ha a fixture ezeket megnevezi, a konkrét hibák javítva, és a célzott VST-target nulla hibával fut.
+- [ ] FX közös GPU fallback még production: `overlay/mixer_ui.h` updatePeek → setNativePeek(useNativeWidgets()), nem kanonikus canvas/letiltott natív widget esetén a közös FxScreen/FxSlotEditor/FxChainBar/FxGallery kezelőket használja. Kész, ha a Mixer minden támogatott vászonra natív PEEK-szerződést biztosít, és a megmaradt közös fallback fizikailag törölhető az input/Q/grafikonok megtartásával. Aktív Mixer-refaktor tulajdona.
+- [ ] A Master natívvá tisztítása után a `nativeMasterPanelSupported` képesség API-nak nincs hívója (`overlay/instance_view.h` alapdefiníció, `synthyboy_mpc.cpp` override). Kész, ha az aktív screen-refaktorok integrálása után e két felesleges definíció is törölve és az érintett host-target fordul.
+- [ ] Megmaradó GPU-s beviteli utak natív helyettesítése még nem igazolt: Macro/LFO `TextEntry` átnevező/szövegbevitel; Master `MiniKeyboardDisplay` 12 hangos skálabillentyűzet; PointMod modulációforrás-választó és scalar/OSC detail szerkesztők kezelői. Kész, ha az eredeti OK/cancel/hosszkorlát/skála-visszahívás/pontszerkesztés és paraméter/Q szerződések natív megfelelői bizonyítottak, a hívók átálltak, és csak ezután a közös GPU kezelők használaton kívüli részei törölve. Görbék és élő moduláció megmaradnak.
+
+
+- [ ] A PointMod `ModSourceBoard` még GPU-s: `native_lfo_detail.h` csak Back/Target/Amount/Remove és menüsor mezőket köt; a Target a TIME/LEVEL/CURVE tulajdonságot választja, nem modulációforrást. Kész, ha valódi natív forrásválasztó callback kerül a meglévő forrás-hozzárendelési logikára, a kijelölés/letiltás/elavult kontextus regressziói átmennek, és a board rajzolás/bemenet törölhető. A ShapeEditor 22 és PointMod 4 már kiváltott GPU-kezelője eltávolítva.
+
+- [ ] Filter-integráció után megmaradt közös tooling: qslots_host 9 Sub/Noise eltérés (qslots_host.cpp:463,475,492–498); coverage_host Macro1–8 natív kontrollfelismerése hiányos; layout_lint_host collectLeaves GPU-only bejárása 43 natív blokkjelzést és mods Stepper clippinget mutat; teljes page_view_host régi FX MORE elvárásai hibásak. Kész, ha a megfelelő natív szerződések alapján javítva, nem baseline-nal elfedve. Pontos átadás: ~/.local/state/agy-profiles/reports/filter-6016bb8e/REPORT.md.
+- [ ] Filter teljes generált TUI azonos common mellett 893716→998167 bájt; előző splithez képest −9233 bájt, a globális750000 kapu továbbra nyitott. A teljes kiadási csomag méretfeladatába számítandó.
+
+- [ ] Worker-integrációs állapot (2026-11-24): Mod agy/gemini-worker-1921cbbf93 (tulajdonos: Antigravity/Gemini) aktív a teljes natív Mod befejezésén (Quick/Source Board, TARGETS panel, Source/Target/AUX választók, static GPU háttér/furniture/marker cover eltávolítása, 877+ ABI tartomány, mod.jpg renderelés). Mixer agy/gemini-worker-5d82d10bb1 PID95027 aktív, értékes WIPforrásokkal; ne töröljük/ne indítsunk párhuzamos megvalósítást. Kész, ha az átadott változások developban vannak és saját worktree/ág takarítva.
+- [ ] Mod teljes natív felületek befejezése (agy/gemini-worker-1921cbbf93): Quick/Source Board, TARGETS panel, Source/Target/AUX picker és list felületek gazdanatív megvalósítása a meglévő komponensekkel; static háttér/gomb/felirat és marker cover hackek eltávolítása natív módban a GPU rétegről, valódi élő moduláció megőrzése; ABI egyeztetés a Mixer 856..876 tartománya után a 877..880 tartományban. Kész, ha a célzott Mod ellenőrzés átmegy, docs/screens/mod.jpg frissült.
+
+
+- [ ] KRITIKUS XL projektbetöltési regresszió develop7b5a79da telepítés után: 2026-11-24 17:19–17:20UTC SynthyBoy effSetChunk után acvs SEGV, régi és aktuális projektek sem tölthetők. Projektfájlokhoz nem nyúlunk. Kész, ha crashok javítva és a tulaj régi/aktuális projektje írásmentesen ismét betölthető XL-en; evidence /Users/szabi/Documents/Projects/Safian/.hw-local/mpc-perf/xl-load-incident-7b5a79da/. (fut: agy/gemini-worker-929321334d)
+
+- [ ] Gyári MPC szövegbevitel cseréje nyitott: az XL 3.10.1.12 tényleges TextEditOverlay visszaírási útja a handle +0x98 szövegképességét ellenőrzi; PluginWrapperElement és ProgramEditParameterElement fix hamis/no-op settert ad. A NameSetterDataAdapter beviteli karakterszűrő, nem eredménycsatorna. Bizonyíték és pontos hostazonosság: `docs/dsp-knowledge/native-text-entry.md`; nyers adatok `.hw-local/mpc-perf/native-text-contract-xl-20261124/`. Kész, ha igazolt pluginhoz kötött írható szöveges host-handle vagy támogatott egyenértékű bővítés visszaadja az UTF-8 eredményt, kezdeti szöveg/OK/cancel/hosszkorlát/preset-kontextus mellett; Macro átnevezés és LFO Save As/Rename átáll, a saját TextEntry és kizárólagos kódja törölve. A működő saját billentyűzet a csere igazolásáig megmarad; a plugin effString2Parameter módosítása önmagában nem hidalja át a host kapuját.
+- [ ] `docs/ui-map/master.md` és `docs/ui-map/OVERVIEW.md` még régi Master GPU numeric TextEntry/list útvonalat ír a már natív Masterhez. Kész, ha az aktív leírás a `31b39dc9`/`cc4aa8ae` utáni natív numerikus bevitelnek felel meg.
+
+- [ ] Gyári kék `knobBlue` kipróbálása külső pluginból, saját PAN/LEVEL elrendezéssel: aktuális XL közös komponenskönyvtárban igazoltan létezik, gyári `knob_blue.png` 127-frame FilmStrip kompozittal; saját PNG-generálást kiválthat, a GenericNoLabel piros ívének átszínezése külön, továbbra sem igazolt út. Külső VST importja, host-asset feloldása és a belső gyermekek saját elrendezésre adaptálása nincs kipróbálva. Kész, ha áttekintett próba-TUI után a képernyő/bekötés/OFF/gate/értékkezelés igazolt és a tulaj jóváhagyja. Forrásolt mélyellenőrzés és korrigált expert FAQ: `.hw-local/mpc-knowledge/reports/Gyári MPC poti színezés ellenőrzése.md`, `findings/native-knob-customization-xl-3.10.1.md`; csak olvasó aktuális XL-bizonyíték, termék/devicestate nem módosult.
+
+- [ ] Mixer valódi sztereó mérők mind a 10 sávon: független L/R csúcs, hold és jelalapú clip; natív 2×8 px kijelző és 95 px fader, egy célzott jel/bekötés ellenőrzés után develop. (fut: detached mixer-stereo)
+
+- [ ] Maradék worktree-k összevezetése: `/private/tmp/sb-graph-native-catalog` mentetlen OSC-selector átvezetése és `/private/tmp/sb-warp-pager.lvCPdz` mentetlen Warp-választója megőrzendő; `/private/tmp/sb-graph-fx-popups` egyedi FX-picker javítását csak a `054064c9` szándékos UI-visszaállításának megőrzésével lehet átvenni. Kész, ha a még értékes változások integrálva vagy tulajdonosi döntéssel elvetve, és a három munkakönyvtár törölve.
+
+- [ ] Tulajdonosi Mixer-regressziójelzés a developon (2026-11-24): a jelenlegi felület hibásnak látszik a sztereó átvezetés után; a pontos megjelenítési hely és tünet még tisztázandó. Kész, ha a tényleges generált natív felület és a jelzett futó nézet az elfogadott mixerrel egyezik, a célzott sztereó Mac-próba sikeres, és a konkrét eltérés javítva. (fut: mixer-stereo)

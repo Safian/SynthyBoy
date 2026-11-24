@@ -1,0 +1,45 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Whisper To Voiced",
+ "category": "Vocal",
+ "description": "The vowel ah (men, 150 Hz): frame 0 is a whisper (formant shaped noise: random phases and amplitudes), the last frame the voiced pulse train; a level matched cross fade.",
+ "frames": 64,
+ "seed": "whisper_to_voiced",
+ "source": {
+  "type": "mix",
+  "params": {
+   "g1": {
+    "law": "linear",
+    "from": 1,
+    "to": 0
+   },
+   "g2": {
+    "law": "linear",
+    "from": 0,
+    "to": 1
+   }
+  },
+  "inputs": [
+   {
+    "type": "formant",
+    "params": {
+     "f0": 150,
+     "vowel_a": "a",
+     "breath": 1.0,
+     "seed": 5
+    }
+   },
+   {
+    "type": "formant",
+    "params": {
+     "f0": 150,
+     "vowel_a": "a",
+     "breath": 0.0
+    }
+   }
+  ]
+ },
+ "post": {
+  "limit": 250
+ }
+}

@@ -1,0 +1,357 @@
+# Copyright (C) 2026 Safian Szabolcs
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Host controls for the standalone Env page. The graph and routing stay in EnvUi.
+
+Uses public native component factories (Level, ActiveText, RadioButton, Button)
+with no local image drawing. Idempotent: a second invocation adds nothing.
+"""
+
+import copy
+import tempfile
+from pathlib import Path
+
+from PIL import Image
+
+from components.native.level.level import compact_dial_definition, synthyboy_dial_data, level_definition
+from components.native.active_text.active_text import (
+    active_text_definition,
+    active_text_entry,
+    render_active_text_art,
+)
+from components.native.radio_button.radio_button import (
+    render_segmented_button_art,
+)
+from components import style
+import native_ui_params as handles
+from native_ui_params import ENV_SELECTOR_CELLS, ENV_SELECTOR_LAST_FRAME, env_selector_base
+
+
+# Tab coordinates matching EnvFullScreen::layout (screen y minus 110).
+CELLS = (
+    ("Attack", (14, 482, 107, 132), "envNativeDial"),
+    ("Decay", (125, 482, 107, 132), "envNativeDial"),
+    ("Sustain", (236, 482, 107, 132), "envNativeDial"),
+    ("Release", (347, 482, 107, 132), "envNativeDial"),
+    ("Attack Curve", (474, 482, 106, 132), "envNativeCurve"),
+    ("Decay Curve", (584, 482, 106, 132), "envNativeCurve"),
+    ("Release Curve", (694, 482, 106, 132), "envNativeCurve"),
+    ("Delay", (821, 482, 108, 132), "envNativeDial"),
+    ("Hold", (933, 482, 108, 132), "envNativeDial"),
+    ("Beats", (1045, 482, 108, 132), "envNativeBeatsSwitch"),
+    ("Retrig", (1157, 482, 109, 132), "envNativeRetrigSwitch"),
+)
+SELECTOR_X, SELECTOR_Y, SELECTOR_W, SELECTOR_H = 68, 12, 88, 56
+SELECTOR_VARIANTS = 5
+SELECTOR_ART = "env_selector_cells.png"
+SELECTOR_HIT = "env_selector_hit.png"
+
+
+def _bounds(rect, gate_list, focus="Yes"):
+    result = {
+        "version": 2 if gate_list else 1,
+        "acceptsHWFocus": focus,
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "%d %d %d %d" % rect,
+    }
+    if gate_list:
+        result["additionalInvalidatingHandles"] = gate_list
+    return result
+
+
+def _entry(name, kind, parameter, caption, rect, gate_list):
+    shown_caption = {"Attack Curve": "A CURVE", "Decay Curve": "D CURVE", "Release Curve": "R CURVE"}.get(caption, caption)
+    remap = [
+        {"key": "Data", "value": f"Parameter {parameter}"},
+        {"key": "Caption", "value": f"WithName[{shown_caption}]/Parameter {parameter}"},
+    ]
+    bounds = _bounds(rect, gate_list)
+    return {
+        "version": 2,
+        "componentData": {
+            "version": 1,
+            "name": name,
+            "type": kind,
+            "data": {"version": 1, "handleName": "Data"},
+        },
+        "handle remapping": {"version": 1, "map": remap},
+        "bounds": bounds,
+    }
+
+
+def _build_bipolar_filmstrip(skins_dir):
+    """Generate bipolar FilmStrip art in a temp dir, then copy to a unique final name.
+
+    The Level factory returns the same filename for unipolar and bipolar at one
+    frame_size. We prevent collision by writing bipolar art to a unique filename.
+    """
+    with tempfile.TemporaryDirectory(prefix="env-curve-") as folder:
+        data = synthyboy_dial_data(folder, frame_size=76, bipolar=True)
+        filename = "env_curve_level_76.png"
+        (Path(skins_dir) / filename).write_bytes((Path(folder) / data["filmStrip"]).read_bytes())
+    data["filmStrip"] = filename
+    return data
+
+
+def _selector_assets(directory):
+    """Build selector artwork using the approved segmented button factory.
+
+    Six slots (ENV 1..6, +) with off/selected in shared gray/cyan.
+    Used instances get a text suffix 'N ·'; '+' stays '+'.
+    """
+    art_path = Path(directory) / SELECTOR_ART
+    hit_path = Path(directory) / SELECTOR_HIT
+    if art_path.is_file() and hit_path.is_file():
+        return
+
+    strip = Image.new("RGBA", (SELECTOR_W, SELECTOR_H * (ENV_SELECTOR_LAST_FRAME + 1)))
+    for number in range(1, ENV_SELECTOR_CELLS + 1):
+        base = 1 + (number - 1) * SELECTOR_VARIANTS
+        for variant in range(SELECTOR_VARIANTS):
+            # variant 0: off, variant 1: used, variant 2: selected, variant 3: used+selected, variant 4: +
+            selected = variant in (2, 3)
+            used = variant in (1, 3)
+            label = "+" if variant == 4 else str(number)
+            if used and variant != 4:
+                label = f"{number} ·"
+            art = render_segmented_button_art(label, selected, SELECTOR_W, SELECTOR_H)
+            strip.paste(art, (0, (base + variant) * SELECTOR_H))
+    strip.save(art_path)
+    Image.new("RGBA", (SELECTOR_W, SELECTOR_H)).save(hit_path)
+
+
+def _selector_entry(name, kind, data, rect, remap, gates, focus="No"):
+    bounds = _bounds(rect, gates, focus)
+    return {
+        "version": 2,
+        "componentData": {"version": 1, "name": name, "type": kind, "data": data},
+        "handle remapping": {"version": 1, "map": [{"key": key, "value": value} for key, value in remap]},
+        "bounds": bounds,
+    }
+
+
+def _append_selector(ctx, items, selector_index, gate):
+    _selector_assets(ctx.skins_dir)
+    frame_count = ENV_SELECTOR_LAST_FRAME + 1
+    rect = (0, 0, SELECTOR_W, SELECTOR_H)
+    art = {
+        "version": 2,
+        "imageType": "FilmStrip",
+        "colour": "0",
+        "image": SELECTOR_ART,
+        "numFrames": frame_count,
+        "handleName": "Frame",
+    }
+    children = [_selector_entry("ENV cell artwork", "Image", art, rect, [], [])]
+    for index in range(ENV_SELECTOR_CELLS):
+        button = {
+            "version": 2,
+            "onImage": SELECTOR_HIT,
+            "offImage": SELECTOR_HIT,
+            "buttonId": index,
+            "numButtonsInGroup": ENV_SELECTOR_CELLS,
+            "handleName": "Data",
+            "gestureBehaviour": "Instant",
+        }
+        children.append(_selector_entry(
+            f"Choose ENV {index + 1}", "Button", button, rect, [],
+            [f"Choice {index + 1} visible"],
+        ))
+    empty = {"version": 1, "colour": "0", "image": ""}
+    ctx.add_component_definition("envNativeSelectorCell", {
+        "version": 2,
+        "actions": [],
+        "backgroundData": {"version": 1, "focussed": empty, "unfocussed": empty},
+        "ignoreMousePresses": True,
+        "disableCoarseDataWheel": False,
+        "componentsData": children,
+    })
+
+    base = env_selector_base(ctx.param_count)
+    for slot in range(ENV_SELECTOR_CELLS):
+        frame = f"Parameter {base + slot}"
+        remap = [
+            ("Data", f"Parameter {selector_index}"),
+            ("Frame", frame),
+        ]
+        for index in range(ENV_SELECTOR_CELLS):
+            low = 1 + index * SELECTOR_VARIANTS
+            high = low + SELECTOR_VARIANTS - 1
+            remap.append((
+                f"Choice {index + 1} visible",
+                f"RangedEnabling/{low}/{high}/{frame_count}/{frame}",
+            ))
+        cell = (SELECTOR_X + slot * SELECTOR_W, SELECTOR_Y, SELECTOR_W, SELECTOR_H)
+        items.append(_selector_entry(
+            f"Env Native Selector {slot + 1}", "envNativeSelectorCell",
+            {"version": 1, "handleName": "Data"}, cell, remap,
+            [gate, f"NonZero/{frame}"],
+        ))
+
+
+def _build_dial_definitions(ctx, definitions, bipolar_data):
+    """Build envNativeDial and envNativeCurve definitions using Level factory."""
+    rects = {
+        "focus": (0, 0, 105, 132),
+        "knob": (14, 33, 76, 76),
+        "name": (0, 4, 105, 26),
+        "value": (0, 110, 105, 22),
+    }
+    for kind, polarity in (("envNativeDial", "UniPolar"), ("envNativeCurve", "BiPolar")):
+        if kind in definitions:
+            continue
+        dial = compact_dial_definition(
+            level_definition(skins_dir=ctx.skins_dir), rects=rects, polarity=polarity
+        )
+        # Replace the Knob child's data with our FilmStrip factory result
+        for item in dial["componentsData"]:
+            if item["componentData"]["name"] == "knob":
+                if polarity == "UniPolar":
+                    film_data = synthyboy_dial_data(ctx.skins_dir, frame_size=76, bipolar=False)
+                else:
+                    film_data = copy.deepcopy(bipolar_data)
+                item["componentData"]["data"] = film_data
+            elif item["componentData"]["name"] == "name":
+                item["componentData"]["data"]["textStyle"]["font"]["height"] = 16
+        for state in dial["backgroundData"].values():
+            if isinstance(state, dict):
+                state["colour"] = style.native_color("transparent")
+        # Add popup actions
+        dial["actions"].extend({
+            "version": 1,
+            "onAction": trigger,
+            "handler": "Show Overlay",
+            "handleName": "Data",
+            "additionalData": "fx editor number menu",
+        } for trigger in ("Double Click", "Enter Pressed"))
+        ctx.add_component_definition(kind, dial)
+
+
+def _write_active_text_assets(directory, text, width, height, *, on_name, off_name):
+    for active, filename in ((True, on_name), (False, off_name)):
+        render_active_text_art(text, active, width, height, font_size=style.size("font.caption")).save(Path(directory) / filename)
+    return on_name, off_name
+
+
+def _build_targets_definition(ctx, width, height):
+    """Build envNativeTargets using the approved Button API."""
+    on_name = "env_targets_on.png"
+    render_active_text_art("TARGETS", True, width, height,
+                           font_size=style.size("font.caption")).save(Path(ctx.skins_dir) / on_name)
+    targets_entry = active_text_entry(
+        "Env Native Targets", on_name, on_name,
+        (0, 0, width, height),
+        handle="Data",
+        gates=[],
+    )
+    # Wrap in a definition with actions
+    targets_def = {
+        "version": 2,
+        "actions": [],
+        "backgroundData": {
+            "version": 1,
+            "focussed": {"version": 1, "colour": "0", "image": ""},
+            "unfocussed": {"version": 1, "colour": "0", "image": ""},
+        },
+        "ignoreMousePresses": True,
+        "disableCoarseDataWheel": True,
+        "componentsData": [targets_entry],
+    }
+    ctx.add_component_definition("envNativeTargets", targets_def)
+
+
+def apply(tui, qlinks, ctx):
+    """Install native ENV controls. Idempotent: second invocation adds nothing."""
+    if not ctx.meta or ctx.meta.get("variant") != "overlay":
+        return
+    if not any(t["name"] == "Env" for t in ctx.meta["tabs"]):
+        return
+
+    tab = ctx.tab("Env")
+    items = tab["componentDefinition"]["componentsData"]
+
+    # Idempotence: if native controls already present, skip
+    if any(c["componentData"]["name"].startswith("Env Native ") for c in items):
+        tab["qlinkBoundsData"] = []
+        return
+
+    # Remove old static ENV-1 widgets
+    items[:] = [c for c in items if not c["componentData"]["name"].startswith("Env 1 ")]
+
+    base = handles.mixer_peek_index(ctx.param_count)
+    gate = f"NonZero/Parameter {base + handles.ENV_VIEW}"
+
+    # Get existing definitions
+    definitions = {
+        d["key"]: d["value"]
+        for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
+    }
+
+    # 1. Selector
+    _append_selector(ctx, items, base + handles.ENV_SELECTION, gate)
+
+    # 2. TARGETS button
+    _build_targets_definition(ctx, 160, 56)
+    items.append(_entry(
+        "Env Native Targets", "envNativeTargets",
+        base + handles.ENV_TARGETS, "TARGETS",
+        (1072, 12, 160, 56), [gate],
+    ))
+
+    # 3. Dial definitions (ADSR+Delay+Hold unipolar, curves bipolar)
+    bipolar_data = _build_bipolar_filmstrip(ctx.skins_dir)
+    _build_dial_definitions(ctx, definitions, bipolar_data)
+
+    # 4. Switch definitions (BEATS/RETRIG via ActiveText)
+    # 5. Create envNativeBeatsSwitch and envNativeRetrigSwitch definitions
+    beats_on, beats_off = _write_active_text_assets(
+        ctx.skins_dir, text="BEATS", width=108, height=132,
+        on_name="env_beats_on.png", off_name="env_beats_off.png",
+    )
+    retrig_on, retrig_off = _write_active_text_assets(
+        ctx.skins_dir, text="RETRIG", width=109, height=132,
+        on_name="env_retrig_on.png", off_name="env_retrig_off.png",
+    )
+
+    beats_def = active_text_definition(
+        "envNativeBeatsSwitch", beats_on, beats_off, (108, 132),
+        handle="Data",
+
+    )
+    beats_def["ignoreMousePresses"] = True
+    ctx.add_component_definition("envNativeBeatsSwitch", beats_def)
+
+    retrig_def = active_text_definition(
+        "envNativeRetrigSwitch", retrig_on, retrig_off, (109, 132),
+        handle="Data",
+
+    )
+    retrig_def["ignoreMousePresses"] = True
+    ctx.add_component_definition("envNativeRetrigSwitch", retrig_def)
+
+    # 6. Add all field controls
+    values = base + handles.ENV_FIELDS
+    for field, (caption, rect, kind) in enumerate(CELLS):
+        if caption in ("Beats", "Retrig"):
+            # Use the specific switch type for each
+            switch_type = "envNativeBeatsSwitch" if caption == "Beats" else "envNativeRetrigSwitch"
+            items.append(_entry(
+                f"Env Native {caption}", switch_type,
+                values + field, caption, rect, [gate],
+            ))
+        else:
+            items.append(_entry(
+                f"Env Native {caption}", kind,
+                values + field, caption, rect, [gate],
+            ))
+
+    # 7. State strings
+    strings = tui["pageData"].setdefault("replacementStrings", [])
+    keys_present = {s.get("key") for s in strings}
+    for field_offset, choices in ((9, ["MS", "BEATS"]), (10, ["OFF", "ON"])):
+        key = f"Parameter {values + field_offset}"
+        if key not in keys_present:
+            strings.append({"key": key, "value": choices})
+
+    tab["qlinkBoundsData"] = []

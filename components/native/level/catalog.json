@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 20,
+  "title": "Level",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "hero",
+          "file": "level-90.png",
+          "alt": "Level"
+        }
+      ]
+    },
+    {
+      "heading": "Kompakt · {size:control.width} × {size:height.medium} px",
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "level-native-40.png",
+          "alt": "Kompakt Level: minimum, közép, maximum"
+        }
+      ]
+    }
+  ]
+}

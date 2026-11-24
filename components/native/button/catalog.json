@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 30,
+  "title": "Button",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "{size_label:height.medium} ({size:height.medium} px)",
+          "file": "catalog-button-48.png",
+          "alt": "Button {size:height.medium} px"
+        }
+      ]
+    },
+    {
+      "heading": "Power · Filter",
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "{size:height.high} × {size:height.high} px",
+          "file": "filter-catalog-active.png",
+          "alt": "FilterPower"
+        }
+      ]
+    }
+  ]
+}

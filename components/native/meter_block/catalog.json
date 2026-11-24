@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 130,
+  "title": "MeterBlock",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "hero",
+          "file": "catalog-meter-block.png",
+          "alt": "MeterBlock natív Peak/Hold mérő és dBFS skála"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Gauss Formant Sweep",
+ "category": "Digital",
+ "description": "A gaussian windowed cosine burst once per cycle (a digital formant), its centre frequency swept 1.5 to 26 harmonics: a hard, nasal, vowel-less formant sweep.",
+ "frames": 64,
+ "seed": "gauss_formant_sweep",
+ "source": {
+  "type": "gaussformant",
+  "params": {
+   "m": {
+    "law": "linear",
+    "from": 1.5,
+    "to": 26
+   },
+   "width": 0.14
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

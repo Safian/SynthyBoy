@@ -1,0 +1,135 @@
+diff --git a/shell-mpc/overlay/lfo_ui.h b/shell-mpc/overlay/lfo_ui.h
+index 11c1a062..be903568 100644
+--- a/shell-mpc/overlay/lfo_ui.h
++++ b/shell-mpc/overlay/lfo_ui.h
+@@ -215,7 +215,7 @@ public:
+             sb.gradientRect (static_cast<float> (kGroundX0), static_cast<float> (kTabY), static_cast<float> (kGroundX1), static_cast<float> (kTabY + kTabH), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
+         }
+         compact_.draw (sb);
+-        ui::lfodisplay::draw (sb, compact_.displayRect(), compactData(), ! displayHot_);
++        ui::lfodisplay::draw (sb, compact_.displayRect(), compactData(), ! displayHot_, displayHot_ && ! instPopup_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);   // hot: the data follows with the live parts (drawLive), the cells keep their groups
+         compact_.full.draw (sb);
+         if (instPopup_)
+             list_.draw (sb);   // the list of the selector lies over the third (drawLive paints no cursors then)
+@@ -250,7 +250,7 @@ public:
+         else
+         {
+             full_.draw (sb);
+-            ui::lfodisplay::draw (sb, full_.displayRect(), data_, ! displayHot_);
++            ui::lfodisplay::draw (sb, full_.displayRect(), data_, ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);
+         }
+     }
+     void drawPopup (gpu::SceneBuilder& sb) const
+@@ -264,10 +264,18 @@ public:
+         if (stackDepth_ == 0)
+         {
+             if (! instPopup_)
++            {
++                if (displayHot_)   // (with the selector's list open the list lies over the third: drawCompact kept the data there)
++                    ui::lfodisplay::draw (sb, compact_.displayRect(), compactData(), false, ui::lfodisplay::Part::Data);   // the data of a hot display (drawCompact left it out): live, after every cell
+                 ui::lfodisplay::drawLive (sb, compact_.displayRect(), compactData());
++            }
+         }
+         else if (pageTop_ == 0 || (pageTop_ == kPageList && underList_ == 0))
++        {
++            if (displayHot_)
++                ui::lfodisplay::draw (sb, full_.displayRect(), data_, false, ui::lfodisplay::Part::Data);
+             ui::lfodisplay::drawLive (sb, full_.displayRect(), data_);
++        }
+     }
+     /** What the current state draws, as one number (the picture changes when it does): a scene of everything, the live parts included. */
+     uint32_t drawHash (gpu::SceneData& scratch) const
+diff --git a/shell-mpc/overlay/osc_display.h b/shell-mpc/overlay/osc_display.h
+index a95facb3..5fe7625c 100644
+--- a/shell-mpc/overlay/osc_display.h
++++ b/shell-mpc/overlay/osc_display.h
+@@ -289,10 +289,16 @@ public:
+             d.noiseHead = live_.noise;
+             d.message = kind == K::noise ? "NOISE" : (kind == K::noSample ? "NO SAMPLE" : (kind == K::off ? "OFF" : ""));
+         }
++        // while the data changes every picture (a knob dragged along the wavetable) it is drawn with the picture, not into a layer: the ground stays a cell where it is, the data comes with the live parts (after every
++        // cell of the page), so the groups of the cell plan are the same hot and settled
+         if (live)
++        {
++            if (hot_)
++                ui::display::draw (sb, r, d, false, ui::display::Part::Data);
+             ui::display::drawLive (sb, r, d);
++        }
+         else
+-            ui::display::draw (sb, r, d, ! hot_);   // while the data changes every picture (a knob dragged along the wavetable) it is drawn with the picture, not into a layer
++            ui::display::draw (sb, r, d, ! hot_, hot_ ? ui::display::Part::Ground : ui::display::Part::All);
+     }
+ 
+ private:
+diff --git a/shell-mpc/ui/display.h b/shell-mpc/ui/display.h
+index 75a05489..9084b5a6 100644
+--- a/shell-mpc/ui/display.h
++++ b/shell-mpc/ui/display.h
+@@ -172,10 +172,14 @@ inline Rect plotOf (const Rect& r, const Data& d) noexcept { return d.area.empty
+ /** The height the amplitude of a wave is scaled by (42 percent of it each way): the display's height, or the height of the plot area plus the margin the display has (the wave has the same size at the same room). */
+ inline int refHeight (const Rect& r, const Data& d) noexcept { return d.area.empty() ? r.h : d.area.h + 16; }
+ 
++/** Which part of the picture draw () emits: both, the ground cell alone, or the rest (the afterglow and the data) alone. A hot display (its data changes every picture) emits its ground cell among the cells of the page
++    and its data later, with the live parts (after every cell), so that the groups of the cell plan are the same hot and settled (see ui/lfo_display.h Part). */
++enum class Part { All, Ground, Data };
++
+ /** Draws the picture inside `r` (the display rectangle): the block (the ground: a gradient, the keyline, the grid) as a cached cell of its own, then the data (the curves, the fills, the light). `cached`: the data
+     is one cached cell too (it is drawn again only when the data changes; the live read-outs come after it, drawLive); false: the data is drawn with the picture every time (a display whose data changes every
+     picture, a knob dragged along a wavetable: nothing gains by caching it, and it would draw the layers under it again each time). */
+-inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cached = true)
++inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cached = true, Part part = Part::All)
+ {
+     namespace dt = detail;
+     const theme::Look& T = theme::L();
+@@ -191,6 +195,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
+     const bool wave = d.kind == Data::Kind::Wave, minmax = d.kind == Data::Kind::MinMax, spec = d.kind == Data::Kind::Spectrum;
+     if (d.kind == Data::Kind::None)
+         return;
++    if (part != Part::Data)
+     {
+     Cell ground (sb, r);
+     // ---- the block under the picture: a vertical gradient, the keyline
+@@ -210,6 +215,8 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
+         }
+     }
+     }
++    if (part == Part::Ground)
++        return;
+     // ---- the afterglow: the previous picture of this rectangle, faded, under the new one (the GPU's feedback; the CPU reference does not draw it)
+     if (T.afterglow > 0.0f && theme::D().afterglow && (d.kind == Data::Kind::Wave || d.kind == Data::Kind::MinMax))
+         sb.feedback (static_cast<float> (r.x + 1), static_cast<float> (r.y + 1), static_cast<float> (r.right() - 1), static_cast<float> (r.bottom() - 1), T.afterglow);
+diff --git a/shell-mpc/ui/lfo_display.h b/shell-mpc/ui/lfo_display.h
+index b49f028c..72e20fd0 100644
+--- a/shell-mpc/ui/lfo_display.h
++++ b/shell-mpc/ui/lfo_display.h
+@@ -120,8 +120,12 @@ inline void stops (uint32_t out[4]) noexcept
+         out[i] = theme::mix (T.lfo[0], T.lfo[1], static_cast<float> (i) / 3.0f);
+ }
+ 
++/** Which part of the picture draw () emits: both, the ground cell alone, or the data alone. A display whose data is hot (it changes every picture) keeps its ground cell where it is among the cells of the page and
++    emits its data later, with the live parts (after every cell), so that the groups of the cell plan (overlay/gpu/cell_plan.h) are the same hot and settled: nothing else of the page is redrawn or moves. */
++enum class Part { All, Ground, Data };
++
+ /** The block, the grid, then the lead-in, the shape or the trace. `cached`: the data is one cached cell (drawn again only when it changes); false: it changes every picture (a handle being dragged). */
+-inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cached = true)
++inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cached = true, Part part = Part::All)
+ {
+     const theme::Look& T = theme::L();
+     if (r.w < 60 || r.h < 40 || d.kind == Data::Kind::None)
+@@ -129,6 +133,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
+     const Rect plot = plotRect (r, d);
+     const float x0 = static_cast<float> (plot.x), x1 = static_cast<float> (plot.right() - 1), top = static_cast<float> (plot.y), bottom = static_cast<float> (plot.bottom());
+     const float mid = 0.5f * (top + bottom);
++    if (part != Part::Data)
+     {
+         Cell ground (sb, r);
+         sb.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), a (T.panel0, 255), a (T.panel0, 255), a (T.panel1, 255), a (T.panel1, 255));
+@@ -152,6 +157,8 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
+         if (d.envelope && d.kind == Data::Kind::Shape)
+             sb.line (x1, top, x1, bottom, T.hair, g0);
+     }
++    if (part == Part::Ground)
++        return;
+     std::optional<Cell> dataCell;
+     if (cached)
+         dataCell.emplace (sb, r);

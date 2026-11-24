@@ -1,0 +1,28 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Saw Filter Sweep",
+ "category": "Analog",
+ "description": "A saw through a resonant 4 pole low pass: the cutoff opens from the 2nd to the 150th harmonic (slow start, fast end), resonance peak riding on it.",
+ "frames": 64,
+ "seed": "saw_filter_sweep",
+ "source": {
+  "type": "spec",
+  "params": {
+   "lp_cut": {
+    "law": "curve",
+    "from": 1.5,
+    "to": 150,
+    "power": 3.0
+   },
+   "lp_res": 3.0,
+   "lp_poles": "4"
+  },
+  "input": {
+   "type": "classic",
+   "params": {
+    "saw": 1.0,
+    "count": 400
+   }
+  }
+ }
+}

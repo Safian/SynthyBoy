@@ -1,0 +1,1219 @@
+{
+  "version": 1,
+  "sizes": {
+    "height.small": 32,
+    "height.intermediate": 40,
+    "height.medium": 48,
+    "height.high": 56,
+    "control.width": 202,
+    "dial.diameter": 90,
+    "dial.compact.diameter": 40,
+    "dial.cell.height": 108,
+    "dial.preview.cell.width": 204,
+    "dial.preview.strip.gap": 5,
+    "dial.arc.radius": 39,
+    "dial.dot.radius": 3.5,
+    "dial.native.pointer.stroke": 3.2,
+    "dial.pointer.stroke": 1.6,
+    "dial.center.stroke": 1.5,
+    "smooth.width": 116,
+    "smooth.height": 72,
+    "smooth.knob.diameter": 60,
+    "smooth.caption.width": 50,
+    "smooth.caption.height": 24,
+    "smooth.caption.font": 11,
+    "smooth.value.font": 14,
+    "smooth.play.width": 196,
+    "smooth.caption.hitbox.width": 60,
+    "smooth.caption.hitbox.height": 56,
+    "smooth.play.value.width": 62,
+    "smooth.play.value.height": 28,
+    "name_value.width": 125,
+    "name_value.box.width": 68,
+    "name_value.pad": 8,
+    "name_value.label.reserve": 20,
+    "macro_card.width": 152,
+    "macro_card.height": 238,
+    "macro_card.action.width": 144,
+    "macro_card.action.gap": 2,
+    "macro_card.dial_rect": [
+      0,
+      0,
+      {
+        "ref": "macro_card.width"
+      },
+      118
+    ],
+    "macro_card.knob_rect": [
+      31,
+      4,
+      {
+        "ref": "dial.diameter"
+      },
+      {
+        "ref": "dial.diameter"
+      }
+    ],
+    "macro_card.native_knob_rect": [
+      29,
+      2,
+      94,
+      92
+    ],
+    "macro_card.name_rect": [
+      8,
+      136,
+      136,
+      24
+    ],
+    "macro_card.name_hit_rect": [
+      4,
+      120,
+      144,
+      {
+        "ref": "height.high"
+      }
+    ],
+    "macro_card.value_rect": [
+      8,
+      96,
+      136,
+      22
+    ],
+    "macro_card.target_rect": [
+      4,
+      178,
+      {
+        "ref": "macro_card.action.width"
+      },
+      {
+        "ref": "height.high"
+      }
+    ],
+    "macro_card.chips_pad_x": 4,
+    "macro_card.chips_pad_bottom": 4,
+    "macro_card.chips_height": {
+      "ref": "height.high"
+    },
+    "macros.bar_height": 64,
+    "macros.margin": 8,
+    "macros.gap": 6,
+    "macros.bank_gap": 12,
+    "macros.title_rect": [
+      14,
+      4,
+      260,
+      {
+        "ref": "height.high"
+      }
+    ],
+    "macros.spectrum_rect": [
+      8,
+      72,
+      1264,
+      290
+    ],
+    "macros.card_positions": [
+      [8, 382],
+      [166, 382],
+      [324, 382],
+      [482, 382],
+      [646, 382],
+      [804, 382],
+      [962, 382],
+      [1120, 382]
+    ],
+    "button.face.height": 48,
+    "button.face.radius": 8,
+    "button.text.font": 18,
+    "button.text.padding": 24,
+    "button.slot.width": 64,
+    "button.slot.height": 56,
+    "radio.group.width": 240,
+    "radio.preview.width": 256,
+    "radio.dot.radius": 6,
+    "selector.route.width": 150,
+    "selector.instance.width": 200,
+    "selector.choice.width": 408,
+    "selector.choice.height": 58,
+    "selector.choice.pitch": 64,
+    "selector.wave.width": 28,
+    "selector.wave.height": 24,
+    "selector.check.size": 20,
+    "meter.width": 8,
+    "meter.height": 64,
+    "font.micro": 9,
+    "font.tiny": 10,
+    "font.annotation": 11,
+    "font.small": 12,
+    "font.section": 13,
+    "font.label": 14,
+    "font.caption": 15,
+    "font.body": 16,
+    "font.option": 17,
+    "font.button": 18,
+    "font.value": 20,
+    "font.value.large": 22,
+    "font.value.hero": 24,
+    "font.selector": 19,
+    "radius.indicator": 2,
+    "radius.tight": 3,
+    "radius.small": 4,
+    "radius.field.small": 5,
+    "radius.control": 6,
+    "radius.field": 8,
+    "radius.menu": 10,
+    "radius.panel": 12,
+    "stroke.hair": 1,
+    "stroke.thin": 1.5,
+    "stroke.icon": 2,
+    "stroke.action": 2.5,
+    "stroke.arc": 3,
+    "stroke.arc.active": 8,
+    "padding.frame": 2,
+    "gap.field": 4,
+    "gap.column": 8,
+    "name_value.presets": {
+      "height.medium": {
+        "radius": "radius.field",
+        "label_size": "font.label",
+        "value_size": "font.body",
+        "pad_x": "name_value.pad"
+      },
+      "height.intermediate": {
+        "radius": "radius.control",
+        "label_size": "font.small",
+        "value_size": "font.label",
+        "pad_x": "name_value.pad"
+      },
+      "height.small": {
+        "radius": "radius.field.small",
+        "label_size": "font.annotation",
+        "value_size": "font.small",
+        "pad_x": "name_value.pad"
+      }
+    },
+    "tune.width": 278,
+    "tune.height": 154,
+    "tune.field.height": {
+      "ref": "height.small"
+    },
+    "button.icon_button.in_slot": 64,
+    "button.icon_button.in_slot.offset1": 56,
+    "level.compact_48_rects.focus": [
+      0,
+      0,
+      {
+        "ref": "control.width"
+      },
+      {
+        "ref": "height.medium"
+      }
+    ],
+    "level.compact_48_rects.knob": [
+      2,
+      4,
+      40,
+      {
+        "ref": "height.intermediate"
+      }
+    ],
+    "level.compact_48_rects.name": [
+      48,
+      4,
+      150,
+      18
+    ],
+    "level.compact_48_rects.value": [
+      48,
+      22,
+      150,
+      22
+    ],
+    "level.default_dial_rects.focus": [
+      0,
+      0,
+      {
+        "ref": "control.width"
+      },
+      {
+        "ref": "dial.cell.height"
+      }
+    ],
+    "level.default_dial_rects.knob": [
+      2,
+      9,
+      {
+        "ref": "dial.diameter"
+      },
+      {
+        "ref": "dial.diameter"
+      }
+    ],
+    "level.default_dial_rects.name": [
+      96,
+      33,
+      104,
+      {
+        "ref": "height.intermediate"
+      }
+    ],
+    "level.default_rects.focus": [
+      0,
+      0,
+      192,
+      {
+        "ref": "dial.cell.height"
+      }
+    ],
+    "level.default_rects.knob": [
+      2,
+      9,
+      {
+        "ref": "dial.diameter"
+      },
+      {
+        "ref": "dial.diameter"
+      }
+    ],
+    "level.default_rects.name": [
+      94,
+      33,
+      98,
+      {
+        "ref": "height.intermediate"
+      }
+    ],
+    "level._smooth_rects.focus": [
+      0,
+      0,
+      {
+        "ref": "smooth.width"
+      },
+      {
+        "ref": "smooth.height"
+      }
+    ],
+    "level._smooth_rects.knob": [
+      2,
+      6,
+      60,
+      60
+    ],
+    "level._smooth_rects.name": [
+      64,
+      16,
+      50,
+      24
+    ],
+    "level._smooth_rects.value": [
+      64,
+      42,
+      50,
+      24
+    ],
+    "level.play_smooth_rects.focus": [
+      0,
+      0,
+      {
+        "ref": "smooth.play.width"
+      },
+      {
+        "ref": "smooth.height"
+      }
+    ],
+    "level.play_smooth_rects.knob": [
+      2,
+      6,
+      60,
+      60
+    ],
+    "level.play_smooth_rects.name": [
+      66,
+      8,
+      {
+        "ref": "smooth.caption.hitbox.width"
+      },
+      {
+        "ref": "smooth.caption.hitbox.height"
+      }
+    ],
+    "level.play_smooth_rects.value": [
+      130,
+      22,
+      {
+        "ref": "smooth.play.value.width"
+      },
+      {
+        "ref": "smooth.play.value.height"
+      }
+    ],
+    "level._value_label.geometry": 20.0,
+    "level.write_strip.scale": 4,
+    "level.sub_dial_definition.caption.bounds.bounds": [
+      100,
+      32,
+      100,
+      22
+    ],
+    "level.sub_dial_definition.style.font.height": 15.0,
+    "level._render_smooth_caption.geometry": 1,
+    "level.native_smooth_cell.geometry": 2,
+    "level.native_smooth_preview.geometry": 2,
+    "level.write_strip.radius": 39,
+    "level.sub_dial_definition.value": 24,
+    "level.compact_dial_definition.is.compact": 56,
+    "level.native_smooth_cell.r": 24,
+    "level.native_smooth_cell.rb": 19,
+    "level.native_smooth_cell.angle.rad": 189,
+    "level.native_smooth_preview.pad.x": 24,
+    "level.native_smooth_preview.pad.y": 20,
+    "level.native_smooth_preview.header.h": 36,
+    "level.native_smooth_preview.footer.h": 44,
+    "level.write_strip.angle": 135,
+    "level.write_strip.arc": 135,
+    "level.write_strip.arc.offset1": 405,
+    "level.write_strip.start": 270,
+    "level.write_strip.start.offset1": 135,
+    "level.write_strip.dot": 3.5,
+    "level.sub_dial_definition.value.offset1": 100,
+    "level.sub_dial_definition.value.offset2": 54,
+    "level.sub_dial_definition.value.offset3": 100,
+    "level.sub_dial_definition.value.offset4": 32,
+    "level.compact_dial_definition.geometry": {
+      "ref": "height.medium"
+    },
+    "level.native_smooth_cell.w.h": {
+      "ref": "smooth.width"
+    },
+    "level.native_smooth_cell.w.h.offset1": {
+      "ref": "smooth.height"
+    },
+    "level.native_smooth_cell.kx.ky.kw.kh": 2,
+    "level.native_smooth_cell.kx.ky.kw.kh.offset1": 6,
+    "level.native_smooth_cell.kx.ky.kw.kh.offset2": 60,
+    "level.native_smooth_cell.kx.ky.kw.kh.offset3": 60,
+    "level.native_smooth_cell.arc": 135,
+    "level.native_smooth_cell.arc.offset1": 405,
+    "level.write_strip.center": 1,
+    "level.level_definition.font.height": 15.0,
+    "level.compact_level_definition.font.height": 14,
+    "level.compact_level_definition._value_label": 16,
+    "level.native_smooth_cell.rounded_rectangle": 1,
+    "level.native_smooth_cell.arc.offset2": 189,
+    "level.native_smooth_cell.arc.offset3": 189,
+    "level.build_native_smooth_dial_with_indicator_definition.focus.comp": 2.0,
+    "level.build_native_smooth_dial_with_indicator_definition.focus.comp.offset1": 1.0,
+    "level.default_level_template.geometry": [
+      2,
+      9,
+      90,
+      90
+    ],
+    "level.default_level_template.geometry.offset1": [
+      100,
+      32,
+      100,
+      22
+    ],
+    "level.write_strip.angle.offset1": 270,
+    "level.write_strip.angle.offset2": 1,
+    "level.write_strip.x.y": 1.5,
+    "level.compact_level_definition.font.height.offset1": 16,
+    "level.compact_dial_definition.is.compact.offset1": 108,
+    "level.compact_dial_definition.font.height": 14,
+    "level.compact_dial_definition.font.height.offset1": 20,
+    "level.native_smooth_cell.rounded_rectangle.offset1": 2,
+    "level.native_smooth_cell.rounded_rectangle.offset2": 2,
+    "level.native_smooth_cell.rounded_rectangle.offset3": 2,
+    "level.native_smooth_cell.rounded_rectangle.offset4": 2,
+    "level.native_smooth_cell.px": 4,
+    "level.native_smooth_cell.py": 4,
+    "level.native_smooth_preview.text": 18,
+    "level.write_strip.point": 270,
+    "level.write_strip.round": 1.6,
+    "level.compact_dial_definition.font.height.offset2": 16,
+    "level.compact_dial_definition.font.height.offset3": 22,
+    "level.write_strip.round.offset1": 1.5,
+    "level.write_strip.point.offset1": 5,
+    "level.write_strip.point.offset2": 2,
+    "macro_card.default_macro_dial_rects.focus": {
+      "ref": "macro_card.dial_rect"
+    },
+    "macro_card.default_macro_dial_rects.knob": {
+      "ref": "macro_card.knob_rect"
+    },
+    "macro_card.default_macro_dial_rects.name": {
+      "ref": "macro_card.name_rect"
+    },
+    "macro_card._value_label.geometry": 20.0,
+    "macro_card.write_level_strip.scale": 4,
+    "macro_card.sub_dial_definition.caption.bounds.bounds": {
+      "ref": "macro_card.name_rect"
+    },
+    "macro_card.sub_dial_definition.style.font.height": 15.0,
+    "macro_card.macro_card.geometry": 200,
+    "macro_card.write_level_strip.radius": 39,
+    "macro_card.write_level_strip.start": 135,
+    "macro_card.sub_dial_definition.value": 20,
+    "macro_card.macro_preview.pad.x.pad.y": 16,
+    "macro_card.write_level_strip.angle": 135,
+    "macro_card.write_level_strip.arc": 135,
+    "macro_card.write_level_strip.arc.offset1": 405,
+    "macro_card.write_level_strip.dot": 3.5,
+    "macro_card.sub_dial_definition.value.offset1": 8,
+    "macro_card.sub_dial_definition.value.offset2": 96,
+    "macro_card.sub_dial_definition.value.offset3": 136,
+    "macro_card.sub_dial_definition.value.offset4": 22,
+    "macro_card.build_macro_card_definition.target": 144,
+    "macro_card.macro_preview.total.h": 2,
+    "macro_card.write_level_strip.center": 1,
+    "macro_card.compact_dial_definition.font.height": 15.0,
+    "macro_card.macro_card.rectangle": 1,
+    "macro_card.macro_card.frame.idx": 1,
+    "macro_card.macro_preview.total.w": 1,
+    "macro_card.default_dial_template.geometry": {
+      "ref": "macro_card.knob_rect"
+    },
+    "macro_card.default_dial_template.geometry.offset1": {
+      "ref": "macro_card.name_rect"
+    },
+    "macro_card.write_level_strip.angle.offset1": 270,
+    "macro_card.write_level_strip.angle.offset2": 1,
+    "macro_card.write_level_strip.x.y": 1.5,
+    "macro_card.macro_card.dial.frame": 1,
+    "macro_card.write_level_strip.round": 1.6,
+    "name_value.height_variants": [
+      {
+        "ref": "height.medium"
+      },
+      {
+        "ref": "height.intermediate"
+      },
+      {
+        "ref": "height.small"
+      }
+    ],
+    "name_value.name_value_box_face.geometry": 4,
+    "name_value.name_value_preview.geometry": 4,
+    "name_value.get_height_preset.geometry": {
+      "ref": "height.medium"
+    },
+    "name_value.get_height_preset.geometry.offset1": {
+      "ref": "height.intermediate"
+    },
+    "name_value.build_name_value_definition.bw": 20,
+    "name_value.name_value_box_face.rounded_rectangle": 1,
+    "name_value.name_value_preview.bw": 20,
+    "name_value.name_value_preview.rounded_rectangle": 1,
+    "name_value.build_name_value_definition.focus.ring": 2.0,
+    "name_value.build_name_value_definition.focus.ring.offset1": 1.0,
+    "pan.compact_48_rects.focus": [
+      0,
+      0,
+      {
+        "ref": "control.width"
+      },
+      {
+        "ref": "height.medium"
+      }
+    ],
+    "pan.compact_48_rects.knob": [
+      2,
+      4,
+      40,
+      {
+        "ref": "height.intermediate"
+      }
+    ],
+    "pan.compact_48_rects.name": [
+      48,
+      4,
+      150,
+      18
+    ],
+    "pan.compact_48_rects.value": [
+      48,
+      22,
+      150,
+      22
+    ],
+    "pan.default_dial_rects.focus": [
+      0,
+      0,
+      {
+        "ref": "control.width"
+      },
+      {
+        "ref": "dial.cell.height"
+      }
+    ],
+    "pan.default_dial_rects.knob": [
+      2,
+      9,
+      {
+        "ref": "dial.diameter"
+      },
+      {
+        "ref": "dial.diameter"
+      }
+    ],
+    "pan.default_dial_rects.name": [
+      96,
+      33,
+      104,
+      {
+        "ref": "height.intermediate"
+      }
+    ],
+    "pan._value_label.geometry": 20.0,
+    "pan.write_strip.scale": 4,
+    "pan.sub_dial_definition.caption.bounds.bounds": [
+      100,
+      32,
+      100,
+      22
+    ],
+    "pan.sub_dial_definition.style.font.height": 15.0,
+    "pan.write_strip.radius": 39,
+    "pan.sub_dial_definition.value": 24,
+    "pan.write_strip.angle": 135,
+    "pan.write_strip.arc": 135,
+    "pan.write_strip.arc.offset1": 405,
+    "pan.write_strip.start": 270,
+    "pan.write_strip.start.offset1": 135,
+    "pan.write_strip.dot": 3.5,
+    "pan.sub_dial_definition.value.offset1": 100,
+    "pan.sub_dial_definition.value.offset2": 54,
+    "pan.sub_dial_definition.value.offset3": 100,
+    "pan.sub_dial_definition.value.offset4": 32,
+    "pan.write_strip.center": 1,
+    "pan.pan_definition.font.height": 15.0,
+    "pan.compact_pan_definition.font.height": 14,
+    "pan.compact_pan_definition._value_label": 16,
+    "pan.default_pan_template.geometry": [
+      2,
+      9,
+      90,
+      90
+    ],
+    "pan.default_pan_template.geometry.offset1": [
+      100,
+      32,
+      100,
+      22
+    ],
+    "pan.write_strip.angle.offset1": 270,
+    "pan.write_strip.angle.offset2": 1,
+    "pan.write_strip.x.y": 1.5,
+    "pan.compact_pan_definition.font.height.offset1": 16,
+    "pan.write_strip.point": 270,
+    "pan.write_strip.round": 1.6,
+    "pan.write_strip.round.offset1": 1.5,
+    "pan.write_strip.point.offset1": 5,
+    "pan.write_strip.point.offset2": 2,
+    "radio_button.segmented_button_art.geometry": 4,
+    "radio_button.radio_dot_button_art.geometry": 4,
+    "radio_button.segmented_button_art.pad": 2,
+    "radio_button.radio_dot_button_art.pad": 2,
+    "radio_button.radio_dot_button_art.r": 6.0,
+    "radio_button.build_radio_button_entries.geometry": 2,
+    "radio_button.radio_dot_button_art.cx": 15,
+    "radio_button.segmented_button_art.rounded_rectangle": 1,
+    "radio_button.radio_dot_button_art.rounded_rectangle": 1,
+    "radio_button.build_radio_button_entries.bounds": 2,
+    "radio_button.build_radio_button_entries.bounds.offset1": 1,
+    "radio_button.radio_dot_button_art.ellipse": 2,
+    "radio_button.radio_dot_button_art.int": 1.8,
+    "radio_button.radio_dot_button_art.text.x": 4,
+    "radio_button.build_radio_button_entries.right": 1,
+    "selector.standalone_osc_size": [
+      200,
+      56
+    ],
+    "selector.modal_marker_cols": [
+      16,
+      28,
+      40
+    ],
+    "selector.standalone_osc_routing_rect": [
+      1122,
+      33,
+      150,
+      56
+    ],
+    "selector.standalone_compact_osc_routing_rect": [
+      1122,
+      37,
+      150,
+      48
+    ],
+    "selector.choice.x": 560,
+    "selector.button_compact_rect": [
+      282,
+      86,
+      64,
+      48
+    ],
+    "selector.standalone_osc_selector_rect": [
+      8,
+      33,
+      200,
+      56
+    ],
+    "selector._value_label.geometry": 20.0,
+    "selector.pipa_icon.geometry": 20,
+    "selector.pipa_icon.scale": 4,
+    "selector.wave_icon.geometry": 24,
+    "selector.wave_icon.scale": 4,
+    "selector.selector_definition.scale": 4,
+    "selector.compact_route_face.geometry": 4,
+    "selector.compact_button_face.geometry": 4,
+    "selector.choice_overlay_art.geometry": 4,
+    "selector.build_shape_selector.geometry": 202,
+    "selector.build_shape_selector.geometry.offset1": 56,
+    "selector.png_routing_frame.mid.y": 2,
+    "selector.compact_route_face.pad": 1,
+    "selector.compact_route_face.caret.sz": 4,
+    "selector.compact_button_face.pad": 1,
+    "selector.compact_button_face.strip.x": 4,
+    "selector.compact_button_face.strip.y": 3,
+    "selector.compact_button_face.strip.h": 5,
+    "selector.choice_overlay_art.row.h": 44,
+    "selector.choice_overlay_art.pitch": 48,
+    "selector.selector_definition.left": 54,
+    "selector.selector_definition.caption": 13,
+    "selector.build_shape_selector.selector_definition": 19.0,
+    "selector.png_routing_frame.range": 1,
+    "selector.png_routing_frame.put": 1,
+    "selector.write_routing_assets.png_solid": 16,
+    "selector.build_compact_osc_routing_definition.build_choice_definition": 16.0,
+    "selector._choice_rows.y0": 800,
+    "selector.compact_route_face.strip.y": 4,
+    "selector.compact_route_face.strip.h": 4,
+    "selector.compact_route_face.strip.pad.x": 10,
+    "selector.compact_route_face.caret.cx": 16,
+    "selector.compact_button_face.strip.w": 8,
+    "selector.compact_button_face.body.y": 4,
+    "selector.compact_button_face.body.h": 4,
+    "selector.choice_overlay_art.total.h": 8,
+    "selector.choice_overlay_art.dot.cx": 24,
+    "selector.choice_overlay_art.r": 5,
+    "selector.build_standalone_osc_selector_definition.kwargs": 20.0,
+    "selector.macro_bank_definition.rects": 380,
+    "selector.macro_bank_definition.rects.offset1": 56,
+    "selector.macro_bank_definition.rects.offset2": 56,
+    "selector._choice_overlay.items": 1280,
+    "selector._choice_overlay.items.offset1": 800,
+    "selector._choice_overlay.items.offset2": [
+      0,
+      0,
+      {
+        "ref": "screen.width"
+      },
+      {
+        "ref": "screen.height"
+      }
+    ],
+    "selector.selector_definition.height": {
+      "ref": "height.high"
+    },
+    "selector.selector_definition.height.offset1": {
+      "ref": "height.medium"
+    },
+    "selector.selector_definition.x.l": 18,
+    "selector.selector_definition.left.offset1": 56,
+    "selector.selector_definition.left.offset2": 32,
+    "selector.selector_definition.left.offset3": 28,
+    "selector.selector_definition.left.offset4": 14,
+    "selector.selector_definition.text.width": 28,
+    "selector.selector_definition.text.width.offset1": 32,
+    "selector.selector_definition.value.bounds.bounds": 29,
+    "selector.selector_definition.caption.offset1": 18,
+    "selector.png_routing_frame.put.offset1": 2,
+    "selector.png_routing_frame.put.offset2": 2,
+    "selector.build_standalone_osc_source_overlay.geometry": 1,
+    "selector.build_standalone_osc_source_overlay.label": 16,
+    "selector.compact_route_face.rounded_rectangle": 1,
+    "selector.compact_route_face.idx": 1,
+    "selector.compact_route_face.total.strip.w": 2,
+    "selector.compact_route_face.caret.cy": 2,
+    "selector.compact_route_face.text.cy": 3,
+    "selector.compact_route_face.text.cx": 20,
+    "selector.compact_button_face.rounded_rectangle": 1,
+    "selector.compact_button_face.half.w": 4,
+    "selector.choice_overlay_art.rounded_rectangle": 1,
+    "selector.choice_overlay_art.y": 4,
+    "selector.pipa_icon.line": 3,
+    "selector.wave_icon.points": 4,
+    "selector.selector_definition.height.offset2": {
+      "ref": "height.medium"
+    },
+    "selector.selector_definition.rounded_rectangle": 1,
+    "selector.selector_definition.x.r": 18,
+    "selector.selector_definition.left.offset5": 160,
+    "selector.selector_definition.definition": 19,
+    "selector.selector_definition.definition.offset1": 24,
+    "selector.selector_definition.value.bounds.bounds.offset1": 21,
+    "selector.selector_definition.caption.offset2": 4,
+    "selector.png_routing_frame.put.offset3": 14,
+    "selector.png_routing_frame.put.offset4": 8,
+    "selector.build_standalone_osc_source_overlay.label.offset1": 112,
+    "selector.build_standalone_osc_source_overlay.label.offset2": 72,
+    "selector.build_standalone_osc_source_overlay.update": 2,
+    "selector.compact_route_face.seg.w": 4,
+    "selector.compact_button_face.rounded_rectangle.offset1": 4,
+    "selector.choice_overlay_art.rounded_rectangle.offset1": 6,
+    "selector.choice_overlay_art.text": 42,
+    "selector.selector_definition.geometry": 56,
+    "selector.selector_definition.x.v": 34,
+    "selector.selector_definition.x": 18,
+    "selector.selector_definition._image_component": 14,
+    "selector.selector_definition._image_component.offset1": 28,
+    "selector.selector_definition._image_component.offset2": 24,
+    "selector.build_standalone_osc_source_overlay.label.offset3": 88,
+    "selector.compact_route_face.rounded_rectangle.offset1": 4,
+    "selector.compact_route_face.polygon": 2,
+    "selector.compact_route_face.polygon.offset1": 3,
+    "selector.choice_overlay_art.rounded_rectangle.offset2": 6,
+    "selector.choice_overlay_art.text.offset1": 24,
+    "selector.choice_overlay_art.ellipse": 2,
+    "selector.selector_definition.line": 3,
+    "selector.selector_definition.line.offset1": 6,
+    "selector.selector_definition.line.offset2": 6,
+    "selector.selector_definition.line.offset3": 6,
+    "selector.selector_definition.line.offset4": 6,
+    "selector.selector_definition.line.offset5": 4,
+    "selector.selector_definition.line.offset6": 2,
+    "selector.selector_definition.line.offset7": 4,
+    "selector.selector_definition.line.offset8": 2,
+    "selector.selector_definition.line.offset9": 5,
+    "selector.selector_definition.line.offset10": 2,
+    "selector.selector_definition.line.offset11": 5,
+    "selector.selector_definition.line.offset12": 2,
+    "selector.selector_definition._image_component.offset3": 24,
+    "selector.wave_icon.points.offset1": 8,
+    "tune.standalone_osc_tune_rect": [
+      10,
+      192,
+      {
+        "ref": "tune.width"
+      },
+      {
+        "ref": "tune.height"
+      }
+    ],
+    "tune.name_value_box_face.geometry": 4,
+    "tune.name_value_preview.geometry": 4,
+    "tune.tune_track_button.geometry": 4,
+    "tune.tune_more_button.geometry": 4,
+    "tune.build_standalone_osc_tune_definition.gap.x": 8,
+    "tune.build_standalone_osc_tune_definition.x0": 10,
+    "tune.build_standalone_osc_tune_definition.y.r1": 26,
+    "tune.tune_card.geometry": 4,
+    "tune.tune_card.geometry.offset1": 48,
+    "tune.tune_card.geometry.offset2": 6,
+    "tune.tune_card.geometry.offset3": 48,
+    "tune.get_height_preset.geometry": {
+      "ref": "height.medium"
+    },
+    "tune.tune_track_button.dot.r": 6,
+    "tune.tune_track_button.dot.cx": 22,
+    "tune.build_standalone_osc_tune_definition.card.h": 8,
+    "tune.tune_card.col.w": 125,
+    "tune.tune_card.gap.x": 8,
+    "tune.tune_card.box.w": 68,
+    "tune.tune_card.top.pad": 26,
+    "tune.tune_card.bottom.pad": 8,
+    "tune.tune_card.card.w": 278,
+    "tune.tune_card.x0": 10,
+    "tune.tune_card.dot.r": 6,
+    "tune.tune_card.r.out": 10,
+    "tune.tune_card.r.in": 7,
+    "tune.tune_card.r.hole": 4,
+    "tune.get_height_preset.geometry.offset1": {
+      "ref": "height.intermediate"
+    },
+    "tune.build_name_value_definition.bw": 20,
+    "tune.tune_card.dot.cx": 22,
+    "tune.tune_card.gx": 22,
+    "tune.tune_card.resize": 278,
+    "tune.name_value_box_face.rounded_rectangle": 1,
+    "tune.name_value_preview.bw": 20,
+    "tune.name_value_preview.rounded_rectangle": 1,
+    "tune.build_name_value_definition.focus.ring": 2.0,
+    "tune.build_name_value_definition.focus.ring.offset1": 1.0,
+    "tune.tune_track_button.rounded_rectangle": 1,
+    "tune.tune_more_button.rounded_rectangle": 1,
+    "tune.build_standalone_osc_tune_definition._header_label": 12,
+    "tune.build_standalone_osc_tune_definition._header_label.offset1": 8,
+    "tune.build_standalone_osc_tune_definition._header_label.offset2": 100,
+    "tune.build_standalone_osc_tune_definition._header_label.offset3": 16,
+    "tune.tune_card.rounded_rectangle": 1,
+    "tune.tune_card.text": 12,
+    "tune.tune_card.text.offset1": 8,
+    "tune.draw_cell.comp.im": 1,
+    "tune.tune_track_button.text": 10,
+    "tune.draw_cell.comp.im.offset1": 125,
+    "tune.tune_card.text.offset2": 10,
+    "tune.tune_card.text.offset3": 10,
+    "tune.tune_card.round": 3.5,
+    "meter.peak_hold.height": 2,
+    "button.art": {
+      "scale": 8,
+      "height": {
+        "ref": "height.medium"
+      },
+      "font": {
+        "ref": "font.button"
+      },
+      "padding": {
+        "ref": "button.text.padding"
+      },
+      "radius": {
+        "ref": "button.face.radius"
+      },
+      "outline": 1,
+      "origin": [
+        8,
+        4
+      ],
+      "power": {
+        "center": [
+          32,
+          29
+        ],
+        "radius": 12,
+        "arc": [
+          -52,
+          233,
+          2
+        ],
+        "stem": [
+          [
+            32,
+            13
+          ],
+          [
+            32,
+            27
+          ]
+        ],
+        "stroke": 3
+      },
+      "expand": {
+        "corners": [
+          [
+            20,
+            16,
+            1,
+            1
+          ],
+          [
+            44,
+            16,
+            -1,
+            1
+          ],
+          [
+            20,
+            40,
+            1,
+            -1
+          ],
+          [
+            44,
+            40,
+            -1,
+            -1
+          ]
+        ],
+        "arm": 7,
+        "stroke": 2.5
+      }
+    },
+    "origin": 0,
+    "pixel.edge": 1,
+    "sampling.standard": 4,
+    "selector.step.chevron.half_width": 12,
+    "selector.step.chevron.half_height": 20,
+    "selector.hit.minimum": 56,
+    "selector.marker.y": 120,
+    "selector.marker.size": 6,
+    "selector.route.chevron.length": 4,
+    "screen.width": 1280,
+    "screen.height": 800,
+    "screen.tab.height": 628,
+    "catalog.max_width": 1380,
+    "catalog.page_padding": 4,
+    "catalog.title.min": 32,
+    "catalog.title.fluid": 5,
+    "catalog.title.max": 62,
+    "catalog.card.min_width": 320,
+    "catalog.card.gap": 16,
+    "catalog.card.padding": 16,
+    "catalog.card.radius": 10,
+    "catalog.hero.height": 178,
+    "catalog.swatch.side": 1.4,
+    "catalog.size_table.width": 640,
+    "catalog.title.margin_bottom": 0.2,
+    "catalog.section.margin_top": 2,
+    "catalog.section.margin_bottom": 0.7,
+    "catalog.section.padding_top": 0.6,
+    "catalog.card_title.margin_top": 0.65,
+    "catalog.variant.margin_top": 0.5,
+    "catalog.paragraph.margin_top": 0.3,
+    "catalog.paragraph.margin_bottom": 0.8,
+    "catalog.swatch.gap": 0.5,
+    "catalog.swatch.label_gap": 0.4,
+    "catalog.table.column_gap": 1,
+    "catalog.render_button_card.gap": 16,
+    "catalog.render_button_card.total.h": 48,
+    "catalog.render_button_card.text.btn": 96,
+    "catalog.render_route_card.im": 150,
+    "catalog.render_route_card.im.offset1": 48,
+    "catalog.render_remaining_cards.preview": {
+      "ref": "smooth.width"
+    },
+    "catalog.render_remaining_cards.preview.offset1": {
+      "ref": "smooth.height"
+    },
+    "catalog.render_remaining_cards.preview.offset2": 2,
+    "catalog.render_source.geometry": 2,
+    "catalog.render_source.geometry.offset2": {
+      "ref": "smooth.height"
+    },
+    "catalog.render_source.geometry.offset3": 56,
+    "catalog.render_source.geometry.offset4": 56,
+    "catalog.samples.gap": 20,
+    "catalog.samples.caption_gap": 8,
+    "font.family": "Titillium Web",
+    "font.style.semibold": "SemiBold",
+    "font.style.regular": "Regular",
+    "font.file.semibold": "TitilliumWeb-SemiBold.ttf",
+    "selector.standalone_compact_osc_pan_rect": [
+      708,
+      37,
+      {
+        "ref": "control.width"
+      },
+      {
+        "ref": "height.medium"
+      }
+    ],
+    "selector.standalone_compact_osc_level_rect": [
+      914,
+      37,
+      {
+        "ref": "control.width"
+      },
+      {
+        "ref": "height.medium"
+      }
+    ],
+    "active_text.font": 11,
+    "active_text.default.width": 50,
+    "active_text.default.height": 24,
+    "active_text.scale": 1,
+    "active_text.preview.pad": 12,
+    "mod_row.height": 56,
+    "mod_row.width": 1198,
+    "mod_row.fullwidth": 1280,
+    "mod_row.step": 72,
+    "mod_row.number.width": 46,
+    "mod_row.slot_width": 56,
+    "mod_row.source_width": 176,
+    "mod_row.source.width": 176,
+    "mod_row.arrow_width": 22,
+    "mod_row.target_width": 244,
+    "mod_row.target.width": 244,
+    "mod_row.amount_width_normal": 508,
+    "mod_row.amount_width_scroll": 464,
+    "mod_row.amount.width": 508,
+    "mod_row.amount_bar.width": 376,
+    "mod_row.slider_width_normal": 400,
+    "mod_row.slider_width_scroll": 356,
+    "mod_row.slider_height": 56,
+    "mod_row.track_height": 16,
+    "mod_row.track_radius": 4,
+    "mod_row.polarity_width": 72,
+    "mod_row.polarity.width": 72,
+    "mod_row.route_width": 72,
+    "mod_row.route.width": 72,
+    "mod_row.more_width": 76,
+    "mod_row.more.width": 76,
+    "mod_row.edit_width": 76,
+    "mod_row.edit.width": 76,
+    "mod_row.readout_width": 96,
+    "mod_row.button_height": 56,
+    "mod_row.button_radius": 5,
+    "mod_row.selector_radius": 6,
+    "mod_row.font.title": 22,
+    "mod_row.font.header": 13,
+    "mod_row.font.label": 16,
+    "mod_row.font.value": 18,
+    "mod_row.font.slots": 14,
+    "mod_row.font.caption": 14,
+    "mod_row.font.dim": 14,
+    "mod_row.font.sub": 12,
+    "mod_matrix.width": 1280,
+    "mod_matrix.height": 628,
+    "mod_matrix.rows": 7,
+    "mod_matrix.header.height": 56,
+    "mod_matrix.row_start_y": 102,
+    "mod_matrix.row_step": 72,
+    "mod_matrix.header_y": 74,
+    "mod_matrix.header_center_y": 83,
+    "mod_matrix.header_center_source": 154,
+    "mod_matrix.header_center_target": 390,
+    "mod_matrix.header_center_amount": 772,
+    "mod_matrix.header_center_polarity": 1068,
+    "mod_matrix.header_center_state": 1146,
+    "mod_detail.col_aux_x": 8,
+    "mod_detail.col_aux_w": 449,
+    "mod_detail.col_shape_x": 465,
+    "mod_detail.col_shape_w": 324,
+    "mod_detail.col_time_x": 797,
+    "mod_detail.col_time_w": 475,
+    "mod_detail.cols_y": 126,
+    "mod_detail.cols_h": 494,
+    "mod_matrix.title_x": 58,
+    "mod_matrix.title_y": 28,
+    "mod_matrix.slots_x": 1090,
+    "mod_matrix.slots_y": 32,
+    "mod_matrix.arrow_cx": 255,
+    "mod_matrix.slot_num_x": 33,
+    "mixer_strip.width": 115,
+    "mixer_strip.height": 550,
+    "mixer_strip.stride": 127,
+    "mixer_strip.start_x": 10,
+    "mixer_strip.start_y": 10,
+    "mixer_strip.count": 10,
+    "mixer_strip.touch.min_target": 56,
+    "mixer_strip.control.height_56": 56,
+    "mixer_strip.button.solo_w": 56,
+    "mixer_strip.button.solo_h": 56,
+    "mixer_strip.button.mute_w": 56,
+    "mixer_strip.button.mute_h": 56,
+    "mixer_strip.button.spacing": 3,
+    "mixer_strip.fader.width": 95,
+    "mixer_strip.fader.height_source": 198,
+    "mixer_strip.fader.height_bus": 414,
+    "mixer_strip.fader.track_height_source": 168,
+    "mixer_strip.fader.track_height_bus": 384,
+    "mixer_strip.fader.track_width": 8,
+    "mixer_strip.fader.cap_width": 48,
+    "mixer_strip.fader.cap_height": 26,
+    "mixer_strip.fader.cap_radius": 4,
+    "mixer_strip.fader.cap_outline": 1,
+    "mixer_strip.fader.cap_notch_width": 24,
+    "mixer_strip.fader.cap_notch_height": 2,
+    "mixer_strip.meter.width": 18,
+    "mixer_strip.meter.offset_x": 97,
+    "mixer_strip.rect.header_name": [0, 0, 115, 17],
+    "mixer_strip.rect.header_solo_mute": [0, 18, 115, 56],
+    "mixer_strip.rect.solo": [0, 18, 56, 56],
+    "mixer_strip.rect.mute": [59, 18, 56, 56],
+    "mixer_strip.rect.fx_enable": [0, 18, 56, 56],
+    "mixer_strip.rect.solo_local": [0, 0, 56, 56],
+    "mixer_strip.rect.mute_local": [59, 0, 56, 56],
+    "mixer_strip.rect.fx_enable_local": [0, 0, 56, 56],
+    "mixer_strip.header.pad_x": 2,
+    "mixer_strip.header.pad_y": 2,
+    "mixer_strip.header.radius": 3,
+    "mixer_strip.fader.track_top_pad": 22,
+    "mixer_strip.fader.track_bottom_pad": 10,
+    "mixer_strip.fader.scale_pad_top": 10,
+    "mixer_strip.fader.scale_pad_bottom": 28,
+    "mixer_strip.fader.caption_y": 10,
+    "mixer_strip.fader.value_box_pad_x": 6,
+    "mixer_strip.fader.value_box_gap_y": 4,
+    "mixer_strip.meter.clip_height": 8,
+    "mixer_strip.meter.bar_pad": 2,
+    "mixer_strip.meter.scale_pad": 4,
+    "mixer_strip.tab.count": 6,
+    "mixer_strip.tab.width": 96,
+    "mixer_strip.tab.height": 56,
+    "mixer_strip.tab.start_x": 10,
+    "mixer_strip.tab.span_x": 1162,
+    "mixer_strip.tab.gap_y": 6,
+    "mixer_strip.rect.destination": [0, 76, 115, 56],
+    "mixer_strip.rect.destination_label": [2, 0, 111, 56],
+    "mixer_strip.rect.level_source": [0, 136, 95, 198],
+    "mixer_strip.rect.meter_source": [97, 136, 18, 198],
+    "mixer_strip.rect.pan": [0, 340, 115, 56],
+    "mixer_strip.rect.send1": [0, 400, 115, 56],
+    "mixer_strip.rect.send2": [0, 460, 115, 56],
+    "mixer_strip.rect.level_bus": [0, 136, 95, 414],
+    "mixer_strip.rect.meter_bus": [97, 136, 18, 414],
+    "mixer_strip.rect.slider_title_v": [0, 4, 95, 20],
+    "mixer_strip.rect.slider_value_v_source": [0, 172, 95, 24],
+    "mixer_strip.rect.slider_value_v_bus": [0, 388, 95, 24],
+    "mixer_strip.rect.dial_knob": [4, 8, 40, 40],
+    "mixer_strip.rect.dial_name": [48, 6, 63, 18],
+    "mixer_strip.rect.dial_value": [48, 26, 63, 22],
+    "mixer_strip.rect.slider_title_h": [6, 18, 42, 20],
+    "mixer_strip.rect.slider_value_h": [52, 18, 56, 20],
+    "mixer_strip.rect.slider_groove_h": [6, 42, 103, 6],
+    "mixer_strip.font.header": 14,
+    "mixer_strip.font.destination": 15,
+    "mixer_strip.font.caption": 13,
+    "mixer_strip.font.value": 13,
+    "mixer_strip.font.badge": 11,
+    "mixer_strip.font.note": 10,
+    "mixer_strip.font.sm": 16,
+    "mixer_strip.font.scale": 10,
+    "mixer_strip.font.preview_title": 20,
+    "mixer_strip.font.preview_sub": 13,
+    "mixer_strip.font.preview_card": 15,
+    "mixer_strip.preview.before_after_w": 760,
+    "mixer_strip.preview.before_after_h": 740,
+    "mixer_strip.preview.variants_w": 940,
+    "mixer_strip.preview.variants_h": 750,
+    "mixer_strip.preview.catalog_w": 460,
+    "mixer_strip.preview.catalog_h": 600,
+    "mixer_strip.preview.crop_x0": 6,
+    "mixer_strip.preview.crop_y0": 176,
+    "mixer_strip.preview.crop_x1": 129,
+    "mixer_strip.preview.crop_y1": 734,
+    "mixer_strip.preview.card_w": 330,
+    "mixer_strip.preview.card_h": 615,
+    "mixer_strip.preview.card_radius": 8,
+    "mixer_strip.preview.badge_radius": 4,
+    "mixer_strip.preview.badge_w_old": 190,
+    "mixer_strip.preview.badge_w_new": 175,
+    "mixer_strip.preview.badge_h": 18,
+    "mixer_strip.preview.variants_col_w": 280,
+    "mixer_strip.preview.variants_col_h": 635,
+    "mixer_strip.preview.variants_gap": 20,
+    "mod_picker.rows": 7,
+    "mod_picker.row": [40, 96, 1200, 56],
+    "mod_picker.row_step": 60,
+    "mod_picker.title": [280, 12, 720, 56],
+    "mod_picker.back": [40, 12, 120, 56],
+    "mod_picker.groups": [170, 12, 100, 56],
+    "mod_picker.prev": [40, 548, 150, 56],
+    "mod_picker.next": [1090, 548, 150, 56],
+    "mod_picker.all_sources": [640, 540, 260, 56],
+    "meter.stereo.channel_width": 8,
+    "meter.stereo.channel_gap": 2,
+    "meter.stereo.clip_height": 4,
+    "meter.stereo.clip_gap": 2,
+    "meter.stereo.segment_height": 4,
+    "meter.stereo.segment_gap": 1
+  },
+  "named_sizes": [
+    {
+      "label": "Small",
+      "token": "height.small"
+    },
+    {
+      "label": "Medium",
+      "token": "height.medium"
+    },
+    {
+      "label": "High",
+      "token": "height.high"
+    }
+  ]
+}

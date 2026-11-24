@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "FM Ratio Ladder",
+ "category": "Digital",
+ "description": "Modulator ratios 1 to 8, eight frames each, the index rising 1 to 5 inside each step: the character jumps at every step and sweeps inside it.",
+ "frames": 64,
+ "seed": "fm_ratio_ladder",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "fm_ratio_ladder"
+  }
+ }
+}

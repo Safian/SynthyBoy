@@ -1,0 +1,4 @@
+view: mixer
+page_top: 0
+gpu_state: running
+instances: 1

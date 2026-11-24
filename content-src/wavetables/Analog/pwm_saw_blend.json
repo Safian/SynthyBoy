@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "PWM Saw Blend",
+ "category": "Analog",
+ "description": "A pulse whose width sweeps 50 % to 4 % while a saw fades in under it: the width modulated saw of string machines.",
+ "frames": 64,
+ "seed": "pwm_saw_blend",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "pwm_saw_blend"
+  }
+ }
+}

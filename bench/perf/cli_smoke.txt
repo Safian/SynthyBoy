@@ -1,0 +1,17 @@
+# CLI smoke tests of synthyboy_tier_bench, read by bench/CMakeLists.txt. One test per line:  name~platform~arguments~regular expression
+# name: the test is synthyboy_tier_bench_<name>.  platform: any, posix (not Windows) or linux.  arguments: split like a shell line, @PRESETS@ is content/presets.
+# regular expression: a CTest PASS_REGULAR_EXPRESSION of the output. It must hold no semicolon and no square bracket (CMake reads this file as a list).
+# Empty lines and lines starting with a hash are ignored.
+list_basic~any~--list --load basic --config low~profile low
+rt_flags~posix~--load basic --config low --seconds 0.3 --rt 20 --mlock --csv /dev/null~rt: 
+csv_schema2~posix~--load basic --config low --seconds 0.3 --csv /dev/null~csv schema 2
+health_line~posix~--load basic --config low --seconds 0.3~health: run_delay
+helpers_away~linux~--load basic --config low --seconds 0.3 --core 0~helpers: 
+verify_guard~any~--verify --load basic --config low~verify: 0 of 1 renders differ
+pmu_flag~posix~--load basic --config low --seconds 0.3 --pmu cache --csv /dev/null~pmu: 
+start_budget~any~--load basic --config low --start-budget-us 5000 --list~spectral start budget: 5000 us
+first_blocks~posix~--load basic --config low --first-blocks 4~first: block 3 
+evict_flag~posix~--load basic --config low --seconds 0.3 --evict~health: run_delay
+modules_fx~posix~--modules --module-group fx --module-reps 1 --seconds 0.3 --config low,fx=all~module-table: 13 cases
+fx_budget~any~--load basic --config low --fx-budget 20 --list~fx budget .*: 20 %
+fx_budget_status~posix~--load basic --config low --seconds 0.3 --fx-budget-status~fx budget: budget 35.00 %, admitted 0.00 %

@@ -1,0 +1,107 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Diphthong Series",
+ "category": "Vocal",
+ "description": "Eight diphthongs of eight frames each (ah-ih, ah-oo, aw-ih, eh-ih, ee-oo, oo-ah, ae-aw, eh-ah), each gliding from its first to its second vowel; a stepped table, the jump between diphthongs is intended.",
+ "frames": 64,
+ "seed": "diphthong_series",
+ "source": {
+  "type": "formant",
+  "params": {
+   "f0": 140,
+   "voice": "men",
+   "sequence": [
+    "a",
+    "I",
+    "a",
+    "U",
+    "o",
+    "I",
+    "E",
+    "I",
+    "i",
+    "u",
+    "u",
+    "a",
+    "ae",
+    "o",
+    "E",
+    "a"
+   ],
+   "pos": {
+    "law": "keys",
+    "points": [
+     [
+      0.0,
+      0
+     ],
+     [
+      0.113,
+      1
+     ],
+     [
+      0.125,
+      2
+     ],
+     [
+      0.238,
+      3
+     ],
+     [
+      0.25,
+      4
+     ],
+     [
+      0.363,
+      5
+     ],
+     [
+      0.375,
+      6
+     ],
+     [
+      0.488,
+      7
+     ],
+     [
+      0.5,
+      8
+     ],
+     [
+      0.613,
+      9
+     ],
+     [
+      0.625,
+      10
+     ],
+     [
+      0.738,
+      11
+     ],
+     [
+      0.75,
+      12
+     ],
+     [
+      0.863,
+      13
+     ],
+     [
+      0.875,
+      14
+     ],
+     [
+      1.0,
+      15
+     ]
+    ],
+    "ease": "linear"
+   },
+   "tilt": 1.0
+  }
+ },
+ "post": {
+  "limit": 250
+ }
+}

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 60,
+  "title": "Natív név–érték mező",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "Sub · OCT",
+          "file": "catalog-name-value-40.png",
+          "alt": "Natív név–érték mező {size:height.intermediate} px"
+        }
+      ]
+    }
+  ]
+}

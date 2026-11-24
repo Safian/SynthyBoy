@@ -1,0 +1,6 @@
+{
+  "comment": "The findings of tools layout_lint_host that are known today (one key per line: page/state|check|control(s)). A new finding fails the test; a finding that is gone must be removed here (the program says which). Regenerate with --write-baseline.",
+  "findings": [
+
+  ]
+}

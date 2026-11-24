@@ -1,0 +1,30 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Ring Mod Saw Glide",
+ "category": "Metallic",
+ "description": "A 24 harmonic saw ring modulated by a sine gliding 0.5 to 12.5 harmonics (with a quarter of the dry saw kept): dense, inharmonic metal that resolves at the integer ratios.",
+ "frames": 64,
+ "seed": "ring_mod_saw_glide",
+ "source": {
+  "type": "ring",
+  "params": {
+   "c": {
+    "law": "linear",
+    "from": 0.5,
+    "to": 12.5
+   },
+   "dry": 0.25,
+   "max_k": 24
+  },
+  "input": {
+   "type": "additive",
+   "params": {
+    "count": 24,
+    "rolloff": 1.0
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

@@ -1,0 +1,1144 @@
+// SynthyBoy - own engine: the eight classic filter models (Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser), written from
+// docs/engine-spec/05-filters.md and its measured responses (original code). Models 8 and up are the filters-serum collection.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#pragma once
+
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <vector>
+
+#include "../dsp/util.h"
+#include "../dsp/simd.h"
+#include "../dsp/fastmath.h"
+#include "../dsp/neon_cmp.h"
+#include "../fx/fx_dsp.h"
+
+#ifndef SB_MID_SAT
+#define SB_MID_SAT 1.0f
+#endif
+#ifndef SB_DIRTY_Q1
+#define SB_DIRTY_Q1 0.556f
+#endif
+#ifndef SB_DIRTY_SAT
+#define SB_DIRTY_SAT 0.5f
+#endif
+#ifndef SB_DIODE_CORNER
+#define SB_DIODE_CORNER 0.765f
+#endif
+#ifndef SB_DIODE_GAIN
+#define SB_DIODE_GAIN 9.8f
+#endif
+#ifndef SB_DIODE_FB
+#define SB_DIODE_FB 0.28f
+#endif
+
+namespace synthyboy
+{
+namespace own
+{
+struct ClassicParams
+{
+    int model = 3, style = 0;
+    float cutoffHz = 1000.0f, res = 0.2f, driveDb = 0.0f, blendRaw = 0.0f; // blendRaw 0 .. 2
+    float combOffset = 42.0f, fx = 0.5f, fy = 0.5f, fres = 0.85f, fspread = 0.0f, ftranspose = 0.0f;
+    bool fast = false; // tier low: tanh by a rational approximation (error < 1e-4)
+};
+
+/** One channel of a classic model. process () takes the block's start and end parameters and interpolates the coefficients every 8 samples. */
+class ClassicFilter
+{
+public:
+    /** The weights of the sections for a style and the blend `b` in -1 .. 1 (document 05, 2.1). */
+    struct Wt { float lp, bp, hp; };
+    /** Everything an svfModel call derives from its arguments (tan, divisions, weights, square roots): computed when the parameters change. */
+    struct SvfSetup
+    {
+        float g = 0.0f, R = 0.0f, R1 = 0.0f, dEff = 1.0f, post = 1.0f;
+        Wt wa {}, wb {};
+        bool two = false, shelf = false;
+    };
+    struct LadderSetup
+    {
+        float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, invDen = 1.0f, c[5] = {};
+    };
+    void prepare (double sampleRate)
+    {
+        sr = sampleRate;
+        memoValid = false;
+        rampValid = false;
+        svfRampValid = false;
+        rampKey = false;
+        svfKey = false;
+        comb.prepare (static_cast<int> (sampleRate * 0.1));
+        reset();
+    }
+
+    void reset() noexcept
+    {
+        s[0] = s[1] = s[2] = s[3] = s[4] = s[5] = 0.0f;
+        for (auto& x : dv) x = 0.0f;
+        dHp[0] = dHp[1] = dFb = dU = dPre = tilt = 0.0f;
+        for (auto& f : fm) f.reset();
+        if (combUsed) // the comb line (32 KB) is cleared only if the Comb model has written into it
+        {
+            comb.reset();
+            combUsed = false;
+        }
+        for (auto& z : ap) z = 0.0f;
+        fbState = 0.0f;
+        lpA = lpB = 0.0f;
+    }
+
+    /** The coefficients change on the absolute 8 sample grid of the control period (t0 = position in the period), so the result does not depend on how the
+        host cuts the blocks. */
+    void process (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        if (sameParams (a, b) && a.cutoffHz >= 1.0f)
+        {
+            // nothing moves across the period: every 8 sample piece would get exactly b (pow (1, t) = 1, lerp (x, x, t) = x), and the sample loops
+            // carry their state from piece to piece, so one call gives the same samples
+            block (in, out, n, b);
+            return;
+        }
+        if (b.fast && a.fast && a.model == b.model && a.style == b.style)
+        {
+            if (b.model == 2)
+            {
+                ladderRamp (in, out, n, a, b, t0);
+                return;
+            }
+            if (b.model == 0 || b.model == 1 || b.model == 3)
+            {
+                svfRamp (in, out, n, a, b, t0);
+                return;
+            }
+        }
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            ClassicParams p = b;
+            p.cutoffHz = a.cutoffHz * std::pow (b.cutoffHz / std::max (a.cutoffHz, 1.0f), t);
+            p.res = lerp (a.res, b.res, t);
+            p.driveDb = lerp (a.driveDb, b.driveDb, t);
+            p.blendRaw = lerp (a.blendRaw, b.blendRaw, t);
+            block (in + i, out + i, m, p);
+            i += m;
+        }
+    }
+
+public:
+    /** The ramp setups of another channel with the same parameters (the right channel of a filter whose two cutoffs are equal needs what the left one just computed). */
+    void adoptRamp (const ClassicFilter& o) noexcept
+    {
+        rampA = o.rampA; rampB = o.rampB; rampP = o.rampP; rampPa = o.rampPa; rampPb = o.rampPb; rampValid = o.rampValid; rampKey = o.rampKey;
+        svfRampA = o.svfRampA; svfRampB = o.svfRampB; svfRampP = o.svfRampP; svfRampPa = o.svfRampPa; svfRampPb = o.svfRampPb; svfRampValid = o.svfRampValid; svfKey = o.svfKey;
+    }
+    static bool sameParams (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        return a.model == b.model && a.style == b.style && a.cutoffHz == b.cutoffHz && a.res == b.res && a.driveDb == b.driveDb && a.blendRaw == b.blendRaw
+            && a.combOffset == b.combOffset && a.fx == b.fx && a.fy == b.fy && a.fres == b.fres && a.fspread == b.fspread && a.ftranspose == b.ftranspose && a.fast == b.fast;
+    }
+    static float sat (float v) noexcept { return v - 0.9f * v * v * v / (v * v + 3.0f); }
+    /** tanh: the library function, or at tier low a [7/6] Pade approximant (absolute error below 1e-4, clamped to +-1 beyond |x| = 4.972 where it reaches 1). */
+    float th (float x) const noexcept
+    {
+        return fastMath ? fastmath::tanh (x) : std::tanh (x);
+    }
+    float hardtanh (float v) const noexcept
+    {
+        const float a = std::fabs (v);
+        return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * th ((a - 0.66f) / 0.34f), v);
+    }
+    bool fastMath = false;
+    bool scalarLoops = false; // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the scalar pair loop also where the NEON form exists
+    /** The values derived from the parameters (several pow / sqrt / tan) are kept while the parameters stay the same, as they do for most control periods. */
+    void remember (const ClassicParams& p) noexcept
+    {
+        if (memoValid && sameParams (p, memoP))
+            return;
+        memoP = p;
+        fastMath = p.fast;
+        memoValid = true;
+        svfValid = false;
+        ladValid = false;
+        dioValid = false;
+        fmtValid = false;
+        mf = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        md = std::pow (10.0f, p.driveDb * 0.05f);
+        mr = clamp01 (p.res);
+        mbraw = std::clamp (p.blendRaw, 0.0f, 2.0f);
+    }
+    /** The setup of the state variable models (0 Analog, 1 Dirty, 3 Digital) for the parameters last passed to remember (). */
+    void ensureSvf (const ClassicParams& p) noexcept
+    {
+        if (svfValid)
+            return;
+        const float f = mf, d = md, r = mr;
+        switch (p.model)
+        {
+            case 3: svf = svfSetup (f, 0.5f + 15.5f * r * r * r, 1.0f, d, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), 3, p.style, p.blendRaw, r); break;
+            case 0: svf = svfSetup (f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d, d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style != 0 ? kAn[5] : kAn[3]), 0, p.style, p.blendRaw, r); break;
+            default: svf = svfSetup (f, 1.0f / std::max (1.8f - 1.87f * std::sqrt (r), 0.03f), kDirtyQ1, 2.0f * (d - 1.0f) + 1.0f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, 1, p.style, p.blendRaw, r); break;
+        }
+        svfValid = true;
+    }
+
+    void block (const float* in, float* out, int n, const ClassicParams& p) noexcept
+    {
+        remember (p);
+        const float f = mf, d = md, r = mr, braw = mbraw;
+        switch (p.model)
+        {
+            case 3: satLoop = false; ensureSvf (p); svfModel (in, out, n, 3, true); break;
+            case 0: satLoop = false; ensureSvf (p); svfModel (in, out, n, 0, false); break;
+            case 1: satLoop = true; ensureSvf (p); svfModel (in, out, n, 1, false); break;
+            case 2: ladder (in, out, n, f, r, d, p.style, braw - 1.0f); break;
+            case 4: diode (in, out, n, f, r, d, p); break;
+            case 5: formant (in, out, n, p); break;
+            case 6: combFilter (in, out, n, f, r, p); break;
+            case 7: phaserFilter (in, out, n, f, r, d, p); break;
+            default: std::copy (in, in + n, out); break;
+        }
+    }
+
+public:
+    /** Two channels of the state variable models with parameters that stay put across the period, in one loop: the two recurrences are independent, so they overlap
+        instead of running one after the other. The samples are those of two separate process () calls. False (nothing done) if the case does not apply. */
+    /** Two channels of the state variable models in one loop, the setups given (the two chains are independent and overlap). */
+    static void svfPairLoop (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n, int model) noexcept
+    {
+#if SB_NEON
+        if (model == 3 && !A.scalarLoops)
+        {
+            svfPairLoopDigitalNeon (A, B, za, zb, inA, outA, inB, outB, n);
+            return;
+        }
+#endif
+        svfPairLoopScalar (A, B, za, zb, inA, outA, inB, outB, n, model);
+    }
+#if SB_NEON
+    /** The Digital model (3) of svfPairLoopScalar () with the two channels in the two lanes of a NEON register: the operations of tpt () and of the loop one by one
+        (separate multiply and add, the true division: one instruction on AArch64, two scalar divisions on 32 bit ARM), flushDenormal () as a select, and the limiter
+        hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. */
+    static void svfPairLoopDigitalNeon (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
+    {
+        // the lanes are written as the S halves of the D register (GCC's vector subscript; a float t[2] went through the stack on 32 bit ARM), and the compares are
+        // the integer forms of dsp/neon_cmp.h (GCC makes a float compare on 32 bit ARM lane by lane through the VFP flags): the same masks for every input
+        auto pair = [] (float a, float b) noexcept { float32x2_t r = vdup_n_f32 (a); r[1] = b; return r; };
+        auto divide = [] (float32x2_t a, float32x2_t b) noexcept
+        {
+ #if defined(__aarch64__)
+            return vdiv_f32 (a, b);
+ #else
+            float32x2_t r = a;
+            r[0] = a[0] / b[0];
+            r[1] = a[1] / b[1];
+            return r;
+ #endif
+        };
+        auto flush = [] (float32x2_t v) noexcept { return neoncmp::flushTiny (v); };
+        auto limit = [&A, &B] (float32x2_t v) noexcept
+        {
+            // hardtanh (): a <= 0.66 ? v : ...; the comparison of the scalar function, per lane (a NaN is not <= 0.66 and goes through the function, as there)
+            const uint32x2_t below = neoncmp::absLe (v, 0.66f);
+            if ((vget_lane_u32 (below, 0) & vget_lane_u32 (below, 1)) != 0u)
+                return v;
+            float32x2_t r = vdup_n_f32 (A.hardtanh (vget_lane_f32 (v, 0)));
+            r[1] = B.hardtanh (vget_lane_f32 (v, 1));
+            return r;
+        };
+        const bool two = za.two;
+        const float32x2_t g = pair (za.g, zb.g), R = pair (za.R, zb.R), dEff = pair (za.dEff, zb.dEff), post = pair (za.post, zb.post);
+        const float32x2_t waLp = pair (za.wa.lp, zb.wa.lp), waBp = pair (za.wa.bp, zb.wa.bp), waHp = pair (za.wa.hp, zb.wa.hp);
+        const float32x2_t wbLp = pair (za.wb.lp, zb.wb.lp), wbBp = pair (za.wb.bp, zb.wb.bp), wbHp = pair (za.wb.hp, zb.wb.hp);
+        // the denominators of tpt (): 1 + g Rloop + g g, with Rloop = R1 in the first section and R in the last (the same expression, once instead of per sample)
+        const float32x2_t den1 = pair (1.0f + za.g * za.R1 + za.g * za.g, 1.0f + zb.g * zb.R1 + zb.g * zb.g);
+        const float32x2_t den2 = pair (1.0f + za.g * za.R + za.g * za.g, 1.0f + zb.g * zb.R + zb.g * zb.g);
+        const float32x2_t twoV = vdup_n_f32 (2.0f);
+        const int k2 = two ? 3 : 0;
+        float32x2_t a1 = pair (A.s[0], B.s[0]), a2 = pair (A.s[1], B.s[1]);       // the states of the first section (the only one when !two)
+        float32x2_t b1 = pair (A.s[k2], B.s[k2]), b2 = pair (A.s[k2 + 1], B.s[k2 + 1]); // the states of the last section
+        for (int i = 0; i < n; ++i)
+        {
+            float32x2_t u = vmul_f32 (pair (inA[i], inB[i]), dEff);
+            if (two)
+            {
+                // tpt (0, u, g, R1, R, ...): the loop runs with R1, the high pass output with the true R
+                const float32x2_t v3 = vsub_f32 (u, a2);
+                const float32x2_t v1 = divide (vadd_f32 (a1, vmul_f32 (g, v3)), den1);
+                const float32x2_t v2 = vadd_f32 (a2, vmul_f32 (g, v1));
+                a1 = flush (vsub_f32 (vmul_f32 (twoV, v1), a1));
+                a2 = flush (vsub_f32 (vmul_f32 (twoV, v2), a2));
+                const float32x2_t hp = vsub_f32 (vsub_f32 (u, vmul_f32 (R, v1)), v2);
+                const float32x2_t y1 = vadd_f32 (vadd_f32 (vmul_f32 (waLp, v2), vmul_f32 (waBp, v1)), vmul_f32 (waHp, hp));
+                u = limit (y1);
+            }
+            float32x2_t& c1 = two ? b1 : a1;
+            float32x2_t& c2 = two ? b2 : a2;
+            const float32x2_t v3 = vsub_f32 (u, c2);
+            const float32x2_t v1 = divide (vadd_f32 (c1, vmul_f32 (g, v3)), den2);
+            const float32x2_t v2 = vadd_f32 (c2, vmul_f32 (g, v1));
+            c1 = flush (vsub_f32 (vmul_f32 (twoV, v1), c1));
+            c2 = flush (vsub_f32 (vmul_f32 (twoV, v2), c2));
+            const float32x2_t hp = vsub_f32 (vsub_f32 (u, vmul_f32 (R, v1)), v2);
+            const float32x2_t y = limit (vadd_f32 (vadd_f32 (vmul_f32 (wbLp, v2), vmul_f32 (wbBp, v1)), vmul_f32 (wbHp, hp)));
+            const float32x2_t o = vmul_f32 (y, post);
+            outA[i] = vget_lane_f32 (o, 0);
+            outB[i] = vget_lane_f32 (o, 1);
+        }
+        if (two)
+        {
+            A.s[0] = vget_lane_f32 (a1, 0); B.s[0] = vget_lane_f32 (a1, 1);
+            A.s[1] = vget_lane_f32 (a2, 0); B.s[1] = vget_lane_f32 (a2, 1);
+            A.s[3] = vget_lane_f32 (b1, 0); B.s[3] = vget_lane_f32 (b1, 1);
+            A.s[4] = vget_lane_f32 (b2, 0); B.s[4] = vget_lane_f32 (b2, 1);
+        }
+        else
+        {
+            A.s[0] = vget_lane_f32 (a1, 0); B.s[0] = vget_lane_f32 (a1, 1);
+            A.s[1] = vget_lane_f32 (a2, 0); B.s[1] = vget_lane_f32 (a2, 1);
+        }
+    }
+#endif
+    /** The scalar loop of svfPairLoop (): every model, every build. */
+    static void svfPairLoopScalar (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n, int model) noexcept
+    {
+        const bool linearHard = model == 3;
+        const bool two = za.two;
+        const bool sat = A.satLoop;
+        for (int i = 0; i < n; ++i)
+        {
+            float ua = inA[i] * za.dEff, ub = inB[i] * zb.dEff;
+            if (two)
+            {
+                float lpa, bpa, hpa, lpb, bpb, hpb;
+                A.tpt (0, ua, za.g, za.R1, model == 3 ? za.R : za.R1, lpa, bpa, hpa, false);
+                B.tpt (0, ub, zb.g, zb.R1, model == 3 ? zb.R : zb.R1, lpb, bpb, hpb, false);
+                const float y1a = za.wa.lp * lpa + za.wa.bp * bpa + za.wa.hp * hpa;
+                const float y1b = zb.wa.lp * lpb + zb.wa.bp * bpb + zb.wa.hp * hpb;
+                ua = linearHard ? A.hardtanh (y1a) : (model == 1 ? y1a : A.th (y1a * kMidSat) / kMidSat);
+                ub = linearHard ? B.hardtanh (y1b) : (model == 1 ? y1b : B.th (y1b * kMidSat) / kMidSat);
+            }
+            float lpa, bpa, hpa, lpb, bpb, hpb;
+            A.tpt (two ? 3 : 0, ua, za.g, za.R, za.R, lpa, bpa, hpa, sat);
+            B.tpt (two ? 3 : 0, ub, zb.g, zb.R, zb.R, lpb, bpb, hpb, sat);
+            float ya = za.wb.lp * lpa + za.wb.bp * bpa + za.wb.hp * hpa;
+            float yb = zb.wb.lp * lpb + zb.wb.bp * bpb + zb.wb.hp * hpb;
+            ya = linearHard ? A.hardtanh (ya) : ya;
+            yb = linearHard ? B.hardtanh (yb) : yb;
+            outA[i] = ya * za.post;
+            outB[i] = yb * zb.post;
+        }
+    }
+    /** Tier low, two channels with the same moving parameters: one setup for both, the four pieces of the period in the paired loops. False if the case does not apply. */
+    static bool processRampPair (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& a, const ClassicParams& b,
+                                 int t0) noexcept
+    {
+        if (!(a.fast && b.fast && a.model == b.model && a.style == b.style && (b.model == 0 || b.model == 1 || b.model == 2 || b.model == 3)))
+            return false;
+        A.fastMath = B.fastMath = true;
+        const bool ladder = b.model == 2;
+        if (ladder)
+            A.ensureLadderRamp (a, b);
+        else
+        {
+            A.ensureSvfRamp (a, b);
+            if (A.svfRampB.shelf || A.svfRampA.shelf)
+                return false;
+            A.satLoop = B.satLoop = b.model == 1;
+        }
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            if (ladder)
+            {
+                const LadderSetup z = rampAt (A.rampA, A.rampB, t);
+                ladderPairLoop (A, B, z, z, inA + i, outA + i, inB + i, outB + i, m);
+            }
+            else
+            {
+                const SvfSetup z = svfRampAt (A.svfRampA, A.svfRampB, t);
+                svfPairLoop (A, B, z, z, inA + i, outA + i, inB + i, outB + i, m, b.model);
+            }
+            i += m;
+        }
+        return true;
+    }
+    static bool processPair (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& aA, const ClassicParams& bA,
+                             const ClassicParams& aB, const ClassicParams& bB) noexcept
+    {
+        if (!(sameParams (aA, bA) && aA.cutoffHz >= 1.0f && sameParams (aB, bB) && aB.cutoffHz >= 1.0f))
+            return false;
+        const int model = bA.model;
+        if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 2 || model == 3))
+            return false;
+        if (model == 2)
+            return processPairLadder (A, B, inA, outA, inB, outB, n, bA, bB);
+        A.remember (bA);
+        B.remember (bB);
+        A.ensureSvf (bA);
+        B.ensureSvf (bB);
+        if (A.svf.shelf || B.svf.shelf || A.svf.two != B.svf.two)
+            return false;
+        A.satLoop = B.satLoop = model == 1;
+        svfPairLoop (A, B, A.svf, B.svf, inA, outA, inB, outB, n, model);
+        return true;
+    }
+
+private:
+    ClassicParams memoP;
+    bool memoValid = false;
+    float mf = 0.0f, md = 1.0f, mr = 0.0f, mbraw = 0.0f;
+
+    static void styleWeights (int style, float b, Wt& A, Wt& B) noexcept
+    {
+        const float t = 0.5f * (b + 1.0f), pn = std::min (b, 0.0f), m = std::sqrt (0.5f * std::max (b, 0.0f) * std::max (b, 0.0f) + 0.5f);
+        switch (style)
+        {
+            case 2: A = B = { std::min (1.0f - b, 1.0f), 0.0f, std::min (1.0f + b, 1.0f) }; break;
+            case 3: A = { t, 0.0f, 1.0f }; B = { 1.0f, 0.0f, t }; break;
+            case 4: A = B = { m * (1.0f + pn), 2.0f * m * (1.0f + pn - b), m * (1.0f + pn) }; break;
+            default: A = B = { std::max (-b, 0.0f), std::sqrt (std::max (0.0f, 1.0f - b * b)), std::max (b, 0.0f) }; break;
+        }
+    }
+
+    // one or two (24 dB) state variable sections with the weights of the style (document 05, 2 and 2.1); the saturation of the Dirty model sits in the loop of the section
+    // `dRaw` is the drive as set, `dComp` the drive compensated by the resonance of the model; the style blends them
+    SvfSetup svf;
+    bool svfValid = false;
+
+    void svfModel (const float* in, float* out, int n, int model, bool linearHard) noexcept
+    {
+        svfRun (svf, in, out, n, model, linearHard);
+    }
+    void svfRun (const SvfSetup& z, const float* in, float* out, int n, int model, bool linearHard) noexcept
+    {
+        if (z.shelf)
+        {
+            std::copy (in, in + n, out); // the shelving mode at 0 dB: LP + HP + R BP = u exactly (document 05, 2.1)
+            return;
+        }
+        const float g = z.g, R = z.R, R1 = z.R1, dEff = z.dEff, post = z.post;
+        const Wt wa = z.wa, wb = z.wb;
+        const bool two = z.two;
+        for (int i = 0; i < n; ++i)
+        {
+            float u = in[i] * dEff;
+            if (two)
+            {
+                // the first section: R = 1 in the loop, the weights with the true R inside the high pass
+                float lp, bp, hp;
+                tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false);
+                float y1 = wa.lp * lp + wa.bp * bp + wa.hp * hp;
+                u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : th (y1 * kMidSat) / kMidSat);
+            }
+            float lp, bp, hp;
+            tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop);
+            float y = wb.lp * lp + wb.bp * bp + wb.hp * hp;
+            y = linearHard ? hardtanh (y) : y;
+            out[i] = y * post;
+        }
+    }
+    /** The setup of the state variable models for parameters p, without touching the memo of block (). */
+    SvfSetup svfSetupFor (const ClassicParams& p) const noexcept
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float d = p.fast ? fastmath::pow10 (p.driveDb * 0.05f) : std::pow (10.0f, p.driveDb * 0.05f);
+        const float r = clamp01 (p.res);
+        switch (p.model)
+        {
+            case 3: return svfSetup (f, 0.5f + 15.5f * r * r * r, 1.0f, d, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), 3, p.style, p.blendRaw, r);
+            case 0: return svfSetup (f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d, d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style != 0 ? kAn[5] : kAn[3]), 0, p.style, p.blendRaw, r);
+            default: return svfSetup (f, 1.0f / std::max (1.8f - 1.87f * std::sqrt (r), 0.03f), kDirtyQ1, 2.0f * (d - 1.0f) + 1.0f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, 1, p.style, p.blendRaw, r);
+        }
+    }
+    /** Tier low, state variable models with moving parameters: the setup (tan, pow, sqrt, divisions) is computed at the two ends of the period, its coefficients are
+        interpolated linearly over the four pieces of 8 samples (see ladderRamp). */
+    void ensureSvfRamp (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        fastMath = true;
+        satLoop = b.model == 1;
+        if (!(svfKey && sameParams (svfRampPa, a) && sameParams (svfRampPb, b)))
+        {
+            const SvfSetup startSetup = (svfRampValid && sameParams (svfRampP, a)) ? svfRampB : svfSetupFor (a);
+            svfRampA = startSetup;
+            if (onlyCutoffDiffers (a, b))
+            {
+                svfRampB = startSetup; // only the cutoff moved: g is the only part of the setup that depends on it
+                const float f = std::clamp (b.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+                svfRampB.g = std::tan (kPif * std::min ((b.model == 0 ? f * kAn[0] : f) / static_cast<float> (sr), 0.499f));
+            }
+            else
+                svfRampB = svfSetupFor (b);
+            svfRampP = b;
+            svfRampValid = true;
+            svfRampPa = a;
+            svfRampPb = b;
+            svfKey = true;
+        }
+    }
+    static SvfSetup svfRampAt (const SvfSetup& A, const SvfSetup& B, float t) noexcept
+    {
+        SvfSetup z = B; // the flags (two, shelf) are those of the end of the period
+        z.g = lerp (A.g, B.g, t);
+        z.R = lerp (A.R, B.R, t);
+        z.R1 = lerp (A.R1, B.R1, t);
+        z.dEff = lerp (A.dEff, B.dEff, t);
+        z.post = lerp (A.post, B.post, t);
+        z.wa = { lerp (A.wa.lp, B.wa.lp, t), lerp (A.wa.bp, B.wa.bp, t), lerp (A.wa.hp, B.wa.hp, t) };
+        z.wb = { lerp (A.wb.lp, B.wb.lp, t), lerp (A.wb.bp, B.wb.bp, t), lerp (A.wb.hp, B.wb.hp, t) };
+        return z;
+    }
+    void svfRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        ensureSvfRamp (a, b);
+        const bool linearHard = b.model == 3;
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            SvfSetup z = svfRampB; // the flags (two, shelf) are those of the end of the period
+            z.g = lerp (svfRampA.g, svfRampB.g, t);
+            z.R = lerp (svfRampA.R, svfRampB.R, t);
+            z.R1 = lerp (svfRampA.R1, svfRampB.R1, t);
+            z.dEff = lerp (svfRampA.dEff, svfRampB.dEff, t);
+            z.post = lerp (svfRampA.post, svfRampB.post, t);
+            z.wa = { lerp (svfRampA.wa.lp, svfRampB.wa.lp, t), lerp (svfRampA.wa.bp, svfRampB.wa.bp, t), lerp (svfRampA.wa.hp, svfRampB.wa.hp, t) };
+            z.wb = { lerp (svfRampA.wb.lp, svfRampB.wb.lp, t), lerp (svfRampA.wb.bp, svfRampB.wb.bp, t), lerp (svfRampA.wb.hp, svfRampB.wb.hp, t) };
+            svfRun (z, in + i, out + i, m, b.model, linearHard);
+            i += m;
+        }
+    }
+    SvfSetup svfRampA, svfRampB;
+    ClassicParams svfRampP, svfRampPa, svfRampPb;
+    bool svfRampValid = false, svfKey = false;
+    SvfSetup svfSetup (float f, float Q, float Q1, float dRaw, float dComp, float postBase, int model, int style, float blendRaw, float resKnob) const noexcept
+    {
+        SvfSetup z;
+        z.g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
+        z.R = 1.0f / std::max (Q, 0.3f);
+        z.R1 = 1.0f / Q1;
+        const float b = std::clamp (blendRaw - 1.0f, -1.0f, 1.0f);
+        if (model == 3 && style == 5)
+        {
+            z.shelf = true;
+            return z;
+        }
+        styleWeights (style == 5 ? 1 : style, b, z.wa, z.wb);
+        // the sections: the Digital model runs one for the styles 0 and 5, two for 1 .. 4; Analog and Dirty one for style 0, two for the others (style 3 the dual pair)
+        z.two = style != 0;
+        float w = 1.0f, dEff;
+        switch (style)
+        {
+            case 2: w = std::fabs (b); break;
+            case 4: w = std::min (1.0f - b, 1.0f); break;
+            default: w = 1.0f; break;
+        }
+        const float t = 0.5f * (b + 1.0f);
+        if (style == 3)
+            dEff = lerp (dRaw, dComp * (2.0f - t), std::min (1.0f - b, 1.0f));
+        else
+            dEff = lerp (dRaw, dComp, w);
+        float post;
+        if (model == 3)
+            post = postBase; // 1 / sqrt (d) with the raw drive
+        else if (model == 0)
+            post = postBase * std::sqrt ((2.0f * resKnob + 1.0f) * dComp) / std::sqrt (std::max ((2.0f * resKnob + 1.0f) * dEff, 1.0e-6f)); // 1 / sqrt ((2 r + 1) d_eff)
+        else
+            post = postBase * std::sqrt (std::max (dComp, 1.0e-6f) / std::max (dEff, 1.0e-6f)) * (style >= 2 ? 1.0f - 0.2f * z.wb.hp : 1.0f); // (measured: the high pass share of the Dirty styles sits about 2 dB low)
+        z.dEff = dEff;
+        z.post = post;
+        return z;
+    }
+    static constexpr float kMidSat = SB_MID_SAT;
+    static constexpr float kDirtyQ1 = SB_DIRTY_Q1, kDirtySat = SB_DIRTY_SAT;
+    bool satLoop = false;
+    void tpt (int k, float u, float g, float Rloop, float Rhp, float& lp, float& bp, float& hp, bool saturate) noexcept
+    {
+        float& ic1 = s[k];
+        float& ic2 = s[k + 1];
+        const float v3 = u - ic2;
+        const float v1 = (ic1 + g * v3) / (1.0f + g * Rloop + g * g);
+        const float v2 = ic2 + g * v1;
+        ic1 = flushDenormal (2.0f * (saturate ? th (v1 * kDirtySat) / kDirtySat : v1) - ic1);
+        ic2 = flushDenormal (2.0f * v2 - ic2);
+        lp = v2;
+        bp = v1;
+        hp = u - Rhp * v1 - v2;
+    }
+
+    // four saturating one pole stages with global feedback (zero delay feedback solved linearly); the output is a weighted sum of the input and the stage outputs (document 05, 2.1)
+    LadderSetup lad;
+    bool ladValid = false;
+
+    LadderSetup ladderSetup (float f, float r, float d, int style, float bRaw) const noexcept
+    {
+        LadderSetup z;
+        const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
+        z.G = g / (1.0f + g);
+        const float b = std::clamp (bRaw, -1.0f, 1.0f);
+        const float Lw = std::max (-b, 0.0f), Bw = std::sqrt (std::max (0.0f, 1.0f - b * b)), Hw = std::max (b, 0.0f);
+        const float H = std::min (1.0f + b, 1.0f), L = std::min (1.0f - b, 1.0f);
+        const float pn = std::min (b, 0.0f), m = std::sqrt (0.5f * Hw * Hw + 0.5f), q = m * (1.0f + pn), band = 2.0f * m * (1.0f + pn - b);
+        const float ab = 1.0f - std::fabs (b);
+        float* c = z.c;
+        switch (style)
+        {
+            case 1: c[0] = Hw; c[1] = -4.0f * Hw; c[2] = 6.0f * Hw - ab; c[3] = -4.0f * Hw + 2.0f * ab; c[4] = Lw + Hw - ab; break;
+            case 2: c[0] = H * H; c[1] = -4.0f * H * H; c[2] = 6.0f * H * H + 2.0f * H * L; c[3] = -4.0f * H * H - 4.0f * H * L; c[4] = H * H + L * L + 2.0f * H * L; break;
+            case 3: c[0] = H; c[1] = -4.0f * H; c[2] = 8.0f * H + 4.0f * L; c[3] = -8.0f * H - 8.0f * L; c[4] = 4.0f * H + 4.0f * L; break;
+            case 4: c[0] = q; c[1] = band - 2.0f * q; c[2] = 2.0f * q - band; c[3] = 0.0f; c[4] = 0.0f; break;
+            default: c[0] = Hw; c[1] = Bw - 2.0f * Hw; c[2] = Lw - Bw + Hw; c[3] = 0.0f; c[4] = 0.0f; break; // style 0 and 5
+        }
+        const int st5 = style == 5 ? 0 : style;
+        // drive: d (1 + r') faded to d as the blend goes to high pass; style 3 uses the raw drive, style 4 fades between d and that
+        const float rp = st5 == 0 ? r : std::sin (r);
+        const float dL = d * lerp (1.0f + rp, 1.0f, Hw);
+        z.pre = st5 == 3 ? d : (st5 == 4 ? lerp (d, dL, std::min (1.0f - b, 1.0f)) : dL);
+        z.post = 1.0f / std::sqrt ((d - 1.0f) * (st5 == 1 ? 0.25f : 0.5f) + 1.0f);
+        const float rr = st5 == 0 ? r : std::sin (kPif * 0.5f * r);
+        z.k = lerp (0.001f, 4.1f, rr);
+        z.invDen = 1.0f / (1.0f + z.k * z.G * z.G * z.G * z.G);
+        return z;
+    }
+    void ladder (const float* in, float* out, int n, float f, float r, float d, int style, float bRaw) noexcept
+    {
+        if (!ladValid)
+        {
+            lad = ladderSetup (f, r, d, style, bRaw);
+            ladValid = true;
+        }
+        ladderRun (lad, in, out, n);
+    }
+    void ladderRun (const LadderSetup& z, const float* in, float* out, int n) noexcept
+    {
+        const float G = z.G, k = z.k, pre = z.pre, post = z.post;
+        const float c0 = z.c[0], c1 = z.c[1], c2 = z.c[2], c3 = z.c[3], c4 = z.c[4];
+        for (int i = 0; i < n; ++i)
+        {
+            const float S = (1.0f - G) * (G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3]); // what the four stages add to the input's share G^4 u (y = G x + (1 - G) s per stage)
+            const float u = th ((fastMath ? (pre * in[i] - k * S) * z.invDen : (pre * in[i] - k * S) / (1.0f + k * G * G * G * G)) * 0.9f) * 1.1f;
+            float x = u, st[4];
+            for (int j = 0; j < 4; ++j)
+            {
+                const float v = (x - s[j]) * G;
+                const float y = v + s[j];
+                s[j] = flushDenormal (y + v);
+                st[j] = y;
+                x = sat (y);
+            }
+            out[i] = (c0 * u + c1 * st[0] + c2 * st[1] + c3 * st[2] + c4 * st[3]) * post;
+        }
+    }
+    /** The Ladder setup of parameters p, without touching the memo of block (). */
+    LadderSetup ladderSetupFor (const ClassicParams& p) const noexcept
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float d = p.fast ? fastmath::pow10 (p.driveDb * 0.05f) : std::pow (10.0f, p.driveDb * 0.05f);
+        return ladderSetup (f, clamp01 (p.res), d, p.style, std::clamp (p.blendRaw, 0.0f, 2.0f) - 1.0f);
+    }
+    /** Tier low, Ladder with moving parameters: the setup (tan, sin, sqrt) is computed at the two ends of the period and its coefficients are interpolated linearly over the
+        four pieces of 8 samples, instead of the cutoff by a power and the whole setup again for every piece. The end of one period is the start of the next. */
+    void ensureLadderRamp (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        fastMath = true;
+        if (!(rampKey && sameParams (rampPa, a) && sameParams (rampPb, b)))
+        {
+            // the setup is computed once for a pair of parameter sets: a second call in the same period (the period was cut by an event) and the other channel
+            // (adoptRamp) find it again; the start of this period is the end of the last one
+            const LadderSetup startSetup = (rampValid && sameParams (rampP, a)) ? rampB : ladderSetupFor (a);
+            rampA = startSetup;
+            if (onlyCutoffDiffers (a, b))
+            {
+                rampB = startSetup; // only the cutoff moved: everything but G (and what follows from it) is the setup of a
+                rampB.G = cutoffToG (b);
+                rampB.invDen = 1.0f / (1.0f + rampB.k * rampB.G * rampB.G * rampB.G * rampB.G);
+            }
+            else
+                rampB = ladderSetupFor (b);
+            rampP = b;
+            rampValid = true;
+            rampPa = a;
+            rampPb = b;
+            rampKey = true;
+        }
+    }
+    static LadderSetup rampAt (const LadderSetup& A, const LadderSetup& B, float t) noexcept
+    {
+        LadderSetup z;
+        z.G = lerp (A.G, B.G, t);
+        z.k = lerp (A.k, B.k, t);
+        z.pre = lerp (A.pre, B.pre, t);
+        z.post = lerp (A.post, B.post, t);
+        z.invDen = lerp (A.invDen, B.invDen, t);
+        for (int j = 0; j < 5; ++j)
+            z.c[j] = lerp (A.c[j], B.c[j], t);
+        return z;
+    }
+    void ladderRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        ensureLadderRamp (a, b);
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            LadderSetup z;
+            z.G = lerp (rampA.G, rampB.G, t);
+            z.k = lerp (rampA.k, rampB.k, t);
+            z.pre = lerp (rampA.pre, rampB.pre, t);
+            z.post = lerp (rampA.post, rampB.post, t);
+            z.invDen = lerp (rampA.invDen, rampB.invDen, t);
+            for (int j = 0; j < 5; ++j)
+                z.c[j] = lerp (rampA.c[j], rampB.c[j], t);
+            ladderRun (z, in + i, out + i, m);
+            i += m;
+        }
+    }
+    LadderSetup rampA, rampB;
+    ClassicParams rampP, rampPa, rampPb;
+    bool rampValid = false, rampKey = false;
+    static bool onlyCutoffDiffers (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        ClassicParams t = a;
+        t.cutoffHz = b.cutoffHz;
+        return sameParams (t, b);
+    }
+    /** g / (1 + g) of the Ladder for the cutoff of p (what ladderSetup () computes from f). */
+    float cutoffToG (const ClassicParams& p) const noexcept
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
+        return g / (1.0f + g);
+    }
+public:
+    /** Two channels of the Ladder model in one loop (see processPair). */
+    /** Two channels of the Ladder in one loop, the setups given. */
+    static void ladderPairLoop (ClassicFilter& A, ClassicFilter& B, const LadderSetup& za, const LadderSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            const float Sa = (1.0f - za.G) * (za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3]);
+            const float Sb = (1.0f - zb.G) * (zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3]);
+            const float ua = A.th ((A.fastMath ? (za.pre * inA[i] - za.k * Sa) * za.invDen : (za.pre * inA[i] - za.k * Sa) / (1.0f + za.k * za.G * za.G * za.G * za.G)) * 0.9f) * 1.1f;
+            const float ub = B.th ((B.fastMath ? (zb.pre * inB[i] - zb.k * Sb) * zb.invDen : (zb.pre * inB[i] - zb.k * Sb) / (1.0f + zb.k * zb.G * zb.G * zb.G * zb.G)) * 0.9f) * 1.1f;
+            float xa = ua, xb = ub, sta[4], stb[4];
+            for (int j = 0; j < 4; ++j)
+            {
+                const float va = (xa - A.s[j]) * za.G, vb = (xb - B.s[j]) * zb.G;
+                const float ya = va + A.s[j], yb = vb + B.s[j];
+                A.s[j] = flushDenormal (ya + va);
+                B.s[j] = flushDenormal (yb + vb);
+                sta[j] = ya;
+                stb[j] = yb;
+                xa = sat (ya);
+                xb = sat (yb);
+            }
+            outA[i] = (za.c[0] * ua + za.c[1] * sta[0] + za.c[2] * sta[1] + za.c[3] * sta[2] + za.c[4] * sta[3]) * za.post;
+            outB[i] = (zb.c[0] * ub + zb.c[1] * stb[0] + zb.c[2] * stb[1] + zb.c[3] * stb[2] + zb.c[4] * stb[3]) * zb.post;
+        }
+    }
+    static bool processPairLadder (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& bA, const ClassicParams& bB) noexcept
+    {
+        A.remember (bA);
+        B.remember (bB);
+        if (!A.ladValid)
+        {
+            A.lad = A.ladderSetup (A.mf, A.mr, A.md, bA.style, A.mbraw - 1.0f);
+            A.ladValid = true;
+        }
+        if (!B.ladValid)
+        {
+            B.lad = B.ladderSetup (B.mf, B.mr, B.md, bB.style, B.mbraw - 1.0f);
+            B.ladValid = true;
+        }
+        ladderPairLoop (A, B, A.lad, B.lad, inA, outA, inB, outB, n);
+        return true;
+    }
+private:
+
+    /** The diode ladder (document 05, 6): a two pole high pass in front (cutoff by the blend), four stages that average with their neighbours, a feedback of the
+        fourth stage through a fixed 20 Hz high pass, the input stage tanh (0.5 (d' hp - k s4)). The stage dynamics are solved with the trapezoidal rule as a tridiagonal
+        system (zero delay feedback inside the ladder); the saturators act on the old states. The corner is on the scale of the measured responses (kDiodeCorner). */
+    static constexpr float kDiodeCorner = SB_DIODE_CORNER, kDiodeGain = SB_DIODE_GAIN, kDiodePre = 100.0f, kDiodeFb = SB_DIODE_FB, kDiodeW = 1.0f;
+    void diode (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
+    {
+        // Everything below up to the sample loop is a function of the parameters alone (a square root, four tangents, an exp2, a dozen divisions): it is kept while
+        // they stay the same (remember ()), as the setups of the other models are. The same expressions, so the same values.
+        if (!dioValid)
+        {
+            DiodeSetup& z = dio;
+            z.k = 0.7f + 16.3f * r * r * r;
+            z.dIn = (0.5f * z.k + 1.0f) * d;
+            z.post = 1.0f / std::sqrt (d);
+            const float fc = std::clamp (f * kDiodeCorner, 5.0f, static_cast<float> (sr) * 0.45f);
+            z.g = std::tan (kPif * std::min (fc / static_cast<float> (sr), 0.499f));
+            const float brawS = clamp01 (p.blendRaw * 0.5f); // 0 .. 1
+            // the high pass in front: 24 dB style: the corner moves from cutoff 2^-9 to 2^-1 with the blend; 12 dB style: fixed 2^-1, the amount is blend^2 / 4
+            const bool style12S = p.style == 0;
+            const float hpHz = f * std::exp2 (style12S ? -1.0f : -9.0f + 8.0f * brawS);
+            z.amount = style12S ? brawS * brawS * 0.25f : 1.0f;
+            z.gh = std::tan (kPif * std::clamp (hpHz, 1.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+            z.gf = std::tan (kPif * 20.0f / static_cast<float> (sr));
+            z.gp = std::tan (kPif * std::clamp (f * kDiodePre, 5.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+            // tridiagonal matrix (constant per block): stage i takes w/2 of each neighbour and (1 - w) of the previous stage; w = 1 averages the neighbours
+            const float wS = kDiodeW, upS = 0.5f * wS, loS = 1.0f - 0.5f * wS;
+            z.bb = 1.0f + z.g;
+            z.cp[0] = -z.g * upS / z.bb;
+            for (int j = 1; j < 4; ++j)
+                z.cp[j] = (j < 3 ? -z.g * upS : 0.0f) / (z.bb + z.g * loS * z.cp[j - 1]);
+            // tier low: the divisions by constants of the block become multiplications by their reciprocals (a few units in the last place)
+            z.invBb = 1.0f / z.bb;
+            z.hpA = z.gh / (1.0f + z.gh);
+            z.hfA = z.gf / (1.0f + z.gf);
+            z.invD[0] = 0.0f;
+            for (int j = 1; j < 4; ++j)
+                z.invD[j] = 1.0f / (z.bb + z.g * loS * z.cp[j - 1]);
+            dioValid = true;
+        }
+        const float k = dio.k, dIn = dio.dIn, post = dio.post, g = dio.g, amount = dio.amount, gh = dio.gh, gf = dio.gf, gp = dio.gp, bb = dio.bb;
+        const float w = kDiodeW, up = 0.5f * w, lo = 1.0f - 0.5f * w;
+        const float* const cp = dio.cp;
+        const float* const invD = dio.invD;
+        const bool quick = fastMath;
+        const float invBb = dio.invBb, hpA = dio.hpA, hfA = dio.hfA;
+        for (int i = 0; i < n; ++i)
+        {
+            const float x = in[i];
+            // two pole high pass (two cascaded one pole trapezoidal sections)
+            float h = x;
+            for (int j = 0; j < 2; ++j)
+            {
+                const float v = quick ? (h - dHp[j]) * hpA : (h - dHp[j]) * gh / (1.0f + gh);
+                const float lp = v + dHp[j];
+                dHp[j] = flushDenormal (lp + v);
+                h = h - lp;
+            }
+            const float xin = lerp (x, h, amount);
+            // 20 Hz high pass of the fed back fourth stage
+            const float vf = quick ? (dv[3] - dFb) * hfA : (dv[3] - dFb) * gf / (1.0f + gf);
+            const float lpf = vf + dFb;
+            dFb = flushDenormal (lpf + vf);
+            const float fb = dv[3] - lpf;
+            float xp = xin;
+            if (kDiodePre < 50.0f) // optional extra pole in front (calibration of the measured response)
+            {
+                dPre += gp / (1.0f + gp) * (xin - dPre);
+                xp = dPre;
+            }
+            const float u = th (0.5f * (dIn * xp - k * kDiodeFb * fb)) * kDiodeGain;
+            // right hand side with the old states (the neighbours through the algebraic saturator)
+            const float s0 = sat (dv[0]), s1 = sat (dv[1]), s2 = sat (dv[2]), s3 = sat (dv[3]);
+            const float in0 = up * (dU + s1) + (1.0f - w) * dU, in1 = up * (s0 + s2) + (1.0f - w) * s0, in2 = up * (s1 + s3) + (1.0f - w) * s1,
+                        in3 = up * 0.0f + lo * s2;
+            float rhs[4] = { (1.0f - g) * dv[0] + g * in0 + g * lo * u, (1.0f - g) * dv[1] + g * in1, (1.0f - g) * dv[2] + g * in2, (1.0f - g) * dv[3] + g * in3 };
+            dU = u;
+            float dp[4];
+            dp[0] = quick ? rhs[0] * invBb : rhs[0] / bb;
+            for (int j = 1; j < 4; ++j)
+                dp[j] = quick ? (rhs[j] + g * lo * dp[j - 1]) * invD[j] : (rhs[j] + g * lo * dp[j - 1]) / (bb + g * lo * cp[j - 1]);
+            float v[4];
+            v[3] = dp[3];
+            for (int j = 2; j >= 0; --j)
+                v[j] = dp[j] - cp[j] * v[j + 1];
+            for (int j = 0; j < 4; ++j)
+                dv[j] = flushDenormal (v[j]);
+            out[i] = dv[3] * post;
+        }
+    }
+    float dv[4] = {}, dHp[2] = {}, dFb = 0.0f, dU = 0.0f, dPre = 0.0f, tilt = 0.0f;
+    struct DiodeSetup { float k = 0.0f, dIn = 0.0f, post = 1.0f, g = 0.0f, amount = 0.0f, gh = 0.0f, gf = 0.0f, gp = 0.0f, bb = 1.0f, cp[4] = {}, invBb = 1.0f, hpA = 0.0f, hfA = 0.0f, invD[4] = {}; };
+    DiodeSetup dio;      // the setup of the diode model for the parameters last passed to remember ()
+    bool dioValid = false;
+    struct FormantSetup { float gain[4] = {}, kq[4] = {}, bpGain[4] = {}; };
+    bool fmtValid = false;
+
+    void formant (const float* in, float* out, int n, const ClassicParams& p) noexcept
+    {
+        // vowels: gain dB, resonance share, centre note per formant (document 05, section 9)
+        static const float kV[5][4][3] = {
+            { { -2, 0.66f, 75.755f }, { -8, 0.75f, 84.545f }, { -9, 1.0f, 100.085f }, { -10, 1.0f, 101.646f } },   // A
+            { { 0, 0.66f, 67.350f }, { -14, 0.75f, 92.400f }, { -4, 1.0f, 99.755f }, { -14, 1.0f, 103.350f } },    // E
+            { { 0, 0.80f, 61.783f }, { -15, 0.75f, 94.050f }, { -17, 1.0f, 101.038f }, { -20, 1.0f, 103.618f } },  // I
+            { { -2, 0.70f, 67.350f }, { -6, 0.75f, 79.350f }, { -14, 1.0f, 99.755f }, { -14, 1.0f, 101.038f } },   // O
+            { { 0, 0.70f, 65.038f }, { -20, 0.75f, 74.370f }, { -17, 1.0f, 100.409f }, { -14, 1.0f, 101.646f } } };// U
+        static const int kStyle0[4] = { 0, 2, 4, 3 }, kStyle1[4] = { 0, 3, 2, 1 }, kStyle2[4] = { 1, 4, 3, 0 }; // corners (0,0) (1,0) (0,1) (1,1): A I U O / A O I E / E U O A
+        // The gains and the coefficients of the four resonators (four pow, four exp2, four tan, eight divisions) are functions of the parameters alone: kept while
+        // they stay the same (remember ()). The same expressions, so the same values.
+        if (!fmtValid)
+        {
+        const int* c = p.style == 0 ? kStyle0 : (p.style == 1 ? kStyle1 : kStyle2);
+        const float tract = p.style >= 2 ? 1.25f : 1.0f; // the vocal tract style: the same four resonators, narrower, with a gentle spectral tilt (the glottal source)
+        float* const gain = fmt.gain;
+        float note[4], q[4];
+        for (int k = 0; k < 4; ++k)
+        {
+            auto mixv = [&] (int comp)
+            {
+                const float b0 = lerp (kV[c[0]][k][comp], kV[c[1]][k][comp], p.fx), b1 = lerp (kV[c[2]][k][comp], kV[c[3]][k][comp], p.fx);
+                return lerp (b0, b1, p.fy);
+            };
+            gain[k] = std::pow (10.0f, mixv (0) * 0.05f);
+            float nt = mixv (2) + p.ftranspose;
+            nt = lerp (nt, 80.0f, std::clamp (p.fspread, -1.0f, 1.0f));
+            note[k] = nt;
+            const float rr = clamp01 (p.fres * mixv (1));
+            q[k] = (4.0f + 26.0f * rr * rr * rr) * tract;
+        }
+        // the four resonators keep their frequency and Q for the whole block: the coefficients (an exp2, a tan, a division each) are computed once, not for every sample
+        Svf::Coef* const cf = fmtCf;
+        float* const kq = fmt.kq;
+        float* const bpGain = fmt.bpGain;
+        for (int k = 0; k < 4; ++k)
+        {
+            const float hz = 8.1757989f * std::exp2 (note[k] / 12.0f);
+            kq[k] = 1.0f / q[k];
+            cf[k] = Svf::coefficients (Svf::coefficient (hz, sr), kq[k]);
+            bpGain[k] = 1.0f / q[k];
+        }
+        fmtValid = true;
+        }
+        const Svf::Coef* const cf = fmtCf;
+        const float* const gain = fmt.gain;
+        const float* const kq = fmt.kq;
+        const float* const bpGain = fmt.bpGain;
+#if SB_NEON
+        if (!scalarLoops && n > 0)
+        {
+            // The four resonators are four independent filters fed the same sample: one NEON register holds the four. Svf::step () lane by lane (separate multiply
+            // and add, flushDenormal as a select); the four band outputs are weighted in the lanes and summed one after the other, as the scalar loop sums them.
+            auto four = [] (float a, float b, float c, float d) noexcept { const float t[4] = { a, b, c, d }; return vld1q_f32 (t); };
+            auto flush = [] (float32x4_t v) noexcept { return neoncmp::flushTiny (v); }; // flushDenormal () on the bit patterns (dsp/neon_cmp.h)
+            const float32x4_t a1 = four (cf[0].a1, cf[1].a1, cf[2].a1, cf[3].a1), a2 = four (cf[0].a2, cf[1].a2, cf[2].a2, cf[3].a2), a3 = four (cf[0].a3, cf[1].a3, cf[2].a3, cf[3].a3);
+            const float32x4_t vk = vld1q_f32 (kq), vgain = vld1q_f32 (gain), vbpGain = vld1q_f32 (bpGain), two = vdupq_n_f32 (2.0f), eight = vdupq_n_f32 (8.0f);
+            float32x4_t s1 = four (fm[0].s1, fm[1].s1, fm[2].s1, fm[3].s1), s2 = four (fm[0].s2, fm[1].s2, fm[2].s2, fm[3].s2);
+            float32x4_t v1 = vdupq_n_f32 (0.0f), v2 = v1, x = v1;
+            for (int i = 0; i < n; ++i)
+            {
+                x = vdupq_n_f32 (in[i]);
+                const float32x4_t v3 = vsubq_f32 (x, s2);
+                v1 = vaddq_f32 (vmulq_f32 (a1, s1), vmulq_f32 (a2, v3));
+                v2 = vaddq_f32 (vaddq_f32 (s2, vmulq_f32 (a2, s1)), vmulq_f32 (a3, v3));
+                s1 = flush (vsubq_f32 (vmulq_f32 (two, v1), s1));
+                s2 = flush (vsubq_f32 (vmulq_f32 (two, v2), s2));
+                float t[4];
+                vst1q_f32 (t, vmulq_f32 (vmulq_f32 (vmulq_f32 (v1, vgain), vbpGain), eight));
+                float y = 0.0f;
+                y += t[0];
+                y += t[1];
+                y += t[2];
+                y += t[3];
+                if (p.style >= 2)
+                {
+                    tilt += 0.35f * (y - tilt);
+                    y = 0.6f * y + 0.4f * tilt;
+                }
+                out[i] = y;
+            }
+            // the resonators keep what the last step left in them (states and outputs)
+            float ts1[4], ts2[4], tlp[4], tbp[4], thp[4];
+            vst1q_f32 (ts1, s1);
+            vst1q_f32 (ts2, s2);
+            vst1q_f32 (tlp, v2);
+            vst1q_f32 (tbp, v1);
+            vst1q_f32 (thp, vsubq_f32 (vsubq_f32 (x, vmulq_f32 (vk, v1)), v2));
+            for (int k = 0; k < 4; ++k)
+            {
+                fm[k].s1 = ts1[k];
+                fm[k].s2 = ts2[k];
+                fm[k].lp = tlp[k];
+                fm[k].bp = tbp[k];
+                fm[k].hp = thp[k];
+            }
+            return;
+        }
+#endif
+        for (int i = 0; i < n; ++i)
+        {
+            float y = 0.0f;
+            for (int k = 0; k < 4; ++k)
+            {
+                fm[k].step (in[i], cf[k], kq[k]);
+                y += fm[k].bp * gain[k] * bpGain[k] * 8.0f;
+            }
+            if (p.style >= 2)
+            {
+                tilt += 0.35f * (y - tilt); // a one pole low pass mixed in: -6 dB per octave above 3 kHz like a glottal source
+                y = 0.6f * y + 0.4f * tilt;
+            }
+            out[i] = y;
+        }
+    }
+
+    /** The Comb model (document 05, 8): style 0 is the plain comb (the one-pole loop filter at the comb offset; blend and style are not read), styles 1 .. 5 are
+        `style = feedback_style + 3 * filter_style` (feedback_style 0 comb, 1 positive flange, 2 negative flange; filter_style 0 low / high blend, 1 band); a style above 5 is 5. */
+    void combFilter (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
+    {
+        const int st = std::clamp (p.style, 0, 5);
+        if (st == 0)
+            combPlain (in, out, n, f, r, p);
+        else
+            combStyled (in, out, n, f, r, p, st);
+    }
+
+    void combStyled (const float* in, float* out, int n, float f, float r, const ClassicParams& p, int st) noexcept
+    {
+        const int fbStyle = st % 3;
+        const bool band = st >= 3;
+        const float srf = static_cast<float> (sr), fe = std::max (f, 20.0f);
+        const float T = std::clamp (srf / fe, 2.0f, srf * 0.09f);
+        const float fc = fe * std::exp2 (p.combOffset / 12.0f);
+        const float edge = srf / 2.1f;
+        float aA, aB, lowGain = 1.0f, highGain = 0.0f;
+        if (!band)
+        {
+            // a low / high blend around the corner n_cut + comb_offset (one pole split), then a second one pole high pass at n_cut - 48 semitones
+            aA = OnePole::coefficient (std::clamp (fc, 1.0f, edge), sr);
+            lowGain = std::clamp (2.0f - p.blendRaw, 0.0f, 1.0f);
+            highGain = std::clamp (p.blendRaw, 0.0f, 1.0f);
+            aB = OnePole::coefficient (std::clamp (fe * 0.0625f, 1.0f, edge), sr);
+        }
+        else
+        {
+            // a band around n_cut + comb_offset whose half width is blend * 4 octaves: a high pass at the lower corner, a low pass at the upper one
+            const float octaves = clamp01 (p.blendRaw * 0.5f) * 4.0f;
+            aA = OnePole::coefficient (std::clamp (fc * std::exp2 (octaves), 1.0f, edge), sr);
+            aB = OnePole::coefficient (std::clamp (fc * std::exp2 (-octaves), 1.0f, edge), sr);
+        }
+        // the loop filter delays the signal at the pitch: its phase delay is taken off the delay line (as for the plain comb), so the comb rings at sr / T
+        using Cx = std::complex<float>;
+        const float w0 = kTwoPif * fe / srf;
+        const Cx zi = std::polar (1.0f, -w0);
+        auto onePole = [&] (float a) { return Cx (a) / (Cx (1.0f) - Cx (1.0f - a) * zi); };
+        Cx H;
+        if (!band)
+        {
+            const Cx lp = onePole (aA);
+            H = (lowGain * lp + highGain * (Cx (1.0f) - lp)) * (Cx (1.0f) - onePole (aB));
+        }
+        else
+            H = (Cx (1.0f) - onePole (aB)) * onePole (aA);
+        const float loopDelay = -std::arg (H) / w0;
+        const float lineT = fbStyle == 2 ? 0.5f * T : T;
+        const float readAt = std::max (lineT - 1.0f - loopDelay, 0.0f);
+        auto filtered = [&] (float x) noexcept
+        {
+            if (!band)
+            {
+                lpA = flushDenormal (lpA + aA * (x - lpA));
+                const float sp = lowGain * lpA + highGain * (x - lpA);
+                lpB = flushDenormal (lpB + aB * (sp - lpB));
+                return sp - lpB;
+            }
+            lpB = flushDenormal (lpB + aB * (x - lpB));
+            const float h = x - lpB;
+            lpA = flushDenormal (lpA + aA * (h - lpA));
+            return lpA;
+        };
+        combUsed = true;
+        if (fbStyle == 0)
+        {
+            float fb = lerp (-1.0f, 1.0f, r);
+            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+            fb = std::clamp (fb, -0.98f, 0.98f);
+            const float scale = 1.0f - 0.5f * fb * fb;
+            for (int i = 0; i < n; ++i)
+            {
+                const float w = hardtanh (filtered (scale * in[i] + fb * comb.read (readAt)));
+                comb.push (w);
+                out[i] = w;
+            }
+            return;
+        }
+        // flanges: the delay line holds x / sqrt (2) + hardtanh (fb filtered (delay)); the output is x / sqrt (2) scale + filtered (negative: the feedback and the output term
+        // inverted, the read at T / 2)
+        const float fb = std::min (clamp01 (r), 0.98f);
+        const float sgn = fbStyle == 2 ? -1.0f : 1.0f;
+        const float scale = 1.0f / (1.0f + fb);
+        const float inGain = 0.70710678f;
+        for (int i = 0; i < n; ++i)
+        {
+            const float fd = filtered (comb.read (readAt));
+            comb.push (inGain * in[i] + hardtanh (sgn * fb * fd));
+            out[i] = inGain * in[i] * scale + sgn * fd;
+        }
+    }
+
+    void combPlain (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
+    {
+        const float T = std::clamp (static_cast<float> (sr) / std::max (f, 20.0f), 2.0f, static_cast<float> (sr) * 0.09f);
+        float fb = lerp (-1.0f, 1.0f, r);
+        fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+        fb = std::clamp (fb, -0.98f, 0.98f);
+        const float scale = 1.0f - 0.5f * fb * fb;
+        const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
+        const float a = OnePole::coefficient (loopHz, sr);
+        // The loop filter delays the signal as well: the phase delay of its one pole at the pitch (about T / 70 at the default offset of 42 semitones, 1.1 % of the period
+        // = 19 cents flat) is taken off the length of the delay line, so the comb resonates at sr / T, the pitch of the cutoff.
+        const float w0 = kTwoPif * std::max (f, 20.0f) / static_cast<float> (sr), bpole = 1.0f - a;
+        const float loopDelay = std::atan2 (bpole * std::sin (w0), 1.0f - bpole * std::cos (w0)) / w0;
+        const float readAt = std::max (T - 1.0f - loopDelay, 0.0f);
+        combUsed = true;
+        for (int i = 0; i < n; ++i)
+        {
+            const float v = scale * in[i] + fb * comb.read (readAt);
+            lpA += a * (v - lpA);
+            lpA = flushDenormal (lpA);
+            const float w = hardtanh (lpA);
+            comb.push (w);
+            out[i] = w;
+        }
+    }
+
+    void phaserFilter (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
+    {
+        const float g = phaserStageG (f, sr);
+        const float a = g / (1.0f + g);
+        const float b = clamp01 (p.blendRaw);
+        const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f);
+        const float p1 = clamp01 (1.0f - braw), p5 = clamp01 (braw - 1.0f), p3 = 1.0f - p1 - p5;
+        const float inv = p.style == 1 ? -1.0f : 1.0f;
+        (void) b;
+        const float c1 = OnePole::coefficient (f / 20.0f, sr), c2 = OnePole::coefficient (f * 20.0f, sr);
+        for (int i = 0; i < n; ++i)
+        {
+            float x = hardtanh (d * (1.0f + 0.5f * r) * in[i] + inv * fbState);
+            float tap[3] = { 0, 0, 0 };
+            for (int st = 0; st < 12; ++st)
+            {
+                const float v = (x - ap[st]) * a;
+                const float lp = v + ap[st];
+                ap[st] = flushDenormal (lp + v);
+                x = x - 2.0f * lp;
+                if (st == 3) tap[0] = x;
+                if (st == 7) tap[1] = x;
+                if (st == 11) tap[2] = x;
+            }
+            const float outAp = p1 * tap[0] + p3 * tap[1] + p5 * tap[2];
+            lpA += c2 * (outAp - lpA);
+            lpB += c1 * (lpA - lpB);
+            fbState = flushDenormal (r * (lpA - lpB));
+            out[i] = 0.5f * (in[i] + inv * outAp);
+        }
+    }
+
+    double sr = 48000.0;
+    static constexpr float kAn[6] = { 1.0f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
+    float s[6] = {};
+    Svf fm[4];
+    FormantSetup fmt;    // the setup of the formant model for the parameters last passed to remember ()
+    Svf::Coef fmtCf[4];
+    DelayLine comb;
+    bool combUsed = false;
+    float ap[12] = {};
+    float fbState = 0.0f, lpA = 0.0f, lpB = 0.0f;
+};
+} // namespace own
+} // namespace synthyboy

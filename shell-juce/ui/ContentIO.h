@@ -1,0 +1,184 @@
+// SynthyBoy - UI: the content pipeline flows (WP-01): audio file decoding (juce::AudioFormatManager), the user content library and the engine.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// Every function runs on the message thread and goes through the UiHost: the files land in host.contentLibrary (), the state `content` is changed with
+// host.setContent () (which hands it to the engine), the parameters are set as host gestures. The panels only call these; nothing here draws.
+#pragma once
+
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "UiContext.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/serum_plugin_import.h"
+#include "synthyboy/vital_plugin_import.h"
+#include "synthyboy/offline_render.h"
+#include "synthyboy/wave_convert.h"
+#include "synthyboy/wavetable_edit.h"
+
+namespace synthyboy::ui
+{
+/** A file the user picked, decoded to floats. */
+struct DecodedAudio
+{
+    std::vector<float> left, right; // right empty = mono
+    double sampleRate = 0.0;
+    juce::String name; // file name without the extension
+    int channels() const noexcept { return right.empty() ? 1 : 2; }
+};
+
+/** Every format juce::AudioFormatManager::registerBasicFormats () reads (WAV, AIFF, FLAC, Ogg Vorbis, MP3 where the platform has it, CAF). */
+juce::String audioFileWildcard();
+bool decodeAudioFile (const juce::File& file, DecodedAudio& out, juce::String* error = nullptr);
+/** The bytes of a file the user picked; empty on failure or above the size cap of the content store. */
+std::vector<uint8_t> readFileBytes (const juce::File& file);
+bool writeFileBytes (const juce::File& file, const std::vector<uint8_t>& bytes);
+
+/** Sets a parameter of the table by key as a host gesture (a choice by its index, a float by its plain value). False for an unknown key. */
+bool setParameter (UiHost& host, const char* key, float plain);
+float readParameter (UiHost& host, const char* key, float fallback = 0.0f);
+/** The index of the entry named `name` (case insensitive prefix match) in the choice list of `key`, or -1. */
+int choiceIndexOf (const char* key, const char* name);
+
+/** The result line every flow reports (shown in the sheet / status line, asserted by the tests). */
+struct FlowResult
+{
+    bool ok = false;
+    juce::String message;
+};
+
+/** Sample: decode `file`, store it (a WAV file is stored as it is, any other format as 24-bit WAV), attach it to the oscillator, set the root note
+    from the file name / WAV chunk, switch `oscN.type` to Sample. */
+FlowResult loadSampleFile (UiContext& ctx, int osc, const juce::File& file);
+/** Multisample (GROUPC WP-13): reads the SFZ file, converts every sample it names to a 24-bit WAV (any format the host decodes), stores instrument and samples in the user library
+    (`user.instruments`), attaches it as `content.instruments[osc]` and switches `oscN.type` to Multisample. Samples that are not there are counted in the message. */
+FlowResult loadInstrumentFile (UiContext& ctx, int osc, const juce::File& sfzFile);
+/** "Switch to Single Sample" (manual p.67): the zone the last note of the oscillator played becomes the sample of the oscillator (root note, tune, start / end and loop of the zone), the type
+    becomes Sample. Fails when no note was played yet. */
+FlowResult switchToSingleSample (UiContext& ctx, int osc);
+/** The stored sample behind the oscillator (a copy of its bytes), empty when there is none. */
+std::vector<uint8_t> storedSampleBytes (UiHost& host, int osc);
+/** Cuts the sample of the oscillator to its START .. END region: stores the new WAV, rescales the slices, resets START / END (and the loop markers). */
+FlowResult trimSample (UiContext& ctx, int osc);
+FlowResult removeSample (UiContext& ctx, int osc);
+
+// ---- GROUPD: Switch to wavetable (WP-14), the offline renders (WP-15), wavetable frame <-> LFO shape (WP-16) -------------------------------------------------------
+
+/** "Switch to Wavetable" of the Sample menu (manual p.68, Granular p.103, Spectral p.122): the START .. END region of the oscillator's sample becomes a wavetable by `options`
+    (the import options of manual p.291), stored through the library, `oscN.type` = Wavetable, `oscN.wavetable` = Preset table, WT POS 0. The sample stays attached (switch back
+    with the type menu). Fails for a wavetable oscillator and when no sample is loaded. */
+FlowResult switchToWavetable (UiContext& ctx, int osc, const wtedit::ImportOptions& options = {});
+/** The runner of the offline render helpers: UiHost::renderOffline with the "Use Ultra quality when rendering" preference applied. */
+convert::OfflineRunner offlineRunner (UiContext& ctx);
+/** All parameters of the parameter tree as a ParamValues (what the offline render starts from). */
+ParamValues readAllValues (UiHost& host);
+/** Render OSC Warp (manual p.324): the current frame of oscillator `osc` swept over WARP 0..100 % into 256 frames, stored as the oscillator's table; WARP type and Morph become
+    None, Remap off, WT POS = the warp amount (so the sound stays). */
+FlowResult renderOscWarp (UiContext& ctx, int osc);
+/** Resample (manual p.324): one bar of the last played note (C3 before any note) is rendered and imported as the wavetable of oscillator `target` (1..3); target 0 = Osc A and
+    Osc B (left channel to A, right to B). `options` is the import mode (Pitch Average by default). */
+FlowResult resampleToWavetable (UiContext& ctx, int target, const wtedit::ImportOptions& options = {});
+
+/** The last note as audio (S01-09, share / drag-out): rendered offline at the tempo-independent length it was held (0.25 s .. 20 s) plus its release tail. */
+struct LastNoteAudio
+{
+    OfflineAudio audio;
+    std::vector<uint8_t> wav;      // 24-bit stereo WAV
+    juce::String name;             // "Init E3" (preset name and note)
+    double seconds() const noexcept { return audio.sampleRate > 0.0 ? static_cast<double> (audio.frames()) / audio.sampleRate : 0.0; }
+};
+FlowResult renderLastNote (UiContext& ctx, LastNoteAudio& out);
+FlowResult saveLastNoteAs (const LastNoteAudio& note, const juce::File& destination);
+/** Writes the WAV to the temp folder (`<temp>/SynthyBoy/<name>.wav`) for the drag-out and the share sheet; an empty File on failure. */
+juce::File writeLastNoteTemp (const LastNoteAudio& note);
+
+/** Wavetable A to LFO (manual p.197): the current frame of oscillator `osc` (WT POS, Remap, as the engine plays it, without warp and morph) becomes the point list of LFO `lfo`,
+    `lfoN.shape` = Custom. */
+FlowResult copyWavetableFrameToLfo (UiContext& ctx, int osc, int lfo);
+/** LFO shape to wavetable (manual p.198): LFO `lfo` (its custom points, or its built-in shape) sampled to a frame; it replaces the current frame of the oscillator's own table, or
+    (built-in table) becomes a one-frame table "LFO n shape". */
+FlowResult copyLfoShapeToWavetable (UiContext& ctx, int lfo, int osc);
+
+/** Wavetable: store the table as a 16-bit WAV (the user pack, or the embedded pack for `embed`), attach it to the oscillator and set oscN.wavetable to
+    the Preset table entry. */
+FlowResult saveWavetable (UiContext& ctx, int osc, const wtedit::Wavetable& table, bool embed);
+/** The table behind the oscillator: the stored file when oscN.wavetable is the Preset table and the engine content has one, false otherwise. */
+bool loadWavetableOf (UiHost& host, int osc, wtedit::Wavetable& out);
+/** Impulse response for Convolve: decode, store, `content.impulses[0]`, convolve.ir = Preset IR. */
+FlowResult loadImpulseFile (UiContext& ctx, const juce::File& file);
+FlowResult removeImpulse (UiContext& ctx);
+/** The stored impulse response as a mono mix (empty when there is none), for the display. */
+bool loadImpulsePreview (UiHost& host, std::vector<float>& mono, double& sampleRate);
+
+/** Vital file (.vital / .vitalbank / .vitaltable / .vitallfo). A preset replaces the patch (host.loadPatch), a table goes to the library and the
+    oscillator `osc`, a shape to the LFO `lfo` (1..10; 0 = not a target). The result carries what the report sheet shows. */
+struct VitalFlowResult
+{
+    FlowResult flow;
+    VitalPluginImport imported;
+};
+VitalFlowResult importVitalFile (UiContext& ctx, const juce::File& file, int osc, int lfo);
+
+/** Serum 2 file (.SerumPreset / .SerumFX / .SerumFXRack / .XferShape, WP-21). A preset replaces the patch, an effect chain is written onto the current patch
+    (only the parameters it holds), a shape goes to the LFO `lfo` (1..10; 0 = not a target); any other Serum family is only reported. The tables, samples and
+    impulses of a preset are read from the Serum content folder that holds the file (the nearest ancestor with a Tables or Samples folder; none: they are reported
+    missing). */
+struct SerumFlowResult
+{
+    FlowResult flow;
+    SerumPluginImport imported;
+};
+SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo);
+
+/** Decoded forms of library files for the views, keyed by the SHA-256 of the reference (so a replaced file is decoded again). Message thread. */
+class ContentCache
+{
+public:
+    std::shared_ptr<const SamplePreview> samplePreview (UiHost& host, const ContentFileRef& ref);
+    std::shared_ptr<const wtedit::Wavetable> table (UiHost& host, const ContentFileRef& ref);
+    void clear();
+
+private:
+    std::map<std::string, std::shared_ptr<const SamplePreview>> samples;
+    std::map<std::string, std::shared_ptr<const wtedit::Wavetable>> tables;
+};
+ContentCache& contentCache (UiContext& ctx);
+
+/** The reference of the oscillator's sample / table in the host content, or null. */
+const ContentSample* sampleOf (const StateContent& content, int osc) noexcept;
+const ContentWavetable* wavetableOf (const StateContent& content, int osc) noexcept;
+} // namespace synthyboy::ui
+
+namespace synthyboy::ui
+{
+/** The logic of the Missing Files dialog (S13-13, S01-08): the references of the loaded patch the library cannot resolve, and the answers (locate the
+    file, remove the reference). The dialog component only shows the rows and calls these. */
+class MissingFilesModel
+{
+public:
+    explicit MissingFilesModel (UiContext& context) : ctx (context) { refresh(); }
+
+    /** Looks at the host content again. */
+    void refresh();
+    const std::vector<MissingContent>& items() const noexcept { return missing; }
+    bool empty() const noexcept { return missing.empty(); }
+    /** Row text: "Osc 2 wavetable: Pad.wav (not found)". */
+    juce::String describe (size_t row) const;
+    /** The user located a file for the row: it is added to the library and the reference follows. A file whose SHA-256 differs from the reference is
+        refused unless `acceptDifferent`. */
+    FlowResult locate (size_t row, const juce::File& file, bool acceptDifferent = false);
+    /** Drops the reference of the row from the content (the engine falls back: saw / silence / bypass). */
+    FlowResult remove (size_t row);
+    FlowResult removeAll();
+
+private:
+    UiContext& ctx;
+    std::vector<MissingContent> missing;
+};
+} // namespace synthyboy::ui

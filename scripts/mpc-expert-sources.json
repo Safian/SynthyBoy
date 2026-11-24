@@ -1,0 +1,57 @@
+{
+  "sources": [
+    {
+      "id": "standalone-3.10.1",
+      "kind": "pdf",
+      "path": "manuals-extended/MPC Standalone OS - User Guide - v3.10.1.pdf",
+      "url": "https://cdn.inmusicbrands.com/Software/MP3108CNOVOP/MPC%20Standalone%20OS%20-%20User%20Guide%20-%20v3.10.1.pdf"
+    },
+    {
+      "id": "xl-liveiii-3.10.1",
+      "kind": "pdf",
+      "path": "manuals-extended/MPC Live III, MPC XL - User Guide - v3.10.1.pdf",
+      "url": "https://cdn.inmusicbrands.com/Software/MP3108CNOVOP/MPC%20Live%20III%2C%20MPC%20XL%20-%20User%20Guide%20-%20v3.10.1.pdf"
+    },
+    {
+      "id": "release-notes-3.10.1",
+      "kind": "pdf",
+      "path": "manuals/rn.pdf",
+      "url": "https://cdn.inmusicbrands.com/Software/MPC/MOPN4PCOPEN/MPC%203.10.1%20-%20Release%20Notes.pdf"
+    },
+    {
+      "id": "sdk-public-docs",
+      "kind": "archive",
+      "path": "sources/runtime-sdk-docs",
+      "max_bytes": 40000000,
+      "url": "https://api.github.com/repos/inmusic-software/mpc-plugin-builder-sdk/zipball"
+    },
+    {
+      "id": "open-mpc-workflow",
+      "kind": "text",
+      "path": "web-pages/runtime-open-mpc-workflow.txt",
+      "url": "https://open-mpc.github.io/workflow.html",
+      "max_bytes": 1000000
+    },
+    {
+      "id": "official-xl-downloads",
+      "kind": "discovery",
+      "path": "web-pages/runtime-official-xl.html",
+      "url": "https://www.akaipro.com/mpc-xl",
+      "max_bytes": 3000000
+    },
+    {
+      "id": "official-key61-downloads",
+      "kind": "discovery",
+      "path": "web-pages/runtime-official-key61.html",
+      "url": "https://www.akaipro.com/mpc-key-61",
+      "max_bytes": 3000000
+    },
+    {
+      "id": "official-downloads",
+      "kind": "discovery",
+      "path": "web-pages/runtime-official-downloads.html",
+      "url": "https://www.akaipro.com/downloads-and-support/downloads/",
+      "max_bytes": 5000000
+    }
+  ]
+}

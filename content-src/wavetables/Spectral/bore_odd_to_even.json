@@ -1,0 +1,40 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Bore Odd To Even",
+ "category": "Spectral",
+ "description": "A cross fade from odd harmonics only (a cylindrical reed) to the full series (a conical bore), level matched: clarinet colour to saxophone colour.",
+ "frames": 64,
+ "seed": "bore_odd_to_even",
+ "source": {
+  "type": "mix",
+  "params": {
+   "g1": {
+    "law": "linear",
+    "from": 1,
+    "to": 0
+   },
+   "g2": {
+    "law": "linear",
+    "from": 0,
+    "to": 1
+   }
+  },
+  "inputs": [
+   {
+    "type": "additive",
+    "params": {
+     "count": 40,
+     "rolloff": 1.0,
+     "mask": "odd"
+    }
+   },
+   {
+    "type": "additive",
+    "params": {
+     "count": 40,
+     "rolloff": 1.0
+    }
+   }
+  ]
+ }
+}

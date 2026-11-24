@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 40,
+  "title": "Selector",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "Filter · MODEL",
+          "file": "catalog-selector-56-nameval.png",
+          "alt": "Selector {size:height.high} px név + érték"
+        },
+        {
+          "file": "catalog-selector-56-valonly.png",
+          "caption": "Voice · csak érték",
+          "alt": "Voice natív lépésválasztó"
+        },
+        {
+          "presentation": "sample",
+          "caption": "Route · {size:height.medium} px",
+          "file": "catalog-route-48.png",
+          "alt": "Route {size:height.medium} px"
+        }
+      ]
+    }
+  ]
+}

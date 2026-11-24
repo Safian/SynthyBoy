@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 100,
+  "title": "Meter",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "{size:meter.width} × {size:meter.height} px",
+          "file": "catalog-active.png",
+          "alt": "Meter"
+        }
+      ]
+    }
+  ]
+}

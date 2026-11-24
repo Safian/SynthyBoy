@@ -1,0 +1,293 @@
+/*
+ * SynthyBoy - minimal 8-voice synthesizer (VST3 + CLAP): thin JUCE shell around synthyboy_core
+ * Copyright (C) 2026 Safian Szabolcs
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#pragma once
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_utils/juce_audio_utils.h>
+
+#include <array>
+#include <functional>
+#include <mutex>
+#include <atomic>
+#include <memory>
+#include <vector>
+
+#include "synthyboy/engine.h"
+#include "synthyboy/output_stage.h"
+#include "synthyboy/preferences.h"
+#include "synthyboy/shell_features.h"
+#include "synthyboy/state.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/user_library.h"
+#include "ApvtsParameterStore.h"
+#include "ui/UiHost.h"
+
+/**
+ * JUCE shell: owns no DSP. The parameter layout is generated from synthyboy::paramTable() (one JUCE parameter per entry, grouped
+ * by the " / " hierarchy of ParamInfo::group), MIDI and parameter values are converted into synthyboy::Event /
+ * IEngine::setParam each block (only the parameters whose value changed), and the state blob is synthyboy::saveState().
+ */
+class SynthyBoyProcessor : public juce::AudioProcessor,
+                          public synthyboy::ui::UiHost
+{
+public:
+    /** Capacity of the per-block event list (allocated in prepareToPlay); further events of a block are dropped and counted. */
+    static constexpr int maxEventsPerBlock = 1024;
+
+    SynthyBoyProcessor();
+    ~SynthyBoyProcessor() override;
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void setNonRealtime (bool isNonRealtime) noexcept override;
+    void releaseResources() override;
+    /** The host's flush (transport stop / locate, a new position): the engine's voices and tails and the output stage's delay line and reduction start clean. */
+    void reset() override;
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override;
+
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
+    void changeProgramName (int index, const juce::String& newName) override;
+
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
+    /** All parameters of the tree as a ParamValues (message thread). */
+    synthyboy::ParamValues allValues() const { return currentValues(); }
+
+    // synthyboy::ui::UiHost (the editor's view of the processor; message thread)
+    synthyboy::ui::ParameterStore& parameterStore() override { return paramStore; }
+    /** The tree behind parameterStore () (tests and the shell; the UI library never sees it). */
+    juce::AudioProcessorValueTreeState& parameters() noexcept { return apvts; }
+    synthyboy::EngineCapsMask engineCaps() const noexcept override { return caps; }
+    synthyboy::EngineCaps2Mask engineCaps2() const noexcept override { return caps2; }
+    bool overlaysInsideEditor() const noexcept override { return false; }
+    synthyboy::Tier qualityTier() const noexcept override { return synthyboy::kDefaultTier; }
+    juce::MidiKeyboardState& keyboardState() override { return keyboard; }
+    synthyboy::ui::AbCompare& abCompare() override { return ab; }
+    void stepPreset (int direction) override;
+    juce::String presetName() const override
+    {
+        const std::lock_guard<std::mutex> lock (presetNameMutex);
+        return presetNameText;
+    }
+    void setPresetNameText (const juce::String& name)
+    {
+        const std::lock_guard<std::mutex> lock (presetNameMutex);
+        presetNameText = name;
+    }
+    int findProgramIndex (const juce::String& identifier) const;
+    std::vector<synthyboy::ui::PresetItem> presetList() const override;
+    void selectPreset (int index) override;
+    int currentPresetIndex() const override { return currentProgramIndex.load (std::memory_order_relaxed); }
+    bool isPresetModified() const override;
+    float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
+    float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
+    void injectMidiMessage (const juce::MidiMessage& msg) override;
+    bool revertToSaved() override;
+    int activeVoiceCount() const noexcept override { return voiceCount.load (std::memory_order_relaxed); }
+    float cpuLoad() const noexcept override { return cpu.load (std::memory_order_relaxed); }
+    int copyScope (float* dest, int maxSamples) const override;
+    void setReadoutTargets (const std::vector<int>& paramIndices) override { if (engine != nullptr) engine->setReadoutTargets (paramIndices.data(), static_cast<int> (paramIndices.size())); }
+    bool copyReadout (synthyboy::LiveValues& out) const override { return engine != nullptr && engine->copyReadout (out); }
+    synthyboy::StateContent content() const override;
+    bool setContent (const synthyboy::StateContent& newContent) override;
+    void reloadContent() override;
+
+    // content pipeline (WP-01): the user content library behind the engine, the JSON item library, file requests
+    synthyboy::UserContentStore* contentLibrary() override { return contentStore.get(); }
+    synthyboy::UserLibrary* userLibrary() override { return itemLibrary.get(); }
+    std::string userDirectory() const override { return userDir; }
+    bool requestFile (const synthyboy::ui::FileRequest& request, std::function<void (const juce::File&)> done) override;
+    bool canRequestFile() const noexcept override { return true; }
+    uint32_t contentRevision() const noexcept override { return contentRev.load (std::memory_order_relaxed); }
+
+    // offline render, last note, share hook (GROUPD WP-15)
+    bool renderOffline (const synthyboy::OfflineRequest& request, synthyboy::OfflineAudio& out) override;
+    LastNote lastNote() const override;
+    double tempoBpm() const noexcept override { return tempo.load (std::memory_order_relaxed); }
+    bool shareFile (const juce::File& file, const juce::String& title, std::function<void (bool)> done) override;
+    bool canShareFiles() const noexcept override { return true; }
+    bool dragFileOut (const juce::File& file, juce::Component& source) override;
+    /** Tests and alternative shells answer the share request themselves (instead of the platform share sheet). */
+    using ShareHandler = std::function<bool (const juce::File&, const juce::String&)>;
+    void setShareHandler (ShareHandler handler) { shareHandler = std::move (handler); }
+    /** Tests and alternative shells answer the file requests themselves (instead of a juce::FileChooser). */
+    using FileRequestHandler = std::function<bool (const synthyboy::ui::FileRequest&, std::function<void (const juce::File&)>)>;
+    void setFileRequestHandler (FileRequestHandler handler) { fileRequestHandler = std::move (handler); }
+
+    // MIDI learn (G07), Save as Default (G02), locks (G08): docs/ui-design/15-shell-features.md
+    bool canMidiLearn() const noexcept override { return true; }
+    void startMidiLearn (const std::string& key) override;
+    void cancelMidiLearn() override;
+    std::string midiLearnKey() const override;
+    int midiCcForKey (const std::string& key) const override;
+    void clearMidiCc (const std::string& key) override;
+    uint32_t midiMapRevision() const noexcept override { return midiMap.revision(); }
+    bool saveAsDefault() override;
+    bool hasUserDefault() const override { return synthyboy::hasUserDefault (userDir); }
+    bool clearUserDefault() override;
+    bool initPatch() override;
+    bool canLock() const noexcept override { return true; }
+    bool isModuleLocked (const std::string& prefix) const override;
+    void setModuleLocked (const std::string& prefix, bool locked) override;
+    bool loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent,
+                    const synthyboy::ui::MidiMapBindings* presetMidiMap = nullptr) override;
+
+    // preferences, MIDI map files, About (GROUPA2 WP-02)
+    const synthyboy::Preferences& preferences() const noexcept override { return prefs; }
+    void setPreferences (const synthyboy::Preferences& newPrefs) override;
+    uint32_t preferencesRevision() const noexcept override { return prefsRev.load (std::memory_order_relaxed); }
+    float modWheel() const noexcept override { return modWheelPosition.load (std::memory_order_relaxed); }
+    juce::String aboutText() const override;
+    synthyboy::ui::MidiMapBindings midiMapBindings() const override { return midiMap.bindings(); }
+    int setMidiMapBindings (const synthyboy::ui::MidiMapBindings& bindings) override;
+    bool hasDefaultMidiMap() const override { return synthyboy::hasDefaultMidiMap (userDir); }
+    bool saveDefaultMidiMap() override;
+    bool clearDefaultMidiMap() override { return synthyboy::clearDefaultMidiMap (userDir); }
+    synthyboy::MidiCcMap& midiCcMap() noexcept { return midiMap; }
+    /** The directory of the user default (SYNTHYBOY_USER_DIR, else the user data directory); fixed at construction. */
+    const std::string& userDataDir() const noexcept { return userDir; }
+
+    /** Preset browsing belongs to Kick: the owner of the preset list installs the prev / next callback and sets the shown name. */
+    void setPresetStepHandler (std::function<void (int)> handler) { presetStepHandler = std::move (handler); }
+    void setPresetName (const juce::String& name) { presetNameText = name; }
+    uint32_t getDroppedEventCount() const noexcept { return droppedEvents.load(); }
+
+private:
+    struct ControlTimer;
+    std::shared_ptr<ControlTimer> controlTimer;
+    void updatePlayback();
+    void prepareEngine (double sampleRate, int samplesPerBlock);
+    // Prepare, release and message-thread publication are serialized by the control timer lock.
+    bool preparedForPlayback = false;
+    double preparedSampleRate = 44100.0;
+    int preparedBlockSize = 512;
+    std::atomic<int> latestLatency { 0 };
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    synthyboy::ParamValues currentValues() const;
+    void applyValues (const synthyboy::ParamValues& values);
+    bool loadLegacyXml (const void* data, int sizeInBytes, synthyboy::ParamValues& values) const;
+
+    juce::AudioProcessorValueTreeState apvts;
+    synthyboy::ui::ApvtsParameterStore paramStore { apvts }; // declared after the tree it listens to
+    std::array<std::atomic<float>*, synthyboy::kMaxParams> rawParams {};
+    std::array<juce::RangedAudioParameter*, synthyboy::kMaxParams> paramPtrs {}; // looked up once: the audio thread must not search by name
+    std::array<float, synthyboy::kMaxParams> sentToEngine {}; // audio thread: the value the engine has, for change detection
+
+    // The `content` section of the state (custom LFO shapes, content references, ...: not parameters). Part of the host state
+    // (docs/ui-design/13-new-keys.md A25); no engine reads it yet. Message thread only, the mutex covers hosts that do not.
+    mutable std::mutex contentMutex;
+    synthyboy::StateContent patchContent;
+
+    // what the host loaded last (or the defaults): "Revert to saved". Message thread, the content mutex covers hosts that do not.
+    synthyboy::ParamValues savedValues = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent savedContent;
+    int savedProgramIndex = 0;
+    juce::String savedPresetName { "Init" };
+
+    // baseline for isPresetModified(): updated on loadPatch, initPatch, setStateInformation, revertToSaved
+    synthyboy::ParamValues presetBaselineValues = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent presetBaselineContent;
+
+    // shell features (not parameters): the CC map is read and learned on the audio thread (atomics), the locks belong to the message thread
+    synthyboy::MidiCcMap midiMap;
+    std::vector<std::string> locks; // guarded by contentMutex
+    // preferences (GROUPA2 WP-02): the struct belongs to the message thread, the audio thread reads the atomics next to it
+    synthyboy::Preferences prefs;
+    std::atomic<uint32_t> prefsRev { 0 };
+    std::atomic<bool> prefSilenceOnStop { true };
+    std::atomic<float> modWheelPosition { 0.0f };
+    synthyboy::TransportStopWatch stopWatch; // audio thread
+    /** A preset change: the preset's own CC map when the preference says so and the preset has one, else the default map file when there is one. */
+    void applyMapOfPresetChange (const synthyboy::ui::MidiMapBindings* presetMidiMap);
+    std::string userDir;
+    synthyboy::ShellState shellState() const;       // takes contentMutex
+    std::string stateText();                         // saveState + content + shell section (the host state and the user default)
+    void restoreProgram (const void* data, size_t size);
+    void applyShell (const synthyboy::ShellState& shell);
+    /** Parameters and content of a loaded patch; `respectLocks` keeps the locked modules of the current patch. */
+    void applyPatch (synthyboy::ParamValues values, synthyboy::StateContent newContent, bool respectLocks);
+
+    // declared before the engine: the engine is destroyed first and never sees a dead store
+    std::unique_ptr<synthyboy::UserContentStore> contentStore;
+    std::unique_ptr<synthyboy::UserLibrary> itemLibrary;
+    std::atomic<uint32_t> contentRev { 0 };
+    FileRequestHandler fileRequestHandler;
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    ShareHandler shareHandler;
+#if JUCE_IOS || JUCE_ANDROID
+    juce::ScopedMessageBox shareSession; // the open platform share sheet (iOS / Android)
+#endif
+    // the last note (audio thread writes, the message thread reads; relaxed atomics, a torn read only shows an odd length): see lastNote ()
+    std::atomic<int> lastKey { -1 };
+    std::atomic<float> lastVelocity { 0.8f };
+    std::atomic<int64_t> lastOnSample { 0 }, lastOffSample { -1 }, samplesDone { 0 };
+    std::atomic<double> tempo { 120.0 };
+
+    std::unique_ptr<synthyboy::IEngine> engine;
+    synthyboy::OutputStage outputStage;   // make-up gain + look-ahead limiter (synthyboy/output_stage.h); its look-ahead is part of the reported latency
+    synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction
+    synthyboy::EngineCaps2Mask caps2 = synthyboy::kCap2None; // engine->capabilities2 ()
+
+    // editor state that outlives the editor window
+    juce::MidiKeyboardState keyboard; // notes of the on-screen keyboard, merged into the MIDI input of processBlock
+    synthyboy::ui::AbCompare ab;
+    mutable std::mutex presetNameMutex;
+    juce::String presetNameText { "Init" };
+    std::function<void (int)> presetStepHandler;
+    std::vector<synthyboy::Event> events;
+    std::atomic<uint32_t> droppedEvents { 0 };
+    std::atomic<float> peakL { 0.0f }, peakR { 0.0f };
+    std::atomic<int> voiceCount { 0 };
+    std::atomic<float> cpu { 0.0f };
+    // mono ring of the last output samples for the master scope (audio thread writes, the UI reads; relaxed atomics, a torn read only
+    // shows one odd sample)
+    std::array<std::atomic<float>, synthyboy::ui::UiHost::kScopeSamples> scopeRing {};
+    std::atomic<uint32_t> scopeWrite { 0 };
+    std::mutex uiMidiMutex;
+    juce::MidiBuffer uiMidiBuffer;
+
+    struct DesktopProgram
+    {
+        std::string category;
+        std::string name;
+        const char* jsonText = nullptr;
+        size_t jsonSize = 0;
+    };
+    std::vector<DesktopProgram> programList;
+    std::atomic<int> currentProgramIndex { 0 }; // read by the host (any thread) and the editor
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SynthyBoyProcessor)
+};

@@ -1,0 +1,42 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Noise To Sine",
+ "category": "Noise",
+ "description": "A level matched cross fade from frozen noise to a pure sine: a breath that condenses into a tone.",
+ "frames": 64,
+ "seed": "noise_to_sine",
+ "source": {
+  "type": "mix",
+  "params": {
+   "g1": {
+    "law": "linear",
+    "from": 1,
+    "to": 0
+   },
+   "g2": {
+    "law": "linear",
+    "from": 0,
+    "to": 1
+   }
+  },
+  "inputs": [
+   {
+    "type": "noise",
+    "params": {
+     "tilt": 0.3,
+     "seed": 9,
+     "count": 300
+    }
+   },
+   {
+    "type": "additive",
+    "params": {
+     "count": 1
+    }
+   }
+  ]
+ },
+ "post": {
+  "limit": 320
+ }
+}

@@ -1,0 +1,85 @@
+# engine-own
+
+The engine written for this project (original code, no Vital-derived content, clean-room process of `docs/ARCHITECTURE.md` 2.2): a Serum-class
+subtractive wavetable synth behind `synthyboy::IEngine`. It is always built and the only engine of iOS builds. Its sources are the public
+documents (`docs/engine-spec/*.md` of branch `engine-spec`, `docs/ui-design/*`, the manuals), DSP literature and black-box measurements of
+the former Vital engine through `IEngine` (`tools/own-oracle`, until that engine was removed on 2026-11-21); it never read the Vital engine's sources.
+
+## Layout
+
+| Directory | Contents |
+|-----------|----------|
+| `dsp/` | helpers shared by all modules (control period, power curve, pan law, RNG, smoother) |
+| `osc/` | band-limited built-in wavetables (additive spectra, inverse FFT, 18 mip levels (1024 .. 256 harmonics in octaves, 181 .. 1 in half octaves) stored at >= 8x their band with a 256 sample floor: 55.6 KB time + 8.2 KB spectrum = 63.8 KB per frame; 32.65 MB (31.14 MiB) for the eight 64 frame tables and 33.10 MB (31.57 MiB) for all 15 built-in tables, shared once per process, `own_wavetable_bank_memory`), the unison wavetable oscillator, the warp modes (4x oversampled with a decimator when a warp is active), the spectral morph (`morph.*`: an inverse FFT of the morphed spectrum every 256 samples, cross-faded), the content set (`content_set.*`: user tables, samples with their analysis, multisample instruments, drawn curves, decoded off the audio thread and handed over without a lock), and the sample / granular / spectral / multisample oscillator types of the voice (`lib_osc.*`, the glue of docs/engine-spec/07 around core/sample-osc, granular, spectral, multisample) |
+| `env_lfo/` | DAHDSR envelope (output squared as the amplitude, power curves), the LFO shape table, the random LFOs |
+| `matrix/` | the 64 slot modulation matrix: slot law, aux source, destination control domains (`DestLaw`: lin / sqrt / fourth root / log2 / note / volume) |
+| `voice/` | the voice (3 oscillators, sub, noise, 2 filters on `core/filters-serum`, 6 envelopes, 10 LFOs, 4 random LFOs, sources, voice control, the mixer outputs Main / Bus 1 / Bus 2 / Direct), the classic filter models, the tuning (`note_tuning.h`: A4, scales, user file, MTS-ESP seam, key scale), the content the voice reads (`own_content.h`: custom LFO shapes with point modulation, per slot curves), the table positions of the keys |
+| `fx/` | the effect racks (Main, Bus 1, Bus 2 and the bands of the three splitters, one `FxChain` per bus) in `fx.order` order: chorus, compressor, delay, distortion, EQ, FX filter, flanger, phaser, reverb (written here), Hyper/Dimension, Utility and the splitters (`core/fx-serum-a`), Bode (`core/fx-serum-b`) |
+| `own_engine.*` | events, voice allocation (polyphony, same-note rule, steal priority, legato, portamento), the control grid, the master stage |
+| `own_support.*` | which keys the engine acts on (`supportsParam`) and the capability bits it reports |
+
+## Timing
+
+Envelopes, LFOs and the matrix advance in control periods of 32 samples **on the absolute sample count** (never on the host block), audio rate values
+(pitch, level, pan, cutoff) are interpolated linearly across the period: the output does not depend on how the host splits the stream into blocks
+(`own_output_does_not_depend_on_the_block_size`). Parameters are read once per `process()` call. No allocation in `process()` (the wavetable bank is
+built in `prepare()`).
+
+## The voice side of this branch (engine-own-c)
+
+Tuning (A4, Pythagorean / Just / user .scl + .kbm, MTS-ESP seam, key scale), MPE (member channel bend, axes to macros / mod wheel), Kill mode with the 50 ms fade, note recall,
+poly legato, voice control, LFO sync types 2 .. 5, swing, stereo offset, HOST lock, mono LFOs, custom LFO shapes with point modulation, rise / fall / delay of a slot, the amount of a
+slot as a destination, the stereo source, the cycle check, the mixer graph (sends, filter blend, buses, Direct, bypasses), filter pan / clean mode / level, the Diode ladder with the
+high pass in front, the delay with the tape glide, the chorus and flanger of document 06, the phaser of document 06 section 8, the Serum unison law.
+Tests: `core/tests/test_own_voice.cpp` (vectors M1 .., L1 .., D1 / D2, F1 .. F7, P1 and an off / on probe for every capability bit this branch reports).
+
+## What is not there yet (see docs/ui-design/OWN-ENGINE-GAP.md, generated)
+
+The audio rate evaluation of the matrix (the control period is 32 samples). The effects of branch `engine-own-d` are listed below.
+## Content and the sample-type oscillators
+
+`setContent` / `setContentStore` (message thread) decode the content section into one immutable `ContentSet` (user wavetables = Preset table, samples with their spectral analysis,
+instruments, remap curves, spectral filter masks) and publish it with an atomic pointer; the audio thread announces the set it reads (hazard pointer) and the message thread frees a
+set only when it is neither current nor announced. A voice whose set changed stops its players. `oscN.type` 1 .. 4 runs `LibOsc` (one per slot and voice): unison as a line of voices
+(doc 07 section 5), pitch, start position, scan, loops and slices, the FM / RM / AM / quantize / distortion warps (sample, granular) and the spectral warps, a 10 ms crossfade on a
+type change. Memory of the library voices (granular clouds, spectral voices, multisample layers) is allocated in `prepare ()` for all 32 voices (about 25 MB); the analysis of a sample
+(`spectral::Analysis`, up to 12 KB per frame and channel, 16 s at most) is built when the content is set.
+
+## What is not there yet (see docs/ui-design/OWN-ENGINE-GAP.md, generated)
+
+Tuning / scale / MPE (step 6), the mixer graph (buses, sends), voice control, the effect racks, Bode, Convolve and the splitters, the Serum unison law, stack styles, transpose snap.
+
+## Known differences to the former Vital engine
+
+Wavetable names with several frames (Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials) are defined
+here, not matched frame by frame. The warps are original definitions; they alias less than the former Vital engine (measured, see the report of the work).
+The filters-serum types can run away at resonance and drive 100 %: `voice/filter_unit.h` guards the output.
+
+## The effects (branch engine-own-d)
+
+Every effect is an `FxModule` (`fx/fx_module.h`, `fx_modules.cpp`): instance 0 of the chain and the 16 slots of the instance pool (`fxiNN`, `FxPool` in `fx_chain.*`) run the same
+code. The reverb has its six algorithms (`fx_reverb.h`), the EQ both laws (`fx_eq.h`), the compressor the Compress / Limit / Serum modes (`fx_compressor.h`), Convolve builds its
+convolver on a helper thread from the impulse of the content store. `fx_latency.h` holds the compensation delays between the paths of the mixer (Bode, the limiter). The SVF styles
+2 .. 5 of the four SVF models are in `voice/classic_filters.h`, the envelope delay in chunks in `env_lfo/envelope.h`. The vectors of documents 03, 05 and 06 are tests in
+`core/tests/test_own_fx.cpp`; assumptions A714 .. A725 in `docs/ui-design/13-new-keys.md` 4.51, open points in `docs/engine-spec/QUESTIONS.md` (rows 9 .. 13).
+
+## Filter response (for the filter display)
+
+`synthyboy::FilterResponse` (`core/include/synthyboy/filter_response.h`, `core/src/filter_response.cpp`) measures the magnitude response of filter 1 or 2 on the real filter
+code: an impulse through `own::FilterUnit`, set up by `own::fillFilterSettings` (`voice/filter_setup.h`), the same function `Voice::tick` uses; FFT with `wtedit::Radix2Fft`.
+The header comment is the how-to for a display: subscribe `FilterResponse::readoutIndices (n, idx)` (cutoff, resonance) with `IEngine::setReadoutTargets`, read
+`IEngine::copyReadout (live)` on the display timer (any thread; `live.target[]` is the modulated value in plain Hz / percent, the plain knob value when nothing modulates it),
+pass them as `Request::cutoffHz` / `resonancePercent` (`std::optional`: unset = the knob) together with the `ParamValues` snapshot to `compute ()` (display thread, no allocation). Without a
+sounding voice the readout of a subscribed knob follows the sources that have a value without a voice (macros, mod wheel, aftertouch, pitch wheel, last velocity and note). Tests:
+`core/tests/test_own_filter_response*.cpp`, answers to the independent review: `core/docs/filter-response-review-answers.md`; command line: `synthyboy_filter_response PRESET.sbpreset [--filter 2] [--points N]` (`tools/filter-response`).
+
+## LFO shape and oscillator cycle (for the LFO and oscillator displays)
+
+`synthyboy::LfoDisplay` (`core/include/synthyboy/lfo_display.h`) gives the shape of an LFO as the voice plays it: it calls `own::lfoShapeAt` (`env_lfo/lfo_eval.h`), the function
+`Voice::lfoValue` calls too (built-in shapes, custom shape with point modulation, swing, direction, phase offset, sync type, smoothing); the x axis is the time since the note
+started, `LiveValues::lfoPhase` is the cursor on it. `synthyboy::OscCycle` (`core/include/synthyboy/osc_cycle.h`) renders one cycle of the wavetable oscillator with the
+voice's own `own::WtOsc` (frame position with smooth / stepped reading and remap, warp 1 and 2, spectral morph, the oversampled path): the readout of
+`OscCycle::readoutIndices (n, idx)` carries the modulated frame, warp and morph amounts. `LiveValues::envFineStage / envFineFraction` give the envelope stage in six
+steps (delay, attack, hold, decay, sustain, release) with its progress. Tests: `core/tests/test_own_displays.cpp` (the LFO values against the engine's LFO source for every
+shape, the cycle against the output of the engine).
+

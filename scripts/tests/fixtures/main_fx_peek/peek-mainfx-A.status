@@ -1,0 +1,5 @@
+view: mixer
+page_top: 26
+gpu_state: running
+page_q_slots: 837 838 841 842 845 846 1500 -1 836 840 844 2635 839 843 847 -1
+instances: 1

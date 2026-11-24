@@ -1,0 +1,23 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Colour Tilt Sweep",
+ "category": "Noise",
+ "description": "One frozen noise spectrum whose tilt moves from -1 (blue, hissy) through white and pink to 2.2 (brown, rumbling): the colour of noise as a scan.",
+ "frames": 64,
+ "seed": "colour_tilt_sweep",
+ "source": {
+  "type": "noise",
+  "params": {
+   "tilt": {
+    "law": "linear",
+    "from": -1.0,
+    "to": 2.2
+   },
+   "seed": 1,
+   "count": 300
+  }
+ },
+ "post": {
+  "limit": 320
+ }
+}

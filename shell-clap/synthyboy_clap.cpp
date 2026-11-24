@@ -1,0 +1,882 @@
+// SynthyBoy - native JUCE-free CLAP entry and wrapper (docs/ARCHITECTURE.md 4).
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+#include "synthyboy_clap.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <atomic>
+#include <chrono>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "synthyboy/engine.h"
+#include "synthyboy/events.h"
+#include "synthyboy/kick_pages.h"
+#include "synthyboy/midi_events.h"
+#include "synthyboy/params.h"
+#include "synthyboy/preferences.h"
+#include "synthyboy/preset.h"
+#include "synthyboy/quality.h"
+#include "synthyboy/shell_features.h"
+#include "synthyboy/state.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/wave_convert.h"
+#include "synthyboy/vital_plugin_import.h"
+#include "synthyboy_content_ext.h"
+#include "synthyboy_content_service.h"
+#include "synthyboy_plugin.h"
+#ifndef SYNTHYBOY_BITMAP_GUI
+ #define SYNTHYBOY_BITMAP_GUI 0
+#endif
+#if SYNTHYBOY_BITMAP_GUI
+ #include "bitmap/BitmapGuiPlugin.h"
+#endif
+#include <clap/ext/remote-controls.h>
+#include <clap/ext/render.h>
+
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+
+namespace synthyboy
+{
+namespace
+{
+constexpr char kPluginId[] = "com.safian.synthyboy";
+constexpr char kPluginName[] = "SynthyBoy";
+constexpr char kPluginVendor[] = "Safian";
+constexpr char kPluginUrl[] = "https://github.com/Safian/SynthyBoy";
+constexpr char kPluginVersion[] = SYNTHYBOY_VERSION_STRING;
+constexpr char kPluginDescription[] = "Synthesizer plugin (VST3 + CLAP)";
+
+const char* const kPluginFeatures[] = {
+    CLAP_PLUGIN_FEATURE_INSTRUMENT,
+    CLAP_PLUGIN_FEATURE_SYNTHESIZER,
+    nullptr
+};
+
+const clap_plugin_descriptor_t s_descriptor = {
+    CLAP_VERSION,
+    kPluginId,
+    kPluginName,
+    kPluginVendor,
+    kPluginUrl,
+    "", // manual_url
+    "", // support_url
+    kPluginVersion,
+    kPluginDescription,
+    kPluginFeatures
+};
+
+/** The plug-in as the ContentHost of the extension synthyboy.content: the values and the content are the plug-in's own, so begin () has nothing to refresh. */
+class NativeContentHost final : public ContentHost
+{
+public:
+    explicit NativeContentHost (SynthyBoyClap& plugin) : self (plugin) {}
+
+    void begin() override
+    {
+        // the audio thread owns `values` while it processes: the extension works on the mirror, which every change of a value updates
+        for (size_t i = 0; i < paramCount(); ++i)
+            self.values.plain[i] = self.ui.value (i);
+    }
+    UserContentStore& store() override { return self.contentStore; }
+    EngineCapsMask engineCaps() override { return self.engine ? self.engine->capabilities() : kCapNone; }
+    ParamValues& values() override { return self.values; }
+    StateContent& content() override { return self.content; }
+    const Preferences& prefs() override { return self.prefs; }
+
+    void setValue (const ParamInfo& info, float constrained) override
+    {
+        const int index = findParamIndex (info.id);
+        self.values.plain[static_cast<size_t> (index)] = constrained;
+        if (self.engine)
+            self.engine->setParam (info.id, constrained);
+        self.ui.publish (static_cast<size_t> (index), constrained);
+    }
+
+    void applyAllValues() override
+    {
+        for (size_t i = 0; i < paramCount(); ++i)
+        {
+            if (self.engine)
+                self.engine->setParam (paramTable()[i].id, self.values.plain[i]);
+            self.ui.publish (i, self.values.plain[i]);
+        }
+    }
+
+    void contentChanged() override
+    {
+        contentRefresh();
+        self.contentRev.fetch_add (1, std::memory_order_relaxed);
+        self.markStateDirty();
+    }
+
+    void contentRefresh() override
+    {
+        if (self.engine)
+            self.engine->setContent (self.content);
+    }
+
+    void valuesRescan() override { self.rescanValues(); }
+
+    bool renderOffline (const OfflineRequest& request, OfflineAudio& audio) override
+    {
+        if (! self.engine)
+            return false;
+        return renderOfflineAny (*self.engine, EngineKind::own, &self.content, &self.contentStore, request, audio);
+    }
+
+    LastNote lastNote() override
+    {
+        LastNote note;
+        const int key = self.lastKey.load (std::memory_order_relaxed);
+        if (key < 0)
+            return note;
+        const int64_t on = self.lastOnSample.load (std::memory_order_relaxed), off = self.lastOffSample.load (std::memory_order_relaxed);
+        const int64_t end = off >= 0 ? off : self.samplesDone.load (std::memory_order_relaxed);
+        note.valid = true;
+        note.key = key;
+        note.velocity = self.lastVelocity.load (std::memory_order_relaxed);
+        note.heldSeconds = static_cast<double> (end - on) / std::max (self.sampleRate, 1.0);
+        return note;
+    }
+
+    double tempoBpm() override { return self.tempo.load (std::memory_order_relaxed); }
+
+private:
+    SynthyBoyClap& self;
+};
+
+struct SynthyBoyClapImpl final : public SynthyBoyClap
+{
+    explicit SynthyBoyClapImpl (const clap_host_t* h)
+        : SynthyBoyClap (h), monoScratch (8192, 0.0f)
+    {
+        silentFrames = static_cast<uint64_t> (std::round (2.0 * sampleRate));
+    }
+    std::vector<float> monoScratch;
+    uint64_t silentFrames = 0;
+};
+
+inline SynthyBoyClapImpl* toClapImpl (const clap_plugin_t* p) noexcept
+{
+    return static_cast<SynthyBoyClapImpl*> (p->plugin_data);
+}
+
+ContentHost* resolveContentHost (const clap_plugin_t* p) noexcept
+{
+    return p != nullptr && p->plugin_data != nullptr ? static_cast<SynthyBoyClap*> (p->plugin_data)->contentHost.get() : nullptr;
+}
+
+// -----------------------------------------------------------------------------
+// Plugin Lifecycle
+// -----------------------------------------------------------------------------
+
+bool clap_init (const clap_plugin_t* p) noexcept
+{
+    return p != nullptr && p->plugin_data != nullptr;
+}
+
+void clap_destroy (const clap_plugin_t* p) noexcept
+{
+    if (p != nullptr && p->plugin_data != nullptr)
+        delete toClapImpl (p);
+}
+
+bool clap_activate (const clap_plugin_t* p, double sample_rate, uint32_t, uint32_t max_frames_count) noexcept
+{
+    if (p == nullptr || p->plugin_data == nullptr)
+        return false;
+    auto* self = toClapImpl (p);
+    self->sampleRate = sample_rate > 0.0 ? sample_rate : 48000.0;
+    self->maxBlockSize = std::max (max_frames_count, 32u);
+    self->monoScratch.assign (std::max (self->maxBlockSize, 8192u), 0.0f);
+    self->silentFrames = static_cast<uint64_t> (std::round (2.0 * self->sampleRate));
+    self->stopWatch.reset();
+    self->outputStage.prepare (self->sampleRate);
+    if (self->engine)
+    {
+        self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender);
+        self->engine->prepare (self->sampleRate, static_cast<int> (self->maxBlockSize), self->quality);
+    }
+    self->active = true;
+    return true;
+}
+
+void clap_deactivate (const clap_plugin_t* p) noexcept
+{
+    if (p != nullptr && p->plugin_data != nullptr)
+        toClap (p)->active = false;
+}
+
+bool clap_start_processing (const clap_plugin_t* p) noexcept
+{
+    if (p == nullptr || p->plugin_data == nullptr)
+        return false;
+    toClap (p)->processing = true;
+    return true;
+}
+
+void clap_stop_processing (const clap_plugin_t* p) noexcept
+{
+    if (p != nullptr && p->plugin_data != nullptr)
+        toClap (p)->processing = false;
+}
+
+void clap_reset (const clap_plugin_t* p) noexcept
+{
+    if (p == nullptr || p->plugin_data == nullptr)
+        return;
+    auto* self = toClapImpl (p);
+    self->silentFrames = static_cast<uint64_t> (std::round (2.0 * self->sampleRate));
+    self->outputStage.reset();
+    if (self->engine)
+        self->engine->reset();
+}
+
+// -----------------------------------------------------------------------------
+// Audio Processing & Event Handling
+// -----------------------------------------------------------------------------
+
+clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* process) noexcept
+{
+    if (p == nullptr || p->plugin_data == nullptr || process == nullptr)
+        return CLAP_PROCESS_ERROR;
+
+    auto* self = toClapImpl (p);
+    if (! self->engine)
+        return CLAP_PROCESS_ERROR;
+
+    self->events.clear();
+
+    // 0. The GUI (docs/BITMAP-GUI-EXTENSION.md): its parameter edits are handled like host automation and reported to the host; its keyboard and wheels arrive as MIDI
+    self->drainUiEdits (process->out_events, 0);
+    for (uint8_t midi[3]; self->ui.popMidi (midi);)
+        self->handleMidi (midi, 0, process->out_events);
+
+    // 1. Process incoming events
+    if (process->in_events != nullptr)
+    {
+        const uint32_t numEvents = process->in_events->size (process->in_events);
+        for (uint32_t i = 0; i < numEvents; ++i)
+        {
+            const auto* hdr = process->in_events->get (process->in_events, i);
+            if (hdr == nullptr || hdr->space_id != CLAP_CORE_EVENT_SPACE_ID)
+                continue;
+
+            switch (hdr->type)
+            {
+                case CLAP_EVENT_NOTE_ON:
+                {
+                    const auto* ev = reinterpret_cast<const clap_event_note_t*> (hdr);
+                    Event e {};
+                    e.frame = static_cast<int32_t> (ev->header.time);
+                    e.type = Event::NoteOn;
+                    e.channel = static_cast<int16_t> (ev->channel);
+                    e.key = static_cast<int16_t> (ev->key);
+                    e.value = static_cast<float> (ev->velocity);
+                    e.noteId = ev->note_id;
+                    self->events.push_back (e);
+                    self->lastKey.store (e.key, std::memory_order_relaxed);
+                    self->lastVelocity.store (e.value, std::memory_order_relaxed);
+                    self->lastOnSample.store (self->samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
+                    self->lastOffSample.store (-1, std::memory_order_relaxed);
+                    break;
+                }
+                case CLAP_EVENT_NOTE_OFF:
+                case CLAP_EVENT_NOTE_CHOKE:
+                {
+                    const auto* ev = reinterpret_cast<const clap_event_note_t*> (hdr);
+                    Event e {};
+                    e.frame = static_cast<int32_t> (ev->header.time);
+                    e.type = Event::NoteOff;
+                    e.channel = static_cast<int16_t> (ev->channel);
+                    e.key = static_cast<int16_t> (ev->key);
+                    e.value = static_cast<float> (ev->velocity);
+                    e.noteId = ev->note_id;
+                    self->events.push_back (e);
+                    if (e.key == self->lastKey.load (std::memory_order_relaxed))
+                        self->lastOffSample.store (self->samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
+                    break;
+                }
+                case CLAP_EVENT_NOTE_EXPRESSION:
+                {
+                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS, PAN
+                    const auto* ev = reinterpret_cast<const clap_event_note_expression_t*> (hdr);
+                    Event e {};
+                    e.frame = static_cast<int32_t> (ev->header.time);
+                    e.type = Event::NoteExpression;
+                    e.channel = static_cast<int16_t> (std::clamp<int> (ev->channel, 0, 15));
+                    e.key = static_cast<int16_t> (ev->key);
+                    e.noteId = ev->note_id;
+                    e.value = static_cast<float> (ev->value);
+                    if (ev->expression_id == CLAP_NOTE_EXPRESSION_TUNING)
+                        e.expression = Event::Tuning;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_PRESSURE)
+                        e.expression = Event::Pressure;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
+                        e.expression = Event::Brightness;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_PAN)
+                        e.expression = Event::Pan; // the X axis of the MPE mappings
+                    else
+                        break; // volume, vibrato, expression: not used
+                    self->events.push_back (e);
+                    break;
+                }
+                case CLAP_EVENT_MIDI:
+                {
+                    // the MIDI dialect of the note port: CC 64 sustain pedal, CC 1, CC 74, pressure, bend, note on/off
+                    const auto* ev = reinterpret_cast<const clap_event_midi_t*> (hdr);
+                    self->handleMidi (ev->data, ev->header.time, process->out_events);
+                    break;
+                }
+                case CLAP_EVENT_PARAM_VALUE:
+                {
+                    const auto* ev = reinterpret_cast<const clap_event_param_value_t*> (hdr);
+                    const int idx = findParamIndex (ev->param_id);
+                    if (idx >= 0)
+                        self->applyHostValue (idx, constrainValue (paramTable()[idx], static_cast<float> (ev->value)));
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+
+    // host transport (tempo sync, beat units, LFO HOST mode)
+    {
+        TransportInfo transport;
+        if (process->transport != nullptr)
+        {
+            const clap_event_transport_t* t = process->transport;
+            if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) != 0 && t->tempo > 0.0)
+            {
+                transport.bpm = t->tempo;
+                self->tempo.store (t->tempo, std::memory_order_relaxed);
+            }
+            if ((t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) != 0)
+                transport.songPosBeats = static_cast<double> (t->song_pos_beats) / static_cast<double> (CLAP_BEATTIME_FACTOR);
+            transport.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+        }
+        // the host stopped: notes end and the effect tails are cleared (S p.315, A381)
+        if (self->stopWatch.update (process->transport != nullptr, transport.playing) && self->prefs.silenceOnStop)
+            self->engine->silence();
+        self->engine->setTransport (transport);
+    }
+
+    // 2. Render audio
+    bool isSilent = true;
+    if (process->audio_outputs_count > 0 && process->audio_outputs != nullptr && process->audio_outputs[0].data32 != nullptr)
+    {
+        const bool isMono = (process->audio_outputs[0].channel_count == 1);
+        float* outL = process->audio_outputs[0].channel_count > 0 ? process->audio_outputs[0].data32[0] : nullptr;
+        float* outR = (! isMono && process->audio_outputs[0].channel_count > 1) ? process->audio_outputs[0].data32[1] : self->monoScratch.data();
+
+        if (outL != nullptr && outR != nullptr)
+        {
+            const bool meters = self->ui.guiActive.load (std::memory_order_relaxed);
+            const auto processStart = meters ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+            self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
+                                   outL, outR, static_cast<int> (process->frames_count));
+            self->outputStage.process (outL, outR, static_cast<int> (process->frames_count));
+            self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
+
+            for (uint32_t i = 0; i < process->frames_count; ++i)
+            {
+                if (std::fabs (outL[i]) >= 1e-6f || std::fabs (outR[i]) >= 1e-6f)
+                {
+                    isSilent = false;
+                    break;
+                }
+            }
+
+            if (isMono)
+            {
+                for (uint32_t i = 0; i < process->frames_count; ++i)
+                    outL[i] = 0.5f * (outL[i] + outR[i]);
+            }
+
+            if (meters)
+            {
+                // the live displays of a GUI: load of this block (smoothed), peaks, voices and the scope ring; nothing of this runs without a GUI
+                const double spent = std::chrono::duration<double> (std::chrono::steady_clock::now() - processStart).count();
+                const double budget = self->sampleRate > 0.0 ? static_cast<double> (process->frames_count) / self->sampleRate : 0.0;
+                if (budget > 0.0)
+                    self->ui.cpu.store (self->ui.cpu.load (std::memory_order_relaxed) * 0.9f + static_cast<float> (spent / budget) * 0.1f, std::memory_order_relaxed);
+                float magL = 0.0f, magR = 0.0f;
+                for (uint32_t i = 0; i < process->frames_count; ++i)
+                {
+                    magL = std::max (magL, std::fabs (outL[i]));
+                    magR = std::max (magR, std::fabs (isMono ? outL[i] : outR[i]));
+                }
+                self->ui.peakL.store (magL, std::memory_order_relaxed);
+                self->ui.peakR.store (magR, std::memory_order_relaxed);
+                self->ui.voiceCount.store (self->engine->activeVoices(), std::memory_order_relaxed);
+                self->ui.writeScope (outL, isMono ? outL : outR, static_cast<int> (process->frames_count));
+            }
+            // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
+            if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
+                self->host->request_restart (self->host);
+            // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart (the output limiter's look-ahead is added)
+            const int latency = self->engine->latencySamples() + self->outputStage.latencySamples();
+            if (latency != self->reportedLatency.load (std::memory_order_relaxed))
+            {
+                self->reportedLatency.store (latency, std::memory_order_relaxed);
+                if (self->host != nullptr && self->host->request_restart != nullptr)
+                    self->host->request_restart (self->host);
+            }
+        }
+    }
+
+    const bool hasVoices = (self->engine->activeVoices() > 0);
+    if (hasVoices || ! isSilent)
+        self->silentFrames = 0;
+    else
+        self->silentFrames += process->frames_count;
+
+    const uint64_t holdFrames = static_cast<uint64_t> (std::round (2.0 * self->sampleRate));
+    return (hasVoices || self->silentFrames < holdFrames) ? CLAP_PROCESS_CONTINUE : CLAP_PROCESS_SLEEP;
+}
+
+// -----------------------------------------------------------------------------
+// CLAP Extensions
+// -----------------------------------------------------------------------------
+
+// audio-ports
+uint32_t ext_audio_ports_count (const clap_plugin_t*, bool is_input) noexcept
+{
+    return is_input ? 0 : 1;
+}
+
+bool ext_audio_ports_get (const clap_plugin_t*, uint32_t index, bool is_input, clap_audio_port_info_t* info) noexcept
+{
+    if (is_input || index != 0 || info == nullptr)
+        return false;
+
+    info->id = 0;
+    std::strncpy (info->name, "Stereo Output", sizeof (info->name) - 1);
+    info->name[sizeof (info->name) - 1] = '\0';
+    info->flags = CLAP_AUDIO_PORT_IS_MAIN;
+    info->channel_count = 2;
+    info->port_type = CLAP_PORT_STEREO;
+    info->in_place_pair = CLAP_INVALID_ID;
+    return true;
+}
+
+const clap_plugin_audio_ports_t s_audio_ports = {
+    ext_audio_ports_count,
+    ext_audio_ports_get
+};
+
+// note-ports
+uint32_t ext_note_ports_count (const clap_plugin_t*, bool is_input) noexcept
+{
+    return is_input ? 1 : 0;
+}
+
+bool ext_note_ports_get (const clap_plugin_t*, uint32_t index, bool is_input, clap_note_port_info_t* info) noexcept
+{
+    if (! is_input || index != 0 || info == nullptr)
+        return false;
+
+    info->id = 0;
+    std::strncpy (info->name, "Note Input", sizeof (info->name) - 1);
+    info->name[sizeof (info->name) - 1] = '\0';
+    info->supported_dialects = CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI;
+    info->preferred_dialect = CLAP_NOTE_DIALECT_CLAP;
+    return true;
+}
+
+const clap_plugin_note_ports_t s_note_ports = {
+    ext_note_ports_count,
+    ext_note_ports_get
+};
+
+// params
+uint32_t ext_params_count (const clap_plugin_t*) noexcept
+{
+    return static_cast<uint32_t> (paramCount());
+}
+
+bool ext_params_get_info (const clap_plugin_t*, uint32_t index, clap_param_info_t* info) noexcept
+{
+    if (index >= paramCount() || info == nullptr)
+        return false;
+
+    const auto& p = paramTable()[index];
+    info->id = p.id;
+    info->flags = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
+    if (p.flags & kParamStepped)
+        info->flags |= CLAP_PARAM_IS_STEPPED;
+
+    info->cookie = nullptr;
+
+    std::strncpy (info->name, p.name, sizeof (info->name) - 1);
+    info->name[sizeof (info->name) - 1] = '\0';
+
+    std::strncpy (info->module, p.group, sizeof (info->module) - 1);
+    info->module[sizeof (info->module) - 1] = '\0';
+
+    info->min_value = p.min;
+    info->max_value = p.max;
+    info->default_value = p.def;
+    return true;
+}
+
+bool ext_params_get_value (const clap_plugin_t* p, clap_id param_id, double* out_value) noexcept
+{
+    if (out_value == nullptr)
+        return false;
+
+    const int idx = findParamIndex (param_id);
+    if (idx < 0)
+        return false;
+
+    *out_value = toClap (p)->ui.value (static_cast<size_t> (idx));
+    return true;
+}
+
+bool ext_params_value_to_text (const clap_plugin_t*, clap_id param_id, double value, char* out_buffer, uint32_t out_buffer_capacity) noexcept
+{
+    if (out_buffer == nullptr || out_buffer_capacity == 0)
+        return false;
+
+    const int idx = findParamIndex (param_id);
+    if (idx < 0)
+        return false;
+
+    valueToText (paramTable()[idx], static_cast<float> (value), out_buffer, out_buffer_capacity);
+    return true;
+}
+
+bool ext_params_text_to_value (const clap_plugin_t*, clap_id param_id, const char* param_value_text, double* out_value) noexcept
+{
+    if (param_value_text == nullptr || out_value == nullptr)
+        return false;
+
+    const int idx = findParamIndex (param_id);
+    if (idx < 0)
+        return false;
+
+    float val = 0.0f;
+    if (textToValue (paramTable()[idx], param_value_text, val))
+    {
+        *out_value = val;
+        return true;
+    }
+    return false;
+}
+
+void ext_params_flush (const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t* out) noexcept
+{
+    auto* self = toClap (p);
+    self->drainUiEdits (out, 0); // the edits of the GUI while the plug-in is not processing
+    if (in == nullptr)
+        return;
+
+    const uint32_t numEvents = in->size (in);
+    for (uint32_t i = 0; i < numEvents; ++i)
+    {
+        const auto* hdr = in->get (in, i);
+        if (hdr != nullptr && hdr->space_id == CLAP_CORE_EVENT_SPACE_ID && hdr->type == CLAP_EVENT_PARAM_VALUE)
+        {
+            const auto* ev = reinterpret_cast<const clap_event_param_value_t*> (hdr);
+            const int idx = findParamIndex (ev->param_id);
+            if (idx >= 0)
+                self->applyHostValue (idx, constrainValue (paramTable()[idx], static_cast<float> (ev->value)));
+        }
+    }
+}
+
+const clap_plugin_params_t s_params = {
+    ext_params_count,
+    ext_params_get_info,
+    ext_params_get_value,
+    ext_params_value_to_text,
+    ext_params_text_to_value,
+    ext_params_flush
+};
+
+// state
+bool ext_state_save (const clap_plugin_t* p, const clap_ostream_t* stream) noexcept
+{
+    if (stream == nullptr)
+        return false;
+
+    auto* self = toClap (p);
+    const std::string s = self->stateText();
+    const int64_t written = stream->write (stream, s.data(), s.size());
+    return (written == static_cast<int64_t> (s.size()));
+}
+
+bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexcept
+{
+    if (stream == nullptr)
+        return false;
+
+    auto* self = toClap (p);
+    std::vector<char> buffer;
+    char chunk[4096];
+    int64_t n = 0;
+    while ((n = stream->read (stream, chunk, sizeof chunk)) > 0)
+    {
+        buffer.insert (buffer.end(), chunk, chunk + n);
+        if (buffer.size() > kMaxStateBytes)
+            return false;
+    }
+
+    if (buffer.empty())
+        return false;
+
+    ParamValues loaded = self->currentValues();
+    StateContent loadedContent = self->content;
+    const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), loaded, loadedContent);
+    if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
+    {
+        // a session of ours carries the `shell` section (MIDI map, locks) and is restored as it is; a document without it is a preset
+        // change and the locked modules of this instance survive it (G08)
+        ShellState shell;
+        const ShellStatus shellStatus = loadShellSection (buffer.data(), buffer.size(), shell);
+        const bool session = shellStatus == ShellStatus::ok || shellStatus == ShellStatus::rejected;
+        if (session)
+            self->applyShell (shell);
+        else
+            self->applyDefaultMidiMap (true); // a preset change loads the default MIDI map (S p.315)
+        // main thread: allocates, handed to the audio thread lock free; the GUI (if any) refreshes from the mirror
+        self->installPatch (loaded, std::move (loadedContent), ! session);
+        self->rememberSaved();
+        return true;
+    }
+
+    return false;
+}
+
+const clap_plugin_state_t s_state = {
+    ext_state_save,
+    ext_state_load
+};
+
+// voice-info
+bool ext_voice_info_get (const clap_plugin_t* p, clap_voice_info_t* info) noexcept
+{
+    if (info == nullptr)
+        return false;
+
+    auto* self = toClap (p);
+    info->voice_count = self->engine ? static_cast<uint32_t> (self->engine->activeVoices()) : 0;
+    info->voice_capacity = static_cast<uint32_t> (self->quality.maxVoices);
+    info->flags = CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES;
+    return true;
+}
+
+const clap_plugin_voice_info_t s_voice_info = {
+    ext_voice_info_get
+};
+
+// latency & tail
+uint32_t ext_latency_get (const clap_plugin_t* plugin) noexcept
+{
+    auto* self = static_cast<SynthyBoyClap*> (plugin->plugin_data);
+    const int latency = (self->engine ? self->engine->latencySamples() : 0) + OutputStage::lookaheadFor (self->sampleRate) * (self->outputStage.limiter() ? 1 : 0);
+    self->reportedLatency.store (latency, std::memory_order_relaxed);
+    return static_cast<uint32_t> (latency);
+}
+
+const clap_plugin_latency_t s_latency = {
+    ext_latency_get
+};
+
+uint32_t ext_tail_get (const clap_plugin_t*) noexcept
+{
+    return 0;
+}
+
+const clap_plugin_tail_t s_tail = {
+    ext_tail_get
+};
+
+// remote-controls
+uint32_t ext_remote_controls_count (const clap_plugin_t*) noexcept
+{
+    return static_cast<uint32_t> (kickPageCount());
+}
+
+bool ext_remote_controls_get (const clap_plugin_t*, uint32_t page_index, clap_remote_controls_page_t* page) noexcept
+{
+    if (page == nullptr || page_index >= kickPageCount())
+        return false;
+
+    const Page& src = kickPageTable()[page_index];
+
+    std::memset (page, 0, sizeof (*page));
+
+    std::strncpy (page->section_name, src.section, sizeof (page->section_name) - 1);
+    page->page_id = page_index;
+    std::strncpy (page->page_name, src.title, sizeof (page->page_name) - 1);
+
+    for (size_t i = 0; i < CLAP_REMOTE_CONTROLS_COUNT; ++i)
+    {
+        if (i < src.count && src.keys[i] != nullptr)
+        {
+            const ParamInfo* p = findParamByKey (src.keys[i]);
+            page->param_ids[i] = (p != nullptr) ? p->id : CLAP_INVALID_ID;
+        }
+        else
+        {
+            page->param_ids[i] = CLAP_INVALID_ID;
+        }
+    }
+
+    page->is_for_preset = false;
+    return true;
+}
+
+const clap_plugin_remote_controls_t s_remote_controls = {
+    ext_remote_controls_count,
+    ext_remote_controls_get
+};
+
+// render (offline bounce): "Use Ultra quality when rendering" (S p.315, A385)
+bool ext_render_has_hard_realtime_requirement (const clap_plugin_t*) noexcept { return false; }
+
+bool ext_render_set (const clap_plugin_t* p, clap_plugin_render_mode mode) noexcept
+{
+    auto* self = toClap (p);
+    self->offlineRender = mode == CLAP_RENDER_OFFLINE;
+    if (self->engine)
+    {
+        self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender); // the process call asks the host for a restart (needsPrepare)
+        self->quality.realtime = ! self->offlineRender;
+        self->engine->setQuality (self->quality);
+    }
+    return true;
+}
+
+const clap_plugin_render_t s_render = {
+    ext_render_has_hard_realtime_requirement,
+    ext_render_set
+};
+
+// Extension query
+const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
+{
+    if (id == nullptr)
+        return nullptr;
+
+    if (std::strcmp (id, CLAP_EXT_AUDIO_PORTS) == 0) return &s_audio_ports;
+    if (std::strcmp (id, CLAP_EXT_NOTE_PORTS) == 0) return &s_note_ports;
+    if (std::strcmp (id, CLAP_EXT_PARAMS) == 0) return &s_params;
+    if (std::strcmp (id, CLAP_EXT_STATE) == 0) return &s_state;
+    if (std::strcmp (id, CLAP_EXT_VOICE_INFO) == 0) return &s_voice_info;
+    if (std::strcmp (id, CLAP_EXT_LATENCY) == 0) return &s_latency;
+    if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
+    if (std::strcmp (id, CLAP_EXT_RENDER) == 0) return &s_render;
+    if (std::strcmp (id, SYNTHYBOY_EXT_CONTENT) == 0) return contentExtension();
+   #if SYNTHYBOY_BITMAP_GUI
+    if (std::strcmp (id, SAFIAN_EXT_BITMAP_GUI) == 0) return bitmapGuiExtension();
+   #endif
+    if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
+        std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||
+        std::strcmp (id, "clap.remote-controls") == 0) return &s_remote_controls;
+
+    return nullptr;
+}
+
+void clap_on_main_thread (const clap_plugin_t*) noexcept {}
+
+// -----------------------------------------------------------------------------
+// Plugin Factory & Entry Point
+// -----------------------------------------------------------------------------
+
+uint32_t factory_get_plugin_count (const clap_plugin_factory_t*) noexcept
+{
+    return 1;
+}
+
+const clap_plugin_descriptor_t* factory_get_plugin_descriptor (const clap_plugin_factory_t*, uint32_t index) noexcept
+{
+    return (index == 0) ? &s_descriptor : nullptr;
+}
+
+const clap_plugin_t* factory_create_plugin (const clap_plugin_factory_t*, const clap_host_t* host, const char* plugin_id) noexcept
+{
+    if (plugin_id == nullptr || std::strcmp (plugin_id, kPluginId) != 0 || host == nullptr)
+        return nullptr;
+
+    auto* self = new SynthyBoyClapImpl (host);
+    self->contentHost = std::make_unique<NativeContentHost> (*self);
+    setContentHostResolver (resolveContentHost);
+    self->plugin.desc = &s_descriptor;
+    self->plugin.plugin_data = self;
+    self->plugin.init = clap_init;
+    self->plugin.destroy = clap_destroy;
+    self->plugin.activate = clap_activate;
+    self->plugin.deactivate = clap_deactivate;
+    self->plugin.start_processing = clap_start_processing;
+    self->plugin.stop_processing = clap_stop_processing;
+    self->plugin.reset = clap_reset;
+    self->plugin.process = clap_process;
+    self->plugin.get_extension = clap_get_extension;
+    self->plugin.on_main_thread = clap_on_main_thread;
+
+    return &self->plugin;
+}
+
+const clap_plugin_factory_t s_factory = {
+    factory_get_plugin_count,
+    factory_get_plugin_descriptor,
+    factory_create_plugin
+};
+
+bool entry_init (const char*) noexcept
+{
+    return true;
+}
+
+void entry_deinit (void) noexcept
+{
+   #if SYNTHYBOY_BITMAP_GUI
+    bitmapGuiShutdown(); // the toolkit of the GUI (a process wide singleton of this module) goes with the module
+   #endif
+}
+
+const void* entry_get_factory (const char* factory_id) noexcept
+{
+    if (factory_id != nullptr && std::strcmp (factory_id, CLAP_PLUGIN_FACTORY_ID) == 0)
+        return &s_factory;
+    return nullptr;
+}
+
+const clap_plugin_entry_t s_entry = {
+    CLAP_VERSION,
+    entry_init,
+    entry_deinit,
+    entry_get_factory
+};
+} // namespace
+} // namespace synthyboy
+
+extern "C" {
+
+SYNTHYBOY_CLAP_API const clap_plugin_entry_t* synthyboy_clap_get_entry (void)
+{
+    return &synthyboy::s_entry;
+}
+
+#if ! defined (SYNTHYBOY_STATIC_ONLY)
+SYNTHYBOY_CLAP_API const clap_plugin_entry_t clap_entry = {
+    CLAP_VERSION,
+    synthyboy::entry_init,
+    synthyboy::entry_deinit,
+    synthyboy::entry_get_factory
+};
+#endif
+
+} // extern "C"

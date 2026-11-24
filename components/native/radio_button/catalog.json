@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 50,
+  "title": "RadioButton",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "ENV · kiválasztott példány",
+          "file": "catalog-radio-56.png",
+          "alt": "ENV natív példányválasztó"
+        }
+      ]
+    },
+    {
+      "heading": "ENV · teljes példányválasztó",
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "catalog-radio-env-group.png",
+          "alt": "ENV hatos példányválasztó: kiválasztott, használt és szabad állapot"
+        }
+      ]
+    },
+    {
+      "heading": "Voice · sorválasztó",
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "catalog-radio-voice-group.png",
+          "alt": "Voice sorválasztó: PAN, DETUNE, CUTOFF, ENV, MOD 1 és MOD 2"
+        }
+      ]
+    }
+  ]
+}

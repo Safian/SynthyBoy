@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 90,
+  "title": "Tune",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "{size:tune.width} × {size:tune.height} px",
+          "file": "osc-tune-compact-card.png",
+          "alt": "Tune {size:tune.width} × {size:tune.height} px"
+        }
+      ]
+    }
+  ]
+}

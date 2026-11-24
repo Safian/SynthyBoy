@@ -1,0 +1,25 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Crackle Pulses",
+ "category": "Noise",
+ "description": "Three clicks per cycle growing to 64 clicks (seeded positions, signs and a short decay tail): a few ticks become a crackling, then a dense rattle.",
+ "frames": 64,
+ "seed": "crackle_pulses",
+ "source": {
+  "type": "clicks",
+  "params": {
+   "count": {
+    "law": "curve",
+    "from": 3,
+    "to": 64,
+    "power": 1.2
+   },
+   "tail": 12.0,
+   "seed": 3
+  }
+ },
+ "post": {
+  "limit": 320,
+  "rms": 0.12
+ }
+}

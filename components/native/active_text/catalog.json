@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 90,
+  "title": "Állapotszöveg",
+  "sections": [
+    {
+      "heading": "Állapotok · {size:active_text.default.width} × {size:active_text.default.height} px",
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "Bekapcsolva (ON)",
+          "file": "active-text-on.png",
+          "alt": "Állapotszöveg bekapcsolva (ON)"
+        },
+        {
+          "presentation": "sample",
+          "caption": "Kikapcsolva (OFF)",
+          "file": "active-text-off.png",
+          "alt": "Állapotszöveg kikapcsolva (OFF)"
+        }
+      ]
+    }
+  ]
+}

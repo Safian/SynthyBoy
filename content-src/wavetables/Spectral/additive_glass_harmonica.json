@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Glass Harmonica",
+ "category": "Spectral",
+ "description": "A sparse set of partials (1 3 5 7 ...) that opens one by one and closes again.",
+ "frames": 48,
+ "seed": "additive_glass_harmonica",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "additive_glass_harmonica"
+  }
+ }
+}

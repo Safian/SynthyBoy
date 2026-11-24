@@ -1,0 +1,7 @@
+# Byte-exact files: generators and tests compare them byte for byte, so a Windows checkout (core.autocrlf=true) must not turn their line ends into CRLF.
+content/presets/** text eol=lf
+docs/params.json text eol=lf
+docs/PARAMETERS.md text eol=lf
+docs/kick-pages.json text eol=lf
+*.sh text eol=lf
+*.py text eol=lf

@@ -1,0 +1,3 @@
+#!/bin/sh
+# A normal merge must obey the same staged screenshot contract as a normal commit.
+exec "$(git rev-parse --show-toplevel)/.githooks/pre-commit"

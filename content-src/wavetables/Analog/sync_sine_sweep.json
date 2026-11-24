@@ -1,0 +1,22 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Sync Sine Sweep",
+ "category": "Analog",
+ "description": "Hard sync: a sine slave resets every cycle and its ratio rises 1 to 9; the classic searing formant sweep.",
+ "frames": 64,
+ "seed": "sync_sine_sweep",
+ "source": {
+  "type": "sync",
+  "params": {
+   "ratio": {
+    "law": "linear",
+    "from": 1.0,
+    "to": 9.0
+   },
+   "slave": "sine"
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}
