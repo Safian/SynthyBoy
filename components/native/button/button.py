@@ -249,3 +249,18 @@ __all__ = [
     "build_filter_power",
     "sanitize_tab_navigation",
 ]
+
+
+def text_face(label, size, *, geometry, surface, border, text):
+    """Token-configured native action face for compact fixed-layout toolbars."""
+    metrics = _style_size(geometry)
+    width, height = size
+    image = Image.new("RGBA", size)
+    pen = ImageDraw.Draw(image)
+    pen.rounded_rectangle((metrics["inset"], metrics["inset"],
+                           width - metrics["end_inset"], height - metrics["end_inset"]),
+                          radius=metrics["radius"], fill=_style_color(surface),
+                          outline=_style_color(border), width=metrics["stroke"])
+    pen.text((width / 2, height / 2), label, anchor="mm", font=semibold(metrics["font"]),
+             fill=_style_color(text))
+    return image

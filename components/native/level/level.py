@@ -85,7 +85,7 @@ def _value_label(name, rect, height=_style_size('level._value_label.geometry')):
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rect,
+            "bounds": "%d %d %d %d" % tuple(rect),
         },
     }
 
@@ -269,7 +269,7 @@ def level_definition(template=None, skins_dir=None, rects=None):
         control = item["componentData"]
         name = control["name"]
         if name in dial_rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % dial_rects[name]
+            item["bounds"]["bounds"] = "%d %d %d %d" % tuple(dial_rects[name])
         if name == "knob":
             control["data"] = {
                 "version": 5,
@@ -304,7 +304,7 @@ def compact_level_definition(template=None, skins_dir=None):
         control = item["componentData"]
         name = control["name"]
         if name in rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % rects[name]
+            item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
         if name == "knob":
             control["data"] = {
                 "version": 5,
@@ -365,7 +365,7 @@ def compact_dial_definition(template, rects=None, polarity="UniPolar", height=No
         control = item["componentData"]
         name = control["name"]
         if name in rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % rects[name]
+            item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
         if name == "knob":
             control["data"] = {
                 "version": 5,
@@ -602,7 +602,7 @@ def build_native_smooth_dial_with_indicator_definition(
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "WhenFocussed",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rects["focus"],
+            "bounds": "%d %d %d %d" % tuple(rects["focus"]),
         },
     }
 
@@ -635,7 +635,7 @@ def build_native_smooth_dial_with_indicator_definition(
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rects["knob"],
+            "bounds": "%d %d %d %d" % tuple(rects["knob"]),
         },
     }
 
@@ -671,7 +671,7 @@ def build_native_smooth_dial_with_indicator_definition(
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rects["name"],
+            "bounds": "%d %d %d %d" % tuple(rects["name"]),
         },
     }
 
@@ -701,7 +701,7 @@ def build_native_smooth_dial_with_indicator_definition(
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rects["value"],
+            "bounds": "%d %d %d %d" % tuple(rects["value"]),
         },
     }
 
@@ -800,3 +800,27 @@ __all__ = [
     "build_native_smooth_dial_with_indicator_definition",
     "build_native_smooth_dual_state_pair",
 ]
+
+
+def blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_rect, value_rect, *,
+                         caption_text=None, caption_height=None, value_height=None):
+    """Compose the shared LEVEL filmstrip, focus and native name/value labels."""
+    from components.native.name_value.name_value import _label_component
+
+    rects = {"focus": (0, 0, width, height), "knob": tuple(knob_rect),
+             "name": tuple(name_rect), "value": tuple(value_rect)}
+    definition = build_native_smooth_dial_with_indicator_definition(rects=rects, skins_dir=skins_dir)
+    focus, knob = definition["componentsData"][:2]
+    knob["bounds"]["acceptsHWFocus"] = "Yes"
+    knob["componentData"]["data"] = synthyboy_dial_data(skins_dir, frame_size=frame_size, bipolar=False)
+    caption_height = _style_size("level.blue.caption.font") if caption_height is None else caption_height
+    value_height = _style_size("level.blue.value.font") if value_height is None else value_height
+    name = _label_component("name", "Text" if caption_text is not None else "Name",
+                            "Data" if caption_text is not None else "Caption", rects["name"],
+                            caption_height, _style_argb("text.caption"), "left verticallyCentred")
+    if caption_text is not None:
+        name["componentData"]["data"]["text"] = caption_text
+    value = _label_component("value", "Value", "Data", rects["value"], value_height,
+                             _style_argb("text.value"), "left verticallyCentred")
+    definition["componentsData"] = [focus, knob, name, value]
+    return definition

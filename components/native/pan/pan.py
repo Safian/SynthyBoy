@@ -61,7 +61,7 @@ def _value_label(name, rect, height=_style_size('pan._value_label.geometry')):
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rect,
+            "bounds": "%d %d %d %d" % tuple(rect),
         },
     }
 
@@ -241,7 +241,7 @@ def pan_definition(template=None, skins_dir=None, rects=None):
         control = item["componentData"]
         name = control["name"]
         if name in dial_rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % dial_rects[name]
+            item["bounds"]["bounds"] = "%d %d %d %d" % tuple(dial_rects[name])
         if name == "knob":
             control["data"] = {
                 "version": 5,
@@ -276,7 +276,7 @@ def compact_pan_definition(template=None, skins_dir=None):
         control = item["componentData"]
         name = control["name"]
         if name in rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % rects[name]
+            item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
         if name == "knob":
             control["data"] = {
                 "version": 5,

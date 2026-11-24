@@ -109,7 +109,7 @@ def _value_label(name, rect, height=_style_size('selector._value_label.geometry'
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rect,
+            "bounds": "%d %d %d %d" % tuple(rect),
         },
     }
 
@@ -155,7 +155,7 @@ def _image_component(name, file, rect):
             "showWhenDataModelInvalid": "Show",
             "whenVisible": "Always",
             "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % rect,
+            "bounds": "%d %d %d %d" % tuple(rect),
         },
     }
 
@@ -937,7 +937,7 @@ def build_standalone_osc_routing_component(
     bounds["showWhenDataModelInvalid"] = "Hide"
     bounds["whenVisible"] = "Always"
     bounds["boundsType"] = "Absolute"
-    bounds["bounds"] = "%d %d %d %d" % rect
+    bounds["bounds"] = "%d %d %d %d" % tuple(rect)
     if handles:
         bounds["version"] = 2
     bounds["additionalInvalidatingHandles"] = handles
@@ -1357,5 +1357,69 @@ def macro_bank_definition(template):
     for item in definition.get("componentsData", []):
         name = item["componentData"]["name"]
         if name in rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % rects[name]
+            item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
     return definition
+
+
+def append_choice_rows(ctx, definition, labels, field):
+    """Native explicit rows for hosts whose drawer loses proxy step metadata.
+
+    The existing host drawer header remains the commit/dismiss target.
+    """
+    from components.native.button.button import button
+
+    geometry = _style_size("selector.choice.rows")
+    definition["ignoreMousePresses"] = False
+    font = semibold(geometry["font"])
+    hint = f"play_sub_{field}_apply.png"
+    header_rect = geometry["header"]
+    header = Image.new("RGBA", tuple(header_rect[2:]))
+    draw = ImageDraw.Draw(header)
+    draw.line(tuple(geometry["back"]), fill=_style_color("text.white"), width=geometry["stroke"])
+    title = "WAVEFORM" if field == "wave" else "OCTAVE"
+    draw.text(tuple(geometry["title"]), f"Tap PLAY SUB {title} to apply", anchor="lm", font=font,
+              fill=_style_color("text.white"))
+    header.save(ctx.skins_dir / hint)
+    definition["componentsData"].append(_entry("Apply hint", "Image", {
+        "version": 2, "imageType": "Regular", "colour": "0", "image": hint
+    }, header_rect, focus="No"))
+    x, y, width, height = geometry["row"]
+    for i, label in enumerate(labels):
+        rect = (x, y + i * geometry["stride"], width, height)
+        images = []
+        for state in ("on", "off"):
+            filename = f"play_sub_{field}_{i}_{state}.png"
+            image = Image.new("RGB", (width, height), _style_color(f"selector.choice.{state}"))
+            ImageDraw.Draw(image).text((width / 2, height / 2), label, anchor="mm", font=font,
+                                       fill=_style_color("text.white"))
+            image.save(ctx.skins_dir / filename)
+            images.append(filename)
+        definition["componentsData"].append(button(label, rect, *images, index=i, count=len(labels)))
+
+
+def write_source_navigation_assets(skins_dir):
+    """Shared source selector chevrons and transparent center hit artwork."""
+    artwork = {}
+    for key in ("left", "right", "empty"):
+        filename = f"play_osc_source_{key}.png"
+        arrow_w, empty_w, art_h = _style_size("play.osc.source.art_size")
+        image = Image.new("RGBA", (arrow_w if key != "empty" else empty_w, art_h))
+        if key != "empty":
+            low, high, top, middle, bottom, stroke = _style_size("play.osc.source.arrow_geometry")
+            front, back = (low, high) if key == "left" else (high, low)
+            ImageDraw.Draw(image).line((back, top, front, middle, back, bottom),
+                                       fill=_style_color("text.icon"), width=stroke)
+        image.save(Path(skins_dir) / filename)
+        artwork[key] = filename
+    return artwork
+
+
+def write_wave_selector_icon(skins_dir):
+    """Shared waveform selector glyph, independent of the live waveform graph."""
+    filename = "play_selector_wave.png"
+    image = Image.new("RGBA", tuple(_style_size("play.wave.source_size")))
+    mid, amplitude, left, right, period, stroke = _style_size("play.wave.geometry")
+    points = [(x, mid - amplitude * math.sin((x - left) * math.tau / period)) for x in range(left, right)]
+    ImageDraw.Draw(image).line(points, fill=_style_color("play.wave.icon"), width=stroke)
+    image.resize(tuple(_style_size("play.wave.icon_size")), Image.Resampling.LANCZOS).save(Path(skins_dir) / filename)
+    return filename

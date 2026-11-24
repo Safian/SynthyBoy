@@ -76,21 +76,14 @@ def _entry(name, kind, data, rect, parameter, gates, focus=False):
 
 
 def _label(name, text, rect, parameter, gates, *, height=16, colour=None, align="horizontallyCentred"):
-    data = {
-        "version": 1,
-        "type": "Value" if text is None else "Text",
-        "handleName": "Data" if text is None else "",
-        "textStyle": {
-            "version": 1,
-            "font": {"version": 1, "name": style.size("font.family"), "style": style.size("font.style.semibold"), "height": height},
-            "colour": colour or style.argb("text.icon"),
-            "case": "Original",
-            "justification": f"{align} verticallyCentred",
-        },
-    }
+    child = ui_name_value._label_component(
+        NATIVE + name, "Value" if text is None else "Text", "Data" if text is None else "",
+        rect, height, colour or style.argb("text.icon"), f"{align} verticallyCentred")
     if text is not None:
-        data["text"] = text
-    return _entry(name, "Label", data, rect, parameter if text is None else 0, gates)
+        child["componentData"]["data"]["text"] = text
+    instance = _entry(name, "Label", child["componentData"]["data"], rect,
+                      parameter if text is None else 0, gates)
+    return instance
 
 
 def _image(name, file, rect, gates=()):
@@ -213,7 +206,7 @@ def _choice_definition(tui, ctx, name, width, height, *, active=True):
 
 
 def _readout_label(name, text, rect, handle="", colour=None, align="horizontallyCentred"):
-    label = _label(name, text, rect, 0, (), height=17, colour=colour or style.argb("text.icon"), align=align)
+    label = _label(name, text, rect, 0, (), height=style.size("filter.readout.font"), colour=colour or style.argb("text.icon"), align=align)
     label["handle remapping"]["map"] = []
     label["componentData"]["data"]["handleName"] = handle
     return label
@@ -233,27 +226,24 @@ def _readouts(ctx, manifest, state, power_frame):
             ("LEVEL", "level", ""), ("PAN", "pan", ""))
     out = manifest["out"]
     _, _, w, h = out
-    font = semibold(17)
     for on in (False, True):
         title = "filterNativeOutOn" if on else "filterNativeOutOff"
         fg = style.argb("text.icon" if on else "text.status.off")
         dim = style.argb("text.caption" if on else "smooth.value.off")
         background = style.argb("button.surface" if on else "menu.background")
-        filename = f"{title}.png"
-        plate = Image.new("RGB", (w, h), "#" + background[2:])
-        draw = ImageDraw.Draw(plate)
         labels = []
         for i, (caption, _, unit) in enumerate(rows):
             y, bottom = i * h // len(rows), (i + 1) * h // len(rows)
             unit_w = 24 if unit else 0
-            mid = (y + bottom) // 2
-            draw.text((4, mid), caption, font=font, fill="#" + dim[2:], anchor="lm")
-            if unit:
-                draw.text((w - 3 - unit_w // 2, mid), unit, font=font, fill="#" + dim[2:], anchor="mm")
-            labels.append(_readout_label(caption + " value", None, (64, y, w - 68 - unit_w, bottom - y),
+            labels.append(_readout_label(caption + " caption", caption,
+                                         (style.size("filter.readout.caption_x"), y,
+                                          style.size("filter.readout.value_x") - style.size("filter.readout.caption_x"), bottom - y),
+                                         colour=dim, align="left"))
+            labels.append(_readout_label(caption + " value", None,
+                                         (style.size("filter.readout.value_x"), y,
+                                          w - style.size("filter.readout.value_x") - style.size("filter.readout.right_pad") - unit_w, bottom - y),
                                          f"Readout{i}", fg, "right"))
-        plate.save(ctx.skins_dir / filename)
-        ctx.add_component_definition(title, _readout_panel(labels, background, filename))
+        ctx.add_component_definition(title, _readout_panel(labels, background))
         for f in (1, 2):
             gates = _state_gates(state, (f, f)) + [f"RangedEnabling/{2 * on}/{2 * on + 1}/4/Parameter {power_frame}"]
             item = _entry(f"OUT F{f} {'on' if on else 'off'}", title, {"version": 1, "handleName": "Data"}, out, 0, gates)
@@ -280,18 +270,11 @@ def _readouts(ctx, manifest, state, power_frame):
 def _pz_toolbar(ctx, rects):
     base = ctx.param_count + LEGACY_EXTRAS
     mode = base + PZ_AVAILABILITY
-    font = semibold(19)
-
     def picture(label, size, active):
-        width, height = size
-        art = Image.new("RGBA", size)
-        draw = ImageDraw.Draw(art)
-        draw.rounded_rectangle((1, 1, width - 2, height - 2), radius=6,
-                               fill="#161d31" if active else "#202020",
-                               outline="#525b73" if active else "#4c4c4c", width=2)
-        draw.text((width / 2, height / 2), label.upper(), font=font,
-                  fill="#e6e6e6" if active else "#949494", anchor="mm")
-        return art
+        state = "active" if active else "inactive"
+        return ui_button.text_face(label.upper(), size, geometry="filter.pz.button",
+                                   surface=f"filter.pz.{state}.surface", border=f"filter.pz.{state}.border",
+                                   text="text.icon" if active else "filter.pz.inactive.text")
 
     x, y, _, height = rects[2]
     right = rects[3][0] + rects[3][2]

@@ -841,24 +841,6 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen p (sb, enabled_, inactive_);
-        if (! curveView())
-        {
-            const auto slots = nativeRects (true);
-            std::array<Rect, nativeui::FilterPoint + 3> areas {};
-            std::copy (slots.begin(), slots.end(), areas.begin());
-            areas[nativeui::FilterPoint] = nativeOutReadoutRect();
-            areas[nativeui::FilterPoint + 1] = nativeExpandFilterRect();
-            areas[nativeui::FilterPoint + 2] = nativeScalarViewRect();
-            for (const Rect& block : { mainBlock_, trackBlock_, outBlock_, formantBlock_, graphRect_ })
-                if (! block.empty())
-                    outsideNativeCells (block, areas, [&] (Rect r)
-                    {
-                        Cell cell (sb, r, 0);
-                        gpu::ScopedClip clip (sb, r.x, r.y, r.right(), r.bottom());
-                        if (!clip) return;
-                        p.block (block);
-                    });
-        }
         if (! curveView()) display.draw (sb);
         Cell cell (sb, rect_);
         drawExtra (p);

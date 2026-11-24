@@ -141,7 +141,16 @@
     "mod_row.field_border": "#1c2651",
     "mod_row.divider": "#1d2855",
     "mod_row.q_badge": "#ffc23d",
-    "mixer.sentinel": "#141a35"
+    "mixer.sentinel": "#141a35",
+    "play.panel.legacy": "#262527",
+    "play.wave.icon": "#91aed5",
+    "selector.choice.on": "#175a76",
+    "selector.choice.off": "#303237",
+    "filter.pz.active.surface": "#161d31",
+    "filter.pz.active.border": "#525b73",
+    "filter.pz.inactive.surface": "#202020",
+    "filter.pz.inactive.border": "#4c4c4c",
+    "filter.pz.inactive.text": "#949494"
   },
   "palette": [
     {
