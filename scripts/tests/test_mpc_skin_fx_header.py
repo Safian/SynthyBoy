@@ -52,16 +52,25 @@ class NativeFxHeaderTests(unittest.TestCase):
                 layout = 7 + 2 * (panel["kind"] - 1) + int(on)
                 active = []
                 for child in header["componentsData"]:
-                    gate, = child["bounds"]["additionalInvalidatingHandles"]
-                    expr = gate.split("/")
-                    if expr[-1] == "Parameter 3493":
-                        continue
-                    self.assertIn(expr[-1], ("Parameter 3067", "Power"))
-                    visible = on if expr[-1] == "Power" else layout > 0 if expr[0] == "NonZero" else (int(expr[1]) <= layout <= int(expr[2]) if expr[0] == "RangedEnabling" else int(expr[1]) == layout)
+                    gates = [g.split("/") for g in child["bounds"]["additionalInvalidatingHandles"]]
+                    if any(g[-1] == "Parameter 3493" for g in gates):
+                        continue  # compressor band frames are exercised independently
+                    frames = {"Power": int(on), "Parameter 3066": 1, "Parameter 3067": layout}
+                    visible = True
+                    for expr in gates:
+                        frame = frames[expr[-1]]
+                        if expr[0] == "NonZero":
+                            visible &= frame != 0
+                        elif expr[0] == "IndexedEnabling":
+                            visible &= frame == int(expr[1])
+                        else:
+                            self.assertEqual(expr[0], "RangedEnabling")
+                            visible &= int(expr[1]) <= frame <= int(expr[2])
                     if visible:
                         active.append(child)
                         x, y, w, h = map(int, child["bounds"]["bounds"].split())
-                        self.assertGreaterEqual(min(w, h), 56)
+                        if not child["componentData"]["name"].startswith("fx_header_"):
+                            self.assertGreaterEqual(min(w, h), 56)
                 names = [c["componentData"]["name"] for c in active]
                 self.assertIn("power", names)
                 self.assertEqual(any(n == "rack" for n in names), on)
@@ -82,6 +91,36 @@ class NativeFxHeaderTests(unittest.TestCase):
         self.assertTrue(rack["disableCoarseDataWheel"])
         self.assertEqual([(action["onAction"], action["handler"], action["additionalData"]) for action in rack["actions"]],
                          [(event, "Show Overlay", "fx editor rack menu") for event in ("Mouse Down", "Enter Pressed")])
+
+    def assert_drawer(self, children, choices, offset, domain):
+        labels = {c["componentData"]["data"]["text"] for c in children if c["componentData"]["type"] == "Label"}
+        buttons = {c["componentData"]["name"]: c for c in children if c["componentData"]["type"] == "Button"}
+        self.assertEqual(labels, set(choices))
+        self.assertEqual(len(buttons), len(choices))
+        rects = []
+        for index, name in enumerate(choices):
+            item = buttons["Choose " + name]
+            data = item["componentData"]["data"]
+            self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["handleName"]),
+                             (index+offset, domain, "Data"))
+            x,y,w,h = map(int, item["bounds"]["bounds"].split())
+            self.assertGreaterEqual(min(w,h), 56)
+            self.assertTrue(0 <= x < x+w <= 1280 and 100 <= y < y+h <= 800)
+            rects.append((x,y,w,h))
+        for (x,y,w,h), (u,v,a,b) in combinations(rects,2):
+            self.assertTrue(x+w <= u or u+a <= x or y+h <= v or v+b <= y)
+
+    def test_rack_drawers_match_the_source_domain(self):
+        full = ["MAIN", "BUS 1", "BUS 2", "L/H LOW", "L/H HIGH", "L/M/H LOW", "L/M/H MID",
+                "L/M/H HIGH", "M/S MID", "M/S SIDE"]
+        header = self.definitions["fxNativeHeader"]["componentsData"]
+        for name, choices, span in (("rack", full, (1,13)), ("rack pool",full[:3], (14,32))):
+            row = next(c for c in header if c["componentData"]["name"] == name)
+            self.assertIn(f"RangedEnabling/{span[0]}/{span[1]}/33/Parameter 3066", row["bounds"]["additionalInvalidatingHandles"])
+            trigger = self.definitions[row["componentData"]["type"]]
+            popup = self.definitions[trigger["actions"][0]["additionalData"]]["componentsData"]
+            self.assert_drawer(popup, choices, 0, len(choices))
+            self.assertTrue(any(c["componentData"]["name"] == "FX Rack Popup Marker" for c in popup))
 
     def test_compressor_band_has_one_enabled_or_passive_cell_per_choice(self):
         manifest = json.loads((base.REAL_EXTRAS / "fx-native-contract.json").read_text())
@@ -188,7 +227,7 @@ class NativeFxHeaderTests(unittest.TestCase):
             for xx, yy, ww, hh in hitboxes[1:]:   # the grip is drawn on the separate overlay plane
                 self.assertTrue(x + w <= xx or xx + ww <= x or y + h <= yy or yy + hh <= y)
 
-    def test_add_uses_its_own_stock_menu_and_type_list(self):
+    def test_add_uses_its_own_native_radio_rows_and_type_list(self):
         definitions = self.definitions
         chooser = definitions["fxNativeChainAdd"]
         self.assertEqual([(a["onAction"], a["handler"], a["additionalData"]) for a in chooser["actions"]],
@@ -200,6 +239,10 @@ class NativeFxHeaderTests(unittest.TestCase):
         self.assertFalse(any(c["componentData"]["name"] == "FX Rack Popup Marker" for c in popup))
         replacements = {row["key"]: row["value"] for row in self.tui["pageData"]["replacementStrings"]}
         manifest = json.loads((base.REAL_EXTRAS / "fx-native-contract.json").read_text())
+        names = [name for name, _ in manifest["chain"]["gallery"]]
+        self.assert_drawer(popup, names, 1, len(names)+1)
+        self.assertEqual(len({int(c["bounds"]["bounds"].split()[0]) for c in popup
+                              if c["componentData"]["type"] == "Button"}), 2)
         self.assertEqual(replacements["Parameter 3281"], ["Select an effect"] + [name for name, _ in manifest["chain"]["gallery"]])
 
 

@@ -17,6 +17,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components import style
+from components.native.selector.selector import labelled_choice_drawer, write_routing_assets
 from components.native.level.level import compact_dial_definition, default_level_template, synthyboy_dial_data
 from components.native.active_text.active_text import write_active_text_assets, active_text_child
 from components.native.radio_button.radio_button import create_segmented_radio_button_group, render_segmented_button_art
@@ -35,6 +36,9 @@ FX_CHOICE_MENU = "fx editor choice menu"
 FX_NUMBER_MENU = "fx editor number menu"
 FX_RACK_MENU = "fx editor rack menu"
 FX_ADD_MENU = "fx chain add menu"
+FX_POOL_RACK_MENU = "fx editor main bus rack menu"
+RACK_NAMES = ("MAIN", "BUS 1", "BUS 2", "L/H LOW", "L/H HIGH", "L/M/H LOW",
+              "L/M/H MID", "L/M/H HIGH", "M/S MID", "M/S SIDE")
 # Full-screen popup marker coordinates and colours match the overlay detector.
 FX_MENU_MARKERS = ((16, "fe356c"), (28, "24c7ff"), (40, "90ed43"))
 
@@ -362,7 +366,30 @@ def _native_editor_definitions(ctx):
     }
 
 
-def _add_native_popups(tui, ctx):
+def _add_drawer(gallery):
+    names = [name for name, _ in gallery]
+    # The Menu handle reserves zero for cancellation. The 16 effect kinds use 1..16.
+    # Keep the full native row height by laying out the gallery as two columns.
+    per_column = (len(names) + 1) // 2
+    drawer = labelled_choice_drawer(FX_ADD_MENU, names[:per_column])
+    children = drawer["componentsData"]
+    for column, offset in enumerate(range(0, len(names), per_column)):
+        source = drawer if column == 0 else labelled_choice_drawer(FX_ADD_MENU, names[offset:offset+per_column])
+        rows = [child for child in source["componentsData"] if child["componentData"]["type"] in ("Label","Button")]
+        for child in rows:
+            model = child["componentData"]
+            if model["type"] == "Button":
+                local = model["data"]["buttonId"]
+                model["data"].update(buttonId=offset + local + 1, numButtonsInGroup=len(names)+1)
+            if column:
+                x, y, w, h = map(int, child["bounds"]["bounds"].split())
+                width = style.size("selector.source.drawer_row")[2]
+                child["bounds"]["bounds"] = f"{x + column * width} {y} {w} {h}"
+                children.append(child)
+    return drawer
+
+
+def _add_native_popups(tui, ctx, gallery):
     from PIL import Image
 
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
@@ -376,16 +403,14 @@ def _add_native_popups(tui, ctx):
                                (x, 120, 6, 6))
         marker["bounds"]["showWhenDataModelInvalid"] = "Show"
         markers.append(marker)
-    for name, kind in ((FX_CHOICE_MENU, "MenuOverlay"), (FX_NUMBER_MENU, "NumericOverlay"),
-                       (FX_RACK_MENU, "MenuOverlay"), (FX_ADD_MENU, "MenuOverlay")):
-        popup = copy.deepcopy(stock)
-        overlay = next(c["componentData"] for c in popup["componentsData"] if c["componentData"]["type"] == "MenuOverlay")
-        overlay["type"] = kind
-        if kind == "NumericOverlay":
-            overlay["data"].pop("withNumbers")
-        popup["componentsData"].extend(copy.deepcopy(markers))
-        if name in (FX_RACK_MENU, FX_ADD_MENU):
-            rack = name == FX_RACK_MENU
+    write_routing_assets(ctx.skins_dir)
+    for name in (FX_CHOICE_MENU, FX_NUMBER_MENU, FX_RACK_MENU, FX_POOL_RACK_MENU, FX_ADD_MENU):
+        if name in (FX_RACK_MENU, FX_POOL_RACK_MENU, FX_ADD_MENU):
+            rack = name != FX_ADD_MENU
+            if rack:
+                popup = labelled_choice_drawer(name, RACK_NAMES if name == FX_RACK_MENU else RACK_NAMES[:3])
+            else:
+                popup = _add_drawer(gallery)
             control = "Rack" if rack else "Add"
             filename = f"fx_{control.lower()}_popup_marker.png"
             Image.new("RGB", (6, 6), "#f1ae47" if rack else "#ef72bf").save(ctx.skins_dir / filename)
@@ -394,6 +419,13 @@ def _add_native_popups(tui, ctx):
                                    (52 if rack else 64, 120, 6, 6))
             action["bounds"]["showWhenDataModelInvalid"] = "Show"
             popup["componentsData"].append(action)
+        else:
+            popup = copy.deepcopy(stock)
+            if name == FX_NUMBER_MENU:
+                overlay = next(c["componentData"] for c in popup["componentsData"] if c["componentData"]["type"] == "MenuOverlay")
+                overlay["type"] = "NumericOverlay"
+                overlay["data"].pop("withNumbers")
+            popup["componentsData"].extend(copy.deepcopy(markers))
         ctx.add_component_definition(name, popup)
 
 
@@ -534,8 +566,6 @@ def _add_native_chain(tui, tab, ctx, contract, base):
 
 
 def _add_native_header(tui, tab, ctx, headers, band, base, panels):
-    rack_names = ("MAIN", "BUS 1", "BUS 2", "L/H LOW", "L/H HIGH", "L/M/H LOW",
-                  "L/M/H MID", "L/M/H HIGH", "M/S MID", "M/S SIDE")
     single, multi = headers
     y, height = single["power"][1], single["power"][3]
     layout_parameter = f"Parameter {base + FX_HEADER + 1}"
@@ -555,11 +585,21 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
     rack_definition["componentsData"][0]["componentData"]["data"].update(type="Text", text="RACK", handleName="")
     rack_definition["disableCoarseDataWheel"] = True
     ctx.add_component_definition("fxNativeHeaderRack", rack_definition)
+    pool_rack = copy.deepcopy(rack_definition)
+    for action in pool_rack["actions"]:
+        action["additionalData"] = FX_POOL_RACK_MENU
+    ctx.add_component_definition("fxNativeHeaderPoolRack", pool_rack)
     x, yy, w, h = single["rack"]
-    rack = _native_entry("rack", "fxNativeHeaderRack", {"version": 1, "handleName": "Data"},
-                         (x, yy-y, w, h), gates=("NonZero/Power",), focus=True)
-    rack["handle remapping"]["map"] = [{"key": "Data", "value": "Rack"}]
-    children.append(rack)
+    # Choose the drawer while the native header is visible. The opened drawer holds its
+    # own action parameter and domain, even if the host subsequently hides the tab.
+    selected = f"Parameter {base + FX_HEADER}"
+    for name, kind, first, last in (("rack", "fxNativeHeaderRack", 1, 13),
+                                     ("rack pool", "fxNativeHeaderPoolRack", 14, FX_HEADER_ITEMS)):
+        rack = _native_entry(name, kind, {"version": 1, "handleName": "Data"}, (x, yy-y, w, h),
+                             gates=("IndexedEnabling/1/2/Power", f"RangedEnabling/{first}/{last}/{FX_HEADER_ITEMS+1}/{selected}"),
+                             focus=True)
+        rack["handle remapping"]["map"] = [{"key": "Data", "value": "Rack"}]
+        children.append(rack)
     x, yy, w, h = single["remove"]
     children.append(action_button(ctx, "remove", (x, yy-y, w, h), "Remove", text="REMOVE", gates=("NonZero/Power",)))
 
@@ -633,7 +673,7 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
         if item == compressor or item >= len(legacy_modules):
             entry["handle remapping"]["map"].append({"key": "Band", "value": f"Parameter {base+FX_BAND_BASE+item}"})
         tab["componentDefinition"]["componentsData"].append(entry)
-        replacements.append({"key": f"Parameter {parameter+1}", "value": list(rack_names if item < 13 else rack_names[:3])})
+        replacements.append({"key": f"Parameter {parameter+1}", "value": list(RACK_NAMES if item < 13 else RACK_NAMES[:3])})
 
 
 def _apply_native_editor(tui, tab, ctx):
@@ -649,7 +689,7 @@ def _apply_native_editor(tui, tab, ctx):
 
     for name, definition in _native_editor_definitions(ctx).items():
         ctx.add_component_definition(name, definition)
-    _add_native_popups(tui, ctx)
+    _add_native_popups(tui, ctx, manifest["chain"]["gallery"])
 
     base = mixer_peek_index(ctx.param_count)
     replacements = tui["pageData"].setdefault("replacementStrings", [])
