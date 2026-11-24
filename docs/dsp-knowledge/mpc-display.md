@@ -487,3 +487,23 @@ Source: MPC SDK `docs/ui-reference.md:1333–1357` §6.15: each native Meter rev
 Source: `Voice::render` adds each source/filter stereo output into fixed 7×2×32 sample sums, before peak detection across voices. Source/filter taps are post level/pan, before routing/ENV1/Mute/voice-count compensation; bus taps are post rack/level/Mute before destination routing, including upstream-bus input; Master is final stereo output after safety/Mute, before mono fold. Audio destination buffers and computations are untouched. Peak display uses the existing -60..0 dBFS/300 ms release, independent per side; holds stay one second then release, and actual raw sample peaks ≥1 latch each side's clip for two seconds. Reset clears the telemetry.
 
 The native geometry is 95 px fader +2 px gap+18 px stereo block (8+2+8), same 115 px strip. Full-size 8×192/408 artwork uses green signal, amber -6..-1 dBFS, red -1..0 only; clip caps are separately driven by the raw signal latch. Appended read-only fields900..959 leave prior IDs untouched. Test: `mixer_stereo_host` (the narrow actual-VST host target) reports zero failures for all ten hard-left/right strips, centered source, 24-voice waveform clip at unchanged gain, independent holds/reset, bit-identical audio with metering enabled/disabled and all 60 read-only/non-automatable VST fields. `UiScreenMixerTests.test_true_stereo_meter_contract` checks the generated production skin: ten shared strip instances, 60 unique parameter bindings, four passive Meter children, no RMS alias and exact-size native artwork. The canonical Mixer preview can consume that engine fixture through `render_mixer_preview.py --meter-readout`; it remains an offline composition, not a hardware screenshot. Native on-device composition and performance are not claimed.
+
+## Play native control padding (XL capture, 2026-11-24)
+
+The `deploy-4cfb7c90/XL-current-20261124-214335-{primary,composite}.png`
+frames under `.hw-local/mpc-perf/xl-load-incident-7b5a79da/` show the cause
+of the blue rectangular margins around the Sub buttons. At screen (18,220)
+both frames and the installed `overlay_bg_play.png` (tab coordinate 18,110)
+have RGB (20,26,56). Immediately outside the native aperture, (82,220), the
+primary remains (20,26,56) while the composite is (18,18,18). The installed
+64×56 power and expand artwork has alpha 0 at (0,0), (1,28), (6,3), (63,28).
+The rectangular hole therefore exposes a blue native background next to the
+overlay's disabled grey ground; it is not a second native button style.
+
+The background producer additionally copied the old expand control from
+screenshot rectangle (766,192,830,248) beneath each live native expand button,
+and baked carousel frames beneath native selectors. Those copies are removed.
+The native compact Play path now keeps its host background intact and renders
+oscillator data without another ground pass; curve dimming remains independent.
+The existing raster was patched only in those duplicate-control rectangles,
+since the current gallery image differs from the historical generator input.

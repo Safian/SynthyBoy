@@ -70,8 +70,8 @@ public:
             Composite::draw (sb);
         else
         {
-            Pen pen (sb, enabled_, inactive_);
-            paintAroundNativeCells (sb, display_, nativeHeader_, [&] { drawUnder (pen); });
+            // Native compact controls and their transparent margins share the
+            // host background; repainting around rectangular holes makes seams.
             drawChildren (sb);
         }
         basic.group.draw (sb);

@@ -40,14 +40,10 @@ def render():
     # and an allowlist of furniture, never from an entire preset screenshot.
     canvas = source.crop((8, TAB_Y, 9, TAB_Y + TAB_H)).resize((1280, TAB_H), Image.Resampling.NEAREST)
     for left, right in PANELS:
-        # Every carousel has the same frame; its selected entry and neighbours are live.
-        furniture(canvas, source, left, right, 120, 176, 100, 7)
+        # Selector frames and expand buttons are host-native components.
+        # Do not bake a second copy below their transparent artwork.
         # x=20 is the blank margin left of the oscillator plot, beyond its frame.
         furniture(canvas, source, left, right, 184, 476, 20, 6)
-        # Expand icon from the ENV display. The oscillator adds power and routing
-        # before this icon and the LFO may change to a random source.
-        expand = source.crop((766, 192, 830, 248))
-        canvas.paste(expand, (right - 68, 192 - TAB_Y))
     # Fixed ENV knob captions only. The value, dial, modulation, Q chip and group
     # frame change with state or device, as do the oscillator and LFO controls.
     for left in (550, 746):

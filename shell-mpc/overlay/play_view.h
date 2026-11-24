@@ -685,16 +685,8 @@ private:
             }
             if (! osc_->compact().nativeHeader()[0].empty())
             {
-                std::array<ui::Rect, nativeui::playoscui::kFields + 1> apertures {};
-                const auto& cells = osc_->compactNativeCells();
-                std::copy (cells.begin(), cells.end(), apertures.begin());
-                apertures.back() = { oscOff ? 84 : static_cast<int> (x0), static_cast<int> (selectorTop),
-                                     oscOff ? 338 : static_cast<int> (x1 - x0), static_cast<int> (selectorBottom - selectorTop) };
-                ui::outsideNativeCells ({ static_cast<int> (x0), play::kTabY, static_cast<int> (x1 - x0), play::kTabH },
-                                        apertures, [&] (ui::Rect strip) {
-                    ground (static_cast<float> (strip.x), static_cast<float> (strip.y),
-                            static_cast<float> (strip.right()), static_cast<float> (strip.bottom()));
-                });
+                // The native skin owns the complete compact background, including
+                // the transparent padding of its rounded controls.
                 return;
             }
             // Keep the native header row transparent without redrawing any

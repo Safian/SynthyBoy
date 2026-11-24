@@ -331,6 +331,13 @@ public:
                 ui::display::draw (sb, r, d, false, ui::display::Part::Data);
             ui::display::drawLive (sb, r, d);
         }
+        else if (nativeHeader != nullptr)
+        {
+            // The native Play skin supplies the graph frame and ground. Only
+            // the curve is dimmed when OFF, never the ground around controls.
+            if (! hot_ || kind_ == K::off)
+                ui::display::draw (sb, r, d, true, ui::display::Part::Data);
+        }
         else
             ui::display::draw (sb, r, d, ! hot_ || kind_ == K::off, hot_ && kind_ != K::off ? ui::display::Part::Ground : ui::display::Part::All);
     }
