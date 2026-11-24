@@ -512,9 +512,10 @@ def _add_native_chain(tui, tab, ctx, contract, base):
                             (f"IndexedEnabling/{current}/3/Parameter {page}",),
                             art(f"page_{current}", page_rect[2:], f"{current} / 2"), index=target, domain=3))
     drag_rect = contract["drag"]
-    move_comp = button("FX Chain Move", None, drag_rect,
-                       (f"RangedEnabling/1/{slots}/{slots + 1}/Parameter {count}",),
-                       art("move", drag_rect[2:], "MOVE"))
+    move_comp = _native_entry("FX Chain Move", "Image",
+                              {"version": 2, "imageType": "Regular", "colour": "0",
+                               "image": art("move", drag_rect[2:], "MOVE")}, drag_rect,
+                              gates=(f"RangedEnabling/1/{slots}/{slots + 1}/Parameter {count}",))
     move_comp["bounds"]["acceptsHWFocus"] = "No"
     items.append(move_comp)
 
@@ -562,44 +563,25 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
     x, yy, w, h = single["remove"]
     children.append(action_button(ctx, "remove", (x, yy-y, w, h), "Remove", text="REMOVE", gates=("NonZero/Power",)))
 
-    # Header path: shows current rack name (e.g. "MAIN", "BUS 1", etc.)
-    path_lbl = _native_label("Value", (500, 0, 390, 56), 16)
-    path_lbl["componentData"]["name"] = "fx_header_path"
-    path_lbl["handle remapping"]["map"] = [{"key": "Data", "value": "Rack"}]
-    path_lbl["componentData"]["data"]["textStyle"]["justification"] = "right verticallyCentred"
-    path_lbl["componentData"]["data"]["textStyle"]["colour"] = style.argb("text.label")
-    path_lbl["bounds"]["additionalInvalidatingHandles"] = [f"NonZero/{layout_parameter}"]
-    path_lbl["bounds"]["version"] = 2
-    children.append(path_lbl)
-
-    # Header effect name for all 16 effect kinds
-    kind_names = [
-        "Chorus", "Compressor", "Delay", "Distortion", "EQ",
-        "FX Filter", "Flanger", "Phaser", "Reverb", "Hyper/Dimension",
-        "Utility", "Bode", "Convolve", "Splitter L/H", "Splitter L/M/H", "Splitter M/S"
-    ]
-    for kind_idx, kname in enumerate(kind_names, 1):
-        off_frame = 7 + 2 * (kind_idx - 1)
-        on_frame = off_frame + 1
-        # Active title (when effect is ON)
-        lbl_on = _native_label("Text", (78, 0, 420, 56), 22)
-        lbl_on["componentData"]["name"] = f"fx_title_on_{kind_idx}"
-        lbl_on["componentData"]["data"].update(type="Text", text=kname.upper(), handleName="")
-        lbl_on["componentData"]["data"]["textStyle"]["justification"] = "left verticallyCentred"
-        lbl_on["componentData"]["data"]["textStyle"]["colour"] = style.argb("text.white")
-        lbl_on["bounds"]["additionalInvalidatingHandles"] = [f"IndexedEnabling/{on_frame}/{frame_count}/{layout_parameter}"]
-        lbl_on["bounds"]["version"] = 2
-        children.append(lbl_on)
-
-        # Inactive title (when effect is OFF)
-        lbl_off = _native_label("Text", (78, 0, 420, 56), 22)
-        lbl_off["componentData"]["name"] = f"fx_title_off_{kind_idx}"
-        lbl_off["componentData"]["data"].update(type="Text", text=kname.upper(), handleName="")
-        lbl_off["componentData"]["data"]["textStyle"]["justification"] = "left verticallyCentred"
-        lbl_off["componentData"]["data"]["textStyle"]["colour"] = style.argb("text.muted")
-        lbl_off["bounds"]["additionalInvalidatingHandles"] = [f"IndexedEnabling/{off_frame}/{frame_count}/{layout_parameter}"]
-        lbl_off["bounds"]["version"] = 2
-        children.append(lbl_off)
+    # Dynamic native names share the existing source-bound action handles.
+    # The plugin publishes the actual title, nested path and content warning.
+    for panel in panels:
+        first = 7 + 2 * (panel["kind"] - 1)
+        gate = f"RangedEnabling/{first}/{first+1}/{frame_count}/{layout_parameter}"
+        for (name, handle, font, colour), rect in zip((
+            ("path", "Rack", 16, "text.label"),
+            ("title", "Power", 22, "text.white"),
+            ("notice", "Remove", 16, "text.status.off"),
+        ), panel["text"]):
+            x, yy, w, h = rect
+            label = _native_label("Name", (x, yy-y, w, h), font)
+            label["componentData"]["name"] = f"fx_header_{name}_{panel['kind']}"
+            label["handle remapping"]["map"] = [{"key": "Data", "value": handle}]
+            label["componentData"]["data"]["textStyle"].update(
+                justification=("right" if name == "notice" else "left") + " verticallyCentred",
+                colour=style.argb(colour))
+            label["bounds"].update(version=2, additionalInvalidatingHandles=[gate])
+            children.append(label)
     for panel in panels:
         kind, names = panel["kind"], panel["names"]
         off_frame, on_frame = 7 + 2 * (kind - 1), 8 + 2 * (kind - 1)

@@ -784,7 +784,7 @@ private:
         const int bandMode = ! ed.nativeBandShown() ? h::NoBand : ed.bandSel.state.disabledMask == 4 ? h::LowAndMid
                            : ed.bandSel.state.disabledMask == 1 ? h::MidAndHigh : h::AllBands;
         return { item, kindOfItem (selectedItem_), layout, ed.rack.state.index,
-                 bandMode != h::NoBand ? ed.effectiveBand() : -1, bandMode, ed.pageIndex(), ed.numPages() };
+                 bandMode != h::NoBand ? ed.effectiveBand() : -1, bandMode, ed.pageIndex(), ed.numPages(), ed.title(), ed.path(), ed.notice };
     }
 
     bool syncNativeHeader (IInstanceView& inst, UiStack& stack)

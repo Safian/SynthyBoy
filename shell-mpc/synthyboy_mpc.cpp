@@ -2375,6 +2375,8 @@ struct PluginInstance
         {
             reportNativeValue (e, base + field, value, force);
         });
+        if (nativeFxHeader.takeLabelsChanged())
+            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
     void nativeFxChainPoll (AEffect* e)
@@ -4440,8 +4442,28 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     else
                     {
                         const int item = (handle - 2) / h::kFields;
-                        std::snprintf (buf, kCap, "FX %s %d %s", item < synthyboy::kNumFxSlots ? "Module" : "Slot",
-                                       (item % synthyboy::kNumFxSlots) + 1, fields[(handle - 2) % h::kFields]);
+                        const int field = (handle - 2) % h::kFields;
+                        if (item == inst->nativeFxHeader.state().item && field != h::Page)
+                        {
+                            char full[128];
+                            inst->nativeFxHeader.label (field, full, sizeof full);
+                            std::string label (full);
+                            if (field == h::Rack)
+                                for (const char* redundant : { " CHAIN", "SPLITTER ", " BAND" })
+                                    for (auto pos = label.find (redundant); pos != std::string::npos; pos = label.find (redundant))
+                                        label.erase (pos, std::strlen (redundant));
+                            if (label.size() >= kCap)
+                            {
+                                const auto prefix = synthyboy_mpc::truncateUtf8 (label, (kCap - 4) / 2);
+                                size_t tail = label.size() - (kCap - 4 - prefix.size());
+                                while (tail < label.size() && (static_cast<unsigned char> (label[tail]) & 0xc0) == 0x80) ++tail;
+                                label = prefix + "..." + label.substr (tail);
+                            }
+                            synthyboy_mpc::putBounded (buf, kCap, label.c_str());
+                        }
+                        else
+                            std::snprintf (buf, kCap, "FX %s %d %s", item < synthyboy::kNumFxSlots ? "Module" : "Slot",
+                                           (item % synthyboy::kNumFxSlots) + 1, fields[field]);
                     }
                 }
                 else if (opcode == effGetParamDisplay && handle >= 2)

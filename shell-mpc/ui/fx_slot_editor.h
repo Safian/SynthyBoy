@@ -124,8 +124,23 @@ public:
 
     Rect knobArea() const noexcept { return knobArea_; }
     Rect nativeControlsArea() const noexcept { return nativeLayout() != 0 ? knobArea_ : Rect {}; }
-    Rect nameRect() const noexcept { return { rect_.x + 78, rect_.y + 8, 420, kHeaderH }; }
-    Rect pathRect() const noexcept { return { rect_.x + 500, rect_.y + 8, 390, kHeaderH }; }
+    const char* title() const noexcept { return name_; }
+    Rect pathRect() const noexcept
+    {
+        const int x = power.rect().right() + 14;
+        return { x, power.rect().y, std::max (0, rack.rect().x - x - 8), 18 };
+    }
+    Rect nameRect() const noexcept
+    {
+        const auto path = pathRect();
+        return { path.x, path.y + 14, path.w, kHeaderH - 14 };
+    }
+    Rect noticeRect() const noexcept
+    {
+        const auto path = pathRect();
+        const int x = path.x + static_cast<int> (std::ceil (Pen::textWidth (name_, theme::L().fTitle))) + 24;
+        return { x, path.y, std::max (0, rack.rect().x - 8 - x), kHeaderH };
+    }
 
     template <typename Visit>
     void visitNativeControls (Visit&& visit) const
@@ -135,6 +150,7 @@ public:
         visit (power.rect());
         visit (nameRect());
         visit (pathRect());
+        visit (noticeRect());
         if (moduleEnabled_)
         {
             visit (rack.rect());

@@ -258,6 +258,15 @@ inline bool exportManifest ()
             if (panel) std::printf (", ");
             quote (panels.names[panel]);
         }
+        ui::FxFullScreen headerScreen;
+        headerScreen.place ({ 0, 0, 1280, 628 });
+        auto& header = headerScreen.slotEditor;
+        header.setType (kind, true);
+        const ui::Rect texts[] { header.pathRect(), header.nameRect(), header.noticeRect() };
+        std::printf ("], \"text\": [");
+        for (int i = 0; i < 3; ++i)
+            std::printf ("%s[%d, %d, %d, %d]", i ? ", " : "", texts[i].x, texts[i].y,
+                         texts[i].w, texts[i].h);
         std::printf ("]}");
     }
     std::printf ("\n  ],\n  \"chain\": {\n");

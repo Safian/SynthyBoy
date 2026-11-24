@@ -22,6 +22,9 @@ struct State
     int item = -1, kind = 0, layout = Hidden, rack = 0;
     int band = -1, bandMode = NoBand;
     int tab = 0, panelCount = 0;
+    const char* title = "";
+    const char* path = "";
+    const char* notice = "";
 
     bool permitsBand (int choice) const noexcept
     {
@@ -74,6 +77,20 @@ class Bank
 public:
     void publish (State state, uint64_t preset) noexcept
     {
+        const char* labels[] { state.title, state.path, "", state.notice };
+        labelsRevision_.fetch_add (1u, std::memory_order_acq_rel);
+        bool changed = false;
+        for (int field = 0; field < kFields; ++field)
+        {
+            const char* text = labels[field] != nullptr ? labels[field] : "";
+            size_t i = 0;
+            for (; i < kLabelSize - 1 && text[i] != '\0'; ++i)
+                changed |= labels_[field][i].exchange (text[i], std::memory_order_relaxed) != text[i];
+            changed |= labels_[field][i].exchange ('\0', std::memory_order_release) != '\0';
+        }
+        labelsRevision_.fetch_add (1u, std::memory_order_release);
+        if (changed)
+            labelsChanged_.store (true, std::memory_order_release);
         const auto previous = this->state();
         if (state.layout == Hidden)
             setRackPopup (false);
@@ -85,6 +102,21 @@ public:
         actions_.publish (state.layout, fields);
         state_.store (pack (state), std::memory_order_release);
         preset_.store (preset, std::memory_order_release);
+    }
+
+    bool takeLabelsChanged() noexcept { return labelsChanged_.exchange (false, std::memory_order_acq_rel); }
+    void label (int field, char* out, size_t cap) const noexcept
+    {
+        if (cap == 0) return;
+        const auto revision = labelsRevision_.load (std::memory_order_acquire);
+        out[0] = '\0';
+        if (revision & 1u) return;
+        size_t i = 0;
+        if (field >= 0 && field < kFields)
+            for (; i < std::min (cap - 1, kLabelSize - 1); ++i)
+                if ((out[i] = labels_[field][i].load (std::memory_order_acquire)) == '\0') break;
+        out[i] = '\0';
+        if (labelsRevision_.load (std::memory_order_acquire) != revision) out[0] = '\0';
     }
 
     State state() const noexcept
@@ -158,6 +190,10 @@ private:
             | ((state.band + 1) << 21) | (state.bandMode << 23) | (state.tab << 25) | (state.panelCount << 27);
     }
 
+    static constexpr size_t kLabelSize = 128;
+    std::array<std::array<std::atomic<char>, kLabelSize>, kFields> labels_ {};
+    std::atomic<bool> labelsChanged_ {};
+    std::atomic<unsigned> labelsRevision_ {};
     std::atomic<uint32_t> state_ {};
     std::atomic<uint64_t> preset_ {};
     NativeCellBank<kFields + 1> actions_;
