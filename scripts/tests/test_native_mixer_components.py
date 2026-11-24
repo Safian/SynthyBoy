@@ -4,6 +4,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import tempfile
 import sys
 import unittest
 from pathlib import Path
@@ -46,6 +47,7 @@ from components.native.meter_block.meter_block import (
 from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
     build_mixer_strip_header_definition,
+    TYPE_STRIP_SOURCE,
     TYPE_HEADER_SOURCE,
     TYPE_HEADER_BUS,
     TYPE_HEADER_MASTER,
@@ -53,6 +55,47 @@ from components.native.mixer_strip.mixer_strip import (
 
 
 class TestNativeMixerComponents(unittest.TestCase):
+    def test_inactive_source_dials_stay_visible_and_read_only(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            definitions = build_mixer_strip_definitions(directory)
+            cells = {e["componentData"]["name"]: e for e in definitions[TYPE_STRIP_SOURCE]["componentsData"]}
+            for name, handle, family in (("pan", "Pan", "pan"), ("send1", "Send1", "level"),
+                                         ("send2", "Send2", "level")):
+                with self.subTest(name=name):
+                    on, off = cells[name], cells[name + " off"]
+                    self.assertEqual(off["bounds"]["bounds"], on["bounds"]["bounds"])
+                    self.assertEqual(off["handle remapping"], on["handle remapping"])
+                    self.assertIn({"key": "Data", "value": handle}, on["handle remapping"]["map"])
+                    for entry, power in ((on, 1), (off, 0)):
+                        self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"],
+                                         [f"IndexedEnabling/{power}/2/Power"])
+                        self.assertEqual(entry["bounds"]["showWhenDataModelInvalid"], "Hide")
+                    self.assertEqual(off["bounds"]["acceptsHWFocus"], "No")
+                    disabled = definitions[off["componentData"]["type"]]
+                    self.assertEqual(disabled["actions"], [])
+                    self.assertTrue(disabled["disableCoarseDataWheel"])
+                    self.assertTrue(disabled["ignoreMousePresses"])
+                    for child in disabled["componentsData"]:
+                        self.assertEqual(child["bounds"]["acceptsHWFocus"], "No")
+                    knobs = []
+                    for entry in (on, off):
+                        definition = definitions[entry["componentData"]["type"]]
+                        knobs.append(next(c["componentData"]["data"] for c in definition["componentsData"]
+                                          if c["componentData"]["type"] == "Knob"))
+                    active, inactive = knobs
+                    self.assertEqual(active["dragOrientation"], "Vertical")
+                    self.assertEqual(inactive["dragOrientation"], "None")
+                    self.assertEqual(active["filmStrip"], f"play_sub_{family}_40.png")
+                    self.assertEqual(inactive["filmStrip"], f"play_sub_{family}_40_disabled.png")
+                    for knob in knobs:
+                        self.assertEqual((knob["knobType"], knob["handleName"]), ("FilmStrip", "Data"))
+                        with Image.open(directory / knob["filmStrip"]) as strip:
+                            self.assertEqual(strip.size, (40, 40 * knob["numFrames"]))
+                            self.assertIsNotNone(strip.getchannel("A").getbbox())
+
     def test_solo_mute_pair_definitions(self):
         defs = build_solo_mute_definitions()
         self.assertIn(TYPE_SOLO_MUTE_SOURCE, defs)

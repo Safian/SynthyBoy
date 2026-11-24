@@ -7,7 +7,10 @@ import unittest
 
 from PIL import Image
 
-from components.native.level.level import compact_dial_definition, compact_level_definition
+from components import style
+from components.native.level.level import (
+    compact_dial_definition, compact_level_definition, master_control_definition,
+)
 from components.native.pan.pan import compact_pan_definition
 
 
@@ -36,7 +39,10 @@ class CompactNativeDialTests(unittest.TestCase):
                 for name, rect in bounds.items():
                     self.assertEqual(components[name]["bounds"]["bounds"], "%d %d %d %d" % rect)
                 knob = components["knob"]["componentData"]["data"]
-                self.assertEqual((knob["handleName"], knob["polarity"]), ("Data", polarity))
+                family = "pan" if polarity == "BiPolar" else "level"
+                frame_size = int(components["knob"]["bounds"]["bounds"].split()[2])
+                self.assertEqual((knob["handleName"], knob["knobType"]), ("Data", "FilmStrip"))
+                self.assertEqual(knob["filmStrip"], f"play_sub_{family}_{frame_size}.png")
                 self.assertEqual(components["name"]["componentData"]["data"]["handleName"], "Caption")
                 self.assertEqual(result["actions"], [{"handler": "Focus Lost"}])
 
@@ -49,7 +55,7 @@ class CompactNativeDialTests(unittest.TestCase):
         first["backgroundData"]["focussed"]["colour"] = "changed"
         self.assertEqual(source, original)
         self.assertEqual(second["actions"], [{"handler": "Focus Lost"}])
-        self.assertEqual(second["backgroundData"]["focussed"]["colour"], "ff060913")
+        self.assertEqual(second["backgroundData"]["focussed"]["colour"], style.native_color("transparent"))
 
     def test_compact_48_pan_and_level_dial_definition(self):
         compact_48_bounds = {
@@ -67,8 +73,10 @@ class CompactNativeDialTests(unittest.TestCase):
                     self.assertEqual(components[name]["bounds"]["bounds"], "%d %d %d %d" % rect)
 
                 knob = components["knob"]["componentData"]["data"]
-                self.assertEqual((knob["handleName"], knob["polarity"]), ("Data", polarity))
-                self.assertEqual(knob["knobType"], "GenericLegacy")
+                family = "pan" if polarity == "BiPolar" else "level"
+                frame_size = int(components["knob"]["bounds"]["bounds"].split()[2])
+                self.assertEqual((knob["handleName"], knob["knobType"]), ("Data", "FilmStrip"))
+                self.assertEqual(knob["filmStrip"], f"play_sub_{family}_{frame_size}.png")
 
                 name_ctrl = components["name"]["componentData"]["data"]
                 self.assertEqual(name_ctrl["handleName"], "Caption")
@@ -81,8 +89,20 @@ class CompactNativeDialTests(unittest.TestCase):
                 self.assertEqual(val_ctrl["textStyle"]["colour"], "ffeef1ff")
 
                 self.assertEqual(result["actions"], [{"handler": "Focus Lost"}])
-                self.assertEqual(result["backgroundData"]["focussed"]["colour"], "ff060913")
-                self.assertEqual(result["backgroundData"]["unfocussed"]["colour"], "ff060913")
+                self.assertEqual(result["backgroundData"]["focussed"]["colour"], style.native_color("transparent"))
+                self.assertEqual(result["backgroundData"]["unfocussed"]["colour"], style.native_color("transparent"))
+
+    def test_master_dials_ship_art_and_bind_to_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for kind, family in (("dial_uni", "level"), ("dial_bi", "pan")):
+                definition = master_control_definition(kind, 120, 124, skins_dir=tmp)
+                knob = next(child["componentData"]["data"] for child in definition["componentsData"]
+                            if child["componentData"]["type"] == "Knob")
+                self.assertEqual(knob["knobType"], "FilmStrip")
+                self.assertEqual(knob["handleName"], "Data")
+                self.assertEqual(knob["filmStrip"], f"play_sub_{family}_90.png")
+                with Image.open(Path(tmp) / knob["filmStrip"]) as img:
+                    self.assertEqual(img.size, (90, 90 * knob["numFrames"]))
 
     def test_native_skin_strips_and_readout(self):
         with tempfile.TemporaryDirectory() as tmp:

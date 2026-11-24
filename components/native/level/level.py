@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 
 from components.style import (
+    focus_ring_data,
     argb as _style_argb,
     native_color as _style_native_color,
     color as _style_color,
@@ -97,7 +98,7 @@ _value_label = value_label
 def default_level_template():
     return {
         "version": 2,
-        "actions": [{"version": 1, "handler": "Show Overlay"}],
+        "actions": [],
         "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "backgroundData": {
@@ -112,13 +113,7 @@ def default_level_template():
                     "version": 1,
                     "name": "knob",
                     "type": "Knob",
-                    "data": {
-                        "version": 5,
-                        "knobType": "GenericLegacy",
-                        "polarity": "UniPolar",
-                        "dragOrientation": "Vertical",
-                        "handleName": "Data",
-                    },
+                    "data": synthyboy_dial_data(None),
                 },
                 "handle remapping": {"version": 1, "map": []},
                 "bounds": {
@@ -239,6 +234,9 @@ def synthyboy_dial_data(skins_dir, *, frame_size=SIZE, bipolar=False, active=Tru
 
 def sub_dial_definition(template, skins_dir, *, bipolar=False):
     definition = copy.deepcopy(template)
+    for item in definition["componentsData"]:
+        if item["componentData"].get("type") == "Focus":
+            item["componentData"]["data"] = focus_ring_data()
     controls = {item["componentData"]["name"]: item for item in definition["componentsData"]}
     controls["knob"]["componentData"]["data"] = synthyboy_dial_data(
         skins_dir, frame_size=SIZE, bipolar=bipolar
@@ -274,15 +272,7 @@ def level_definition(template=None, skins_dir=None, rects=None):
         name = control["name"]
         if name in dial_rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % tuple(dial_rects[name])
-        if name == "knob":
-            control["data"] = {
-                "version": 5,
-                "knobType": "GenericLegacy",
-                "polarity": "UniPolar",
-                "dragOrientation": "Vertical",
-                "handleName": "Data",
-            }
-        elif name == "name":
+        if name == "name":
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.level_definition.font.height')
@@ -306,18 +296,12 @@ def compact_level_definition(template=None, skins_dir=None):
     rects = copy.deepcopy(COMPACT_48_RECTS)
     for item in definition["componentsData"]:
         control = item["componentData"]
+        if control.get("type") == "Focus":
+            control["data"] = focus_ring_data()
         name = control["name"]
         if name in rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
-        if name == "knob":
-            control["data"] = {
-                "version": 5,
-                "knobType": "GenericLegacy",
-                "polarity": "UniPolar",
-                "dragOrientation": "Vertical",
-                "handleName": "Data",
-            }
-        elif name == "name":
+        if name == "name":
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.compact_level_definition.font.height')
@@ -345,7 +329,16 @@ def compact_level_definition(template=None, skins_dir=None):
 # CompactDial variant API
 # -------------------------------------------------------------------------
 
-def compact_dial_definition(template, rects=None, polarity="UniPolar", height=None):
+def _dial_for_polarity(skins_dir, polarity, frame_size):
+    if polarity == "BiPolar":
+        from components.native.pan.pan import synthyboy_dial_data as pan_dial_data
+        return pan_dial_data(skins_dir, frame_size=frame_size)
+    if polarity == "UniPolar":
+        return synthyboy_dial_data(skins_dir, frame_size=frame_size)
+    raise ValueError(f"Unsupported native dial polarity: {polarity}")
+
+
+def compact_dial_definition(template, rects=None, polarity="UniPolar", height=None, *, skins_dir=None):
     definition = copy.deepcopy(template)
     for state in ("focussed", "unfocussed"):
         if state in definition.get("backgroundData", {}):
@@ -367,17 +360,13 @@ def compact_dial_definition(template, rects=None, polarity="UniPolar", height=No
 
     for item in definition["componentsData"]:
         control = item["componentData"]
+        if control.get("type") == "Focus":
+            control["data"] = focus_ring_data()
         name = control["name"]
         if name in rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
         if name == "knob":
-            control["data"] = {
-                "version": 5,
-                "knobType": "GenericLegacy",
-                "polarity": polarity,
-                "dragOrientation": "Vertical",
-                "handleName": "Data",
-            }
+            control["data"] = _dial_for_polarity(skins_dir, polarity, rects["knob"][2])
         elif name == "name":
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
@@ -591,13 +580,7 @@ def build_native_smooth_dial_with_indicator_definition(
             "version": 1,
             "name": "focus",
             "type": "Focus",
-            "data": {
-                "version": 1,
-                "backgroundColour": _style_argb("text.white", _style_opacity("focus")),
-                "outlineColour": _style_argb("focus.cyan"),
-                "backgroundInset": _style_size('level.build_native_smooth_dial_with_indicator_definition.focus.comp'),
-                "outlineThickness": _style_size('level.build_native_smooth_dial_with_indicator_definition.focus.comp.offset1'),
-            },
+            "data": focus_ring_data(),
         },
         "handle remapping": {"version": 1, "map": []},
         "bounds": {
@@ -610,16 +593,7 @@ def build_native_smooth_dial_with_indicator_definition(
         },
     }
 
-    if skins_dir is not None:
-        knob_data = synthyboy_dial_data(skins_dir, frame_size=rects["knob"][2], bipolar=False, active=active)
-    else:
-        knob_data = {
-            "version": 5,
-            "knobType": "GenericLegacy",
-            "polarity": "UniPolar",
-            "dragOrientation": "Vertical" if active else "None",
-            "handleName": "Data",
-        }
+    knob_data = synthyboy_dial_data(skins_dir, frame_size=rects["knob"][2], active=active)
     if not active:
         knob_data["dragOrientation"] = "None"
         knob_data["ignoreMousePresses"] = True
@@ -831,7 +805,7 @@ def blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_r
     return definition
 
 
-def master_control_definition(kind, w, h):
+def master_control_definition(kind, w, h, *, skins_dir=None):
     """Native master control composition with calibrated relative dial geometry."""
     from components.native.button.button import entry
     from components.native.name_value.name_value import _label_component
@@ -853,9 +827,8 @@ def master_control_definition(kind, w, h):
 
     if kind.startswith("dial_"):
         children = [label(True, (inset, 0, w - 2 * inset, label_h)),
-                    entry("dial", "Knob", {"version": 5, "knobType": "GenericNoLabel",
-                          "polarity": "BiPolar" if kind == "dial_bi" else "UniPolar",
-                          "dragOrientation": "Vertical", "handleName": "Data"},
+                    entry("dial", "Knob", _dial_for_polarity(
+                          skins_dir, "BiPolar" if kind == "dial_bi" else "UniPolar", SIZE),
                           (inset, label_h, w - 2 * inset, h - 2 * label_h), focus="No"),
                     label(False, (inset, h - label_h, w - 2 * inset, label_h))]
         for child, relative in zip(children, metrics["relative_bounds"]):

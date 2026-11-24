@@ -85,6 +85,16 @@ def native_color(name):
     return _token("colors.json", "native", name)
 
 
+def focus_ring_data():
+    return {
+        "version": 1,
+        "backgroundColour": argb("text.white", opacity("focus")),
+        "outlineColour": argb("focus.cyan"),
+        "backgroundInset": size("focus.ring.inset"),
+        "outlineThickness": size("focus.ring.stroke"),
+    }
+
+
 def _dim_artwork(image):
     from PIL import ImageOps
     grey = ImageOps.colorize(image.convert("L"), color("inactive.preview.dark"), color("inactive.preview.light"))

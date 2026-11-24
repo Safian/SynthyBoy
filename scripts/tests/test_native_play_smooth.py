@@ -113,6 +113,9 @@ class TestNativePlaySmooth(unittest.TestCase):
         comp_def = build_native_smooth_dial_with_indicator_definition(active=True)
         self.assertEqual(comp_def["version"], 2)
         children = comp_def["componentsData"]
+        knob = next(c["componentData"]["data"] for c in children if c["componentData"]["type"] == "Knob")
+        self.assertEqual(knob["knobType"], "FilmStrip")
+        self.assertEqual(knob["handleName"], "Data")
         names = [c["componentData"]["name"] for c in children]
         self.assertIn("knob", names)
         self.assertNotIn("led", names)
@@ -129,7 +132,10 @@ class TestNativePlaySmooth(unittest.TestCase):
         # Passive / inactive definition
         comp_off = build_native_smooth_dial_with_indicator_definition(active=False)
         off_children = {c["componentData"]["name"]: c for c in comp_off["componentsData"]}
-        self.assertEqual(off_children["knob"]["componentData"]["data"]["dragOrientation"], "None")
+        passive_knob = off_children["knob"]["componentData"]["data"]
+        self.assertEqual(passive_knob["knobType"], "FilmStrip")
+        self.assertTrue(passive_knob["filmStrip"].endswith("_inactive.png"))
+        self.assertEqual(passive_knob["dragOrientation"], "None")
         self.assertTrue(off_children["knob"]["componentData"]["data"].get("ignoreMousePresses"))
         self.assertEqual(off_children["knob"]["bounds"]["acceptsHWFocus"], "No")
         self.assertEqual(off_children["focus"]["bounds"]["acceptsHWFocus"], "No")

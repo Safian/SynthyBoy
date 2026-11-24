@@ -27,6 +27,10 @@ class TestNativeModRow(unittest.TestCase):
     def tearDown(self):
         self.tmp_dir.cleanup()
 
+    def test_unknown_editor_cell_fails_generation(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported native modulation editor cell"):
+            nmr.build_editor_cell_definition("unsupported", 80, 60)
+
     def test_shared_row_registered_once_with_seven_instances(self):
         """ONE canonical row definition registered, instantiated 7 times for 7 matrix rows."""
         defs = nmr.build_mod_row_definitions(self.skins_dir)
@@ -39,7 +43,7 @@ class TestNativeModRow(unittest.TestCase):
         row_def = defs["modRow"]
         self.assertEqual(row_def["version"], 2)
         self.assertTrue(row_def["ignoreMousePresses"])
-        self.assertEqual(row_def["backgroundData"]["unfocussed"]["colour"], "00000000")
+        self.assertEqual(row_def["backgroundData"]["unfocussed"]["colour"], style.native_color("transparent"))
 
         # 6 child interactive controls in row
         children = {c["componentData"]["name"]: c for c in row_def["componentsData"]}

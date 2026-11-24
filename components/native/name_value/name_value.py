@@ -16,6 +16,7 @@ import copy
 from pathlib import Path
 
 from components.style import (
+    focus_ring_data,
     argb as _style_argb,
     color as _style_color,
     opacity as _style_opacity,
@@ -258,13 +259,7 @@ def build_name_value_definition(
             "version": 1,
             "name": "focus",
             "type": "Focus",
-            "data": {
-                "version": 1,
-                "backgroundColour": _style_argb("text.white", _style_opacity("focus")),
-                "outlineColour": _style_argb("focus.field"),
-                "backgroundInset": _style_size('name_value.build_name_value_definition.focus.ring'),
-                "outlineThickness": _style_size('name_value.build_name_value_definition.focus.ring.offset1'),
-            },
+            "data": focus_ring_data(),
         },
         "handle remapping": {"version": 1, "map": []},
         "bounds": dict(_bounds((bx, by, bw, bh)), whenVisible="WhenFocussed"),

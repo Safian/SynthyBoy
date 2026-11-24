@@ -779,10 +779,7 @@ def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice me
         val_lbl = editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.padding"), knob_y + dial_size + _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), val_h), just="horizontallyCentred verticallyCentred")
         children = [name_lbl, control, val_lbl]
     else:
-        control = _entry("dial", "Knob", {"version": 5, "knobType": "GenericNoLabel",
-                         "polarity": "BiPolar" if kind == "dial_bi" else "UniPolar",
-                         "dragOrientation": "Vertical", "handleName": "Data"}, (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.fallback_label_height"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), h - _style_size("mod_row.build_editor_cell_definition.fallback_labels_height")))
-        children = [editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), 0, w - _style_size("mod_row.build_editor_cell_definition.double_padding"), _style_size("mod_row.build_editor_cell_definition.fallback_label_height"))), control, editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.padding"), h - _style_size("mod_row.build_editor_cell_definition.fallback_label_height"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), _style_size("mod_row.build_editor_cell_definition.fallback_label_height")))]
+        raise ValueError(f"Unsupported native modulation editor cell: {kind}")
     default = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
     return {"version": 2, "actions": actions,
             "backgroundData": {"version": 1, "focussed": dict(default, colour=_style_argb("mod_row.focus")), "unfocussed": default},

@@ -5,6 +5,7 @@
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -24,7 +25,8 @@ from native_master.master_controls import (
 
 
 class DummyContext:
-    def __init__(self, tui, params):
+    def __init__(self, tui, params, skins_dir):
+        self.skins_dir = skins_dir
         self._tui = tui
         self._index = {p["key"]: i for i, p in enumerate(params["params"])}
         self.param_count = len(self._index)
@@ -45,6 +47,9 @@ class DummyContext:
 
 class MasterNativeControlsTests(unittest.TestCase):
     def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.skins_dir = Path(tmp.name)
         with open(PARAMS_JSON, encoding="utf-8") as f:
             self.params_doc = json.load(f)
         self.param_keys = {p["key"] for p in self.params_doc["params"]}
@@ -63,7 +68,7 @@ class MasterNativeControlsTests(unittest.TestCase):
         unconverted = get_unconverted_controls()
         names = {u["name"] for u in unconverted}
         self.assertIn("Glide Slope Curve", names)
-        self.assertIn("Mini Keyboard", names)
+        self.assertNotIn("Mini Keyboard", names)
 
     def test_geometry_and_touch_target_bounds(self):
         specs = get_master_control_specs()
@@ -96,18 +101,17 @@ class MasterNativeControlsTests(unittest.TestCase):
                 ]
             }
         }
-        ctx = DummyContext(tui, self.params_doc)
+        ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         created = apply_master_native_controls(tui, {}, ctx)
-        self.assertEqual(created, 45, "All standard native controls, output widgets and panel buttons created")
+        self.assertEqual(created, 46, "All standard native controls, output widgets and panel buttons created")
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
-        self.assertEqual(len(tab_components), 46, "Marker plus native editor, output and navigation widgets")
+        self.assertEqual(len(tab_components), 47, "Marker plus native editor, output and navigation widgets")
 
         # Verify specific remappings
         vol = next(c for c in tab_components if c["componentData"]["name"] == "Master Volume")
         self.assertEqual(vol["componentData"]["type"], "masterNative_dial_bi")
         # The dial is a local component definition; the instance carries only
-        # its Data handle.  The GenericLegacy polarity belongs to the child
-        # Knob in the definition, not to the instance data.
+        # its Data handle. The shared child provides the bipolar filmstrip.
         self.assertEqual(vol["componentData"]["data"], {"version": 1, "handleName": "Data"})
         self.assertEqual(vol["bounds"]["acceptsHWFocus"], "Yes")
         self.assertEqual(vol["bounds"]["whenVisible"], "Always")
@@ -166,11 +170,11 @@ class MasterNativeControlsTests(unittest.TestCase):
                 ]
             }
         }
-        ctx = DummyContext(tui, self.params_doc)
+        ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         created = apply_master_native_controls(tui, {}, ctx)
-        self.assertEqual(created, 45, "All standard native controls, output widgets and panel buttons created after purge")
+        self.assertEqual(created, 46, "All standard native controls, output widgets and panel buttons created after purge")
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
-        self.assertEqual(len(tab_components), 46, "Marker plus native editor, output and navigation widgets")
+        self.assertEqual(len(tab_components), 47, "Marker plus native editor, output and navigation widgets")
 
         # Verify Master Transpose now has correct geometry (856 110 134 112 in tab space), not legacy 23 45 278 107
         transpose = next(c for c in tab_components if c["componentData"]["name"] == "Master Transpose")
@@ -224,7 +228,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                 ]
             }
         }
-        ctx = DummyContext(tui, self.params_doc)
+        ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         apply_master_native_controls(tui, {}, ctx)
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
         for spec in specs:
@@ -247,7 +251,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                 ]
             }
         }
-        ctx = DummyContext(tui, self.params_doc)
+        ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         apply_master_native_controls(tui, {}, ctx)
 
         replacement = tui["pageData"].get("replacementStrings", [])
@@ -282,7 +286,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                 ]
             }
         }
-        ctx = DummyContext(tui, self.params_doc)
+        ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         ctx.overlay_param = 2675
         apply_master_native_controls(tui, {}, ctx)
 
@@ -298,19 +302,14 @@ class MasterNativeControlsTests(unittest.TestCase):
         self.assertIn(f"IndexedEnabling/0/2/Parameter {link_idx}", handles)
         self.assertIn("IndexedEnabling/1/3/Parameter 2887", handles)
 
-        # MPE BEND must carry IndexedEnabling/1/2 on master.mpe.on
-        mpe_bend = next(c for c in tab_components if c["componentData"]["name"] == "Master MPE Bend Range")
-        self.assertEqual(mpe_bend["bounds"]["version"], 2)
-        self.assertEqual(mpe_bend["bounds"]["showWhenDataModelInvalid"], "Hide")
-        mpe_handles = mpe_bend["bounds"]["additionalInvalidatingHandles"]
-        self.assertIn(f"IndexedEnabling/1/2/Parameter {mpe_idx}", mpe_handles)
-        self.assertIn("IndexedEnabling/2/3/Parameter 2887", mpe_handles)
-
-        # MPE BEND TO X must carry IndexedEnabling/1/2 on master.mpe.on
-        mpe_bend_to_x = next(c for c in tab_components if c["componentData"]["name"] == "Master MPE Bend to X")
-        self.assertEqual(mpe_bend_to_x["bounds"]["version"], 2)
-        self.assertIn(f"IndexedEnabling/1/2/Parameter {mpe_idx}", mpe_bend_to_x["bounds"]["additionalInvalidatingHandles"])
-
+        # Inactive MPE controls stay visible and retain their readouts.
+        for name in ("Master MPE Bend Range", "Master MPE Bend to X"):
+            widget = next(c for c in tab_components if c["componentData"]["name"] == name)
+            self.assertEqual(widget["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/2/3/Parameter 2887"])
+            self.assertEqual(widget["bounds"]["acceptsHWFocus"], "Children")
+            mapping = {m["key"]: m["value"] for m in widget["handle remapping"]["map"]}
+            for state in (0, 1):
+                self.assertEqual(mapping[f"NativeActiveGate{state}"], f"IndexedEnabling/{state}/2/Parameter {mpe_idx}")
 
     def test_release_skin_has_one_editor_side_gate_per_control(self):
         import tempfile
@@ -351,9 +350,19 @@ class MasterNativeControlsTests(unittest.TestCase):
                 self.assertEqual(binding["Data"], f"Parameter {indices[spec['key']]}")
                 self.assertEqual(binding["Caption"], f"WithName[{spec['caption']}]/Parameter {indices[spec['key']]}")
                 definition = definitions[widget["componentData"]["type"]]
+                if "NativeActiveGate0" in binding:
+                    self.assertTrue(spec["key"].startswith("master.mpe."))
+                    off, on = definition["componentsData"]
+                    self.assertEqual(off["bounds"]["additionalInvalidatingHandles"], ["NativeActiveGate0"])
+                    self.assertEqual(on["bounds"]["additionalInvalidatingHandles"], ["NativeActiveGate1"])
+                    inactive = definitions[off["componentData"]["type"]]
+                    self.assertEqual(inactive["actions"], [])
+                    self.assertTrue(inactive["ignoreMousePresses"])
+                    self.assertTrue(inactive["disableCoarseDataWheel"])
+                    definition = definitions[on["componentData"]["type"]]
                 actions = definition["actions"]
                 children = [child["bounds"] for child in definition["componentsData"]]
-                if widget["componentData"]["type"] in ("masterNative_dial_bi", "masterNative_dial_uni"):
+                if spec["widget"].startswith("dial_") and spec["key"] not in MASTER_INTEGER_FIELDS:
                     self.assertTrue(all(b["boundsType"] == "Relative" for b in children))
                     sizes = {"parent.width": width, "parent.height": height}
 

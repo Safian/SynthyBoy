@@ -6,6 +6,7 @@ from pathlib import Path
 
 from components.native.level.level import value_label, write_strip as write_dial_strip
 from components.style import (
+    focus_ring_data,
     argb as _style_argb,
     native_color as _style_native_color,
     rect as _style_rect,
@@ -36,7 +37,7 @@ def _value_label(name, rect, height=_style_size('pan._value_label.geometry')):
 def default_pan_template():
     return {
         "version": 2,
-        "actions": [{"version": 1, "handler": "Show Overlay"}],
+        "actions": [],
         "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "backgroundData": {
@@ -51,13 +52,7 @@ def default_pan_template():
                     "version": 1,
                     "name": "knob",
                     "type": "Knob",
-                    "data": {
-                        "version": 5,
-                        "knobType": "GenericLegacy",
-                        "polarity": "BiPolar",
-                        "dragOrientation": "Vertical",
-                        "handleName": "Data",
-                    },
+                    "data": synthyboy_dial_data(None),
                 },
                 "handle remapping": {"version": 1, "map": []},
                 "bounds": {
@@ -134,6 +129,9 @@ def synthyboy_dial_data(skins_dir, *, frame_size=SIZE, bipolar=True):
 
 def sub_dial_definition(template, skins_dir, *, bipolar=True):
     definition = copy.deepcopy(template)
+    for item in definition["componentsData"]:
+        if item["componentData"].get("type") == "Focus":
+            item["componentData"]["data"] = focus_ring_data()
     controls = {item["componentData"]["name"]: item for item in definition["componentsData"]}
     controls["knob"]["componentData"]["data"] = synthyboy_dial_data(
         skins_dir, frame_size=SIZE, bipolar=bipolar
@@ -169,15 +167,7 @@ def pan_definition(template=None, skins_dir=None, rects=None):
         name = control["name"]
         if name in dial_rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % tuple(dial_rects[name])
-        if name == "knob":
-            control["data"] = {
-                "version": 5,
-                "knobType": "GenericLegacy",
-                "polarity": "BiPolar",
-                "dragOrientation": "Vertical",
-                "handleName": "Data",
-            }
-        elif name == "name":
+        if name == "name":
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('pan.pan_definition.font.height')
@@ -201,18 +191,12 @@ def compact_pan_definition(template=None, skins_dir=None):
     rects = copy.deepcopy(COMPACT_48_RECTS)
     for item in definition["componentsData"]:
         control = item["componentData"]
+        if control.get("type") == "Focus":
+            control["data"] = focus_ring_data()
         name = control["name"]
         if name in rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
-        if name == "knob":
-            control["data"] = {
-                "version": 5,
-                "knobType": "GenericLegacy",
-                "polarity": "BiPolar",
-                "dragOrientation": "Vertical",
-                "handleName": "Data",
-            }
-        elif name == "name":
+        if name == "name":
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('pan.compact_pan_definition.font.height')

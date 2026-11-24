@@ -22,6 +22,7 @@ from pathlib import Path
 from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
 from components.native.level.level import value_label
 from components.style import (
+    focus_ring_data,
     argb as _style_argb,
     color as _style_color,
     opacity as _style_opacity,
@@ -89,7 +90,7 @@ def _value_label(name, rect, height=_style_size('selector._value_label.geometry'
 
 
 def build_choice_definition(source_def, overlay_name, rect, label, decoration=(), label_height=_style_size('font.value')):
-    """Keep the SDK focus ring and give the parent sole ownership of touch and wheel input."""
+    """Use the project focus ring and let the parent handle touch and wheel input."""
     definition = copy.deepcopy(source_def) if source_def else {"actions": [], "componentsData": []}
     menu_triggers = ("Mouse Down", "Enter Pressed")
     definition["actions"] = [
@@ -112,6 +113,7 @@ def build_choice_definition(source_def, overlay_name, rect, label, decoration=()
     children = [child for child in definition.get("componentsData", [])
                 if child.get("componentData", {}).get("type") == "Focus"]
     for child in children:
+        child["componentData"]["data"] = focus_ring_data()
         child["bounds"]["bounds"] = "%d %d %d %d" % bounds
     definition["componentsData"] = children + list(decoration) + [_value_label(label, bounds, label_height)]
     return definition
@@ -1337,6 +1339,8 @@ def macro_bank_definition(template):
         "slider": (0, 0, _style_size('selector.macro_bank_definition.rects'), _style_size('selector.macro_bank_definition.rects.offset2')),
     }
     for item in definition.get("componentsData", []):
+        if item["componentData"]["type"] == "Focus":
+            item["componentData"]["data"] = focus_ring_data()
         name = item["componentData"]["name"]
         if name in rects:
             item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rects[name])
