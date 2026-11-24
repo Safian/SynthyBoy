@@ -25,18 +25,16 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
-for p in (str(REPO_ROOT), str(HERE), str(HERE / "tests")):
+for p in (str(REPO_ROOT), str(HERE)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from native_tab_sketch import NativeTabSketch
 from components import style
 from native_skin_font import semibold
 from screen_images import screen_path, save_screen, export_path
-import test_mpc_skin_extras as skin
+from preview_skin import PARAMS_JSON, ensure_generated_skin
 
-PARAMS_JSON = REPO_ROOT / "docs" / "params.json"
-PAGES_JSON = REPO_ROOT / "docs" / "kick-pages.json"
-LAYOUT_JSON = REPO_ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
 CONTRACT_JSON = REPO_ROOT / "scripts" / "mpc-skin-extras" / "mod-native-contract.json"
 PREVIEW_BASE_SCRIPT = REPO_ROOT / "scripts" / "render-mpc-skin-preview.py"
 FIXTURE_SRC = REPO_ROOT / "shell-mpc" / "overlay" / "tests" / "mod_render_fixture.cpp"
@@ -45,7 +43,6 @@ OUT_FULL = screen_path('mod')
 HISTORICAL_BEFORE = REPO_ROOT / "docs" / "screens" / "mod_old.jpg"
 HISTORICAL_SLOT_BEFORE = Path("/tmp/mod-slot-historical.png") if Path("/tmp/mod-slot-historical.png").is_file() else REPO_ROOT / "docs" / "user-guide" / "img" / "mod-slot.png"
 
-DEFAULT_MPC_SDK = Path("/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge/docs-official/mpc-sdk")
 DEFAULT_BUILD_DIR = REPO_ROOT / "build"
 
 
@@ -54,18 +51,6 @@ def _load_sketch_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _find_mpc_sdk() -> Path:
-    env = os.environ.get("MPC_SDK")
-    if env and Path(env).is_dir():
-        return Path(env)
-    if DEFAULT_MPC_SDK.is_dir():
-        return DEFAULT_MPC_SDK
-    home_sdk = Path.home() / ".local" / "share" / "local-worker" / "ext" / "mpc-sdk"
-    if home_sdk.is_dir():
-        return home_sdk
-    raise FileNotFoundError("MPC_SDK not found; set MPC_SDK environment variable.")
 
 
 def _find_core_build_dir(explicit=None) -> Path:
@@ -121,18 +106,7 @@ def ensure_fixture_binary(work_dir: Path, ui_gen: int = 2, core_build_dir=None) 
     return out_bin
 
 
-def ensure_generated_skin(work_dir: Path, mpc_sdk: Path | None = None) -> Path:
-    sdk = mpc_sdk or _find_mpc_sdk()
-    os.environ["MPC_SDK"] = str(sdk)
-    skin.SDK = sdk
-    skins = skin.generate_skins(work_dir, LAYOUT_JSON)
-    code, err = skin.run_apply(skins, skin.REAL_EXTRAS)
-    if code != 0:
-        raise RuntimeError(f"run_apply failed with code {code}: {err}")
-    return skins
-
-
-class ModSketchAdapter:
+class ModSketchAdapter(NativeTabSketch):
     """Adapter around render-mpc-skin-preview.Sketch that authentically renders
     the generated TUI tab using real MPC components, remapped handles,
     evaluated gates, and C++ fixture parameters."""
@@ -149,28 +123,6 @@ class ModSketchAdapter:
             for r in self._sketch.tui["pageData"].get("replacementStrings", [])
         }
         self._img_cache: dict[str, Image.Image] = {}
-
-    def _open_image(self, filename: str) -> Image.Image | None:
-        if not filename:
-            return None
-        if filename not in self._img_cache:
-            path = self._skins / filename
-            if not path.is_file():
-                return None
-            self._img_cache[filename] = Image.open(path).convert("RGBA")
-        return self._img_cache[filename]
-
-    def _font(self, size: int, style_name: str = "SemiBold") -> ImageFont.ImageFont:
-        return self._base_mod.font(style_name, max(8, int(round(size))))
-
-    @staticmethod
-    def _strip_prefix(handle: str) -> tuple[str | None, str]:
-        if handle.startswith("WithName[") and "]/" in handle:
-            head, rest = handle.split("]/", 1)
-            return head[len("WithName["):], rest
-        if handle.startswith("FromGesture/"):
-            return None, handle[len("FromGesture/"):]
-        return None, handle
 
     def _resolve_handle(self, handle: str | None, remaps: dict[str, str]) -> tuple[str | None, str | None]:
         if not handle:
@@ -483,20 +435,7 @@ class ModSketchAdapter:
             return
 
     def render_tab(self, tab_name: str = "Mod") -> Image.Image:
-        tabs_by_name = {t.get("tabName"): t for t in self._sketch.tui["pageData"]["tabs"]}
-        if tab_name not in tabs_by_name:
-            raise KeyError(f"Tab '{tab_name}' not found in TUI tabs: {list(tabs_by_name.keys())}")
-        tab = tabs_by_name[tab_name]["componentDefinition"]
-        bg = tab.get("backgroundData", {}).get("focussed", {})
-        bg_name = bg.get("image", "")
-        im = self._open_image(bg_name)
-        if im is not None:
-            canvas = im.resize((1280, 628), Image.Resampling.LANCZOS).copy()
-        else:
-            canvas = Image.new("RGBA", (1280, 628), style.color("surface.panel"))
-        for child in tab.get("componentsData", []):
-            self._draw_entry(canvas, child, (0, 0), (1280, 628), {})
-        return canvas
+        return super().render_tab(tab_name)
 
 
 def compose_tab(host_tab: Image.Image, overlay_tab: Image.Image) -> Image.Image:
@@ -623,9 +562,8 @@ def render_all(
     import tempfile
     with tempfile.TemporaryDirectory() as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
-        sdk = _find_mpc_sdk()
         fixture_bin = ensure_fixture_binary(tmp_dir, ui_gen=2)
-        skins_dir = ensure_generated_skin(tmp_dir, mpc_sdk=sdk)
+        skins_dir = ensure_generated_skin(tmp_dir)
 
         # 1. Render Populated Matrix State
         pop_overlay_png = tmp_dir / "mod_pop_overlay.png"

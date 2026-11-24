@@ -29,14 +29,10 @@ for p in (str(REPO_ROOT), str(SCRIPTS_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from preview_skin import PARAMS_JSON, ensure_generated_skin
+from native_tab_sketch import NativeTabSketch
 from components import style
 
-PARAMS_JSON = REPO_ROOT / "docs" / "params.json"
-PAGES_JSON = REPO_ROOT / "docs" / "kick-pages.json"
-LAYOUT_JSON = REPO_ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
-GEN_SCRIPT = REPO_ROOT / "scripts" / "gen-mpc-ui.py"
-RUN_GEN_UI = REPO_ROOT / "scripts" / "run-gen-ui.py"
-APPLY_SCRIPT = REPO_ROOT / "scripts" / "apply-mpc-skin-extras.py"
 PREVIEW_BASE_SCRIPT = REPO_ROOT / "scripts" / "render-mpc-skin-preview.py"
 FIXTURE_SRC = REPO_ROOT / "shell-mpc" / "overlay" / "tests" / "lfo_render_fixture.cpp"
 
@@ -45,7 +41,6 @@ UI_MAP_DIR = REPO_ROOT / "docs" / "ui-map"
 CANONICAL_KOMP = screen_path('lfo')
 CANONICAL_RND = screen_path('rnd')
 
-DEFAULT_MPC_SDK = Path("/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge/docs-official/mpc-sdk")
 DEFAULT_BUILD_DIR = Path(f"/tmp/synthyboy-{os.getuid()}/lfo-preview")
 
 STATE_LABELS = {
@@ -65,15 +60,6 @@ def _load_sketch_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _find_mpc_sdk() -> Path:
-    env = os.environ.get("MPC_SDK")
-    if env and Path(env).is_dir():
-        return Path(env)
-    if DEFAULT_MPC_SDK.is_dir():
-        return DEFAULT_MPC_SDK
-    raise FileNotFoundError("MPC_SDK not found; set MPC_SDK environment variable.")
 
 
 def _find_core_build_dir(explicit=None) -> Path:
@@ -138,50 +124,7 @@ def ensure_fixture_binary(work_dir: Path, ui_gen: int = 2, core_build_dir=None) 
     return out_bin
 
 
-def ensure_generated_skin(work_dir: Path, mpc_sdk: Path | None = None) -> Path:
-    skins_dir = work_dir / "skins"
-    tui_path = skins_dir / "TUI.json"
-    inputs = [PARAMS_JSON, LAYOUT_JSON, * (SCRIPTS_DIR / "mpc-skin-extras").glob("*.py"),
-              * (SCRIPTS_DIR / "mpc-skin-extras").glob("*.json"),
-              * (REPO_ROOT / "components").rglob("*.py")]
-    if tui_path.is_file() and tui_path.stat().st_mtime >= max(p.stat().st_mtime for p in inputs):
-        return skins_dir
-    sdk = mpc_sdk or _find_mpc_sdk()
-    ui_dir = work_dir / "ui"
-    ui_dir.mkdir(parents=True, exist_ok=True)
-    skins_dir.mkdir(parents=True, exist_ok=True)
-
-    steps = [
-        [
-            sys.executable, str(GEN_SCRIPT),
-            "--params", str(PARAMS_JSON),
-            "--pages", str(PAGES_JSON),
-            "--layout", str(LAYOUT_JSON),
-            "--out", str(ui_dir),
-        ],
-        [
-            sys.executable, str(RUN_GEN_UI),
-            "--sdk", str(sdk),
-            "--params", str(ui_dir / "params-hostsim.json"),
-            "--ui", str(ui_dir / "ui.json"),
-            "--out", str(skins_dir),
-            "--quiet",
-        ],
-        [
-            sys.executable, str(APPLY_SCRIPT),
-            "--skins", str(skins_dir),
-            "--params", str(PARAMS_JSON),
-            "--meta", str(ui_dir / "skin-meta.json"),
-        ],
-    ]
-    for cmd in steps:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        if res.returncode != 0:
-            raise RuntimeError(f"Skin generation command failed ({cmd[1]}):\n{res.stderr}")
-    return skins_dir
-
-
-class LfoSkinSketch:
+class LfoSkinSketch(NativeTabSketch):
     """Adapter around Sketch that evaluates gates, remapped handles,
     FilmStrip knob frames (enforcing 1:1 square ratio), ActiveText buttons, and C++ values."""
 
@@ -207,36 +150,6 @@ class LfoSkinSketch:
                 raise FileNotFoundError(f"Generated native skin references missing packaged asset: {filename}")
             self._img_cache[filename] = Image.open(path).convert("RGBA")
         return self._img_cache[filename]
-
-    def _font(self, size: int, style_name: str = "SemiBold") -> ImageFont.ImageFont:
-        return self._base_mod.font(style_name, max(8, int(round(size))))
-
-    @staticmethod
-    def _strip_prefix(handle: str) -> tuple[str | None, str]:
-        if handle.startswith("WithName[") and "]/" in handle:
-            head, rest = handle.split("]/", 1)
-            return head[len("WithName["):], rest
-        if handle.startswith("FromGesture/"):
-            return None, handle[len("FromGesture/"):]
-        return None, handle
-
-    def _resolve_handle(self, handle: str | None, remaps: dict[str, str]) -> tuple[str | None, str | None]:
-        if not handle:
-            return None, None
-        seen = set()
-        with_name = None
-        cur = handle
-        while cur and cur not in seen:
-            seen.add(cur)
-            wn, stripped = self._strip_prefix(cur)
-            if wn:
-                with_name = wn
-            if stripped in remaps:
-                cur = remaps[stripped]
-                continue
-            cur = stripped
-            break
-        return with_name, cur
 
     def _norm_for_handle(self, resolved: str | None) -> float:
         if not resolved or not resolved.startswith("Parameter "):
@@ -441,20 +354,7 @@ class LfoSkinSketch:
         raise ValueError(f"Unresolved native LFO primitive or definition: {ctype}")
 
     def render_tab(self, tab_name: str = "LFO") -> Image.Image:
-        tabs_by_name = {t.get("tabName"): t for t in self._sketch.tui["pageData"]["tabs"]}
-        if tab_name not in tabs_by_name:
-            raise KeyError(f"Tab '{tab_name}' not found in TUI tabs: {list(tabs_by_name.keys())}")
-        tab = tabs_by_name[tab_name]["componentDefinition"]
-        bg = tab.get("backgroundData", {}).get("focussed", {})
-        bg_name = bg.get("image", "")
-        im = self._open_image(bg_name)
-        if im is not None:
-            canvas = im.resize((1280, 628), Image.Resampling.LANCZOS).copy()
-        else:
-            canvas = Image.new("RGBA", (1280, 628), style.color("surface.panel"))
-        for child in tab.get("componentsData", []):
-            self._draw_entry(canvas, child, (0, 0), (1280, 628), {})
-        return canvas
+        return super().render_tab(tab_name)
 
 
 def compose_full_mpc_screen(tab_img: Image.Image, overlay_tab_img: Image.Image, label: str, *, ui_gen=2, knobs=16) -> Image.Image:
@@ -499,48 +399,6 @@ def compose_full_mpc_screen(tab_img: Image.Image, overlay_tab_img: Image.Image, 
     tab_comp = Image.alpha_composite(tab_img.convert("RGBA"), overlay_tab_img.convert("RGBA"))
     frame.alpha_composite(tab_comp, (0, 110))
     return frame
-
-
-def render_lfo_breakdown(native: Image.Image, overlay: Image.Image, composite: Image.Image) -> Image.Image:
-    """Generate annotated 3-layer architecture comparison (1280 x 2080)."""
-    w, h = 1280, 628
-    header_h = 44
-    gap = 16
-    total_h = (h + header_h + gap) * 3 + gap
-    breakdown = Image.new("RGBA", (w, total_h), (8, 11, 20, 255))
-    draw = ImageDraw.Draw(breakdown)
-
-    try:
-        f_title = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 18)
-        f_sub = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 14)
-    except Exception:
-        f_title = ImageFont.load_default()
-        f_sub = f_title
-
-    layers = [
-        ("1. HOST NATIVE SKIN LAYER (Akai OS framework · TUI.json)",
-         "overlay_bg_lfo.png background + redesigned header + modern blue FilmStrip dials & segmented radio buttons",
-         native),
-        ("2. DYNAMIC OVERLAY LAYER (SynthyBoy internal engine · C++ scene_cpu.h)",
-         "Real-time waveform, voice cursors and live phase line · x:8..1272, y:72..322 aperture",
-         overlay),
-        ("3. FULL CERTIFIED COMPOSITE SCREEN (Akai MPC hardware display surface)",
-         "Redesigned LFO screen · 100% native components · Disjoint ActiveText Smooth switch · Zero visible Q-Link frames",
-         composite),
-    ]
-
-    curr_y = gap
-    for title, subtitle, img in layers:
-        draw.rounded_rectangle([gap, curr_y, w - gap, curr_y + header_h - 4], radius=6, fill="#121829", outline="#253556", width=1)
-        draw.text((gap + 16, curr_y + 8), title, font=f_title, fill="#90edc0" if "3." in title else "#72d1ec")
-        draw.text((gap + 520, curr_y + 12), subtitle, font=f_sub, fill="#a0a8be")
-        curr_y += header_h
-
-        draw.rectangle([0, curr_y, w, curr_y + h], outline="#253556", width=1)
-        breakdown.paste(img, (0, curr_y), img if img.mode == "RGBA" else None)
-        curr_y += h + gap
-
-    return breakdown
 
 
 def render_state(state_name: str, out_path: Path, *, skins_dir: Path, fixture_bin: Path, work_dir: Path, full_frame: bool = False, knobs: int = 16) -> tuple[Image.Image, Image.Image, Image.Image]:

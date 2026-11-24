@@ -2,20 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Native MPC PAN dial component and generator."""
 import copy
-import math
 from pathlib import Path
 
+from components.native.level.level import value_label, write_strip as write_dial_strip
 from components.style import (
     argb as _style_argb,
-    color as _style_color,
     rect as _style_rect,
     size as _style_size,
 )
-
-try:
-    from PIL import Image, ImageDraw
-except ImportError:
-    Image = ImageDraw = None
 
 SIZE = _style_size('dial.diameter')
 FRAMES = 127
@@ -35,35 +29,7 @@ DEFAULT_DIAL_RECTS = {
 
 
 def _value_label(name, rect, height=_style_size('pan._value_label.geometry')):
-    return {
-        "version": 2,
-        "componentData": {
-            "version": 1,
-            "name": name,
-            "type": "Label",
-            "data": {
-                "version": 1,
-                "textStyle": {
-                    "version": 1,
-                    "font": {"version": 1, "name": _style_size('font.family'), "style": _style_size('font.style.semibold'), "height": float(height)},
-                    "colour": _style_argb("text.icon"),
-                    "justification": "horizontallyCentred verticallyCentred",
-                    "case": "Original",
-                },
-                "type": "Value",
-                "handleName": "Data",
-            },
-        },
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {
-            "version": 1,
-            "acceptsHWFocus": "No",
-            "showWhenDataModelInvalid": "Show",
-            "whenVisible": "Always",
-            "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % tuple(rect),
-        },
-    }
+    return value_label(name, rect, height)
 
 
 def default_pan_template():
@@ -141,47 +107,7 @@ def default_pan_template():
 
 
 def write_strip(path, frame_size=SIZE, bipolar=True):
-    if Image is None:
-        raise RuntimeError("Pillow is required to generate dial filmstrips")
-    scale = _style_size('pan.write_strip.scale')
-    center = (SIZE - _style_size('pan.write_strip.center')) * scale / 2
-    radius = _style_size('pan.write_strip.radius') * scale
-
-    def point(angle, r):
-        return (
-            center + r * math.cos(math.radians(angle)),
-            center + r * math.sin(math.radians(angle)),
-        )
-
-    strip = Image.new("RGBA", (frame_size, frame_size * FRAMES))
-    bounds = (center - radius, center - radius, center + radius, center + radius)
-    for i in range(FRAMES):
-        frame = Image.new("RGBA", (SIZE * scale, SIZE * scale))
-        draw = ImageDraw.Draw(frame)
-        angle = _style_size('pan.write_strip.angle') + _style_size('pan.write_strip.angle.offset1') * i / (FRAMES - _style_size('pan.write_strip.angle.offset2'))
-        draw.arc(bounds, _style_size('pan.write_strip.arc'), _style_size('pan.write_strip.arc.offset1'), fill=_style_color("dial.native.track"), width=_style_size('stroke.arc') * scale)
-        if bipolar:
-            draw.line(
-                (point(_style_size('pan.write_strip.point'), radius - _style_size('pan.write_strip.point.offset1') * scale), point(_style_size('pan.write_strip.point'), radius + _style_size('pan.write_strip.point.offset2') * scale)),
-                fill=_style_color("text.caption"),
-                width=round(_style_size('pan.write_strip.round.offset1') * scale),
-            )
-        start = _style_size('pan.write_strip.start') if bipolar else _style_size('pan.write_strip.start.offset1')
-        if angle != start:
-            draw.arc(bounds, min(angle, start), max(angle, start), fill=_style_color("dial.native.value"), width=_style_size('stroke.arc.active') * scale)
-        draw.line(
-            (point(angle, radius * 0.25), point(angle, radius * 0.6)),
-            fill=_style_color("dial.native.pointer"),
-            width=round(_style_size('dial.native.pointer.stroke') * scale),
-        )
-        x, y = point(angle, radius - _style_size('pan.write_strip.x.y') * scale)
-        dot = _style_size('pan.write_strip.dot') * scale
-        draw.ellipse((x - dot, y - dot, x + dot, y + dot), fill=_style_color("dial.native.pointer"))
-        strip.paste(
-            frame.resize((frame_size, frame_size), Image.Resampling.LANCZOS),
-            (0, i * frame_size),
-        )
-    strip.save(path)
+    return write_dial_strip(path, frame_size=frame_size, bipolar=bipolar)
 
 
 def synthyboy_dial_data(skins_dir, *, frame_size=SIZE, bipolar=True):

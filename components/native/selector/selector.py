@@ -19,6 +19,7 @@ from hashlib import sha256
 import math
 from pathlib import Path
 
+from components.native.level.level import value_label
 from components.style import (
     argb as _style_argb,
     color as _style_color,
@@ -83,35 +84,7 @@ def button(name, rect, on, off=None, index=1, count=1, remaps=(), gates=()):
 
 
 def _value_label(name, rect, height=_style_size('selector._value_label.geometry')):
-    return {
-        "version": 2,
-        "componentData": {
-            "version": 1,
-            "name": name,
-            "type": "Label",
-            "data": {
-                "version": 1,
-                "textStyle": {
-                    "version": 1,
-                    "font": {"version": 1, "name": _style_size('font.family'), "style": _style_size('font.style.semibold'), "height": float(height)},
-                    "colour": _style_argb("text.icon"),
-                    "justification": "horizontallyCentred verticallyCentred",
-                    "case": "Original",
-                },
-                "type": "Value",
-                "handleName": "Data",
-            },
-        },
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {
-            "version": 1,
-            "acceptsHWFocus": "No",
-            "showWhenDataModelInvalid": "Show",
-            "whenVisible": "Always",
-            "boundsType": "Absolute",
-            "bounds": "%d %d %d %d" % tuple(rect),
-        },
-    }
+    return value_label(name, rect, height)
 
 
 def build_choice_definition(source_def, overlay_name, rect, label, decoration=(), label_height=_style_size('font.value')):

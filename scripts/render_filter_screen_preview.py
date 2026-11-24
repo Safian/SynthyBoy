@@ -29,19 +29,14 @@ for p in (str(REPO_ROOT), str(SCRIPTS_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from preview_skin import PARAMS_JSON, ensure_generated_skin
+from native_tab_sketch import NativeTabSketch
 from components import style
 from screen_images import export_path, require_external_output, save_screen, screen_path
 
-PARAMS_JSON = REPO_ROOT / "docs" / "params.json"
-PAGES_JSON = REPO_ROOT / "docs" / "kick-pages.json"
-LAYOUT_JSON = REPO_ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
-GEN_SCRIPT = REPO_ROOT / "scripts" / "gen-mpc-ui.py"
-RUN_GEN_UI = REPO_ROOT / "scripts" / "run-gen-ui.py"
-APPLY_SCRIPT = REPO_ROOT / "scripts" / "apply-mpc-skin-extras.py"
 PREVIEW_BASE_SCRIPT = REPO_ROOT / "scripts" / "render-mpc-skin-preview.py"
 FIXTURE_SRC = REPO_ROOT / "shell-mpc" / "overlay" / "tests" / "filter_render_fixture.cpp"
 
-DEFAULT_MPC_SDK = Path("/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge/docs-official/mpc-sdk")
 DEFAULT_BUILD_DIR = REPO_ROOT / "build"
 DEFAULT_WORK_DIR = Path(f"/tmp/synthyboy-{os.getuid()}/filter-preview")
 DEFAULT_OUT = screen_path("filter")
@@ -55,15 +50,6 @@ def _load_sketch_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _find_mpc_sdk() -> Path:
-    env = os.environ.get("MPC_SDK")
-    if env and Path(env).is_dir():
-        return Path(env)
-    if DEFAULT_MPC_SDK.is_dir():
-        return DEFAULT_MPC_SDK
-    raise FileNotFoundError("MPC_SDK not found; set MPC_SDK environment variable.")
 
 
 def _find_core_build_dir(explicit=None) -> Path:
@@ -134,56 +120,7 @@ def ensure_fixture_binary(work_dir: Path, ui_gen: int = 2, qframe_enabled: int =
     return out_bin
 
 
-def ensure_generated_skin(work_dir: Path, mpc_sdk: Path | None = None) -> Path:
-    skins_dir = work_dir / "skins"
-    tui_path = skins_dir / "TUI.json"
-    inputs = [
-        PARAMS_JSON, LAYOUT_JSON,
-        *(SCRIPTS_DIR / "mpc-skin-extras").glob("*.py"),
-        *(SCRIPTS_DIR / "mpc-skin-extras").glob("*.json"),
-        *(REPO_ROOT / "components").rglob("*.py"),
-        *(REPO_ROOT / "components").rglob("*.json"),
-        *(REPO_ROOT / "components").rglob("*.png"),
-        *(REPO_ROOT / "components").rglob("*.ttf"),
-    ]
-    if tui_path.is_file() and tui_path.stat().st_mtime >= max(p.stat().st_mtime for p in inputs):
-        return skins_dir
-    sdk = mpc_sdk or _find_mpc_sdk()
-    ui_dir = work_dir / "ui"
-    ui_dir.mkdir(parents=True, exist_ok=True)
-    skins_dir.mkdir(parents=True, exist_ok=True)
-
-    steps = [
-        [
-            sys.executable, str(GEN_SCRIPT),
-            "--params", str(PARAMS_JSON),
-            "--pages", str(PAGES_JSON),
-            "--layout", str(LAYOUT_JSON),
-            "--out", str(ui_dir),
-        ],
-        [
-            sys.executable, str(RUN_GEN_UI),
-            "--sdk", str(sdk),
-            "--params", str(ui_dir / "params-hostsim.json"),
-            "--ui", str(ui_dir / "ui.json"),
-            "--out", str(skins_dir),
-            "--quiet",
-        ],
-        [
-            sys.executable, str(APPLY_SCRIPT),
-            "--skins", str(skins_dir),
-            "--params", str(PARAMS_JSON),
-            "--meta", str(ui_dir / "skin-meta.json"),
-        ],
-    ]
-    for cmd in steps:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        if res.returncode != 0:
-            raise RuntimeError(f"Skin generation command failed ({cmd[1]}):\n{res.stderr}")
-    return skins_dir
-
-
-class FilterSkinSketch:
+class FilterSkinSketch(NativeTabSketch):
     """Authentic native host skin sketch interpreter for the Filter tab.
     Evaluates real gates, handle remappings, defs, images, filmstrips, buttons,
     shared FilmStrip dials, choice definitions, and labels."""
@@ -207,9 +144,6 @@ class FilterSkinSketch:
             self._img_cache[filename] = Image.open(path).convert("RGBA")
         return self._img_cache[filename]
 
-    def _font(self, size: int, style_name: str = "SemiBold") -> ImageFont.ImageFont:
-        return self._base_mod.font(style_name, max(8, int(round(size))))
-
     @staticmethod
     def _strip_prefix(handle: str) -> tuple[str | None, str]:
         if handle.startswith("WithName[") and "]/ " in handle:
@@ -221,24 +155,6 @@ class FilterSkinSketch:
         if handle.startswith("FromGesture/"):
             return None, handle[len("FromGesture/"):]
         return None, handle
-
-    def _resolve_handle(self, handle: str | None, remaps: dict[str, str]) -> tuple[str | None, str | None]:
-        if not handle:
-            return None, None
-        seen = set()
-        with_name = None
-        cur = handle
-        while cur and cur not in seen:
-            seen.add(cur)
-            wn, stripped = self._strip_prefix(cur)
-            if wn:
-                with_name = wn
-            if stripped in remaps:
-                cur = remaps[stripped]
-                continue
-            cur = stripped
-            break
-        return with_name, cur
 
     def _norm_for_handle(self, resolved: str | None) -> float:
         if not resolved or not resolved.startswith("Parameter "):
@@ -448,20 +364,7 @@ class FilterSkinSketch:
             return
 
     def render_tab(self, tab_name: str = "Filter") -> Image.Image:
-        tabs_by_name = {t.get("tabName"): t for t in self._sketch.tui["pageData"]["tabs"]}
-        if tab_name not in tabs_by_name:
-            raise KeyError(f"Tab '{tab_name}' not found in TUI tabs: {list(tabs_by_name.keys())}")
-        tab = tabs_by_name[tab_name]["componentDefinition"]
-        bg = tab.get("backgroundData", {}).get("focussed", {})
-        bg_name = bg.get("image", "")
-        im = self._open_image(bg_name)
-        if im is not None:
-            canvas = im.resize((1280, 628), Image.Resampling.LANCZOS).copy()
-        else:
-            canvas = Image.new("RGBA", (1280, 628), style.color("surface.panel"))
-        for child in tab.get("componentsData", []):
-            self._draw_entry(canvas, child, (0, 0), (1280, 628), {})
-        return canvas
+        return super().render_tab(tab_name)
 
 
 def get_commit_hash() -> str:

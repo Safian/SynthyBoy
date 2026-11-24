@@ -58,7 +58,7 @@ _SMOOTH_NAME_HEIGHT = _style_size('smooth.caption.font')
 _SMOOTH_VALUE_HEIGHT = _style_size('smooth.value.font')
 
 
-def _value_label(name, rect, height=_style_size('level._value_label.geometry')):
+def value_label(name, rect, height=_style_size('level._value_label.geometry')):
     return {
         "version": 2,
         "componentData": {
@@ -88,6 +88,9 @@ def _value_label(name, rect, height=_style_size('level._value_label.geometry')):
             "bounds": "%d %d %d %d" % tuple(rect),
         },
     }
+
+
+_value_label = value_label
 
 
 def default_level_template():
@@ -779,6 +782,7 @@ __all__ = [
     "FRAMES",
     "COMPACT_48_RECTS",
     "DEFAULT_DIAL_RECTS",
+    "value_label",
     "_value_label",
     "default_level_template",
     "write_strip",

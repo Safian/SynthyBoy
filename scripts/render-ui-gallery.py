@@ -11,6 +11,8 @@ import hashlib
 import html
 import json
 import os
+import runpy
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -418,10 +420,24 @@ def main():
     parser.add_argument("--knobs", type=int, default=16, choices=[4, 16], help="Q-Link knobs of the device: 16 (MPC XL, the default: idle chips 5..16) or 4 (Key 61)")
     parser.add_argument("--only", default="", help="Comma-separated list of page-name beginnings to include in --list and contact sheet")
     parser.add_argument("--only-prefix", default="", help="Render only states whose name starts with this prefix")
-    parser.add_argument("--export-backgrounds", default="", help="Export pre-rendered host background PNGs (e.g. scripts/mpc-skin-extras/overlay-backgrounds)")
+    parser.add_argument("--export-backgrounds", default="", help="Copy the production host backgrounds and detector PNGs into this directory")
     args = parser.parse_args()
 
     repo_root = find_repo_root()
+    if args.export_backgrounds:
+        skin = runpy.run_path(str(repo_root / "scripts/mpc-skin-extras/99_backgrounds.py"))
+        destination = Path(args.export_backgrounds).resolve()
+        destination.mkdir(parents=True, exist_ok=True)
+        assets = {asset for _, _, asset in skin["BACKGROUND_TABS"]}
+        assets.update(f"sentinel_{view}.png" for view, _, _ in skin["BACKGROUND_TABS"])
+        for filename in sorted(assets):
+            source = skin["ASSETS_DIR"] / filename
+            target = destination / filename
+            if not target.exists() or not source.samefile(target):
+                shutil.copyfile(source, target)
+        print(f"Exported {len(assets)} production skin assets to {destination}")
+        return 0
+
     views = load_layout_views(repo_root)
     print(f"Loaded {len(views)} views from overlay_layout.json")
 
@@ -442,26 +458,6 @@ def main():
         allow_build=args.build,
     )
     print(f"Using host binary: {host_bin}")
-
-    if args.export_backgrounds:
-        bg_out = Path(args.export_backgrounds).resolve()
-        bg_out.mkdir(parents=True, exist_ok=True)
-        cmd = [str(host_bin), "--export-backgrounds", str(bg_out)]
-        res = subprocess.run(cmd, cwd=str(repo_root))
-        if res.returncode != 0:
-            print(f"Error: host binary failed to export backgrounds", file=sys.stderr)
-            return res.returncode
-        # Optimize with PIL if available (lossless re-compression to reduce file size)
-        try:
-            from PIL import Image
-            for p in sorted(bg_out.rglob("*.png")):
-                with Image.open(p) as im:
-                    im.save(p, "PNG", optimize=True)
-                size_kb = p.stat().st_size / 1024.0
-                print(f"Optimized PNG: {p.relative_to(bg_out)} ({size_kb:.1f} KB)")
-        except ImportError:
-            pass
-        return 0
 
     # Presets
     preset_paths = []

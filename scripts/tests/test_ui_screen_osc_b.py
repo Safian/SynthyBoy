@@ -222,8 +222,8 @@ class TestUiScreenOscB(unittest.TestCase):
             full_path = p_tmp / "osc_b_full.png"
             audit_path = p_tmp / "osc_b_audit.png"
 
-            r_mod.render_full_screen_preview(output_path=full_path)
-            r_mod.render_audit_sheet(output_path=audit_path)
+            r_mod.render_full_screen_preview(output_path=full_path, ref_path=ROOT / "docs/screens/osc_b.jpg")
+            r_mod.render_audit_sheet(output_path=audit_path, ref_path=full_path)
 
             self.assertTrue(full_path.is_file())
             self.assertTrue(audit_path.is_file())
