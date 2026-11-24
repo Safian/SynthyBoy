@@ -109,7 +109,7 @@ public:
         (void) around;
 #endif
     }
-    /** The rectangle of the index chip of a member (the same as Pen::qIndex draws): the cell of the chip. */
+    /** Historical numbered-chip footprint for layout regression checks. */
     static Rect chipRect (const Rect& member, int index) noexcept { return { member.x + 4, std::max (0, member.y - 15), index > 9 ? 26 : 18, 17 }; }
     // Idle and wide groups have no numbered decorations.
     void drawWide (gpu::SceneBuilder&) const {}

@@ -421,31 +421,6 @@ public:
         (void) frame;
 #endif
     }
-    /** The index chip (1 .. 16) of a Q-Link group member: on the top left corner of the member, on the line above it, so that it covers none of the member's content. Every layout that has Q members leaves
-        a lane of kQLane pixels above each of them (the gap between two stacked members, the strip above a row). One rule for every member of every group. */
-    void qIndex (const Rect& member, int index, bool idle = false)
-    {
-        if (index < 1 || index > 16)
-            return;
-        qChip ({ member.x + 4, std::max (0, member.y - 15), index > 9 ? 26 : 18, 17 }, index, idle);   // two digits (the slots 10 .. 16 of the MPC XL) need a wider chip
-    }
-    /** `idle`: the chip of a quad that is not the active one (a bank a touch or the page stepper selects): the keyline colours, quiet. */
-    void qChip (const Rect& b, int index, bool idle = false)
-    {
-        const theme::Look& T = theme::L();
-        char d[3] = { static_cast<char> (index > 9 ? '1' : '0' + index), '\0', '\0' };
-        if (index > 9)
-            d[1] = static_cast<char> ('0' + index - 10);
-        if (idle)
-        {
-            rrect (b, 5.0f, c (colour::rgba (T.panel1, 255)));
-            rrect (b, 5.0f, c (colour::rgba (T.keylineHi, 255)), 1.0f);
-            textCentered (b, d, 13.0f, c (colour::rgba (T.textDim, 255)), 8.0f);
-            return;
-        }
-        rrect (b, 5.0f, c (colour::rgba (T.q, 255)));
-        textCentered (b, d, 13.0f, c (colour::rgba (T.onBright, 255)), 8.0f);
-    }
 
 private:
     gpu::SceneBuilder& sb_;

@@ -405,21 +405,20 @@ static void assertFallbackPeekIsolation()
         assert (r.inst.writes == writesPreDrag);
         assert (r.inst.get ("bus1.level") == bus1LevelBefore);
 
-        // If a nested popup is opened inside FilterUi, touch/wheel over native coords stays isolated.
+        // The host owns the Filter model menu. The overlay stays on PEEK and isolates the Mixer strips.
         if (peekIdx == 0 || peekIdx == 1)
         {
             auto* fltFull = dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot());
             assert (fltFull != nullptr);
             r.tap (fltFull->model);
             r.refresh (1);
-            assert (r.ui.topPage() == FilterUi::kPageList);
+            assert (r.ui.topPage() == MixerUi::kPagePeek);
             assert (r.ui.covers (956, 520));
             assert (r.ui.covers (1083, 520));
             assert (r.ui.wheel (956, 725, 1, r.stack, r.inst, 700.0));
             r.drag (956, 520, 956, 460, true);
             assert (r.inst.get ("bus1.level") == bus1LevelBefore);
             assert (r.inst.get ("bus2.level") == bus2LevelBefore);
-            r.tapAt (10, 725, 40); // close inner list popup
             assert (r.ui.topPage() == MixerUi::kPagePeek);
         }
         else
@@ -511,7 +510,7 @@ static void assertNativePeekApertures()
             r.refresh();
             const auto off = renderUi (r.ui, true);
             assert (r.ui.covers (cx (cutoff), cy (cutoff))
-                    && inspectRect (off, { cx (cutoff), cy (cutoff), 1, 1 }).nonZero == 1);
+                    && inspectRect (off, { cx (cutoff), cy (cutoff), 1, 1 }).transparent == 1);
         }
         else
         {

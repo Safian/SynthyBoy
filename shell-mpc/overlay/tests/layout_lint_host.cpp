@@ -1385,10 +1385,12 @@ int selfTest()
     page.draw (sb);
     {
         ui::Pen pen (sb, true);
-        pen.qIndex ({ 720, 330, 100, 100 }, 1);   // a Q chip at (724, 315): over the dial of kChip? placed below
-        ui::Rect near { 760, 330, 40, 40 };
-        pen.qChip ({ 700 + 70 - 9, 300 + 30, 18, 17 }, 2);   // on the dial of kChip, near the top of the ring
-        (void) near;
+        // Seed the forbidden shape so the detector can still catch a regression.
+        float vx, vy;
+        kChip.valuePoint (vx, vy);
+        const ui::Rect chip { static_cast<int>(vx) - 9, static_cast<int>(vy) - 8, 18, 17 };
+        pen.rrect (chip, 5.0f, pen.c (ui::theme::L().q, 255));
+        pen.textCentered (chip, "2", 13.0f, pen.c (ui::theme::L().onBright, 255), 8.0f);
     }
     parseScene (*scene, cap);
     Sink sink;
