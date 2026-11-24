@@ -344,7 +344,7 @@ public:
         if (nativeRouting_ == shown)
             return;
         nativeRouting_ = shown;
-        show (mix, ! isNativeRoutingActive());
+        show (mix, ! nativeRouting_);
         if (rect_.w > 0)
             layout();
     }
@@ -365,11 +365,6 @@ public:
     bool isNativeRouting (int x, int y) const noexcept
     {
         return isNativeRoutingActive() && (panArea().contains (x, y) || levelArea().contains (x, y) || routingArea_.contains (x, y));
-    }
-    void setInactive (bool i) override
-    {
-        Composite::setInactive (i);
-        show (mix, ! isNativeRoutingActive());
     }
     /** Hide what does not apply: the amount and the PHASE knob of warp `slot` (0, 1) while its type is Off; the Q groups close up. */
     void setWarpApplies (int slot, bool applies)
@@ -441,7 +436,7 @@ public:
                 if (shown_[i])
                 {
                     if (kids_[i] == &panel)
-                        panel.drawWithNativeCells (sb, *nativeCells_);
+                        panel.drawNativePanel (sb);
                     else
                         kids_[i]->draw (sb);
                 }
@@ -482,7 +477,7 @@ protected:
         const int routeH = nativeRouting_ ? 48 : 56;
         routingArea_ = { r[3].x, topR.y + (topH - routeH) / 2, r[3].w, routeH };
         mix.place ({ r[3].x, topR.y + 7, r[3].w, topH - 14 });
-        show (mix, ! isNativeRoutingActive());
+        show (mix, ! nativeRouting_);
         const int gap = kGap + 4;
         const int panelY = rect_.bottom() - (isTab ? 0 : m) - bottomH;
         const int midY = top.rect().bottom() + gap;

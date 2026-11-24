@@ -49,7 +49,8 @@ def _dial_cell(definition, skins, index, caption, value, size):
     controls = definition["componentsData"]
     width, height = size
     background = definition["backgroundData"]["unfocussed"]["colour"]
-    result = Image.new("RGBA", (width, height), "#" + background[-6:])
+    alpha, red, green, blue = bytes.fromhex(background.zfill(8))
+    result = Image.new("RGBA", (width, height), (red, green, blue, alpha))
     for child in controls:
         model = child["componentData"]
         data = model["data"]
@@ -93,14 +94,14 @@ def render_dial_cards():
             with Image.open(target) as previous:
                 canvas_size = previous.size
             gap = (canvas_size[0] - sum(cell.width for cell in cells)) // (len(cells) - 1)
-            canvas = Image.new("RGBA", canvas_size, _style_color("surface.control"))
+            canvas = Image.new("RGBA", canvas_size)
             for i, cell in enumerate(cells):
                 canvas.alpha_composite(cell, (i * (cell.width + gap), 0))
             canvas.save(target)
             compact = directory / f"{name}-native-40.png"
             with Image.open(compact) as previous:
                 compact_size = previous.size
-            canvas = Image.new("RGBA", compact_size, _style_color("surface.control"))
+            canvas = Image.new("RGBA", compact_size)
             strip = directory / f"play_sub_{name}_{_style_size('dial.compact.diameter')}.png"
             for i, index in enumerate(indices):
                 frame = _dial_frame(strip, index)

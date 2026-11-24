@@ -12,6 +12,7 @@ _SCRIPTS = _REPO_ROOT / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from components.style import bind_control_active
 from components.native.level.level import compact_level_definition
 from components.native.pan.pan import compact_pan_definition
 from components.native.selector.selector import (
@@ -103,6 +104,15 @@ def apply(tui, qlinks, ctx):
 
     ensure_routing_replacement_strings(tui, routing_indices, choices=OSC_ROUTING_CHOICES)
 
+    visibility = f"Parameter {visibility_idx}"
+
+    def show_root_states(layer):
+        # Hidden=0, RootOff=1, RootOn=2. OFF keeps the actual readouts and
+        # removes the route drawer, dial gestures and focus from the surface.
+        layer["bounds"]["additionalInvalidatingHandles"] = [f"NonZero/{visibility}"]
+        return bind_control_active(layer, visibility, ctx, defs,
+                                   frames=((1, False), (2, True)), frame_count=3)
+
     dial_layers = []
     for name, layer, kind, keys, rect, caption in (
         (OSC_PAN_CONTROL_NAME, OSC_PAN_LAYER, OSC_COMPACT_PAN_COMPONENT_TYPE, OSC_PAN_PARAM_KEYS, STANDALONE_COMPACT_OSC_PAN_RECT, "PAN"),
@@ -117,11 +127,11 @@ def apply(tui, qlinks, ctx):
                 gates=[f"IndexedEnabling/{source}/{len(keys)}/Parameter {base + OSC_SOURCE}"],
             ))
         defs.append({"key": layer, "value": passive_layer(children)})
-        dial_layers.append(_entry(
+        dial_layers.append(show_root_states(_entry(
             name, layer, {"version": 1, "handleName": "Data"}, rect,
             remaps=[("Data", f"Parameter {visibility_idx}")],
-            gates=[f"IndexedEnabling/2/3/Parameter {visibility_idx}"], focus="Children",
-        ))
+            gates=[f"NonZero/{visibility}"], focus="Children",
+        )))
 
     routing_children = []
     for source, (label, index) in enumerate(zip(OSC_INSTANCE_NAMES, routing_indices)):
@@ -152,5 +162,5 @@ def apply(tui, qlinks, ctx):
 
         tab["componentDefinition"]["componentsData"].extend([
             *dial_layers,
-            routing_layer_item,
+            show_root_states(routing_layer_item),
         ])

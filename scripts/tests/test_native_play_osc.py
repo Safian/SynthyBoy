@@ -32,56 +32,49 @@ class NativePlayOscTests(unittest.TestCase):
         return {kv["key"]: kv["value"] for kv in widget["handle remapping"]["map"]}
 
     def test_each_source_owns_its_own_widgets_and_does_not_share_the_legacy_proxy(self):
-        wrappers = [w for w in self.widgets if w["componentData"]["type"] == "playNativeOsc"]
-        self.assertEqual(len(wrappers), 4)
-        self.assertFalse(any(w["componentData"]["name"].startswith(("Play Osc Pan ", "Play Osc Level ")) for w in self.widgets))
+        self.assertNotIn("playNativeOsc", self.definitions)
         fields = ("power", "expand", "routing", "first", "second", "pan", "level")
-        for source, root in enumerate(wrappers, 1):
-            with self.subTest(source=source):
-                data = root["componentData"]
-                group = ("sub", "abc", "abc", "abc", "noise")[source]
-                self.assertEqual(data["type"], "playNativeOsc")
-                self.assertEqual(root["bounds"]["acceptsHWFocus"], "Children")
-                gates = root["bounds"]["additionalInvalidatingHandles"]
-                self.assertIn("RangedEnabling/0/18/33/Parameter 2675", gates)
-                self.assertIn(f"IndexedEnabling/{source}/5/Parameter 2676", gates)
-                start = 3313 + 7 * source
-                remaps = self.remaps(root)
-                self.assertEqual([remaps[f] for f in fields], [f"Parameter {start + i}" for i in range(7)])
-                first = 2 * source
-                if group == "abc":
-                    self.assertIn(f"RangedEnabling/{first}/{first + 1}/9/Parameter 3312", gates)
-                    self.assertEqual(remaps["Wavetable"], f"IndexedEnabling/{first}/9/Parameter 3312")
-                    self.assertEqual(remaps["Content"], f"IndexedEnabling/{first + 1}/9/Parameter 3312")
-                else:
-                    self.assertIn(f"IndexedEnabling/{1 if group == 'sub' else 8}/9/Parameter 3312", gates)
-                children = self.definitions[data["type"]]["componentsData"]
-                for on in (False, True):
+        for ordinal, source in enumerate(("Sub", "Osc A", "Osc B", "Osc C", "Noise")):
+            group = ("sub", "abc", "abc", "abc", "noise")[ordinal]
+            prefix = f"Play Native OSC {source} "
+            controls = [w for w in self.widgets if w["componentData"]["name"].startswith(prefix)]
+            start = 3313 + 7 * ordinal
+            modes = (2 * ordinal, 2 * ordinal + 1) if group == "abc" else (1 if group == "sub" else 8,)
+            for mode in modes:
+                with self.subTest(source=source, mode=mode):
                     observed = {}
-                    for child in children:
-                        bounds = child["bounds"]
-                        guard = bounds.get("additionalInvalidatingHandles", ())
-                        mode = next((gate for gate in guard if gate.isalpha()), None)
-                        if (f"IndexedEnabling/{int(not on)}/2/power" in guard or mode == "Content"
-                                or (mode is not None and remaps[mode] == "Invalid")):
-                            continue
-                        field = self.remaps(child)["Data"]
+                    for item in controls:
+                        field = item["componentData"]["name"].removeprefix(prefix)
+                        gates = item["bounds"]["additionalInvalidatingHandles"]
+                        self.assertIn(f"IndexedEnabling/{ordinal}/5/Parameter 2676", gates)
+                        self.assertIn("RangedEnabling/0/18/33/Parameter 2675", gates)
+                        source_gate = (f"RangedEnabling/{modes[0]}/{modes[-1]}/9/Parameter 3312" if group == "abc"
+                                       else f"IndexedEnabling/{mode}/9/Parameter 3312")
+                        self.assertIn(source_gate, gates)
+                        if group == "abc" and field == "second":
+                            kind = item["componentData"]["type"]
+                            slot = {"NativeActive playOscTableField": modes[0],
+                                    "NativeActive playOscContentField": modes[1]}[kind]
+                            self.assertIn(f"IndexedEnabling/{slot}/9/Parameter 3312", gates)
+                            if slot != mode:
+                                continue
+                        bindings = self.remaps(item)
+                        self.assertEqual(bindings["Data"], f"Parameter {start + fields.index(field)}")
                         self.assertNotIn(field, observed)
-                        observed[field] = self.rect(child)
-                        if not on and field != "power":
-                            expected = {"first": "playOscInactiveChoice", "second": "playOscInactiveChoice",
-                                        "expand": "Image"}.get(field, "playOscInactive")
-                            self.assertEqual(child["componentData"]["type"], expected)
-                            self.assertEqual(bounds["acceptsHWFocus"], "No")
-                    names = (set(fields) - ({"routing"} if group == "sub" else set())) if on else {"power", "pan", "level"}
-                    if not on and group == "sub":
-                        names.update(("expand", "first", "second"))
-                    self.assertEqual(observed, {f: self.manifest[group][f] for f in names})
+                        observed[field] = self.rect(item)
+                        if field == "power":
+                            self.assertEqual(item["componentData"]["type"], "Button")
+                        else:
+                            for active in (0, 1):
+                                self.assertEqual(bindings[f"NativeActiveGate{active}"],
+                                                 f"IndexedEnabling/{active}/2/Parameter {start}")
+                    expected = set(fields) - ({"routing"} if group == "sub" else set())
+                    self.assertEqual(observed, {f: self.manifest[group][f] for f in expected})
                     for (x, y, w, h), (xx, yy, ww, hh) in combinations(observed.values(), 2):
                         self.assertTrue(x + w <= xx or xx + ww <= x or y + h <= yy or yy + hh <= y)
                     self.assertTrue(all(w >= 56 and h >= 56 for _, _, w, h in observed.values()))
-                if group != "sub":
-                    self.assertEqual(self.replacements[f"Parameter {start + 2}"][-1], "Routing controls")
+            if group != "sub":
+                self.assertEqual(self.replacements[f"Parameter {start + 2}"][-1], "Routing controls")
 
     def test_sub_body_is_on_the_tab_with_resolved_data_caption_and_power_gates(self):
         self.assertEqual(self.manifest["sub"]["first"], [14, 404, 292, 72])
@@ -97,23 +90,17 @@ class NativePlayOscTests(unittest.TestCase):
         )
         sub = {w["componentData"]["name"].removeprefix("Play Native OSC Sub "): w for w in self.widgets
                if w["componentData"]["name"].startswith("Play Native OSC Sub ")}
-        expected = {"power", "expand", "expand off"}
+        self.assertEqual(set(sub), {"power", "expand", "first", "second", "pan", "level"})
         for field, index, caption, enabled_kind in (
                 ("first", 3316, "WAVE", "playSubWaveField"), ("second", 3317, "OCT", "playOscNumberField"),
                 ("pan", 3318, "PAN", "playSubPan"), ("level", 3319, "LEVEL", "playSubLevel")):
-            expected.update((field, field + " off"))
-            for on, suffix in ((True, ""), (False, " off")):
-                item = sub[field + suffix]
-                self.assertEqual(item["bounds"]["bounds"], " ".join(map(str, self.manifest["sub"][field])))
-                self.assertEqual(self.remaps(item), {"Data": f"Parameter {index}", "Caption": f"WithName[{caption}]/Parameter {index}"})
-                self.assertEqual(item["bounds"]["acceptsHWFocus"], "Yes" if on else "No")
-                kind = item["componentData"]["type"]
-                off_kind = {"first": "playSubWaveInactive", "second": "playSubOctInactive"}.get(field, "playOscInactive")
-                self.assertEqual(kind, enabled_kind if on else off_kind)
-                self.assertEqual(set(item["bounds"]["additionalInvalidatingHandles"]), {
-                    "IndexedEnabling/1/9/Parameter 3312", "IndexedEnabling/0/5/Parameter 2676",
-                    f"IndexedEnabling/{int(on)}/2/Parameter 1558", "RangedEnabling/0/18/33/Parameter 2675"})
-        self.assertEqual(sub.keys(), expected)
+            item = sub[field]
+            self.assertEqual(self.remaps(item)["Caption"], f"WithName[{caption}]/Parameter {index}")
+            states = self.definitions[item["componentData"]["type"]]["componentsData"]
+            self.assertEqual([(s["componentData"]["type"], s["bounds"]["additionalInvalidatingHandles"],
+                               s["bounds"]["acceptsHWFocus"]) for s in states],
+                             [("NativeInactive " + enabled_kind, ["NativeActiveGate0"], "No"),
+                              (enabled_kind, ["NativeActiveGate1"], "Children")])
         # Sub OCT uses shared name_value (transparent root, outside Caption label, framed right value box, 40px visual in >=56px touch area)
         oct_def = self.definitions["playOscNumberField"]
         self.assertEqual(oct_def["backgroundData"]["unfocussed"]["colour"], "0")
@@ -133,7 +120,7 @@ class NativePlayOscTests(unittest.TestCase):
         self.assertEqual((oct_children["name"]["componentData"]["data"]["type"], oct_children["name"]["componentData"]["data"]["handleName"]), ("Name", "Caption"))
         self.assertEqual((oct_children["value"]["componentData"]["data"]["type"], oct_children["value"]["componentData"]["data"]["handleName"]), ("Value", "Data"))
         # Sub OCT OFF readout keeps name_value geometry with passive grey styling
-        oct_off = self.definitions["playSubOctInactive"]
+        oct_off = self.definitions["NativeInactive playOscNumberField"]
         self.assertEqual(oct_off["actions"], [])
         self.assertTrue(oct_off["ignoreMousePresses"])
         self.assertTrue(oct_off["disableCoarseDataWheel"])
@@ -166,23 +153,22 @@ class NativePlayOscTests(unittest.TestCase):
         with Image.open(fallback.NoFallbackTests.skins / knob_l["filmStrip"]) as strip:
             self.assertEqual(strip.size, (90, 90 * knob_l["numFrames"]))
 
-    def test_source_off_replaces_only_the_pan_and_level_value(self):
-        definition = self.definitions["playOscInactive"]
-        self.assertEqual(definition["actions"], [])
-        self.assertTrue(definition["ignoreMousePresses"])
-        self.assertTrue(definition["disableCoarseDataWheel"])
-        caption, value = [child["componentData"]["data"] for child in definition["componentsData"]]
-        self.assertEqual((caption["type"], caption["handleName"], caption["textStyle"]["colour"]),
-                         ("Name", "Caption", "ff999999"))
-        self.assertEqual((value["type"], value["text"], value["textStyle"]["colour"]),
-                         ("Text", "OFF", "ffff5a7a"))
-        for key in ("playSubWaveInactive", "playSubOctInactive"):
-            choice = self.definitions[key]["componentsData"][-1]["componentData"]["data"]
-            self.assertEqual((choice["type"], choice["handleName"]), ("Value", "Data"))
+    def test_inactive_dials_keep_their_bound_readouts(self):
+        for key in ("playSubPan", "playSubLevel", "playOscPan", "compactNativeDial", "compactNativeRiseDial"):
+            definition = self.definitions["NativeInactive " + key]
+            self.assertEqual(definition["actions"], [])
+            self.assertTrue(definition["ignoreMousePresses"])
+            self.assertTrue(definition["disableCoarseDataWheel"])
+            children = {child["componentData"]["name"]: child["componentData"] for child in definition["componentsData"]}
+            self.assertEqual(children["value"]["data"]["handleName"], "Data")
+            self.assertEqual(children["name"]["data"]["handleName"], "Caption")
+            self.assertNotIn("focus", children)
 
     def test_choices_source_buttons_and_octave_are_stock_widgets(self):
-        expand, = [child for child in self.definitions["playNativeOsc"]["componentsData"]
-                   if child["componentData"]["name"] == "expand"]
+        sub_expand, = [w for w in self.widgets if w["componentData"]["name"] == "Play Native OSC Sub expand"]
+        active, = [c for c in self.definitions[sub_expand["componentData"]["type"]]["componentsData"]
+                   if c["bounds"]["additionalInvalidatingHandles"] == ["NativeActiveGate1"]]
+        expand, = self.definitions[active["componentData"]["type"]]["componentsData"]
         for image in ("onImage", "offImage"):
             self.assertTrue(expand["componentData"]["data"][image].startswith("native_action_"))
         self.assertEqual(self.replacements["Parameter 3323"],

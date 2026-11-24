@@ -161,10 +161,10 @@ public:
         {
             cells[0] = nativeSelector_ ? selectorArea() : ui::Rect {};
             cells[1] = osc_.full().hasNativePower() ? powerArea() : ui::Rect {};
-            cells[2] = isNativeRoutingActive() ? routingArea() : ui::Rect {};
+            cells[2] = nativeRouting_ ? routingArea() : ui::Rect {};
             cells[3] = isNativeTuneActive() ? tuneArea() : ui::Rect {};
-            cells[4] = isNativeRoutingActive() ? osc_.full().panArea() : ui::Rect {};
-            cells[5] = isNativeRoutingActive() ? osc_.full().levelArea() : ui::Rect {};
+            cells[4] = nativeRouting_ ? osc_.full().panArea() : ui::Rect {};
+            cells[5] = nativeRouting_ ? osc_.full().levelArea() : ui::Rect {};
             std::copy (settings.begin(), settings.end(), cells.begin() + 6);
         }
         if (root && nativeRouting_ && &ui::theme::L() == &ui::theme::kLook1)

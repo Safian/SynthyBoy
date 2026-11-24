@@ -702,6 +702,7 @@ public:
     {
         ui::lfodisplay::Data d = data_;
         d.area = ui::playrows::plotRect (compact_.displayRect());
+        d.aperture = compact_.full.rect();
         return d;
     }
     int gridOf (int lfo) const noexcept { return gridXOf (lfo); }

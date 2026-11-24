@@ -2293,7 +2293,7 @@ struct PluginInstance
         for (int source = 1; source <= n::kLastSource; ++source)
         {
             reportNativeValue (e, nativeui::kOscPower + source - 1, state.powerValue (source), moved && source == state.source());
-            reportNativeValue (e, nativeui::kOscRoutingBySource + source - 1, state.routingValue (source), moved && state.routesSource (source));
+            reportNativeValue (e, nativeui::kOscRoutingBySource + source - 1, state.routingValue (source), moved && state.displaysSource (source));
         }
         if (state.source() != 0)
         {
@@ -4526,7 +4526,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 buf[0] = '\0';
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, n::kRoutingNames[field]);
-                else if (opcode == effGetParamDisplay && state.routesSource (field + 1))
+                else if (opcode == effGetParamDisplay && state.displaysSource (field + 1))
                     synthyboy_mpc::putBounded (buf, kCap, n::kDestinationNames[state.destination()]);
                 return 1;
             }

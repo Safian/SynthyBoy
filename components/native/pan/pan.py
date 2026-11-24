@@ -7,6 +7,7 @@ from pathlib import Path
 from components.native.level.level import value_label, write_strip as write_dial_strip
 from components.style import (
     argb as _style_argb,
+    native_color as _style_native_color,
     rect as _style_rect,
     size as _style_size,
 )
@@ -40,8 +41,8 @@ def default_pan_template():
         "disableCoarseDataWheel": False,
         "backgroundData": {
             "version": 1,
-            "focussed": {"version": 1, "colour": _style_argb("surface.control"), "image": ""},
-            "unfocussed": {"version": 1, "colour": _style_argb("surface.control"), "image": ""},
+            "focussed": {"version": 1, "colour": _style_native_color("transparent"), "image": ""},
+            "unfocussed": {"version": 1, "colour": _style_native_color("transparent"), "image": ""},
         },
         "componentsData": [
             {
@@ -161,7 +162,7 @@ def pan_definition(template=None, skins_dir=None, rects=None):
 
     for state in ("focussed", "unfocussed"):
         if state in definition.get("backgroundData", {}):
-            definition["backgroundData"][state]["colour"] = _style_argb("surface.control")
+            definition["backgroundData"][state].update(colour=_style_native_color("transparent"), image="")
 
     for item in definition["componentsData"]:
         control = item["componentData"]
@@ -195,7 +196,7 @@ def compact_pan_definition(template=None, skins_dir=None):
     definition = copy.deepcopy(template)
     for state in ("focussed", "unfocussed"):
         if state in definition.get("backgroundData", {}):
-            definition["backgroundData"][state]["colour"] = _style_argb("surface.control")
+            definition["backgroundData"][state].update(colour=_style_native_color("transparent"), image="")
 
     rects = copy.deepcopy(COMPACT_48_RECTS)
     for item in definition["componentsData"]:

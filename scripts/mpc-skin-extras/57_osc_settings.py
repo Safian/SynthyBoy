@@ -73,7 +73,6 @@ def _label(kind, rect, *, text=None, height=None, align="horizontallyCentred ver
     if text is not None:
         data["type"] = "Text"
         data["text"] = text
-        data["handleName"] = "Invalid"
     return _entry(kind.lower(), "Label", data, rect, relative=True)
 
 
@@ -179,6 +178,7 @@ def apply(tui, qlinks, ctx):
     definitions, drawers, menus, cells, abc_cells, abc_cells_off = set(), set(), {}, [], [], []
     variants_by_layout = defaultdict(set)
     geometry = {}
+    abc_captions = {}
 
     skins_dir = getattr(ctx, "skins_dir", None)
     if skins_dir is not None:
@@ -238,7 +238,12 @@ def apply(tui, qlinks, ctx):
             )
             definitions.add(definition)
         data = f"OscAbc{slot}" if abc else f"Parameter {base + OSC_SETTINGS + slot}"
-        remap = [("Data", data), ("Caption", f"WithName[{field['label']}]/{data}")]
+        caption = field["label"]
+        caption_handle = f"WithName[{caption}]/{data}"
+        if abc:
+            caption_handle = f"OscCaption{slot} {caption}"
+            abc_captions[caption_handle] = (slot, caption)
+        remap = [("Data", data), ("Caption", caption_handle)]
         if abc:
             abc_cells.append(
                 _entry(field["key"] or field["label"], definition, {"version": 1, "handleName": "Data"}, rect, remap, gates, kind != "table")
@@ -312,6 +317,9 @@ def apply(tui, qlinks, ctx):
             power_idx = base + OSC_POWER + source_idx
             remaps = [("Data", view), *((f"OscAbc{slot}", f"Parameter {base + OSC_ABC_SETTINGS + i * OSC_ABC_SETTINGS_FIELDS + slot}")
                                          for slot in range(OSC_ABC_SETTINGS_FIELDS))]
+            for key, (slot, caption) in abc_captions.items():
+                param = base + OSC_ABC_SETTINGS + i * OSC_ABC_SETTINGS_FIELDS + slot
+                remaps.append((key, f"WithName[{caption}]/Parameter {param}"))
             cells.append(_entry(
                 label, ABC_LAYER, {"version": 1, "handleName": "Data"}, tuple(_ui_style.size('screen.osc_settings.apply.rect')), remaps,
                 [f"IndexedEnabling/{source_idx}/5/Parameter {base + OSC_SOURCE}",

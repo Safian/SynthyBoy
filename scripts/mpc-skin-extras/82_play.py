@@ -8,20 +8,9 @@
 #   proxies    after the selectors, group after group (oscillator, envelope, LFO), eight each
 #   Q proxies  "Q 1" .. "Q 16" after the last proxy (shell-mpc/q_router.h): what the 16 hardware knobs (Q-Link 1 .. 16) of EVERY Play sub-tab are mapped to
 # Compact Play combines native selectors and dials with overlay graphs. Physical Q-Links use the Q proxies; the expanded editors have their own drawing and input paths.
-# Every one of the three tabs has the same TOP (tab coordinates, 1280 x 628): the region of the overlay view (shell-mpc/overlay/overlay_layout.json "play1" .. "play3": the three live panels), with
-# the markers and the instance picture of the view; the native selectors occupy the compact header row (y 10 .. 66), one per panel; BOTTOM: the eight knobs of the module of the sub-tab in the lower two rows of the
-# grid (Q-Link 1 .. 8: the bottom row left to right is Q-Link 1 .. 4, the row above Q-Link 5 .. 8 = slots 0 .. 7 of the table in play_params.h).
-# The controls are COPIES of the controls of the real parameter of instance 1 on its own tab (the same widget, the same look), bound to the proxy parameter; a stepped real parameter with five or more
-# choices is a selector, with two to four a toggle. Where the production skin has no control for a real parameter (Env release curve) the control of a similar one is copied.
-# The fallback when the overlay is off or disabled: under the plane a plain dark picture with the three panel frames and the three titles ("Oscillator", "Envelope", "LFO" as fixed texts bound to the
-# selectors); the selectors and the knobs work without the overlay.
-# Runs after 80_layout.py (the copies already have the final geometry of their definitions), before 85_names.py (the names) and 90_frames.py.
-
 import copy
 import json
 import os
-import struct
-import zlib
 from pathlib import Path
 import sys
 
@@ -48,7 +37,7 @@ from components.native.level.level import (
     compact_dial_definition,
     synthyboy_dial_data,
 )
-from components.style import size as _style_size, argb as _style_argb, color as _style_color
+from components.style import size as _style_size
 from native_play.osc import add_compact_osc
 from native_ui_params import PLAY_LFO_STANDARD, PLAY_OSC, mixer_peek_index
 
@@ -58,13 +47,7 @@ TABS = ("Play",)   # ONE Play page since 2026-11-18 (the sub-tabs "Play Env" and
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS, OVERLAY_INSTANCE = 4, 32, 2, 1
 GROUPS = 3
 SLOTS = 8
-# The Key 61 has one column of four knobs; Bank Direction "Column" banks the 4 x 4 grid (Q-Links.json 8.2 / 8.3 of the SDK's ui-reference.md) by columns read TOP TO BOTTOM: bank 0 = Q-Link 13, 9, 5, 1, bank 1 = 14, 10, 6, 2.
-# The Play pages' first bank is the four Q proxies: the top knob is Q 1, the bottom one Q 4 (measured on the device: the panel showed Q 1 at the bottom for Q-Link 1).
-# The oscillator sub-tab (the first sub-tab of the first tab) is the exception, measured on the device with injected knob turns: the host honours only the bottom row (Q-Link 1 .. 4) there and fills the rows above with its own assignments (Macro 1, Master Volume, Macro 5 ...) whatever this file says; so that sub-tab uses Bank Direction "Row", bank 0 = Q-Link 1, 2, 3, 4 = top knob .. bottom knob. The cause: the host keeps a SNAPSHOT of the Q-Links.json the track was made with in the project and it wins over this file where it has an entry (docs/MPC.md "The host keeps a Q-Link map per track"); in a new project the whole file is honoured.
-QLINK_COLUMN_0 = (13, 9, 5, 1)
-QLINK_COLUMN_1 = (14, 10, 6, 2)
-Q_PROXIES = 16             # "Q 1" .. "Q 16": the parameters after the last Play proxy (the first four are older than the rest: docs/MPC.md "Parameter order")
-PLUGIN_DRAWN_PANELS = (0, 1, 2)   # the panels (0 oscillator, 1 envelope, 2 LFO) the plugin draws entirely: no host widget under (or beside) its own drawing
+Q_PROXIES = 16
 # (prefix, instances, [(key suffix of the real parameter, template suffix if the production skin has no control for it, short name)] x 8) ; the names are the ones of play_params.h
 TABLE = (
     ("osc", 3, [("frame", None, "WT Position"), ("unison.voices", None, "Unison"), ("unison.detune", None, "Detune"), ("unison.blend", None, "Blend"),
@@ -76,33 +59,12 @@ TABLE = (
 )
 SELECTOR_KEYS = ("shell.play_osc", "shell.play_env", "shell.play_lfo")
 SELECTOR_SHORT = ("Osc", "Env", "LFO")
-PANEL_TITLES = ("Oscillator", "Envelope", "LFO")
 SELECTOR_TEMPLATES = ("sliderWithFocusMenu",) * 3   # the widget of a selector: the selector slider of the skin (touch and drag; observed on the Key 61: the radio group did not answer a tap, the selector does)
 SELECTOR_COMPONENTS = ("playOscSelector", "playModSelector", "playModSelector")
-PANEL_W, PANEL_GAP = _style_size('play.panel.width_gap')
 # Detection markers occupy the unused top eight pixels, not selector space.
 SELECTOR_RECTS = tuple(tuple(rect) for rect in _style_size('play.selector.rects'))
-COLS = _style_size('play.grid.columns') # slot x of the 4 columns (80_layout.py SLOT_X)
-ROW_Y = {int(row): y for row, y in _style_size("play.grid.rows").items()}   # graphic tabs: y of the grid rows 3 and 4 (80_layout.py GRAPHIC_ROWS)
-ROW_H = _style_size('play.grid.row_height')
-SLOT_W = _style_size('play.grid.slot_width')
 SLOT_H = _style_size("play.grid.slot_heights")
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = _style_size('play.qlink.bounds_yh')
-BACKGROUND_FILE, PANEL_FILE = "overlay_play_bg.png", "overlay_play_panel.png"
-PANEL_RGB = tuple(bytes.fromhex(_style_color("play.panel.legacy")[1:]))
-TITLE_COLOUR = _style_argb("text.icon")
-
-
-def png_solid(width, height, rgb):
-    def chunk(kind, body):
-        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
-    row = b"\x00" + bytes(rgb) * width
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(row * height, 9)) + chunk(b"IEND", b""))
-
-
-def _rgb(text):
-    return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16))
 
 
 def _rect(c):
@@ -116,24 +78,6 @@ def _set(c, rect):
 def _param_of(c):
     m = c["handle remapping"]["map"]
     return int(m[0]["value"].split()[1]) if m else None
-
-
-def _image(name, file, rect):
-    return {"version": 2,
-            "componentData": {"version": 1, "name": name, "type": "Image", "data": {"version": 2, "imageType": "Regular", "colour": "0", "image": file}},
-            "handle remapping": {"version": 1, "map": []},
-            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % tuple(rect)}}
-
-
-def _title(name, text, param, rect):
-    return {"version": 2,
-            "componentData": {"version": 1, "name": name, "type": "Label",
-                              "data": {"version": 1,
-                                       "textStyle": {"version": 1, "font": {"version": 1, "name": _style_size("font.family"), "style": _style_size("font.style.semibold"), "height": _style_size("play.font.title")},
-                                                     "colour": TITLE_COLOUR, "justification": "horizontallyCentred verticallyCentred", "case": "Upper Case"},
-                                       "type": "Text", "handleName": "Data", "text": text}},
-            "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter %d" % param}]},
-            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % tuple(rect)}}
 
 
 def _controls_by_param(tui):
@@ -217,12 +161,10 @@ def apply(tui, qlinks, ctx):
     q_idx = [first + GROUPS + GROUPS * SLOTS + i for i in range(Q_PROXIES)]
     for i, idx in enumerate(q_idx):
         ctx.add_param_key(idx, "shell.q_%d" % (i + 1))
-    proxy_keys = [[], [], []]
     for g, (prefix, instances, slots) in enumerate(TABLE):
         ctx.add_param_key(sel_idx[g], SELECTOR_KEYS[g])
         for s, (suffix, _, _) in enumerate(slots):
             key = "shell.play_%s_%s" % (prefix, suffix.replace(".", "_"))
-            proxy_keys[g].append(key)
             ctx.add_param_key(proxy_idx[g][s], key)
     # sliderWithFocusMenu gets its choices from pageData.replacementStrings;
     # without this entry the host opens an empty MenuOverlay for a valid
@@ -305,10 +247,6 @@ def apply(tui, qlinks, ctx):
             popup = build_standalone_osc_source_overlay(ctx.param_index(k) for k in OSC_POWER_PARAM_KEYS)
             definitions.append({"key": overlay_name, "value": popup})
     by_param = _controls_by_param(tui)
-    skins = ctx.skins_dir
-    region = play_views[0]["region"]
-    (skins / BACKGROUND_FILE).write_bytes(png_solid(region["w"], region["h"], _rgb(layout["background"])))
-    (skins / PANEL_FILE).write_bytes(png_solid(PANEL_W, region["h"], PANEL_RGB))
     # the templates of the selectors: a control of the production skin of the same widget
     selector_template = {}
     for kind in set(SELECTOR_TEMPLATES):
@@ -316,25 +254,10 @@ def apply(tui, qlinks, ctx):
         if not found:
             raise ValueError("the skin has no %s control to copy for a Play selector" % kind)
         selector_template[kind] = found[0]
-    names = {t["name"]: t for t in ctx.meta["tabs"]}
-    for view, tab_name in zip(play_views, TABS):
+    for tab_name in TABS:
         tab = ctx.tab(tab_name)
         items = tab["componentDefinition"]["componentsData"]
-        highlight = view["index"] - 1
         extra = []
-        # fallback picture (under everything): dark region, three panels, three titles
-        under = [_image("Play Background", BACKGROUND_FILE, (region["x"], region["y"], region["w"], region["h"]))]
-        for p in range(GROUPS):
-            if p in PLUGIN_DRAWN_PANELS:
-                continue
-            x = region["x"] + p * (PANEL_W + PANEL_GAP)
-            under.append(_image("Play Panel %d" % (p + 1), PANEL_FILE, (x, region["y"], PANEL_W, region["h"])))
-        items[:0] = under
-        for p in range(GROUPS):
-            if p in PLUGIN_DRAWN_PANELS:
-                continue
-            x = region["x"] + p * (PANEL_W + PANEL_GAP)
-            extra.append(_title("Play Title %d" % (p + 1), PANEL_TITLES[p], sel_idx[p], (x + _style_size("play.title.margin"), region["y"] + _style_size("play.title.margin"), PANEL_W - 2 * _style_size("play.title.margin"), _style_size("play.title.height"))))
         # the selectors, one under each panel
         for p in range(GROUPS):
             # The panel graph remains plugin-drawn, but its instance selector
@@ -393,45 +316,13 @@ def apply(tui, qlinks, ctx):
         extra.extend((active_smooth, passive_smooth))
         add_compact_osc(tui, ctx, extra, mixer_peek_index(ctx.param_count) + PLAY_OSC, sel_idx[0],
                         selector_source, stock_menu, unipolar)
-        # the eight knobs of the module of this sub-tab
-        prefix, _, slots = TABLE[highlight]
-        links = {"Q-Link %d" % i: -1 for i in range(1, 17)}
-        rebind = {ctx.param_index("%s1.%s" % (prefix, suffix)): proxy_idx[highlight][s] for s, (suffix, _, _) in enumerate(slots)}   # real parameter of instance 1 -> its proxy
-        for s, (suffix, fallback, short) in enumerate(slots):
-            if highlight in PLUGIN_DRAWN_PANELS:
-                break   # the oscillator sub-tab has no knob widgets: the compact view and the full-screen page are the plugin's own
-            real = ctx.param_index("%s1.%s" % (prefix, suffix))
-            templates = by_param.get(real)
-            if templates is None and fallback is not None:
-                if fallback.startswith("@"):   # any control of that widget (a switch the production skin has no control for)
-                    templates = next(([v[0]] for v in by_param.values() if v[0][1]["componentData"]["type"] == fallback[1:]), None)
-                else:
-                    templates = by_param.get(ctx.param_index("%s1.%s" % (prefix, fallback)))
-            if templates is None:
-                raise ValueError("no control of the production skin to copy for %s1.%s" % (prefix, suffix))
-            kind = templates[0][1]["componentData"]["type"]
-            row, col = (3, s) if s < 4 else (2, s - 4)
-            y = ROW_Y[row] + (ROW_H - SLOT_H[kind]) // 2
-            for v, template in enumerate(templates):
-                c, segs = _copy_control(template, "Play %s %s%s" % (prefix.capitalize(), short, "" if v == 0 else " %d" % (v + 1)), proxy_idx[highlight][s], (COLS[col], y, SLOT_W, SLOT_H[kind]), rebind)
-                extra.append(c)
-                extra.extend(segs)
-            if s >= 4:   # the second row of the module's knobs: the second Q-Link bank (column 1), read top to bottom: slots 5, 6, 7, 8
-                links["Q-Link %d" % QLINK_COLUMN_1[s - 4]] = proxy_idx[highlight][s]
-        for i in range(Q_PROXIES if highlight in PLUGIN_DRAWN_PANELS else 4):   # the hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on): Q-Link n = Q n, the host's own numbering
-            links["Q-Link %d" % (i + 1 if highlight in PLUGIN_DRAWN_PANELS else QLINK_COLUMN_0[i])] = q_idx[i]
+        links = {f"Q-Link {i + 1}": index for i, index in enumerate(q_idx)}
         for c in extra:
             _hide_while_full_screen(c, first - OVERLAY_INSTANCE)
         items.extend(extra)
-        # names over the controls (85_names.py): the meta of this tab
-        tab_names = names[tab_name]["names"]
-        for s, (_, _, short) in enumerate(slots):
-            if highlight not in PLUGIN_DRAWN_PANELS:
-                tab_names[proxy_keys[highlight][s]] = short
         entry = [m for m in qlinks["Screen Mode Q-Links"]["map"] if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1]
         if len(entry) != 1:
             raise ValueError("Q-Links.json has %d entries for the tab %r" % (len(entry), tab_name))
         entry[0]["Q-Links"] = links
-        if highlight in PLUGIN_DRAWN_PANELS:
-            entry[0]["Bank Direction"] = "Row"
+        entry[0]["Bank Direction"] = "Row"
         tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], QLINK_BOUNDS_Y, b.split()[2], QLINK_BOUNDS_H) for b in tab["qlinkBoundsData"]]

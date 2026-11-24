@@ -329,11 +329,9 @@ public:
         warp_.setStacked (p.numBlocks > 0);
         layout();
     }
-    template<size_t N>
-    void drawWithNativeCells (gpu::SceneBuilder& sb, const std::array<Rect, N>& cells) const
+    void drawNativePanel (gpu::SceneBuilder& sb) const
     {
         Pen pen (sb, enabled_, inactive_);
-        paintAroundNativeCells (sb, rect_, cells, [&] { drawUnder (pen); });
         drawChildren (sb);
         Cell cell (sb, rect_);
         drawExtra (pen);

@@ -2,17 +2,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Native MPC MacroCard component, definitions, and renderer."""
 import copy
-import math
 from pathlib import Path
 
-from components.native.button.button import action_art, action_button, button, entry, in_slot
-from components.native.level.level import value_label
+from components.native.button.button import action_art, action_button, entry, in_slot
+from components.native.level.level import FRAMES as SUB_DIAL_FRAMES, default_level_template, level_definition
 from components.style import (
     argb as _style_argb,
     color as _style_color,
     opacity as _style_opacity,
     rgba as _style_rgba,
-    rect as _style_rect,
     size as _style_size,
 )
 import tempfile
@@ -34,7 +32,7 @@ TARGET_RECT = tuple(_style_size('macro_card.target_rect'))
 DIAL_HEIGHT = DIAL_RECT[3]
 ACTION_SLOT_HEIGHT = TARGET_RECT[3]
 DIAL_BUTTON_GAP = _style_size('macro_card.action.gap')
-SUB_DIAL_SIZE, SUB_DIAL_FRAMES = KNOB_RECT[2], 127
+SUB_DIAL_SIZE = KNOB_RECT[2]
 MACRO_CARD_POSITIONS = [tuple(pos) for pos in _style_size('macros.card_positions')]
 DEFAULT_MACRO_DIAL_RECTS = {
     "focus": DIAL_RECT,
@@ -51,208 +49,27 @@ def semibold(size):
     return ImageFont.truetype(str(FONT_FILE), size)
 
 
-def _value_label(name, rect, height=_style_size('macro_card._value_label.geometry')):
-    return value_label(name, rect, height)
-
-
-def default_dial_template():
-    """Fallback unipolar knob template matching SDK knobUni structure."""
-    return {
-        "version": 2,
-        "actions": [{"version": 1, "handler": "Show Overlay"}],
-        "ignoreMousePresses": False,
-        "disableCoarseDataWheel": False,
-        "backgroundData": {
-            "version": 1,
-            "focussed": {"version": 1, "colour": _style_argb("surface.control"), "image": ""},
-            "unfocussed": {"version": 1, "colour": _style_argb("surface.control"), "image": ""},
-        },
-        "componentsData": [
-            {
-                "version": 2,
-                "componentData": {
-                    "version": 1,
-                    "name": "knob",
-                    "type": "Knob",
-                    "data": {
-                        "version": 5,
-                        "knobType": "GenericLegacy",
-                        "polarity": "UniPolar",
-                        "dragOrientation": "Vertical",
-                        "handleName": "Data",
-                    },
-                },
-                "handle remapping": {"version": 1, "map": []},
-                "bounds": {
-                    "version": 1,
-                    "acceptsHWFocus": "Yes",
-                    "showWhenDataModelInvalid": "Show",
-                    "whenVisible": "Always",
-                    "boundsType": "Absolute",
-                    "bounds": _style_rect("macro_card.default_dial_template.geometry"),
-                },
-            },
-            {
-                "version": 2,
-                "componentData": {
-                    "version": 1,
-                    "name": "name",
-                    "type": "Label",
-                    "data": {
-                        "version": 1,
-                        "type": "Name",
-                        "handleName": "Caption",
-                        "textStyle": {
-                            "version": 1,
-                            "font": {
-                                "version": 1,
-                                "name": _style_size('font.family'),
-                                "style": _style_size('font.style.semibold'),
-                                "height": _style_size('font.caption'),
-                            },
-                            "colour": _style_argb("text.caption"),
-                            "justification": "left verticallyCentred",
-                            "case": "Original",
-                        },
-                    },
-                },
-                "handle remapping": {"version": 1, "map": []},
-                "bounds": {
-                    "version": 1,
-                    "acceptsHWFocus": "No",
-                    "showWhenDataModelInvalid": "Show",
-                    "whenVisible": "Always",
-                    "boundsType": "Absolute",
-                    "bounds": _style_rect("macro_card.default_dial_template.geometry.offset1"),
-                },
-            },
-        ],
-    }
-
-
-def write_level_strip(path, frame_size=SUB_DIAL_SIZE):
-    if Image is None:
-        raise RuntimeError("Pillow is required to generate dial filmstrips")
-    scale = _style_size('macro_card.write_level_strip.scale')
-    center = (SUB_DIAL_SIZE - _style_size('macro_card.write_level_strip.center')) * scale / 2
-    radius = _style_size('macro_card.write_level_strip.radius') * scale
-
-    def point(angle, r):
-        return (
-            center + r * math.cos(math.radians(angle)),
-            center + r * math.sin(math.radians(angle)),
-        )
-
-    strip = Image.new("RGBA", (frame_size, frame_size * SUB_DIAL_FRAMES))
-    bounds = (center - radius, center - radius, center + radius, center + radius)
-    for i in range(SUB_DIAL_FRAMES):
-        frame = Image.new("RGBA", (SUB_DIAL_SIZE * scale, SUB_DIAL_SIZE * scale))
-        draw = ImageDraw.Draw(frame)
-        angle = _style_size('macro_card.write_level_strip.angle') + _style_size('macro_card.write_level_strip.angle.offset1') * i / (SUB_DIAL_FRAMES - _style_size('macro_card.write_level_strip.angle.offset2'))
-        draw.arc(bounds, _style_size('macro_card.write_level_strip.arc'), _style_size('macro_card.write_level_strip.arc.offset1'), fill=_style_color("dial.track"), width=_style_size('stroke.arc') * scale)
-        start = _style_size('macro_card.write_level_strip.start')
-        if angle != start:
-            draw.arc(bounds, min(angle, start), max(angle, start), fill=_style_color("dial.value"), width=_style_size('stroke.arc.active') * scale)
-        draw.line(
-            (point(angle, radius * 0.25), point(angle, radius * 0.6)),
-            fill=_style_color("text.value"),
-            width=round(_style_size('macro_card.write_level_strip.round') * scale),
-        )
-        x, y = point(angle, radius - _style_size('macro_card.write_level_strip.x.y') * scale)
-        dot = _style_size('macro_card.write_level_strip.dot') * scale
-        draw.ellipse((x - dot, y - dot, x + dot, y + dot), fill=_style_color("text.value"))
-        strip.paste(
-            frame.resize((frame_size, frame_size), Image.Resampling.LANCZOS),
-            (0, i * frame_size),
-        )
-    strip.save(path)
-
-
-def synthyboy_level_dial_data(skins_dir, frame_size=SUB_DIAL_SIZE):
-    filename = f"play_sub_level_{frame_size}.png"
-    if skins_dir is not None:
-        write_level_strip(Path(skins_dir) / filename, frame_size=frame_size)
-    return {
-        "version": 3,
-        "knobType": "FilmStrip",
-        "filmStrip": filename,
-        "numFrames": SUB_DIAL_FRAMES,
-        "invert": False,
-        "dragOrientation": "Vertical",
-        "handleName": "Data",
-    }
-
-
-def compact_dial_definition(template, rects=None, polarity="UniPolar"):
-    definition = copy.deepcopy(template)
-    for state in ("focussed", "unfocussed"):
-        if state in definition.get("backgroundData", {}):
-            definition["backgroundData"][state]["colour"] = _style_argb("surface.control")
-
-    if rects is None:
-        rects = copy.deepcopy(DEFAULT_MACRO_DIAL_RECTS)
-
-    for item in definition.get("componentsData", []):
-        control = item["componentData"]
-        name = control["name"]
-        if name in rects:
-            item["bounds"]["bounds"] = "%d %d %d %d" % rects[name]
-        if name == "knob":
-            control["data"] = {
-                "version": 5,
-                "knobType": "GenericLegacy",
-                "polarity": polarity,
-                "dragOrientation": "Vertical",
-                "handleName": "Data",
-            }
-        elif name == "name":
-            control["data"]["handleName"] = "Caption"
-            font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
-            font["height"] = _style_size('macro_card.compact_dial_definition.font.height')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.caption")
-
-    definition["actions"] = [
-        a for a in definition.get("actions", []) if a.get("handler") != "Show Overlay"
-    ]
-    return definition
-
-
-def sub_dial_definition(template, skins_dir, *, bipolar=False, include_name=True):
-    definition = copy.deepcopy(template)
-    controls = {item["componentData"]["name"]: item for item in definition["componentsData"]}
-    controls["knob"]["componentData"]["data"] = synthyboy_level_dial_data(skins_dir)
-    if include_name:
-        if "name" not in controls:
-            default_name = next(
-                copy.deepcopy(c) for c in default_dial_template()["componentsData"] if c["componentData"]["name"] == "name"
-            )
-            definition["componentsData"].append(default_name)
-            controls["name"] = default_name
-        caption = controls["name"]
-        caption["bounds"]["bounds"] = _style_rect("macro_card.name_rect")
-        style = caption["componentData"]["data"]["textStyle"]
-        style["colour"] = _style_argb("text.caption")
-        style["font"]["height"] = _style_size('macro_card.sub_dial_definition.style.font.height')
-        style["justification"] = "horizontallyCentred verticallyCentred"
-    value = _value_label("value", VALUE_RECT, _style_size('macro_card.sub_dial_definition.value'))
-    value_style = value["componentData"]["data"]["textStyle"]
-    value_style.update(colour=_style_argb("text.value"), justification="horizontallyCentred verticallyCentred")
-    definition["componentsData"] = [
-        c for c in definition["componentsData"]
-        if c["componentData"]["name"] != "value" and (include_name or c["componentData"]["name"] != "name")
-    ]
-    definition["componentsData"].append(value)
-    return definition
-
-
 def macro_level_definition(template=None, skins_dir=None, rects=None, *, include_name=True):
-    """Produces the authentic MacroCard dial component definition from shared MacroCard tokens."""
-    if template is None:
-        template = default_dial_template()
-    dial_rects = rects or DEFAULT_MACRO_DIAL_RECTS
-    level = compact_dial_definition(template, dial_rects, polarity="UniPolar")
-
-    return sub_dial_definition(level, skins_dir, bipolar=False, include_name=include_name)
+    """Lay out the shared LEVEL dial in the MacroCard."""
+    template = copy.deepcopy(template) if template is not None else default_level_template()
+    if not any(c["componentData"]["name"] == "name" for c in template["componentsData"]):
+        caption = next(c for c in default_level_template()["componentsData"] if c["componentData"]["name"] == "name")
+        template["componentsData"].append(caption)
+    level = level_definition(template, skins_dir, rects or DEFAULT_MACRO_DIAL_RECTS)
+    for state in ("focussed", "unfocussed"):
+        level["backgroundData"][state].update(colour=_style_argb("ink.black", 0), image="")
+    for c in level["componentsData"]:
+        name = c["componentData"]["name"]
+        if name in ("name", "value"):
+            rect = NAME_RECT if name == "name" else VALUE_RECT
+            c["bounds"]["bounds"] = "%d %d %d %d" % rect
+            style = c["componentData"]["data"]["textStyle"]
+            style["justification"] = "horizontallyCentred verticallyCentred"
+            style["font"]["height"] = _style_size("macro_card.sub_dial_definition.style.font.height"
+                                                  if name == "name" else "macro_card.sub_dial_definition.value")
+    if not include_name:
+        level["componentsData"] = [c for c in level["componentsData"] if c["componentData"]["name"] != "name"]
+    return level
 
 
 TARGET_X = TARGET_RECT[0]
@@ -266,7 +83,6 @@ def build_macro_card_definition(skins_dir, action_text="NO TARGET", *, level_typ
         level_type,
         {"version": 1, "handleName": "Data"},
         DIAL_RECT,
-        (("Data", "Data"), ("Caption", "Caption")),
     )
     target = action_button(
         SimpleNamespace(skins_dir=Path(skins_dir)),
@@ -276,7 +92,7 @@ def build_macro_card_definition(skins_dir, action_text="NO TARGET", *, level_typ
         text=action_text,
         width=None,
     )
-    background = {"version": 1, "colour": _style_argb("surface.panel"), "image": ""}
+    background = {"version": 1, "colour": _style_argb("ink.black", 0), "image": ""}
     return {
         "version": 2,
         "actions": [],
@@ -335,10 +151,6 @@ def render_macro_card(
         raise RuntimeError("Pillow is required for render_macro_card")
     card = Image.new("RGBA", (width, height), _style_rgba("ink.black", _style_opacity("transparent")))
     draw = ImageDraw.Draw(card)
-
-    draw.rectangle((0, 0, width - _style_size('macro_card.macro_card.rectangle'), height - _style_size('macro_card.macro_card.rectangle')), fill=_style_color("surface.panel"))
-    level_bg = level_definition["backgroundData"]["unfocussed"]["colour"]
-    draw.rectangle((0, 0, width - _style_size('macro_card.macro_card.rectangle'), DIAL_HEIGHT - _style_size('macro_card.macro_card.rectangle')), fill="#" + level_bg[-6:])
 
     # 1. Read knob geometry from level_definition
     knob_comp = next(

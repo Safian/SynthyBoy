@@ -30,7 +30,6 @@ from components.native.selector.selector import (
     OSC_ROUTING_CHOICES,
     _value_label,
     build_choice_definition,
-    passive_layer,
     selector_definition,
 )
 from components.style import size as _style_size, bind_control_active
@@ -185,11 +184,6 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
         remaps = (("Data", field), ("Caption", f"WithName[{field.upper()}]/{field}"))
         children.append(component(field, kind, rects[field], remaps))
     definitions = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
-    for child in children:
-        if child["componentData"]["name"] != "power":
-            bind_control_active(child, "power", ctx, definitions)
-    ctx.add_component_definition("playNativeOsc", passive_layer(children))
-
     replacements = tui["pageData"]["replacementStrings"]
     ctx.add_param_key(base, "shell.play_osc_native_view")
     for ordinal, (source, group, first_key) in enumerate(zip(OSC_INSTANCE_NAMES, OSC_LAYOUT, ENGINE_FIRST)):
@@ -197,10 +191,6 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
         handles = [f"Parameter {start + i}" for i in range(len(FIELDS))]
         for index, field in enumerate(FIELDS):
             ctx.add_param_key(start + index, f"shell.play_osc_native_{ordinal + 1}_{field}")
-        remaps = [("Data", handles[0]), *zip(FIELDS, handles)]
-        # Modifier-bearing handles remap as complete names through compounds.
-        remaps.extend((f"IndexedEnabling/{value}/2/power", f"IndexedEnabling/{value}/2/{handles[0]}")
-                      for value in (0, 1))
         mode_gates = {name: "Invalid" for name in ("RoutingVisible", "Wavetable", "Content", "Filter")}
         if group == "abc":
             first = 2 * ordinal
@@ -213,7 +203,6 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
             if group == "noise":
                 mode_gates["Filter"] = visible
                 mode_gates["RoutingVisible"] = visible
-        remaps.extend(mode_gates.items())
         source_gates = (visible, f"IndexedEnabling/{ordinal}/5/Parameter {selector}")
         if group == "sub":
             # Place the cells directly on the tab, like the adjacent Play ENV dials.
@@ -238,8 +227,25 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
             for control in items[first_item + 1:]:
                 bind_control_active(control, handles[0], ctx, definitions)
         else:
-            items.append(component(f"Play Native OSC {source}", "playNativeOsc", _style_size('play.osc.panel_rect'),
-                                   remaps, source_gates, "Children"))
+            # Bind each shared control on the tab, as for Sub. The XL does
+            # not resolve all nested handles through a full-panel wrapper.
+            fields = dict(zip(FIELDS, handles))
+            for template in children:
+                control = copy.deepcopy(template)
+                model = control["componentData"]
+                field = model["name"]
+                model["name"] = f"Play Native OSC {source} {field}"
+                for mapping in control["handle remapping"]["map"]:
+                    prefix, slash, key = mapping["value"].rpartition("/")
+                    mapping["value"] = prefix + slash + fields.get(key, key)
+                bounds = control["bounds"]
+                gates = [mode_gates[key] for key in bounds.get("additionalInvalidatingHandles", ())]
+                if "Invalid" in gates:
+                    continue
+                bounds.update(version=2, additionalInvalidatingHandles=[*source_gates, *gates])
+                if field != "power":
+                    bind_control_active(control, handles[0], ctx, definitions)
+                items.append(control)
         choices = ctx.params[ctx.param_index(first_key)]["choices"]
         if group == "abc":
             choices = [choices[i] for i in TYPE_ORDER]

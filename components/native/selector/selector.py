@@ -104,6 +104,10 @@ def build_choice_definition(source_def, overlay_name, rect, label, decoration=()
             "handleName": "Data",
             "additionalData": overlay_name,
         })
+    if decoration:
+        for state in ("focussed", "unfocussed"):
+            if state in definition.get("backgroundData", {}):
+                definition["backgroundData"][state].update(colour=_style_native_color("transparent"), image="")
     bounds = (0, 0, rect[2], rect[3])
     children = [child for child in definition.get("componentsData", [])
                 if child.get("componentData", {}).get("type") == "Focus"]
@@ -273,7 +277,7 @@ def build_step_buttons(skins_dir, width, height, hit_width, labels, count, *, ne
                     draw.line(((back, cy - _style_size('selector.step.chevron.half_height')), (tip, cy), (back, cy + _style_size('selector.step.chevron.half_height'))),
                               fill=color, width=_style_size('stroke.icon') * scale)
                 resized = im.resize((hit_width, height), Image.Resampling.LANCZOS)
-                save_png_filter0(resized, path, neutral=neutral)
+                save_png_filter0(resized, path)
             gate = f"IndexedEnabling/{index}/{count}/{handle_name}"
             step = button(f"{key} from {index}", (left, 0, hit_width, height),
                           filename, index=target, count=count, gates=(gate,))
@@ -348,7 +352,7 @@ def selector_definition(
         outline_col = _style_rgb("selector.neutral.border") if neutral else _style_color("control.border")
         arrow_col = _style_rgb("selector.neutral.border") if neutral else _style_color("text.muted")
 
-        face = Image.new("RGB" if neutral else "RGBA", (width * scale, height * scale), fill_col if neutral else _style_rgba("ink.black", _style_opacity("transparent")))
+        face = Image.new("RGBA", (width * scale, height * scale), _style_rgba("ink.black", _style_opacity("transparent")))
         pen = ImageDraw.Draw(face)
         pen.rounded_rectangle((0, 0, face.width - _style_size('selector.selector_definition.rounded_rectangle'), face.height - _style_size('selector.selector_definition.rounded_rectangle')), radius=_style_size('radius.control') * scale,
                               fill=fill_col, outline=outline_col, width=scale)
@@ -397,7 +401,7 @@ def selector_definition(
         if play_face:
             resized.save(skins_dir / filename)
         else:
-            save_png_filter0(resized, skins_dir / filename, neutral=neutral)
+            save_png_filter0(resized, skins_dir / filename)
 
     decorations = [_image_component(frame_name, filename, (0, top, width, height))]
 

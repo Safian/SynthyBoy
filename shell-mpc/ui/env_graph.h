@@ -20,7 +20,7 @@
 //      the handle held, the shape and the geometry at the touch, the finger's start, the zoom last reported.
 #pragma once
 
-#include "core.h"
+#include "native_apertures.h"
 #include "time_ruler.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -388,7 +388,10 @@ protected:
     {
         const theme::Look& T = theme::L();
         const bool reduced = theme::detailLevel() == 2, comp = compactChrome();
-        p.block (rect_);
+        if (plotArea.empty())
+            p.block (rect_);
+        else
+            drawNativeGraphFrame (p, rect_);  // Play places its native expand button in the graph header.
         const Rect pl = plot();
         if (pl.w < 40 || pl.h < 30)
             return;

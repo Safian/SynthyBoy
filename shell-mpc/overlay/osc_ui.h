@@ -799,7 +799,7 @@ public:
         const bool root = stackDepth_ == 1 && pageTop_ == 0;
         if (! enabled || full_.inactive() || (! root && ! spec && ! detail))
         {
-            full_.more.setHostPainted (false);
+            full_.more.setHostPainted (root && full_.hasNativeTune());
             full_.subBlend.setHostPainted (false);
             if (nativeDetail_ >= n::Plain && spec)
                 spec_.relayoutNow();

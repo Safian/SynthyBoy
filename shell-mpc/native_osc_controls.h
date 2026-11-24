@@ -62,8 +62,8 @@ public:
         int source() const noexcept { return static_cast<int> (bits & 7); }
         int destination() const noexcept { return static_cast<int> ((bits >> 3) & 7); }
         int visibility() const noexcept { return source() == 0 ? kHidden : (bits & 64) != 0 ? kRootOn : kRootOff; }
-        bool routesSource (int which) const noexcept { return source() == which && visibility() == kRootOn; }
-        float routingValue (int which) const noexcept { return routesSource (which) ? value (kRouting) : 0.0f; }
+        bool displaysSource (int which) const noexcept { return source() != 0 && source() == which; }
+        float routingValue (int which) const noexcept { return displaysSource (which) ? value (kRouting) : 0.0f; }
         bool powered() const noexcept { return (bits & 128) != 0; }
         float powerValue (int which) const noexcept { return source() == which && powered() ? 1.0f : 0.0f; }
         uint64_t revision() const noexcept { return bits >> 32; }

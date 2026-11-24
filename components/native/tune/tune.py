@@ -64,8 +64,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 # Visual theme palette matching the reference image and SynthyBoy MPC dark theme
 BG_CANVAS = _style_color("surface.canvas")
-BG_PANEL = _style_color("surface.panel")
-BORDER_PANEL = _style_color("panel.border")
 BG_CELL = _style_color("field.surface")
 BORDER_CELL = _style_color("field.border")
 BG_CELL_FOCUS = _style_color("field.focus")
@@ -338,7 +336,7 @@ def _header_label(name, text, rect):
                     "case": "Original",
                 },
                 "type": "Text",
-                "handleName": "Invalid",
+                "handleName": "Data",
                 "text": text,
             },
         },
@@ -377,8 +375,8 @@ def build_standalone_osc_tune_definition(
     if rect is None:
         rect = (*STANDALONE_OSC_TUNE_RECT[:2], DEFAULT_CARD_WIDTH, card_h)
 
-    bg_unfocused = {"version": 1, "colour": _style_argb("surface.panel"), "image": ""}
-    bg_focused = {"version": 1, "colour": _style_argb("surface.panel"), "image": ""}
+    bg_unfocused = {"version": 1, "colour": _style_argb("ink.black", 0), "image": ""}
+    bg_focused = bg_unfocused.copy()
 
     if skins_dir:
         write_tune_assets(skins_dir, field_h=field_h, box_width=DEFAULT_BOX_WIDTH)
@@ -576,6 +574,7 @@ def build_standalone_osc_tune(
     sem_id = transpose_id
 
     handle_map = [
+        {"key": "Data", "value": f"Parameter {oct_id}"},
         {"key": "Data_Oct", "value": f"Parameter {oct_id}"},
         {"key": "Caption_Oct", "value": f"WithName[OCT]/Parameter {oct_id}"},
         {"key": "Data_Sem", "value": f"Parameter {sem_id}"},
@@ -640,14 +639,6 @@ def render_tune_card(
 
     im = Image.new("RGBA", (card_w, card_h), _style_rgba("ink.black", _style_opacity("transparent")))
     draw = ImageDraw.Draw(im)
-
-    draw.rounded_rectangle(
-        (0, 0, card_w - _style_size('tune.tune_card.rounded_rectangle'), card_h - _style_size('tune.tune_card.rounded_rectangle')),
-        radius=_style_size('radius.panel') * scale,
-        fill=BG_PANEL,
-        outline=BORDER_PANEL,
-        width=scale,
-    )
 
     font_header = _get_font(_style_size('font.small') * scale)
     draw.text((_style_size('tune.tune_card.text') * scale, _style_size('tune.tune_card.text.offset1') * scale), "TUNE", fill=TEXT_LABEL, font=font_header)

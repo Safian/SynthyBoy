@@ -148,21 +148,22 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     if (part != Part::Data)
     {
         Cell ground (sb, r);
-        auto frame = [&]
+        if (d.aperture.empty())
         {
             sb.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), a (T.panel0, 255), a (T.panel0, 255), a (T.panel1, 255), a (T.panel1, 255));
             sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, 0xffffffffu);
             sb.paintOff();
             sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, a (T.keyline, 255), T.frame);
-        };
-        if (d.aperture.empty())
-            frame();
+        }
         else
             outsideNativeCells (r, std::array<Rect, 1> { d.aperture }, [&] (Rect strip)
             {
                 const gpu::ScopedClip clip (sb, strip.x, strip.y, strip.right(), strip.bottom());
                 if (clip)
-                    frame();
+                {
+                    Pen pen (sb, true);
+                    drawNativeGraphFrame (pen, r);
+                }
             });
         const uint32_t g0 = a (T.grid, 255), g1 = a (theme::mix (T.grid, T.keyline, 0.5f), 255);
         const int divX = d.gridX >= 2 ? d.gridX : 4;

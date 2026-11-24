@@ -7,6 +7,7 @@ from pathlib import Path
 
 from components.style import (
     argb as _style_argb,
+    native_color as _style_native_color,
     color as _style_color,
     opacity as _style_opacity,
     rgba as _style_rgba,
@@ -101,8 +102,8 @@ def default_level_template():
         "disableCoarseDataWheel": False,
         "backgroundData": {
             "version": 1,
-            "focussed": {"version": 1, "colour": _style_argb("surface.control"), "image": ""},
-            "unfocussed": {"version": 1, "colour": _style_argb("surface.control"), "image": ""},
+            "focussed": {"version": 1, "colour": _style_native_color("transparent"), "image": ""},
+            "unfocussed": {"version": 1, "colour": _style_native_color("transparent"), "image": ""},
         },
         "componentsData": [
             {
@@ -266,7 +267,7 @@ def level_definition(template=None, skins_dir=None, rects=None):
 
     for state in ("focussed", "unfocussed"):
         if state in definition.get("backgroundData", {}):
-            definition["backgroundData"][state]["colour"] = _style_argb("surface.control")
+            definition["backgroundData"][state].update(colour=_style_native_color("transparent"), image="")
 
     for item in definition["componentsData"]:
         control = item["componentData"]
@@ -300,7 +301,7 @@ def compact_level_definition(template=None, skins_dir=None):
     definition = copy.deepcopy(template)
     for state in ("focussed", "unfocussed"):
         if state in definition.get("backgroundData", {}):
-            definition["backgroundData"][state]["colour"] = _style_argb("surface.control")
+            definition["backgroundData"][state].update(colour=_style_native_color("transparent"), image="")
 
     rects = copy.deepcopy(COMPACT_48_RECTS)
     for item in definition["componentsData"]:
@@ -348,7 +349,7 @@ def compact_dial_definition(template, rects=None, polarity="UniPolar", height=No
     definition = copy.deepcopy(template)
     for state in ("focussed", "unfocussed"):
         if state in definition.get("backgroundData", {}):
-            definition["backgroundData"][state]["colour"] = _style_argb("surface.control")
+            definition["backgroundData"][state].update(colour=_style_native_color("transparent"), image="")
 
     if rects is None:
         if height == _style_size('level.compact_dial_definition.geometry'):
@@ -582,7 +583,7 @@ def build_native_smooth_dial_with_indicator_definition(
     if rects is None:
         rects = _SMOOTH_RECTS
 
-    background = {"version": 1, "colour": _style_argb("surface.control"), "image": ""}
+    background = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
 
     focus_comp = {
         "version": 2,
@@ -713,7 +714,7 @@ def build_native_smooth_dial_with_indicator_definition(
         "actions": [],
         "backgroundData": {
             "version": 1,
-            "focussed": dict(background, colour=_style_argb("surface.focus")),
+            "focussed": background.copy(),
             "unfocussed": background,
         },
         "ignoreMousePresses": False,
