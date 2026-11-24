@@ -805,6 +805,7 @@ def write_routing_assets(skins_dir):
     """Writes all PNG artwork needed by oscNativeRouting and oscNativeRoutingChoices."""
     skins = Path(skins_dir)
     skins.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (1, 1)).save(skins / "osc_source_row_hit.png")
     (skins / OSC_ROUTING_OVERLAY_BG_IMAGE).write_bytes(png_solid(_style_size('selector.write_routing_assets.png_solid'), _style_size('selector.write_routing_assets.png_solid'), BG_RGB))
     (skins / OSC_ROUTING_FRAME_IMAGE).write_bytes(png_routing_frame(STANDALONE_OSC_ROUTING_RECT[2], STANDALONE_OSC_ROUTING_RECT[3]))
     (skins / OSC_COMPACT_ROUTING_FRAME_IMAGE).write_bytes(png_compact_routing_frame(STANDALONE_COMPACT_OSC_ROUTING_RECT[2], STANDALONE_COMPACT_OSC_ROUTING_RECT[3]))
@@ -846,6 +847,25 @@ def build_standalone_osc_routing_choice_overlay(
     items = overlay["componentsData"]
     _mark_native_menu(items)
     return overlay
+
+def labelled_choice_drawer(name, choices):
+    """Bind each visible native row to an explicit choice of the drawer's Data handle."""
+    overlay = _choice_overlay(name)
+    items = overlay["componentsData"]
+    x, top, width, pitch = _style_size("selector.source.drawer_row")
+    label_x, _, _, _ = _style_size("selector.source.drawer_name")
+    pitch = min(pitch, (800 - top) // len(choices))
+    for index, choice in enumerate(choices):
+        y = top + index * pitch
+        label = _value_label(choice, (label_x, y, width - 2 * label_x, pitch))
+        data = label["componentData"]["data"]
+        data.update(type="Text", text=choice)
+        data["textStyle"]["justification"] = "left verticallyCentred"
+        items.extend([label, button("Choose " + choice, (x, y, width, pitch),
+                                    "osc_source_row_hit.png", index=index, count=len(choices))])
+    _mark_native_menu(items)
+    return overlay
+
 
 def build_standalone_osc_source_overlay(power_indices):
     """The SDK drawer owns selection; the adjacent labels report all five power states."""

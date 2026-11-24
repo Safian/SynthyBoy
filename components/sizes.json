@@ -648,6 +648,8 @@
       150,
       48
     ],
+    "selector.source.drawer_row": [0, 110, 426, 80],
+    "selector.source.drawer_name": [42, 0, 190, 80],
     "selector.choice.x": 560,
     "selector.button_compact_rect": [
       282,

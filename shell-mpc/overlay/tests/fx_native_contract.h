@@ -267,7 +267,8 @@ inline bool exportManifest ()
         for (int i = 0; i < 3; ++i)
             std::printf ("%s[%d, %d, %d, %d]", i ? ", " : "", texts[i].x, texts[i].y,
                          texts[i].w, texts[i].h);
-        std::printf ("]}");
+        const auto& look = ui::theme::L();
+        std::printf ("], \"text_font\": [%g, %g, %g]}", look.fLabel - 2.0f, look.fTitle, look.fLabel + 2.0f);
     }
     std::printf ("\n  ],\n  \"chain\": {\n");
     ui::FxFullScreen screen;

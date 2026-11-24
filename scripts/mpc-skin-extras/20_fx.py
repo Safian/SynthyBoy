@@ -608,11 +608,11 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
     for panel in panels:
         first = 7 + 2 * (panel["kind"] - 1)
         gate = f"RangedEnabling/{first}/{first+1}/{frame_count}/{layout_parameter}"
-        for (name, handle, font, colour), rect in zip((
-            ("path", "Rack", 16, "text.label"),
-            ("title", "Power", 22, "text.white"),
-            ("notice", "Remove", 16, "text.status.off"),
-        ), panel["text"]):
+        for (name, handle, colour), rect, font in zip((
+            ("path", "Rack", "text.label"),
+            ("title", "Power", "text.white"),
+            ("notice", "Remove", "text.status.off"),
+        ), panel["text"], panel["text_font"]):
             x, yy, w, h = rect
             label = _native_label("Name", (x, yy-y, w, h), font)
             label["componentData"]["name"] = f"fx_header_{name}_{panel['kind']}"
