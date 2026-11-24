@@ -276,30 +276,7 @@ def apply(tui, qlinks, ctx):
     title["bounds"]["additionalInvalidatingHandles"] = [list_gate]
     items.append(title)
 
-    # Gated background images for matrix (views 1..2), detail (views 3..4), and quick-add board
-    items.insert(0, _entry(
-        "Mod Matrix Background",
-        "Image",
-        {"version": 2, "imageType": "Regular", "colour": "0", "image": "mod_matrix_background.png"},
-        (0, 0, 1280, 628),
-        gates=[f"RangedEnabling/1/2/5/Parameter {view}", board_hide],
-        focus="No",
-    ))
-    items.insert(1, _entry(
-        "Mod Detail Background",
-        "Image",
-        {"version": 2, "imageType": "Regular", "colour": "0", "image": "mod_detail_background.png"},
-        (0, 0, 1280, 628),
-        gates=[detail_gate],
-        focus="No",
-    ))
-    items.insert(2, _entry(
-        "Mod Board Background",
-        "Image",
-        {"version": 2, "imageType": "Regular", "colour": "0", "image": "mod_board_background.png"},
-        (0, 0, 1280, 628),
-        gates=[board_gate],
-        focus="No",
-    ))
+    # Matrix, detail and quick-add share the fixed root canvas. No redundant
+    # per-view background Images or generated demo artwork belongs below them.
     replacement.extend({"key": param, "value": choices} for param, choices in toggles.items())
 
