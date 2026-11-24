@@ -48,6 +48,7 @@ from components.native.level.level import (
     compact_dial_definition,
     synthyboy_dial_data,
 )
+from components.style import size as _style_size, argb as _style_argb, color as _style_color
 from native_play.osc import add_compact_osc
 from native_ui_params import PLAY_LFO_STANDARD, PLAY_OSC, mixer_peek_index
 
@@ -78,18 +79,18 @@ SELECTOR_SHORT = ("Osc", "Env", "LFO")
 PANEL_TITLES = ("Oscillator", "Envelope", "LFO")
 SELECTOR_TEMPLATES = ("sliderWithFocusMenu",) * 3   # the widget of a selector: the selector slider of the skin (touch and drag; observed on the Key 61: the radio group did not answer a tap, the selector does)
 SELECTOR_COMPONENTS = ("playOscSelector", "playModSelector", "playModSelector")
-PANEL_W, PANEL_GAP = 400, 17
+PANEL_W, PANEL_GAP = _style_size('play.panel.width_gap')
 # Detection markers occupy the unused top eight pixels, not selector space.
-SELECTOR_RECTS = ((14, 10, 408, 56), (446, 10, 388, 56), (864, 10, 396, 56))
-COLS = (21, 341, 661, 981) # slot x of the 4 columns (80_layout.py SLOT_X)
-ROW_Y = {2: 343, 3: 483}   # graphic tabs: y of the grid rows 3 and 4 (80_layout.py GRAPHIC_ROWS)
-ROW_H = 138
-SLOT_W = 278
-SLOT_H = {"knobUni": 138, "knobBi": 138, "toggle": 138, "faderUni": 100, "faderBi": 100, "radio3": 100, "radio4": 100, "sliderWithFocus": 100, "sliderWithFocusMenu": 56}
-QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323
+SELECTOR_RECTS = tuple(tuple(rect) for rect in _style_size('play.selector.rects'))
+COLS = _style_size('play.grid.columns') # slot x of the 4 columns (80_layout.py SLOT_X)
+ROW_Y = {int(row): y for row, y in _style_size("play.grid.rows").items()}   # graphic tabs: y of the grid rows 3 and 4 (80_layout.py GRAPHIC_ROWS)
+ROW_H = _style_size('play.grid.row_height')
+SLOT_W = _style_size('play.grid.slot_width')
+SLOT_H = _style_size("play.grid.slot_heights")
+QLINK_BOUNDS_Y, QLINK_BOUNDS_H = _style_size('play.qlink.bounds_yh')
 BACKGROUND_FILE, PANEL_FILE = "overlay_play_bg.png", "overlay_play_panel.png"
-PANEL_RGB = (0x26, 0x25, 0x27)
-TITLE_COLOUR = "ffe6e6e6"
+PANEL_RGB = tuple(bytes.fromhex(_style_color("play.panel.legacy")[1:]))
+TITLE_COLOUR = _style_argb("text.icon")
 
 
 def png_solid(width, height, rgb):
@@ -98,30 +99,6 @@ def png_solid(width, height, rgb):
     row = b"\x00" + bytes(rgb) * width
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(row * height, 9)) + chunk(b"IEND", b""))
-
-
-def png_selector_frame(width=408, height=56, *, neutral=False):
-    """Opaque current Play header art; the native Slider remains underneath for input."""
-    background = (0x20, 0x20, 0x20) if neutral else (0x14, 0x1a, 0x38)
-    px = bytearray(bytes(background) * (width * height))
-    def put(x, y, c):
-        if 0 <= x < width and 0 <= y < height:
-            i = (y * width + x) * 3
-            px[i:i + 3] = bytes(c)
-    edge = (0x5a, 0x5a, 0x5a) if neutral else (0x5a, 0x58, 0x5a)
-    for x in range(width):
-        put(x, 1, edge); put(x, height - 2, edge)
-    for y in range(height):
-        put(1, y, edge); put(width - 2, y, edge)
-    # small contextual chevrons survive behind the live Value label
-    for d in range(7):
-        put(14 + d, 24 - d, edge); put(14 + d, 24 + d, edge)
-        put(width - 15 - d, 24 - d, edge); put(width - 15 - d, 24 + d, edge)
-    def chunk(kind, body):
-        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
-    raw = b"".join(b"\x00" + bytes(px[y * width * 3:(y + 1) * width * 3]) for y in range(height))
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
 def _rgb(text):
@@ -152,25 +129,11 @@ def _title(name, text, param, rect):
     return {"version": 2,
             "componentData": {"version": 1, "name": name, "type": "Label",
                               "data": {"version": 1,
-                                       "textStyle": {"version": 1, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": 22.0},
+                                       "textStyle": {"version": 1, "font": {"version": 1, "name": _style_size("font.family"), "style": _style_size("font.style.semibold"), "height": _style_size("play.font.title")},
                                                      "colour": TITLE_COLOUR, "justification": "horizontallyCentred verticallyCentred", "case": "Upper Case"},
                                        "type": "Text", "handleName": "Data", "text": text}},
             "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter %d" % param}]},
             "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}}
-
-
-def _value_label(name, rect):
-    return {"version": 2, "componentData": {"version": 1, "name": name, "type": "Label", "data": {"version": 1,
-        "textStyle": {"version": 1, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": 24.0}, "colour": "ffe6e6e6", "justification": "horizontallyCentred verticallyCentred", "case": "Original"}, "type": "Value", "handleName": "Data"}},
-        "handle remapping": {"version": 1, "map": []}, "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}}
-
-
-def _menu_label(name, text, rect):
-    return {"version": 2, "componentData": {"version": 1, "name": name, "type": "Label", "data": {"version": 1, "textStyle": {"version": 1, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": 28.0}, "colour": "ffe6e6e6", "justification": "left verticallyCentred", "case": "Original"}, "type": "Text", "handleName": "Data", "text": text}}, "handle remapping": {"version": 1, "map": []}, "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}}
-
-
-def _choice_button(name, index, count, rect, on_image, off_image):
-    return {"version": 2, "componentData": {"version": 1, "name": name, "type": "Button", "data": {"version": 2, "onImage": on_image, "offImage": off_image, "buttonId": index, "numButtonsInGroup": count, "handleName": "Data", "gestureBehaviour": "Instant"}}, "handle remapping": {"version": 1, "map": []}, "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}}
 
 
 def _controls_by_param(tui):
@@ -230,25 +193,6 @@ def _require(component, *gates):
     bounds.setdefault("additionalInvalidatingHandles", []).extend(gates)
 
 
-def _passive_dial(template, rects):
-    # A native readout preserves the original parameter and units without a
-    # GenericLegacy dial, focus target, wheel handler or popup.
-    definition = copy.deepcopy(template)
-    definition["ignoreMousePresses"] = True
-    definition["disableCoarseDataWheel"] = True
-    definition["actions"] = []
-    for state in ("focussed", "unfocussed"):
-        definition["backgroundData"][state]["colour"] = "ff101010"
-    name = _menu_label("name", "", rects[0])
-    name["componentData"]["data"].update(type="Name", handleName="Caption")
-    value = _value_label("value", rects[1])
-    for label in (name, value):
-        label["componentData"]["data"]["textStyle"].update(colour="ff999999", justification="left verticallyCentred")
-        label["componentData"]["data"]["textStyle"]["font"]["height"] = 20
-    definition["componentsData"] = [name, value]
-    return definition
-
-
 FULL_FRAME_LAST_VISIBLE = 18   # the host widgets of the Play page are visible while the "Overlay Instance" frame is 0 .. 18 (slots use 1 .. 17); the plugin takes frame 24 while a plugin-drawn full screen is open
 
 
@@ -305,7 +249,7 @@ def apply(tui, qlinks, ctx):
     unipolar = next(d["value"] for d in definitions if d["key"] == "knobUni")
     ctx.add_component_definition("compactNativeDial", compact_dial_definition(unipolar))
     rise_dial = compact_dial_definition(unipolar)
-    rise_rects = {"focus": (0, 0, 196, 72), "knob": (2, 0, 60, 60), "name": (66, 16, 126, 36)}
+    rise_rects = {name: tuple(rect) for name, rect in _style_size('play.rise.seed_rects').items()}
     for item in rise_dial["componentsData"]:
         name = item["componentData"]["name"]
         item["bounds"]["bounds"] = "%d %d %d %d" % rise_rects[name]
@@ -349,11 +293,11 @@ def apply(tui, qlinks, ctx):
         (SELECTOR_COMPONENTS[0], OSC_SOURCE_OVERLAY_NAME, "play_osc_selector_frame.png", True, SELECTOR_RECTS[0][2]),
         (SELECTOR_COMPONENTS[1], "fx editor choice menu", "play_selector_frame.png", False, SELECTOR_RECTS[1][2]),
     ):
-        bounds = (0, 0, width, 56)
+        bounds = (0, 0, width, _style_size("height.high"))
         selector_def = selector_definition(
             selector_source, overlay_name, bounds[2:], ctx.skins_dir,
             title="Data", frame_name="Play selector frame",
-            filename=frame_asset, neutral=neutral, arrows=True, label_height=24.0,
+            filename=frame_asset, neutral=neutral, arrows=True, label_height=_style_size("play.font.24"),
             justification="horizontallyCentred verticallyCentred"
         )
         definitions.append({"key": component_name, "value": selector_def})
@@ -390,7 +334,7 @@ def apply(tui, qlinks, ctx):
             if p in PLUGIN_DRAWN_PANELS:
                 continue
             x = region["x"] + p * (PANEL_W + PANEL_GAP)
-            extra.append(_title("Play Title %d" % (p + 1), PANEL_TITLES[p], sel_idx[p], (x + 8, region["y"] + 8, PANEL_W - 16, 28)))
+            extra.append(_title("Play Title %d" % (p + 1), PANEL_TITLES[p], sel_idx[p], (x + _style_size("play.title.margin"), region["y"] + _style_size("play.title.margin"), PANEL_W - 2 * _style_size("play.title.margin"), _style_size("play.title.height"))))
         # the selectors, one under each panel
         for p in range(GROUPS):
             # The panel graph remains plugin-drawn, but its instance selector
@@ -412,12 +356,12 @@ def apply(tui, qlinks, ctx):
         # Sustain and Rise are independent of time units. The existing
         # Play proxies follow the selected module instance, including preset changes.
         # Integrator verification: geometry matches LfoCompact
-        LFO_COMPACT_RECT = (864, 546, 196, 72)
+        LFO_COMPACT_RECT = _style_size('play.lfo.rise.rect')
         compact_dials = (
-            ("Play Env Attack", 1, "attack", "Attack", (446, 386, 192, 108), "compactNativeDial"),
-            ("Play Env Decay", 1, "decay", "Decay", (642, 386, 192, 108), "compactNativeDial"),
-            ("Play Env Sustain", 1, "sustain", "Sustain", (446, 510, 192, 108), "compactNativeDial"),
-            ("Play Env Release", 1, "release", "Release", (642, 510, 192, 108), "compactNativeDial"),
+            ("Play Env Attack", 1, "attack", "Attack", _style_size('play.env.attack.rect'), "compactNativeDial"),
+            ("Play Env Decay", 1, "decay", "Decay", _style_size('play.env.decay.rect'), "compactNativeDial"),
+            ("Play Env Sustain", 1, "sustain", "Sustain", _style_size('play.env.sustain.rect'), "compactNativeDial"),
+            ("Play Env Release", 1, "release", "Release", _style_size('play.env.release.rect'), "compactNativeDial"),
             ("Play LFO Rise", 2, "fade_in", "Rise", LFO_COMPACT_RECT, "compactNativeRiseDial"),
         )
         knob_template = next(v[0] for v in by_param.values() if v[0][1]["componentData"]["type"] == "knobUni"
@@ -436,7 +380,7 @@ def apply(tui, qlinks, ctx):
         active_smooth, passive_smooth = build_native_smooth_dual_state_pair(
             smooth_time_param,
             smooth_on_param,
-            (1064, 546, 196, 72),
+            _style_size('play.lfo.smooth.rect'),
             active_type="compactNativeSmoothWithIndicator",
             passive_type="compactNativeSmoothReadout",
             name_prefix="Play LFO Smooth",

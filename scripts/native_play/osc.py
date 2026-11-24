@@ -4,10 +4,9 @@
 
 import copy
 import json
-import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import sys
 
@@ -24,6 +23,9 @@ from components.native.name_value.name_value import (
 )
 from components.native.pan.pan import pan_definition
 from components.native.selector.selector import (
+    append_choice_rows,
+    write_source_navigation_assets,
+    write_wave_selector_icon,
     OSC_INSTANCE_NAMES,
     OSC_ROUTING_CHOICES,
     _value_label,
@@ -32,7 +34,6 @@ from components.native.selector.selector import (
     selector_definition,
 )
 from components.style import size as _style_size, bind_control_active
-from native_skin_font import semibold
 from components.native.button.button import action_button, button, entry
 if __package__:
     from .sub_dial import sub_dial_definition
@@ -91,34 +92,6 @@ def component(name, kind, rect, remaps=(), gates=(), focus="Yes"):
     return entry(name, kind, {"version": 1, "handleName": "Data"}, rect, remaps, gates, focus)
 
 
-def sub_choice_rows(ctx, definition, labels, field):
-    """Use named native radio buttons because the XL drawer loses the proxy step metadata."""
-    definition["ignoreMousePresses"] = False
-    # Tapping the stock header closes the drawer and commits the selected row.
-    font = semibold(27)
-    hint = f"play_sub_{field}_apply.png"
-    header = Image.new("RGBA", (550, 56))
-    draw = ImageDraw.Draw(header)
-    draw.line((24, 18, 14, 28, 24, 38), fill="white", width=3)
-    title = "WAVEFORM" if field == "wave" else "OCTAVE"
-    draw.text((41, 28), f"Tap PLAY SUB {title} to apply", anchor="lm", font=font, fill="white")
-    header.save(ctx.skins_dir / hint)
-    definition["componentsData"].append(entry("Apply hint", "Image", {
-        "version": 2, "imageType": "Regular", "colour": "0", "image": hint
-    }, (436, 27, 550, 56), focus="No"))
-    for i, label in enumerate(labels):
-        rect = (520, 105 + i * 65, 360, 58)
-        images = []
-        for state, fill in (("on", "#175a76"), ("off", "#303237")):
-            filename = f"play_sub_{field}_{i}_{state}.png"
-            im = Image.new("RGB", rect[2:], fill)
-            draw = ImageDraw.Draw(im)
-            draw.text((180, 29), label, anchor="mm", font=font, fill="white")
-            im.save(ctx.skins_dir / filename)
-            images.append(filename)
-        definition["componentsData"].append(button(label, rect, *images, index=i, count=len(labels)))
-
-
 def setup_popups(ctx, stock_menu):
     marker_paths = {}
     for x, rgb in (*MODAL_MARKERS, *POPUP_MARKERS):
@@ -128,7 +101,7 @@ def setup_popups(ctx, stock_menu):
     for name, (x, _) in zip((ROUTE_MENU, CHOICE_MENU, OCTAVE_PAD), POPUP_MARKERS):
         definition = copy.deepcopy(stock_menu)
         if name == OCTAVE_PAD:
-            sub_choice_rows(ctx, definition, [str(i) for i in range(-4, 5)], "octave")
+            append_choice_rows(ctx, definition, [str(i) for i in range(-4, 5)], "octave")
         for offset in (16, 28, 40, x):
             mark = entry(f"Play OSC marker {offset}", "Image", {"version": 2, "imageType": "Regular",
                          "colour": "0", "image": marker_paths[offset]}, (offset, 120, 6, 6), focus="No")
@@ -137,7 +110,7 @@ def setup_popups(ctx, stock_menu):
         ctx.add_component_definition(name, definition)
         if name == CHOICE_MENU:
             sub = copy.deepcopy(definition)
-            sub_choice_rows(ctx, sub, ctx.params[ctx.param_index("sub.waveform")]["choices"], "wave")
+            append_choice_rows(ctx, sub, ctx.params[ctx.param_index("sub.waveform")]["choices"], "wave")
             ctx.add_component_definition("play sub waveform", sub)
 
 
@@ -146,19 +119,11 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
     layout_handle = f"Parameter {base}"
     setup_popups(ctx, stock_menu)
 
-    artwork = {}
-    for key in ("left", "right", "empty"):
-        filename = f"play_osc_source_{key}.png"
-        im = Image.new("RGBA", (56 if key != "empty" else 90, 72))
-        if key != "empty":
-            front, back = (24, 32) if key == "left" else (32, 24)
-            ImageDraw.Draw(im).line((back, 28, front, 36, back, 44), fill="#e6e6e6", width=2)
-        im.save(ctx.skins_dir / filename)
-        artwork[key] = filename
+    artwork = write_source_navigation_assets(ctx.skins_dir)
 
     for name, popup, size, text_height in (
-        ("playOscRouteField", ROUTE_MENU, (64, 64), 13.0),
-        ("playOscChoiceField", CHOICE_MENU, (202, 72), 23.0),
+        ("playOscRouteField", ROUTE_MENU, _style_size('play.osc.routing.size'), _style_size("play.font.13")),
+        ("playOscChoiceField", CHOICE_MENU, _style_size('play.osc.choice.size'), _style_size("play.font.23")),
     ):
         ctx.add_component_definition(name, build_choice_definition(
             selector_template, popup, (0, 0, *size), "Value", label_height=text_height))
@@ -180,23 +145,19 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
         return definition
 
     ctx.add_component_definition("playOscNumberField", build_sub_oct_definition("playOscNumberField"))
-    wave_icon = "play_selector_wave.png"
-    icon = Image.new("RGBA", (112, 96))
-    points = [(x, 48 - 19 * math.sin((x - 4) * math.tau / 103)) for x in range(4, 108)]
-    ImageDraw.Draw(icon).line(points, fill="#91aed5", width=7)
-    icon.resize((28, 24), Image.Resampling.LANCZOS).save(ctx.skins_dir / wave_icon)
+    wave_icon = write_wave_selector_icon(ctx.skins_dir)
     ctx.add_component_definition("playSubWaveField", selector_definition(
         selector_template, "play sub waveform", tuple(geometry["sub"]["first"][2:]), ctx.skins_dir,
         icon=wave_icon, title="Data", name="Caption"))
     for name, with_steps in (("playOscTableField", True), ("playOscContentField", False)):
         source = copy.deepcopy(selector_template)
         source["actions"] = []
-        centre = (56, 0, 90, 72) if with_steps else (0, 0, 202, 72)
+        centre = _style_size('play.osc.source.stepped_rect') if with_steps else _style_size('play.osc.source.rect')
         children = [button("browse", centre, artwork["empty"], index=2, count=4),
-                    _value_label("source name", centre, 17.0)]
+                    _value_label("source name", centre, _style_size("play.font.17"))]
         if with_steps:
-            children += [button("previous", (0, 0, 56, 72), artwork["left"], index=1, count=4),
-                         button("next", (146, 0, 56, 72), artwork["right"], index=3, count=4)]
+            children += [button("previous", _style_size('play.osc.source.previous_rect'), artwork["left"], index=1, count=4),
+                         button("next", _style_size('play.osc.source.next_rect'), artwork["right"], index=3, count=4)]
         source["componentsData"] = children
         source["disableCoarseDataWheel"] = True
         ctx.add_component_definition(name, source)
@@ -277,7 +238,7 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
             for control in items[first_item + 1:]:
                 bind_control_active(control, handles[0], ctx, definitions)
         else:
-            items.append(component(f"Play Native OSC {source}", "playNativeOsc", (0, 0, 432, 628),
+            items.append(component(f"Play Native OSC {source}", "playNativeOsc", _style_size('play.osc.panel_rect'),
                                    remaps, source_gates, "Children"))
         choices = ctx.params[ctx.param_index(first_key)]["choices"]
         if group == "abc":

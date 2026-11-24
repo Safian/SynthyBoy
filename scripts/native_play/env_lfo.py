@@ -20,7 +20,7 @@ from components.native.active_text.active_text import (
 from components.native.level.level import (
     PLAY_SMOOTH_RECTS,
     build_native_smooth_dial_with_indicator_definition,
-    synthyboy_dial_data,
+    blue_dial_definition,
 )
 from components.native.selector.selector import build_shape_selector, selector_definition
 from components.native.radio_button.radio_button import create_segmented_radio_button_group
@@ -48,96 +48,6 @@ def _entry(name, kind, data, rect, bindings=(), gates=(), focus=True):
         "componentData": {"version": 1, "name": name, "type": kind, "data": data},
         "handle remapping": {"version": 1, "map": [{"key": k, "value": v} for k, v in bindings]},
         "bounds": bounds,
-    }
-
-
-def _blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_rect, value_rect, *,
-                          caption_text=None, caption_height=14.0, value_height=20.0):
-    """Build a Play compact dial definition backed by the approved blue LEVEL FilmStrip."""
-    bg = {"version": 1, "colour": _style_argb("surface.control"), "image": ""}
-    focus = {
-        "version": 2,
-        "componentData": {
-            "version": 1, "name": "focus", "type": "Focus",
-            "data": {
-                "version": 1,
-                "backgroundColour": _style_argb("text.white", _style_opacity("focus")),
-                "outlineColour": _style_argb("focus.cyan"),
-                "backgroundInset": 4.0,
-                "outlineThickness": 1.0,
-            },
-        },
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {
-            "version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show",
-            "whenVisible": "WhenFocussed", "boundsType": "Absolute", "bounds": f"0 0 {width} {height}",
-        },
-    }
-    knob = {
-        "version": 2,
-        "componentData": {
-            "version": 1, "name": "knob", "type": "Knob",
-            "data": synthyboy_dial_data(skins_dir, frame_size=frame_size, bipolar=False),
-        },
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {
-            "version": 1, "acceptsHWFocus": "Yes", "showWhenDataModelInvalid": "Show",
-            "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % knob_rect,
-        },
-    }
-    name_data = {
-        "version": 1,
-        "textStyle": {
-            "version": 1,
-            "font": {"version": 1, "name": _style_size("font.family"), "style": _style_size("font.style.semibold"), "height": float(caption_height)},
-            "colour": _style_argb("text.caption"),
-            "justification": "left verticallyCentred",
-            "case": "Original",
-        },
-        "type": "Text" if caption_text is not None else "Name",
-        "handleName": "Data" if caption_text is not None else "Caption",
-    }
-    if caption_text is not None:
-        name_data["text"] = caption_text
-    name_comp = {
-        "version": 2,
-        "componentData": {"version": 1, "name": "name", "type": "Label", "data": name_data},
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {
-            "version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show",
-            "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % name_rect,
-        },
-    }
-    value_comp = {
-        "version": 2,
-        "componentData": {
-            "version": 1, "name": "value", "type": "Label",
-            "data": {
-                "version": 1,
-                "textStyle": {
-                    "version": 1,
-                    "font": {"version": 1, "name": _style_size("font.family"), "style": _style_size("font.style.semibold"), "height": float(value_height)},
-                    "colour": _style_argb("text.value"),
-                    "justification": "left verticallyCentred",
-                    "case": "Original",
-                },
-                "type": "Value",
-                "handleName": "Data",
-            },
-        },
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {
-            "version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show",
-            "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % value_rect,
-        },
-    }
-    return {
-        "version": 2,
-        "actions": [],
-        "backgroundData": {"version": 1, "focussed": dict(bg, colour=_style_argb("surface.focus")), "unfocussed": bg},
-        "ignoreMousePresses": False,
-        "disableCoarseDataWheel": False,
-        "componentsData": [focus, knob, name_comp, value_comp],
     }
 
 
@@ -192,13 +102,13 @@ def apply(tui, items, ctx, contract):
 
     # Upgrade compact Play ENV/LFO dials from GenericLegacy to the approved blue LEVEL component.
     blue_dials = {
-        "compactNativeDial": _blue_dial_definition(
-            ctx.skins_dir, 192, 108, 90, (2, 9, 90, 90), (96, 32, 92, 22), (96, 54, 92, 32),
-            caption_height=15.0, value_height=22.0,
+        "compactNativeDial": blue_dial_definition(
+            ctx.skins_dir, *_style_size('play.env.dial.geometry'),
+            caption_height=_style_size('play.font.15'), value_height=_style_size('play.font.22'),
         ),
-        "compactNativeRiseDial": _blue_dial_definition(
-            ctx.skins_dir, 196, 72, 60, (2, 6, 60, 60), (68, 12, 124, 22), (68, 34, 124, 28),
-            caption_height=14.0, value_height=20.0,
+        "compactNativeRiseDial": blue_dial_definition(
+            ctx.skins_dir, *_style_size('play.rise.dial.geometry'),
+            caption_height=_style_size('play.font.14'), value_height=_style_size('play.font.20'),
         ),
         "compactNativeSmoothWithIndicator": smooth_active_def,
         "compactNativeSmoothTime": smooth_active_def,
@@ -222,9 +132,9 @@ def apply(tui, items, ctx, contract):
     local_defs[:] = [e for e in local_defs if e["key"] != "compactNativeSmoothToggle"]
     definitions.pop("compactNativeSmoothToggle", None)
 
-    rate_def = _blue_dial_definition(
-        ctx.skins_dir, 182, 72, 60, (2, 6, 60, 60), (68, 12, 110, 22), (68, 34, 110, 28),
-        caption_text="RATE", caption_height=14.0, value_height=19.0,
+    rate_def = blue_dial_definition(
+        ctx.skins_dir, *_style_size('play.rate.dial.geometry'),
+        caption_text="RATE", caption_height=_style_size('play.font.14'), value_height=_style_size('play.font.19'),
     )
     ctx.add_component_definition("playEnvLfoRate", rate_def)
 
@@ -243,7 +153,7 @@ def apply(tui, items, ctx, contract):
             control = build_shape_selector(
                 definitions.get("sliderWithFocusMenu", selector),
                 menu,
-                (396, 56),
+                tuple(_style_size("play.lfo.selector.size")),
                 ctx.skins_dir,
                 title="Data",
                 caption="SHAPE",
@@ -261,7 +171,7 @@ def apply(tui, items, ctx, contract):
                 filename="play_lfo_selector_frame.png",
                 neutral=False,
                 arrows=True,
-                label_height=24.0,
+                label_height=_style_size("play.font.24"),
                 justification="horizontallyCentred verticallyCentred",
             )
         else:
