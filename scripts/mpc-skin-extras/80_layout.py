@@ -18,23 +18,25 @@
 # Touch and focus behaviour (actions, handles, Q-Link and overlay) are those of the generator: only geometry and justification change here.
 
 import copy
+from components import style as _ui_style
 
-OLD_COLS = (23, 343, 663, 983)
-OLD_ROWS = (45, 196, 346, 497)
-SLOT_X = (21, 341, 661, 981)
-SLOT_W = 278
-AXIS = 139                       # axis of the column inside a slot
-PLAIN_ROWS = (44, 188, 332, 476)
-GRAPHIC_ROWS = {2: 343, 3: 483}  # tabs with a picture: only the lower two rows exist
-ROW_H = 138
+OLD_COLS = tuple(_ui_style.size('screen.layout.old_cols'))
+OLD_ROWS = tuple(_ui_style.size('screen.layout.old_rows'))
+SLOT_X = tuple(_ui_style.size('screen.layout.slot_x'))
+SLOT_W = _ui_style.size('screen.layout.slot_w')
+AXIS = _ui_style.size('screen.layout.axis') # axis of the column inside a slot
+PLAIN_ROWS = tuple(_ui_style.size('screen.layout.plain_rows'))
+GRAPHIC_ROWS = dict(zip((2, 3), _ui_style.size('screen.layout.graphic_rows')))  # tabs with a picture: only the lower two rows exist
+ROW_H = _ui_style.size('screen.layout.row_h')
 SLOT_TYPES = ("knobUni", "knobBi", "toggle", "faderUni", "faderBi", "radio3", "radio4", "sliderWithFocus", "sliderWithFocusMenu")
 ALIGNED = ("knobUni", "knobBi", "toggle", "faderUni", "faderBi", "radio3", "radio4")  # definitions that get the centred layout
-SLOT_H = {"knobUni": ROW_H, "knobBi": ROW_H, "toggle": ROW_H, "faderUni": 100, "faderBi": 100, "radio3": 100, "radio4": 100,
-          "sliderWithFocus": 100, "sliderWithFocusMenu": 100}
-VALUE_FONT = 24.0
+SHORT_H = _ui_style.size("screen.layout.short_height")
+SLOT_H = {"knobUni": ROW_H, "knobBi": ROW_H, "toggle": ROW_H, "faderUni": SHORT_H, "faderBi": SHORT_H, "radio3": SHORT_H, "radio4": SHORT_H,
+          "sliderWithFocus": SHORT_H, "sliderWithFocusMenu": SHORT_H}
+VALUE_FONT = _ui_style.size('screen.layout.value_font')
 CENTRED = "horizontallyCentred verticallyCentred"
-SEG_DY = 54                      # the text over a radio button: y of the buttons inside the radio slot
-RADIO4_DX = 2
+SEG_DY = _ui_style.size('screen.layout.seg_dy') # the text over a radio button: y of the buttons inside the radio slot
+RADIO4_DX = _ui_style.size('screen.layout.radio4_dx')
 
 
 def _child(definition, name):
@@ -61,18 +63,18 @@ def _value(definition, value_rect):
 
 
 def _knob(definition):
-    _value(definition, (3, 112, 272, 26))
-    _place(definition, "knob", (AXIS - 45, 22, 90, 90))
+    _value(definition, tuple(_ui_style.size('screen.layout.value_rect')))
+    _place(definition, "knob", tuple(_ui_style.size('screen.layout.knob_rect')))
 
 
 def _toggle(definition):
-    _value(definition, (3, 112, 272, 26))
-    _place(definition, "toggle", (AXIS - 42, 33, 84, 68))
+    _value(definition, tuple(_ui_style.size('screen.layout.value_rect')))
+    _place(definition, "toggle", tuple(_ui_style.size('screen.layout.toggle_rect')))
 
 
 def _fader(definition):
-    _value(definition, (3, 70, 272, 26))
-    _place(definition, "fader", (15, 32, 248, 36))
+    _value(definition, tuple(_ui_style.size('screen.layout.fader_value_rect')))
+    _place(definition, "fader", tuple(_ui_style.size('screen.layout.fader_rect')))
 
 
 def _radio(definition):
@@ -86,7 +88,7 @@ def _radio(definition):
 
 
 def _selector(definition):
-    _place(definition, "slider", (15, 11, 248, 77))
+    _place(definition, "slider", tuple(_ui_style.size('screen.layout.selector_rect')))
 
 
 ALIGN = {"knobUni": _knob, "knobBi": _knob, "toggle": _toggle, "faderUni": _fader, "faderBi": _fader, "radio3": _radio, "radio4": _radio}
@@ -117,7 +119,7 @@ def _set(component, rect):
 
 
 def _graphic(tab):
-    return all(b.split()[1] == "301" for b in tab["qlinkBoundsData"])
+    return all(b.split()[1] == str(_ui_style.size('screen.layout.graphic_top')) for b in tab["qlinkBoundsData"])
 
 
 def apply(tui, qlinks, ctx):
@@ -140,7 +142,7 @@ def apply(tui, qlinks, ctx):
                     or custom_name.startswith(("Master ", "Voice ", "Mod ", "Macro ", "Macros ", "FX ", "Mixer ", "Osc Native "))):
                 continue
             x, y, w, h = _rect(c)
-            if x not in OLD_COLS or y not in OLD_ROWS or (w, h) != (278, 107):
+            if x not in OLD_COLS or y not in OLD_ROWS or (w, h) != tuple(_ui_style.size('screen.layout.generated_slot')):
                 raise ValueError("tab %r: %r is not on the generator's grid: %d %d %d %d" % (tab["tabName"], c["componentData"]["name"], x, y, w, h))
             row = OLD_ROWS.index(y)
             if graphic:

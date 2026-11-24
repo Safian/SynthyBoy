@@ -16,12 +16,14 @@
 # buttons (made by the SDK generator with an empty remap), is bound to the parameter of the control it belongs to. SemiBold was seen to draw there, Bold was not.
 # Runs after 80_layout.py (which places the slots) and before 90_frames.py.
 
-NAME_FONT = 22.0
-NAME_STYLE = "SemiBold"
-NAME_COLOUR = "ff6a6a6c"
-NAME_H = 26
-NAME_X, NAME_W = 3, 272          # inside the slot of 278 px: the inner width of the Q-Link frame
-NAME_DY = {"knobUni": 0, "knobBi": 0, "toggle": 0, "faderUni": 4, "faderBi": 4, "radio3": 6, "radio4": 6}   # y of the name inside the slot
+from components import style as _ui_style
+
+NAME_FONT = _ui_style.size('screen.names.font')
+NAME_STYLE = _ui_style.size("font.style.semibold")
+NAME_COLOUR = _ui_style.argb("screen.names.caption")
+NAME_H = _ui_style.size('screen.names.height')
+NAME_X, NAME_W = _ui_style.size('screen.names.horizontal')          # inside the slot of 278 px: the inner width of the Q-Link frame
+NAME_DY = _ui_style.size('screen.names.offsets')   # y of the name inside the slot
 CENTRED = "horizontallyCentred verticallyCentred"
 
 
@@ -34,7 +36,7 @@ def _native_captioned(component):
 
 def _label_data(text):
     return {"version": 1,
-            "textStyle": {"version": 1, "font": {"version": 1, "name": "Titillium Web", "style": NAME_STYLE, "height": NAME_FONT},
+            "textStyle": {"version": 1, "font": {"version": 1, "name": _ui_style.size("font.family"), "style": NAME_STYLE, "height": NAME_FONT},
                           "colour": NAME_COLOUR, "justification": CENTRED, "case": "Upper Case"},
             "type": "Text", "handleName": "Data", "text": text}
 

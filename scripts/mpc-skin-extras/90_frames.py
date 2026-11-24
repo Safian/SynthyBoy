@@ -9,9 +9,11 @@
 # 301 and 323 on the tabs with a picture in the upper half (Env 1-4: 10_env.py), where the frame covers the lower two rows only.
 # It runs last (name order) so that it is the only place that knows the frame x and width.
 
-FRAME_X0 = 16
-FRAME_PITCH = 320
-FRAME_W = 288
+from components import style as _ui_style
+
+FRAME_X0 = _ui_style.size('screen.frames.left')
+FRAME_PITCH = _ui_style.size('screen.frames.pitch')
+FRAME_W = _ui_style.size('screen.frames.width')
 COLUMNS = 4
 
 

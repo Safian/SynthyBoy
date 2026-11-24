@@ -54,13 +54,5 @@ def apply(tui, qlinks, ctx):
                     copied = True
                     break
             if not copied:
-                from PIL import Image, ImageDraw
-                im = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
-                draw = ImageDraw.Draw(im)
-                is_on = "on" in toggle_name
-                fill = (46, 230, 240, 255) if is_on else (21, 26, 45, 255)
-                outline = (38, 48, 75, 255)
-                draw.rounded_rectangle([0, 0, 63, 31], radius=16, fill=fill, outline=outline, width=1)
-                thumb_x0 = 34 if is_on else 2
-                draw.ellipse([thumb_x0, 2, thumb_x0 + 27, 29], fill=(230, 230, 230, 255))
-                im.save(dst)
+                from components.native.button.button import write_switch_asset
+                write_switch_asset(dst, active="on" in toggle_name)
