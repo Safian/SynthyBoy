@@ -22,9 +22,10 @@ def render():
         for layout in (1, 3, 4, 6):
             filename = f"lfo_native_furniture_{layout}"
             with Image.open(temp / (filename + ".ppm")) as image:
-                # Preserve the existing LFO detector sentinel underneath widgets.
-                image.paste((0x0b, 0x10, 0x29), (900, 2, 905, 7))
-                image.save(ASSETS / (filename + ".png"), optimize=True)
+                # Leave the first eight rows to the root background and host
+                # markers, including their one-pixel detector safety margin.
+                image.crop((0, 8, image.width, image.height)).save(
+                    ASSETS / (filename + ".png"), optimize=True)
 
 
 if __name__ == "__main__":

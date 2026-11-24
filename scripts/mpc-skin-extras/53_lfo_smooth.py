@@ -204,7 +204,7 @@ def apply(tui, qlinks, ctx):
         gate = (f"IndexedEnabling/{layout}/{LAYOUT_STEPS}/Parameter {base + LAYOUT}",)
         items.insert(0, _entry(PREFIX + f"Furniture {layout}", "Image",
                             {"version": 2, "imageType": "Regular", "colour": "0", "image": filename},
-                            (0, 0, 1280, 628), gates=gate))
+                            (0, 8, 1280, 620), gates=gate))
     ranges = {}
     for layout, field, action, *rect in sorted(contract):
         spans = ranges.setdefault((field, action, tuple(rect)), [])

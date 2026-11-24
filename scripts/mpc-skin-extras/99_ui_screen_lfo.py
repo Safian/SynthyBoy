@@ -318,8 +318,14 @@ def apply(tui, qlinks, ctx):
     editor_items = [e for e in native_items if e["componentData"]["name"].startswith(PREFIX + "Editor ")]
     detail_items = [e for e in native_items if e["componentData"]["name"].startswith(PREFIX + "Detail ")]
 
-    if len(root_items) != 29:
-        raise ValueError(f"Expected 29 root native LFO widgets, found {len(root_items)}")
+    furniture = [e for e in root_items if e["componentData"]["name"].startswith(PREFIX + "Furniture ")]
+    controls = [e for e in root_items if e not in furniture]
+    # Two SYNC composites became six directly bound Button leaves apiece.
+    # The 25 scalar composites and two action Buttons retain their contracts.
+    if len(controls) != 39 or sum(e["componentData"]["type"] == "Button" for e in controls) != 14:
+        raise ValueError(f"Expected 39 root native LFO controls including 14 Buttons, found {len(controls)}")
+    if len(furniture) != 6 or any(e["componentData"]["type"] != "Image" or _rect(e) != (0, 8, 1280, 620) for e in furniture):
+        raise ValueError("Expected six native LFO furniture states below the marker strip")
     if len(editor_items) != 29:
         raise ValueError(f"Expected 29 Shape Editor widgets, found {len(editor_items)}")
     if len(detail_items) != 18:
