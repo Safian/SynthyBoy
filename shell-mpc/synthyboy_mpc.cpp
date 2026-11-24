@@ -3713,9 +3713,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr
     if (opcode == effProcessEvents && ptr)
     {
         const VstEvents* events = static_cast<const VstEvents*>(ptr);
-#if SYNTHYBOY_MPC_OVERLAY
-        int transportPlaying = -1;
-#endif
         for (VstInt32 i = 0; i < events->numEvents; ++i)
         {
             const VstEvent* ev = events->events[i];
@@ -5075,6 +5072,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         VstEvents* events = static_cast<VstEvents*>(ptr);
         if (!events) return 0;
 
+#if SYNTHYBOY_MPC_OVERLAY
+        int transportPlaying = -1;
+#endif
         for (VstInt32 i = 0; i < events->numEvents; ++i)
         {
             VstEvent* ev = events->events[i];
