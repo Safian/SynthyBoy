@@ -47,65 +47,8 @@ struct Look
     int gap, pad;
 };
 
-// look 1: the reference neon, balanced
-inline const Look kLook1 = {
-    "neon",
-    0x0b1026, 0x05070f, 0x141a38, 0x0c1026, 0x27306a, 0x4a5aa8, 0x1c2350, 0x1a2250,
-    0xeef1ff, 0xaab2d8, 0x6c76a8, 0x05070f,
-    0xffc23d,
-    { 0x2ee6f0, 0x6c7bff, 0xb45cff, 0xff4fc3 },
-    { 0xffb03d, 0x2ee6f0, 0xb45cff, 0xff4fc3, 0x5cff9d },
-    { 0xff9a3d, 0x5cff9d, 0xffd84a, 0x6c9bff, 0xff7ad9, 0x4fe0c8, 0xb08cff, 0xff6f6f },
-    { 0xff9a3d, 0xff4f4f }, { 0x5cff9d, 0x2ee6f0 }, { 0x2ee6f0, 0xb45cff },
-    0xff5a7a,
-    1.25f, 2.0f, 0.9f, 1.0f,
-    0.060f, 0.078f, 0.042f,
-    1.0f,
-    0.18f, 0.0f,
-    28.0f, 24.0f, 15.0f, 22.0f, 12.0f, 9.0f,
-    14.0f, 10.0f, 6.0f,
-    8, 12
-};
-
-// look 2: calmer, the colour in smaller doses, thinner lines, little light
-inline const Look kLook2 = {
-    "aurora",
-    0x0a0f1e, 0x04060c, 0x121a30, 0x0a1020, 0x243058, 0x4562a0, 0x182044, 0x182046,
-    0xe6ecf8, 0x9fadc8, 0x64708f, 0x04060c,
-    0xffc23d,
-    { 0x34d6c0, 0x4c8dff, 0x8f6bff, 0xe86bd8 },
-    { 0xffc058, 0x34d6c0, 0x8f6bff, 0xe86bd8, 0x7de08a },
-    { 0xffa95a, 0x7de08a, 0xf2d75a, 0x6aa3ff, 0xe58ad8, 0x5fd8c4, 0xa79bff, 0xf08080 },
-    { 0xffa95a, 0xf06a6a }, { 0x7de08a, 0x34d6c0 }, { 0x34d6c0, 0x8f6bff },
-    0xf06a86,
-    1.0f, 1.7f, 0.7f, 0.8f,
-    0.050f, 0.062f, 0.036f,
-    1.0f,
-    0.0f, 0.0f,
-    28.0f, 24.0f, 15.0f, 22.0f, 12.0f, 9.0f,
-    12.0f, 8.0f, 5.0f,
-    8, 12
-};
-
-// look 3: the boldest: saturated, thicker lines, a lot of light, the instance colours dealt the other way round
-inline const Look kLook3 = {
-    "plasma",
-    0x120a1e, 0x07040d, 0x1c1133, 0x10081f, 0x3a2764, 0x6a4cc0, 0x2a1a50, 0x2a1c52,
-    0xffffff, 0xc4b8e8, 0x8576b4, 0x07040d,
-    0xffc23d,
-    { 0xff4fc3, 0xb45cff, 0x2e8bff, 0x2ee6f0 },
-    { 0xffc23d, 0xff4fc3, 0x2ee6f0, 0xb45cff, 0x5cff9d },
-    { 0xffa030, 0x5cff9d, 0xffe14a, 0x4fa0ff, 0xff5ccc, 0x2ef0d0, 0xc090ff, 0xff6060 },
-    { 0xffa030, 0xff3b6b }, { 0x5cff9d, 0x2ee6f0 }, { 0xff4fc3, 0x2ee6f0 },
-    0xff4060,
-    1.5f, 2.4f, 1.1f, 1.0f,
-    0.075f, 0.098f, 0.052f,
-    1.5f,
-    0.30f, 0.0f,
-    28.0f, 24.0f, 15.0f, 22.0f, 12.0f, 9.0f,
-    16.0f, 12.0f, 8.0f,
-    8, 12
-};
+// Exact palette and geometry values are generated from the shared JSON tokens.
+#include "theme_tokens.h"
 
 /** The LEVEL OF DETAIL, next to the look: how much of the drawing is made (the number of frames of the wavetable stack, of unison hairlines, the spectrum, the soft light passes, the afterglow).
     "full" is the designed, richest picture; "reduced" is what a machine that cannot keep it within its frame time gets (the plugin chooses from the measured frame time of the GPU helper; a file

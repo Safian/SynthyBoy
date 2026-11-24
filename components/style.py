@@ -215,3 +215,11 @@ def set_leaf_control_active(entry, ctx, *, active):
                               "data": {"version": 1, "handleName": "Data"}}
     entry["bounds"]["acceptsHWFocus"] = "No"
     return entry
+
+
+def theme_colors(name):
+    """Resolve a named C++ graph theme from the shared color token family."""
+    result = {}
+    for key, value in _token("colors.json", "themes", name).items():
+        result[key] = [color(token) for token in value] if isinstance(value, list) else color(value)
+    return result

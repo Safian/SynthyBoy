@@ -1,10 +1,16 @@
 # Theme (theme.h)
 
 ## What it is
-ONE table (`struct Look`) with every colour, gradient, line width, type size, radius and spacing the components draw with. Components take their numbers from nowhere else. Three looks are three tables, not branches in the code. Next to it the level of detail (`struct Detail`): how much of a display is drawn.
+The shared table (`struct Look`) supplies graph colours, gradients, line widths, type sizes, radii and spacing. Its values come from the same token files as native components. Three looks are three tables, not branches in the code. Next to it the level of detail (`struct Detail`): how much of a display is drawn.
 
 ## Header and types
-`shell-mpc/ui/theme.h`, namespace `synthyboy_mpc::ui::theme`. Includes only `<cstdint>`, `<cstring>`: free of SynthyBoy code. Types: `Look`, `Detail`. Tables: `kLook1` (`"neon"`, the reference), `kLook2` (`"aurora"`, calmer), `kLook3` (`"plasma"`, boldest), `kDetailFull`, `kDetailReduced`.
+`shell-mpc/ui/theme.h`, namespace `synthyboy_mpc::ui::theme`. Includes `<cstdint>`, `<cstring>` and the generated `theme_tokens.h`; no runtime JSON parsing. Types: `Look`, `Detail`. Tables: `kLook1` (`"neon"`, the reference), `kLook2` (`"aurora"`, calmer), `kLook3` (`"plasma"`, boldest), `kDetailFull`, `kDetailReduced`.
+
+## Token source and regeneration
+
+`components/colors.json` owns the RGB values and the `themes` field maps each Look field to a colour token. `components/sizes.json` owns the `theme.neon`, `theme.aurora` and `theme.plasma` metric tables. `scripts/gen-ui-theme.py` reads both through `components/style.py` and writes `shell-mpc/ui/theme_tokens.h`.
+
+After editing these theme tokens, run `python3 scripts/gen-ui-theme.py`. The MPC package build runs the generator with `--check` before compilation and rejects a stale header. This generates C++ constants only; fixed background PNG assets are never regenerated.
 
 ## State fields (struct Look)
 | Group | Fields |

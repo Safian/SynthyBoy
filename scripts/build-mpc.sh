@@ -203,6 +203,11 @@ fi
 echo "$me: image $image, architectures: ${archs[*]}"
 echo "$me: source $repo_root (read-only), build trees $build_dir/<arch>, jobs $jobs"
 
+# Shared JSON remains the source of truth; never compile a stale graph palette.
+if [[ -z "$plugin_dir" ]]; then
+    python3 "$repo_root/scripts/gen-ui-theme.py" --check
+fi
+
 # ---- 1. the modules (and the benchmarks), one container per architecture ----------------------------------------------------------------------------
 # Runs as root inside the container (apt needs it); the results are handed back to the host user at the end of mpc-container-build.sh.
 if [[ "$skin_only" != 1 ]]; then

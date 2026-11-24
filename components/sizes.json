@@ -1630,7 +1630,10 @@
     "filter.label.font": 16,
     "filter.dock.thresholds": [110, 400, 90, 200],
     "fx.chain.card.labels": [["Select", [2, 3, 4, 27], 13], ["Power", [2, 30, 4, 23], 12]],
-    "fx.legacy.slider.insets": [6, 7, 12, 14]
+    "fx.legacy.slider.insets": [6, 7, 12, 14],
+    "theme.neon": {"curve": 1.25, "curveHi": 2.0, "curveBack": 0.9, "hair": 1.0, "arcTrack": 0.06, "arcValue": 0.078, "arcMod": 0.042, "frame": 1.0, "backGlow": 0.18, "afterglow": 0.0, "fTitle": 28.0, "fValue": 24.0, "fLabel": 15.0, "fItem": 22.0, "fSmall": 12.0, "fMin": 9.0, "rBlock": 14.0, "rControl": 10.0, "rChip": 6.0, "gap": 8, "pad": 12},
+    "theme.aurora": {"curve": 1.0, "curveHi": 1.7, "curveBack": 0.7, "hair": 0.8, "arcTrack": 0.05, "arcValue": 0.062, "arcMod": 0.036, "frame": 1.0, "backGlow": 0.0, "afterglow": 0.0, "fTitle": 28.0, "fValue": 24.0, "fLabel": 15.0, "fItem": 22.0, "fSmall": 12.0, "fMin": 9.0, "rBlock": 12.0, "rControl": 8.0, "rChip": 5.0, "gap": 8, "pad": 12},
+    "theme.plasma": {"curve": 1.5, "curveHi": 2.4, "curveBack": 1.1, "hair": 1.0, "arcTrack": 0.075, "arcValue": 0.098, "arcMod": 0.052, "frame": 1.5, "backGlow": 0.3, "afterglow": 0.0, "fTitle": 28.0, "fValue": 24.0, "fLabel": 15.0, "fItem": 22.0, "fSmall": 12.0, "fMin": 9.0, "rBlock": 16.0, "rControl": 12.0, "rChip": 8.0, "gap": 8, "pad": 12}
   },
   "named_sizes": [
     {
