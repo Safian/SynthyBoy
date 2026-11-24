@@ -22,7 +22,7 @@ constexpr unsigned kInstanceNoneRgb = 0xc814d8;    // frame 17: an instance with
 constexpr unsigned kInstanceBlankRgb = 0x14c8d8;   // frame 0 (nothing reported yet) and the frames after 17
 constexpr int kNumViews = 15;
 constexpr View kViews[kNumViews] = {
-    { "play1", 5, 1, { 23, 124, 1234, 190 }, true, { { { 33, 134, 6, 6 }, 0x723a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a7264, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Play"
+    { "play1", 5, 1, { 23, 110, 1234, 204 }, true, { { { 33, 111, 6, 6 }, 0x723a2c, 0x1e1d1e }, { { 1241, 111, 6, 6 }, 0x3a7264, 0x1e1d1e } }, { 45, 111, 6, 6 } },   // tab "Play"
     { "macros", 10, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x6b3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a6b64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Macros"
     { "osca", 15, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xaa3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3aaa64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc A"
     { "oscb", 15, 3, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xb13a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3ab164, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc B"

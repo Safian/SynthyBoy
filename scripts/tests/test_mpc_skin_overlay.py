@@ -579,7 +579,7 @@ class OverlaySkinTests(unittest.TestCase):
             for p, i in enumerate(sel):
                 c = next(c for c in slots if bound(c) == i)
                 x, y, w, h = rect(c)
-                expected = ((84, 10, 338, 56), (446, 10, 388, 56), (864, 10, 338, 56))[p]
+                expected = ((14, 10, 408, 56), (446, 10, 388, 56), (864, 10, 396, 56))[p]
                 self.assertEqual((x, y, w, h), expected, "the selector %d occupies the current Play header" % p)
                 self.assertTrue(x > 39 or x + w <= 34, "the selector %d does not cover the left detector marker" % p)
                 self.assertTrue(x > 1247 or x + w <= 1242, "the selector %d does not cover the right detector marker" % p)

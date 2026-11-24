@@ -79,9 +79,8 @@ PANEL_TITLES = ("Oscillator", "Envelope", "LFO")
 SELECTOR_TEMPLATES = ("sliderWithFocusMenu",) * 3   # the widget of a selector: the selector slider of the skin (touch and drag; observed on the Key 61: the radio group did not answer a tap, the selector does)
 SELECTOR_COMPONENTS = ("playOscSelector", "playModSelector", "playModSelector")
 PANEL_W, PANEL_GAP = 400, 17
-# Keep the detector's 5x5 marker squares at x=34..39 and x=1242..1247
-# outside the native controls while retaining the three header columns.
-SELECTOR_RECTS = ((84, 10, 338, 56), (446, 10, 388, 56), (864, 10, 338, 56))
+# Detection markers occupy the unused top eight pixels, not selector space.
+SELECTOR_RECTS = ((14, 10, 408, 56), (446, 10, 388, 56), (864, 10, 396, 56))
 COLS = (21, 341, 661, 981) # slot x of the 4 columns (80_layout.py SLOT_X)
 ROW_Y = {2: 343, 3: 483}   # graphic tabs: y of the grid rows 3 and 4 (80_layout.py GRAPHIC_ROWS)
 ROW_H = 138

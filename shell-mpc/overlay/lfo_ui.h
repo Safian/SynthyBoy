@@ -334,11 +334,13 @@ public:
     }
 
     // ---- the drawing (a picture is one scene of cached cells, then the live parts, then the popups)
-    void drawCompact (gpu::SceneBuilder& sb) const
+    void drawCompact (gpu::SceneBuilder& sb, bool nativeBackground = false) const
     {
         const ui::theme::Look& L = ui::theme::L();
         auto ground = [&] (int x, int y, int w, int h)
         {
+            if (nativeBackground)
+                return;   // Native Play background also owns the gaps between controls.
             if (w <= 0 || h <= 0)
                 return;
             ui::Cell cell (sb, { x, y, w, h }, 0);
@@ -588,8 +590,6 @@ public:
     {
         const auto* component = compactNativePart (*this, field);
         auto rect = component != nullptr ? component->rect() : ui::Rect {};
-        if (field == nativeui::playenvlfo::Choose)
-            rect.w = 338;   // the compact Play skin reserves the right header gutter
         return rect;
     }
     void setCompactNativeParts (const nativeui::playenvlfo::State& view)

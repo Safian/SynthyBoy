@@ -507,3 +507,32 @@ The native compact Play path now keeps its host background intact and renders
 oscillator data without another ground pass; curve dimming remains independent.
 The existing raster was patched only in those duplicate-control rectangles,
 since the current gallery image differs from the historical generator input.
+
+
+## Active skin page and Play layout (SDK checked 2026-11-24)
+
+Sources opened: public SDK `docs/host-contract.md` (UI and host information),
+`docs/ui-reference.md` §3.5 tabs and §7.2 modifiers, plus the local framework
+at commit `febd2ca5bd9eb16c4a412837196e145566bc981b`. The current upstream
+versions were also read at
+https://github.com/inmusic-software/mpc-plugin-builder-sdk/tree/main/docs .
+Neither this VST host contract nor its framework exposes a current skin tab
+name/index callback. `tabName` configures the host's labels; `TabLimited`
+restricts a host data binding and `Local` stores host-only UI state. These
+are not documented plugin page notifications. This is a limit of the checked
+public contract, not a claim that no internal host implementation exists.
+
+The overlay therefore retains its measured primary-framebuffer page + instance
+markers. This is a project-specific visibility check, not an SDK API. Play's
+6×6 markers and instance stamp now occupy tab y=1..6, above selectors starting
+at y=10. The source selector uses the full panel width (x14,w408), and LFO
+uses x864,w396. The previous x84 offset existed only to avoid markers at y24;
+there is no SDK requirement for that gap. Skin and detector consume the same
+layout manifest and generated header.
+
+The f4eb8f0e XL composite revealed a second source of rectangular seams:
+`ui/display.h` applied the disabled veil outside the native apertures even in
+its data-only pass. Native-header graphs now dim their curve without that
+whole-panel veil. Compact ENV/LFO ground-strip gradients also restarted per
+strip around native controls; Play now leaves those gaps to the native root
+background. Graph drawing and native controls retain their existing geometry.

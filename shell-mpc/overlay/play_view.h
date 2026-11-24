@@ -777,7 +777,7 @@ private:
                 if (live)
                     env_->drawLive (sb);
                 else
-                    env_->drawCompact (sb);
+                    env_->drawCompact (sb, true);
                 continue;
             }
             if (p == 2 && usePageLfo_)   // and the LFO (lfo_ui.h): the display with the cursors of the voices, the Q group RATE
@@ -785,7 +785,7 @@ private:
                 if (live)
                     lfo_->drawLive (sb);
                 else
-                    lfo_->drawCompact (sb);
+                    lfo_->drawCompact (sb, true);
                 continue;
             }
             ui::display::Module m;

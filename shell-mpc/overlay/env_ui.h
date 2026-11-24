@@ -249,11 +249,13 @@ public:
 
     // ---- the drawing (a picture is one scene of cached cells, then the live parts, then the popups)
     /** The opaque ground and the compact view (main state). */
-    void drawCompact (gpu::SceneBuilder& sb) const
+    void drawCompact (gpu::SceneBuilder& sb, bool nativeBackground = false) const
     {
         const ui::theme::Look& L = ui::theme::L();
         auto ground = [&] (int x0, int y0, int x1, int y1)
         {
+            if (nativeBackground)
+                return;   // Native Play background also owns the gaps between controls.
             if (x1 <= x0 || y1 <= y0)
                 return;
             ui::Cell cell (sb, { x0, y0, x1 - x0, y1 - y0 }, 0);

@@ -434,17 +434,14 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     }
     sb.style (1.0f, false);
     sb.paintOff();
-    if (d.dim && d.kind != Data::Kind::Noise && d.kind != Data::Kind::Message)   // a switched off source: the picture of its current content under a dark veil and a small OFF tag (the noise dims itself)
+    if (d.dim && d.nativeHeader == nullptr && d.kind != Data::Kind::Noise && d.kind != Data::Kind::Message)   // a switched off source: the picture of its current content under a dark veil and a small OFF tag (the noise dims itself)
     {
         const auto veil = [&] (Rect area)
         {
             sb.rect (static_cast<float> (area.x), static_cast<float> (area.y),
                      static_cast<float> (area.right()), static_cast<float> (area.bottom()), dt::a (rgb (T.panel0), 165));
         };
-        if (d.nativeHeader != nullptr)
-            outsideNativeCells (r.inset (2), *d.nativeHeader, veil);
-        else
-            veil (r.inset (2));
+        veil (r.inset (2));
         const float size = 20.0f;
         sb.text (static_cast<float> (r.x + 84), sdf::baselineForCentre (static_cast<float> (r.y) + (d.area.empty() ? 32.0f : 36.0f), size), size, "OFF", dt::a (rgb (T.textDim), 255));   // right of the power button in the top left corner of the display (4 px + 64 px; with a plot area: the middle of the header band)
     }

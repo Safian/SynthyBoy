@@ -158,7 +158,7 @@ class PlayPreviewRendererTests(unittest.TestCase):
             self.assertEqual(rate_knob.width, rate_knob.height, "RATE dial must preserve 1:1 square aspect ratio")
             self.assertLessEqual(rate_knob.width, 36)
 
-            # 2. Rendered snapshot must draw Overlay Instance play1 as a single 6x6 frame at (45, 24),
+            # 2. Rendered snapshot must draw Overlay Instance play1 as a single 6x6 frame at (45, 1),
             # with NO vertical 33-frame strip leaking down over the header or Sub power button.
             rendered = sketch.render("Play").convert("RGB")
             for y in range(36, 140):
@@ -228,7 +228,7 @@ class PlayPreviewRendererTests(unittest.TestCase):
                 self.assertGreater(sum(1 for r, g, b in oct_value.getdata() if r > 180 and g > 180 and b > 180), 8, "Missing OCT value inside box")
 
                 # Verify all three module headers have intact unclipped right chevrons
-                for hx, hw in ((84, 338), (446, 388), (864, 338)):
+                for hx, hw in ((14, 408), (446, 388), (864, 396)):
                     right_chevron = im.crop((hx + hw - 26, 26, hx + hw - 10, 46))
                     self.assertGreater(sum(1 for r, g, b in right_chevron.getdata() if r > 70 or g > 70 or b > 70), 5,
                                        f"Missing/clipped right chevron in header {(hx, 10, hw, 56)}")
