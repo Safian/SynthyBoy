@@ -793,7 +793,7 @@ def build_standalone_osc_tune_definitions(
 ):
     """Build the complete, self-contained set of SDK component definitions required for the TUNE block."""
     defs = {}
-    if skins_dir:
+    if skins_dir and with_button_art:
         _write_tune_button_assets(skins_dir)
 
     nv_def = build_name_value_definition(
