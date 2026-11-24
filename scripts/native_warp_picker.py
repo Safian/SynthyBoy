@@ -4,7 +4,7 @@
 from PIL import Image, ImageDraw
 
 from components import style
-from components.native.button.button import button
+from components.native.button.button import button, write_transparent_hit
 from components.native.radio_button.radio_button import create_segmented_radio_button_group
 from components.native.selector.selector import _choice_overlay, _image_component, _mark_native_menu, _value_label, save_png_filter0
 
@@ -16,6 +16,7 @@ PAGE_SIZE = ROWS * COLUMNS
 
 
 def warp_picker(choices, skins):
+    hit = write_transparent_hit(skins)
     count = len(choices)
     pages = (count + PAGE_SIZE - 1) // PAGE_SIZE
     # Local is the SDK's stepped page-local UI handle (ui-reference §7.3).
@@ -38,7 +39,7 @@ def warp_picker(choices, skins):
         text["componentData"]["data"]["textStyle"]["justification"] = "left verticallyCentred"
         text["bounds"].update(version=2, showWhenDataModelInvalid="Hide", additionalInvalidatingHandles=[gate])
         entries.extend([text, button("Choose " + choice, (x, y, width, height), selected_art,
-                                     "osc_source_row_hit.png", index=index, count=count, gates=(gate,))])
+                                     hit, index=index, count=count, gates=(gate,))])
     ranges = [f"{start + 1}–{min(start + PAGE_SIZE, count)}" for start in range(0, count, PAGE_SIZE)]
     entries.extend(create_segmented_radio_button_group("Warp choices", (20, 720, 1240, 64),
                                                        ranges, page_handle, skins))

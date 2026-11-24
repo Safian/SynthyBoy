@@ -2,24 +2,23 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from pathlib import Path
-from PIL import Image, ImageDraw
 
-from native_skin_font import semibold
 from native_ui_params import (
-    MIXER_STEREO_BASE, MIXER_STEREO_FIELDS,
+    MIXER_STEREO_BASE,
     MIXER_ACTIVE_TAB,
     MIXER_CONTROL,
     MIXER_HOLD_OFFSET,
     MIXER_MUTE_OFFSET,
     MIXER_MUTE_VISUAL,
     MIXER_PEAK_OFFSET,
-    MIXER_PEEK_TARGETS,
     MIXER_SOLO_OFFSET,
     MIXER_SOLO_VISUAL,
     MIXER_TABS,
     mixer_peek_index,
 )
-from components.style import color as _style_color, rgb as _style_rgb, size as _style_size
+from components.style import size as _style_size
+from components.native.button.button import TRANSPARENT_HIT, button, entry
+from components.native.radio_button.radio_button import write_segmented_strip
 
 from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
@@ -41,53 +40,6 @@ STRIPS = (
 )
 PEEK_LABELS = ("FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
 NATIVE = "Mixer Native "
-
-
-def entry(name, kind, data, rect, handles, gates=(), focus=False):
-    bounds = {"version": 2, "acceptsHWFocus": "Yes" if focus else "No",
-              "showWhenDataModelInvalid": "Hide", "whenVisible": "Always", "boundsType": "Absolute",
-              "bounds": "%d %d %d %d" % rect, "additionalInvalidatingHandles": list(gates)}
-    return {"version": 2, "componentData": {"version": 1, "name": name, "type": kind, "data": data},
-            "handle remapping": {"version": 1, "map": [{"key": key, "value": "Parameter %d" % idx}
-                                                     for key, idx in handles]},
-            "bounds": bounds}
-
-
-def button(name, parameter, rect, gates, index=1, count=1, art=("toggle_on.png", "toggle_off.png")):
-    data = {"version": 2, "onImage": art[0], "offImage": art[1], "buttonId": index, "numButtonsInGroup": count,
-            "handleName": "Data", "gestureBehaviour": "Instant"}
-    return entry(name, "Button", data, rect, (("Data", parameter),), gates, focus=True)
-
-
-def tab_filmstrip_art(skins_dir, caption, tab_index):
-    """Generates a 6-frame FilmStrip PNG highlighting tab `tab_index` when active."""
-    font = semibold(_style_size("mixer_strip.font.sm"))
-    bw = _style_size("mixer_strip.tab.width")
-    bh = _style_size("mixer_strip.tab.height")
-    radius = _style_size("radius.field")
-    sheet = Image.new("RGBA", (bw, bh * MIXER_TABS), (0, 0, 0, 0))
-    for frame in range(MIXER_TABS):
-        active = (frame == tab_index)
-        img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        fill = _style_rgb("dial.value") if active else _style_rgb("button.surface")
-        outline = _style_rgb("accent.cyan") if active else _style_rgb("button.border")
-        draw.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=radius, fill=fill, outline=outline, width=1)
-        text_fill = _style_color("text.white") if active else _style_color("text.icon")
-        draw.text((bw // 2, bh // 2), caption, fill=text_fill, font=font, anchor="mm")
-        sheet.alpha_composite(img, (0, frame * bh))
-    slug = caption.lower().replace(" ", "_")
-    filename = f"mixer_tab_{slug}_states.png"
-    sheet.save(skins_dir / filename)
-    return filename
-
-
-def tab_hit_art(skins_dir):
-    bw = _style_size("mixer_strip.tab.width")
-    bh = _style_size("mixer_strip.tab.height")
-    filename = "mixer_tab_hit.png"
-    Image.new("RGBA", (bw, bh), (0, 0, 0, 0)).save(skins_dir / filename)
-    return filename
 
 
 def apply(tui, qlinks, ctx):
@@ -211,12 +163,15 @@ def apply(tui, qlinks, ctx):
     peek_h = _style_size("mixer_strip.tab.height")
     tab_start_x = _style_size("mixer_strip.tab.start_x")
     tab_span_x = _style_size("mixer_strip.tab.span_x")
-    hit_png = tab_hit_art(Path(ctx.skins_dir)) if skins_dir else "toggle_off.png"
 
     for k, caption in enumerate(all_tabs):
         x = tab_start_x + int(round(tab_span_x * (k / (MIXER_TABS - 1))))
         if skins_dir:
-            film = tab_filmstrip_art(Path(skins_dir), caption, k)
+            slug = caption.lower().replace(" ", "_")
+            film = write_segmented_strip(
+                Path(skins_dir) / f"mixer_tab_{slug}_states.png", (bw, peek_h),
+                [(caption, frame == k) for frame in range(MIXER_TABS)],
+            )
             vis_data = {
                 "version": 2,
                 "imageType": "FilmStrip",
@@ -226,6 +181,6 @@ def apply(tui, qlinks, ctx):
                 "handleName": "Data",
             }
             components.append(entry(f"{NATIVE}{caption} Tab Visual", "Image", vis_data,
-                                    (x, peek_y, bw, peek_h), (("Data", base + MIXER_ACTIVE_TAB),), modal_gate, focus=False))
-        components.append(button(f"{NATIVE}{caption} Peek", base, (x, peek_y, bw, peek_h), modal_gate,
-                                 index=k, count=MIXER_TABS, art=(hit_png, hit_png)))
+                                    (x, peek_y, bw, peek_h), (("Data", f"Parameter {base + MIXER_ACTIVE_TAB}"),), modal_gate, focus="No"))
+        components.append(button(f"{NATIVE}{caption} Peek", (x, peek_y, bw, peek_h), TRANSPARENT_HIT,
+                                 index=k, count=MIXER_TABS, remaps=(("Data", f"Parameter {base}"),), gates=modal_gate))

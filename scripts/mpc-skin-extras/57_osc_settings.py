@@ -21,6 +21,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from components import style
+from components.native.button.button import TRANSPARENT_HIT
 from components.native.level.level import COMPACT_48_RECTS, DEFAULT_DIAL_RECTS, compact_level_definition, level_definition
 from components.native.pan.pan import compact_pan_definition, pan_definition
 from components.native.name_value.name_value import DEFAULT_BOX_WIDTH, DEFAULT_HEIGHT, build_name_value_definition
@@ -36,7 +37,7 @@ CONTRACT = Path(__file__).with_name("osc-native-settings.json")
 LAYER = "oscNativeSettingsLayer"
 CHOICE_MENU = "fx editor choice menu"
 NUMBER_MENU = "fx editor number menu"
-TABLE_ART = ("osc_native_table_prev.png", "osc_native_table_hit.png", "osc_native_table_next.png")
+TABLE_ART = ("osc_native_table_prev.png", TRANSPARENT_HIT, "osc_native_table_next.png")
 ABC_LAYER = "oscNativeAbcSettings"
 
 

@@ -12,7 +12,6 @@ from components import style as _ui_style
 import json
 from pathlib import Path
 
-from PIL import Image
 
 import sys
 
@@ -20,6 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
 from components.native.mod_row.mod_row import write_route_button_art, write_route_pagination_art
 from native_ui_params import (MOD_TARGETS, MOD_TARGETS_PAGE_GATE, MOD_TARGETS_ROW_FIELDS,
@@ -83,7 +83,7 @@ def _pagination(ctx, rect, parameter, availability):
     gate = f"NonZero/{availability}"
     art = {"version": 2, "imageType": "FilmStrip", "image": image, "colour": "0", "numFrames": 4,
            "handleName": availability}
-    hit = ("mod_targets_hit.png",) * 2
+    hit = (TRANSPARENT_HIT,) * 2
     return [_entry("Page arrows", "Image", rect, art, gate=gate),
             _label("Page", (x + 40, y, w - 80, h), "Value", parameter, gate),
             _button("Previous", (x, y, half, h), hit, f"WithName[Previous Page]/FromGesture/{parameter}",
@@ -100,7 +100,7 @@ def apply(tui, qlinks, ctx):
     view = f"Parameter {base + MOD_TARGETS_VIEW}"
     row_type = "nativeModulationRoute"
     ctx.add_component_definition(row_type, passive_layer(_rows(ctx, contract["row"])))
-    Image.new("RGBA", (1, 1)).save(ctx.skins_dir / "mod_targets_hit.png")
+    write_transparent_hit(ctx.skins_dir)
     back = contract["back"]
     art = write_route_button_art(ctx.skins_dir, "back", "BACK", back, False)
     add = f"Parameter {base + MOD_TARGETS + 1}"

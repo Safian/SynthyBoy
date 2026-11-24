@@ -42,9 +42,7 @@ class TestUiScreenMod(unittest.TestCase):
             "mod_action_edit.png": (76, 56),
             "mod_detail_delete.png": (120, 56),
             "mod_detail_confirm.png": (120, 56),
-            "mod_selector_group.png": (260, 56),
-            "seg3_on.png": (80, 56),
-            "seg3_off.png": (80, 56),
+            "mod_selector_260x56.png": (260, 56),
         }
         for filename, (expected_w, expected_h) in expected_assets.items():
             path = self.skins / filename
@@ -77,7 +75,7 @@ class TestUiScreenMod(unittest.TestCase):
         self.assertEqual(self.definitions["modNative_action_76x56"]["backgroundData"]["unfocussed"]["image"],
                          "mod_action_edit.png")
         self.assertEqual(self.definitions["modNative_group_260x56"]["backgroundData"]["unfocussed"]["image"],
-                         "mod_selector_group.png")
+                         "mod_selector_260x56.png")
 
     def test_no_visible_qlink_bounds_highlight(self):
         # Q-Link frames must not draw visible numbered host badges over the controls

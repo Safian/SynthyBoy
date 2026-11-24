@@ -19,6 +19,18 @@ except ImportError:
 FONT_FILE = Path(__file__).resolve().parent / "img" / _style_size('font.file.semibold')
 
 
+TRANSPARENT_HIT = "native_button_hit.png"
+
+
+def write_transparent_hit(directory):
+    """A native Button takes its hit area from bounds; one transparent pixel is sufficient."""
+    path = Path(directory) / TRANSPARENT_HIT
+    if not path.is_file():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGBA", (1, 1)).save(path)
+    return TRANSPARENT_HIT
+
+
 def semibold(size):
     if ImageFont is None or not FONT_FILE.is_file():
         return None
@@ -238,6 +250,8 @@ def sanitize_tab_navigation(tab, filter_power_params):
 
 __all__ = [
     "FONT_FILE",
+    "TRANSPARENT_HIT",
+    "write_transparent_hit",
     "semibold",
     "action_art",
     "in_slot",

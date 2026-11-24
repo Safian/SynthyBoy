@@ -1,10 +1,3 @@
-import sys as _token_sys
-from pathlib import Path as _TokenPath
-_token_root = str(_TokenPath(__file__).resolve().parents[2])
-if _token_root not in _token_sys.path:
-    _token_sys.path.insert(0, _token_root)
-from components import style as _ui_style
-
 # SynthyBoy - verified native controls for the Mod matrix and route editor.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -22,15 +15,15 @@ for p in (str(REPO_ROOT), str(SCRIPTS)):
 
 from components import style
 from components.native.level.level import write_strip
-from components.native.mod_row.mod_row import write_assets as write_mod_row_assets
+from components.native.mod_row.mod_row import write_skin_assets as write_mod_row_assets
 from components.native.radio_button.radio_button import render_segmented_button_art
 from components.native.button.button import action_art, in_slot
 from components.native.button.button import button as native_button
 
 MODE_BUTTONS = (
-    ("mode1", "ALL", 80, 56, 1),
-    ("mode2", "BY SOURCE", 140, 56, 2),
-    ("mode3", "BY DEST", 120, 56, 3),
+    ("mode1", "ALL", 80, 56),
+    ("mode2", "BY SOURCE", 140, 56),
+    ("mode3", "BY DEST", 120, 56),
 )
 
 
@@ -42,43 +35,31 @@ def _ensure_assets(skins_dir):
     write_mod_row_assets(skins_dir)
 
     # 2. Segmented Mode buttons (ALL, BY SOURCE, BY DEST)
-    for tag, label, w, h, _ in MODE_BUTTONS:
+    for tag, label, w, h in MODE_BUTTONS:
         on_art = render_segmented_button_art(label, True, w, h)
         off_art = render_segmented_button_art(label, False, w, h)
         on_art.save(skins_dir / f"mod_mode_{tag}_on.png")
         off_art.save(skins_dir / f"mod_mode_{tag}_off.png")
 
-    # Safety compatibility: seg3_on / seg3_off if referenced anywhere
-    if not (skins_dir / "seg3_on.png").is_file():
-        seg_on = render_segmented_button_art("MODE", True, 80, 56)
-        seg_off = render_segmented_button_art("MODE", False, 80, 56)
-        seg_on.save(skins_dir / "seg3_on.png")
-        seg_off.save(skins_dir / "seg3_off.png")
-
     # 3. Action buttons (+ ADD, EDIT, BACK, DELETE)
-    add_art = in_slot(action_art(text="+ ADD", width=_ui_style.size('screen.ui_screen_mod.add_art.width')), tuple(_ui_style.size('screen.ui_screen_mod.add_art.size')))
+    add_art = in_slot(action_art(text="+ ADD", width=style.size('screen.ui_screen_mod.add_art.width')), tuple(style.size('screen.ui_screen_mod.add_art.size')))
     add_art.save(skins_dir / "mod_action_add.png")
 
-    edit_art = in_slot(action_art(text="EDIT", width=_ui_style.size('screen.ui_screen_mod.edit_art.width')), tuple(_ui_style.size('screen.ui_screen_mod.edit_art.size')))
+    edit_art = in_slot(action_art(text="EDIT", width=style.size('screen.ui_screen_mod.edit_art.width')), tuple(style.size('screen.ui_screen_mod.edit_art.size')))
     edit_art.save(skins_dir / "mod_action_edit.png")
 
-    back_art = in_slot(action_art(text="BACK", width=_ui_style.size('screen.ui_screen_mod.back_art.width')), tuple(_ui_style.size('screen.ui_screen_mod.back_art.size')))
+    back_art = in_slot(action_art(text="BACK", width=style.size('screen.ui_screen_mod.back_art.width')), tuple(style.size('screen.ui_screen_mod.back_art.size')))
     back_art.save(skins_dir / "mod_detail_back.png")
 
-    del_art = in_slot(action_art(text="DELETE", width=_ui_style.size('screen.ui_screen_mod.del_art.width')), tuple(_ui_style.size('screen.ui_screen_mod.del_art.size')))
+    del_art = in_slot(action_art(text="DELETE", width=style.size('screen.ui_screen_mod.del_art.width')), tuple(style.size('screen.ui_screen_mod.del_art.size')))
     del_art.save(skins_dir / "mod_detail_delete.png")
     delete_rect = json.loads((SCRIPTS / "mpc-skin-extras" / "mod-native-contract.json").read_text())["detail_navigation"]["delete"]
     confirm_art = in_slot(action_art(text="CONFIRM?", width=delete_rect[2]), tuple(delete_rect[2:]))
     confirm_art.save(skins_dir / "mod_detail_confirm.png")
 
-    # 4. Group selector background compatibility
-    if (skins_dir / "mod_selector_260x56.png").is_file():
-        import shutil
-        shutil.copy2(skins_dir / "mod_selector_260x56.png", skins_dir / "mod_selector_group.png")
-
     # 5. Dial filmstrips for Detail (90px)
-    write_strip(skins_dir / "mod_dial_90_uni.png", frame_size=_ui_style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=False, active=True)
-    write_strip(skins_dir / "mod_dial_90_bi.png", frame_size=_ui_style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=True, active=True)
+    write_strip(skins_dir / "mod_dial_90_uni.png", frame_size=style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=False, active=True)
+    write_strip(skins_dir / "mod_dial_90_bi.png", frame_size=style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=True, active=True)
 
     # 7. Board source chip button art
     board_chips = (
@@ -90,7 +71,7 @@ def _ensure_assets(skins_dir):
     )
     for label, _ in board_chips:
         tag = label.lower().replace(" ", "")
-        chip_art = in_slot(action_art(text=label, width=_ui_style.size('screen.ui_screen_mod.chip_art.width')), tuple(_ui_style.size('screen.ui_screen_mod.chip_art.size')))
+        chip_art = in_slot(action_art(text=label, width=style.size('screen.ui_screen_mod.chip_art.width')), tuple(style.size('screen.ui_screen_mod.chip_art.size')))
         chip_art.save(skins_dir / f"mod_chip_{tag}.png")
 
 
@@ -106,43 +87,24 @@ def apply(tui, qlinks, ctx):
     defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
     focus_col = style.argb("mod_row.focus")
 
-    # Upgrade Mode buttons to use verified segmented art without duplicate label overlay
-    for tag, _, w, h, button_id in MODE_BUTTONS:
-        def_key = f"modNative_{tag}_{w}x{h}"
-        if def_key in defs:
-            definition = defs[def_key]
-            definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": ""}
-            definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": ""}
-            children = definition.get("componentsData", [])
-            if children and children[0]["componentData"]["type"] == "Button":
-                btn = children[0]["componentData"]
-                btn["data"]["onImage"] = f"mod_mode_{tag}_on.png"
-                btn["data"]["offImage"] = f"mod_mode_{tag}_off.png"
-                btn["data"]["buttonId"] = button_id
-                btn["data"]["numButtonsInGroup"] = 4
-                btn["data"]["gestureBehaviour"] = "Instant"
-            # Ensure no secondary duplicate text label
-            if len(children) > 1:
-                del children[1:]
-
     # Upgrade action button "+ ADD"
     if "modNative_action_120x56" in defs:
         definition = defs["modNative_action_120x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": "mod_action_add.png"}
+        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_action_add.png"}
         definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_action_add.png"}
         definition["componentsData"] = []
 
     # Upgrade action button "EDIT" / "MORE"
     if "modNative_action_76x56" in defs:
         definition = defs["modNative_action_76x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": "mod_action_edit.png"}
+        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_action_edit.png"}
         definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_action_edit.png"}
         definition["componentsData"] = []
 
     # Upgrade detail action buttons: BACK and DELETE
     if "modNative_action_100x56" in defs:
         definition = defs["modNative_action_100x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": "mod_detail_back.png"}
+        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_detail_back.png"}
         definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_detail_back.png"}
         definition["componentsData"] = []
 
@@ -164,18 +126,18 @@ def apply(tui, qlinks, ctx):
     # Upgrade dropdown group selector
     if "modNative_group_260x56" in defs:
         definition = defs["modNative_group_260x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": "mod_selector_group.png"}
-        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_group.png"}
+        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_selector_260x56.png"}
+        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_260x56.png"}
 
     # Upgrade row list selectors
     if "modNative_list_176x56" in defs:
         definition = defs["modNative_list_176x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": "mod_selector_176x56.png"}
+        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_selector_176x56.png"}
         definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_176x56.png"}
 
     if "modNative_list_244x56" in defs:
         definition = defs["modNative_list_244x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": _ui_style.argb('ink.black', 0), "image": "mod_selector_244x56.png"}
+        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_selector_244x56.png"}
         definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_244x56.png"}
 
     # Tab background is neutral dark surface; Matrix and Detail backgrounds are gated components

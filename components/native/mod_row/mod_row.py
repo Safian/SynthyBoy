@@ -23,7 +23,7 @@ from components.style import (
     color as _style_color,
     size as _style_size,
 )
-from components.native.button.button import action_art, in_slot
+from components.native.button.button import action_art, button as native_button, entry as _entry, in_slot
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -82,25 +82,6 @@ def semibold(font_size):
     if ImageFont is None or not font_file.is_file():
         return None
     return ImageFont.truetype(str(font_file), int(round(font_size)))
-
-
-def _entry(name, kind, data, bounds_rect, remaps=(), gates=(), focus="Yes"):
-    bounds = {
-        "version": 2 if gates else 1,
-        "acceptsHWFocus": focus,
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "%d %d %d %d" % tuple(bounds_rect),
-    }
-    if gates:
-        bounds["additionalInvalidatingHandles"] = list(gates)
-    return {
-        "version": 2,
-        "componentData": {"version": 1, "name": name, "type": kind, "data": data},
-        "handle remapping": {"version": 1, "map": [{"key": k, "value": v} for k, v in remaps]},
-        "bounds": bounds,
-    }
 
 
 def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticallyCentred", font_size=_style_size("mod_row.font.label")):
@@ -593,10 +574,42 @@ def extract_historical_before_crop(source_path=HISTORICAL_SOURCE_IMAGE):
         return im.crop((0, y0, im.width, y1)).convert("RGBA")
 
 
-def write_assets(dest_dir=IMG_DIR):
-    """Generate canonical PNG assets into dest_dir."""
+def write_skin_assets(dest_dir):
+    """Write the selector and slider PNGs referenced by the Mod skin."""
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # Selector backgrounds
+    s176 = draw_selector_frame(SOURCE_WIDTH, ROW_HEIGHT)
+    if s176:
+        s176.save(dest_dir / "mod_selector_176x56.png")
+
+    s244 = draw_selector_frame(TARGET_WIDTH, ROW_HEIGHT)
+    if s244:
+        s244.save(dest_dir / "mod_selector_244x56.png")
+
+    s260 = draw_selector_frame(260, ROW_HEIGHT)
+    if s260:
+        s260.save(dest_dir / "mod_selector_260x56.png")
+
+    # Slider TrackAndThumb assets (400x56 for normal, 356x56 for scroll)
+    for w in (SLIDER_WIDTH_NORMAL, SLIDER_WIDTH_SCROLL):
+        track_art = draw_slider_track(w, ROW_HEIGHT)
+        if track_art:
+            track_art.save(dest_dir / f"mod_slider_track_{w}x56.png")
+        revealed_art = draw_slider_revealed(w, ROW_HEIGHT)
+        if revealed_art:
+            revealed_art.save(dest_dir / f"mod_slider_revealed_{w}x56.png")
+
+    thumb_art = draw_slider_thumb(8, ROW_HEIGHT)
+    if thumb_art:
+        thumb_art.save(dest_dir / "mod_slider_thumb.png")
+
+
+def write_assets(dest_dir=IMG_DIR):
+    """Export the runtime assets and standalone component catalog artwork."""
+    dest_dir = Path(dest_dir)
+    write_skin_assets(dest_dir)
 
     # 1. Standalone row previews at fullwidth (1280px)
     row_populated = render_standalone_mod_row(
@@ -619,35 +632,9 @@ def write_assets(dest_dir=IMG_DIR):
     if row_inactive:
         row_inactive.save(dest_dir / "inactive.png")
 
-    # 2. Selectors
-    s176 = draw_selector_frame(SOURCE_WIDTH, ROW_HEIGHT)
-    if s176:
-        s176.save(dest_dir / "mod_selector_176x56.png")
-
-    s244 = draw_selector_frame(TARGET_WIDTH, ROW_HEIGHT)
-    if s244:
-        s244.save(dest_dir / "mod_selector_244x56.png")
-
-    s260 = draw_selector_frame(260, ROW_HEIGHT)
-    if s260:
-        s260.save(dest_dir / "mod_selector_260x56.png")
-
     arr = draw_arrow(ARROW_WIDTH, ROW_HEIGHT)
     if arr:
         arr.save(dest_dir / "mod_arrow_22x56.png")
-
-    # 3. Slider TrackAndThumb Assets (400x56 for normal, 356x56 for scroll)
-    for w in (SLIDER_WIDTH_NORMAL, SLIDER_WIDTH_SCROLL):
-        track_art = draw_slider_track(w, ROW_HEIGHT)
-        if track_art:
-            track_art.save(dest_dir / f"mod_slider_track_{w}x56.png")
-        revealed_art = draw_slider_revealed(w, ROW_HEIGHT)
-        if revealed_art:
-            revealed_art.save(dest_dir / f"mod_slider_revealed_{w}x56.png")
-
-    thumb_art = draw_slider_thumb(8, ROW_HEIGHT)
-    if thumb_art:
-        thumb_art.save(dest_dir / "mod_slider_thumb.png")
 
     # 4. Compact Buttons
     for txt, col_key, filename in (
@@ -757,10 +744,10 @@ def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice me
         return build_cell_definition("action" if kind == "delete" else kind, w, h)
     actions = []
     if kind.startswith("mode"):
-        tag = kind
-        data = {"version": 2, "onImage": f"mod_mode_{tag}_on.png", "offImage": f"mod_mode_{tag}_off.png",
-                "buttonId": int(kind[4:]), "numButtonsInGroup": 4, "handleName": "Data", "gestureBehaviour": "Instant"}
-        children = [_entry("mode", "Button", data, (0, 0, w, h), focus="No")]
+        mode = native_button("mode", (0, 0, w, h), f"mod_mode_{kind}_on.png",
+                             f"mod_mode_{kind}_off.png", index=int(kind[4:]), count=4)
+        mode["bounds"]["acceptsHWFocus"] = "No"
+        children = [mode]
     elif kind == "group":
         name_h = _style_size("mod_row.build_editor_cell_definition.label_height") if h > _style_size("mod_row.build_editor_cell_definition.tall_threshold") else 0
         if name_h:

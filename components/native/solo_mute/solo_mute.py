@@ -38,7 +38,7 @@ from components.style import (
     rgba as _style_rgba,
     size as _style_size,
 )
-from components.native.button.button import semibold
+from components.native.button.button import TRANSPARENT_HIT as ASSET_HIT, semibold, write_transparent_hit
 
 # Component state constants (indices 0..4 align 1:1 with FilmStrip frames & mixer_visual ABI)
 STATE_NEUTRAL = "neutral"
@@ -72,7 +72,6 @@ TYPE_SOLO_MUTE_MASTER = "soloMutePairMaster"
 ASSET_SOLO_STATES = "solo_mute_s_states.png"
 ASSET_MUTE_STATES = "solo_mute_m_states.png"
 ASSET_FX_STATES = "solo_mute_fx_states.png"
-ASSET_HIT = "solo_mute_hit.png"
 
 ALL_ASSETS = (
     ASSET_SOLO_STATES,
@@ -159,13 +158,10 @@ def write_solo_mute_assets(directory: Path) -> None:
     """Generates multi-state FilmStrip sheets and transparent touch hitbox asset."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    w = _style_size("mixer_strip.button.solo_w")
-    h = _style_size("mixer_strip.button.solo_h")
-
     render_filmstrip_sheet("S", STATE_SOLO).save(directory / ASSET_SOLO_STATES, format="PNG")
     render_filmstrip_sheet("M", STATE_MUTE).save(directory / ASSET_MUTE_STATES, format="PNG")
     render_filmstrip_sheet("FX", "fx_on").save(directory / ASSET_FX_STATES, format="PNG")
-    Image.new("RGBA", (w, h), (0, 0, 0, 0)).save(directory / ASSET_HIT, format="PNG")
+    write_transparent_hit(directory)
 
 
 def derive_channel_presentation_state(

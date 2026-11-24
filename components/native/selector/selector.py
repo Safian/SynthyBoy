@@ -19,6 +19,7 @@ from hashlib import sha256
 import math
 from pathlib import Path
 
+from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
 from components.native.level.level import value_label
 from components.style import (
     argb as _style_argb,
@@ -782,7 +783,7 @@ def write_routing_assets(skins_dir):
     """Writes all PNG artwork needed by oscNativeRouting and oscNativeRoutingChoices."""
     skins = Path(skins_dir)
     skins.mkdir(parents=True, exist_ok=True)
-    Image.new("RGBA", (1, 1)).save(skins / "osc_source_row_hit.png")
+    write_transparent_hit(skins)
     (skins / OSC_ROUTING_OVERLAY_BG_IMAGE).write_bytes(png_solid(_style_size('selector.write_routing_assets.png_solid'), _style_size('selector.write_routing_assets.png_solid'), BG_RGB))
     (skins / OSC_ROUTING_FRAME_IMAGE).write_bytes(png_routing_frame(STANDALONE_OSC_ROUTING_RECT[2], STANDALONE_OSC_ROUTING_RECT[3]))
     (skins / OSC_COMPACT_ROUTING_FRAME_IMAGE).write_bytes(png_compact_routing_frame(STANDALONE_COMPACT_OSC_ROUTING_RECT[2], STANDALONE_COMPACT_OSC_ROUTING_RECT[3]))
@@ -839,7 +840,7 @@ def labelled_choice_drawer(name, choices):
         data.update(type="Text", text=choice)
         data["textStyle"]["justification"] = "left verticallyCentred"
         items.extend([label, button("Choose " + choice, (x, y, width, pitch),
-                                    "osc_source_row_hit.png", index=index, count=len(choices))])
+                                    TRANSPARENT_HIT, index=index, count=len(choices))])
     _mark_native_menu(items)
     return overlay
 
@@ -1376,16 +1377,15 @@ def append_choice_rows(ctx, definition, labels, field):
 
 def write_source_navigation_assets(skins_dir):
     """Shared source selector chevrons and transparent center hit artwork."""
-    artwork = {}
-    for key in ("left", "right", "empty"):
+    artwork = {"empty": write_transparent_hit(skins_dir)}
+    arrow_w, _, art_h = _style_size("play.osc.source.art_size")
+    low, high, top, middle, bottom, stroke = _style_size("play.osc.source.arrow_geometry")
+    for key in ("left", "right"):
         filename = f"play_osc_source_{key}.png"
-        arrow_w, empty_w, art_h = _style_size("play.osc.source.art_size")
-        image = Image.new("RGBA", (arrow_w if key != "empty" else empty_w, art_h))
-        if key != "empty":
-            low, high, top, middle, bottom, stroke = _style_size("play.osc.source.arrow_geometry")
-            front, back = (low, high) if key == "left" else (high, low)
-            ImageDraw.Draw(image).line((back, top, front, middle, back, bottom),
-                                       fill=_style_color("text.icon"), width=stroke)
+        image = Image.new("RGBA", (arrow_w, art_h))
+        front, back = (low, high) if key == "left" else (high, low)
+        ImageDraw.Draw(image).line((back, top, front, middle, back, bottom),
+                                   fill=_style_color("text.icon"), width=stroke)
         image.save(Path(skins_dir) / filename)
         artwork[key] = filename
     return artwork
@@ -1405,13 +1405,13 @@ def write_wave_selector_icon(skins_dir):
 def write_osc_table_navigation_assets(directory, filenames):
     """Shared previous/center/next artwork for the standalone table selector."""
     top, middle, bottom = _style_size("selector.table.arrow_y")
-    for index, filename in enumerate(filenames):
-        path = Path(directory) / filename
+    write_transparent_hit(directory)
+    for index in (0, 2):
+        path = Path(directory) / filenames[index]
         if path.is_file():
             continue
         image = Image.new("RGBA", tuple(_style_size("screen.osc_settings.art.size")))
-        if index != 1:
-            tip, side = _style_size("screen.osc_settings.apply.size" if index == 0 else "screen.osc_settings.apply.size.2")
-            ImageDraw.Draw(image).line((side, top, tip, middle, side, bottom), fill=_style_color("text.icon"),
-                                       width=_style_size("screen.osc_settings.apply.width"))
+        tip, side = _style_size("screen.osc_settings.apply.size" if index == 0 else "screen.osc_settings.apply.size.2")
+        ImageDraw.Draw(image).line((side, top, tip, middle, side, bottom), fill=_style_color("text.icon"),
+                                   width=_style_size("screen.osc_settings.apply.width"))
         image.save(path)

@@ -98,7 +98,7 @@ def _button(name, rect, parameter, gates, index=1, count=1, art=("toggle_on.png"
 
 
 def _hidden_hit(name, rect, action, action_index, gates):
-    return _button(name, rect, action, gates, action_index, FILTER_ACTION_COUNT, ("filter_native_hit.png",) * 2)
+    return _button(name, rect, action, gates, action_index, FILTER_ACTION_COUNT, (ui_button.TRANSPARENT_HIT,) * 2)
 
 
 def _film(name, file, rect, parameter, gates, frames):
@@ -258,7 +258,7 @@ def _pz_toolbar(ctx, rects):
             for frame in range(4):
                 film.paste(picture(label, tuple(rect[2:]), start <= frame <= start + 1), (rect[0] - x, frame * height))
             gates = (f"RangedEnabling/{start}/{start + 1}/4/Parameter {mode}",)
-            name = "filter_native_hit.png"
+            name = ui_button.TRANSPARENT_HIT
         button = _button(f"PZ {label}", rect, 0, gates, index, 5, (name, name))
         button["handle remapping"]["map"][0]["value"] = f"WithName[{label}]/FromGesture/Data"
         children.append(button)
@@ -462,7 +462,7 @@ def apply(tui, qlinks, ctx):
     velo_ind = displays + 3
     power_frame = displays + 4
     domain_base = ctx.param_count + LEGACY_EXTRAS + FX_DOMAIN_OFFSET
-    Image.new("RGBA", (1, 1)).save(ctx.skins_dir / "filter_native_hit.png")
+    ui_button.write_transparent_hit(ctx.skins_dir)
 
     dial_assets = _ensure_dial_assets(ctx.skins_dir)
     split_dial_assets = _ensure_dial_assets(ctx.skins_dir, style.size("height.medium"))

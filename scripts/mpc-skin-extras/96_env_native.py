@@ -17,7 +17,7 @@ import copy
 import tempfile
 from pathlib import Path
 
-from PIL import Image
+from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
 
 from components.native.level.level import compact_dial_definition, synthyboy_dial_data, level_definition
 from components.native.active_text.active_text import (
@@ -50,7 +50,6 @@ CELLS = (
 SELECTOR_X, SELECTOR_Y, SELECTOR_W, SELECTOR_H = tuple(_ui_style.size('screen.env_native.metric.rect'))
 SELECTOR_VARIANTS = 5
 SELECTOR_ART = "env_selector_cells.png"
-SELECTOR_HIT = "env_selector_hit.png"
 
 
 def _bounds(rect, gate_list, focus="Yes"):
@@ -108,8 +107,8 @@ def _selector_assets(directory):
     Used instances get a text suffix 'N ·'; '+' stays '+'.
     """
     art_path = Path(directory) / SELECTOR_ART
-    hit_path = Path(directory) / SELECTOR_HIT
-    if art_path.is_file() and hit_path.is_file():
+    write_transparent_hit(directory)
+    if art_path.is_file():
         return
 
     frames = [None] * (ENV_SELECTOR_LAST_FRAME + 1)
@@ -124,7 +123,6 @@ def _selector_assets(directory):
                 label = f"{number} ·"
             frames[base + variant] = (label, selected)
     write_segmented_strip(art_path, (SELECTOR_W, SELECTOR_H), frames)
-    Image.new("RGBA", (SELECTOR_W, SELECTOR_H)).save(hit_path)
 
 
 def _selector_entry(name, kind, data, rect, remap, gates, focus="No"):
@@ -153,8 +151,8 @@ def _append_selector(ctx, items, selector_index, gate):
     for index in range(ENV_SELECTOR_CELLS):
         button = {
             "version": 2,
-            "onImage": SELECTOR_HIT,
-            "offImage": SELECTOR_HIT,
+            "onImage": TRANSPARENT_HIT,
+            "offImage": TRANSPARENT_HIT,
             "buttonId": index,
             "numButtonsInGroup": ENV_SELECTOR_CELLS,
             "handleName": "Data",
