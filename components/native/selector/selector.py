@@ -355,6 +355,8 @@ def selector_definition(
         height = _style_size('selector.selector_definition.height') if name else _style_size('selector.selector_definition.height.offset1')
     elif name or caption_text:
         height = _style_size('selector.selector_definition.height')
+        if slot_height == _style_size('height.medium'):
+            height = slot_height
     elif slot_height == _style_size('selector.selector_definition.geometry') and not neutral and not stepper and not arrows and not neighbors and not steps:
         height = _style_size('selector.selector_definition.height')
     else:
@@ -449,7 +451,9 @@ def selector_definition(
     value["componentData"]["data"]["handleName"] = title
     val_just = justification or ("horizontallyCentred verticallyCentred" if (navigable or arrows) else "left verticallyCentred")
     value["componentData"]["data"]["textStyle"]["justification"] = val_just
-    value["bounds"]["bounds"] = f"{left} {top + (_style_size('selector.selector_definition.value.bounds.bounds.offset1') if (name or caption_text) else 0)} {text_width} {_style_size('selector.selector_definition.value.bounds.bounds') if (name or caption_text) else height}"
+    value_y = _style_size('selector.selector_definition.value.bounds.bounds.offset1') if name or caption_text else 0
+    value_h = min(_style_size('selector.selector_definition.value.bounds.bounds'), height - value_y) if name or caption_text else height
+    value["bounds"]["bounds"] = f"{left} {top + value_y} {text_width} {value_h}"
 
     if name or caption_text:
         caption = _value_label("Name", (left, top + _style_size('selector.selector_definition.caption.offset2'), text_width, _style_size('selector.selector_definition.caption.offset1')), _style_size('selector.selector_definition.caption'))

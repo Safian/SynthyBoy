@@ -352,26 +352,26 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
 
     def test_integer_remainder_cell_widths_share_component_subtrees(self):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        compact_dials = [key for key in definitions if key.startswith("filterNativeDial_side_") and key.endswith("x76")]
-        self.assertTrue(compact_dials)
-        self.assertTrue(all(key.endswith("_182x76") for key in compact_dials))
+        compact_dials = [key for key in definitions if key.startswith("filterNativeDial_side_") and key.endswith("x60")]
+        self.assertEqual({key.rsplit("_", 1)[1] for key in compact_dials}, {"128x60", "131x60", "200x60"})
         compact_fields = [key for key in definitions if key.startswith("filterNativeNv_") and key.endswith("x56")]
         self.assertEqual(compact_fields, ["filterNativeNv_119x56"])
 
-    def test_filter_native_interactive_children_keep_real_56px_hit_targets(self):
+    def test_filter_native_interactive_children_fit_full_and_compact_controls(self):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         visited = set()
 
-        def check_children(entries):
+        def check_children(entries, minimum):
             for entry in entries:
                 kind = entry["componentData"]["type"]
                 if kind in ("Knob", "Button", "NumberField", "ActiveText"):
-                    self.assertGreaterEqual(min(rect(entry)[2:]), 56, entry["componentData"]["name"])
+                    self.assertGreaterEqual(min(rect(entry)[2:]), minimum, entry["componentData"]["name"])
                 if kind in definitions and kind not in visited:
                     visited.add(kind)
-                    check_children(definitions[kind].get("componentsData", []))
+                    check_children(definitions[kind].get("componentsData", []), minimum)
 
-        check_children(self.controls + self.curve_controls + self.split_left_controls + self.split_right_controls)
+        check_children(self.controls + self.curve_controls, 56)
+        check_children(self.split_left_controls + self.split_right_controls, 48)
 
     def test_each_routing_caption_is_in_its_exact_single_button_hitbox(self):
         manifest = json.loads((base.REAL_EXTRAS / "filter-native-contract.json").read_text())
@@ -390,10 +390,14 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 for index, route in enumerate(branch):
                     data = route["componentData"]["data"]
                     self.assertTrue(data["onImage"].startswith("choice_segmented_"))
-                    top = index * h // 3
-                    self.assertEqual(rect(route), (x, y + top, w, (index + 1) * h // 3 - top))
+                    horizontal = prefix == "Filter Native Split Routing "
+                    extent = w if horizontal else h
+                    start, end = extent * index // 3, extent * (index + 1) // 3
+                    expected = (x + start, y, end - start, h) if horizontal else (x, y + start, w, end - start)
+                    self.assertEqual(rect(route), expected)
                     self.assertEqual((data["buttonId"], data["numButtonsInGroup"], handle(route)), (index, 3, 2861))
-                    point = (x + w // 2, y + (2 * index + 1) * h // 6, 1, 1)
+                    px, py, pw, ph = expected
+                    point = (px + pw // 2, py + ph // 2, 1, 1)
                     self.assertEqual([c for c in branch if overlaps(point, rect(c))], [route])
 
 

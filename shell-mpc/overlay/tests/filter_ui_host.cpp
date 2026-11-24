@@ -1555,7 +1555,7 @@ static void exportNativeFilterContract ()
     splitCurve.setCompact (true);
     const int lx = 8, lw = (FilterUi::kCanvasW - 28) * 60 / 100;
     const int rx = lx + lw + 12, rw = FilterUi::kCanvasW - 8 - rx;
-    splitCurve.place ({ rx, FilterUi::kTabY + ui::kQLane, rw, FilterUi::kTabH - ui::kQLane - 8 });
+    splitCurve.place ({ rx, full.scalarView.rect().y, rw, full.rect().bottom() - 8 - full.scalarView.rect().y });
     std::printf (",\n  \"split\": {\n    \"view\": ");
     rect (full.view.rect());
     std::printf (",\n    \"scalar_view\": ");
@@ -1706,8 +1706,8 @@ static void testSplit6040LayoutAndState ()
     check (r.ui.isSplit() && f.splitMode() && c.compact(), "Split root starts in 60/40 Split mode with compact ScalarCurveEditor");
 
     // 1. 60/40 Split exact columns (8 px margin, 12 px center gap, 751 px left + 501 px right)
-    check (f.view.rect().x == 8 && f.view.rect().y == FilterUi::kTabY + ui::kQLane && f.view.rect().h == 56,
-           "Split left header starts at x=8, y=kTabY+16, h=56");
+    check (f.view.rect().x == 8 && f.view.rect().y == FilterUi::kTabY + 12 && f.view.rect().h == 48,
+           "Split left header starts at x=8, y=kTabY+12, h=48");
     check (f.clean.rect().right() == 8 + 751 && f.expand.rect().right() <= 8 + 751,
            "Split left panel fits within 751 px (60% column)");
     check (f.scalarView.rect().x == 771 && c.rect().x == 771 && c.rect().right() == 771 + 501,
@@ -1715,15 +1715,15 @@ static void testSplit6040LayoutAndState ()
     check (f.power.rect().x == 16 && f.power.rect().y == f.graphRect().y + 4
            && f.expand.rect().right() == f.graphRect().right() - 8 && f.expand.rect().y == f.graphRect().y + 4,
            "Split places POWER at graph top-left and EXPAND at graph top-right");
-    check (f.display.rect().y >= f.power.rect().bottom() && f.display.rect().y >= f.expand.rect().bottom(),
+    check (f.display.rect() == f.graphRect() && f.display.plot().y >= f.power.rect().bottom() && f.display.plot().y >= f.expand.rect().bottom(),
            "Split left graph plots strictly below POWER/EXPAND top row");
 
-    // 2. Side dials (60 px) & vertical ROUTING >= 56 px/row & all hitboxes >= 56 px
+    // Two four-slot rows plus the three-way native routing strip.
     for (const ui::FilterKnob* k : { &f.cutoff, &f.resonance, &f.drive, &f.mix, &f.keytrack, &f.var, &f.blend })
-        check (k->state.side && k->state.dialMax == 60 && k->rect().w >= 56 && k->rect().h >= 56,
-               std::string ("Split knob uses 60 px side-dial >=56px: ") + k->state.label);
-    check (f.routing.columns() == 1 && f.routing.rect().h >= 3 * 56,
-           "Split ROUTING is a single vertical column with >=56 px per radio row");
+        check (k->state.side && k->rect().w >= 128 && k->rect().h == 60,
+               std::string ("Split knob uses a 60 px tall side-dial slot: ") + k->state.label);
+    check (f.routing.columns() == 3 && f.routing.rect().h == 48,
+           "Split ROUTING has three horizontal choices in one 48 px row");
     check (c.gridX.rect().h >= 56 && c.gridY.rect().h >= 56 && c.snap.rect().h >= 56 && c.legato.rect().h >= 56
            && c.init.rect().h >= 56 && c.undoButton.rect().h >= 56 && c.del.rect().h >= 56,
            "Split right panel controls all have >=56 px touch height");

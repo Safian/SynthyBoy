@@ -850,7 +850,7 @@ protected:
     {
         const int W = rect_.w, X = rect_.x;
         const int targetsW = 130;
-        targets.place ({ rect_.right() - targetsW, rect_.y, targetsW, 56 });
+        targets.place ({ rect_.right() - targetsW, rect_.y, targetsW, 48 });
         glideRect_ = {};
         usedRect_ = {};
         usedList.place ({});
@@ -860,7 +860,7 @@ protected:
         const int bottomY = rect_.bottom() - bottomRowH;
         const int optY = bottomY - 8 - optRowH;
         const int editY = optY - 4 - editH;
-        const int graphY = rect_.y + 64;
+        const int graphY = targets.rect().bottom() + 4;
         graphRect_ = { X, graphY, W, std::max (0, editY - 8 - graphY) };
         expandBtn.place ({ graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
         canvas.place ({ graphRect_.x, graphRect_.y + 64, graphRect_.w, std::max (0, graphRect_.h - 64) });

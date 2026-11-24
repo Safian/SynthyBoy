@@ -119,9 +119,9 @@ def _write_selector_strip(directory, key, rect, frames):
     return file
 
 
-def _ensure_dial_assets(skins_dir):
-    uni_on = ui_level.synthyboy_dial_data(skins_dir, frame_size=DIAL_SIZE, bipolar=False, active=True)
-    bi_on = ui_pan.synthyboy_dial_data(skins_dir, frame_size=DIAL_SIZE, bipolar=True)
+def _ensure_dial_assets(skins_dir, frame_size=DIAL_SIZE):
+    uni_on = ui_level.synthyboy_dial_data(skins_dir, frame_size=frame_size, bipolar=False, active=True)
+    bi_on = ui_pan.synthyboy_dial_data(skins_dir, frame_size=frame_size, bipolar=True)
 
     return {"uni_on": uni_on, "bi_on": bi_on}
 
@@ -287,11 +287,7 @@ def _pz_toolbar(ctx, rects):
 
 
 def _ensure_dial_definition(ctx, w, h, bipolar, active, dial_assets, side_layout):
-    # The compact row has 182/185/187px cells from integer column division.
-    # Reuse the narrowest control subtree; the at-most-five trailing pixels are
-    # parent spacing, not a new dial/caption/value component variant.
-    if side_layout and h == style.size("filter.ensure_dial_definition.side_height"):
-        w = style.size("filter.ensure_dial_definition.side_min_width")
+    dial_size = style.size("height.medium") if side_layout else DIAL_SIZE
     layout_tag = "side" if (side_layout or w >= style.size("filter.ensure_dial_definition.side_threshold")) else "top"
     kind = f"filterNativeDial_{layout_tag}_{'bi' if bipolar else 'uni'}_{'on' if active else 'off'}_{w}x{h}"
     defs = ctx._filter_dial_defs if hasattr(ctx, "_filter_dial_defs") else setattr(ctx, "_filter_dial_defs", set()) or ctx._filter_dial_defs
@@ -300,8 +296,8 @@ def _ensure_dial_definition(ctx, w, h, bipolar, active, dial_assets, side_layout
     defs.add(kind)
 
     if layout_tag == "side":
-        dial_rect = (style.size("filter.ensure_dial_definition.padding"), (h - DIAL_SIZE) // 2, DIAL_SIZE, DIAL_SIZE)
-        tx = style.size("filter.ensure_dial_definition.padding") + DIAL_SIZE + style.size("filter.ensure_dial_definition.gap")
+        dial_rect = (style.size("filter.ensure_dial_definition.padding"), (h - dial_size) // 2, dial_size, dial_size)
+        tx = style.size("filter.ensure_dial_definition.padding") + dial_size + style.size("filter.ensure_dial_definition.gap")
         tw = max(style.size("filter.ensure_dial_definition.min_label_width"), w - tx - style.size("filter.ensure_dial_definition.end_padding"))
         cap_rect = (tx, max(style.size("filter.ensure_dial_definition.padding"), h // 2 - style.size("filter.ensure_dial_definition.vertical_gap")), tw, style.size("filter.ensure_dial_definition.caption_height"))
         val_rect = (tx, max(style.size("filter.ensure_dial_definition.vertical_gap"), h // 2 - style.size("filter.ensure_dial_definition.end_padding")), tw, style.size("filter.ensure_dial_definition.value_height"))
@@ -381,9 +377,10 @@ def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passi
             container.append(style.set_leaf_control_active(passive, ctx, active=False))
 
 
-def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates, skins_dir, *, active_alternatives=()):
+def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates, skins_dir, *, active_alternatives=(), compact=False):
     rows = ui_radio.create_segmented_radio_button_group(
-        NATIVE + name, rect, ROUTING, f"Parameter {param}", skins_dir, vertical=True, gates=active_gates)
+        NATIVE + name, rect, ("Parallel", "1 → 2", "2 → 1") if compact else ROUTING,
+        f"Parameter {param}", skins_dir, vertical=not compact, gates=active_gates)
     for index, row in enumerate(rows):
         row_name = f"{NATIVE}{name} {index}"
         row["componentData"]["name"] = row_name
@@ -403,10 +400,10 @@ def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates
 
 def _ensure_nv_definition(ctx, w, h):
     # Integer row division produces 119..121px cells. A common 119px subtree
-    # preserves every >=56px value hitbox without serialising three copies.
+    # preserves the full-height touch row without serialising three copies.
     if h == style.size("filter.ensure_nv_definition.row_height"):
         w = style.size("filter.ensure_nv_definition.min_width")
-    bw = max(style.size("filter.ensure_nv_definition.min_box_width"), min(style.size("filter.ensure_nv_definition.max_box_width"), w // 2))
+    bw = style.size("filter.ensure_nv_definition.box_width")
     kind = f"filterNativeNv_{w}x{h}"
     defs = ctx._filter_nv_defs if hasattr(ctx, "_filter_nv_defs") else setattr(ctx, "_filter_nv_defs", set()) or ctx._filter_nv_defs
     if kind in defs:
@@ -414,6 +411,7 @@ def _ensure_nv_definition(ctx, w, h):
     defs.add(kind)
     defn = ui_name_value.build_name_value_definition(
         name=kind, rect=(0, 0, w, h), skins_dir=ctx.skins_dir, box_width=bw,
+        box_height=style.size("height.small"),
         handle="Data", caption_handle="Caption",
     )
     ctx.add_component_definition(kind, defn)
@@ -479,6 +477,7 @@ def apply(tui, qlinks, ctx):
     Image.new("RGBA", (1, 1)).save(ctx.skins_dir / "filter_native_hit.png")
 
     dial_assets = _ensure_dial_assets(ctx.skins_dir)
+    split_dial_assets = _ensure_dial_assets(ctx.skins_dir, style.size("height.medium"))
     power_art = _ensure_power_art(ctx.skins_dir)
     domains = json.loads(FX_CONTRACT.read_text(encoding="utf-8"))["domains"]
 
@@ -764,10 +763,10 @@ def apply(tui, qlinks, ctx):
                                  passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
                                                   ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
                 elif slot == ROUTE:
-                    _emit_routing(ctx, split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir)
+                    _emit_routing(ctx, split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir, compact=True)
                 else:
                     _emit_dial(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
-                               slot in BIPOLAR, active_gates, passive_gates, dial_assets, side_layout=True,
+                               slot in BIPOLAR, active_gates, passive_gates, split_dial_assets, side_layout=True,
                                passive_bindings=[(f" F{f}", ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}"),
                                                   f"IndexedEnabling/{f}/5/Parameter {state}", ctx.param_index(f"filter{f}.model"))
                                                  for f in (1, 2)], model_proxy=model)

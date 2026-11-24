@@ -612,6 +612,7 @@ class FilterFullScreen : public Composite
 public:
     static constexpr int kMaxGroups = 4;   // MAIN, TRACK, OUT, FORMANT
     static constexpr int kRoutingW = 150;  // the ROUTING list: dot, "Series 1 to 2", padding
+    static constexpr int kSplitHeaderY = 12, kSplitHeaderH = 48;
     static constexpr int kTopH = 56, kTopBarH = kQLane + kTopH, kBandH = 214, kBlockTitleH = 34, kBlockPad = 2, kBlockGap = 4, kSlotGap = 0, kBandMargin = 4;   // the top bar: the lane of the chips of MODEL and STYLE, then the 56 px row
     static constexpr int kViewF1 = 0, kViewF2 = 1, kViewNote = 2, kViewVelo = 3, kViewCellW = 72;   // the states of the page (the selector's candidate id is the state + 1)
     MenuButton close { "CLOSE", MenuButton::Icon::None };
@@ -879,8 +880,8 @@ protected:
         const int lx = rect_.x + m, lw = (rect_.w - 2 * m - gapCol) * 60 / 100;
         const int rx = lx + lw + gapCol, rw = rect_.right() - m - rx;
 
-        // 1. Left & right top bars (56 px high below 16 px Q-chip lane)
-        const Rect topLeft { lx, rect_.y + kQLane, lw, kTopH };
+        // Leave the host detection markers (y=4..10) above the compact header.
+        const Rect topLeft { lx, rect_.y + kSplitHeaderY, lw, kSplitHeaderH };
         Rect r[4];
         const int fixed[4] = { 116, 0, 0, LedToggle::widthFor ("CLEAN") }, weight[4] = { 0, 5, 4, 0 };
         layoutRow (topLeft, fixed, weight, 4, 6, r);
@@ -890,50 +891,39 @@ protected:
         model.place (r[1]);
         style.place (r[2]);
         clean.place (r[3]);
-        scalarView.place ({ rx, topLeft.y, std::max (116, rw - 130 - 6), kTopH });
+        scalarView.place ({ rx, topLeft.y, std::max (116, rw - 130 - 6), kSplitHeaderH });
 
-        // 2. Left bottom band: TRACK (2x2 >=56 px slots) + OUT (BLEND side-dial + vertical ROUTING), MAIN above it
-        const int bandH = 192, bandY = rect_.bottom() - m - bandH;
-        const int mainH = 100, mainY = bandY - 6 - mainH;
+        // MAIN and TRACK own four dials per row; OUT has BLEND above the compact routing choice.
+        const int rowHeight = 84, rowGap = 4, outWidth = 208, groupGap = 8;
+        const int controlsY = rect_.bottom() - m - 2 * rowHeight - rowGap;
+        const int rowWidth = lw - outWidth - groupGap;
+        mainBlock_ = { lx, controlsY, rowWidth, rowHeight };
+        trackBlock_ = { lx, controlsY + rowHeight + rowGap, rowWidth, rowHeight };
+        outBlock_ = { lx + rowWidth + groupGap, controlsY, outWidth, 2 * rowHeight + rowGap };
 
-        // 3. Left graph card: POWER at top-left, EXPAND at top-right, FilterDisplay below top 64 px band
-        const int graphY = topLeft.bottom() + 8;
-        graphRect_ = { lx, graphY, lw, std::max (204, mainY - 6 - graphY) };
-        power.place ({ graphRect_.x + 8, graphRect_.y + 4, 56, 56 });
-        expand.place ({ graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
+        const int graphY = topLeft.bottom() + 4;
+        graphRect_ = { lx, graphY, lw, controlsY - 6 - graphY };
+        power.place ({ lx + 8, graphY + 4, 56, 56 });
+        expand.place ({ graphRect_.right() - 64, graphY + 4, 56, 56 });
         display.placeGraph (graphRect_, power.rect(), expand.rect());
 
-        // 4. MAIN: 4 side-dials (CUTOFF, RESO, DRIVE, MIX)
-        mainBlock_ = { lx, mainY, lw, mainH };
+        const int gap = 4, pad = 4, slotWidth = (rowWidth - 2 * pad - 3 * gap) / 4;
+        auto slot = [&] (Rect row, int column)
         {
-            const Rect in { mainBlock_.x + 4, mainBlock_.y + 20, mainBlock_.w - 8, 76 };
-            const int gap = 4, cw = (in.w - 3 * gap) / 4;
-            Component* ms[4] = { &cutoff, &resonance, &drive, &mix };
-            for (int i = 0; i < 4; ++i)
-                ms[i]->place ({ in.x + i * (cw + gap), in.y, i == 3 ? in.w - 3 * (cw + gap) : cw, in.h });
-        }
-
-        // 5. TRACK (2x2: KEYTRACK, VAR/FRESO / ENV1, COMB) & OUT (BLEND + vertical ROUTING)
-        const int trackW = 388, midGap = 8;
-        trackBlock_ = { lx, bandY, trackW, bandH };
-        outBlock_ = { lx + trackW + midGap, bandY, lw - trackW - midGap, bandH };
+            const int x = row.x + pad + column * (slotWidth + gap);
+            return Rect { x, row.y + 20, column == 3 ? row.right() - pad - x : slotWidth, 60 };
+        };
+        Component* main[] = { &cutoff, &resonance, &drive, &mix };
+        Component* track[] = { &keytrack, &env1, &var, &combOffset };
+        for (int i = 0; i < 4; ++i)
         {
-            const int tx = trackBlock_.x + 4, tw = trackBlock_.w - 8, cGap = 6, cw = (tw - cGap) / 2;
-            const int row1Y = trackBlock_.y + 20, rowH = 76, row2Y = row1Y + rowH + kQLane;
-            keytrack.place ({ tx, row1Y, cw, rowH });
-            const Rect third { tx + cw + cGap, row1Y, tw - cw - cGap, rowH };
-            var.place (third);
-            formantRes.place (third);
-            env1.place ({ tx, row2Y, cw, rowH });
-            combOffset.place ({ tx + cw + cGap, row2Y, tw - cw - cGap, rowH });
+            main[i]->place (slot (mainBlock_, i));
+            track[i]->place (slot (trackBlock_, i));
         }
-        {
-            const int ox = outBlock_.x + 4, oy = outBlock_.y + 20, ow = outBlock_.w - 8;
-            const int listW = 156, bGap = 6, bw = std::max (56, ow - listW - bGap);
-            blend.place ({ ox, oy, bw, 76 });
-            routing.place ({ ox + bw + bGap, oy, listW, 168 });
-            outReadout.place ({});
-        }
+        formantRes.place (var.rect());
+        blend.place ({ outBlock_.x + pad, mainBlock_.y + 20, outWidth - 2 * pad, 60 });
+        routing.place ({ outBlock_.x + pad, trackBlock_.y + 24, outWidth - 2 * pad, 48 });
+        outReadout.place ({});
         formantBlock_ = {};
         for (Component* c : { static_cast<Component*> (&formantX), static_cast<Component*> (&formantY), static_cast<Component*> (&formantTrans), static_cast<Component*> (&formantSpread) })
             c->place ({});
@@ -1171,7 +1161,7 @@ protected:
             if ((i != 3 || (isFormant_ && ! splitMode_)) && ! blocks[i].empty())
                 p.textLeft ({ blocks[i].x + kBlockPad + 4, blocks[i].y + 3, std::max (0, blocks[i].w - 2 * kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (activeGroup_ == i ? T.q : T.textDim, 255), T.fMin);
         // the name of the LED list in the title strip of its block (the list has no title of its own: the three rows use the whole height); the read-only part says where it is edited
-        p.textLeft ({ routing.rect().x + 28, outBlock_.y + 3, std::max (0, routing.rect().w - 28), 16 }, "ROUTING", T.fLabel - 2.0f,
+        p.textLeft ({ routing.rect().x + (splitMode_ ? 2 : 28), splitMode_ ? trackBlock_.y + 3 : outBlock_.y + 3, std::max (0, routing.rect().w - 28), 16 }, "ROUTING", T.fLabel - 2.0f,
                     p.c (anyOn_ ? (activeGroup_ == 2 ? T.q : T.textDim) : T.textFaint, 255), T.fMin);
         if (! splitMode_ && ! outReadout.rect().empty())
             p.textLeft ({ outReadout.rect().x + 4, outBlock_.y + 3, std::max (0, outReadout.rect().w - 4), 16 }, "SET ON MIXER", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);

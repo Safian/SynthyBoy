@@ -197,6 +197,7 @@ def build_name_value_definition(
     skins_dir=None,
     *,
     box_width=DEFAULT_BOX_WIDTH,
+    box_height=None,
     popup=POPUP_NUMBER_MENU,
     handle="Data",
     caption_handle="Caption",
@@ -221,7 +222,9 @@ def build_name_value_definition(
     7. SDK Focus ring child included for hardware navigation, focused on the number box.
     """
     w, h = rect[2], rect[3]
-    preset = get_height_preset(h)
+    bh = h if box_height is None else min(h, box_height)
+    by = (h - bh) // 2
+    preset = get_height_preset(bh)
 
     r = radius if radius is not None else preset["radius"]
     px = pad_x if pad_x is not None else preset["pad_x"]
@@ -230,8 +233,6 @@ def build_name_value_definition(
 
     bw = min(box_width, w - _style_size('name_value.build_name_value_definition.bw'))
     bx = w - bw
-    by = 0
-    bh = h
 
     triggers = ("Mouse Down", "Enter Pressed")
 
@@ -312,7 +313,7 @@ def build_name_value_definition(
     )
 
     # Right: Value centered inside the framed number box
-    value_rect = (bx, 0, bw, bh)
+    value_rect = (bx, by, bw, bh)
     value_comp = _label_component(
         "value",
         "Value",

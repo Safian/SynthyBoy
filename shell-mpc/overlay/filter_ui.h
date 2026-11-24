@@ -961,7 +961,7 @@ private:
             const ui::Rect fr = full_.rect();
             const int lx = fr.x + 8, lw = (fr.w - 28) * 60 / 100;
             const int rx = lx + lw + 12, rw = fr.right() - 8 - rx;
-            compactRect = { rx, fr.y + ui::kQLane, rw, std::max (0, fr.h - ui::kQLane - 8) };
+            compactRect = { rx, full_.scalarView.rect().y, rw, fr.bottom() - 8 - full_.scalarView.rect().y };
         }
         for (ScalarCurveUi& c : curve_)
         {
