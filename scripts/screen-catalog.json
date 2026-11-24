@@ -81,7 +81,7 @@
     {
       "name": "mixer",
       "title": "Mixer",
-      "status": "MPC XL hardverfelvétel · 8c65be5e",
+      "status": "MPC XL hardverfelvétel · 536348cd · tíz natív csatornasáv",
       "migration_current_source": "docs/ui-components/komponensek/mixer-preview.png",
       "migration_current_source_commit": "8bac702e",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_mixer.png",

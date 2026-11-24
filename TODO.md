@@ -312,6 +312,3 @@
 - [ ] Gyári kék `knobBlue` kipróbálása külső pluginból, saját PAN/LEVEL elrendezéssel: aktuális XL közös komponenskönyvtárban igazoltan létezik, gyári `knob_blue.png` 127-frame FilmStrip kompozittal; saját PNG-generálást kiválthat, a GenericNoLabel piros ívének átszínezése külön, továbbra sem igazolt út. Külső VST importja, host-asset feloldása és a belső gyermekek saját elrendezésre adaptálása nincs kipróbálva. Kész, ha áttekintett próba-TUI után a képernyő/bekötés/OFF/gate/értékkezelés igazolt és a tulaj jóváhagyja. Forrásolt mélyellenőrzés és korrigált expert FAQ: `.hw-local/mpc-knowledge/reports/Gyári MPC poti színezés ellenőrzése.md`, `findings/native-knob-customization-xl-3.10.1.md`; csak olvasó aktuális XL-bizonyíték, termék/devicestate nem módosult.
 
 - [ ] Mixer valódi sztereó mérők mind a 10 sávon: független L/R csúcs, hold és jelalapú clip; natív 2×8 px kijelző és 95 px fader, egy célzott jel/bekötés ellenőrzés után develop. (fut: detached mixer-stereo)
-
-
-- [ ] Mixer: a 8c65be5e XL-csomagon az aktív MIXER fül alatt a tíz csatornasáv helye üres, az alsó fülsor látszik (docs/screens/mixer.jpg). Vizsgáld meg a natív strip-példányok láthatósági feltételeit és host-feloldását. Kész, ha az XL-en mind a tíz sáv megjelenik és a sztereó mérők a megfelelő csatornát követik.
