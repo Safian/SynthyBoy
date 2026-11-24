@@ -397,18 +397,28 @@ protected:
         p.style (1.0f, true);
         if (! model.isIdentity())
             p.line (static_cast<float> (pxOf (0.0f)), static_cast<float> (pyOf (0.0f)), static_cast<float> (pxOf (1.0f)), static_cast<float> (pyOf (1.0f)), T.hair, p.c (T.textFaint, 110));
-        // the curve: the engine's value (ScalarCurve::at) in steps of 4 px; a vertical step (two points of the same x) is a vertical line
+        // Preserve fractional screen coordinates all the way to the anti-aliased stroke.
+        const auto screenX = [&] (float x) { return pl.x + x * (pl.w - 1); };
+        const auto screenY = [&] (float y) { return pl.bottom() - 1 - y * (pl.h - 1); };
         const uint32_t col = p.c (lineColour(), 255);
-        float px0 = static_cast<float> (pl.x), py0 = static_cast<float> (pyOf (model.at (0.0f)));
-        for (int x = pl.x + 4; ; x += 4)
+        for (int seg = 0; seg + 1 < model.n; ++seg)
         {
-            const int xx = std::min (x, pl.right() - 1);
-            const float py1 = static_cast<float> (pyOf (model.at (xFrom (xx))));
-            p.line (px0, py0, static_cast<float> (xx), py1, T.curve, col);
-            px0 = static_cast<float> (xx);
-            py0 = py1;
-            if (xx >= pl.right() - 1)
-                break;
+            const auto& from = model.p[seg];
+            const auto& to = model.p[seg + 1];
+            float x = screenX (from.x), y = screenY (from.y);
+            const float endX = screenX (to.x);
+            if (from.power != 0.0f && from.y != to.y)
+            {
+                for (float nextX = x + 2.0f; nextX < endX; nextX += 2.0f)
+                {
+                    const float norm = (nextX - pl.x) / static_cast<float> (std::max (1, pl.w - 1));
+                    const float nextY = screenY (model.at (norm));
+                    p.line (x, y, nextX, nextY, T.curve, col);
+                    x = nextX;
+                    y = nextY;
+                }
+            }
+            p.line (x, y, endX, screenY (to.y), T.curve, col);
         }
         // the middle of every bendable segment (what a vertical drag on the segment moves), the handles
         for (int s = 0; s + 1 < model.n; ++s)
