@@ -48,6 +48,56 @@ class UiScreenMixerTests(unittest.TestCase):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
+    def test_true_stereo_meter_contract(self):
+        """The generated native tree binds all ten stereo readouts without duplicating mono/RMS."""
+        from PIL import Image
+        from native_ui_params import MIXER_STEREO_BASE, NATIVE_PARAMS
+        self.assertEqual(self.code, 0, self.err)
+        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 960))
+        definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
+        entries = [e for e in tab["componentDefinition"]["componentsData"]
+                   if e["componentData"]["type"] in ("mixerStripSource", "mixerStripBus", "mixerStripMaster")]
+        self.assertEqual(len(entries), 10)
+        base_offset = mixer_peek_index(len(self.params)) + MIXER_STEREO_BASE
+        fields = ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")
+        bound = set()
+        for strip, entry in enumerate(entries):
+            handles = {m["key"]: m["value"] for m in entry["handle remapping"]["map"]}
+            for field, name in enumerate(fields):
+                value = f"Parameter {base_offset + field * 10 + strip}"
+                self.assertEqual(handles[name], value)
+                bound.add(value)
+            nested = next(c for c in definitions[entry["componentData"]["type"]]["componentsData"]
+                          if c["componentData"]["name"] == "meter_block")
+            self.assertEqual(nested["componentData"]["data"]["handleName"], "Data")
+            self.assertEqual({m["key"]: m["value"] for m in nested["handle remapping"]["map"]}, {name: name for name in fields})
+        self.assertEqual(len(bound), 60)
+        for name, signal_height in (("mixerMeterBlockSource", 192), ("mixerMeterBlockBus", 408)):
+            block = definitions[name]
+            self.assertTrue(block["ignoreMousePresses"])
+            self.assertEqual(block["actions"], [])
+            self.assertEqual(len(block["componentsData"]), 4)
+            for child in block["componentsData"]:
+                model = child["componentData"]
+                self.assertEqual(model["type"], "Meter")
+                data = model["data"]
+                self.assertEqual(data["rmsHandle"], "")
+                self.assertEqual(data["rmsImage"], "")
+                clip = model["name"].startswith("Clip")
+                right = model["name"].endswith("R")
+                self.assertEqual(child["bounds"]["bounds"], f"{10 if right else 0} {0 if clip else 6} 8 {4 if clip else signal_height}")
+                self.assertEqual(child["bounds"]["acceptsHWFocus"], "No")
+                self.assertEqual(data["peakHandle"], ("Clip" if clip else "Peak") + ("R" if right else "L"))
+                for image in (data["inactiveImage"], data["peakImage"]):
+                    with Image.open(self.skins / image) as artwork:
+                        self.assertEqual(artwork.size, (8, 4 if clip else signal_height))
+                if clip:
+                    self.assertEqual(data["peakHoldHandle"], "")
+                else:
+                    self.assertEqual(data["peakHoldHandle"], "Hold" + ("R" if right else "L"))
+                    self.assertEqual(data["peakHoldSize"], 2)
+
     def test_hook_discovery_and_execution_clean(self):
         """Verify apply-mpc-skin-extras runs with code 0 and no error."""
         self.assertEqual(self.code, 0, f"run_apply failed with stderr: {self.err}")

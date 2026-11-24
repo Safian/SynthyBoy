@@ -110,6 +110,8 @@ def apply(tui, qlinks, ctx):
         ctx.add_param_key(base + MIXER_HOLD_OFFSET + i, "shell.mixer_hold_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_CONTROL + MIXER_SOLO_OFFSET + i, "shell.mixer_solo_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_CONTROL + MIXER_MUTE_OFFSET + i, "shell.mixer_mute_%d" % (i + 1))
+        for field, name in enumerate(("peak_l", "peak_r", "hold_l", "hold_r", "clip_l", "clip_r")):
+            ctx.add_param_key(base + MIXER_STEREO_BASE + field * len(STRIPS) + i, f"shell.mixer_{name}_{i + 1}")
         ctx.add_param_key(base + MIXER_SOLO_VISUAL + i, "shell.mixer_solo_visual_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_MUTE_VISUAL + i, "shell.mixer_mute_visual_%d" % (i + 1))
 
