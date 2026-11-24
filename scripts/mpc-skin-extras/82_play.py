@@ -110,7 +110,7 @@ def _rect(c):
 
 
 def _set(c, rect):
-    c["bounds"]["bounds"] = "%d %d %d %d" % rect
+    c["bounds"]["bounds"] = "%d %d %d %d" % tuple(rect)
 
 
 def _param_of(c):
@@ -122,7 +122,7 @@ def _image(name, file, rect):
     return {"version": 2,
             "componentData": {"version": 1, "name": name, "type": "Image", "data": {"version": 2, "imageType": "Regular", "colour": "0", "image": file}},
             "handle remapping": {"version": 1, "map": []},
-            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}}
+            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % tuple(rect)}}
 
 
 def _title(name, text, param, rect):
@@ -133,7 +133,7 @@ def _title(name, text, param, rect):
                                                      "colour": TITLE_COLOUR, "justification": "horizontallyCentred verticallyCentred", "case": "Upper Case"},
                                        "type": "Text", "handleName": "Data", "text": text}},
             "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter %d" % param}]},
-            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}}
+            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % tuple(rect)}}
 
 
 def _controls_by_param(tui):
@@ -252,7 +252,7 @@ def apply(tui, qlinks, ctx):
     rise_rects = {name: tuple(rect) for name, rect in _style_size('play.rise.seed_rects').items()}
     for item in rise_dial["componentsData"]:
         name = item["componentData"]["name"]
-        item["bounds"]["bounds"] = "%d %d %d %d" % rise_rects[name]
+        item["bounds"]["bounds"] = "%d %d %d %d" % tuple(rise_rects[name])
     ctx.add_component_definition("compactNativeRiseDial", rise_dial)
     on_img, off_img = write_active_text_assets(
         ctx.skins_dir,
