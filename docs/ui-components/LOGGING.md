@@ -18,7 +18,7 @@ The audio thread may log: the call formats into a fixed record and publishes it 
 
 ## Switching it on, on the device
 
-Dev builds start with every category OFF. Create `/tmp/<plugin>-log.conf` (for SynthyBoy `/tmp/synthyboy-log.conf`):
+SynthyBoy developer builds log at info from startup, including the MIDI note, channel, velocity and selected root for KEY mode captures. The reusable logger defaults to off unless its caller sets a level. To override the default, create `/tmp/<plugin>-log.conf` (for SynthyBoy `/tmp/synthyboy-log.conf`):
 
 ```
 # category=level; all= is the default of every category without a line

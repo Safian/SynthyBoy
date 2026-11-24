@@ -5122,6 +5122,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                                    && !inst->scaleInput.compare_exchange_weak (mode, note % 12)) {}
                             if (mode >= PluginInstance::ScaleInputArmed)
                             {
+                                MPCKIT_LOG ("key_mode", info, "selected root=%d midi_note=%d channel=%d velocity=%d live_flag=%d",
+                                            note % 12, note, (data[0] & 15) + 1, hostVel, live ? 1 : 0);
                                 uint8_t released = PluginInstance::Released;
                                 key.compare_exchange_strong (released, PluginInstance::Captured);
                                 continue;
@@ -6849,7 +6851,7 @@ extern "C"
         synthyboy_mpc::startupTimes().begin();   // the start-up record (startup_timing.h): time zero is the first entry here
         (void) synthyboy_mpc::outputPeak(); (void) synthyboy_mpc::noteDiagnostics();   // belt and braces: touched before any instance exists (they are constant-initialised globals, no guard on the MIDI or audio thread)
         synthyboy::setHelperThreadStartHook (&engineHelperThreadPolicy);   // before any engine exists: its helper threads get the policy above
-        try { MPCKIT_LOG_START ("synthyboy"); } catch (...) {}   // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
+        try { MPCKIT_LOG_START ("synthyboy", mpckit::Level::info); } catch (...) {}   // dev builds only: the developer log (kit/log.h), info by default, configurable via /tmp/synthyboy-log.conf
         // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
         PluginInstance* inst = nullptr;
         try { inst = new PluginInstance(); }

@@ -86,6 +86,7 @@ struct Settings
     std::string logPath, confPath;
     size_t capBytes = kMaxFileBytes;
     bool thread = true;          // false: no writer thread (tests drain by hand with Logger::drainNow)
+    Level defaultLevel = Level::off;
 };
 
 class Logger
@@ -285,7 +286,7 @@ private:
         buf[got] = '\0';
         struct Named { char name[kCategoryName]; int level; };
         Named named[kMaxCategories];
-        int count = 0, allValue = 0;
+        int count = 0, allValue = static_cast<int> (settings_.defaultLevel);
         const char* p = buf;
         while (*p != '\0')
         {
@@ -476,9 +477,10 @@ inline Logger& logger() noexcept
     return instance;
 }
 
-inline void start (const char* plugin)
+inline void start (const char* plugin, Level defaultLevel = Level::off)
 {
     Settings s;
+    s.defaultLevel = defaultLevel;
     s.logPath = std::string ("/tmp/") + plugin + "-dev.log";
     s.confPath = std::string ("/tmp/") + plugin + "-log.conf";
     logger().start (s);
@@ -519,12 +521,12 @@ private:
 #define MPCKIT_SCOPE_JOIN2(a, b) a##b
 #define MPCKIT_SCOPE_JOIN(a, b) MPCKIT_SCOPE_JOIN2 (a, b)
 #define MPCKIT_SCOPE(category, name) ::mpckit::devlog::Scope MPCKIT_SCOPE_JOIN (mpckitScope_, __LINE__) (category, name)
-#define MPCKIT_LOG_START(plugin) ::mpckit::devlog::start (plugin)
+#define MPCKIT_LOG_START(...) ::mpckit::devlog::start (__VA_ARGS__)
 
 #else // MPCKIT_DEV_LOG == 0: nothing of the log exists in the binary
 
 #define MPCKIT_LOG(category, level, ...) do {} while (0)
 #define MPCKIT_SCOPE(category, name) do {} while (0)
-#define MPCKIT_LOG_START(plugin) do {} while (0)
+#define MPCKIT_LOG_START(...) do {} while (0)
 
 #endif
