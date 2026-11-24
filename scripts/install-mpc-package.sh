@@ -59,7 +59,8 @@ fi
 archive=$(mktemp)
 trap 'rm -f "$archive"' EXIT
 trap 'exit 1' HUP INT TERM
-COPYFILE_DISABLE=1 tar --exclude '._*' --exclude '.DS_Store' -C "$package" -cf "$archive" .
+# BusyBox tar on the MPC cannot restore the macOS default GNU sparse entries.
+COPYFILE_DISABLE=1 tar --format=ustar --exclude '._*' --exclude '.DS_Store' -C "$package" -cf "$archive" .
 
 remote=$(cat <<'REMOTE'
 set -eu
