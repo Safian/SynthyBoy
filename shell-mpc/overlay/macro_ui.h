@@ -197,11 +197,8 @@ public:
         publishQGroup (inst);
     }
 
-    enum class DrawPass { All, StaticOnly, LiveOnly };
-    void setDrawPass (DrawPass p) noexcept { drawPass_ = p; }
-    DrawPass drawPass() const noexcept { return drawPass_; }
-    void setHostBackground (bool on) noexcept { drawPass_ = on ? DrawPass::LiveOnly : DrawPass::All; }
-    bool hostBackground() const noexcept { return pageTop_ == 0 && drawPass_ == DrawPass::LiveOnly; }
+    void setHostBackground (bool on) noexcept { nativeGround_ = on; }
+    bool hostBackground() const noexcept { return pageTop_ == 0 && nativeGround_; }
     // Macros draws its ground here, with apertures where it shares the page with the host.
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
@@ -210,22 +207,14 @@ public:
     static void drawMarkerCovers (gpu::SceneBuilder& sb)
     {
         ui::Cell cell (sb, { 0, kTabY, kCanvasW, ui::MacroView::kBarH }, 0);
-        drawNativeMarkerCovers (sb, "macros", kCoverGround, kCoverGround);
+        drawNativeMarkerCovers (sb, "macros");
     }
-    static constexpr unsigned kCoverGround = 0x0b1025;   // the ground colour of the page (page::ground) at the marker spots: flat there
 
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (drawPass_ == DrawPass::StaticOnly)
-        {
-            page::ground (sb);
-            view_.drawStatic (sb);
-            return;
-        }
-
         if (hostBackground())
             drawMarkerCovers (sb);
-        else if (pageTop_ == 0 && nativeControls_)
+        else if (pageTop_ == 0)
         {
             drawNativeFallback (sb);
             drawMarkerCovers (sb);
@@ -238,16 +227,7 @@ public:
         else if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
             targets_.draw (sb);
         else
-        {
-            if (hostBackground() || nativeControls_)
-            {
-                // Axis/grid belongs to the live graph, never the plain canvas PNG.
-                view_.spectrum.drawStatic (sb);
-                view_.drawLive (sb);
-            }
-            else
-                view_.draw (sb);
-        }
+            view_.draw (sb);
 
         if (pageTop_ == kPageList)
             list_.draw (sb);
@@ -386,20 +366,8 @@ private:
     {
         std::array<ui::Rect, ui::MacroView::kNumMacros> holes;
         for (size_t i = 0; i < holes.size(); ++i)
-        {
-            const auto& card = view_.cards[i];
-            holes[i] = ui::Rect::unite (card.dialArea(), card.nativeTargetArea());
-        }
-        const auto& look = ui::theme::L();
-        ui::outsideNativeCells ({ 0, kTabY, w_, kTabH }, holes, [&] (ui::Rect r)
-        {
-            ui::Cell cell (sb, r, 0);
-            ui::Pen p (sb, true);
-            p.paintY2 (kTabY, kTabY + kTabH, look.bg0, look.bg1, 255);
-            p.rect (r, ui::theme::rgba (look.bg1));
-            p.paintOff();
-        });
-        view_.drawStatic (sb, true);
+            holes[i] = view_.cards[i].rect();
+        ui::drawNativeCanvas (sb, { 0, kTabY, w_, kTabH }, holes);
     }
 
     void resetSpectrum() noexcept
@@ -697,7 +665,7 @@ private:
 
     QSlots qSlots_;
     char qName_[32] = "MACROS 1-4";
-    DrawPass drawPass_ = DrawPass::All;
+    bool nativeGround_ = false;
     bool nativeControls_ = true;
     bool presetSeen_ = false;
     uint64_t presetGeneration_ = 0;

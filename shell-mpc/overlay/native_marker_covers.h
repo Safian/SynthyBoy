@@ -3,12 +3,13 @@
 
 #include <cstring>
 
+#include "../ui/theme.h"
 #include "gpu/scene.h"
 #include "overlay_layout.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
-inline void drawNativeMarkerCovers (gpu::SceneBuilder& sb, const char* name, unsigned topRgb, unsigned bottomRgb) noexcept
+inline void drawNativeMarkerCovers (gpu::SceneBuilder& sb, const char* name) noexcept
 {
     const layout::View* view = nullptr;
     for (const layout::View& candidate : layout::kViews)
@@ -24,11 +25,7 @@ inline void drawNativeMarkerCovers (gpu::SceneBuilder& sb, const char* name, uns
     {
         const float left = static_cast<float> (r.x - 1), right = static_cast<float> (r.x + r.w + 1);
         const float top = static_cast<float> (r.y - 1), bottom = static_cast<float> (r.y + r.h + 1);
-        const auto first = gpu::rgba8FromRgb (topRgb, 255), last = gpu::rgba8FromRgb (bottomRgb, 255);
-        if (first == last)
-            sb.rect (left, top, right, bottom, first);
-        else
-            sb.gradientRect (left, top, right, bottom, first, last);
+        sb.rect (left, top, right, bottom, gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
     }
 }
 

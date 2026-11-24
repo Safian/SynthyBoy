@@ -869,7 +869,6 @@ void testDrawingAndCpuRendering()
 
     ui::QGroup::setWideDevice (true);
     MacroRig macr;
-    macr.ui.setNativeControls (false);   // Compare static/live overlay composition without host apertures.
     auto macData = std::make_unique<gpu::SceneData>();
     std::memset (macData.get(), 0, sizeof (gpu::SceneData));
     gpu::SceneBuilder msb (*macData);
@@ -880,29 +879,9 @@ void testDrawingAndCpuRendering()
     renderScene (*macData, macCv);
     check (macCv.size() == 1280u * 800u, "the CPU renderer draws Macros view");
 
-    // Host background layer separation test
-    check (macr.ui.drawPass() == MacroUi::DrawPass::All, "default draw pass is All");
     check (! macr.ui.hostBackground(), "hostBackground flag is initially false");
     macr.ui.setHostBackground (true);
     check (macr.ui.hostBackground(), "setHostBackground(true) enables host background");
-    check (macr.ui.drawPass() == MacroUi::DrawPass::LiveOnly, "host background implies LiveOnly pass");
-    macr.ui.setHostBackground (false);
-    check (macr.ui.drawPass() == MacroUi::DrawPass::All, "setHostBackground(false) restores All pass");
-
-    // Static pass:
-    macr.ui.setDrawPass (MacroUi::DrawPass::StaticOnly);
-    auto staticData = std::make_unique<gpu::SceneData>();
-    std::memset (staticData.get(), 0, sizeof (gpu::SceneData));
-    gpu::SceneBuilder ssb (*staticData);
-    ssb.begin (gpu::kKindPlay, 0, 1280, 800);
-    macr.ui.draw (ssb);
-    check (! ssb.overflow && staticData->numOps > 0, "Static pass produces ops (" + std::to_string (staticData->numOps) + " ops)");
-    check (staticData->numOps < macData->numOps, "Static pass has fewer ops than all-in-one (" + std::to_string (staticData->numOps) + " vs " + std::to_string (macData->numOps) + ")");
-    std::vector<uint32_t> staticCv;
-    renderScene (*staticData, staticCv);
-
-    // Live pass:
-    macr.ui.setDrawPass (MacroUi::DrawPass::LiveOnly);
     auto liveData = std::make_unique<gpu::SceneData>();
     std::memset (liveData.get(), 0, sizeof (gpu::SceneData));
     gpu::SceneBuilder lsb (*liveData);
@@ -913,25 +892,23 @@ void testDrawingAndCpuRendering()
     std::vector<uint32_t> liveCv;
     renderScene (*liveData, liveCv);
 
-    // Composite liveCv over staticCv using draw::over
-    std::vector<uint32_t> composedCv (1280u * 800u);
-    int differingPixels = 0;
-    for (size_t i = 0; i < 1280u * 800u; ++i)
-    {
-        composedCv[i] = draw::over (staticCv[i], liveCv[i], 255);
-        if (composedCv[i] != macCv[i])
+    const auto canvas = 0xff000000u | ui::theme::kNativeCanvas;
+    const auto composedDifferences = [canvas] (const std::vector<uint32_t>& first, const std::vector<uint32_t>& second) {
+        int differences = 0;
+        for (size_t i = 0; i < first.size(); ++i)
         {
-            if (differingPixels < 10)
-            {
-                int x = static_cast<int> (i % 1280), y = static_cast<int> (i / 1280);
-                std::printf ("diff at (%d, %d): comp=0x%08x mac=0x%08x live=0x%08x stat=0x%08x\n", x, y, composedCv[i], macCv[i], liveCv[i], staticCv[i]);
-            }
-            ++differingPixels;
+            const uint32_t a = draw::over (canvas, first[i], 255), b = draw::over (canvas, second[i], 255);
+            for (int shift = 0; shift < 24; shift += 8)
+                if (std::abs (static_cast<int> ((a >> shift) & 255u) - static_cast<int> ((b >> shift) & 255u)) > 1)
+                {
+                    ++differences;
+                    break;
+                }
         }
-    }
-    check (differingPixels == 0, "composed scene matches all-in-one scene (0 differing pixels, got " + std::to_string (differingPixels) + ")");
+        return differences;
+    };
+    check (composedDifferences (macCv, liveCv) == 0, "native macro page looks the same before and after background detection");
 
-    // the three marker cover patches (the layout's two markers and the instance picture, one pixel larger): opaque ground in the live pass, flat ground in the static pass (the host background has nothing else there)
     {
         const layout::View* mv = nullptr;
         for (const layout::View& cand : layout::kViews)
@@ -941,8 +918,8 @@ void testDrawingAndCpuRendering()
         if (mv != nullptr)
         {
             const layout::Rect spots[3] = { mv->markers[0].rect, mv->instance, mv->markers[1].rect };
-            const uint32_t ground = 0xff000000u | MacroUi::kCoverGround;
-            int badLive = 0, badStatic = 0;
+            const uint32_t ground = canvas;
+            int badLive = 0;
             for (const layout::Rect& r : spots)
                 for (int y = r.y - 1; y < r.y + r.h + 1; ++y)
                     for (int x = r.x - 1; x < r.x + r.w + 1; ++x)
@@ -950,11 +927,8 @@ void testDrawingAndCpuRendering()
                         const uint32_t lv = liveCv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)];
                         if (lv != ground && lv != macCv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)])   // the title "MACROS" (live) lies over the spots: its pixels are the all-in-one picture's
                             ++badLive;
-                        if (staticCv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)] != ground)
-                            ++badStatic;
                     }
             check (badLive == 0, "the live pass covers the three marker spots with opaque ground, only the title's own pixels on top (bad pixels: " + std::to_string (badLive) + ")");
-            check (badStatic == 0, "the static background is flat ground at the three marker spots (bad pixels: " + std::to_string (badStatic) + ")");
         }
     }
 
@@ -965,9 +939,9 @@ void testDrawingAndCpuRendering()
         for (int i = 0; i < 256; ++i)
             levels[i] = 0.2f + 0.5f * static_cast<float> (i % 7) / 7.0f;   // a spectrum with sound: the curve, its fill and its line are plain ops of the scene
         macr.ui.view().spectrum.levels = levels;
-        for (MacroUi::DrawPass pass : { MacroUi::DrawPass::All, MacroUi::DrawPass::LiveOnly })
+        for (bool hostGround : { false, true })
         {
-            macr.ui.setDrawPass (pass);
+            macr.ui.setHostBackground (hostGround);
             auto d = std::make_unique<gpu::SceneData>();
             std::memset (d.get(), 0, sizeof (gpu::SceneData));
             gpu::SceneBuilder b (*d);
@@ -975,7 +949,7 @@ void testDrawingAndCpuRendering()
             macr.ui.draw (b);
             gpu::CellPlan plan;
             const bool planned = gpu::planCells (*d, plan);
-            const std::string what = pass == MacroUi::DrawPass::All ? "all-in-one" : "live";
+            const std::string what = ! hostGround ? "all-in-one" : "live";
             check (planned, "the " + what + " scene of the Macros page makes a cell plan (else every picture repaints the whole plane)");
             if (planned)
             {
@@ -993,7 +967,7 @@ void testDrawingAndCpuRendering()
         }
         // Native macro value changes do not repaint overlay cells; names remain live.
         {
-            macr.ui.setDrawPass (MacroUi::DrawPass::LiveOnly);
+            macr.ui.setHostBackground (true);
             auto planOf = [&] (gpu::CellPlan& plan) {
                 auto d = std::make_unique<gpu::SceneData>();
                 std::memset (d.get(), 0, sizeof (gpu::SceneData));
@@ -1016,7 +990,7 @@ void testDrawingAndCpuRendering()
         macr.inst.writeParam (macr.ui.macroParam (3), 0.0f);   // (back to the state of the pictures above)
         macr.refresh();
         macr.ui.view().spectrum.levels = nullptr;
-        macr.ui.setDrawPass (MacroUi::DrawPass::All);
+        macr.ui.setHostBackground (false);
     }
 
     // The spectrum must repaint in every picture in which it changes, with the background on AND off: the page decides "changed" by the hash of its scene (page_view_base.h sceneHash). The rows of a plain curve
@@ -1028,9 +1002,9 @@ void testDrawingAndCpuRendering()
             lvA[i] = 0.2f + 0.5f * static_cast<float> (i % 7) / 7.0f;
             lvB[i] = i == 100 ? lvA[i] + 0.1f : lvA[i];   // one point of the curve moves
         }
-        for (MacroUi::DrawPass pass : { MacroUi::DrawPass::All, MacroUi::DrawPass::LiveOnly })
+        for (bool hostGround : { false, true })
         {
-            macr.ui.setDrawPass (pass);
+            macr.ui.setHostBackground (hostGround);
             uint32_t hashOf[2] = {};
             int k = 0;
             for (const float* lv : { static_cast<const float*> (lvA), static_cast<const float*> (lvB) })
@@ -1043,17 +1017,15 @@ void testDrawingAndCpuRendering()
                 macr.ui.draw (b);
                 hashOf[k++] = page::sceneHash (*d);
             }
-            check (hashOf[0] != hashOf[1], std::string ("a changing spectrum changes the scene hash (") + (pass == MacroUi::DrawPass::All ? "all-in-one" : "background on, live pass") + ")");
+            check (hashOf[0] != hashOf[1], std::string ("a changing spectrum changes the scene hash (") + (! hostGround ? "all-in-one" : "background on, live pass") + ")");
         }
         macr.ui.view().spectrum.levels = nullptr;
-        macr.ui.setDrawPass (MacroUi::DrawPass::All);
+        macr.ui.setHostBackground (false);
     }
 
-    // A NON-DEFAULT instance (macro names set, a target added, bank 2, a macro turned, the other macros' titles long): the composed picture is still the all-in-one picture, 0 differing pixels, and the STATIC pass is
-    // pixel for pixel the one of the default instance: the host-skin background holds nothing the instance can change (names, the title, chips, the active bank, values, the lines under the names)
+    // Names, destinations, bank and macro values remain live over the same native card faces.
     {
         MacroRig nd;
-        nd.ui.setNativeControls (false);   // Same overlay composition contract as macr above.
         nd.inst.setMacroName (0, "Cutoff");
         nd.inst.setMacroName (1, "Drive + Warp");
         nd.inst.setMacroName (5, "A Very Long Macro Name Indeed");
@@ -1065,8 +1037,8 @@ void testDrawingAndCpuRendering()
         nd.refresh();
         check (nd.ui.cardName (0) == "CUTOFF" && nd.ui.bank() == 1,
                "the non-default instance preserves its names and bank 2 focus");
-        auto render = [&] (MacroUi::DrawPass pass, std::vector<uint32_t>& out) {
-            nd.ui.setDrawPass (pass);
+        auto render = [&] (bool hostGround, std::vector<uint32_t>& out) {
+            nd.ui.setHostBackground (hostGround);
             auto d = std::make_unique<gpu::SceneData>();
             std::memset (d.get(), 0, sizeof (gpu::SceneData));
             gpu::SceneBuilder b (*d);
@@ -1075,27 +1047,10 @@ void testDrawingAndCpuRendering()
             check (! b.overflow, "the non-default scene fits in the buffer");
             renderScene (*d, out);
         };
-        std::vector<uint32_t> ndAll, ndStatic, ndLive;
-        render (MacroUi::DrawPass::All, ndAll);
-        render (MacroUi::DrawPass::StaticOnly, ndStatic);
-        render (MacroUi::DrawPass::LiveOnly, ndLive);
-        // The layer is 8-bit straight alpha: where a live element's anti-aliased edge lies over a static one the layer's own rounding can differ by ONE level in one channel from drawing both directly (the
-        // GPU compositor has the same quantisation); more than 1 level, or more than a handful of such pixels, is a real difference.
-        int diffs = 0, staticDiffs = 0, maxDelta = 0;
-        for (size_t i = 0; i < 1280u * 800u; ++i)
-        {
-            const uint32_t comp = draw::over (ndStatic[i], ndLive[i], 255);
-            if (comp != ndAll[i])
-            {
-                ++diffs;
-                for (int sh = 0; sh < 24; sh += 8)
-                    maxDelta = std::max (maxDelta, std::abs (static_cast<int> ((comp >> sh) & 255u) - static_cast<int> ((ndAll[i] >> sh) & 255u)));
-            }
-            if (ndStatic[i] != staticCv[i])
-                ++staticDiffs;
-        }
-        check (maxDelta <= 1 && diffs <= 8, "non-default instance: composed scene matches the all-in-one scene (differing pixels " + std::to_string (diffs) + " of 1024000, all within 1 level: max delta " + std::to_string (maxDelta) + ")");
-        check (staticDiffs == 0, "the static pass is identical for two different instances (names, targets, bank, values): nothing instance-dependent is baked (differing pixels " + std::to_string (staticDiffs) + ")");
+        std::vector<uint32_t> ndAll, ndLive;
+        render (false, ndAll);
+        render (true, ndLive);
+        check (composedDifferences (ndAll, ndLive) == 0, "non-default instance matches over the native canvas");
         check (ndAll != macCv, "the non-default instance really looks different (the test can fail)");
     }
 

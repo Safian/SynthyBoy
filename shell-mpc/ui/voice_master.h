@@ -392,30 +392,9 @@ public:
         return std::any_of (areas.begin(), areas.end(), [=] (Rect r) { return r.contains (x, y); });
     }
 
-    void drawNativeFurniture (gpu::SceneBuilder& sb) const
+    void drawNativeGround (gpu::SceneBuilder& sb) const
     {
-        const auto areas = nativeApertures();
-        Pen p (sb, enabled_, inactive_);
-        const auto& t = theme::L();
-        auto paintOutside = [&] (Rect bounds, uint32_t top, uint32_t bottom)
-        {
-            outsideNativeCells (bounds, areas, [&] (Rect strip)
-            {
-                Cell cell (sb, strip, 0);
-                p.paintY2 (static_cast<float> (bounds.y), static_cast<float> (bounds.bottom()), top, bottom, 255);
-                p.rect (strip, p.c (bottom, 255));
-                p.paintOff();
-            });
-        };
-        paintOutside (rect_, t.bg0, t.bg1);
-        for (int b = 0; b < kBlocks; ++b)
-            if (blockVisible (b))
-            {
-                const Rect block = blockRect (b);
-                paintOutside (block, t.panel0, t.panel1);
-                p.rrect (block, t.rBlock, p.c (t.keyline, 255), t.frame);
-            }
-        drawFixedLabels (p);
+        drawNativeCanvas (sb, rect_, nativeApertures());
     }
 
     void drawStaticFurniture (gpu::SceneBuilder& sb) const
@@ -423,7 +402,6 @@ public:
         Pen p (sb, enabled_, inactive_);
         Cell cell (sb, rect_);
         drawUnder (p);
-        drawFixedLabels (p);
     }
 
     void draw (gpu::SceneBuilder& sb) const override { drawPage (sb); }
@@ -431,6 +409,7 @@ public:
     void drawPage (gpu::SceneBuilder& sb, bool showQGroups = true) const
     {
         Pen p (sb, enabled_, inactive_);
+        drawFixedLabels (p);
         drawLiveLabels (p);
         if (side_ == SideMain)
             portaCurve.draw (sb);

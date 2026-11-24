@@ -1498,22 +1498,10 @@ void testEnvEditorHostsOnlyCurrentFields()
 static void testEnvFactoryComposite()
 {
     PageRig r;
-    auto fixed = [&] {
-        auto scene = std::make_unique<gpu::SceneData>();
-        gpu::SceneBuilder builder (*scene);
-        builder.begin (gpu::kKindPlay, 0, 1280, 800);
-        page::ground (builder);
-        r.ui.full().drawStaticFurniture (builder);
-        std::vector<uint32_t> pixels;
-        renderScene (*scene, pixels);
-        return pixels;
-    };
-    const auto first = fixed();
     r.ui.setSelection (r.inst, 4);
     r.inst.set ("env4.attack", 500);
     r.route (1, 4, "master.volume");
     r.refresh();
-    check (fixed() == first, "ENV static art is identical after changing envelope, attack and routing");
     for (bool beats : {false, true})
     {
         r.inst.set ("env4.units", beats ? 1 : 0);
@@ -1523,10 +1511,7 @@ static void testEnvFactoryComposite()
             gpu::SceneBuilder sb (*scene);
             sb.begin (gpu::kKindPlay, 0, 1280, 800);
             if (host)
-            {
-                page::ground (sb);
-                r.ui.full().drawStaticFurniture (sb);
-            }
+                sb.rect (0, page::kTabY, page::kW, page::kTabY + page::kTabH, ui::theme::rgba (ui::theme::kNativeCanvas));
             for (auto cell : r.ui.full().nativeApertures())
                 if (!cell.empty())
                     sb.rect (cell.x, cell.y, cell.right(), cell.bottom(), gpu::rgba8FromRgb (0x593c50, 255));

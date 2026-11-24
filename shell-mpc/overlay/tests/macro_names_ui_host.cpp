@@ -619,11 +619,11 @@ void testStandaloneMacrosDifferingStates()
     check (r.inst.uiWrites.load() == writes, "unavailable host never enables GPU knob input");
     for (bool available : { false, true })
         for (bool enabled : { false, true })
-            for (const auto pass : { MacroUi::DrawPass::All, MacroUi::DrawPass::StaticOnly, MacroUi::DrawPass::LiveOnly })
+            for (bool hostGround : { false, true })
             {
                 r.ui.setNativeControls (available);
                 r.ui.view().setEnabled (enabled);
-                r.ui.setDrawPass (pass);
+                r.ui.setHostBackground (hostGround);
                 r.refresh();
                 auto data = std::make_unique<gpu::SceneData>();
                 gpu::SceneBuilder sb (*data);
@@ -643,7 +643,7 @@ void testStandaloneMacrosDifferingStates()
                 check (! obsolete, "all host/pass/enabled states omit GPU macro dials and target chips");
             }
     r.ui.view().setEnabled (true);
-    r.ui.setDrawPass (MacroUi::DrawPass::All);
+    r.ui.setHostBackground (false);
 
     // Toggling native controls back to true
     r.ui.setNativeControls (true);

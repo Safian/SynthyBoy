@@ -235,13 +235,7 @@ public:
     /** The whole picture: the page and what lies over it. */
     void draw (gpu::SceneBuilder& sb) const
     {
-        const bool normalBoard = hostBackground() && nativeControls_ && pageTop_ == 0 && matrix_.boardShown();
-        const bool normalDetail = hostBackground() && nativeControls_ && pageTop_ == kPageDetail;
-        const bool normalMatrix = hostBackground() && nativeControls_ && pageTop_ == 0 && ! matrix_.boardShown();
-        const bool normalTargets = hostBackground() && nativeControls_ && pageTop_ == kPageTargets;
-        const bool fullyHostNative = (normalBoard || normalDetail || normalMatrix || normalTargets || (hostBackground() && pageTop_ == kPageList));
-
-        if (fullyHostNative)
+        if (hostBackground())
             return;
 
         const auto view = nativeView();
@@ -254,11 +248,7 @@ public:
             sb.gradientRect (tab.x, tab.y, tab.right(), tab.bottom(),
                              ui::theme::rgba (ui::theme::L().bg0), ui::theme::rgba (ui::theme::L().bg1));
         };
-        if (hostBackground())
-        {
-            // Fully host native surfaces already handled above. No GPU marker cover hacks.
-        }
-        else if (nativeControls_ && pageTop_ == 0)
+        if (nativeControls_ && pageTop_ == 0)
         {
             const auto nav = matrix_.nativeNavigationApertures();
             const auto values = matrix_.nativeApertures();
@@ -282,7 +272,7 @@ public:
         }
         else
         {
-            matrix_.drawPage (sb, hostBackground());
+            matrix_.drawPage (sb, false);
         }
         if (pageTop_ == kPageList)
             list_.draw (sb);

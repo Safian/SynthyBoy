@@ -435,7 +435,7 @@ public:
         else
         {
             Pen pen (sb, enabled_, inactive_);
-            if (! hostTopFurniture_)
+            if (! nativeRouting_)
                 paintAroundNativeCells (sb, top.rect(), *nativeCells_, [&] { pen.block (top.rect()); });
             for (int i = 0; i < n_; ++i)
                 if (shown_[i])
@@ -456,14 +456,6 @@ public:
     }
     /** All the leaves that are on the screen now (what the adjacency check looks at). */
     int leaves (Component** out, int max) { return collectLeaves (out, 0, max); }
-
-    void setHostTopFurniture (bool on) noexcept { hostTopFurniture_ = on; }
-    void drawStaticFurniture (gpu::SceneBuilder& sb) const
-    {
-        Cell cell (sb, top.rect(), 0);
-        Pen pen (sb, true);
-        pen.block (top.rect());
-    }
 
 protected:
     void layout() override
@@ -568,7 +560,7 @@ protected:
     void drawUnder (Pen& p) const override
     {
         // every Q group has a block of its own (the active one also has the coloured frame of its QGroup): the top row; the panel draws its own blocks
-        if (! hostTopFurniture_)
+        if (! nativeRouting_)
             p.block (top.rect());
     }
     void drawExtra (Pen& p) const override
@@ -584,7 +576,6 @@ protected:
     OscKind kind_ = OscKind::Wavetable;
     bool noiseSample_ = false, warpApplies_[2] = { true, true };
     bool nativeSelector_ = false, nativeRouting_ = false, nativePower_ = false;
-    bool hostTopFurniture_ = false;
     const NativeCells* nativeCells_ = nullptr;
     int nGroups_ = 0, active_ = -1;
     char names_[kMaxGroups][20] = {};

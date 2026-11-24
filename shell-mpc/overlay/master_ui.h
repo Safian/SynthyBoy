@@ -252,7 +252,7 @@ public:
     bool hostBackground() const noexcept
     {
         return nativeGround_ && pageTop_ == 0 && w_ == page::kW && h_ == page::kH
-            && &ui::theme::L() == &ui::theme::kLook1 && full_.side() == ui::MasterScreen::SideMain;
+            && &ui::theme::L() == &ui::theme::kLook1;
     }
 
     void drawPageGround (gpu::SceneBuilder& sb) const
@@ -260,14 +260,14 @@ public:
         if (hostBackground())
             return;
         if (pageTop_ == 0)
-            full_.drawNativeFurniture (sb);
+            full_.drawNativeGround (sb);
         else
             page::ground (sb);
     }
 
     void draw (gpu::SceneBuilder& sb) const
     {
-        drawNativeMarkerCovers (sb, "master", 0x0b1025, 0x0b1025);
+        drawNativeMarkerCovers (sb, "master");
         if (pageTop_ != 0)
             full_.drawStaticFurniture (sb);
         full_.drawPage (sb, pageTop_ == 0);

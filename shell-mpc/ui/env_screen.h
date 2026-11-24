@@ -479,34 +479,9 @@ public:
         return c;
     }
 
-    /** The static background furniture: the three block frames and the fixed titles and caption.
-        Used for pre-rendered host background art (nothing state- or instance-dependent). */
-    void drawStaticFurniture (gpu::SceneBuilder& sb) const
+    void drawNativeGround (gpu::SceneBuilder& sb) const
     {
-        Pen p (sb, enabled_, inactive_);
-        Cell cell (sb, rect_);
-        for (int i = 0; i < kMaxGroups; ++i)
-            p.block (blocks_[i]);
-        drawFixedLabels (p);
-    }
-
-    void drawFallbackFurniture (gpu::SceneBuilder& sb) const
-    {
-        const auto areas = nativeApertures();
-        const auto& t = theme::L();
-        Pen p (sb, enabled_, inactive_);
-        outsideNativeCells (rect_, areas, [&] (Rect strip) {
-            gpu::ScopedClip clip (sb, strip.x, strip.y, strip.right(), strip.bottom());
-            if (!clip) return;
-            sb.gradientRect (rect_.x, rect_.y, rect_.right(), rect_.bottom(), theme::rgba (t.bg0), theme::rgba (t.bg1));
-        });
-        for (const Rect& block : blocks_)
-            outsideNativeCells (block, areas, [&] (Rect strip) {
-                gpu::ScopedClip clip (sb, strip.x, strip.y, strip.right(), strip.bottom());
-                if (!clip) return;
-                p.block (block);
-            });
-        drawFixedLabels (p);
+        drawNativeCanvas (sb, rect_, nativeApertures());
     }
 
     void drawFixedLabels (Pen& p) const
@@ -562,12 +537,12 @@ public:
             Pen pen (sb, enabled_, inactive_);
             Cell cell (sb, rect_);
             drawUnder (pen);
-            drawFixedLabels (pen);
         }
         drawChildren (sb);
         {
             Pen p (sb, enabled_, inactive_);
             Cell cell (sb, rect_);
+            drawFixedLabels (p);
             drawLiveLabels (p);
         }
         for (int i = 0; i < kMaxGroups; ++i)

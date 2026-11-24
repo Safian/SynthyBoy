@@ -258,7 +258,7 @@ public:
     {
         const bool nativeMode = pageTop_ == 0 && (hostBackground() || full_.nativeControls());
         if (nativeMode)
-            drawNativeMarkerCovers (sb, "voice", 0x0b1025, 0x0b1025);
+            drawNativeMarkerCovers (sb, "voice");
         else
             page::ground (sb);
         // Native Voice controls own the converted lower blocks even when the

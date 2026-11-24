@@ -1251,7 +1251,7 @@ static void testFilterFactoryBackground ()
         for (int marker : { 33, 45, 1241 })
             for (int py = 113; py < 121; ++py)
                 for (int px = marker - 1; px < marker + 7; ++px)
-                    markersCovered &= (pixel (px, py) & 0x00ffffffu) == 0x0b1026u;
+                    markersCovered &= (pixel (px, py) & 0x00ffffffu) == ui::theme::kNativeCanvas;
         check (root.ui().hostBackground() && pixel (600, 185) == 0u
                && pixel (power.x + 10, power.y + 10) == 0u && pixel (x, y) == 0u && markersCovered,
                prefix + " verified host ground stays transparent outside native marker covers");

@@ -250,7 +250,7 @@ public:
         else if (hostBackground())
         {
             if (native)
-                drawNativeMarkerCovers (sb, "fx", 0x141a38, 0x141a38);
+                drawNativeMarkerCovers (sb, "fx");
             else
             {
                 page::ground (sb);

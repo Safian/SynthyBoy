@@ -599,16 +599,13 @@ public:
     const ModRow* modRows() const noexcept { return modRows_; }
 
 private:
-    /** Restore the scanout colours behind the marker pixels. The Filter asset
-        has the factory gradient and one deliberately different sentinel patch. */
     static void coverRootMarkers (gpu::SceneBuilder& sb) noexcept
     {
-        drawNativeMarkerCovers (sb, "filter1", 0x0b1026, 0x0b1026);
+        drawNativeMarkerCovers (sb, "filter1");
         if (const auto* bg = backgroundOf ("filter1"))
         {
             const int x = bg->sentinelX, y = kTabY + bg->sentinelY;
-            sb.rect (x, y, x + 5, y + 1, gpu::rgba8FromRgb (0x0a0f23, 255));
-            sb.rect (x, y + 1, x + 5, y + 5, gpu::rgba8FromRgb (0x0a0f22, 255));
+            sb.rect (x, y, x + 5, y + 5, gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
         }
     }
 

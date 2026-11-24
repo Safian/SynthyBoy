@@ -301,13 +301,6 @@ public:
         groups[activeGroup_].draw (sb);
     }
 
-    void drawStaticFurniture (overlay::gpu::SceneBuilder& sb) const
-    {
-        Pen pen (sb, true);
-        routingBar.drawFrame (pen);
-        drawExtra (pen);
-    }
-
 protected:
     void layout() override
     {

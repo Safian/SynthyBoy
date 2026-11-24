@@ -190,8 +190,6 @@ protected:
         knob.place (dialArea());
     }
 
-    void drawUnder (Pen& p) const override { p.block (rect_, false); }
-
     void drawMacroName (Pen& p) const
     {
         const theme::Look& T = theme::L();
@@ -221,26 +219,7 @@ protected:
     }
 
 public:
-    void drawStatic (gpu::SceneBuilder& sb, bool leaveNativeDialClear = false) const
-    {
-        Pen p (sb, enabled_, inactive_);
-        {
-            Cell cell (sb, rect_);
-            if (leaveNativeDialClear)
-                p.rrect (rect_, theme::L().rBlock, p.c (theme::L().keyline, 255), theme::L().frame);
-            else
-                drawUnder (p);
-        }
-
-    }
-
     void draw (gpu::SceneBuilder& sb) const override
-    {
-        drawStatic (sb, false);
-        drawLive (sb);
-    }
-
-    void drawLive (gpu::SceneBuilder& sb) const
     {
         Pen p (sb, enabled_, inactive_);
         Cell cell (sb, rect_);
@@ -344,20 +323,9 @@ public:
         return c;
     }
 
-    void drawStatic (gpu::SceneBuilder& sb, bool leaveNativeDialsClear = false) const
+    void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen p (sb, enabled_, inactive_);
-        {
-            Cell cell (sb, rect_);
-            drawUnder (p);
-        }
-        for (int i = 0; i < kNumMacros; ++i)
-            cards[i].drawStatic (sb, leaveNativeDialsClear);
         spectrum.drawStatic (sb);
-    }
-
-    void drawLive (gpu::SceneBuilder& sb) const
-    {
         {
             // the title lies over the skin's marker squares (the live pass covers them): it is drawn here, never baked
             Pen p (sb, enabled_, inactive_);
@@ -365,7 +333,7 @@ public:
             drawExtra (p);
         }
         for (int i = 0; i < kNumMacros; ++i)
-            cards[i].drawLive (sb);
+            cards[i].draw (sb);
 
         #if SYNTHYBOY_MPC_QFRAME_ENABLED
         // One Gen 1 frame around the four cards of the focused bank (suppressed on XL wideDevice and compiled out on Gen 2); drawn before spectrum plain ops so cells stay in one layer.
@@ -378,12 +346,6 @@ public:
         #endif
 
         spectrum.drawLive (sb);
-    }
-
-    void draw (gpu::SceneBuilder& sb) const override
-    {
-        drawStatic (sb);
-        drawLive (sb);
     }
 
     Change turnQ (int knobIndex, double delta) { return qgroup.turn (knobIndex, delta); }
@@ -403,11 +365,6 @@ protected:
             cards[i].place ({ rect_.x + macrocard::kCardPositions[i].x, rect_.y + macrocard::kCardPositions[i].y, macrocard::kCardW, macrocard::kCardH });
 
         spectrum.place ({ rect_.x + macrocard::kSpectrumRect.x, rect_.y + macrocard::kSpectrumRect.y, macrocard::kSpectrumRect.w, macrocard::kSpectrumRect.h });
-    }
-
-    void drawUnder (Pen& p) const override
-    {
-        p.line (static_cast<float> (rect_.x + macrocard::kMargin), static_cast<float> (rect_.y + kBarH - 2), static_cast<float> (rect_.right() - macrocard::kMargin), static_cast<float> (rect_.y + kBarH - 2), 1.5f, p.c (theme::L().keyline, 255));
     }
 
     void drawExtra (Pen& p) const override

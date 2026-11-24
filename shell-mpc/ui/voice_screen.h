@@ -263,12 +263,7 @@ public:
     void drawPage (gpu::SceneBuilder& sb, bool nativeGround) const
     {
         if (! nativeGround)
-        {
-            Pen pen (sb, enabled_, inactive_);
-            Cell cell (sb, rect_);
-            drawUnder (pen);
-            drawFixedLabels (pen);
-        }
+            drawStaticFurniture (sb);
         drawChildren (sb);
         {
             Pen p (sb, enabled_, inactive_);

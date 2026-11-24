@@ -199,7 +199,7 @@ int main (int argc, char** argv)
         synthyboy_mpc::overlay::gpu::SceneBuilder msb (markerScene);
         msb.begin (synthyboy_mpc::overlay::gpu::kKindPlay, 0, fullW, fullH);
         msb.clear (0u);
-        synthyboy_mpc::overlay::drawNativeMarkerCovers (msb, "play1", 0x141a38u, 0x141a38u);
+        synthyboy_mpc::overlay::drawNativeMarkerCovers (msb, "play1");
         std::vector<uint32_t> markerPixels;
         synthyboy_mpc::overlay::renderScene (markerScene, markerPixels);
         const size_t n = std::min (fullPixels.size(), markerPixels.size());

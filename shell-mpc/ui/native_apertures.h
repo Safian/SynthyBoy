@@ -47,6 +47,16 @@ void outsideNativeCells (Rect base, const std::array<Rect, N>& cells, Draw&& dra
             draw (Rect { x, y, base.right() - x, h });
     }
 }
+/** Paint the release canvas around whole native widgets until the host background is visible. */
+template <size_t N>
+void drawNativeCanvas (gpu::SceneBuilder& sb, Rect base, const std::array<Rect, N>& cells)
+{
+    outsideNativeCells (base, cells, [&] (Rect r) {
+        Cell cell (sb, r, 0);
+        sb.rect (r.x, r.y, r.right(), r.bottom(), theme::rgba (theme::kNativeCanvas));
+    });
+}
+
 /** Let the host paint this control above an already composed panel. */
 inline void clearNativeCell (gpu::SceneBuilder& sb, Rect cell)
 {

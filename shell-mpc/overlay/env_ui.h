@@ -284,13 +284,13 @@ public:
     {
         if (hostBackground())
         {
-            drawNativeMarkerCovers (sb, "env1", 0x0b1025, 0x0b1025);
+            drawNativeMarkerCovers (sb, "env1");
             full_.drawPage (sb, true);
             return;
         }
         if (pageTop_ == 0 && (page_ || nativePlayEditor_))
         {
-            full_.drawFallbackFurniture (sb);
+            full_.drawNativeGround (sb);
             full_.drawPage (sb, true);
             return;
         }

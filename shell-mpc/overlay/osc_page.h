@@ -17,6 +17,7 @@
 #else
 #include "backgrounds_manifest.h"
 #endif
+#include "native_marker_covers.h"
 #include "osc_display.h"
 #include "osc_marks.h"
 #include "osc_ui.h"
@@ -103,7 +104,6 @@ public:
             updateNativeDetail (inst, stack, false);
         }
         osc_.syncNativeModulations (inst, stack, inPlay_ ? nativeui::targets::PlayOsc : nativeui::targets::Osc);
-        osc_.full().setHostTopFurniture (hostBackground());
         marks_ = OscMarks::of (inst, sel_, osc_.topPage());
         display_.update (inst, sel_, in.targets, in.live, nowMs, counters_);
     }
@@ -140,11 +140,12 @@ public:
         for (const auto& view : layout::kViews)
             if (view.kind == layout::kKindOscUi && view.index == tabSelection_)
             {
-                constexpr ui::Rect tab { 0, page::kTabY, page::kW, page::kTabH };
-                for (const auto& spot : {view.markers[0].rect, view.instance, view.markers[1].rect})
-                    ui::drawOscillatorPageGround (sb, tab, { spot.x - 1, spot.y - 1, spot.w + 2, spot.h + 2 });
+                drawNativeMarkerCovers (sb, view.name);
                 if (const auto* asset = backgroundOf (view.name))
-                    ui::drawOscillatorPageGround (sb, tab, { asset->sentinelX, page::kTabY + asset->sentinelY, 5, 5 });
+                {
+                    const int x = asset->sentinelX, y = page::kTabY + asset->sentinelY;
+                    sb.rect (x, y, x + 5, y + 5, gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
+                }
                 return;
             }
     }
@@ -166,7 +167,10 @@ public:
             cells[5] = isNativeRoutingActive() ? osc_.full().levelArea() : ui::Rect {};
             std::copy (settings.begin(), settings.end(), cells.begin() + 6);
         }
-        ui::outsideNativeCells (tab, cells, [&] (ui::Rect area) { ui::drawOscillatorPageGround (sb, tab, area, off); });
+        if (root && nativeRouting_ && &ui::theme::L() == &ui::theme::kLook1)
+            ui::drawNativeCanvas (sb, tab, cells);
+        else
+            ui::outsideNativeCells (tab, cells, [&] (ui::Rect area) { ui::drawOscillatorPageGround (sb, tab, area, off); });
     }
 
     bool covers (int x, int y) const noexcept
@@ -393,7 +397,6 @@ public:
         setNativeInstanceSelector (true);
         setNativeRouting (true);
         osc_.full().setNativePower (true);
-        osc_.full().setHostTopFurniture (hostBackground());
     }
     ui::Rect selectorArea() const noexcept { return osc_.selectorArea(); }
     ui::Rect powerArea() const noexcept { return osc_.full().power.rect(); }

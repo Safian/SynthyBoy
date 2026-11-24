@@ -167,17 +167,7 @@ void testOscNativeBackgrounds()
     if (backgroundOf ("osca") == nullptr)
         return;
     constexpr ui::Rect tab { 0, page::kTabY, page::kW, page::kTabH };
-    ui::OscillatorFullScreen furniture;
-    furniture.setNativeInstanceSelector (true);
-    furniture.setNativeRouting (true);
-    furniture.place (tab);
-    auto scene = std::make_unique<gpu::SceneData>();
-    gpu::SceneBuilder sb (*scene);
-    sb.begin (gpu::kKindPlay, 0, page::kW, page::kH);
-    ui::drawOscillatorPageGround (sb, tab, tab);
-    furniture.drawStaticFurniture (sb);
-    std::vector<uint32_t> asset;
-    renderScene (*scene, asset);
+    constexpr uint32_t canvas = 0xff000000u | ui::theme::kNativeCanvas;
 
     struct Case { const char* view; const char* power; const char* type; float mode; };
     const Case cases[] {
@@ -215,7 +205,7 @@ void testOscNativeBackgrounds()
         const auto pixelAt = [] (int x, int y) { return static_cast<size_t> (y * page::kW + x); };
         const ui::Rect selector = view->ui().selectorArea(), power = view->ui().powerArea(), routing = view->ui().routingArea();
         const ui::Rect pan = view->ui().ui().full().panArea(), level = view->ui().ui().full().levelArea();
-        check (power == ui::Rect { 212, 143, 64, 56 }, std::string (source.view) + " shares the packaged POWER bounds");
+        check (power == ui::playrows::powerRect (view->ui().ui().full().displayRect()), std::string (source.view) + " shares the packaged POWER bounds");
         const auto hitAt = [&] (ui::Rect area) { return view->ui().covers (area.x + area.w / 2, area.y + area.h / 2); };
         const size_t outside = pixelAt (1, tab.y + tab.h / 2);
         const auto cold = capture();
@@ -249,10 +239,11 @@ void testOscNativeBackgrounds()
                 if (selector.contains (x, y) || power.contains (x, y) || routing.contains (x, y) || pan.contains (x, y) || level.contains (x, y))
                     continue;
                 const size_t pixel = pixelAt (x, y);
-                const auto composed = draw::over (asset[pixel], foreground[pixel], 255);
+                const auto composed = draw::over (canvas, foreground[pixel], 255);
+                const auto fallback = draw::over (canvas, cold[pixel], 255);
                 int error = 0;
                 for (int shift = 0; shift <= 24; shift += 8)
-                    error = std::max (error, std::abs (static_cast<int> ((composed >> shift) & 255u) - static_cast<int> ((cold[pixel] >> shift) & 255u)));
+                    error = std::max (error, std::abs (static_cast<int> ((composed >> shift) & 255u) - static_cast<int> ((fallback >> shift) & 255u)));
                 maxDiff = std::max (maxDiff, error);
                 different += error > 2;
             }
@@ -275,12 +266,10 @@ void testOscNativeBackgrounds()
         r.inst.set (source.power, 0.0f);
         r.run (500);
         const auto off = capture();
-        const auto grey = off[outside];
-        check (! view->ui().hostBackground() && grey >> 24 == 255
-               && ((grey >> 16) & 255u) == ((grey >> 8) & 255u) && ((grey >> 8) & 255u) == (grey & 255u)
+        check (view->ui().hostBackground() && off[outside] == 0
                && off[pixelAt (power.x + 4, power.y + 8)] == 0
                && ! hitAt (selector) && ! hitAt (power) && hitAt (routing) && r.inst.uiWrites.load() == writes,
-               std::string (source.view) + " paints OFF ground in grey and preserves host selector and POWER touch");
+               std::string (source.view) + " keeps the native canvas and preserves host selector and POWER touch when off");
         r.inst.set (source.power, 1.0f);
         r.run (500);
         check (view->ui().hostBackground(), std::string (source.view) + " restores the native furniture when powered on");

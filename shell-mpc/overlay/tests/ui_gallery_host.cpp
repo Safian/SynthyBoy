@@ -1512,7 +1512,6 @@ int main (int argc, char** argv)
     std::string outDir;
     std::vector<std::string> presets;
     std::string onlyPrefix;
-    std::string exportBgDir;
     bool testMode = false;
     bool listMode = false;
     int knobs = 16;   // the XL first: the idle chips of the mapped groups read 5 .. 16; `--knobs 4` renders the Key 61 (the chips relative to the bank, 1 .. 4)
@@ -1523,10 +1522,6 @@ int main (int argc, char** argv)
         if (arg == "--out" && i + 1 < argc)
         {
             outDir = argv[++i];
-        }
-        else if (arg == "--export-backgrounds" && i + 1 < argc)
-        {
-            exportBgDir = argv[++i];
         }
         else if (arg == "--preset" && i + 1 < argc)
         {
@@ -1558,183 +1553,14 @@ int main (int argc, char** argv)
             std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--only-prefix PREFIX] [--knobs 16|4] [--test] [--list]\n", argv[0]);
             return 0;
         }
+        else
+        {
+            std::fprintf (stderr, "Unknown or incomplete option: %s\n", arg.c_str());
+            return 2;
+        }
     }
 
     ui::QGroup::setWideDevice (knobs == 16);
-    if (! exportBgDir.empty())
-    {
-        fs::create_directories (exportBgDir);
-        GalleryInst macrosBgInst;
-        macrosBgInst.nativeMacroTargets = true;
-        // Macros static background
-        uit::Image tabIm;
-        tabIm.w = 1280; tabIm.h = 628;
-        tabIm.px.resize (1280 * 628);
-        {
-            GalleryRig<MacroUi> r (macrosBgInst, 1);
-            r.ui.setDrawPass (MacroUi::DrawPass::StaticOnly);
-            r.refresh (2);
-            auto scene = std::make_unique<gpu::SceneData>();
-            gpu::SceneBuilder sb (*scene);
-            sb.begin (gpu::kKindPlay, 0, 1280, 800);
-            r.ui.draw (sb);
-            uit::Image fullIm;
-            fullIm.w = 1280; fullIm.h = 800;
-            synthyboy_mpc::overlay::renderScene (*scene, fullIm.px);
-            for (int y = 0; y < 628; ++y)
-                for (int x = 0; x < 1280; ++x)
-                    tabIm.px[y * 1280 + x] = fullIm.px[(y + 110) * 1280 + x];
-            std::string outPath = exportBgDir + "/overlay_bg_macros.png";
-            uit::writePng (outPath, tabIm, 1);
-            std::printf ("Exported static background: %s (1280x628)\n", outPath.c_str());
-        }
-
-        std::string prevDir = exportBgDir + "/preview";
-        fs::create_directories (prevDir);
-
-        // All-in-one vs Static+Live pixel identity check (full overlay pass, nativeControls = false)
-        uit::Image fullStaticIm;
-        fullStaticIm.w = 1280; fullStaticIm.h = 800;
-        {
-            GalleryRig<MacroUi> r (macrosBgInst, 1);
-            r.ui.setNativeControls (false);
-            r.ui.setDrawPass (MacroUi::DrawPass::StaticOnly);
-            r.refresh (2);
-            auto scene = std::make_unique<gpu::SceneData>();
-            gpu::SceneBuilder sb (*scene);
-            sb.begin (gpu::kKindPlay, 0, 1280, 800);
-            r.ui.draw (sb);
-            synthyboy_mpc::overlay::renderScene (*scene, fullStaticIm.px);
-        }
-
-        uit::Image allIm;
-        allIm.w = 1280; allIm.h = 800;
-        {
-            GalleryRig<MacroUi> r (macrosBgInst, 1);
-            r.ui.setNativeControls (false);
-            r.ui.setDrawPass (MacroUi::DrawPass::All);
-            r.refresh (2);
-            auto scene = std::make_unique<gpu::SceneData>();
-            gpu::SceneBuilder sb (*scene);
-            sb.begin (gpu::kKindPlay, 0, 1280, 800);
-            r.ui.draw (sb);
-            synthyboy_mpc::overlay::renderScene (*scene, allIm.px);
-            std::string outPath = prevDir + "/all_in_one_macros.png";
-            uit::writePng (outPath, allIm, 1);
-            std::printf ("Exported all-in-one render: %s (1280x800)\n", outPath.c_str());
-        }
-
-        // Live-only Macros render
-        uit::Image liveIm;
-        liveIm.w = 1280; liveIm.h = 800;
-        {
-            GalleryRig<MacroUi> r (macrosBgInst, 1);
-            r.ui.setNativeControls (false);
-            r.ui.setDrawPass (MacroUi::DrawPass::LiveOnly);
-            r.refresh (2);
-            auto scene = std::make_unique<gpu::SceneData>();
-            gpu::SceneBuilder sb (*scene);
-            sb.begin (gpu::kKindPlay, 0, 1280, 800);
-            r.ui.draw (sb);
-            synthyboy_mpc::overlay::renderScene (*scene, liveIm.px);
-            std::string outPath = prevDir + "/live_macros.png";
-            uit::writePng (outPath, liveIm, 1);
-            std::printf ("Exported live-only render: %s (1280x800)\n", outPath.c_str());
-        }
-
-        // Composed result: live pass over static background
-        uit::Image compIm;
-        compIm.w = 1280; compIm.h = 800;
-        compIm.px.resize (1280 * 800);
-
-        uit::Image diffIm;
-        diffIm.w = 1280; diffIm.h = 800;
-        diffIm.px.assign (1280 * 800, 0xFF000000u); // black background
-
-        int totalDiff = 0;
-        int diff1Lsb = 0;
-        int otherDiff = 0;
-        int maxDr = 0, maxDg = 0, maxDb = 0;
-
-        for (int y = 0; y < 800; ++y)
-        {
-            for (int x = 0; x < 1280; ++x)
-            {
-                size_t idx = static_cast<size_t> (y * 1280 + x);
-                if (y >= 110 && y < 738)
-                {
-                    uint32_t bgPx = fullStaticIm.px[idx];
-                    uint32_t livePx = liveIm.px[idx];
-                    compIm.px[idx] = draw::over (bgPx, livePx, 255);
-                }
-                else
-                {
-                    compIm.px[idx] = allIm.px[idx];
-                }
-
-                uint32_t c1 = allIm.px[idx];
-                uint32_t c2 = compIm.px[idx];
-                if (c1 != c2)
-                {
-                    totalDiff++;
-                    diffIm.px[idx] = 0xFFFF00FFu; // magenta for diff
-                    int r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
-                    int r2 = (c2 >> 16) & 255, g2 = (c2 >> 8) & 255, b2 = c2 & 255;
-                    int dr = std::abs (r1 - r2);
-                    int dg = std::abs (g1 - g2);
-                    int db = std::abs (b1 - b2);
-                    int md = std::max (dr, std::max (dg, db));
-                    maxDr = std::max (maxDr, dr);
-                    maxDg = std::max (maxDg, dg);
-                    maxDb = std::max (maxDb, db);
-                    if (md <= 1)
-                        diff1Lsb++;
-                    otherDiff++;
-                }
-            }
-        }
-
-        std::string compPath = prevDir + "/composed_macros.png";
-        uit::writePng (compPath, compIm, 1);
-        std::printf ("Exported composed preview: %s (1280x800)\n", compPath.c_str());
-
-        std::string diffPath = prevDir + "/diff_macros.png";
-        uit::writePng (diffPath, diffIm, 1);
-        std::printf ("Exported pixel diff image: %s (1280x800)\n", diffPath.c_str());
-
-        // Check flat ground colour at the 3 marker positions in the exported background tabIm
-        // Left marker: {32..40, 23..31}, Instance: {44..52, 23..31}, Right marker: {1240..1248, 23..31}
-        bool markersFlat = true;
-        const uint32_t expectedFlat = 0xff0b1025u; // ARGB for ground colour (11, 16, 37)
-        for (const auto& sp : { std::make_pair (32, 40), std::make_pair (44, 52), std::make_pair (1240, 1248) })
-        {
-            for (int y = 23; y < 31; ++y)
-            {
-                for (int x = sp.first; x < sp.second; ++x)
-                {
-                    uint32_t px = tabIm.px[static_cast<size_t> (y * 1280 + x)];
-                    if (px != expectedFlat)
-                        markersFlat = false;
-                }
-            }
-        }
-
-        std::printf ("=== PIXEL IDENTITY CHECK (Composed vs All-in-One) ===\n");
-        std::printf ("Total screen pixels: %d\n", 1280 * 800);
-        std::printf ("Tab region pixels (1280x628): %d\n", 1280 * 628);
-        std::printf ("Total differing pixels: %d\n", totalDiff);
-        std::printf ("  - 1-LSB rounding differences (max channel delta <= 1): %d\n", diff1Lsb);
-        std::printf ("  - Other differences: %d\n", otherDiff);
-        std::printf ("Max channel delta: R=%d, G=%d, B=%d\n", maxDr, maxDg, maxDb);
-        std::printf ("Markers flat ground check: %s\n", markersFlat ? "PASS (0x0b1025)" : "FAIL");
-
-        if (totalDiff != 0 || diff1Lsb != 0 || ! markersFlat)
-        {
-            std::fprintf (stderr, "FAIL: Pixel identity check failed (%d diffs, %d 1-LSB, markersFlat=%d)\n", totalDiff, diff1Lsb, (int) markersFlat);
-            return 1;
-        }
-        return 0;
-    }
     if (listMode)
     {
         std::printf ("Views from overlay layout (%d):\n", layout::kNumViews);

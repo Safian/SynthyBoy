@@ -367,14 +367,6 @@ public:
                 groups[i].drawIdle (sb);
         }
     }
-    // Offline skin production only; the live overlay never calls this.
-    void drawNativeFurniture (gpu::SceneBuilder& sb) const
-    {
-        Cell cell (sb, rect_);
-        Pen p (sb, false);
-        drawUnder (p);
-        drawExtra (p);
-    }
     /** The page of its own tab (the plugin draws the whole tab): there is nothing to close. */
     void setPageMode (bool page)
     {

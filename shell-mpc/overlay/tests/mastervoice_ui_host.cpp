@@ -71,41 +71,30 @@ bool inLeaves (MasterUi& ui, const ui::Component& c)
 
 
 
-template<class Rig>
-void checkNativePage (Rig& r, const std::string& name)
-{
-    r.refresh();
-    auto scene = std::make_unique<gpu::SceneData>();
-    gpu::SceneBuilder sb (*scene);
-    sb.begin (gpu::kKindPlay, 0, 1280, 800);
-    r.ui.setHostBackground (false);
-    r.ui.draw (sb);
-    std::vector<uint32_t> expected, actual;
-    renderScene (*scene, expected);
-
-    gpu::SceneBuilder native (*scene);
-    native.begin (gpu::kKindPlay, 0, 1280, 800);
-    page::ground (native);
-    r.ui.screen().drawStaticFurniture (native);
-    r.ui.setHostBackground (true);
-    check (r.ui.hostBackground(), name + " uses its factory native furniture after sentinel confirmation");
-    r.ui.draw (native);
-    renderScene (*scene, actual);
-    check (actual == expected, name + " static and live passes reproduce every pixel of the opaque renderer");
-
-    ui::theme::setLook (2);
-    check (!r.ui.hostBackground(), name + " uses opaque furniture for an alternative look");
-    ui::theme::setLook (1);
-}
-
 void testNativePages()
 {
     MRig master;
     VRig voice;
-    voice.ui.setNativeControls (false);
-    checkNativePage (voice, "Voice");
+    voice.refresh();
+    const auto renderVoice = [&] (bool confirmed) {
+        voice.ui.setHostBackground (confirmed);
+        auto scene = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sb (*scene);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        voice.ui.draw (sb);
+        std::vector<uint32_t> pixels;
+        renderScene (*scene, pixels);
+        return pixels;
+    };
+    const auto cold = renderVoice (false);
+    const auto warm = renderVoice (true);
+    check (voice.ui.hostBackground() && cold == warm, "Voice preserves its native controls and live readouts when the background is confirmed");
+    ui::theme::setLook (2);
+    check (! voice.ui.hostBackground(), "Voice uses the selected look for an alternative theme");
+    ui::theme::setLook (1);
     master.ui.screen().setSide (ui::MasterScreen::SideTuning);
-    check (!master.ui.hostBackground(), "Master tuning paints over the native MAIN furniture");
+    master.ui.setHostBackground (true);
+    check (master.ui.hostBackground(), "Master tuning shares the native canvas with the main side");
 }
 
 void testMasterDraw()

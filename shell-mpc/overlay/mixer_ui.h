@@ -361,23 +361,15 @@ public:
                 page::ground (sb);
                 screen_.draw (sb);
             }
-            else
+            else if (! hostBackground())
             {
-                if (hostBackground())
-                {
-                    // HOST-ONLY normal Mixer:
-                    // When native widgets and host background sentinel are active on normal Mixer,
-                    // emit zero ops (empty scene / hidden plane).
-                }
-                else
-                {
-                    page::ground (sb);
-                    screen_.drawStaticFurniture (sb);
-                    visitNativeStripCells ([&] (ui::Rect cell) { ui::clearNativeCell (sb, cell); });
-                    for (int tab = 0; tab < nativeui::kMixerTabs; ++tab)
-                        ui::clearNativeCell (sb, tabRect (tab));
-                    drawNativeBaseScreen (sb);
-                }
+                // A native channel strip includes its header, meters and controls.
+                std::array<ui::Rect, ui::MixerFullScreen::kStrips + nativeui::kMixerTabs> holes;
+                for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
+                    holes[s] = screen_.strips[s].rect();
+                for (int t = 0; t < nativeui::kMixerTabs; ++t)
+                    holes[ui::MixerFullScreen::kStrips + t] = tabRect (t);
+                ui::drawNativeCanvas (sb, screen_.rect(), holes);
             }
             if (listOpen_)
                 list_.draw (sb);
@@ -657,13 +649,6 @@ private:
         screen_.routingBar.nativePeek = nativeBase();
         for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
             screen_.strips[s].nativeGround = hostBg;
-    }
-
-    /** The host draws the base widgets. The overlay retains routing lines and Q focus. */
-    void drawNativeBaseScreen (gpu::SceneBuilder& sb) const
-    {
-        screen_.routingBar.draw (sb);
-        screen_.groups[screen_.activeGroup()].draw (sb);
     }
 
     void placePeek()
