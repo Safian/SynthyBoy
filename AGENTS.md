@@ -28,6 +28,8 @@ Develop and release SynthyBoy exclusively for standalone Akai MPC hardware. Foll
 
 ## Screen image library (owner, 2026-11-24)
 
+For every current MPC screen capture or photo refresh, use the [mpc-screen-photo skill](.agents/skills/mpc-screen-photo/SKILL.md).
+
 - After changing a screen, refresh its current image from the deployed hardware when it is available. Capture the host and overlay together so the image shows what the owner sees.
 - All project screen captures and full-screen previews live only in `docs/screens/`. This is one flat directory: no subdirectories, aliases, metadata, README, comparison sheets, state variants or other files.
 - Each screen has one current image named `<screen>.jpg` and, when available, one fixed historical reference named `<screen>_old.jpg`. `_old` means the chosen historical reference; never overwrite it with a previous current image or update it during rendering. Screen names and provenance metadata belong outside the image directory.
