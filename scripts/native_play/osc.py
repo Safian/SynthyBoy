@@ -237,6 +237,9 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
         for index, field in enumerate(FIELDS):
             ctx.add_param_key(start + index, f"shell.play_osc_native_{ordinal + 1}_{field}")
         remaps = [("Data", handles[0]), *zip(FIELDS, handles)]
+        # Modifier-bearing handles remap as complete names through compounds.
+        remaps.extend((f"IndexedEnabling/{value}/2/power", f"IndexedEnabling/{value}/2/{handles[0]}")
+                      for value in (0, 1))
         mode_gates = {name: "Invalid" for name in ("RoutingVisible", "Wavetable", "Content", "Filter")}
         if group == "abc":
             first = 2 * ordinal

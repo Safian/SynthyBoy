@@ -173,12 +173,16 @@ def bind_control_active(entry, active_handle, ctx, definitions):
         states = []
         for value, type_name in ((0, off_name), (1, on_name)):
             child = native_entry("State", type_name, {"version": 1, "handleName": "Data"},
-                                 (0, 0, 1, 1), gates=(f"IndexedEnabling/{value}/2/NativeActive",),
+                                 (0, 0, 1, 1), gates=(f"NativeActiveGate{value}",),
                                  focus="No" if value == 0 else "Children")
             child["bounds"]["boundsType"] = "Proportional"
             states.append(child)
         ctx.add_component_definition(state_name, passive_layer(states))
     entry["componentData"] = {"version": 1, "name": widget["name"], "type": state_name,
                               "data": {"version": 1, "handleName": "Data"}}
-    entry["handle remapping"]["map"].append({"key": "NativeActive", "value": active_handle})
+    for value in (0, 1):
+        entry["handle remapping"]["map"].append({
+            "key": f"NativeActiveGate{value}",
+            "value": f"IndexedEnabling/{value}/2/{active_handle}",
+        })
     return entry
