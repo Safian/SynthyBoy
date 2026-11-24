@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from native_ui_params import LFO_OFFSET, mixer_peek_index
+from components import style as _ui_style
 
 CONTRACT = Path(__file__).with_name("lfo-native-contract.json")
 PREFIX = "LFO 1 Native "
@@ -33,9 +34,9 @@ def _entry(name, kind, data, rect, handles=(), gates=(), focus=False, proportion
             "bounds": bounds}
 
 
-def _label(kind, rect, size=14, colour="ffe6e6e6", text=None, proportional=False):
+def _label(kind, rect, size=_ui_style.size("lfo.dial.caption_font"), colour=_ui_style.argb('text.icon'), text=None, proportional=False):
     data = {"version": 1, "textStyle": {"version": 1,
-            "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": float(size)},
+            "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": float(size)},
             "colour": colour, "justification": "horizontallyCentred verticallyCentred", "case": "Original"},
             "type": kind, "handleName": "Data"}
     if text is not None:
@@ -50,12 +51,12 @@ def _button(rect, index, count, art):
 
 
 def _definition(children, popup=None, inactive=False):
-    background = {"version": 1, "colour": "ff171d32", "image": ""}
+    background = {"version": 1, "colour": _ui_style.argb('screen.lfo_smooth.colour'), "image": ""}
     actions = [{"version": 1, "onAction": trigger, "handler": "Show Overlay",
                 "handleName": "Data", "additionalData": popup}
                for trigger in ("Mouse Down", "Enter Pressed")] if popup is not None else []
     return {"version": 2, "actions": actions,
-            "backgroundData": {"version": 1, "focussed": dict(background, colour="ff2a3651"), "unfocussed": background},
+            "backgroundData": {"version": 1, "focussed": dict(background, colour=_ui_style.argb('screen.lfo_smooth.focussed')), "unfocussed": background},
             "ignoreMousePresses": inactive, "disableCoarseDataWheel": inactive, "componentsData": children}
 
 
@@ -69,7 +70,7 @@ FIELD_CAPTIONS = {
 }
 
 
-def _dial(polarity, ctx, width=162, height=168, *, active=True, smooth=False):
+def _dial(polarity, ctx, width=_ui_style.size("lfo.dial.default_width"), height=_ui_style.size("lfo.dial.default_height"), *, active=True, smooth=False):
     from components.native.level.level import (
         compact_dial_definition, level_definition,
         build_native_smooth_dial_with_indicator_definition, synthyboy_dial_data,
@@ -78,11 +79,11 @@ def _dial(polarity, ctx, width=162, height=168, *, active=True, smooth=False):
 
     # Current compact LEVEL variants: side-by-side in wide cells, stacked in
     # narrow cells. The physical knob always remains a square >= 56 px.
-    side = width >= 190 and height <= 120
-    size = 60 if side or height < 150 else 90
+    side = width >= _ui_style.size("lfo.dial.side_min_width") and height <= _ui_style.size("lfo.dial.side_max_height")
+    size = _ui_style.size("lfo.dial.small_size") if side or height < _ui_style.size("lfo.dial.small_max_height") else _ui_style.size("lfo.dial.large_size")
     if smooth:
-        rects = {"focus": (0, 0, width, height), "knob": ((width-size)//2, 4, size, size),
-                 "name": (0, 0, width, 1), "value": (2, height-34, width-4, 28)}
+        rects = {"focus": (0, 0, width, height), "knob": ((width-size)//2, _ui_style.size("lfo.dial.top"), size, size),
+                 "name": (0, 0, width, 1), "value": (2, height-_ui_style.size("lfo.dial.value_bottom"), width-_ui_style.size("lfo.dial.top"), _ui_style.size("lfo.dial.value_height"))}
         definition = build_native_smooth_dial_with_indicator_definition(
             rects=rects, skins_dir=ctx.skins_dir, active=active, handle_name="Active")
         # The adjacent exported kSmooth cell owns the one ActiveText caption.
@@ -90,13 +91,13 @@ def _dial(polarity, ctx, width=162, height=168, *, active=True, smooth=False):
                                          if c["componentData"]["name"] != "name"]
         return definition
     if side:
-        rects = {"focus": (0, 0, width, height), "knob": (6, (height-size)//2, size, size),
-                 "name": (74, height//2-26, width-78, 22),
-                 "value": (74, height//2, width-78, 28)}
+        rects = {"focus": (0, 0, width, height), "knob": (_ui_style.size("lfo.dial.side_left"), (height-size)//2, size, size),
+                 "name": (_ui_style.size("lfo.dial.side_text_left"), height//2-_ui_style.size("lfo.dial.side_caption_offset"), width-_ui_style.size("lfo.dial.side_text_margin"), _ui_style.size("lfo.dial.caption_height")),
+                 "value": (_ui_style.size("lfo.dial.side_text_left"), height//2, width-_ui_style.size("lfo.dial.side_text_margin"), _ui_style.size("lfo.dial.value_height"))}
     else:
-        name_y = min(size+10, height-52)
-        rects = {"focus": (0, 0, width, height), "knob": ((width-size)//2, 4, size, size),
-                 "name": (2, name_y, width-4, 22), "value": (2, name_y+24, width-4, 28)}
+        name_y = min(size+_ui_style.size("lfo.dial.caption_gap"), height-_ui_style.size("lfo.dial.caption_bottom"))
+        rects = {"focus": (0, 0, width, height), "knob": ((width-size)//2, _ui_style.size("lfo.dial.top"), size, size),
+                 "name": (2, name_y, width-_ui_style.size("lfo.dial.top"), _ui_style.size("lfo.dial.caption_height")), "value": (2, name_y+_ui_style.size("lfo.dial.value_offset"), width-_ui_style.size("lfo.dial.top"), _ui_style.size("lfo.dial.value_height"))}
     definition = compact_dial_definition(level_definition(skins_dir=ctx.skins_dir), rects=rects, polarity=polarity)
     for child in definition["componentsData"]:
         if child["componentData"]["name"] == "knob":
@@ -104,7 +105,7 @@ def _dial(polarity, ctx, width=162, height=168, *, active=True, smooth=False):
                 ctx.skins_dir, frame_size=size, bipolar=polarity == "BiPolar")
         elif child["componentData"]["name"] in ("name", "value"):
             data = child["componentData"]["data"]
-            data["textStyle"]["font"]["height"] = 14 if child["componentData"]["name"] == "name" else 20
+            data["textStyle"]["font"]["height"] = _ui_style.size("lfo.dial.caption_font") if child["componentData"]["name"] == "name" else _ui_style.size("lfo.dial.value_font")
             data["textStyle"]["justification"] = "left verticallyCentred" if side else "horizontallyCentred verticallyCentred"
     return definition
 
@@ -125,7 +126,7 @@ def _choice(ctx, width, height, caption=None, number=False):
     from components.native.selector.selector import selector_definition
     return selector_definition(None, "fx editor number menu" if number else "fx editor choice menu",
                                (width, height), ctx.skins_dir, title="Data",
-                               caption_text=caption, label_height=17)
+                               caption_text=caption, label_height=_ui_style.size('screen.lfo_smooth.choice.label_height'))
 
 
 def _action(ctx, width, height, *, text=None, icon=None, action=1, count=1):
@@ -137,7 +138,7 @@ def _action(ctx, width, height, *, text=None, icon=None, action=1, count=1):
 
 def _sync_radio(ctx, width, height, handle="Data"):
     from components.native.radio_button.radio_button import build_radio_button_entries, VARIANT_RADIO_DOT
-    vertical = width < 3*56
+    vertical = width < 3*_ui_style.size("lfo.dial.option_min_width")
     cell_w, cell_h = (width, height//3) if vertical else (width//3, height)
     children = build_radio_button_entries("LFO Sync", (0, 0, cell_w*3, cell_h),
                                           ("HZ", "BPM", "KEY"), VARIANT_RADIO_DOT, handle, ctx.skins_dir)
@@ -159,7 +160,7 @@ def _sync_radio(ctx, width, height, handle="Data"):
 
 def _definitions(ctx):
     from components.native.button.button import icon_button
-    icon_button("expand", "#e6e6e6").save(ctx.skins_dir / "lfo_native_expand.png")
+    icon_button("expand", _ui_style.color('text.icon')).save(ctx.skins_dir / "lfo_native_expand.png")
     # Generic definitions still used by the existing nested shape editor.
     return {
         "Uni": _dial("UniPolar", ctx), "Bi": _dial("BiPolar", ctx),
@@ -167,8 +168,6 @@ def _definitions(ctx):
         "Toggle": _definition([_label("Name", (0.02, 0.03, 0.96, 0.36), 13, proportional=True),
                                _button((0.12, 0.38, 0.76, 0.58), 1, 1, ("toggle_on.png", "toggle_off.png"))]),
         "Choice": _choice(ctx, 300, 62), "Number": _choice(ctx, 236, 56, number=True),
-        "Disabled": _definition([_label("Name", (0, 0, 1, .45), colour="ff9699a4", proportional=True),
-                                  _label("Value", (0, .45, 1, .55), 17, "ff9699a4", proportional=True)], inactive=True),
     }
 
 
@@ -276,7 +275,6 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
 # The stock components own only the cells exported by ShapeEditorPage. The
 # transparent overlay keeps the canvas, annotations and Q-Link framing.
 def _apply_shape_editor(tui, items, ctx):
-    from PIL import Image, ImageDraw, ImageFont
     from native_ui_params import (
         LFO_EDITOR_AVAILABILITY, LFO_EDITOR_SCALE, LFO_EDITOR_VALUES, LFO_EDITOR_VIEW,
     )
@@ -291,7 +289,7 @@ def _apply_shape_editor(tui, items, ctx):
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     mode = next(p["choices"] for p in ctx.params if p["key"] == "lfo1.sync_type")
 
-    def text_label(text=None, colour="ffe6e6e6", size=17):
+    def text_label(text=None, colour=_ui_style.argb('text.icon'), size=_ui_style.size("lfo.dial.choice_font")):
         return _label("Name" if text is None else "Text", (0, 0, 1, 1), size, colour, text, proportional=True)
 
     generic_action = _action(ctx, 150, 56, text=" ")
@@ -299,13 +297,11 @@ def _apply_shape_editor(tui, items, ctx):
     generic_action["componentsData"].append(text_label())
     defs = {
         "Action": generic_action,
-        "DisabledAction": _definition([text_label(colour="ff9699a4")], inactive=True),
-        "Disabled": _definition([text_label(colour="ff9699a4")], inactive=True),
     }
 
     for display in ("CURVE", "SCALE"):
-        for enabled in (False, True):
-            colour = "ffe6e6e6" if enabled else "ff9699a4"
+        for enabled in (True,):
+            colour = _ui_style.argb('text.icon') if enabled else _ui_style.argb('screen.lfo_smooth.colour.2')
             defs[display + ("Active" if enabled else "Disabled")] = _definition([
                 _label("Text", (0.02, 0.03, 0.96, 0.42), colour=colour, text=display, proportional=True),
                 _label("Value", (0.02, 0.43, 0.96, 0.54), 17, colour, proportional=True),
@@ -317,29 +313,37 @@ def _apply_shape_editor(tui, items, ctx):
             remap.append(("Active", handle))
         focus = True
         if available is not None:
-            remap.append(("Enabled", f"Parameter {available}"))
+            remap.extend((f"NativeOptionalGate{value}", f"IndexedEnabling/{value}/2/Parameter {available}")
+                         for value in (0, 1))
             focus = "Children"
         item = _entry(prefix + name, kind, {"version": 1, "handleName": "Data"}, rect, remap, gates, focus=focus)
         if focus == "Children":
             item["bounds"]["acceptsHWFocus"] = focus
         items.append(item)
 
-    def optional_definition(name, active, passive):
+    def optional_definition(name, active):
+        # An unavailable field retains its own native face and value binding.
+        # Do not replace selectors/buttons with a generic text-only rectangle.
+        available_defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        available_defs.update({definition + key: value for key, value in defs.items()})
+        inactive_name = "Inactive" + name
+        defs[inactive_name] = _ui_style.apply_control_state(available_defs[active], ctx.skins_dir, active=False)
+        passive = definition + inactive_name
         children = []
         for i, child_type in enumerate((passive, active)):
             children.append(_entry("state", child_type, {"version": 1, "handleName": "Data"},
-                                   (0, 0, 1, 1), gates=(f"IndexedEnabling/{i}/2/Enabled",),
+                                   (0, 0, 1, 1), gates=(f"NativeOptionalGate{i}",),
                                    focus=i == 1, proportional=True))
         container = _definition(children, inactive=True)
         for style in ("focussed", "unfocussed"):
             container["backgroundData"][style]["colour"] = "0"
         defs[name] = container
 
-    optional_definition("OptionalAction", definition + "Action", definition + "DisabledAction")
+    optional_definition("OptionalAction", definition + "Action")
 
-    optional_definition("OptionalNumber", DEFINITION + "Number", definition + "Disabled")
+    optional_definition("OptionalNumber", DEFINITION + "Number")
     for caption in ("CURVE", "SCALE"):
-        optional_definition("Optional" + caption, definition + caption + "Active", definition + caption + "Disabled")
+        optional_definition("Optional" + caption, definition + caption + "Active")
 
     def tool_art(i, tool, active):
         from components.native.radio_button.radio_button import render_segmented_button_art
@@ -367,7 +371,7 @@ def _apply_shape_editor(tui, items, ctx):
             local_kind = kind + str(field)
             defs[local_kind] = _choice(ctx, rect[2], rect[3], caption=name, number=kind == "Number")
             if field in optional:
-                optional_definition("Optional" + local_kind, definition + local_kind, definition + "Disabled")
+                optional_definition("Optional" + local_kind, definition + local_kind)
                 kind = local_kind
             else:
                 widget(name, definition + local_kind, rect, parameter, (gate,))
@@ -376,7 +380,7 @@ def _apply_shape_editor(tui, items, ctx):
             toggle_name = "Toggle" + str(field)
             defs[toggle_name] = _active_text(ctx, name, rect[2], rect[3])
             if field in optional:
-                optional_definition("Optional" + toggle_name, definition + toggle_name, definition + "Disabled")
+                optional_definition("Optional" + toggle_name, definition + toggle_name)
                 kind = toggle_name
             else:
                 widget(name, definition + toggle_name, rect, parameter, (gate,))
@@ -393,7 +397,7 @@ def _apply_shape_editor(tui, items, ctx):
                        (gate, f"IndexedEnabling/{scale}/2/{curve_gate}"), available)
         elif available is not None:
             if kind.startswith("Action"):
-                optional_definition("Optional" + kind, definition + kind, definition + "DisabledAction")
+                optional_definition("Optional" + kind, definition + kind)
             widget(name, definition + "Optional" + kind, rect, parameter, (gate,), available)
         else:
             widget(name, (definition if kind.startswith("Action") else DEFINITION) + kind, rect, parameter, (gate,))

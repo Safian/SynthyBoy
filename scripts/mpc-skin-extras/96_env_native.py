@@ -5,6 +5,13 @@
 Uses public native component factories (Level, ActiveText, RadioButton, Button)
 with no local image drawing. Idempotent: a second invocation adds nothing.
 """
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 
 import copy
 import tempfile
@@ -28,19 +35,19 @@ from native_ui_params import ENV_SELECTOR_CELLS, ENV_SELECTOR_LAST_FRAME, env_se
 
 # Tab coordinates matching EnvFullScreen::layout (screen y minus 110).
 CELLS = (
-    ("Attack", (14, 482, 107, 132), "envNativeDial"),
-    ("Decay", (125, 482, 107, 132), "envNativeDial"),
-    ("Sustain", (236, 482, 107, 132), "envNativeDial"),
-    ("Release", (347, 482, 107, 132), "envNativeDial"),
-    ("Attack Curve", (474, 482, 106, 132), "envNativeCurve"),
-    ("Decay Curve", (584, 482, 106, 132), "envNativeCurve"),
-    ("Release Curve", (694, 482, 106, 132), "envNativeCurve"),
-    ("Delay", (821, 482, 108, 132), "envNativeDial"),
-    ("Hold", (933, 482, 108, 132), "envNativeDial"),
-    ("Beats", (1045, 482, 108, 132), "envNativeBeatsSwitch"),
-    ("Retrig", (1157, 482, 109, 132), "envNativeRetrigSwitch"),
+    ("Attack", tuple(_ui_style.size('screen.env_native.cells.rect')), "envNativeDial"),
+    ("Decay", tuple(_ui_style.size('screen.env_native.cells.rect.2')), "envNativeDial"),
+    ("Sustain", tuple(_ui_style.size('screen.env_native.cells.rect.3')), "envNativeDial"),
+    ("Release", tuple(_ui_style.size('screen.env_native.cells.rect.4')), "envNativeDial"),
+    ("Attack Curve", tuple(_ui_style.size('screen.env_native.cells.rect.5')), "envNativeCurve"),
+    ("Decay Curve", tuple(_ui_style.size('screen.env_native.cells.rect.6')), "envNativeCurve"),
+    ("Release Curve", tuple(_ui_style.size('screen.env_native.cells.rect.7')), "envNativeCurve"),
+    ("Delay", tuple(_ui_style.size('screen.env_native.cells.rect.8')), "envNativeDial"),
+    ("Hold", tuple(_ui_style.size('screen.env_native.cells.rect.9')), "envNativeDial"),
+    ("Beats", tuple(_ui_style.size('screen.env_native.cells.rect.10')), "envNativeBeatsSwitch"),
+    ("Retrig", tuple(_ui_style.size('screen.env_native.cells.rect.11')), "envNativeRetrigSwitch"),
 )
-SELECTOR_X, SELECTOR_Y, SELECTOR_W, SELECTOR_H = 68, 12, 88, 56
+SELECTOR_X, SELECTOR_Y, SELECTOR_W, SELECTOR_H = tuple(_ui_style.size('screen.env_native.metric.rect'))
 SELECTOR_VARIANTS = 5
 SELECTOR_ART = "env_selector_cells.png"
 SELECTOR_HIT = "env_selector_hit.png"
@@ -87,7 +94,7 @@ def _build_bipolar_filmstrip(skins_dir):
     frame_size. We prevent collision by writing bipolar art to a unique filename.
     """
     with tempfile.TemporaryDirectory(prefix="env-curve-") as folder:
-        data = synthyboy_dial_data(folder, frame_size=76, bipolar=True)
+        data = synthyboy_dial_data(folder, frame_size=_ui_style.size('screen.env_native.data.frame_size'), bipolar=True)
         filename = "env_curve_level_76.png"
         (Path(skins_dir) / filename).write_bytes((Path(folder) / data["filmStrip"]).read_bytes())
     data["filmStrip"] = filename
@@ -193,10 +200,10 @@ def _append_selector(ctx, items, selector_index, gate):
 def _build_dial_definitions(ctx, definitions, bipolar_data):
     """Build envNativeDial and envNativeCurve definitions using Level factory."""
     rects = {
-        "focus": (0, 0, 105, 132),
-        "knob": (14, 33, 76, 76),
-        "name": (0, 4, 105, 26),
-        "value": (0, 110, 105, 22),
+        "focus": tuple(_ui_style.size('screen.env_native.focus.rect')),
+        "knob": tuple(_ui_style.size('screen.env_native.knob.rect')),
+        "name": tuple(_ui_style.size('screen.env_native.name.rect')),
+        "value": tuple(_ui_style.size('screen.env_native.value.rect')),
     }
     for kind, polarity in (("envNativeDial", "UniPolar"), ("envNativeCurve", "BiPolar")):
         if kind in definitions:
@@ -208,7 +215,7 @@ def _build_dial_definitions(ctx, definitions, bipolar_data):
         for item in dial["componentsData"]:
             if item["componentData"]["name"] == "knob":
                 if polarity == "UniPolar":
-                    film_data = synthyboy_dial_data(ctx.skins_dir, frame_size=76, bipolar=False)
+                    film_data = synthyboy_dial_data(ctx.skins_dir, frame_size=_ui_style.size('screen.env_native.film_data.frame_size'), bipolar=False)
                 else:
                     film_data = copy.deepcopy(bipolar_data)
                 item["componentData"]["data"] = film_data
@@ -296,7 +303,7 @@ def apply(tui, qlinks, ctx):
     items.append(_entry(
         "Env Native Targets", "envNativeTargets",
         base + handles.ENV_TARGETS, "TARGETS",
-        (1072, 12, 160, 56), [gate],
+        tuple(_ui_style.size('screen.env_native.apply.rect')), [gate],
     ))
 
     # 3. Dial definitions (ADSR+Delay+Hold unipolar, curves bipolar)
@@ -306,16 +313,16 @@ def apply(tui, qlinks, ctx):
     # 4. Switch definitions (BEATS/RETRIG via ActiveText)
     # 5. Create envNativeBeatsSwitch and envNativeRetrigSwitch definitions
     beats_on, beats_off = _write_active_text_assets(
-        ctx.skins_dir, text="BEATS", width=108, height=132,
+        ctx.skins_dir, text="BEATS", width=_ui_style.size('screen.env_native.apply.width'), height=_ui_style.size('screen.env_native.apply.height'),
         on_name="env_beats_on.png", off_name="env_beats_off.png",
     )
     retrig_on, retrig_off = _write_active_text_assets(
-        ctx.skins_dir, text="RETRIG", width=109, height=132,
+        ctx.skins_dir, text="RETRIG", width=_ui_style.size('screen.env_native.apply.width.2'), height=_ui_style.size('screen.env_native.apply.height'),
         on_name="env_retrig_on.png", off_name="env_retrig_off.png",
     )
 
     beats_def = active_text_definition(
-        "envNativeBeatsSwitch", beats_on, beats_off, (108, 132),
+        "envNativeBeatsSwitch", beats_on, beats_off, tuple(_ui_style.size('screen.env_native.beats_def.size')),
         handle="Data",
 
     )
@@ -323,7 +330,7 @@ def apply(tui, qlinks, ctx):
     ctx.add_component_definition("envNativeBeatsSwitch", beats_def)
 
     retrig_def = active_text_definition(
-        "envNativeRetrigSwitch", retrig_on, retrig_off, (109, 132),
+        "envNativeRetrigSwitch", retrig_on, retrig_off, tuple(_ui_style.size('screen.env_native.retrig_def.size')),
         handle="Data",
 
     )

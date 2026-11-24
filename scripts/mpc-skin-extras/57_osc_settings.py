@@ -1,3 +1,10 @@
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 # SynthyBoy - MPC controls generated from the OSC root bindings.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -12,14 +19,13 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-from PIL import Image, ImageDraw
 
 from components import style
 from components.native.level.level import COMPACT_48_RECTS, DEFAULT_DIAL_RECTS, compact_level_definition, level_definition
 from components.native.pan.pan import compact_pan_definition, pan_definition
 from components.native.name_value.name_value import DEFAULT_BOX_WIDTH, DEFAULT_HEIGHT, build_name_value_definition
 from components.native.active_text.active_text import active_text_definition, write_active_text_assets
-from components.native.selector.selector import OSC_TAB_NAMES, labelled_choice_drawer, passive_layer, selector_definition
+from components.native.selector.selector import OSC_TAB_NAMES, labelled_choice_drawer, passive_layer, selector_definition, write_osc_table_navigation_assets
 import native_warp_picker
 from native_ui_params import (
     OSC_ABC_SETTINGS, OSC_ABC_SETTINGS_FIELDS, OSC_POWER, OSC_SETTINGS, OSC_SETTINGS_FIELDS, OSC_SETTINGS_LAYOUTS,
@@ -55,8 +61,8 @@ def _label(kind, rect, *, text=None, height=None, align="horizontallyCentred ver
             "colour": style.argb("text.caption") if caption else style.argb("text.icon"),
             "font": {
                 "version": 1,
-                "name": "Titillium Web",
-                "style": "SemiBold",
+                "name": _ui_style.size("font.family"),
+                "style": _ui_style.size("font.style.semibold"),
                 "height": height if height is not None else (14 if caption else 18),
             },
             "justification": align,
@@ -151,11 +157,11 @@ def _control(kind, side, skins_dir=None, size=None, caption=""):
             }, (x, 0.05, width, 0.90), focus=True, relative=True))
         return _definition([
             *parts,
-            _label("Text", (0.16, 0.06, 0.68, 0.32), text="SOURCE", height=12),
-            _label("Value", (0.16, 0.38, 0.68, 0.56), height=17),
+            _label("Text", (0.16, 0.06, 0.68, 0.32), text="SOURCE", height=_ui_style.size('screen.osc_settings.control.height')),
+            _label("Value", (0.16, 0.38, 0.68, 0.56), height=_ui_style.size('screen.osc_settings.control.height.2')),
         ])
     if kind == "action":
-        return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=13)], "Toggle Switch")
+        return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=_ui_style.size('screen.osc_settings.control.height.3'))], "Toggle Switch")
     raise ValueError("Unknown OSC control " + kind)
 
 
@@ -175,14 +181,7 @@ def apply(tui, qlinks, ctx):
 
     skins_dir = getattr(ctx, "skins_dir", None)
     if skins_dir is not None:
-        for i, filename in enumerate(TABLE_ART):
-            art_path = skins_dir / filename
-            if not art_path.is_file():
-                art = Image.new("RGBA", (56, 56))
-                if i != 1:
-                    tip, side = (19, 35) if i == 0 else (37, 21)
-                    ImageDraw.Draw(art).line((side, 15, tip, 28, side, 41), fill=style.color("text.icon"), width=3)
-                art.save(art_path)
+        write_osc_table_navigation_assets(skins_dir, TABLE_ART)
 
     # These shared names are referenced by the standalone detail grid and expanded views.
     for kind in ("dial_uni", "dial_bi", "menu", "toggle", "number", "dial_uni_side"):
@@ -202,7 +201,7 @@ def apply(tui, qlinks, ctx):
 
     def add(field, gates, abc, power_gates=()):
         slot, kind, rect = field["slot"], field["kind"], field["rect"]
-        if abc and field["id"] in (110, 112):  # OCT and FIN live in the native TUNE card
+        if abc and field["id"] in tuple(_ui_style.size('screen.osc_settings.add.size')):  # OCT and FIN live in the native TUNE card
             return
         limit = OSC_ABC_SETTINGS_FIELDS if abc else OSC_SETTINGS_FIELDS
         if not 0 <= slot < limit or kind not in ("dial_uni", "dial_bi", "toggle", "menu", "number", "source", "table", "action"):
@@ -313,13 +312,13 @@ def apply(tui, qlinks, ctx):
             remaps = [("Data", view), *((f"OscAbc{slot}", f"Parameter {base + OSC_ABC_SETTINGS + i * OSC_ABC_SETTINGS_FIELDS + slot}")
                                          for slot in range(OSC_ABC_SETTINGS_FIELDS))]
             cells.append(_entry(
-                label, ABC_LAYER, {"version": 1, "handleName": "Data"}, (0, 0, 1280, 628), remaps,
+                label, ABC_LAYER, {"version": 1, "handleName": "Data"}, tuple(_ui_style.size('screen.osc_settings.apply.rect')), remaps,
                 [f"IndexedEnabling/{source_idx}/5/Parameter {base + OSC_SOURCE}",
                  f"IndexedEnabling/1/2/Parameter {power_idx}"],
                 focus="Children",
             ))
             cells.append(_entry(
-                f"{label} Off", f"{ABC_LAYER}Off", {"version": 1, "handleName": "Data"}, (0, 0, 1280, 628), remaps,
+                f"{label} Off", f"{ABC_LAYER}Off", {"version": 1, "handleName": "Data"}, tuple(_ui_style.size('screen.osc_settings.apply.rect')), remaps,
                 [f"IndexedEnabling/{source_idx}/5/Parameter {base + OSC_SOURCE}",
                  f"IndexedEnabling/0/2/Parameter {power_idx}"],
                 focus=False,
@@ -331,6 +330,6 @@ def apply(tui, qlinks, ctx):
     )
     for tab in tabs:
         tab["componentDefinition"]["componentsData"].append(
-            _entry("Osc Native Settings", LAYER, {"version": 1, "handleName": "Data"}, (0, 0, 1280, 628),
+            _entry("Osc Native Settings", LAYER, {"version": 1, "handleName": "Data"}, tuple(_ui_style.size('screen.osc_settings.apply.rect')),
                    [("Data", view)], [f"NonZero/{view}"])
         )

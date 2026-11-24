@@ -1,3 +1,10 @@
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 # SynthyBoy - native control grid of the standalone OSC detail pages.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -42,7 +49,7 @@ def stepper():
         kids.append(entry(name, "Button", (x, 0.39, 0.39, 0.61), data, proportional=True))
     for name, y, size, colour in (("Name", 0, 14, style.argb("text.caption")), ("Value", 0.18, 17, style.argb("text.icon"))):
         data = {"version": 1, "type": name, "handleName": "Data", "textStyle": {"version": 1,
-                "colour": colour, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": size},
+                "colour": colour, "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": size},
                 "justification": "horizontallyCentred verticallyCentred", "case": "Original"}}
         kids.append(entry(name, "Label", (0.02, y, 0.96, 0.21), data, focus="No", proportional=True))
     return passive_layer(kids)
@@ -123,4 +130,4 @@ def apply(tui, qlinks, ctx):
     ctx.add_component_definition("oscNativeDetail", passive_layer(page))
     for tab in tabs:
         tab["componentDefinition"]["componentsData"].append(
-            custom("Osc Native Detail", "oscNativeDetail", (0, 0, 1280, 628), (("Data", view),), f"NonZero/{view}"))
+            custom("Osc Native Detail", "oscNativeDetail", tuple(_ui_style.size('screen.osc_detail.apply.rect')), (("Data", view),), f"NonZero/{view}"))

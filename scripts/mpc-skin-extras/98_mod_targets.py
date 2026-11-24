@@ -1,3 +1,10 @@
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 # SynthyBoy - shared native controls of the MPC modulation route editor.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -5,7 +12,7 @@
 import json
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import sys
 
@@ -14,7 +21,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
-from native_skin_font import semibold
+from components.native.mod_row.mod_row import write_route_button_art, write_route_pagination_art
 from native_ui_params import (MOD_TARGETS, MOD_TARGETS_PAGE_GATE, MOD_TARGETS_ROW_FIELDS,
                               MOD_TARGETS_ROW_GATE, MOD_TARGETS_ROWS, MOD_TARGETS_VIEW,
                               mixer_peek_index)
@@ -38,21 +45,9 @@ def _custom(name, kind, rect, remap, gate):
 
 def _label(name, rect, kind, handle, gate=None, align="horizontallyCentred"):
     data = {"version": 1, "type": kind, "handleName": handle, "textStyle": {
-        "version": 1, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": 19},
-        "colour": "ffe6e6e6", "justification": f"{align} verticallyCentred", "case": "Original"}}
+        "version": 1, "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": _ui_style.size('screen.mod_targets.height')},
+        "colour": _ui_style.argb('text.icon'), "justification": f"{align} verticallyCentred", "case": "Original"}}
     return _entry(name, "Label", rect, data, gate=gate)
-
-
-def _picture(directory, key, caption, rect, active):
-    w, h = rect[2:]
-    im = Image.new("RGBA", (w, h))
-    pen = ImageDraw.Draw(im)
-    pen.rounded_rectangle((1, 1, w - 2, h - 2), radius=6, fill="#161d31",
-                          outline="#72d1ec" if active else "#525b73", width=2)
-    pen.text((w / 2, h / 2), caption, font=semibold(19), fill="#e6e6e6", anchor="mm")
-    name = f"mod_targets_{key}.png"
-    im.save(directory / name)
-    return name
 
 
 def _button(name, rect, images, handle, gate=None, index=1, count=1):
@@ -68,15 +63,15 @@ def _rows(ctx, geometry):
     name, amount, polarity, active, remove = [(x, top - y, w, h) for x, top, w, h in geometry]
     x, top, w, h = amount
     data = {"version": 2, "sliderType": "ColourBar", "direction": "Horizontal",
-            "backgroundColour": "ff242b42", "outlineColour": "ff52607a", "valueColour": "ff72d1ec",
+            "backgroundColour": _ui_style.argb('screen.mod_targets.backgroundcolour'), "outlineColour": _ui_style.argb('screen.mod_targets.outlinecolour'), "valueColour": _ui_style.argb('mod_targets.border.active'),
             "isBipolar": True, "handleName": "Amount"}
     items = [_label("Target", name, "Name", "Amount", "IndexedEnabling/2/3/Present", "leftJustified"),
              _entry("Amount", "Slider", amount, data, focus="Yes"),
              _label("Depth", (x + w - 104, top, 104, h), "Value", "Amount")]
     for key, rect, captions in (("Polarity", polarity, ("BI", "UNI")), ("Active", active, ("ON", "OFF")),
                                 ("Remove", remove, ("×", "×"))):
-        on = _picture(ctx.skins_dir, key.lower() + "_on", captions[0], rect, key != "Remove")
-        off = on if key == "Remove" else _picture(ctx.skins_dir, key.lower() + "_off", captions[1], rect, False)
+        on = write_route_button_art(ctx.skins_dir, key.lower() + "_on", captions[0], rect, key != "Remove")
+        off = on if key == "Remove" else write_route_button_art(ctx.skins_dir, key.lower() + "_off", captions[1], rect, False)
         items.append(_button(key, rect, (on, off), "FromGesture/" + key))
     return items
 
@@ -84,16 +79,7 @@ def _rows(ctx, geometry):
 def _pagination(ctx, rect, parameter, availability):
     x, y, w, h = rect
     half = w // 2
-    film = Image.new("RGBA", (w, h * 4))
-    for mode in range(1, 4):
-        im = Image.new("RGBA", (w, h))
-        pen = ImageDraw.Draw(im)
-        pen.rounded_rectangle((1, 1, w - 2, h - 2), radius=6, fill="#161d31", outline="#525b73", width=2)
-        for arrow, dx, active in (("‹", 22, mode <= 2), ("›", w - 22, mode >= 2)):
-            pen.text((dx, h / 2), arrow, font=semibold(27), fill="#e6e6e6" if active else "#727a90", anchor="mm")
-        film.paste(im, (0, h * mode))
-    image = "mod_targets_pages.png"
-    film.save(ctx.skins_dir / image)
+    image = write_route_pagination_art(ctx.skins_dir, w, h)
     gate = f"NonZero/{availability}"
     art = {"version": 2, "imageType": "FilmStrip", "image": image, "colour": "0", "numFrames": 4,
            "handleName": availability}
@@ -116,7 +102,7 @@ def apply(tui, qlinks, ctx):
     ctx.add_component_definition(row_type, passive_layer(_rows(ctx, contract["row"])))
     Image.new("RGBA", (1, 1)).save(ctx.skins_dir / "mod_targets_hit.png")
     back = contract["back"]
-    art = _picture(ctx.skins_dir, "back", "BACK", back, False)
+    art = write_route_button_art(ctx.skins_dir, "back", "BACK", back, False)
     add = f"Parameter {base + MOD_TARGETS + 1}"
     items = [_button("BACK", back, (art, art), f"FromGesture/Parameter {base + MOD_TARGETS}"),
              _entry("Add", "oscNativeSetting_action", contract["add"], {"version": 1, "handleName": "Data"},
@@ -139,5 +125,5 @@ def apply(tui, qlinks, ctx):
     for tab in tui["pageData"]["tabs"]:
         if (frame := pages.get(tab["tabName"])) is not None:
             entries = tab["componentDefinition"]["componentsData"]
-            entries.insert(0, _custom("Native Modulation Editor", kind, (0, 0, 1280, 628),
+            entries.insert(0, _custom("Native Modulation Editor", kind, tuple(_ui_style.size('screen.mod_targets.apply.rect')),
                                       (("Data", view),), f"IndexedEnabling/{frame}/9/{view}"))

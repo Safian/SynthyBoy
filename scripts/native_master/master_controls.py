@@ -6,13 +6,20 @@ Builds host-native MPC controls for standard dials, buttons, toggles,
 selectors and lists on the Master tab, while dynamic curves, meters,
 and visualizers share the tab with the hardware overlay layer.
 """
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 
 import copy
 
-from PIL import Image, ImageDraw
 
 import native_ui_params
-from native_skin_font import semibold
+from components.native.button.button import write_panel_selector_assets
+from components.native.meter.meter import write_peak_scale as write_native_peak_scale
 from native_meter import meter_data
 
 # Explicit list of unconverted controls retained in overlay
@@ -21,28 +28,28 @@ UNCONVERTED_CONTROLS = [
         "name": "Glide Slope Curve",
         "component": "PortamentoCurveDisplay",
         "side": "main",
-        "rect": (1020, 456, 246, 268),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.2')),
         "reason": "Mathematical exponential portamento curvature graph responding dynamically to master.portamento.slope.",
     },
     {
         "name": "Mini Keyboard",
         "component": "MiniKeyboardDisplay",
         "side": "tuning",
-        "rect": (14, 294, 1252, 162),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.3')),
         "reason": "Interactive 12-key piano keyboard visualizer with dynamic in-scale pitch highlights.",
     },
     {
         "name": "List Popup",
         "component": "ListPopup",
         "side": "both",
-        "rect": (340, 130, 600, 460),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.4')),
         "reason": "Dynamic modal list overlay for large selection lists (20 musical scales, 12 root keys).",
     },
     {
         "name": "Numeric Keyboard",
         "component": "TextEntry",
         "side": "both",
-        "rect": (0, 110, 1280, 628),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.5')),
         "reason": "Full-screen modal keypad popup for direct numeric entry on knob taps.",
     },
 
@@ -69,7 +76,7 @@ MASTER_SPECS = [
         "caption": "VOLUME",
         "widget": "dial_bi",
         "side": "main",
-        "rect": (122, 220, 119, 124),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.6')),
     },
     {
         "key": "master.stereo_spread",
@@ -77,7 +84,7 @@ MASTER_SPECS = [
         "caption": "SPREAD",
         "widget": "dial_uni",
         "side": "main",
-        "rect": (245, 220, 119, 124),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.7')),
     },
     {
         "key": "master.stereo_routing",
@@ -85,7 +92,7 @@ MASTER_SPECS = [
         "caption": "STEREO",
         "widget": "dial_uni",
         "side": "main",
-        "rect": (368, 220, 119, 124),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.8')),
     },
     {
         "key": "master.voice_override",
@@ -93,7 +100,7 @@ MASTER_SPECS = [
         "caption": "VOICE OVERRIDE",
         "widget": "selector",
         "side": "main",
-        "rect": (492, 220, 150, 124),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.9')),
         "choices": ["Kill", "Steal"],
     },
     {
@@ -102,7 +109,7 @@ MASTER_SPECS = [
         "caption": "NO SMOOTHING",
         "widget": "toggle",
         "side": "main",
-        "rect": (300, 348, 160, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.10')),
     },
     {
         "key": "quality.oversample_4x",
@@ -110,7 +117,7 @@ MASTER_SPECS = [
         "caption": "OVERSAMPLE 4X",
         "widget": "toggle",
         "side": "main",
-        "rect": (464, 348, 166, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.11')),
     },
 
     # ---- PITCH BLOCK (SideMain)
@@ -120,7 +127,7 @@ MASTER_SPECS = [
         "caption": "TUNE",
         "widget": "dial_bi",
         "side": "main",
-        "rect": (662, 220, 190, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.12')),
     },
     {
         "key": "master.transpose",
@@ -128,7 +135,7 @@ MASTER_SPECS = [
         "caption": "TRANSPOSE",
         "widget": "dial_bi",
         "side": "main",
-        "rect": (856, 220, 134, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.13')),
     },
     {
         "key": "master.bend_range",
@@ -136,7 +143,7 @@ MASTER_SPECS = [
         "caption": "BEND UP",
         "widget": "dial_uni",
         "side": "main",
-        "rect": (994, 220, 134, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.14')),
         "condition": {"param": "master.bend_down_link", "choice": 0, "numChoices": 2},
     },
     {
@@ -145,7 +152,7 @@ MASTER_SPECS = [
         "caption": "BEND DOWN",
         "widget": "dial_uni",
         "side": "main",
-        "rect": (1132, 220, 134, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.15')),
         "condition": {"param": "master.bend_down_link", "choice": 0, "numChoices": 2},
     },
     {
@@ -154,7 +161,7 @@ MASTER_SPECS = [
         "caption": "LINK",
         "widget": "toggle",
         "side": "main",
-        "rect": (994, 348, 96, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.16')),
     },
 
     # ---- VOICES BLOCK (SideMain)
@@ -164,7 +171,7 @@ MASTER_SPECS = [
         "caption": "POLY",
         "widget": "dial_uni",
         "side": "main",
-        "rect": (14, 456, 189, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.17')),
     },
     {
         "key": "master.legato",
@@ -172,7 +179,7 @@ MASTER_SPECS = [
         "caption": "LEGATO",
         "widget": "toggle",
         "side": "main",
-        "rect": (207, 456, 189, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.18')),
     },
     {
         "key": "master.poly_legato",
@@ -180,7 +187,7 @@ MASTER_SPECS = [
         "caption": "POLY LEG",
         "widget": "toggle",
         "side": "main",
-        "rect": (400, 456, 189, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.19')),
     },
     {
         "key": "voice.phase_legato",
@@ -188,7 +195,7 @@ MASTER_SPECS = [
         "caption": "PHASE LEG",
         "widget": "toggle",
         "side": "main",
-        "rect": (593, 456, 189, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.20')),
     },
     {
         "key": "master.velocity_track",
@@ -196,7 +203,7 @@ MASTER_SPECS = [
         "caption": "VEL TRACK",
         "widget": "dial_bi",
         "side": "main",
-        "rect": (14, 528, 189, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.21')),
     },
     {
         "key": "master.voice.same_note",
@@ -204,7 +211,7 @@ MASTER_SPECS = [
         "caption": "SAME NOTE",
         "widget": "selector",
         "side": "main",
-        "rect": (207, 528, 226, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.22')),
         "choices": ["Steal", "Stack", "Ignore"],
     },
     {
@@ -213,7 +220,7 @@ MASTER_SPECS = [
         "caption": "STEAL",
         "widget": "selector",
         "side": "main",
-        "rect": (437, 528, 345, 112),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.23')),
         "choices": ["Newest", "Oldest", "Highest", "Lowest", "Velocity"],
     },
 
@@ -223,7 +230,7 @@ MASTER_SPECS = [
         "caption": "PAD PRESS",
         "widget": "toggle",
         "side": "main",
-        "rect": (14, 656, 189, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.24')),
     },
     {
         "key": "shell.pad_pressure_amount",
@@ -231,7 +238,7 @@ MASTER_SPECS = [
         "caption": "PAD %",
         "widget": "number",
         "side": "main",
-        "rect": (207, 656, 189, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.25')),
         "condition": {"param": "shell.pad_pressure", "choice": 1, "numChoices": 2},
     },
     # ---- GLIDE BLOCK (SideMain)
@@ -241,7 +248,7 @@ MASTER_SPECS = [
         "caption": "GLIDE",
         "widget": "dial_uni",
         "side": "main",
-        "rect": (802, 456, 105, 196),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.26')),
     },
     {
         "key": "master.portamento.slope",
@@ -249,7 +256,7 @@ MASTER_SPECS = [
         "caption": "SLOPE",
         "widget": "dial_bi",
         "side": "main",
-        "rect": (911, 456, 105, 196),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.27')),
     },
     {
         "key": "master.portamento.always",
@@ -257,7 +264,7 @@ MASTER_SPECS = [
         "caption": "ALWAYS",
         "widget": "toggle",
         "side": "main",
-        "rect": (802, 668, 105, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.28')),
     },
     {
         "key": "master.portamento.scaled",
@@ -265,7 +272,7 @@ MASTER_SPECS = [
         "caption": "SCALED",
         "widget": "toggle",
         "side": "main",
-        "rect": (911, 668, 105, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.29')),
     },
 
     # ---- SCALE BLOCK (SideTuning)
@@ -275,7 +282,7 @@ MASTER_SPECS = [
         "caption": "SCALE",
         "widget": "selector",
         "side": "tuning",
-        "rect": (14, 220, 450, 64),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.30')),
         "choices": [
             "Chromatic (off)", "Major", "Natural Minor", "Harmonic Minor", "Melodic Minor",
             "Dorian", "Phrygian", "Lydian", "Mixolydian", "Locrian",
@@ -290,7 +297,7 @@ MASTER_SPECS = [
         "caption": "KEY",
         "widget": "selector",
         "side": "tuning",
-        "rect": (468, 220, 325, 64),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.31')),
         "choices": ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"],
     },
     {
@@ -299,7 +306,7 @@ MASTER_SPECS = [
         "caption": "MODE",
         "widget": "selector",
         "side": "tuning",
-        "rect": (797, 220, 469, 64),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.32')),
         "choices": ["Conform", "Mark only"],
     },
 
@@ -310,7 +317,7 @@ MASTER_SPECS = [
         "caption": "A4 HZ",
         "widget": "dial_uni",
         "side": "tuning",
-        "rect": (14, 508, 200, 144),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.33')),
     },
     {
         "key": "master.tuning.scale",
@@ -318,7 +325,7 @@ MASTER_SPECS = [
         "caption": "TUNING",
         "widget": "selector",
         "side": "tuning",
-        "rect": (218, 508, 412, 144),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.34')),
         "choices": ["12-TET", "Pythagorean", "Just intonation", "User file"],
     },
     {
@@ -327,7 +334,7 @@ MASTER_SPECS = [
         "caption": "MTS-ESP",
         "widget": "toggle",
         "side": "tuning",
-        "rect": (14, 668, 306, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.35')),
     },
     {
         "key": "master.tuning.mts_note_on_only",
@@ -335,7 +342,7 @@ MASTER_SPECS = [
         "caption": "NOTE-ON",
         "widget": "toggle",
         "side": "tuning",
-        "rect": (324, 668, 306, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.36')),
     },
 
     # ---- MPE BLOCK (SideTuning)
@@ -345,7 +352,7 @@ MASTER_SPECS = [
         "caption": "MPE",
         "widget": "toggle",
         "side": "tuning",
-        "rect": (650, 508, 202, 144),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.37')),
     },
     {
         "key": "master.mpe.bend_range",
@@ -353,7 +360,7 @@ MASTER_SPECS = [
         "caption": "MPE BEND",
         "widget": "dial_uni",
         "side": "tuning",
-        "rect": (856, 508, 202, 144),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.38')),
         "condition": {"param": "master.mpe.on", "choice": 1, "numChoices": 2},
     },
     {
@@ -362,7 +369,7 @@ MASTER_SPECS = [
         "caption": "XYZ TO MACROS",
         "widget": "selector",
         "side": "tuning",
-        "rect": (1062, 508, 204, 104),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.39')),
         "choices": ["Off", "XYZ -> Macro 1, 2, 3", "YZ -> Macro 1, 2"],
     },
     {
@@ -371,7 +378,7 @@ MASTER_SPECS = [
         "caption": "Y TO WHEEL",
         "widget": "toggle",
         "side": "tuning",
-        "rect": (650, 668, 202, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.40')),
     },
     {
         "key": "master.mpe.bend_to_x",
@@ -379,7 +386,7 @@ MASTER_SPECS = [
         "caption": "BEND TO X",
         "widget": "toggle",
         "side": "tuning",
-        "rect": (856, 668, 202, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.41')),
         "condition": {"param": "master.mpe.on", "choice": 1, "numChoices": 2},
     },
     {
@@ -388,26 +395,26 @@ MASTER_SPECS = [
         "caption": "Y BIPOLAR",
         "widget": "toggle",
         "side": "tuning",
-        "rect": (1062, 668, 204, 56),
+        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.42')),
     },
 ]
 
 
 MASTER_OUTPUT_WIDGETS = {
-    "Master Peak Meters": (14, 276, 100, 128),
-    "Master Voice Meter": (400, 662, 382, 44),
-    "Master Clip Off": (14, 220, 100, 56),
-    "Master Clip On": (14, 220, 100, 56),
-    "Master Output Limiter": (122, 348, 96, 56),
+    "Master Peak Meters": tuple(_ui_style.size('screen.master_controls.master_peak_meters.rect')),
+    "Master Voice Meter": tuple(_ui_style.size('screen.master_controls.master_voice_meter.rect')),
+    "Master Clip Off": tuple(_ui_style.size('screen.master_controls.master_clip_off.rect')),
+    "Master Clip On": tuple(_ui_style.size('screen.master_controls.master_clip_on.rect')),
+    "Master Output Limiter": tuple(_ui_style.size('screen.master_controls.master_output_limiter.rect')),
 }
-MASTER_PANELS = (("MAIN", (300, 114, 160, 56)), ("TUNING & MPE", (468, 114, 220, 56)))
+MASTER_PANELS = (("MAIN", tuple(_ui_style.size('screen.master_controls.master_panels.rect'))), ("TUNING & MPE", tuple(_ui_style.size('screen.master_controls.master_panels.rect.2'))))
 MASTER_LINKED_BEND = {
     "key": "master.bend_range",
     "name": "Master Bend Range Linked",
     "caption": "BEND",
     "widget": "dial_uni",
     "side": "main",
-    "rect": (994, 220, 272, 112),
+    "rect": tuple(_ui_style.size('screen.master_controls.rect.rect')),
     "condition": {"param": "master.bend_down_link", "choice": 1, "numChoices": 2},
 }
 MASTER_CONTROL_NAMES = (frozenset(spec["name"] for spec in MASTER_SPECS)
@@ -434,8 +441,8 @@ def _label(caption, rect):
         "version": 1,
         "textStyle": {
             "version": 1,
-            "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": 16.0 if caption else 20.0},
-            "colour": "ffc3cbdf" if caption else "ffe6e6e6",
+            "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": 16.0 if caption else 20.0},
+            "colour": _ui_style.argb('master.meter.scale.text') if caption else _ui_style.argb('text.icon'),
             "justification": "horizontallyCentred verticallyCentred", "case": "Original",
         },
         "type": kind, "handleName": handle,
@@ -476,8 +483,8 @@ def _definition(kind, w, h):
     return {
         "version": 2,
         "actions": actions,
-        "backgroundData": {"version": 1, "focussed": {"version": 1, "colour": "ff202a44", "image": ""},
-                           "unfocussed": {"version": 1, "colour": "ff151a2d", "image": ""}},
+        "backgroundData": {"version": 1, "focussed": {"version": 1, "colour": _ui_style.argb('field.focus'), "image": ""},
+                           "unfocussed": {"version": 1, "colour": _ui_style.argb('button.surface'), "image": ""}},
         "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "componentsData": children,
@@ -523,26 +530,11 @@ PEAK_SCALE_IMAGE = "master_peak_scale.png"
 
 
 def write_peak_scale(directory):
-    size = MASTER_OUTPUT_WIDGETS["Master Peak Meters"][2:]
-    plate = Image.new("RGB", size, "#151a2d")
-    draw = ImageDraw.Draw(plate)
-    font = semibold(15)
-    for caption, y in (("0", 10), ("-12", 26), ("-24", 45), ("-48", 84)):
-        draw.text((19, y), caption, fill="#c3cbdf", font=font, anchor="mm")
-    for channel, x in (("L", 51), ("R", 81)):
-        draw.text((x, 113), channel, fill="#e6e6e6", font=font, anchor="mm")
-    plate.save(directory / PEAK_SCALE_IMAGE)
+    write_native_peak_scale(directory, MASTER_OUTPUT_WIDGETS["Master Peak Meters"][2:], PEAK_SCALE_IMAGE)
 
 
 def write_master_panel_art(directory):
-    font = semibold(19)
-    for i, (name, (_, _, width, height)) in enumerate(MASTER_PANELS, 1):
-        for state, border in (("on", "#50c1ef"), ("off", "#3a456c")):
-            image = Image.new("RGB", (width, height), "#151a2d")
-            draw = ImageDraw.Draw(image)
-            draw.rounded_rectangle((1, 1, width - 2, height - 2), radius=5, outline=border, width=2)
-            draw.text((width / 2, height / 2), name, font=font, fill="#e6e6e6", anchor="mm")
-            image.save(directory / f"master_panel_{i}_{state}.png")
+    write_panel_selector_assets(directory, MASTER_PANELS)
 
 
 def _output_widgets(ctx, view, standard_widget):
@@ -562,7 +554,7 @@ def _output_widgets(ctx, view, standard_widget):
         item["bounds"]["acceptsHWFocus"] = "Yes" if focus else "No"
         return item
 
-    def text(value, rect, colour="ffe6e6e6"):
+    def text(value, rect, colour=_ui_style.argb('text.icon')):
         label = _label(False, rect)
         label["componentData"]["name"] = value
         data = label["componentData"]["data"]
@@ -571,7 +563,7 @@ def _output_widgets(ctx, view, standard_widget):
         data["textStyle"]["font"]["height"] = 15.0
         return label
 
-    def panel(children, colour="ff151a2d", actions=(), image=""):
+    def panel(children, colour=_ui_style.argb('button.surface'), actions=(), image=""):
         background = {"version": 1, "colour": colour, "image": image}
         return {"version": 2, "actions": list(actions), "backgroundData": {"version": 1,
                      "focussed": background, "unfocussed": background},
@@ -586,9 +578,9 @@ def _output_widgets(ctx, view, standard_widget):
               (("PeakL", n.MASTER_PEAK_L), ("PeakR", n.MASTER_PEAK_R),
                ("HoldL", n.MASTER_HOLD_L), ("HoldR", n.MASTER_HOLD_R)))
 
-    voice_bar = _child("voice bar", "Meter", meter_data("Right", hold=False), (6, 6, 226, 32))
+    voice_bar = _child("voice bar", "Meter", meter_data("Right", hold=False), tuple(_ui_style.size('screen.master_controls.voice_bar.rect')))
     yield add("Master Voice Meter", "masterNativeVoiceMeter",
-              panel([voice_bar, _label(False, (238, 0, 138, 44))]),
+              panel([voice_bar, _label(False, tuple(_ui_style.size('screen.master_controls.output_widgets.rect')))]),
               (("Peak", n.MASTER_VOICE_RATIO), ("Data", n.MASTER_VOICE_COUNT)))
 
     limiter_type = standard_widget("toggle", *MASTER_OUTPUT_WIDGETS["Master Output Limiter"][2:])
@@ -598,12 +590,12 @@ def _output_widgets(ctx, view, standard_widget):
         {"key": "Caption", "value": f"WithName[LIMIT]/Parameter {base + n.MASTER_LIMITER}"})
     yield limiter
 
-    for active, colour, text_colour in ((0, "ff151a2d", "ffc3cbdf"), (1, "ff9d2236", "ffffffff")):
+    for active, colour, text_colour in ((0, _ui_style.argb('button.surface'), _ui_style.argb('master.meter.scale.text')), (1, _ui_style.argb('screen.master_controls.output_widgets'), _ui_style.argb('text.white'))):
         suffix = "On" if active else "Off"
         actions = [{"version": 1, "onAction": trigger, "handler": "Toggle Switch",
                     "handleName": "Data", "additionalData": ""} for trigger in ("Mouse Down", "Enter Pressed")]
         yield add("Master Clip " + suffix, "masterNativeClip" + suffix,
-                  panel([text("CLIP", (0, 0, 100, 56), text_colour)], colour, actions),
+                  panel([text("CLIP", tuple(_ui_style.size('screen.master_controls.output_widgets.rect.2')), text_colour)], colour, actions),
                   (("Data", n.MASTER_CLEAR_CLIP),),
                   (main_gate, f"IndexedEnabling/{active}/2/Parameter {base + n.MASTER_CLIP}"), focus=True)
 

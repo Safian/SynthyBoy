@@ -1,3 +1,10 @@
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 # SynthyBoy - MPC skin extra: editable envelope curves (SDK Envelope, envelopeType DAHDSR) on the tab Env (the one Env tab of the layout since 2026-11-21: the selector ENV 1 .. 6 is the plugin page's; this module serves the tab's host widgets of ENV 1, which the overlay skin removes again in 97_no_fallback.py).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -12,10 +19,10 @@
 
 import copy
 
-COLS = (23, 343, 663, 983)
-ROWS = (45, 196, 346, 497)
-KNOB_W, KNOB_H = 278, 107
-ENV_BOUNDS = (23, 6, 1238, 290)   # above the Q-Link badge zone's frame top (the frame of the lower two rows starts at y 301)
+COLS = tuple(_ui_style.size('screen.env.cols.rect'))
+ROWS = tuple(_ui_style.size('screen.env.rows.rect'))
+KNOB_W, KNOB_H = tuple(_ui_style.size('screen.env.metric.size'))
+ENV_BOUNDS = tuple(_ui_style.size('screen.env.env_bounds.rect'))   # above the Q-Link badge zone's frame top (the frame of the lower two rows starts at y 301)
 # order of the knobs in the grid cells (row 2, then row 3): (name suffix, params.json suffix, template knob)
 KNOBS = (
     ("Delay", "delay"), ("Attack", "attack"), ("Hold", "hold"), ("Decay", "decay"),
@@ -27,18 +34,18 @@ STAGES = (  # handle name inside the envelope components, params.json suffix (al
 )
 DUP = "\x00"  # second "version" key of the overlay widgets (see mpc-skin-extras/README.md)
 SHAPES = (("AttackShape", "attack_curve"), ("DecayShape", "decay_curve"), ("ReleaseShape", "release_curve"))
-QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
+QLINK_BOUNDS_Y, QLINK_BOUNDS_H = tuple(_ui_style.size('screen.env.metric.size.2'))   # x and width of the frames: 90_frames.py
 
 
 def _style(big):
     return {
-        "backgroundColour": "ff1e1d1e", "scaleColour": "0", "lineColour": "ffd31145", "fillColour": "40d31145",
-        "highlightColour": "ffffffff", "lineWidth": 4 if not big else 6, "handleWidth": 44 if not big else 64,
-        "handleHeight": 32 if not big else 46, "handleShape": "Circle",
-        "handleLineWidth": 2, "handleLineColour": "ffffffff", "handleFillColour": "ff1e1d1e", "handleTextColour": "ffffffff",
-        "handleLineWidthOnPressed": 2, "handleLineColourOnPressed": "ffffffff", "handleFillColourOnPressed": "ffd31145",
-        "handleTextColourOnPressed": "ffffffff", "handleArrowLineColourOnPressed": "ffffffff",
-        "handleArrowFillColourOnPressed": "ffd31145",
+        "backgroundColour": _ui_style.argb('menu.background'), "scaleColour": "0", "lineColour": _ui_style.argb('focus.field'), "fillColour": _ui_style.argb('focus.field', 64),
+        "highlightColour": _ui_style.argb('text.white'), "lineWidth": _ui_style.size("env.curve.line_width")[int(big)], "handleWidth": _ui_style.size("env.curve.handle_width")[int(big)],
+        "handleHeight": _ui_style.size("env.curve.handle_height")[int(big)], "handleShape": "Circle",
+        "handleLineWidth": _ui_style.size('screen.env.handlelinewidth'), "handleLineColour": _ui_style.argb('text.white'), "handleFillColour": _ui_style.argb('menu.background'), "handleTextColour": _ui_style.argb('text.white'),
+        "handleLineWidthOnPressed": _ui_style.size('screen.env.handlelinewidthonpressed'), "handleLineColourOnPressed": _ui_style.argb('text.white'), "handleFillColourOnPressed": _ui_style.argb('focus.field'),
+        "handleTextColourOnPressed": _ui_style.argb('text.white'), "handleArrowLineColourOnPressed": _ui_style.argb('text.white'),
+        "handleArrowFillColourOnPressed": _ui_style.argb('focus.field'),
     }
 
 
@@ -93,7 +100,7 @@ def _add_definitions(ctx, n):
         _overlay_actions(overlay), False))
     ctx.add_component_definition(overlay, _definition(
         [_entry("Envelope Overlay", "EnvelopeOverlay", _envelope_data(n, True), [],
-                _bounds((0, 0, 1280, 800), 2, "Yes", "Show"))], [], True))
+                _bounds(tuple(_ui_style.size('screen.env.add_definitions.rect')), 2, "Yes", "Show"))], [], True))
     return display
 
 

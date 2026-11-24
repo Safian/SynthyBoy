@@ -6,6 +6,13 @@ Defines exact geometry, parameter bindings, component generation, and explicit
 inventory of converted vs retained dynamic overlay controls.
 Geometry strictly matches shell-mpc/ui/voice_screen.h and docs/ui-map/voice.md.
 """
+import sys as _token_sys
+from pathlib import Path as _TokenPath
+_token_root = str(_TokenPath(__file__).resolve().parents[2])
+if _token_root not in _token_sys.path:
+    _token_sys.path.insert(0, _token_root)
+from components import style as _ui_style
+
 from pathlib import Path
 import sys
 
@@ -89,7 +96,7 @@ UNCONVERTED_CONTROLS = [
     {
         "name": "Voice Step Grid",
         "component": "VoiceGrid",
-        "rect": (268, 84, 1004, 236),
+        "rect": tuple(_ui_style.size('screen.voice_tab.rect.rect')),
         "reason": (
             "The eight own native bipolar knobs represent6 modulation "
             "rows (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2) and Steps1-8 using "
@@ -101,7 +108,7 @@ UNCONVERTED_CONTROLS = [
     {
         "name": "Voice Step Readout Strip",
         "component": "stripRect",
-        "rect": (8, 326, 1264, 40),
+        "rect": tuple(_ui_style.size('screen.voice_tab.rect.rect.2')),
         "reason": (
             "Real-time multi-parameter readout strip displaying 'STEP N' and formatted values "
             "for all 6 modulation rows of the currently selected step simultaneously, with "
@@ -150,7 +157,7 @@ def _definition(children, action, target="", triggers=("Mouse Down",)):
     background = {"version": 1, "colour": style.native_color("transparent"), "image": ""}
     focus = _component("focus", "Focus", {
         "version": 1, "backgroundColour": style.argb("surface.control"), "outlineColour": style.argb("accent.cyan"),
-        "backgroundInset": 4.0, "outlineThickness": 1.0,
+        "backgroundInset": _ui_style.size('screen.voice_tab.backgroundinset'), "outlineThickness": 1.0,
     }, dict(_bounds((0, 0, 1, 1), proportional=True), whenVisible="WhenFocussed"))
     return {
         "version": 2,
@@ -206,14 +213,14 @@ def voice_definitions(skins_dir=None):
         from components.native.selector.selector import button
         rows.append(button(f"row {i}",(4+(i%2)*118,24+(i//2)*60,114,56),on,off,index=i,count=6))
     definitions = {
-        "voiceNativeRowList": _definition([_label("Name",(4,0,232,24),16),*rows],"",triggers=()),
-        "voiceNativeStepSelect": selector_definition(None,"fx editor choice menu",(208,56),skins),
-        "voiceNativeStepValue": build_name_value_definition(rect=(0,0,200,56),skins_dir=skins,box_width=112),
-        "voiceNativeNumber": build_name_value_definition(rect=(0,0,180,56),skins_dir=skins,box_width=80),
+        "voiceNativeRowList": _definition([_label("Name",tuple(_ui_style.size('screen.voice_tab.voicenativerowlist.rect')),16),*rows],"",triggers=()),
+        "voiceNativeStepSelect": selector_definition(None,"fx editor choice menu",tuple(_ui_style.size('screen.voice_tab.voicenativestepselect.size')),skins),
+        "voiceNativeStepValue": build_name_value_definition(rect=tuple(_ui_style.size('screen.voice_tab.voicenativestepvalue.rect')),skins_dir=skins,box_width=112),
+        "voiceNativeNumber": build_name_value_definition(rect=tuple(_ui_style.size('screen.voice_tab.voicenativenumber.rect')),skins_dir=skins,box_width=80),
         "voiceNativeDial": _dial(skins,124,130),
         "voiceNativePanDepth": _dial(skins,124,130,pan=True),
         "voiceNativeScaleDial": _dial(skins,180,120),
-        "voiceNativeChoice": build_titled_selector(None, "fx editor choice menu", (368, 80), skins, caption_handle="Caption", play_face=True),
+        "voiceNativeChoice": build_titled_selector(None, "fx editor choice menu", tuple(_ui_style.size('screen.voice_tab.voicenativechoice.size')), skins, caption_handle="Caption", play_face=True),
     }
     caption = next(c for c in definitions["voiceNativeStepValue"]["componentsData"] if c["componentData"]["data"].get("handleName") == "Caption")
     caption["componentData"]["data"]["type"] = "Value"
