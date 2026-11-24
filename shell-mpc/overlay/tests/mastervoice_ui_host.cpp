@@ -1037,9 +1037,6 @@ void testStandaloneMasterNativeControls()
     check (m.mpeIsOn(), "mpe is on");
     check (! r.ui.covers (mpeBendR.x + mpeBendR.w / 2, mpeBendR.y + mpeBendR.h / 2), "mpeBend area is passthrough when mpe is on");
 
-    const ui::Rect kr = m.keyboard.rect();
-    check (! r.ui.covers (kr.x + kr.w / 2, kr.y + kr.h / 2), "native scale keyboard receives touches on the tuning side");
-
     // 6. Q-Link routing remains active and published
     m.setSide (ui::MasterScreen::SideMain);
     m.setActiveGroup (0);

@@ -1,6 +1,6 @@
 // SynthyBoy - MPC overlay: the MASTER UI, the page of the Master tab (the plugin draws the whole tab, page_view.h): the blocks of the master section (shell-mpc/ui/voice_master.h) wired to the engine's parameters
 // master.*: OUTPUT (volume, stereo spread, routing, voice override, the meters), PITCH (tune, transpose, bend range), VOICES (polyphony, legato, same note, steal), GLIDE (portamento), and on the second side
-// SCALE (with the keyboard), TUNING and MPE. One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the
+// SCALE, TUNING and MPE. One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the
 // instance as IInstanceView. Docs: docs/MPC.md "Master and Voice UI".
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

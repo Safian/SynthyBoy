@@ -13,7 +13,7 @@ The view occupies the full tab area (1280 x 628) and provides comprehensive top-
    - **VOICES**: Maximum synth polyphony (`master.polyphony`), monophonic legato (`master.legato`), polyphonic legato (`master.poly_legato`), oscillator phase legato (`voice.phase_legato`), velocity tracking sensitivity (`master.velocity_track`), same note retrigger behavior (`master.voice.same_note`), voice stealing priority rule (`master.voice.steal_priority`), sounding voice count meter, and plugin pad pressure modulation layer (PAD PRESS; PAD % only while it is on). VEL TRACK, SAME NOTE and STEAL are touch only since the Q-Link mapping extension (still visible and editable on the screen).
    - **GLIDE**: Portamento glide duration (`master.portamento.time`), glide curve slope (`master.portamento.slope`), continuous glide mode (`master.portamento.always`), interval-scaled glide time (`master.portamento.scaled`), and live portamento curvature display.
 2. **TUNING & MPE side**:
-   - **SCALE**: Scale selection (`master.scale.type` with 20 musical scales), root key selection (`master.scale.key` with 12 chromatic pitches), scale quantization mode (`master.scale.mode`), and interactive 12-key piano keyboard diagram.
+   - **SCALE**: Scale selection (`master.scale.type` with 20 musical scales), root key selection (`master.scale.key` with 12 chromatic pitches), scale quantization mode (`master.scale.mode`).
    - **TUNING**: A4 reference pitch tuning (`master.tuning.a4`), microtonal tuning temperament system (`master.tuning.scale`), MIDI Tuning Standard ESP client support (`master.tuning.mts_esp`), and MTS Note-On filter (`master.tuning.mts_note_on_only`).
    - **MPE**: MIDI Polyphonic Expression toggle (`master.mpe.on`), per-note MPE pitch bend range (`master.mpe.bend_range`, hidden while MPE is off), MPE XYZ to macros routing (`master.mpe.xyz_macro`), MPE Y to mod wheel mapping (`master.mpe.y_modwheel`), standard pitch bend to MPE X glide mapping (`master.mpe.bend_to_x`, hidden while MPE is off), and MPE Y bipolar mode (`master.mpe.y_bipolar`).
 
@@ -52,15 +52,14 @@ The page structure consists of a top header bar and two switchable side views co
 
 3. **Side 1: TUNING & MPE** (`shell-mpc/ui/voice_master.h:756-797`):
    Divided into three blocks:
-   - **Row 1 (Top, y = 182, height = 280 px)**:
-     - **Block 4: SCALE** at `(rect.x + 8, rect.y + 72, 1264, 280)` (`shell-mpc/ui/voice_master.h:757-765`):
+   - **Row 1 (Top, y = 182, height = 108 px)**:
+     - **Block 4: SCALE** at `(rect.x + 8, rect.y + 72, 1264, 108)` (`shell-mpc/ui/voice_master.h:757-765`):
        - Top row (height 64 px): Stepper `scaleType` ("SCALE", width 450 px), Stepper `scaleKey` ("KEY", width 325 px), and LED list `scaleMode` ("MODE", about 469 px, 2 options: Conform, Mark only).
-       - Lower area (height 162 px): `keyboard` (`masterNativeScaleKeyboard`, width 1252 px) featuring interactive 12-key piano keyboard (7 white keys C..B, 5 black keys) with active scale note highlights.
-   - **Row 2 (Bottom, y = 470, height = 260 px)**:
-     - **Block 5: TUNING** at `(rect.x + 8, rect.y + 360, 628, 260)` (`shell-mpc/ui/voice_master.h:766-774`):
+   - **Row 2 (Bottom, y = 298, height = 260 px)**:
+     - **Block 5: TUNING** at `(rect.x + 8, rect.y + 188, 628, 260)` (`shell-mpc/ui/voice_master.h:766-774`):
        - Top row (height about 144 px): NumberField `tuningA4` ("A4 HZ", width 200 px) and LED list `tuningScale` ("TUNING", about 412 px, 4 options: 12-TET, Pythagorean, Just intonation, User file).
        - Bottom row (height 56 px): LED toggle `mtsEsp` ("MTS-ESP", about 306 px) and LED toggle `mtsNoteOn` ("NOTE-ON", about 306 px).
-     - **Block 6: MPE** at `(rect.x + 644, rect.y + 360, 628, 260)` (`shell-mpc/ui/voice_master.h:775-797`):
+     - **Block 6: MPE** at `(rect.x + 644, rect.y + 188, 628, 260)` (`shell-mpc/ui/voice_master.h:775-797`):
        - Top row (height about 144 px): LED toggle `mpeOn` ("MPE", about 202 px), NumberField `mpeBend` ("MPE BEND", about 202 px, hidden while MPE is off), and LED list `mpeMacro` ("XYZ TO MACROS", about 204 px, options: Off, XYZ, YZ). With MPE off the remaining two cells are about 306 px each (`shell-mpc/ui/voice_master.h:788-796`).
        - Bottom row (height 56 px): LED toggle `mpeYModwheel` ("Y TO WHEEL"), LED toggle `mpeBendToX` ("BEND TO X", hidden while MPE is off), and LED toggle `mpeYBipolar` ("Y BIPOLAR"), about 202 px each (MPE off: two of about 306 px).
 
@@ -100,9 +99,8 @@ In the gesture column `Qn` is slot n INSIDE the control's Q group; where the gro
 | SCALE | `master.scale.type` | Tap arrows / Turn / Q1 turn / Tap caption | Selects active musical scale (20 options; tap caption opens list popup) | `shell-mpc/overlay/master_ui.h:263` |
 | KEY | `master.scale.key` | Tap arrows / Turn / Q2 turn / Tap caption | Selects musical root key (12 options C..B; tap caption opens list popup) | `shell-mpc/overlay/master_ui.h:264` |
 | MODE | `master.scale.mode` | Tap option / Wheel / Q3 turn | Sets scale quantization mode (Conform, Mark only) | `shell-mpc/overlay/master_ui.h:266` |
-| Scale Keyboard | `master.scale.key` | Tap or drag piano key | Selects musical root key (0..11, C..B) by touching piano keys on mini keyboard | `components/native/scale_keyboard/scale_keyboard.py` |
 | A4 HZ | `master.tuning.a4` | Vertical drag / Wheel / Q1 turn | Sets reference concert pitch frequency for A4 (400.00 to 480.00 Hz in 0.01 Hz steps) | `shell-mpc/overlay/master_ui.h:267` |
-| TUNING | `master.tuning.scale` | Tap option / Wheel / Q2 turn | Selects microtonal tuning temperament system (12-TET, Pythagorean, Just intonation, User file) | `components/native/scale_keyboard/scale_keyboard.py` |
+| TUNING | `master.tuning.scale` | Tap option / Wheel / Q2 turn | Selects microtonal tuning temperament system (12-TET, Pythagorean, Just intonation, User file) | `scripts/native_master/master_controls.py` |
 | MTS-ESP | `master.tuning.mts_esp` | Tap toggle / Q3 turn | Enables MIDI Tuning Standard ESP client synchronization (Off / On) | `shell-mpc/overlay/master_ui.h:269` |
 | NOTE-ON | `master.tuning.mts_note_on_only` | Tap toggle / Q4 turn | Restricts MTS tuning updates to Note-On events only (Off / On) | `shell-mpc/overlay/master_ui.h:270` |
 | MPE | `master.mpe.on` | Tap toggle / Q1 turn | Enables MIDI Polyphonic Expression MPE mode (Off / On) | `shell-mpc/overlay/master_ui.h:271` |
@@ -168,7 +166,7 @@ Change of the Q-Link mapping extension (`docs/ui-map/q-link-audit.md` item 7, "o
 `MasterUi::publishQGroup` (`shell-mpc/overlay/master_ui.h:490-516`): the groups of the side that is up (`first = 0, count = 5` on MAIN, `first = 5, count = 4` on TUNING & MPE), the ones with members in reading order, mapped by `QSlots::publish` (`shell-mpc/overlay/q_publish.h:57-65`). While a detail page (list or keyboard) is open nothing is published (`shell-mpc/overlay/master_ui.h:495,500-501`).
 - **MPC XL (16 knobs, no active group).** Four used groups on each side, so each keeps its slots (`QRouter::blockOfGroup`, `shell-mpc/q_router.h:71-79`): MAIN Q1 .. 4 OUTPUT, Q5 .. 8 PITCH, Q9 .. 12 VOICES, Q13 .. 16 GLIDE (Q8 is empty while LINK is on). TUNING & MPE: Q1 .. 4 SCALE, Q5 .. 8 TUNING, Q9 .. 12 MPE, Q13 .. 16 MPE Y. The XL draws no frame; the chips carry 1 .. 16.
 - **Key 61 (four knobs, banks).** Bank n = Q 4n-3 .. 4n of the same list: the ACTIVE group (the last touched) is bank 1, the others follow in reading order and wrap, so MAIN has four banks (OUTPUT, PITCH, VOICES, GLIDE), TUNING & MPE four (SCALE, TUNING, MPE, MPE Y). A frame marks the active group.
-- Not on any Q-Link (touch only): LINK, VEL TRACK, SAME NOTE, STEAL, LIMIT, QUALITY pair (`quality.no_smoothing`, `quality.oversample_4x`), PAD PRESS, PAD %, the Scale Keyboard, the side switches.
+- Not on any Q-Link (touch only): LINK, VEL TRACK, SAME NOTE, STEAL, LIMIT, QUALITY pair (`quality.no_smoothing`, `quality.oversample_4x`), PAD PRESS, PAD %, the side switches.
 
 ### Activation and drawing
 - On four-knob devices, touching a native control selects its Q-Link group while the MPC handles the edit. A touch-only control selects the group of its block. MAIN opens on OUTPUT and TUNING opens on SCALE. On the XL, the active side's groups keep their assigned slots.
@@ -184,7 +182,6 @@ Change of the Q-Link mapping extension (`docs/ui-map/q-link-audit.md` item 7, "o
    - In `MasterUi::update` (`shell-mpc/overlay/master_ui.h:126`), `master.portamento.slope` is read from `inst.param(slopeIdx_)`.
    - In `PortamentoCurveDisplay::drawBody` (`shell-mpc/ui/voice_master.h:36-73`), a 32-segment exponential curve $y = (e^{k \cdot t} - 1) / (e^k - 1)$ is dynamically calculated and drawn in real time across the grid, visualizing linear (slope = 0), concave (slope < 0), or convex (slope > 0) glide acceleration.
 
-5. **Scale keyboard**. Twelve native radio buttons select the root. The indicator on each key follows the scale type and root.
 
 6. **Active Q-Link Group Outline and Idle Chips**:
    - The active Q-Link group draws a bright accent frame around its controls (`QGroup::draw`, `shell-mpc/ui/voice_master.h:651-652`; not drawn on the XL).
@@ -193,7 +190,7 @@ Change of the Q-Link mapping extension (`docs/ui-map/q-link-audit.md` item 7, "o
 
 ## Standalone Master Tab Migration to Host-Native MPC Controls
 
-The MPC skin supplies the Master dials, toggles, selectors, and number fields. It draws the scale keyboard on TUNING and the output and voice meters, CLIP and LIMIT on MAIN. The overlay draws the glide curve and detail overlays.
+The MPC skin supplies the Master dials, toggles, selectors, and number fields. It draws the output and voice meters, CLIP and LIMIT on MAIN. The overlay draws the glide curve and detail overlays.
 
 ### 1. Architecture & Ownership
 - **Master-specific source files**: `shell-mpc/ui/voice_master.h` (`isNativeControl`, `isRetainedOverlayControl`, and transparent scene rendering), `shell-mpc/overlay/master_ui.h` (`covers()` passthrough, scene dispatch), `shell-mpc/overlay/tests/mastervoice_ui_host.cpp` (`testStandaloneMasterNativeControls`).
@@ -254,7 +251,6 @@ The following controls are deliberately retained in the overlay layer:
 | Side Switcher TUNING & MPE | `MenuButton` | `(468, 114, 220, 56)` | Page navigation button switching between MAIN and TUNING & MPE sub-views. |
 | Block Headers | `isBlockHeader` | Title strips `(x, y, w, 38)` | Touch targets allowing tapping on a block title to switch active Q-Link group in native mode. |
 | Glide Slope Curve | `PortamentoCurveDisplay` | `(1021, 442, 243, 280)` | 32-point mathematical exponential curve plotting real-time transition curve from `master.portamento.slope`. |
-| Scale Keyboard | `masterNativeScaleKeyboard` | `(14, 294, 1252, 162)` | Interactive 12-key piano keyboard diagram with dynamic in-scale highlighting and note tap selection. |
 | Choice Popup | `ListPopup` | `(340, 130, 600, 460)` | Modal detail popup overlay for selecting among 20 musical scales and 12 root keys. |
 | Virtual Keypad | `TextEntry` | `(0, 110, 1280, 628)` | Modal numeric keypad popup opening on knob taps for direct value entry. |
 
@@ -333,9 +329,5 @@ The following controls are deliberately retained in the overlay layer:
 6. **Touch-only controls without Q-Link encoder representation**:
    - `quality.no_smoothing` and `quality.oversample_4x` (`shell-mpc/overlay/master_ui.h:278-279`) are engine synthesis parameters placed in the OUTPUT block strip, but have no Q-Link group assignments because Group 0 is full.
    - Similarly, shell settings `LIMIT` (`outputLimiter`, `shell-mpc/overlay/master_ui.h:277`), `PAD PRESS` (`padPressure`, `shell-mpc/overlay/master_ui.h:280`), and `PAD %` (`padAmount`, `shell-mpc/overlay/master_ui.h:281`) have no Q-Link encoder mappings and require touchscreen interaction.
-
-7. **Redundant key selection controls for `master.scale.key`**:
-   - `master.scale.key` can be selected via the `KEY` Stepper arrows (`shell-mpc/ui/base.h:739-747`), the `KEY` popup list (`shell-mpc/overlay/master_ui.h:433-447`), encoder Q2 of the SCALE group (`shell-mpc/ui/voice_master.h:858`), and the interactive `masterNativeScaleKeyboard` piano keys (`components/native/scale_keyboard/scale_keyboard.py`).
-   - The interactive piano keyboard renders directly beneath the `KEY` stepper, making the stepper and its popup list redundant.
 
 8. **GLIDE replaced VOICE OPTS on the Q-Links (open for the owner)**: VEL TRACK, SAME NOTE and STEAL are visible controls with no Q-Link (`shell-mpc/ui/voice_master.h:1035`); the audit marks the choice "owner may reverse" (`docs/ui-map/q-link-audit.md`, "Open for the owner").

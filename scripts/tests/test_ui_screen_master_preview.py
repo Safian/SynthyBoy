@@ -102,17 +102,7 @@ class MasterScreenVerificationTests(unittest.TestCase):
             for name in MASTER_OUTPUT_WIDGETS:
                 self.assertIn(name, comp_names, f"Missing output widget: {name}")
 
-            keyboard = next(c for c in components if c["componentData"]["name"] == "Master Scale Keyboard")
-            self.assertTrue(keyboard["bounds"]["additionalInvalidatingHandles"][0].startswith("IndexedEnabling/2/3/"))
-            definitions = dict((d["key"], d["value"]) for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"])
-            keys = definitions[keyboard["componentData"]["type"]]["componentsData"]
-            buttons = [k for k in keys if k["componentData"]["type"] == "Button"]
-            self.assertEqual(sorted(k["componentData"]["data"]["buttonId"] for k in buttons), list(range(12)))
-            root_handle = keyboard["handle remapping"]["map"][0]["value"]
-            for key in buttons:
-                self.assertEqual(key["componentData"]["data"]["numButtonsInGroup"], 12)
-                self.assertEqual(key["handle remapping"]["map"][0]["value"], root_handle)
-            self.assertEqual(len(list(skins.glob("scale_interval_*.png"))), 12)
+            self.assertNotIn("Master Scale Keyboard", comp_names)
 
             # Panels present
             self.assertIn("Master Panel MAIN", comp_names)

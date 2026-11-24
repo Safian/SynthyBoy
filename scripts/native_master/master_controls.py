@@ -21,7 +21,6 @@ import native_ui_params
 from components.native.button.button import write_panel_selector_assets
 from components.native.level.level import master_control_definition as _definition
 from components.native.meter.meter import write_peak_scale as write_native_peak_scale
-from components.native.scale_keyboard.scale_keyboard import scale_keyboard
 from native_meter import meter_data
 from components.native.name_value.name_value import _label_component
 
@@ -412,7 +411,7 @@ MASTER_LINKED_BEND = {
     "condition": {"param": "master.bend_down_link", "choice": 1, "numChoices": 2},
 }
 MASTER_CONTROL_NAMES = (frozenset(spec["name"] for spec in MASTER_SPECS)
-                        | {"Master Scale Keyboard"} | MASTER_OUTPUT_WIDGETS.keys() | {MASTER_LINKED_BEND["name"]}
+                        | MASTER_OUTPUT_WIDGETS.keys() | {MASTER_LINKED_BEND["name"]}
                         | {f"Master Panel {name}" for name, _ in MASTER_PANELS})
 MASTER_INTEGER_FIELDS = {
     "master.transpose", "master.bend_range", "master.bend_down_range", "master.polyphony", "master.mpe.bend_range",
@@ -634,19 +633,6 @@ def apply_master_native_controls(tui, qlinks, ctx):
             component["bounds"]["acceptsHWFocus"] = "Children"
         components.append(component)
         created_count += 1
-
-    keyboard_rect = _ui_style.size("master.scale_keyboard.rect")
-    keyboard_key = f"Parameter {_param_index(ctx, 'master.scale.key')}"
-    keyboard_scale = f"Parameter {_param_index(ctx, 'master.scale.type')}"
-    ctx.add_component_definition("masterNativeScaleKeyboard",
-        scale_keyboard(ctx.skins_dir, keyboard_rect[2:], keyboard_key, keyboard_scale))
-    keyboard = _child("Master Scale Keyboard", "masterNativeScaleKeyboard",
-                      {"version": 1, "handleName": "Data"}, keyboard_rect)
-    keyboard["handle remapping"]["map"] = [{"key": "Data", "value": keyboard_key}]
-    keyboard["bounds"] = _make_bounds(keyboard_rect, [f"IndexedEnabling/2/3/Parameter {view}"])
-    keyboard["bounds"]["acceptsHWFocus"] = "Children"
-    components.append(keyboard)
-    created_count += 1
 
     output = list(_output_widgets(ctx, view, standard_widget))
     components.extend(output)

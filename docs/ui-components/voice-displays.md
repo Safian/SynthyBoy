@@ -1,6 +1,6 @@
 # Master displays and native readouts
 
-The overlay draws the glide slope with `PortamentoCurveDisplay`. On Tuning, the native scale keyboard binds twelve radio keys to `master.scale.key` and uses `master.scale.type` to highlight scale notes.
+The overlay draws the glide slope with `PortamentoCurveDisplay`.
 
 `PeakMeterReadout`, `VoiceMeterReadout` and `ClipReadout` are plain state/geometry adapters for host-native widgets. They have no GPU drawing or touch methods. Peaks retain independent L/R hold levels; `updateHold` falls by 0.5 per second. Voice state contains active voice count and polyphony. Clip state is supplied by `IInstanceView::pollMasterClip`; its real `ClipHold` latch remains in `ui/clip_hold.h` and clears through the native host callback.
 

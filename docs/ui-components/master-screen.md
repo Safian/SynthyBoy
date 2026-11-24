@@ -1,7 +1,7 @@
 # MasterScreen
 
 ## What it is
-The Master page: two sides switched by MAIN / TUNING & MPE buttons. MAIN: OUTPUT (volume, peak meters, spread, stereo knob, voice override list), PITCH (tune, transpose, bend up and down, link), VOICES (polyphony, legato switches, same-note and steal lists, velocity tracking, voice meter, pad pressure), GLIDE (time, slope, always, scaled, the curve display). TUNING: SCALE (type, key, mode, mini keyboard), TUNING (A4, scale, MTS options), MPE (on, bend range, macro, Y options).
+The Master page: two sides switched by MAIN / TUNING & MPE buttons. MAIN: OUTPUT (volume, peak meters, spread, stereo knob, voice override list), PITCH (tune, transpose, bend up and down, link), VOICES (polyphony, legato switches, same-note and steal lists, velocity tracking, voice meter, pad pressure), GLIDE (time, slope, always, scaled, the curve display). TUNING: SCALE (type, key, mode), TUNING (A4, scale, MTS options), MPE (on, bend range, macro, Y options).
 
 ## Header and types
 `shell-mpc/ui/voice_master.h`: `MasterScreen : Composite`, `MasterScreen::Side { SideMain = 0, SideTuning = 1 }`; displays in [voice-displays.md](voice-displays.md).
@@ -14,7 +14,7 @@ API: `side()`, `setSide (s)`, static `sideOfGroup (g)`, `numGroups()`, `activeGr
 `minSize()` 1280 x 628.
 
 ## Touch and knob behaviour
-The MPC host owns the knobs, fields, lists, toggles, meters, CLIP and both side selectors. Their C++ objects retain geometry, formatting and Q/state data outside the overlay children. Only the glide curve and scale keyboard draw and take overlay input. Native panel callbacks select MAIN or TUNING; parameter callbacks use their original engine indices. A touch on a native aperture can select its four-knob Q group without editing the value.
+The MPC host owns the knobs, fields, lists, toggles, meters, CLIP and both side selectors. Their C++ objects retain geometry, formatting and Q/state data outside the overlay children. The overlay draws the glide curve. Native panel callbacks select MAIN or TUNING; parameter callbacks use their original engine indices. A touch on a native aperture can select its four-knob Q group without editing the value.
 
 Parent enabled/inactive state explicitly propagates to the adapters. Disabled MPE and linked BEND parameters leave their Q groups; their stored values remain intact.
 

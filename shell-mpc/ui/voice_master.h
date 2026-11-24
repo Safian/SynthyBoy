@@ -110,17 +110,18 @@ struct VoiceMeterReadout : NativeReadoutArea
 
 // ===============================================================================================================================
 /** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER, and the two sides MAIN and TUNING & MPE) and the blocks of the side that is on, each ONE Q group (VOICES and the last block of the second
-    side two):  side MAIN: OUTPUT, PITCH (top row), VOICES, GLIDE (bottom row);  side TUNING & MPE: SCALE (with the keyboard), TUNING, MPE (a group of at most three in each of its two rows).
+    side two):  side MAIN: OUTPUT, PITCH (top row), VOICES, GLIDE (bottom row);  side TUNING & MPE: SCALE, TUNING, MPE (a group of at most three in each of its two rows).
     Bold cut (owner 2026-11-21): LINK is a touch-only toggle inside the PITCH block (no Q slot, no group of its own: five groups on MAIN); what does not apply is HIDDEN, not dimmed: BEND DOWN while LINK is on
     (the engine then uses the BEND UP range for both directions, own_engine.cpp PitchBend), MPE BEND and BEND TO X while MPE is off (the engine reads them only for a member channel of MPE). The cells of a row and
     the members of its Q group close up from the left, so the chips are always 1, 2, 3 in the order of the live controls (setBendLinked / setMpeOn, called by the page from the instance).
     The switches and the short lists are LED controls (led_toggle.h, led_list.h: a dot and a name, no box, every option of a list visible); the numbers, the knobs and the long lists (SCALE, KEY) keep their cells.
-    The room the LED controls free goes to the knobs, the glide curve and the keyboard. */
+    The room the LED controls free goes to the knobs and the glide curve. */
 class MasterScreen : public Composite
 {
 public:
     static constexpr int kMaxGroups = 9, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8;   // the title strip: the name of the block, then the lane of the index chips with a gap to the name
     static constexpr int kTopBlockH = 228, kTopLeftW = 640, kBottomLeftW = 780;   // the first row of MAIN: OUTPUT (the knobs) and PITCH; the second: VOICES (the widest) and GLIDE
+    static constexpr int kScaleRowH = 64;
     enum Side : int { SideMain = 0, SideTuning = 1 };
 
     MenuButton sideMain { "MAIN", MenuButton::Icon::None };
@@ -154,7 +155,6 @@ public:
     // SCALE
     Stepper scaleType, scaleKey;   // 20 scales and 12 keys: long lists, they keep the stepper with its list
     LedList scaleMode;
-    NativeReadoutArea keyboard;
     // TUNING
     NumberField tuningA4;
     LedList tuningScale;
@@ -377,7 +377,7 @@ public:
         }
         else
         {
-            areas = { keyboard.rect(), scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
+            areas = { scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
                       mtsEsp.rect(), mtsNoteOn.rect(), mpeOn.rect(), mpeMacro.rect(), mpeYModwheel.rect(),
                       mpeYBipolar.rect(), mpeOn_ ? mpeBend.rect() : Rect {}, mpeOn_ ? mpeBendToX.rect() : Rect {} };
         }
@@ -458,7 +458,8 @@ public:
             const int y = b < 2 ? y0 : y0 + topH + m, bh = b < 2 ? topH : botH;
             return b % 2 == 0 ? Rect { rect_.x + m, y, lw, bh } : Rect { rect_.x + m + lw + m, y, w - lw - m, bh };
         }
-        const int topH = (h - m) * 52 / 100, botH = h - m - topH;
+        const int topH = kBlockTitleH + kScaleRowH + kBlockPad;
+        const int botH = std::min (260, h - m - topH);
         if (b == 4)
             return { rect_.x + m, y0, w, topH };
         const int bw = (w - m) / 2;
@@ -546,14 +547,12 @@ protected:
             portaCurve.place ({ in.x + lw + g, in.y, in.w - lw - g, in.h });
         }
         // ---- side TUNING & MPE
-        {   // SCALE: the two long lists as steppers and MODE as a LED list in a row spanning the width, the big keyboard under them
+        {   // SCALE: the two long lists as steppers and MODE as a LED list in a row spanning the width
             const Rect in = inner (4);
-            const int rowH = 64, typeW = in.w * 36 / 100, keyW = in.w * 26 / 100;
+            const int rowH = kScaleRowH, typeW = in.w * 36 / 100, keyW = in.w * 26 / 100;
             scaleType.place ({ in.x, in.y, typeW, rowH });
             scaleKey.place ({ in.x + typeW + g, in.y, keyW, rowH });
             scaleMode.place ({ in.x + typeW + keyW + 2 * g, in.y, in.right() - (in.x + typeW + keyW + 2 * g), rowH });
-            const int ky = in.y + rowH + 10;
-            keyboard.place ({ in.x, ky, in.w, std::max (90, in.bottom() - ky) });
         }
         {   // TUNING: A4 and the tuning list (four options, all visible) in the first row, the two MTS switches under them
             const Rect in = inner (5);
