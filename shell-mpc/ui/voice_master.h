@@ -155,7 +155,6 @@ public:
     // SCALE
     Stepper scaleType, scaleKey;   // 20 scales and 12 keys: long lists, they keep the stepper with its list
     LedList scaleMode;
-    bool showKeyPads = false;
     // TUNING
     NumberField tuningA4;
     LedList tuningScale;
@@ -378,8 +377,7 @@ public:
         }
         else
         {
-            areas = { showKeyPads ? Rect { rect_.x + 384, rect_.y + 452, 512, 168 } : Rect {},
-                      Rect { rect_.x + 704, rect_.y + 4, 560, 56 }, scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
+            areas = { Rect { rect_.x + 704, rect_.y + 4, 560, 56 }, scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
                       mtsEsp.rect(), mtsNoteOn.rect(), mpeOn.rect(), mpeMacro.rect(), mpeYModwheel.rect(),
                       mpeYBipolar.rect(), mpeOn_ ? mpeBend.rect() : Rect {}, mpeOn_ ? mpeBendToX.rect() : Rect {} };
         }

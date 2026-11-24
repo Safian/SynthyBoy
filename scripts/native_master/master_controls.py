@@ -21,8 +21,6 @@ import native_ui_params
 from components.native.button.button import button, text_face, write_panel_selector_assets
 from components.native.level.level import master_control_definition as _definition
 from components.native.meter.meter import write_peak_scale as write_native_peak_scale
-from components.native.radio_button.radio_button import segmented_radio_entry
-from components.native.selector.selector import passive_layer
 from native_meter import meter_data
 from components.native.name_value.name_value import _label_component
 
@@ -413,7 +411,7 @@ MASTER_LINKED_BEND = {
     "condition": {"param": "master.bend_down_link", "choice": 1, "numChoices": 2},
 }
 MASTER_CONTROL_NAMES = (frozenset(spec["name"] for spec in MASTER_SPECS)
-                        | MASTER_OUTPUT_WIDGETS.keys() | {MASTER_LINKED_BEND["name"], "Master Scale Input", "Master Key Pads"}
+                        | MASTER_OUTPUT_WIDGETS.keys() | {MASTER_LINKED_BEND["name"], "Master Scale Input"}
                         | {f"Master Panel {name}" for name, _ in MASTER_PANELS})
 MASTER_INTEGER_FIELDS = {
     "master.transpose", "master.bend_range", "master.bend_down_range", "master.polyphony", "master.mpe.bend_range",
@@ -637,7 +635,7 @@ def apply_master_native_controls(tui, qlinks, ctx):
         created_count += 1
 
     rect = _ui_style.size("master.scale_input.rect")
-    for state, caption in (("off", "ACTIVATE SCALE INPUT"), ("on", "KEY MODE  •  CHROMATIC C  •  TAP TO PLAY")):
+    for state, caption in (("off", "ACTIVATE SCALE INPUT"), ("on", "KEY MODE  •  SELECT ROOT  •  TAP TO PLAY")):
         face = text_face(caption, rect[2:], geometry="master.panel.face", surface="button.surface",
                          border=f"master.panel.border.{state}", text="accent.cyan" if state == "on" else "text.icon")
         face.save(_TokenPath(ctx.skins_dir) / f"master_scale_input_{state}.png")
@@ -647,25 +645,7 @@ def apply_master_native_controls(tui, qlinks, ctx):
     switch["bounds"] = _make_bounds(rect, [f"IndexedEnabling/2/3/Parameter {view}"])
     components.append(switch)
 
-    # MPC chromatic C layout, numbered from the bottom left. The hardware
-    # path uses the note actually delivered by Pad Perform or the keybed.
-    grid = _ui_style.size("master.key_pads.rect")
-    width, height = grid[2] // 4, grid[3] // 4
-    key_spec = next(spec for spec in MASTER_SPECS if spec["key"] == "master.scale.key")
-    keys = key_spec["choices"]
-    pads = []
-    for index in range(16):
-        pitch = index % len(keys)
-        cell = (index % 4 * width, (3 - index // 4) * height, width, height)
-        pads.append(segmented_radio_entry(f"Pad {index + 1}", f"{index + 1:02}  {keys[pitch]}", cell,
-                                          pitch, len(keys), "Data", ctx.skins_dir))
-    ctx.add_component_definition("masterKeyPads", passive_layer(pads))
-    grid_view = _child("Master Key Pads", "masterKeyPads", {"version": 1, "handleName": "Data"}, grid)
-    grid_view["bounds"] = _make_bounds(grid, [f"IndexedEnabling/2/3/Parameter {view}", f"NonZero/Parameter {control}"])
-    grid_view["bounds"]["acceptsHWFocus"] = "Children"
-    grid_view["handle remapping"]["map"] = [{"key": "Data", "value": f"Parameter {_param_index(ctx, key_spec['key'])}"}]
-    components.append(grid_view)
-    created_count += 2
+    created_count += 1
 
     output = list(_output_widgets(ctx, view, standard_widget))
     components.extend(output)

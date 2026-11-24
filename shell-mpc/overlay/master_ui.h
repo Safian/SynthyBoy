@@ -93,8 +93,7 @@ public:
             full_.setSide (panel >= 0.75f ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain);
             qSlots_.forget();
         }
-        full_.showKeyPads = nativeView() == nativeui::master::Tuning && inst.masterScaleInputActive();
-        if (full_.showKeyPads)
+        if (nativeView() == nativeui::master::Tuning && inst.masterScaleInputActive())
         {
             const int root = inst.takeMasterScaleRoot();
             if (root >= 0)
