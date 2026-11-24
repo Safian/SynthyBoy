@@ -7,7 +7,7 @@ import json
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw
 
 import sys
 
@@ -19,10 +19,8 @@ for _p in (_ROOT, _SCRIPTS):
 
 from components.native.level.level import compact_dial_definition, level_definition
 from components.native.name_value.name_value import (
-    DEFAULT_BOX_WIDTH,
     build_name_value_definition,
     create_name_value_entry,
-    render_name_value_box_face,
 )
 from components.native.pan.pan import pan_definition
 from components.native.selector.selector import (
@@ -33,7 +31,7 @@ from components.native.selector.selector import (
     passive_layer,
     selector_definition,
 )
-from components.style import argb as _style_argb, color as _style_color, size as _style_size
+from components.style import size as _style_size
 from native_skin_font import semibold
 from components.native.button.button import action_button, button, entry
 if __package__:
@@ -168,57 +166,20 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
     oct_visual_h = _style_size("height.intermediate")
     oct_top = (oct_h - oct_visual_h) // 2
 
-    def build_sub_oct_definition(name, *, active):
+    def build_sub_oct_definition(name):
         definition = build_name_value_definition(
             name=name,
             rect=(0, 0, oct_w, oct_visual_h),
-            skins_dir=ctx.skins_dir if active else None,
+            skins_dir=ctx.skins_dir,
             popup=OCTAVE_PAD,
-            label_colour=_style_argb("text.label") if active else _style_argb("text.status.off"),
-            value_colour=_style_argb("field.value") if active else _style_argb("text.status.off"),
-            with_face_art=active,
         )
-        if not active:
-            definition["actions"] = []
-            definition["ignoreMousePresses"] = True
-            definition["disableCoarseDataWheel"] = True
-            definition["componentsData"] = [
-                c for c in definition["componentsData"] if c["componentData"]["type"] != "Focus"
-            ]
-            box_w = min(DEFAULT_BOX_WIDTH, oct_w - _style_size("name_value.build_name_value_definition.bw"))
-            box_x = oct_w - box_w
-            face_name = f"play_sub_oct_off_{box_w}x{oct_visual_h}.png"
-            base_face = render_name_value_box_face(box_w, oct_visual_h)
-            grey_face = ImageOps.colorize(
-                ImageOps.grayscale(base_face),
-                _style_color("selector.neutral.surface"),
-                _style_color("selector.neutral.border"),
-            ).convert("RGBA")
-            grey_face.putalpha(base_face.getchannel("A"))
-            grey_face.save(ctx.skins_dir / face_name)
-            definition["componentsData"].insert(0, {
-                "version": 2,
-                "componentData": {
-                    "version": 1,
-                    "name": "Face",
-                    "type": "Image",
-                    "data": {"version": 2, "imageType": "Regular", "colour": "0", "image": face_name},
-                },
-                "handle remapping": {"version": 1, "map": []},
-                "bounds": {
-                    "version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show",
-                    "whenVisible": "Always", "boundsType": "Absolute",
-                    "bounds": f"{box_x} 0 {box_w} {oct_visual_h}",
-                },
-            })
         if oct_top:
             for child in definition["componentsData"]:
                 bx, by, bw, bh = map(int, child["bounds"]["bounds"].split())
                 child["bounds"]["bounds"] = f"{bx} {by + oct_top} {bw} {bh}"
         return definition
 
-    ctx.add_component_definition("playOscNumberField", build_sub_oct_definition("playOscNumberField", active=True))
-    ctx.add_component_definition("playSubOctInactive", build_sub_oct_definition("playSubOctInactive", active=False))
+    ctx.add_component_definition("playOscNumberField", build_sub_oct_definition("playOscNumberField"))
     wave_icon = "play_selector_wave.png"
     icon = Image.new("RGBA", (112, 96))
     points = [(x, 48 - 19 * math.sin((x - 4) * math.tau / 103)) for x in range(4, 108)]
@@ -243,58 +204,25 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
     ctx.add_component_definition("playOscPan", pan_definition(dial_template, ctx.skins_dir))
     ctx.add_component_definition("playSubPan", pan_definition(dial_template, ctx.skins_dir))
     ctx.add_component_definition("playSubLevel", level_definition(dial_template, ctx.skins_dir))
-    inactive = copy.deepcopy(selector_template)
-    inactive["actions"] = []
-    inactive["ignoreMousePresses"] = True
-    inactive["disableCoarseDataWheel"] = True
-    for state in ("focussed", "unfocussed"):
-        inactive["backgroundData"][state].update(colour="ff202020", image="")
-    name = _value_label("caption", (10, 28, 182, 28), 17.0)
-    name["componentData"]["data"].update(type="Name", handleName="Caption")
-    value = _value_label("value", (10, 55, 182, 28), 17.0)
-    for child in (name, value):
-        child["componentData"]["data"]["textStyle"]["colour"] = "ff999999"
-    inactive["componentsData"] = [name, value]
-    sub_wave_off = copy.deepcopy(inactive)
-    wave_text_w = geometry["sub"]["first"][2] - 20
-    for child, y in zip(sub_wave_off["componentsData"], (5, 35)):
-        child["bounds"]["bounds"] = f"10 {y} {wave_text_w} 28"
-    ctx.add_component_definition("playSubWaveInactive", sub_wave_off)
-
-    # The existing source power gates alone expose this passive readout.
-    value_data = value["componentData"]["data"]
-    value_data.update(type="Text", text="OFF")
-    value_data["textStyle"]["colour"] = "ffff5a7a"
-    ctx.add_component_definition("playOscInactive", inactive)
-
-    expand_off = "play_sub_expand_off.png"
-    with Image.open(ctx.skins_dir / "lfo_native_expand.png") as expand_art:
-        disabled = ImageOps.colorize(expand_art.convert("L"), "#141414", "#999999")
-        disabled.putalpha(expand_art.getchannel("A"))
-        disabled.save(ctx.skins_dir / expand_off)
-
-    power_gate = "IndexedEnabling/1/2/power"
-    off_gate = "IndexedEnabling/0/2/power"
     rects = geometry["abc"]
     children = [
         button("power", rects["power"], "osc_native_power_on.png", "osc_native_power_off.png",
                remaps=(("Data", "power"),)),
-        action_button(ctx, "expand", rects["expand"], "expand", icon="expand", gates=(power_gate,)),
-        component("first", "playOscChoiceField", rects["first"], (("Data", "first"),), (power_gate,)),
+        action_button(ctx, "expand", rects["expand"], "expand", icon="expand"),
+        component("first", "playOscChoiceField", rects["first"], (("Data", "first"),)),
         component("routing", "playOscRouteField", rects["routing"], (("Data", "routing"),),
-                  (power_gate, "RoutingVisible")),
+                  ("RoutingVisible",)),
     ]
     for gate, kind in (("Wavetable", "playOscTableField"), ("Content", "playOscContentField"),
                        ("Filter", "compactNativeRiseDial")):
         remaps = [("Data", "second")]
         if gate == "Filter":
             remaps.append(("Caption", "WithName[FILTER]/second"))
-        children.append(component("second", kind, rects["second"], remaps, (power_gate, gate),
+        children.append(component("second", kind, rects["second"], remaps, (gate,),
                                   "Children" if gate in ("Wavetable", "Content") else "Yes"))
     for field, kind in (("pan", "playOscPan"), ("level", "compactNativeDial")):
         remaps = (("Data", field), ("Caption", f"WithName[{field.upper()}]/{field}"))
-        children += [component(field, kind, rects[field], remaps, (power_gate,)),
-                     component(field + " off", "playOscInactive", rects[field], remaps, (off_gate,), "No")]
+        children.append(component(field, kind, rects[field], remaps))
     ctx.add_component_definition("playNativeOsc", passive_layer(children))
 
     replacements = tui["pageData"]["replacementStrings"]
@@ -323,13 +251,9 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
             # Place the cells directly on the tab, like the adjacent Play ENV dials.
             # The XL can show the buttons of a wrapper while nested widget bodies remain blank.
             rect = geometry["sub"]
-            on = (*source_gates, f"IndexedEnabling/1/2/Parameter {ctx.param_index('sub.on')}")
-            off = (*source_gates, f"IndexedEnabling/0/2/Parameter {ctx.param_index('sub.on')}")
             items.append(button("Play Native OSC Sub power", rect["power"], "osc_native_power_on.png",
                                 "osc_native_power_off.png", remaps=(("Data", handles[0]),), gates=source_gates))
-            items.append(action_button(ctx, "Play Native OSC Sub expand", rect["expand"], handles[1], icon="expand", gates=on))
-            items.append(entry("Play Native OSC Sub expand off", "Image", {"version": 2, "imageType": "Regular",
-                               "colour": "0", "image": expand_off}, rect["expand"], (("Data", handles[1]),), off, "No"))
+            items.append(action_button(ctx, "Play Native OSC Sub expand", rect["expand"], handles[1], icon="expand", gates=source_gates))
             for field, widget, caption in (("first", "playSubWaveField", "WAVE"), ("second", "playOscNumberField", "OCT"),
                                            ("pan", "playSubPan", "PAN"), ("level", "playSubLevel", "LEVEL")):
                 h = handles[FIELDS.index(field)]
@@ -338,16 +262,10 @@ def add_compact_osc(tui, ctx, items, base, selector, selector_template, stock_me
                 name = f"Play Native OSC Sub {field}"
                 if field == "second":
                     items.append(create_name_value_entry(
-                        name, widget, rect[field], data_handle=h, caption_handle=caption_h, gates=on, focus="Yes"
-                    ))
-                    items.append(create_name_value_entry(
-                        name + " off", "playSubOctInactive", rect[field],
-                        data_handle=h, caption_handle=caption_h, gates=off, focus="No"
+                        name, widget, rect[field], data_handle=h, caption_handle=caption_h, gates=source_gates, focus="Yes"
                     ))
                 else:
-                    items.append(component(name, widget, rect[field], bindings, on))
-                    disabled = "playSubWaveInactive" if field == "first" else "playOscInactive"
-                    items.append(component(name + " off", disabled, rect[field], bindings, off, "No"))
+                    items.append(component(name, widget, rect[field], bindings, source_gates))
         else:
             items.append(component(f"Play Native OSC {source}", "playNativeOsc", (0, 0, 432, 628),
                                    remaps, source_gates, "Children"))
