@@ -808,12 +808,14 @@ private:
         if (dimmed_.load())
             return;   // the host's picture is dimmed, the strip does not look like its reference: the cut stays where it was until the wake
         int edge = PanelKey::kNoKey;
-        if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn())
 #if SYNTHYBOY_MPC_INHOST_DRAW
-            if (inhost::hostEdgeActive())
-                edge = inhost::hostEdge();
-            else
+        const bool useInhostEdge = current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn() && inhost::hostEdgeActive();
+        if (useInhostEdge)
+            edge = inhost::hostEdge();
+#else
+        constexpr bool useInhostEdge = false;
 #endif
+        if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn() && ! useInhostEdge)
         {
             PanelKey& k = keys_[current_];
             if (! k.hasReference())
