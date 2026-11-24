@@ -314,6 +314,5 @@
 
 - [ ] Mixer valódi sztereó mérők mind a 10 sávon: független L/R csúcs, hold és jelalapú clip; natív 2×8 px kijelző és 95 px fader, egy célzott jel/bekötés ellenőrzés után develop. (fut: detached mixer-stereo)
 
-- [ ] Maradék worktree-k összevezetése: `/private/tmp/sb-graph-native-catalog` mentetlen OSC-selector átvezetése és `/private/tmp/sb-warp-pager.lvCPdz` mentetlen Warp-választója megőrzendő; `/private/tmp/sb-graph-fx-popups` egyedi FX-picker javítását csak a `054064c9` szándékos UI-visszaállításának megőrzésével lehet átvenni. Kész, ha a még értékes változások integrálva vagy tulajdonosi döntéssel elvetve, és a három munkakönyvtár törölve.
 
 - [ ] Tulajdonosi Mixer-regressziójelzés a developon (2026-11-24): a jelenlegi felület hibásnak látszik a sztereó átvezetés után; a pontos megjelenítési hely és tünet még tisztázandó. Kész, ha a tényleges generált natív felület és a jelzett futó nézet az elfogadott mixerrel egyezik, a célzott sztereó Mac-próba sikeres, és a konkrét eltérés javítva. (fut: mixer-stereo)
