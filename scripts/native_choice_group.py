@@ -14,10 +14,7 @@ if _ROOT not in sys.path:
 from components.native.radio_button.radio_button import *
 from components.native.radio_button.radio_button import (
     VARIANT_SEGMENTED,
-    VARIANT_RADIO_DOT,
     render_segmented_button_art,
-    render_radio_dot_button_art,
     build_radio_button_entries as build_choice_group_entries,
     create_segmented_radio_button_group as create_segmented_choice_group,
-    create_radio_dot_group as create_radio_dot_choice_group,
 )

@@ -216,7 +216,7 @@ class TestUiScreenLfo(unittest.TestCase):
         contract = self.ctx.screen_lfo_contract
         self.assertEqual(contract["title"], "LFO")
         self.assertGreaterEqual(len(contract["rebuilt_components"]), 10)
-        self.assertEqual(contract["approved_radio_variant"]["variant_id"], "VARIANT_RADIO_DOT")
+        self.assertEqual(contract["approved_radio_variant"]["variant_id"], "VARIANT_SEGMENTED")
         self.assertIn("Visible Q-Link numbers", contract["rejected_concepts"][0])
 
     def test_native_choice_group_radio1_available(self):

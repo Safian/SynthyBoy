@@ -389,6 +389,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(len(branch), 3)
                 for index, route in enumerate(branch):
                     data = route["componentData"]["data"]
+                    self.assertTrue(data["onImage"].startswith("choice_segmented_"))
                     top = index * h // 3
                     self.assertEqual(rect(route), (x, y + top, w, (index + 1) * h // 3 - top))
                     self.assertEqual((data["buttonId"], data["numButtonsInGroup"], handle(route)), (index, 3, 2861))

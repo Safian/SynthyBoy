@@ -11,7 +11,7 @@ Safely checks existing definitions from 53_lfo_smooth.py to prevent duplicate ke
 
 Features:
 - Full inventory of rebuilt native components on the LFO screen.
-- Verification and support of the approved Variant 1 native radio selector (VARIANT_RADIO_DOT).
+- Verification and support of the approved Variant 1 native radio selector (VARIANT_SEGMENTED).
 - Strict enforcement of owner visual rules: no numbered Q badges; Gen1 single-Q frame and Gen2 compile-out follow the common policy.
 - Rejection of fake animations and hand-drawn / vector controls presented as authentic.
 - Full verification of sentinel positions, widget counts, and touch target minimums (>= 56 px).
@@ -111,8 +111,8 @@ REBUILT_NATIVE_COMPONENTS = (
         "name": "LFO Native SYNC Selector (HZ / BPM / KEY)",
         "kind": "lfoNativeChoice / native_choice_group",
         "rect": tuple(_ui_style.size('screen.ui_screen_lfo.rect.rect.7')),
-        "role": "Szinkronizáció módválasztó (Jóváhagyott mai natív pontjelölős rádióválasztó HZ / BPM / KEY)",
-        "status": "MEGÉPÍTETT (Jóváhagyott pontjelölős változat, VARIANT_RADIO_DOT)",
+        "role": "Szinkronizáció módválasztó (Jóváhagyott mai natív szegmentált rádióválasztó HZ / BPM / KEY)",
+        "status": "MEGÉPÍTETT (Jóváhagyott szegmentált változat, VARIANT_SEGMENTED)",
     },
     {
         "id": "lfo_smooth_toggle",
@@ -182,8 +182,8 @@ REBUILT_NATIVE_COMPONENTS = (
 
 # Approved radio selector variant specification:
 APPROVED_RADIO_VARIANT = {
-    "variant_id": "VARIANT_RADIO_DOT",
-    "name": "Mai natív rádióválasztó aktív cián ponttal",
+    "variant_id": "VARIANT_SEGMENTED",
+    "name": "Mai natív rádióválasztó teljes cián kijelöléssel",
     "active_color": _ui_style.color('accent.cyan'),
     "active_text": _ui_style.color('radio.active.text'),
     "inactive_color": _ui_style.color('radio.surface.top'),

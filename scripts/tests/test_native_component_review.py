@@ -23,19 +23,17 @@ class NativeComponentReviewTest(unittest.TestCase):
     def test_distinct_radio_labels_keep_their_own_art_across_groups(self):
         radio = load("radio_button")
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
-            for variant, renderer in ((radio.VARIANT_SEGMENTED, radio.render_segmented_button_art),
-                                      (radio.VARIANT_RADIO_DOT, radio.render_radio_dot_button_art)):
-                first = radio.build_radio_button_entries("First", (0, 0, 240, 48),
-                    ("A-B", "OTHER"), variant, "Parameter 10", tmp)
-                second = radio.build_radio_button_entries("Second", (0, 0, 240, 48),
-                    ("A B", "OTHER"), variant, "Parameter 20", tmp)
-                one = first[0]["componentData"]["data"]
-                two = second[0]["componentData"]["data"]
-                self.assertNotEqual(one["onImage"], two["onImage"])
-                for data, label in ((one, "A-B"), (two, "A B")):
-                    for active, key in ((True, "onImage"), (False, "offImage")):
-                        with Image.open(Path(tmp) / data[key]) as actual:
-                            self.assertEqual(actual.tobytes(), renderer(label, active, 120, 48).tobytes())
+            first = radio.build_radio_button_entries("First", (0, 0, 240, 48),
+                ("A-B", "OTHER"), radio.VARIANT_SEGMENTED, "Parameter 10", tmp)
+            second = radio.build_radio_button_entries("Second", (0, 0, 240, 48),
+                ("A B", "OTHER"), radio.VARIANT_SEGMENTED, "Parameter 20", tmp)
+            one = first[0]["componentData"]["data"]
+            two = second[0]["componentData"]["data"]
+            self.assertNotEqual(one["onImage"], two["onImage"])
+            for data, label in ((one, "A-B"), (two, "A B")):
+                for active, key in ((True, "onImage"), (False, "offImage")):
+                    with Image.open(Path(tmp) / data[key]) as actual:
+                        self.assertEqual(actual.tobytes(), radio.render_segmented_button_art(label, active, 120, 48).tobytes())
 
     def test_gated_name_value_hides_invalid_model(self):
         nv = load("name_value")

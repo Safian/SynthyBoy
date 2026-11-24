@@ -43,6 +43,7 @@ from components.native.active_text.active_text import (
     titled_active_text_group_entry,
 )
 from components.native.name_value.name_value import build_name_value_definition
+from components.native.radio_button.radio_button import segmented_radio_entry
 from components.native.selector.selector import build_titled_selector, selector_definition
 
 _LAYOUT = json.loads(Path(__file__).with_name("voice_layout.json").read_text())
@@ -210,12 +211,8 @@ def voice_definitions(skins_dir=None):
     row_origin = style.size('voice.controls.row_origin')
     row_pitch = style.size('voice.controls.row_pitch')
     for i, label in enumerate(VOICE_ROWS):
-        from components.native.radio_button.radio_button import render_segmented_button_art
-        on,off = f"voice_row_{i}_on.png",f"voice_row_{i}_off.png"
-        render_segmented_button_art(label,True,*row_size).save(skins/on)
-        render_segmented_button_art(label,False,*row_size).save(skins/off)
-        from components.native.selector.selector import button
-        rows.append(button(f"row {i}",(row_origin[0]+(i%2)*row_pitch[0],row_origin[1]+(i//2)*row_pitch[1],*row_size),on,off,index=i,count=6))
+        rect = (row_origin[0] + (i % 2) * row_pitch[0], row_origin[1] + (i // 2) * row_pitch[1], *row_size)
+        rows.append(segmented_radio_entry(f"row {i}", label, rect, i, len(VOICE_ROWS), None, skins))
     definitions = {
         "voiceNativeRowList": _definition([_label("Name",tuple(_ui_style.size('screen.voice_tab.voicenativerowlist.rect')),style.size('voice.controls.row_caption_font')),*rows],"",triggers=()),
         "voiceNativeStepSelect": selector_definition(None,"fx editor choice menu",tuple(_ui_style.size('screen.voice_tab.voicenativestepselect.size')),skins),

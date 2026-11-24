@@ -381,21 +381,23 @@ def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passi
             container.append(style.set_leaf_control_active(passive, ctx, active=False))
 
 
-def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates, skins_dir, variant_key, *, active_alternatives=()):
-    x, y, w, h = rect
-    for index, caption in enumerate(ROUTING):
-        top = index * h // 3
-        part = (x, y + top, w, (index + 1) * h // 3 - top)
-        pw, ph = part[2], part[3]
-        on_file = f"filter_native_route_{variant_key}_{index}_{pw}x{ph}_on.png"
-        off_file = f"filter_native_route_{variant_key}_{index}_{pw}x{ph}_off.png"
-        ui_radio.render_radio_dot_button_art(caption, True, pw, ph).save(skins_dir / on_file)
-        ui_radio.render_radio_dot_button_art(caption, False, pw, ph).save(skins_dir / off_file)
-        for branch, gates in enumerate([active_gates, *active_alternatives]):
-            suffix = " alternative" if branch else ""
-            container.append(_button(f"{name} {index}{suffix}", part, param, gates, index, 3, (on_file, off_file)))
+def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates, skins_dir, *, active_alternatives=()):
+    rows = ui_radio.create_segmented_radio_button_group(
+        NATIVE + name, rect, ROUTING, f"Parameter {param}", skins_dir, vertical=True, gates=active_gates)
+    for index, row in enumerate(rows):
+        row_name = f"{NATIVE}{name} {index}"
+        row["componentData"]["name"] = row_name
+        container.append(row)
+        for gates in active_alternatives:
+            alternative = copy.deepcopy(row)
+            alternative["componentData"]["name"] = row_name + " alternative"
+            alternative["bounds"]["additionalInvalidatingHandles"] = list(gates)
+            container.append(alternative)
         if passive_gates:
-            passive = _button(f"{name} {index} off", part, ctx.param_index("filter.routing"), passive_gates, index, len(ROUTING), (on_file, off_file))
+            passive = copy.deepcopy(row)
+            passive["componentData"]["name"] = row_name + " off"
+            passive["bounds"]["additionalInvalidatingHandles"] = list(passive_gates)
+            passive["handle remapping"]["map"][0]["value"] = f"Parameter {ctx.param_index('filter.routing')}"
             container.append(style.set_leaf_control_active(passive, ctx, active=False))
 
 
@@ -561,7 +563,7 @@ def apply(tui, qlinks, ctx):
                     _emit_routing(ctx, filter_items, name, rect, host_value,
                                   [f"IndexedEnabling/1/2/Parameter {f1}"],
                                   [f"IndexedEnabling/0/2/Parameter {f1}", f"IndexedEnabling/0/2/Parameter {f2}"],
-                                  ctx.skins_dir, "exp", active_alternatives=[
+                                  ctx.skins_dir, active_alternatives=[
                                       [f"IndexedEnabling/0/2/Parameter {f1}", f"IndexedEnabling/1/2/Parameter {f2}"]])
                 else:
                     _emit_dial(ctx, filter_items, name, rect, host_value, FIELDS[slot].upper(),
@@ -748,7 +750,7 @@ def apply(tui, qlinks, ctx):
                                  passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
                                                   ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
                 elif slot == ROUTE:
-                    _emit_routing(ctx, split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir, "split")
+                    _emit_routing(ctx, split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir)
                 else:
                     _emit_dial(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
                                slot in BIPOLAR, active_gates, passive_gates, dial_assets, side_layout=True,

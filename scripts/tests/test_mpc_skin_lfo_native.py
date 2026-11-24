@@ -177,7 +177,7 @@ class LfoSkinTest(unittest.TestCase):
                 buttons = [c for c in children if c["componentData"]["type"] == "Button"]
                 self.assertEqual({c["componentData"]["data"]["numButtonsInGroup"] for c in buttons}, {5})
                 self.assertEqual({c["componentData"]["data"]["buttonId"] for c in buttons}, {0, 1, 2, 3, 4})
-                self.assertTrue(all("choice_radio_dot_" in c["componentData"]["data"]["onImage"] for c in buttons))
+                self.assertTrue(all("choice_segmented_" in c["componentData"]["data"]["onImage"] for c in buttons))
                 for choice in range(5):
                     visible = []
                     for button in buttons:

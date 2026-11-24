@@ -20,7 +20,7 @@ The [native contract](../../scripts/mpc-skin-extras/lfo-native-contract.json) is
 | MOTION | DIRECTION, SWING, bipolar PAN-style STEREO dial and MONO ActiveText |
 | Random bottom band | RATE/DIVISION or KEY fields, HZ/BPM/KEY, STEREO ActiveText and MODE; no invented Smooth parameter |
 
-The HZ/BPM/KEY buttons use the current `components/native/radio_button` **radio-dot** variant. The public Sync handle remains the existing five-state engine parameter: Hz=0, Tempo=1, dotted=2, triplet=3, Key=4. The three visible choices write the corresponding existing indices; the BPM indicator also stays active for dotted/triplet states. Physical Q-Link access to those five engine states is retained.
+The HZ/BPM/KEY buttons use the current `components/native/radio_button` **segmented** variant. The public Sync handle remains the existing five-state engine parameter: Hz=0, Tempo=1, dotted=2, triplet=3, Key=4. The three visible choices write the corresponding existing indices; the BPM indicator also stays active for dotted/triplet states. Physical Q-Link access to those five engine states is retained.
 
 Dials use the current LEVEL/PAN FilmStrip assets. Their real Knob children are square and at least 56×56 px. Side or stacked name/value positions are chosen from the actual contract cell; every child remains inside its own cell. Controls are registered as shared definitions and instances bind to them, without copying complete subtrees per layout.
 
