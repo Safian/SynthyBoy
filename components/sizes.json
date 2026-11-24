@@ -792,8 +792,6 @@
         "ref": "tune.height"
       }
     ],
-    "tune.name_value_box_face.geometry": 4,
-    "tune.name_value_preview.geometry": 4,
     "tune.tune_track_button.geometry": 4,
     "tune.tune_more_button.geometry": 4,
     "tune.build_standalone_osc_tune_definition.gap.x": 8,
@@ -803,9 +801,6 @@
     "tune.tune_card.geometry.offset1": 48,
     "tune.tune_card.geometry.offset2": 6,
     "tune.tune_card.geometry.offset3": 48,
-    "tune.get_height_preset.geometry": {
-      "ref": "height.medium"
-    },
     "tune.tune_track_button.dot.r": 6,
     "tune.tune_track_button.dot.cx": 22,
     "tune.build_standalone_osc_tune_definition.card.h": 8,
@@ -820,18 +815,9 @@
     "tune.tune_card.r.out": 10,
     "tune.tune_card.r.in": 7,
     "tune.tune_card.r.hole": 4,
-    "tune.get_height_preset.geometry.offset1": {
-      "ref": "height.intermediate"
-    },
-    "tune.build_name_value_definition.bw": 20,
     "tune.tune_card.dot.cx": 22,
     "tune.tune_card.gx": 22,
     "tune.tune_card.resize": 278,
-    "tune.name_value_box_face.rounded_rectangle": 1,
-    "tune.name_value_preview.bw": 20,
-    "tune.name_value_preview.rounded_rectangle": 1,
-    "tune.build_name_value_definition.focus.ring": 2.0,
-    "tune.build_name_value_definition.focus.ring.offset1": 1.0,
     "tune.tune_track_button.rounded_rectangle": 1,
     "tune.tune_more_button.rounded_rectangle": 1,
     "tune.build_standalone_osc_tune_definition._header_label": 12,

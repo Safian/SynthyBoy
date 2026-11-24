@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Native MPC MacroCard component, definitions, and renderer."""
 import copy
-import hashlib
 import math
 from pathlib import Path
 
+from components.native.button.button import action_art, action_button, button, entry, in_slot
 from components.style import (
     argb as _style_argb,
     color as _style_color,
@@ -280,115 +280,6 @@ def macro_level_definition(template=None, skins_dir=None, rects=None, *, include
     level = compact_dial_definition(template, dial_rects, polarity="UniPolar")
 
     return sub_dial_definition(level, skins_dir, bipolar=False, include_name=include_name)
-
-
-def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon")):
-    if Image is None:
-        raise RuntimeError("Pillow is required for action_art")
-    if bool(icon) == bool(text):
-        raise ValueError("Supply exactly one icon or text label")
-    art = _style_size('button.art')
-    scale, height = art['scale'], art['height']
-    font = semibold(art['font'] * scale)
-    minimum = height if icon else math.ceil(font.getlength(text) / scale) + art['padding']
-    width = minimum if width is None else width
-    if width < minimum or (icon and width != height):
-        raise ValueError("Button width does not fit its content")
-    image = Image.new("RGBA", (width * scale, height * scale))
-    pen = ImageDraw.Draw(image)
-    pen.rounded_rectangle(
-        (0, 0, image.width - art['outline'], image.height - art['outline']),
-        radius=art['radius'] * scale,
-        fill=_style_color("button.surface"), outline=_style_color("button.border"), width=art['outline'] * scale,
-    )
-
-    def stroke(points, stroke_width):
-        ox, oy = art['origin']
-        points = [(round((x - ox) * scale), round((y - oy) * scale)) for x, y in points]
-        pen.line(points, fill=colour, width=round(stroke_width * scale), joint="curve")
-        radius = stroke_width * scale / 2
-        for x, y in (points[0], points[-1]):
-            pen.ellipse((x - radius, y - radius, x + radius, y + radius), fill=colour)
-
-    if icon == "power":
-        geometry = art['power']
-        cx, cy = geometry['center']
-        radius = geometry['radius']
-        arc = [(cx + radius * math.cos(math.radians(a)), cy + radius * math.sin(math.radians(a)))
-               for a in range(*geometry['arc'])]
-        stroke(arc, geometry['stroke'])
-        stroke(geometry['stem'], geometry['stroke'])
-    elif icon == "expand":
-        geometry = art['expand']
-        arm = geometry['arm']
-        for x, y, dx, dy in geometry['corners']:
-            stroke([(x, y + dy * arm), (x, y), (x + dx * arm, y)], geometry['stroke'])
-    elif text:
-        pen.text((image.width / 2, image.height / 2), text, font=font, fill=colour, anchor="mm")
-    else:
-        raise ValueError(icon)
-    return image.resize((width, height), Image.Resampling.LANCZOS)
-
-
-def in_slot(face, size):
-    if Image is None:
-        raise RuntimeError("Pillow is required for in_slot")
-    w, h = size
-    if w < face.width or h < face.height:
-        raise ValueError("Button exceeds its slot")
-    image = Image.new("RGBA", size)
-    image.alpha_composite(face, ((w - face.width) // 2, (h - face.height) // 2))
-    return image
-
-
-def entry(name, kind, data, rect, remaps=(), gates=(), focus="Yes"):
-    bounds = {
-        "version": 2 if gates else 1,
-        "acceptsHWFocus": focus,
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": " ".join(map(str, rect)),
-    }
-    if gates:
-        bounds["additionalInvalidatingHandles"] = list(gates)
-    return {
-        "version": 2,
-        "componentData": {"version": 1, "name": name, "type": kind, "data": data},
-        "handle remapping": {"version": 1, "map": [{"key": a, "value": b} for a, b in remaps]},
-        "bounds": bounds,
-    }
-
-
-def button(name, rect, on, off=None, index=1, count=1, remaps=(), gates=()):
-    return entry(
-        name,
-        "Button",
-        {
-            "version": 2,
-            "onImage": on,
-            "offImage": off or on,
-            "buttonId": index,
-            "numButtonsInGroup": count,
-            "handleName": "Data",
-            "gestureBehaviour": "Instant",
-        },
-        rect,
-        remaps,
-        gates,
-    )
-
-
-def action_button(ctx, name, rect, action, *, icon=None, text=None, width=None, gates=()):
-    """Bind one immediate MPC action to a centered 48 px icon or label."""
-    if not action:
-        raise ValueError("An action handle is required")
-    image = in_slot(action_art(icon=icon, text=text, width=width), tuple(rect[2:]))
-    digest = hashlib.sha256(str(image.size).encode() + image.tobytes()).hexdigest()[:20]
-    filename = f"native_action_{digest}.png"
-    skins_dir = getattr(ctx, "skins_dir", ctx)
-    image.save(Path(skins_dir) / filename)
-    return button(name, rect, filename, remaps=(("Data", action),), gates=gates)
 
 
 TARGET_X = TARGET_RECT[0]
