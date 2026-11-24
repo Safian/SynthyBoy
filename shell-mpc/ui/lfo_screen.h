@@ -334,7 +334,7 @@ public:
     Size minSize() const override { return { 1200, 600 }; }
     Change touchDown (int x, int y, double nowMs) override
     {
-        if (isNativeSmooth (x, y))
+        if (pageMode_ || isNativeSmooth (x, y))
             return Change::none();
         const Change c = Composite::touchDown (x, y, nowMs);
         int hit = -1;
@@ -352,27 +352,11 @@ public:
     }
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Composite::draw (sb);
-        if (pageMode_ && nativePageControls_)
-        {
-#if SYNTHYBOY_MPC_QFRAME_ENABLED
-            // Native children are hidden from Composite, but their functional
-            // Q bank still owns one visible block. Keep the complete frame-only
-            // bounds/cell path out of Gen2, matching the common visual policy.
-            if (! QGroup::wideDevice() && active_ >= 0 && active_ < nGroups_)
-            {
-                const int block = blockOfGroup_[active_];
-                const Rect frame = block >= 0 && block < nBlocks_ ? blocks_[block] : smoothArea();
-                if (! frame.empty())
-                {
-                    Cell cell (sb, Rect::unite (frame, Pen::qMarkerRect (frame)));
-                    Pen pen (sb, true);
-                    pen.qFocus (frame);
-                }
-            }
-#endif
+        // Page controls and furniture are host-native. Keep these objects only
+        // as geometry/state/Q adapters, never as an availability fallback.
+        if (pageMode_)
             return;
-        }
+        Composite::draw (sb);
         for (int i = 0; i < nGroups_; ++i)
         {
             if (i == keyGroup() && ! keyActive_)
@@ -382,6 +366,14 @@ public:
             else
                 groups[i].drawIdle (sb);
         }
+    }
+    // Offline skin production only; the live overlay never calls this.
+    void drawNativeFurniture (gpu::SceneBuilder& sb) const
+    {
+        Cell cell (sb, rect_);
+        Pen p (sb, false);
+        drawUnder (p);
+        drawExtra (p);
     }
     /** The page of its own tab (the plugin draws the whole tab): there is nothing to close. */
     void setPageMode (bool page)

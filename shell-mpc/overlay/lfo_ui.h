@@ -257,11 +257,7 @@ public:
     void setHostBackground (bool confirmed) noexcept { nativeGround_ = confirmed; }
     bool hostBackground() const noexcept { return nativeGround_ && full_.nativePageControls() && pageTop_ == 0; }
 
-    void drawPageGround (gpu::SceneBuilder& sb) const
-    {
-        if (full_.nativePageControls() && ! hostBackground())
-            drawRootGroundWithApertures (sb);
-    }
+    void drawPageGround (gpu::SceneBuilder&) const {}
 
     ui::Rect nativeRect (int field, int action = nativeui::lfo::kTargets) const noexcept
     {
@@ -391,10 +387,8 @@ public:
             ui::outsideNativeCells (ui::Rect { 0, kTabY, w_, kTabH }, cells,
                                     [&] (ui::Rect strip) { drawRootGround (sb, strip); });
         }
-        else if (! full_.nativePageControls())
+        else if (pageTop_ != 0 && pageTop_ != kPageList)
             drawRootGround (sb, { 0, kTabY, w_, kTabH });
-        else if (hostBackground())
-            coverRootMarkers (sb);
         if (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor))
         {
             editor_.draw (sb);
@@ -824,8 +818,7 @@ private:
     {
         const auto useNative = [&]
         {
-            return inst.nativeLfoControls() && stack.depth() == 1 && stack.element() == kElementLfo
-                && &ui::theme::L() == &ui::theme::kLook1;
+            return stack.depth() == 1 && stack.element() == kElementLfo;
         };
         const auto pull = [&]
         {
@@ -866,64 +859,6 @@ private:
         updateNativeEditor (inst, stack, nowMs);
         inst.setNativeLfoState (state);
         nativePublished_ = state.layout != 0;
-    }
-
-    void drawRootGroundWithApertures (gpu::SceneBuilder& sb) const
-    {
-        namespace n = nativeui::lfo;
-        constexpr int maxHoles = n::kCount + 2, top = page::kTabY, bottom = page::kTabY + page::kTabH;
-        ui::Rect holes[maxHoles];
-        int edges[2 + 2 * maxHoles] { top, bottom };
-        int numHoles = 0, numEdges = 2;
-        auto cut = [&](const ui::Rect& r)
-        {
-            if (! r.empty())
-            {
-                holes[numHoles++] = r;
-                edges[numEdges++] = r.y;
-                edges[numEdges++] = r.bottom();
-            }
-        };
-        for (int field = 0; field < n::kCount; ++field)
-            if ((nativeFields_ & n::bit (field)) != 0)
-                cut (nativeRect (field));
-        if (! random())
-            cut (nativeRect (n::kAction, n::kExpand));
-        if (nativePlayEditor_)
-            cut (full_.close.rect());
-        std::sort (edges, edges + numEdges);
-        for (int i = 1; i < numEdges; ++i)
-        {
-            const int y = edges[i - 1], h = edges[i] - y;
-            if (h == 0)
-                continue;
-            std::pair<int, int> spans[maxHoles];
-            int numSpans = 0;
-            for (int k = 0; k < numHoles; ++k)
-                if (y >= holes[k].y && y < holes[k].bottom())
-                    spans[numSpans++] = { holes[k].x, holes[k].right() };
-            std::sort (spans, spans + numSpans);
-            int x = 0;
-            for (int k = 0; k < numSpans; ++k)
-            {
-                drawRootGround (sb, { x, y, spans[k].first - x, h });
-                x = std::max (x, spans[k].second);
-            }
-            drawRootGround (sb, { x, y, page::kW - x, h });
-        }
-    }
-
-    static void coverRootMarkers (gpu::SceneBuilder& sb)
-    {
-        for (const auto& view : layout::kViews)
-            if (view.kind == layout::kKindLfoUi)
-            {
-                for (const auto& spot : { view.markers[0].rect, view.instance, view.markers[1].rect })
-                    drawRootGround (sb, { spot.x - 1, spot.y - 1, spot.w + 2, spot.h + 2 });
-                if (const auto* asset = backgroundOf (view.name))
-                    drawRootGround (sb, { asset->sentinelX, page::kTabY + asset->sentinelY, 5, 5 });
-                return;
-            }
     }
 
     int nativeFieldAt (int x, int y) const noexcept

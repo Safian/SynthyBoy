@@ -135,12 +135,12 @@ def _action(ctx, width, height, *, text=None, icon=None, action=1, count=1):
     return _definition([child])
 
 
-def _sync_radio(ctx, width, height):
+def _sync_radio(ctx, width, height, handle="Data"):
     from components.native.radio_button.radio_button import build_radio_button_entries, VARIANT_RADIO_DOT
     vertical = width < 3*56
     cell_w, cell_h = (width, height//3) if vertical else (width//3, height)
     children = build_radio_button_entries("LFO Sync", (0, 0, cell_w*3, cell_h),
-                                          ("HZ", "BPM", "KEY"), VARIANT_RADIO_DOT, "Data", ctx.skins_dir)
+                                          ("HZ", "BPM", "KEY"), VARIANT_RADIO_DOT, handle, ctx.skins_dir)
     if vertical:
         for i, child in enumerate(children):
             child["bounds"]["bounds"] = f"0 {i*cell_h} {cell_w} {cell_h}"
@@ -152,9 +152,9 @@ def _sync_radio(ctx, width, height):
     for low, high, index in ((0, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 1)):
         copy_bpm = copy.deepcopy(bpm)
         copy_bpm["componentData"]["data"]["buttonId"] = index
-        copy_bpm["bounds"].update(version=2, additionalInvalidatingHandles=[f"RangedEnabling/{low}/{high}/5/Data"])
+        copy_bpm["bounds"].update(version=2, additionalInvalidatingHandles=[f"RangedEnabling/{low}/{high}/5/{handle}"])
         children.append(copy_bpm)
-    return _definition(children)
+    return children
 
 
 def _definitions(ctx):
@@ -194,6 +194,17 @@ def apply(tui, qlinks, ctx):
 
     items = tab["componentDefinition"]["componentsData"]
     items[:] = [c for c in items if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
+    # The host paints the existing LFO furniture beneath its native widgets.
+    # Assets are rendered offline from the same LfoFullScreen layout.
+    import shutil
+    for layout in range(1, LAYOUT_STEPS):
+        art_layout = (1, 1, 3, 4, 4, 6)[layout - 1]
+        filename = f"lfo_native_furniture_{art_layout}.png"
+        shutil.copyfile(CONTRACT.parent / "overlay-backgrounds" / filename, ctx.skins_dir / filename)
+        gate = (f"IndexedEnabling/{layout}/{LAYOUT_STEPS}/Parameter {base + LAYOUT}",)
+        items.insert(0, _entry(PREFIX + f"Furniture {layout}", "Image",
+                            {"version": 2, "imageType": "Regular", "colour": "0", "image": filename},
+                            (0, 0, 1280, 628), gates=gate))
     ranges = {}
     for layout, field, action, *rect in sorted(contract):
         spans = ranges.setdefault((field, action, tuple(rect)), [])
@@ -218,15 +229,29 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
         gates = (f"RangedEnabling/{first}/{last}/{LAYOUT_STEPS}/{layout_handle}",)
     handle = f"Parameter {base + field}"
     width, height = rect[2:]
+    # Bind the library's native leaf Buttons directly to their host handles;
+    # no opaque wrapper or intermediate Data remapping is needed.
+    if field == ACTION or field == 10:
+        from components.native.button.button import action_button
+        if field == ACTION:
+            child = action_button(ctx, PREFIX + f"Action {action}", tuple(rect),
+                                  "FromGesture/" + handle,
+                                  text="TARGETS" if action == 1 else None,
+                                  icon="expand" if action == 2 else None, gates=gates)
+            child["componentData"]["data"].update(buttonId=action, numButtonsInGroup=3)
+            items.append(child)
+        else:
+            for child in _sync_radio(ctx, width, height, handle):
+                x, y, w, h = map(int, child["bounds"]["bounds"].split())
+                child["bounds"].update(version=2, bounds=f"{rect[0]+x} {rect[1]+y} {w} {h}")
+                child["bounds"].setdefault("additionalInvalidatingHandles", []).extend(gates)
+                child["componentData"]["name"] = PREFIX + child["componentData"]["name"]
+                items.append(child)
+        return
     label = FIELD_CAPTIONS.get(field)
     widget = f"Field{field}_{width}x{height}_{action}"
     if widget not in definitions:
-        if field == ACTION:
-            definitions[widget] = _action(ctx, width, height, text="TARGETS" if action == 1 else None,
-                                           icon="expand" if action == 2 else None, action=action, count=3)
-        elif field == 10:
-            definitions[widget] = _sync_radio(ctx, width, height)
-        elif field in TOGGLE_FIELDS:
+        if field in TOGGLE_FIELDS:
             definitions[widget] = _active_text(ctx, label, width, height)
         elif field in choices or field in NUMBER_FIELDS:
             definitions[widget] = _choice(ctx, width, height, caption=label, number=field in NUMBER_FIELDS)
