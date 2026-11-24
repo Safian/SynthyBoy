@@ -26,7 +26,7 @@ from components.native.active_text.active_text import (
     render_active_text_art,
 )
 from components.native.radio_button.radio_button import (
-    render_segmented_button_art,
+    write_segmented_strip,
 )
 from components import style
 import native_ui_params as handles
@@ -112,7 +112,7 @@ def _selector_assets(directory):
     if art_path.is_file() and hit_path.is_file():
         return
 
-    strip = Image.new("RGBA", (SELECTOR_W, SELECTOR_H * (ENV_SELECTOR_LAST_FRAME + 1)))
+    frames = [None] * (ENV_SELECTOR_LAST_FRAME + 1)
     for number in range(1, ENV_SELECTOR_CELLS + 1):
         base = 1 + (number - 1) * SELECTOR_VARIANTS
         for variant in range(SELECTOR_VARIANTS):
@@ -122,9 +122,8 @@ def _selector_assets(directory):
             label = "+" if variant == 4 else str(number)
             if used and variant != 4:
                 label = f"{number} ·"
-            art = render_segmented_button_art(label, selected, SELECTOR_W, SELECTOR_H)
-            strip.paste(art, (0, (base + variant) * SELECTOR_H))
-    strip.save(art_path)
+            frames[base + variant] = (label, selected)
+    write_segmented_strip(art_path, (SELECTOR_W, SELECTOR_H), frames)
     Image.new("RGBA", (SELECTOR_W, SELECTOR_H)).save(hit_path)
 
 

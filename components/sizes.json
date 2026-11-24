@@ -1598,8 +1598,6 @@
     "lfo.editor.curve_value_font": 17,
     "lfo.detail.header_font": 19,
     "lfo.detail.row_size": [300, 56],
-    "radio.indicator.size": 22,
-    "radio.indicator.gap": 2,
     "filter.label.font": 16,
     "filter.dock.thresholds": [110, 400, 90, 200],
     "fx.chain.card.labels": [["Select", [2, 3, 4, 27], 13], ["Power", [2, 30, 4, 23], 12]],

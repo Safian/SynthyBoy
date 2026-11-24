@@ -107,25 +107,6 @@ def _film(name, file, rect, parameter, gates, frames):
     return _entry(name, "Image", data, rect, parameter, gates)
 
 
-def _write_selector_strip(directory, key, rect, frames):
-    """Render selector cell FilmStrip frames using components.native.radio_button."""
-    file = "filter_native_" + key + ".png"
-    w, h = rect[2:]
-    art = Image.new("RGBA", (w, h * len(frames)))
-    for i, (label, selected, used) in enumerate(frames):
-        indicator = None
-        text_colour = None
-        if label in ("F1", "F2"):
-            indicator = ui_button.action_art(icon="power", icon_only=True,
-                                             colour=style.color("accent.green" if used else "text.muted"))
-        elif used:
-            text_colour = style.color("radio.active.text" if selected else "accent.cyan")
-        cell = ui_radio.render_segmented_button_art(label, selected, w, h, indicator=indicator, text_colour=text_colour)
-        art.paste(cell, (0, i * h))
-    art.save(directory / file)
-    return file
-
-
 def _ensure_dial_assets(skins_dir, frame_size=DIAL_SIZE):
     uni_on = ui_level.synthyboy_dial_data(skins_dir, frame_size=frame_size, bipolar=False, active=True)
     bi_on = ui_pan.synthyboy_dial_data(skins_dir, frame_size=frame_size, bipolar=True)
@@ -634,7 +615,8 @@ def apply(tui, qlinks, ctx):
     vx, vy, vw, vh = manifest["view"]
     for i, label in enumerate(SELECT):
         rect = (vx + i * vw // style.size("filter.apply.rect.4"), vy, vw // style.size("filter.apply.rect.4"), vh)
-        file = _write_selector_strip(ctx.skins_dir, label.lower(), rect, [(label, bool(k & 2), bool(k & 1)) for k in range(4)])
+        file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_{label.lower()}.png", rect[2:],
+                                             [(label + (" ·" if i >= 2 and k & 1 else ""), bool(k & 2)) for k in range(4)])
         # Expanded Curve keeps canonical "Filter Native F1..VELO" names on state 3..4;
         # Expanded Filter mounts them when NOT in Split (!note_ind[2..3] & !velo_ind[2..3])
         items.extend((_film(label + " art", file, rect, displays + i, expanded_curve_gates, 4),
@@ -643,8 +625,8 @@ def apply(tui, qlinks, ctx):
                       _hidden_hit("Exp " + label, rect, action, i + 1, expanded_filter_gates)))
 
     both = manifest["both"]
-    dual_frames = [("F1+F2", bool(frame & 1), False) for frame in range(4)]
-    art = _write_selector_strip(ctx.skins_dir, "dual", both, dual_frames)
+    dual_frames = [("F1+F2", bool(frame & 1)) for frame in range(4)]
+    art = ui_radio.write_segmented_strip(ctx.skins_dir / "filter_native_dual.png", both[2:], dual_frames)
     items.extend((_film("dual art", art, both, displays + 4, expanded_filter_gates, 4),
                   _hidden_hit("dual", both, action, 5, expanded_filter_gates)))
 
@@ -704,8 +686,8 @@ def apply(tui, qlinks, ctx):
     svx, svy, svw, svh = split["view"]
     for i, label in enumerate(("F1", "F2")):
         rect = (svx + i * svw // 2, svy, svw // 2, svh)
-        file = _write_selector_strip(ctx.skins_dir, f"split_{label.lower()}", rect,
-                                     [(label, bool(k & 2), bool(k & 1)) for k in range(4)])
+        file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_split_{label.lower()}.png", rect[2:],
+                                             [(label, bool(k & 2)) for k in range(4)])
         split_left.extend((_film(f"Split {label} art", file, rect, displays + i, (), 4),
                            _hidden_hit(f"Split {label}", rect, action, i + 1, ())))
 
@@ -796,8 +778,8 @@ def apply(tui, qlinks, ctx):
     srx, sry, srw, srh = split["scalar_view"]
     for i, label in enumerate(("NOTE", "VELO")):
         rect = (srx + i * srw // 2, sry, srw // 2, srh)
-        file = _write_selector_strip(ctx.skins_dir, f"split_{label.lower()}", rect,
-                                     [(label, bool(k & 2), bool(k & 1)) for k in range(4)])
+        file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_split_{label.lower()}.png", rect[2:],
+                                             [(label + (" ·" if k & 1 else ""), bool(k & 2)) for k in range(4)])
         split_right.extend((_film(f"Split {label} art", file, rect, displays + 2 + i, (), 4),
                             _hidden_hit(f"Split {label}", rect, action, 3 + i, ())))
 
