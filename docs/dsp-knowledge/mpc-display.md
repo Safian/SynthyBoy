@@ -536,3 +536,7 @@ its data-only pass. Native-header graphs now dim their curve without that
 whole-panel veil. Compact ENV/LFO ground-strip gradients also restarted per
 strip around native controls; Play now leaves those gaps to the native root
 background. Graph drawing and native controls retain their existing geometry.
+
+### XL native control backgrounds, 2026-11-25
+
+On the XL with the 4fd1ab00 ARM64 package, the two Play expand slots and their adjoining graph backgrounds match at y=220 (RGB 9,13,25 on each side at x=764/768 and 1188/1192). The Macros capture shows eight LEVEL controls. With the same Acid Saw Reso preset, OSC A shows the enabled TUNE controls; B and C show one disabled MORE button and one routing readout. See the current Play, Macros and OSC photographs under `docs/screens/` in the capture commit following 4fd1ab00. These observations cover rendering.
