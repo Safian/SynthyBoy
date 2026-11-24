@@ -128,9 +128,6 @@ public:
             full_.setPadPressureOn (have && on);   // PAD % applies only while PAD PRESS is on: hidden (not dimmed) otherwise
         }
         full_.portaCurve.slope = inst.param (slopeIdx_);
-        full_.keyboard.state.scaleType = static_cast<int> (std::lround (inst.param (scaleTypeIdx_)));
-        full_.keyboard.state.scaleKey = static_cast<int> (std::lround (inst.param (scaleKeyIdx_)));
-        full_.keyboard.state.scaleMode = static_cast<int> (std::lround (inst.param (scaleModeIdx_)));
         inst.setUiFullOpen (true);
         if (nativeView() == nativeui::master::Main)
             inst.setNativeMasterOutput ({ full_.meters.peakL, full_.meters.peakR, full_.meters.holdL, full_.meters.holdR,
@@ -320,7 +317,6 @@ private:
         bind (kPortaScaled, &full_.portaScaled, T::Toggle, "master.portamento.scaled");
         bind (kScaleType, &full_.scaleType, T::Stepper, "master.scale.type");
         bind (kScaleKey, &full_.scaleKey, T::Stepper, "master.scale.key");
-        full_.keyboard.setId (kScaleKey);
         bind (kScaleMode, &full_.scaleMode, T::List, "master.scale.mode");
         bind (kTuningA4, &full_.tuningA4, T::Number, "master.tuning.a4");
         bind (kTuningScale, &full_.tuningScale, T::List, "master.tuning.scale");
@@ -343,9 +339,6 @@ private:
         mpeOnIdx_ = uibind::indexOfKey ("master.mpe.on");
         polyphonyIdx_ = uibind::indexOfKey ("master.polyphony");
         slopeIdx_ = uibind::indexOfKey ("master.portamento.slope");
-        scaleTypeIdx_ = uibind::indexOfKey ("master.scale.type");
-        scaleKeyIdx_ = uibind::indexOfKey ("master.scale.key");
-        scaleModeIdx_ = uibind::indexOfKey ("master.scale.mode");
     }
 
     void pull (IInstanceView& inst)
@@ -502,7 +495,7 @@ private:
     int pageTop_ = 0;
     const IInstanceView* lastInstance_ = nullptr;
     double lastMs_ = 0.0;
-    int bendLinkIdx_ = -1, mpeOnIdx_ = -1, polyphonyIdx_ = -1, slopeIdx_ = -1, scaleTypeIdx_ = -1, scaleKeyIdx_ = -1, scaleModeIdx_ = -1;
+    int bendLinkIdx_ = -1, mpeOnIdx_ = -1, polyphonyIdx_ = -1, slopeIdx_ = -1;
 
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;

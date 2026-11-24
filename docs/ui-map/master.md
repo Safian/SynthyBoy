@@ -55,7 +55,7 @@ The page structure consists of a top header bar and two switchable side views co
    - **Row 1 (Top, y = 182, height = 280 px)**:
      - **Block 4: SCALE** at `(rect.x + 8, rect.y + 72, 1264, 280)` (`shell-mpc/ui/voice_master.h:757-765`):
        - Top row (height 64 px): Stepper `scaleType` ("SCALE", width 450 px), Stepper `scaleKey` ("KEY", width 325 px), and LED list `scaleMode` ("MODE", about 469 px, 2 options: Conform, Mark only).
-       - Lower area (height 162 px): `keyboard` (`MiniKeyboardDisplay`, width 1252 px) featuring interactive 12-key piano keyboard (7 white keys C..B, 5 black keys) with active scale note highlights.
+       - Lower area (height 162 px): `keyboard` (`masterNativeScaleKeyboard`, width 1252 px) featuring interactive 12-key piano keyboard (7 white keys C..B, 5 black keys) with active scale note highlights.
    - **Row 2 (Bottom, y = 470, height = 260 px)**:
      - **Block 5: TUNING** at `(rect.x + 8, rect.y + 360, 628, 260)` (`shell-mpc/ui/voice_master.h:766-774`):
        - Top row (height about 144 px): NumberField `tuningA4` ("A4 HZ", width 200 px) and LED list `tuningScale` ("TUNING", about 412 px, 4 options: 12-TET, Pythagorean, Just intonation, User file).
@@ -100,9 +100,9 @@ In the gesture column `Qn` is slot n INSIDE the control's Q group; where the gro
 | SCALE | `master.scale.type` | Tap arrows / Turn / Q1 turn / Tap caption | Selects active musical scale (20 options; tap caption opens list popup) | `shell-mpc/overlay/master_ui.h:263` |
 | KEY | `master.scale.key` | Tap arrows / Turn / Q2 turn / Tap caption | Selects musical root key (12 options C..B; tap caption opens list popup) | `shell-mpc/overlay/master_ui.h:264` |
 | MODE | `master.scale.mode` | Tap option / Wheel / Q3 turn | Sets scale quantization mode (Conform, Mark only) | `shell-mpc/overlay/master_ui.h:266` |
-| Scale Keyboard | `master.scale.key` | Tap or drag piano key | Selects musical root key (0..11, C..B) by touching piano keys on mini keyboard | `shell-mpc/overlay/master_ui.h:265` |
+| Scale Keyboard | `master.scale.key` | Tap or drag piano key | Selects musical root key (0..11, C..B) by touching piano keys on mini keyboard | `components/native/scale_keyboard/scale_keyboard.py` |
 | A4 HZ | `master.tuning.a4` | Vertical drag / Wheel / Q1 turn | Sets reference concert pitch frequency for A4 (400.00 to 480.00 Hz in 0.01 Hz steps) | `shell-mpc/overlay/master_ui.h:267` |
-| TUNING | `master.tuning.scale` | Tap option / Wheel / Q2 turn | Selects microtonal tuning temperament system (12-TET, Pythagorean, Just intonation, User file) | `shell-mpc/overlay/master_ui.h:265` |
+| TUNING | `master.tuning.scale` | Tap option / Wheel / Q2 turn | Selects microtonal tuning temperament system (12-TET, Pythagorean, Just intonation, User file) | `components/native/scale_keyboard/scale_keyboard.py` |
 | MTS-ESP | `master.tuning.mts_esp` | Tap toggle / Q3 turn | Enables MIDI Tuning Standard ESP client synchronization (Off / On) | `shell-mpc/overlay/master_ui.h:269` |
 | NOTE-ON | `master.tuning.mts_note_on_only` | Tap toggle / Q4 turn | Restricts MTS tuning updates to Note-On events only (Off / On) | `shell-mpc/overlay/master_ui.h:270` |
 | MPE | `master.mpe.on` | Tap toggle / Q1 turn | Enables MIDI Polyphonic Expression MPE mode (Off / On) | `shell-mpc/overlay/master_ui.h:271` |
@@ -184,9 +184,7 @@ Change of the Q-Link mapping extension (`docs/ui-map/q-link-audit.md` item 7, "o
    - In `MasterUi::update` (`shell-mpc/overlay/master_ui.h:126`), `master.portamento.slope` is read from `inst.param(slopeIdx_)`.
    - In `PortamentoCurveDisplay::drawBody` (`shell-mpc/ui/voice_master.h:36-73`), a 32-segment exponential curve $y = (e^{k \cdot t} - 1) / (e^k - 1)$ is dynamically calculated and drawn in real time across the grid, visualizing linear (slope = 0), concave (slope < 0), or convex (slope > 0) glide acceleration.
 
-5. **Scale Mini Keyboard Diagram (`keyboard`, `MiniKeyboardDisplay`)**:
-   - In `MasterUi::update` (`shell-mpc/overlay/master_ui.h:127-129`), `master.scale.type`, `master.scale.key`, and `master.scale.mode` are refreshed.
-   - In `MiniKeyboardDisplay::drawBody` (`shell-mpc/ui/voice_master.h:203-246`), all 12 chromatic keys are rendered. In-scale notes are highlighted with light backgrounds and glowing outlines, while the root pitch receives a solid flow accent indicator bar. The header caption dynamically reflects the active scale root: `"ALL 12 NOTES"` for chromatic or `"SCALE ON <KEY>"` for chosen scales.
+5. **Scale keyboard**. Twelve native radio buttons select the root. The indicator on each key follows the scale type and root.
 
 6. **Active Q-Link Group Outline and Idle Chips**:
    - The active Q-Link group draws a bright accent frame around its controls (`QGroup::draw`, `shell-mpc/ui/voice_master.h:651-652`; not drawn on the XL).
@@ -195,7 +193,7 @@ Change of the Q-Link mapping extension (`docs/ui-map/q-link-audit.md` item 7, "o
 
 ## Standalone Master Tab Migration to Host-Native MPC Controls
 
-The MPC skin supplies the Master dials, toggles, selectors, and number fields. It draws the output and voice meters, CLIP and LIMIT on MAIN. The overlay draws the curves, keyboard and its detail overlays.
+The MPC skin supplies the Master dials, toggles, selectors, and number fields. It draws the scale keyboard on TUNING and the output and voice meters, CLIP and LIMIT on MAIN. The overlay draws the glide curve and detail overlays.
 
 ### 1. Architecture & Ownership
 - **Master-specific source files**: `shell-mpc/ui/voice_master.h` (`isNativeControl`, `isRetainedOverlayControl`, and transparent scene rendering), `shell-mpc/overlay/master_ui.h` (`covers()` passthrough, scene dispatch), `shell-mpc/overlay/tests/mastervoice_ui_host.cpp` (`testStandaloneMasterNativeControls`).
@@ -256,7 +254,7 @@ The following controls are deliberately retained in the overlay layer:
 | Side Switcher TUNING & MPE | `MenuButton` | `(468, 114, 220, 56)` | Page navigation button switching between MAIN and TUNING & MPE sub-views. |
 | Block Headers | `isBlockHeader` | Title strips `(x, y, w, 38)` | Touch targets allowing tapping on a block title to switch active Q-Link group in native mode. |
 | Glide Slope Curve | `PortamentoCurveDisplay` | `(1021, 442, 243, 280)` | 32-point mathematical exponential curve plotting real-time transition curve from `master.portamento.slope`. |
-| Scale Keyboard | `MiniKeyboardDisplay` | `(16, 280, 1248, 174)` | Interactive 12-key piano keyboard diagram with dynamic in-scale highlighting and note tap selection. |
+| Scale Keyboard | `masterNativeScaleKeyboard` | `(14, 294, 1252, 162)` | Interactive 12-key piano keyboard diagram with dynamic in-scale highlighting and note tap selection. |
 | Choice Popup | `ListPopup` | `(340, 130, 600, 460)` | Modal detail popup overlay for selecting among 20 musical scales and 12 root keys. |
 | Virtual Keypad | `TextEntry` | `(0, 110, 1280, 628)` | Modal numeric keypad popup opening on knob taps for direct value entry. |
 
@@ -337,7 +335,7 @@ The following controls are deliberately retained in the overlay layer:
    - Similarly, shell settings `LIMIT` (`outputLimiter`, `shell-mpc/overlay/master_ui.h:277`), `PAD PRESS` (`padPressure`, `shell-mpc/overlay/master_ui.h:280`), and `PAD %` (`padAmount`, `shell-mpc/overlay/master_ui.h:281`) have no Q-Link encoder mappings and require touchscreen interaction.
 
 7. **Redundant key selection controls for `master.scale.key`**:
-   - `master.scale.key` can be selected via the `KEY` Stepper arrows (`shell-mpc/ui/base.h:739-747`), the `KEY` popup list (`shell-mpc/overlay/master_ui.h:433-447`), encoder Q2 of the SCALE group (`shell-mpc/ui/voice_master.h:858`), and the interactive `MiniKeyboardDisplay` piano keys (`shell-mpc/ui/voice_master.h:176-201`, `shell-mpc/overlay/master_ui.h:265`).
+   - `master.scale.key` can be selected via the `KEY` Stepper arrows (`shell-mpc/ui/base.h:739-747`), the `KEY` popup list (`shell-mpc/overlay/master_ui.h:433-447`), encoder Q2 of the SCALE group (`shell-mpc/ui/voice_master.h:858`), and the interactive `masterNativeScaleKeyboard` piano keys (`components/native/scale_keyboard/scale_keyboard.py`).
    - The interactive piano keyboard renders directly beneath the `KEY` stepper, making the stepper and its popup list redundant.
 
 8. **GLIDE replaced VOICE OPTS on the Q-Links (open for the owner)**: VEL TRACK, SAME NOTE and STEAL are visible controls with no Q-Link (`shell-mpc/ui/voice_master.h:1035`); the audit marks the choice "owner may reverse" (`docs/ui-map/q-link-audit.md`, "Open for the owner").

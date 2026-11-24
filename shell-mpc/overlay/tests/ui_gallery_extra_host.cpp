@@ -1556,16 +1556,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             });
         }
 
-        // 11.2 Generic RoutePanel popup over screen
-        {
-            saveScene (outDir + "/" + state + "_lib_route_panel.png", [] (gpu::SceneBuilder& sb)
-            {
-                ui::RoutePanel rp;
-                rp.setPopup (true, { 0, 0, 1280, 800 });
-                rp.place ({ 480, 220, 320, 360 });
-                rp.draw (sb);
-            });
-        }
+
     }
 }
 
@@ -1724,8 +1715,7 @@ int main (int argc, char** argv)
             "test_init_master_tuning_mpe.png",
             "test_init_voice_row_pan.png",
             "test_init_voice_row_detune.png",
-            "test_init_lib_list_popup.png",
-            "test_init_lib_route_panel.png"
+            "test_init_lib_list_popup.png"
         };
 
         bool ok = true;

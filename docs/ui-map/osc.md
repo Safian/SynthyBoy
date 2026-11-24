@@ -27,7 +27,7 @@ The page manages:
 2. **Sub Oscillator** (`sub.`): 6 basic waveforms (Sine, Half Sine, Triangle, Saw, Square, Pulse) with octave transposition (`sub.octave`), pitch tuning (`sub.tune`), free-run phase, dedicated routing, and mono switch (`sub.mono`).
 3. **Noise Generator** (`noise.`): algorithmic noise (white, pink, etc.; `noise.sample`) or sample-based noise playback (`noise.type`), filtering (`noise.filter`), pitch tuning (`noise.pitch`), fine tune (`noise.fine`), key tracking (`noise.keytrack`), stereo spread (`noise.stereo`), and Envelope 1 modulation (`noise.env1`).
 
-The page opens popups and sub-pages for routing (`RoutePanel`), unison voice voicing (`DetailPage`), grain window envelope shaping (`DetailPage`), multisample envelope times (`DetailPage`), engine spec pages (`OscSpecPage` for map, options, region, slices, grain, spectral filter, and spectral scan), modulation matrix depth inspection (`ModulationsPage`), and preset/file selection (`ListPopup`).
+The page opens popups and sub-pages for routing (native OSC detail controls), unison voice voicing (`DetailPage`), grain window envelope shaping (`DetailPage`), multisample envelope times (`DetailPage`), engine spec pages (`OscSpecPage` for map, options, region, slices, grain, spectral filter, and spectral scan), modulation matrix depth inspection (`ModulationsPage`), and preset/file selection (`ListPopup`).
 
 ## Layout
 
@@ -114,14 +114,9 @@ The controls of MORE and its pages are in "Opens" (5). Gone from the default vie
 
 The Oscillator page opens the MORE page and, from it, the detail pages of the type (OPTIONS and the type's own pages), the unison, grain window and multisample envelope pages (from the unison box, MORE), one modulation matrix inspector, and one full-screen list / content browser; the route popup belongs to the Play page's compact view:
 
-### 1. Route Popup (`RoutePanel`, `kPageRoute = 13`)
-Opened by the ROUTE button of the Play page's compact view (the intentional shortcut; the standalone OSC tabs use a separate host-native destination menu while the oscillator is on). It displays a framed modal dialog `(300, 294, 680, 220)` over a dimmed backdrop (`shell-mpc/ui/composite.h:744-843`):
-- `CLOSE`: MenuButton (route_.close, `kRouteClose`). Tap -> closes popup (`stack.back()`; `shell-mpc/overlay/osc_ui.h:1405`).
-- Backdrop: Tap outside dialog box (`kRouteBackdrop`). Tap -> closes popup (`shell-mpc/overlay/osc_ui.h:1405`).
-- `DEST`: Stepper (route_.target, `kRouteTarget`). Parameter: `osc1.destination` (or `noise.destination`). Tap arrow / wheel / Q1 turn -> sets filter destination routing (`shell-mpc/overlay/osc_ui.h:815`).
-- `F1 F2`: Knob (route_.balance, `kRouteBalance`). Parameter: `osc1.filter_blend` (or `noise.filter_blend`). Rotary drag / wheel / Q2 turn -> sets filter blend balance (`shell-mpc/overlay/osc_ui.h:816`).
-- `BUS 1`: Knob (route_.bus1, `kRouteBus1`). Parameter: `osc1.bus1_send` (or `noise.bus1_send`). Rotary drag / wheel / Q3 turn -> sets Aux Bus 1 send level (`shell-mpc/overlay/osc_ui.h:817`).
-- `BUS 2`: Knob (route_.bus2, `kRouteBus2`). Parameter: `osc1.bus2_send` (or `noise.bus2_send`). Rotary drag / wheel / Q4 turn -> sets Aux Bus 2 send level (`shell-mpc/overlay/osc_ui.h:818`).
+### 1. Routing controls (`kPageRoute = 13`)
+
+On Play, choose **Routing controls** in the compact oscillator's destination menu. The native detail page has a seven-choice destination stepper and two bus-send dials for the selected source. Selecting **Filter blend** also enables its balance dial. Q1–Q4 control destination, balance, Bus 1 and Bus 2. **Back** returns to the expanded editor. The standalone OSC tabs have their own native destination menu.
 
 ### 2. Unison Detail Page (`DetailPage`, `kPageUnison = 10`)
 Opened by the DETAIL button (the gear) of the unison box (`kUnisonGear`) or by the `UNISON` button of MORE (granular). Displays waveform preview with unison voice spread fans (`shell-mpc/overlay/osc_ui.h:190`):

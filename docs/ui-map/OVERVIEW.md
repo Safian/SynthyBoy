@@ -10,7 +10,7 @@
 |---|---|---|---|---|---|
 | **Play** | Live synthesis view — oscillator, envelope and LFO side by side in one screen | ~87 own + full-screen popups | OscFullScreen, EnvFullScreen, LfoFullScreen, ShapeEditorPage, ModTargetsPage, ModulationsPage, ListPopup | 3 (Osc, Env, LFO; each switches on highlight) | Oscillator cycle waveform, envelope voice dots, LFO voice cursors / RND trace |
 | **Macros** | 8 macro knobs with live spectrum display and modulation-target chips | 11 own + targets/list/keyboard popups | Targets page, Destination list, Keyboard (rename) | 2 (MACROS 1–4 / 5–8) + targets row | Live spectrum strip, macro card chips |
-| **Osc** | Full editor for Sub / A / B / C / Noise oscillators (5 tabs) | ~74 own + 10 detail/popup pages | RoutePanel, Unison, GrainWindow, MSEnvelope, 7 OscSpecPages, ModulationsPage, ListPopup | 6 (Basic, Type, Tune, Unison, Warp1, Warp2) per tab | Waveform / 3D stack / FFT / sample cursor, voice playheads, power-off grey |
+| **Osc** | Full editor for Sub / A / B / C / Noise oscillators (5 tabs) | ~74 own + 10 detail/popup pages | Native routing, Unison, GrainWindow, MSEnvelope, 7 OscSpecPages, ModulationsPage, ListPopup | 6 (Basic, Type, Tune, Unison, Warp1, Warp2) per tab | Waveform / 3D stack / FFT / sample cursor, voice playheads, power-off grey |
 | **Mixer** | 10-channel mixing console (Sub, A, B, C, Noise, F1, F2, BUS1, BUS2, MASTER) | 50 own (bold cut: no OUT button) + destination list popup | Destination list popup | 10 (one per strip) | Peak meters, routing animation |
 | **Filter** | Filter 1 and Filter 2 with live frequency-response curve and dual-filter routing | ~47 own + RoutePanel / ModelList / Mods | RoutePanel, Model/Style ListPopup, ModulationsPage | 4 (MAIN, TRACK, OUT, FORMANT) | Real-time response curve, voice cutoff markers, formant puck |
 | **Env** | DAHDSR envelope editor for 6 envelopes with interactive graph | ~19 own + targets/mods/list/keyboard | ModTargetsPage, Destination list, ModulationsPage, Instance list | 3 (ADSR, SHAPE, TIME) | Voice progress dots, modulation arcs |
@@ -31,7 +31,7 @@
 | A4 reference pitch | Master → TUNING block | — |
 | Attack time (Env 1) | Env page (graph + ADSR knob) | Play compact ENV panel; host proxy |
 | Bend range (pitch wheel) | Master → PITCH block | — |
-| Bus sends (osc / filter) | Osc → RoutePanel popup; Filter → OUTPUT popup | Mixer strips B1/B2 |
+| Bus sends (osc / filter) | Osc → native routing controls; Filter → OUTPUT popup | Mixer strips B1/B2 |
 | Compressor | FX page (Compressor effect) | — |
 | Cutoff (filter) | Filter page MAIN block (knob + display puck) | Mixer (no — only level/pan there) |
 | Delay (FX echo) | FX page (Delay effect) | — |
@@ -62,7 +62,7 @@
 | Mod slot depth / polarity | Mod page matrix rows | Same per-source TARGETS pages |
 | Noise kind / filter | Osc → Noise tab (SOUND / KIND / FILTER controls) | Play compact OSC panel |
 | Oscillator on/off | Play compact OSC (power toggle); Osc page top bar POWER | Mixer strip on/off |
-| Oscillator routing (dest) | Play compact OSC (ROUTE); Osc page top bar ROUTE button → RoutePanel | Mixer strip dest dropdown |
+| Oscillator routing (dest) | Play compact OSC (ROUTE); OSC destination menu | Mixer strip dest dropdown |
 | Oscillator type | Play compact OSC (TYPE); Osc page top bar TYPE selector | — |
 | Pan (oscillator) | Play compact OSC panel; Osc page top basic controls | Mixer strip PAN |
 | Pan (filter) | Filter page OUT block | Mixer strip PAN; Filter OUTPUT popup |

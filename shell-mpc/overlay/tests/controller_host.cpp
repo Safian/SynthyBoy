@@ -1133,9 +1133,7 @@ static void testCompactPlayOsc ()
     popup (-1);
     check (controller.uiState (slot).top() == OscUi::kPageRoute && first.get ("osc1.destination") == 2.0f
            && first.writes == off + 1, "the Routing controls item opens the existing balance and sends without writing a destination");
-    const auto routeClose = playView->oscUi()->routePanel().close.rect();
-    controller.touchEvent ({ TouchEvent::Down, routeClose.x + routeClose.w / 2, routeClose.y + routeClose.h / 2 }, now);
-    controller.touchEvent ({ TouchEvent::Up, routeClose.x + routeClose.w / 2, routeClose.y + routeClose.h / 2 }, now + 20.0);
+    check (controller.back (slot), "return from routing to the expanded editor");
     tick();
     controller.touchEvent ({ TouchEvent::Down, close.x + close.w / 2, close.y + close.h / 2 }, now);
     controller.touchEvent ({ TouchEvent::Up, close.x + close.w / 2, close.y + close.h / 2 }, now + 20.0);

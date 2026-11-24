@@ -102,6 +102,18 @@ class MasterScreenVerificationTests(unittest.TestCase):
             for name in MASTER_OUTPUT_WIDGETS:
                 self.assertIn(name, comp_names, f"Missing output widget: {name}")
 
+            keyboard = next(c for c in components if c["componentData"]["name"] == "Master Scale Keyboard")
+            self.assertTrue(keyboard["bounds"]["additionalInvalidatingHandles"][0].startswith("IndexedEnabling/2/3/"))
+            definitions = dict((d["key"], d["value"]) for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"])
+            keys = definitions[keyboard["componentData"]["type"]]["componentsData"]
+            buttons = [k for k in keys if k["componentData"]["type"] == "Button"]
+            self.assertEqual(sorted(k["componentData"]["data"]["buttonId"] for k in buttons), list(range(12)))
+            root_handle = keyboard["handle remapping"]["map"][0]["value"]
+            for key in buttons:
+                self.assertEqual(key["componentData"]["data"]["numButtonsInGroup"], 12)
+                self.assertEqual(key["handle remapping"]["map"][0]["value"], root_handle)
+            self.assertEqual(len(list(skins.glob("scale_interval_*.png"))), 12)
+
             # Panels present
             self.assertIn("Master Panel MAIN", comp_names)
             self.assertIn("Master Panel TUNING & MPE", comp_names)
@@ -148,9 +160,7 @@ class MasterScreenVerificationTests(unittest.TestCase):
         self.assertEqual(names["Glide Slope Curve"]["component"], "PortamentoCurveDisplay")
         self.assertEqual(names["Glide Slope Curve"]["side"], "main")
 
-        self.assertIn("Mini Keyboard", names)
-        self.assertEqual(names["Mini Keyboard"]["component"], "MiniKeyboardDisplay")
-        self.assertEqual(names["Mini Keyboard"]["side"], "tuning")
+        self.assertNotIn("Mini Keyboard", names)
 
         self.assertIn("List Popup", names)
         self.assertIn("Numeric Keyboard", names)

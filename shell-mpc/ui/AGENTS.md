@@ -132,7 +132,6 @@ WarpSlot / WarpPair | composite.h | warp knob + type + var | V I
 KnobRandPair | composite.h | knob + RAND knob | V
 SourcePicker | composite.h | stepper + dropdown | I R
 BasicControls | composite.h | Basic Q group of an oscillator | V I R
-RoutePanel | composite.h | route popup: target, balance, buses | V I R
 KnobPanel | panel.h | preset grid of parts | per part
 DetailPage | panel.h | back + display + panel in Q groups | R per part
 OscillatorCompact | screen.h | third of the Play page | I R V
@@ -167,7 +166,6 @@ MacroCard / MacroView | mod_macros.h | macro cards and page | V R I
 VoiceGrid | voice_grid.h | 8 x 6 step grid | V (-1..+1)
 VoiceScreen | voice_screen.h | voice page | V I
 PortamentoCurveDisplay | voice_master.h | glide curve | -
-MiniKeyboardDisplay | voice_master.h | octave with scale, picks key | I
 PeakMeterDisplay | voice_master.h | two peak meters | -
 VoiceMeterDisplay | voice_master.h | sounding voices bar | -
 MasterScreen | voice_master.h | master page, two sides | V I R

@@ -1,5 +1,6 @@
 # SynthyBoy — nyitott teendők
-- [ ] A `27e711cc` natív UI-auditból igazolt megmaradó GPU-kezelők: `ListPopup` az OSC/LFO/ENV/Filter/Macro/Voice/FX/Mixer útvonalakon; OSC `RoutePanel` (`osc_ui.h` drawPopup) és interaktív `NoteMask` (`drawNativeDetail`); Master Scale `MiniKeyboardDisplay`. Kész, ha a működésazonos natív helyettesítések és bekötések elkészültek, a régi rajzolás/bemenet törölve. A külön követett TextEntry/PointMod/FX fallback feladatokhoz kapcsolódik; a már eltávolított ShapeEditor-kezelőket ne építsük újra.
+- [ ] A controller_host helyi futásában az FX popup és Voice grid ellenőrzések hibát jeleztek. Kész, ha a célkonfigurációval az ok tisztázott és e két útvonal megfelelően működik.
+- [ ] A `27e711cc` natív UI-auditból igazolt megmaradó GPU-kezelők: `ListPopup` az OSC/LFO/ENV/Filter/Macro/Voice/FX/Mixer útvonalakon; OSC interaktív `NoteMask` (`drawNativeDetail`). Kész, ha a működésazonos natív helyettesítések és bekötések elkészültek, a régi rajzolás/bemenet törölve. A külön követett TextEntry/PointMod/FX fallback feladatokhoz kapcsolódik; a már eltávolított ShapeEditor-kezelőket ne építsük újra.
 
 - [ ] A natív LFO/FX/Mixer vezérlőkhöz tartozó GPU-s statikus rajzolás és fallback bemenet eltávolítása, a natív feliratok/vezérlők megtartásával és élő grafika ellenőrzésével. (fut: LFO agy/gemini-worker-96073cd12c; FX agy/gemini-worker-13801c554f; Mixer agy/gemini-worker-06745eeffb)
 

@@ -273,32 +273,6 @@ void testVoiceGridStoresNoTruth()
     check (t.kind == ui::ChangeKind::Value && t.id == g.stepId (1, 2) && std::fabs (t.value - 0.95) < 0.001 && g.state.values[1][2] == 1.0f, "grid: a turn down reports the new value and leaves `state` alone");
 }
 
-void testKeyboardStoresNoTruth()
-{
-    ui::MiniKeyboardDisplay k;
-    k.setId (7);
-    k.place ({ 0, 0, 480, 160 });
-    k.state.scaleType = 1;
-    k.state.scaleKey = 0;
-    const std::vector<uint32_t> before = pixelsOf (k, 480, 160);
-    const auto kr = k.computeRects();
-    const ui::Rect dKey = kr.white[1], eKey = kr.white[2], cKey = kr.white[0];   // D, E, C
-    const int y = dKey.bottom() - 4;   // below the black keys
-    ui::Change c = k.touchDown (dKey.x + dKey.w / 2, y, 0.0);
-    check (c.kind == ui::ChangeKind::Index && c.id == 7 && c.index == 2, "keyboard: a finger down on D reports the note 2");
-    c = k.touchMove (eKey.x + eKey.w / 2, y);
-    check (c.kind == ui::ChangeKind::Index && c.index == 4, "keyboard: a slide to E reports the note 4");
-    c = k.touchUp (eKey.x + eKey.w / 2, y);
-    check (c.kind == ui::ChangeKind::None, "keyboard: lifting after the slide reports nothing more");
-    check (k.touchDown (dKey.x + dKey.w / 2, y, 500.0).index == 2 && k.touchUp (dKey.x + dKey.w / 2, y).kind == ui::ChangeKind::None, "keyboard: a tap reports its key once (down), not again on lifting");
-    check (k.state.scaleKey == 0 && k.state.scaleType == 1 && k.state.scaleMode == 0, "keyboard: after the gesture with no write back `state` is as the owner left it");
-    check (pixelsOf (k, 480, 160) == before, "keyboard: ... and the picture is the same");
-    check (k.touchDown (cKey.x + cKey.w / 2, y, 100.0).kind == ui::ChangeKind::None, "keyboard: a touch on the root that is shown already reports nothing");
-    k.touchUp (cKey.x + cKey.w / 2, y);
-    k.state.scaleKey = 4;   // the owner wrote the parameter and sets the state
-    check (pixelsOf (k, 480, 160) != before, "keyboard: with the owner writing back, the next draw shows the new root");
-}
-
 void testVoiceStepsLitAndQ()
 {
     VRig r;
@@ -923,7 +897,6 @@ void testStandaloneMasterNativeControls()
     check (m.clip.rect().w >= 56,
            "CLIP, stereo peaks and voice meter are native");
     check (m.portaCurve.enabled(), "dynamic glide curve display remains enabled");
-    check (m.keyboard.enabled(), "interactive scale keyboard diagram remains enabled");
     check (m.sideMain.enabled(), "sideMain navigation button remains enabled");
     check (m.sideTuning.enabled(), "sideTuning navigation button remains enabled");
     check (! inLeaves (r.ui, m.outputLimiter), "the native LIMIT switch disables its overlay counterpart");
@@ -1065,14 +1038,7 @@ void testStandaloneMasterNativeControls()
     check (! r.ui.covers (mpeBendR.x + mpeBendR.w / 2, mpeBendR.y + mpeBendR.h / 2), "mpeBend area is passthrough when mpe is on");
 
     const ui::Rect kr = m.keyboard.rect();
-    check (r.ui.covers (kr.x + kr.w / 2, kr.y + kr.h / 2), "keyboard visualizer is covered by overlay on tuning side");
-
-    // Tap on keyboard in native mode still updates scale key
-    const auto kbr = m.keyboard.computeRects();
-    r.tapAt (kbr.white[0].x + kbr.white[0].w / 2, kbr.white[0].bottom() - 15);
-    check (r.inst.get ("master.scale.key") == 0.0f, "tap on C key writes scale key 0 in native mode");
-    r.tapAt (kbr.black[1].x + kbr.black[1].w / 2, kbr.black[1].y + kbr.black[1].h / 2);
-    check (r.inst.get ("master.scale.key") == 3.0f, "tap on D# black key writes scale key 3 in native mode");
+    check (! r.ui.covers (kr.x + kr.w / 2, kr.y + kr.h / 2), "native scale keyboard receives touches on the tuning side");
 
     // 6. Q-Link routing remains active and published
     m.setSide (ui::MasterScreen::SideMain);
@@ -1208,7 +1174,6 @@ int main (int argc, char** argv)
     testVoiceLayout();
     testVoiceGridDrawing();
     testVoiceGridStoresNoTruth();
-    testKeyboardStoresNoTruth();
     testVoiceStepsLitAndQ();
     testVoiceDraw();
     testVoiceNativeControls();

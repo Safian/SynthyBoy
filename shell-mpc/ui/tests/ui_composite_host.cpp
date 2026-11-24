@@ -193,72 +193,6 @@ void testRandPair()
 }
 
 
-void testRoutePanel()
-{
-    RoutePanel r;
-    r.place ({ 20, 20, r.minSize().w, r.minSize().h });
-    r.target.setId (1); r.balance.setId (2); r.bus1.setId (3); r.bus2.setId (4); r.close.setId (5);
-    r.target.state.count = 4; r.target.state.index = 0; r.target.setItem ("FILTER");
-    std::string why;
-    check (r.sizeOk() && leavesOk (r, r.rect(), why), "route panel: fits its minimum size, five children inside, no overlap" + why);
-    Change c = tap (r, r.target.rect().right() - 10, cy (r.target), 0.0);
-    check (c.kind == ChangeKind::Index && c.id == 1 && c.index == 1, "route panel: the target stepper: next, id 1");
-    check (r.targetIsFilter() && r.balance.enabled() && r.balance.state.bipolar, "route panel: the balance knob is bipolar and enabled while the target is the filter");
-    c = drag (r, cx (r.balance), cy (r.balance) + 20, cy (r.balance) - 20);
-    check (c.kind == ChangeKind::Value && c.id == 2, "route panel: the balance knob: id 2");
-    r.touchUp (0, 0);
-    r.setTargetIsFilter (false);
-    check (! r.balance.enabled() && ! drag (r, cx (r.balance), cy (r.balance) + 20, cy (r.balance) - 20), "route panel: the target is not the filter: the balance knob is dim and without reaction");
-    r.touchUp (0, 0);
-    c = drag (r, cx (r.bus1), cy (r.bus1) + 20, cy (r.bus1) - 20);
-    check (c.kind == ChangeKind::Value && c.id == 3, "route panel: BUS 1 send: id 3");
-    r.touchUp (0, 0);
-    c = drag (r, cx (r.bus2), cy (r.bus2) + 20, cy (r.bus2) - 20);
-    check (c.kind == ChangeKind::Value && c.id == 4, "route panel: BUS 2 send: id 4");
-    r.touchUp (0, 0);
-    c = tap (r, cx (r.close), cy (r.close), 100.0);
-    check (c.kind == ChangeKind::Request && c.id == 5, "route panel: the close button: { request, id 5 }");
-    c = r.turn (1);
-    check (c.kind == ChangeKind::Index && c.id == 1, "route panel: turn goes to the target stepper");
-    r.setTargetIsFilter (true);
-    r.setEnabled (false);
-    check (! r.turn (1) && ! r.balance.enabled(), "route panel: disabled with everything");
-    r.setEnabled (true);
-    check (r.balance.enabled(), "route panel: enabled again, filter target: the balance knob is back");
-    drawChecks (r, "route panel", { 10, 10, r.minSize().w, r.minSize().h }, "routepanel_min.png");
-    drawChecks (r, "route panel (large)", { 10, 10, 700, 240 }, "routepanel.png");
-    // the popup variant
-    RoutePanel pp;
-    const Rect parent { 0, 0, 1280, 800 };
-    pp.place ({ 300, 250, 560, 200 });
-    pp.setPopup (true, parent);
-    pp.setBackdropId (77);
-    pp.target.setId (1); pp.close.setId (5);
-    check (pp.popup() && pp.group.numMembers() == 4 && pp.group.member (0) == &pp.target && pp.group.member (1) == &pp.balance && pp.group.member (2) == &pp.bus1 && pp.group.member (3) == &pp.bus2, "route panel popup: exactly four values = one Q group (target, balance, BUS 1, BUS 2)");
-    pp.group.setActive (true);
-    Component* pl[8];
-    const int np = pp.collectLeaves (pl, 0, 8);
-    check (pp.group.check (pl, np) == 0, "route panel popup: the Q group is adjacent (the close button is in a row of its own, outside the union)");
-    Scene sp (1280, 800, kBackgroundRgba);
-    pp.draw (sp.builder());
-    const Image ip = render (sp);
-    check (! sp.overflow() && drawnOutside (ip, parent, backgroundPixel()) == 0 && ip.at (50, 50) != backgroundPixel() && colourNear (ip, 300.0f, 300.0f, 0, colour::accent(), 4), "route panel popup: a dimmed backdrop over the parent rectangle (changes the pixels), the framed box, nothing outside the parent");
-    c = tap (pp, 50, 50, 0.0);
-    check (c.kind == ChangeKind::Request && c.id == 77, "route panel popup: a tap outside the box (on the backdrop) = close requested: id 77");
-    pp.touchDown (50, 50, 100.0);
-    pp.touchMove (50, 300);
-    check (! pp.touchUp (50, 300), "route panel popup: a drag on the backdrop is not a tap");
-    check (! tap (pp, -5, -5, 200.0), "route panel popup: a touch outside the parent is ignored");
-    pp.target.state.count = 4;
-    c = tap (pp, pp.target.rect().right() - 10, cy (pp.target), 300.0);
-    check (c.kind == ChangeKind::Index && c.id == 1, "route panel popup: a tap inside the box reaches the children");
-    c = tap (pp, cx (pp.close), cy (pp.close), 400.0);
-    check (c.kind == ChangeKind::Request && c.id == 5, "route panel popup: the close button inside: id 5");
-    pp.setEnabled (false);
-    check (! tap (pp, 50, 50, 500.0), "route panel popup: disabled: no reaction");
-    writePng (outDir() + "/routepanel_popup.png", ip, 1);
-}
-
 void testDetailPage()
 {
     struct Case { const PanelPreset* p; const char* title; int parts, groups; bool display; };
@@ -925,7 +859,6 @@ void testLedParts()
 int main()
 {
     testLedParts();
-    testRoutePanel();
     testDetailPage();
     testModulationsPage();
     testSourcePicker();

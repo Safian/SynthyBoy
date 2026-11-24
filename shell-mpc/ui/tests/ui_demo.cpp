@@ -250,22 +250,6 @@ static void renderAll (const std::string& dir)
         pg.draw (s.builder());
         save (dir, "detail_modulations.png", s);
     }
-    // the route popup over a screen
-    {
-        static OscillatorFullScreen fs;
-        fs.place ({ 0, 0, 1280, 800 });
-        fs.setInstance (OscInstance::A, OscKind::Wavetable);
-        static RoutePanel rp;
-        rp.place ({ 300, 220, 640, 260 });
-        rp.setPopup (true, { 0, 0, 1280, 800 });
-        rp.target.state.count = 4; rp.target.setItem ("FILTER");
-        rp.bus1.state.value = rp.bus1.state.modValue = 0.3; rp.bus2.state.value = rp.bus2.state.modValue = 0.6;
-        rp.group.setActive (true);
-        GScene s (1280, 800);
-        fs.draw (s.builder());
-        rp.draw (s.builder());
-        save (dir, "route_popup.png", s);
-    }
     // the list popup (the source list, the warp types) over a screen
     {
         static const char* const names[] = { "Sine", "Saw", "Square", "Triangle", "Pulse", "Noise", "Organ", "Bell", "Vocal", "Pad", "Bass", "Lead" };
@@ -281,23 +265,6 @@ static void renderAll (const std::string& dir)
         fs.draw (s.builder());
         lp.draw (s.builder());
         save (dir, "list_popup_screen.png", s);
-    }
-    // the route panel
-    {
-        RoutePanel r;
-        r.place ({ 40, 40, 560, 200 });
-        r.target.state.count = 4; r.target.setItem ("FILTER");
-        r.bus1.state.value = r.bus1.state.modValue = 0.3; r.bus2.state.value = r.bus2.state.modValue = 0.6;
-        RoutePanel off;
-        off.place ({ 640, 40, 560, 200 });
-        off.target.state.count = 4; off.target.state.index = 1; off.target.setItem ("MAIN");
-        off.setTargetIsFilter (false);
-        GScene s (1280, 280);
-        label (s.builder(), 40, 20, "TARGET FILTER");
-        label (s.builder(), 640, 20, "TARGET MAIN: BALANCE DIM");
-        r.draw (s.builder());
-        off.draw (s.builder());
-        save (dir, "route_panel.png", s);
     }
     // the knob in every modulation state
     {

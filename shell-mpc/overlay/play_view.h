@@ -264,7 +264,7 @@ public:
                 const bool hosted = &ui::theme::L() == &ui::theme::kLook1;
                 env_->syncNativePlayEditor (*io, *in.ui, highlight_, in.nowMs, live, hosted);
                 lfo_->syncNativePlayEditor (*io, *in.ui, highlight_, in.nowMs, live, hosted);
-                if (hosted && ! in.ui->isMain() && in.ui->element() == OscUi::kElementOsc)
+                if (! in.ui->isMain() && in.ui->element() == OscUi::kElementOsc && (hosted || in.ui->top() == OscUi::kPageRoute))
                 {
                     if (! expandedOsc_)
                         expandedOsc_ = std::make_unique<OscPageUi> (*osc_, osd_);
@@ -828,7 +828,8 @@ private:
     nativeui::expandedplay::State nativeExpandedState (const UiStack& stack, const IInstanceView& inst) const noexcept
     {
         namespace n = nativeui::expandedplay;
-        if (&ui::theme::L() != &ui::theme::kLook1 || stack.isMain())
+        if (stack.isMain() || (&ui::theme::L() != &ui::theme::kLook1
+            && !(stack.element() == OscUi::kElementOsc && stack.top() == OscUi::kPageRoute)))
             return {};
         if (stack.element() == OscUi::kElementOsc)
             return {stack.depth() == 1 ? n::OscRoot : n::OscDetail, std::clamp (inst.playSelection (0), 1, playosc::kInstances), inst.stateGeneration()};

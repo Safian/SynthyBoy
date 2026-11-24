@@ -1268,7 +1268,7 @@ private:
 // ===============================================================================================================================================================
 /** 7. RouteButton. In: the target text (<= 3 characters: "M", "F1", "F2", "D", "-") and two indicator segments on / off (their meaning is the owner's: it is an open question of the
     specification, nothing is hard coded). Out: a Request change on a tap ("route panel requested"). It is a DetailButton without a main value (the gesture is the DetailButton's); turn and
-    drag do nothing. The popup it opens is the RoutePanel (composite.h). */
+    drag do nothing. Opens the routing controls. */
 class RouteButton : public DetailButton
 {
 public:

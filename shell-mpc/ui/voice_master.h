@@ -75,192 +75,6 @@ protected:
 };
 
 // ===============================================================================================================================
-/** Mini 12-key keyboard diagram highlighting in-scale notes for the selected scale and key. It stores nothing of the scale: it draws `state` (the owner sets it on every update) and a touch on a key reports the key (`Index`,
-    `index` = the note 0 .. 11); the owner writes the parameter and the next update shows it. A key that is already the root, or was already reported in this gesture, is not reported again. */
-class MiniKeyboardDisplay : public Component
-{
-public:
-    struct State
-    {
-        int scaleType = 0;   // 0 Chromatic .. 19
-        int scaleKey = 0;    // 0 C .. 11 B
-        int scaleMode = 0;   // 0 Conform, 1 Mark only
-    };
-    State state;
-
-    MiniKeyboardDisplay() = default;
-    Size minSize() const override { return { 240, 90 }; }
-
-    static bool isScaleNote (int type, int key, int note) noexcept
-    {
-        if (type <= 0) return true; // Chromatic (all notes)
-        struct ScaleDef { int count; int steps[8]; };
-        static constexpr ScaleDef kDefs[20] = {
-            { 12, { 0 } },
-            { 7, { 0, 2, 4, 5, 7, 9, 11 } },        // Major
-            { 7, { 0, 2, 3, 5, 7, 8, 10 } },        // Natural Minor
-            { 7, { 0, 2, 3, 5, 7, 8, 11 } },        // Harmonic Minor
-            { 7, { 0, 2, 3, 5, 7, 9, 11 } },        // Melodic Minor
-            { 7, { 0, 2, 3, 5, 7, 9, 10 } },        // Dorian
-            { 7, { 0, 1, 3, 5, 7, 8, 10 } },        // Phrygian
-            { 7, { 0, 2, 4, 6, 7, 9, 11 } },        // Lydian
-            { 7, { 0, 2, 4, 5, 7, 9, 10 } },        // Mixolydian
-            { 7, { 0, 1, 3, 5, 6, 8, 10 } },        // Locrian
-            { 5, { 0, 2, 4, 7, 9 } },               // Major Pentatonic
-            { 5, { 0, 3, 5, 7, 10 } },              // Minor Pentatonic
-            { 6, { 0, 3, 5, 6, 7, 10 } },           // Blues
-            { 6, { 0, 2, 4, 6, 8, 10 } },           // Whole Tone
-            { 8, { 0, 1, 3, 4, 6, 7, 9, 10 } },     // Diminished (H-W)
-            { 8, { 0, 2, 3, 5, 6, 8, 9, 11 } },     // Diminished (W-H)
-            { 7, { 0, 1, 4, 5, 7, 8, 10 } },        // Phrygian Dominant
-            { 7, { 0, 2, 3, 6, 7, 8, 11 } },        // Hungarian Minor
-            { 7, { 0, 1, 4, 5, 7, 8, 11 } },        // Double Harmonic
-            { 5, { 0, 2, 3, 7, 8 } },               // Hirajoshi
-        };
-        if (type >= 20) return true;
-        const int pc = (note - key + 12) % 12;
-        for (int i = 0; i < kDefs[type].count; ++i)
-            if (kDefs[type].steps[i] == pc)
-                return true;
-        return false;
-    }
-
-    struct KeyRects
-    {
-        Rect white[7];
-        int whiteNote[7];
-        Rect black[5];
-        int blackNote[5];
-    };
-
-    KeyRects computeRects() const noexcept
-    {
-        KeyRects kr;
-        const int m = 8, labelH = 22;
-        const int kbX = rect_.x + m, kbY = rect_.y + m + labelH, kbW = rect_.w - 2 * m, kbH = std::max (24, rect_.h - 2 * m - labelH);
-        const float wkW = static_cast<float> (kbW) / 7.0f;
-        static const int kWhites[7] = { 0, 2, 4, 5, 7, 9, 11 };
-        for (int i = 0; i < 7; ++i)
-        {
-            kr.whiteNote[i] = kWhites[i];
-            const int x0 = kbX + static_cast<int> (std::round (i * wkW));
-            const int x1 = kbX + static_cast<int> (std::round ((i + 1) * wkW));
-            kr.white[i] = { x0, kbY, x1 - x0, kbH };
-        }
-        static const struct { int note; float pos; } kBlacks[5] = {
-            { 1, 0.877f }, { 3, 2.040f }, { 6, 3.790f }, { 8, 4.950f }, { 10, 6.120f }   // the centres of a piano's black keys in white key widths from the left of the C (23.5 mm whites, 13.7 mm blacks)
-        };
-        const float bkW = std::round (wkW * 0.40f);   // narrow: a black key is under 0.6 of a white one on a piano, and these white keys are wide and short, so it is narrower still to read as a key
-        const int bkH = static_cast<int> (std::round (kbH * 0.62f));
-        for (int i = 0; i < 5; ++i)
-        {
-            kr.blackNote[i] = kBlacks[i].note;
-            const int cx = kbX + static_cast<int> (std::round (kBlacks[i].pos * wkW));
-            const int x0 = cx - static_cast<int> (bkW * 0.5f);
-            kr.black[i] = { x0, kbY, static_cast<int> (bkW), bkH };
-        }
-        return kr;
-    }
-
-    int hitTestNote (int x, int y) const noexcept
-    {
-        const KeyRects kr = computeRects();
-        for (int i = 0; i < 5; ++i)
-            if (kr.black[i].contains (x, y))
-                return kr.blackNote[i];
-        for (int i = 0; i < 7; ++i)
-            if (kr.white[i].contains (x, y))
-                return kr.whiteNote[i];
-        return -1;
-    }
-
-    Change onDown (int x, int y, double now) override
-    {
-        tap_.down (x, y, now);
-        downNote_ = hitTestNote (x, y);
-        reported_ = -1;
-        return report (downNote_);
-    }
-    Change onMove (int x, int y) override
-    {
-        tap_.move (x, y);
-        const int note = hitTestNote (x, y);
-        if (note >= 0 && note != downNote_)
-        {
-            downNote_ = note;
-            return report (note);
-        }
-        return Change::none();
-    }
-    Change onUp (int x, int y) override
-    {
-        const int note = hitTestNote (x, y);
-        if (tap_.up() != 0 && note >= 0)
-            return report (note);
-        return Change::none();
-    }
-
-protected:
-    void drawBody (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        p.rrect (rect_, T.rControl, p.c (T.panel1, 200));
-        p.rrect (rect_, T.rControl, p.c (T.keyline, 160), 1.0f);
-
-        const int m = 8, labelH = 22;
-        char lblBuf[48];
-        static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-        std::snprintf (lblBuf, sizeof lblBuf, state.scaleType <= 0 ? "ALL 12 NOTES" : "SCALE ON %s", kKeyNames[std::clamp (state.scaleKey, 0, 11)]);
-        p.textLeft ({ rect_.x + m, rect_.y + 4, rect_.w - 2 * m, labelH }, lblBuf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-
-        const KeyRects kr = computeRects();
-        static const char* const kName[7] = { "C", "D", "E", "F", "G", "A", "B" };
-
-        // 7 white keys (dark surface from palette with thin outlines)
-        for (int i = 0; i < 7; ++i)
-        {
-            const int note = kr.whiteNote[i];
-            const bool in = isScaleNote (state.scaleType, state.scaleKey, note);
-            const bool isRoot = (note == state.scaleKey);
-            const Rect wr = kr.white[i];
-            p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (in ? T.panel0 : T.bg1, 255));
-            if (in)
-                p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (T.flow[0], 28));
-            p.rrect ({ wr.x + 1, wr.y, wr.w - 2, wr.h }, 3.0f, p.c (in ? (isRoot ? T.flow[0] : T.keylineHi) : T.keyline, 255), isRoot ? 1.5f : 1.0f);
-            if (isRoot)
-                p.rect (wr.x + 8, wr.bottom() - 6, wr.right() - 8, wr.bottom() - 2, p.c (T.flow[0], 255));
-            p.textCentered ({ wr.x, wr.bottom() - 30, wr.w, 22 }, kName[i], T.fLabel, p.c (in ? (isRoot ? T.flow[0] : T.text) : T.textDim, 255), T.fMin);
-        }
-
-        // 5 black keys (darker surface from palette, narrower and shorter, drawn above white keys)
-        for (int i = 0; i < 5; ++i)
-        {
-            const int note = kr.blackNote[i];
-            const bool in = isScaleNote (state.scaleType, state.scaleKey, note);
-            const bool isRoot = (note == state.scaleKey);
-            const Rect br = kr.black[i];
-            p.rect (br, p.c (T.bg0, 255));   // dark, thin outline: the notes of the scale are the outline (accent for the root) and a small bar, not a coloured block
-            p.rrect (br, 3.0f, p.c (in ? (isRoot ? T.flow[0] : T.keylineHi) : T.keyline, 255), isRoot ? 1.5f : 1.0f);
-            if (in)
-                p.rect (br.x + 5, br.bottom() - 7, br.right() - 5, br.bottom() - 4, p.c (isRoot ? T.flow[0] : T.keylineHi, isRoot ? 255 : 200));
-        }
-    }
-
-private:
-    TapGesture tap_;
-    int downNote_ = -1;
-    int reported_ = -1;   // the note of the last report of this gesture (gesture data, not the value: the root is `state.scaleKey`)
-
-    /** The change for a touch on `note`: none for no key, for the root that is shown already, and for the key this gesture reported last. */
-    Change report (int note) noexcept
-    {
-        if (note < 0 || note == state.scaleKey || note == reported_)
-            return Change::none();
-        reported_ = note;
-        return Change::indexed (id_, note, static_cast<double> (note));
-    }
-};
-
 // ===============================================================================================================================
 /** Geometry and live state for host-native Master readouts; no GPU drawing or input. */
 struct NativeReadoutArea
@@ -340,7 +154,7 @@ public:
     // SCALE
     Stepper scaleType, scaleKey;   // 20 scales and 12 keys: long lists, they keep the stepper with its list
     LedList scaleMode;
-    MiniKeyboardDisplay keyboard;
+    NativeReadoutArea keyboard;
     // TUNING
     NumberField tuningA4;
     LedList tuningScale;
@@ -403,7 +217,6 @@ public:
         mpeYBipolar.setLabel ("Y BIPOLAR");
 
         addKid (portaCurve);
-        addKid (keyboard, false);
         setSide (SideMain);   // builds the groups and hides what does not apply
     }
 
@@ -432,7 +245,6 @@ public:
     {
         side_ = s == SideTuning ? SideTuning : SideMain;
         show (portaCurve, side_ == SideMain);
-        show (keyboard, side_ == SideTuning);
         if (activeGroup_ >= 0 && sideOfGroup (activeGroup_) != side_)
             setActiveGroup (side_ == SideMain ? 0 : kFirstTuningGroup);
         else
@@ -548,10 +360,6 @@ public:
         {
             if (portaCurve.rect().contains (x, y)) return true;
         }
-        else
-        {
-            if (keyboard.rect().contains (x, y)) return true;
-        }
         return false;
     }
 
@@ -569,7 +377,7 @@ public:
         }
         else
         {
-            areas = { scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
+            areas = { keyboard.rect(), scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
                       mtsEsp.rect(), mtsNoteOn.rect(), mpeOn.rect(), mpeMacro.rect(), mpeYModwheel.rect(),
                       mpeYBipolar.rect(), mpeOn_ ? mpeBend.rect() : Rect {}, mpeOn_ ? mpeBendToX.rect() : Rect {} };
         }
@@ -626,8 +434,6 @@ public:
         drawLiveLabels (p);
         if (side_ == SideMain)
             portaCurve.draw (sb);
-        else
-            keyboard.draw (sb);
         if (showQGroups)
             drawQGroups (sb);
     }
@@ -672,7 +478,7 @@ protected:
     }
     std::vector<Component*> sideTuningComponents()
     {
-        return { &scaleType, &scaleKey, &scaleMode, &keyboard, &tuningA4, &tuningScale, &mtsEsp, &mtsNoteOn, &mpeOn, &mpeBend, &mpeMacro, &mpeYModwheel, &mpeBendToX, &mpeYBipolar };
+        return { &scaleType, &scaleKey, &scaleMode, &tuningA4, &tuningScale, &mtsEsp, &mtsNoteOn, &mpeOn, &mpeBend, &mpeMacro, &mpeYModwheel, &mpeBendToX, &mpeYBipolar };
     }
 
     void layout() override

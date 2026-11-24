@@ -40,7 +40,7 @@ Verdicts: **GENERIC** = no SynthyBoy knowledge (the engine, its parameter table,
 | `display.h` | oscillator display (display::Data, draw) | core.h; synth vocabulary, no engine | **GENERIC** | - |
 | `lfo_display.h` | LFO display (Data) | core.h | **GENERIC** | - |
 | `lfo_model.h` | LFO shape model | none | **GENERIC** | - |
-| `composite.h` | Composite (base), KnobRandPair + oscillator composites UnisonBox, WarpSlot, WarpPair, SourcePicker, BasicControls, RoutePanel | base.h, qgroup.h; oscillator vocabulary, no engine | **GENERIC** | - |
+| `composite.h` | Composite (base), KnobRandPair + oscillator composites UnisonBox, WarpSlot, WarpPair, SourcePicker, BasicControls | base.h, qgroup.h; oscillator vocabulary, no engine | **GENERIC** | - |
 | `ui.h` | umbrella include of the whole library | includes fx_screen.h -> synthyboy/fx_types.h and voice_*.h | **ADAPTER** | split into ui_generic.h (the GENERIC headers) and ui.h (= ui_generic.h + the specific ones): migration step 4 |
 | `panel.h` | KnobPanel, DetailPage, ModulationsPage, presets; enum PanelSlot | composite.h, mod_board.h; the slot names are SynthyBoy oscillator parts (WtPos, Unison, Warp, Sub*, Noise*) | **SPECIFIC** | - |
 | `play_rows.h` | rows of the Play thirds | core.h | **SPECIFIC** | - |
@@ -62,7 +62,7 @@ Verdicts: **GENERIC** = no SynthyBoy knowledge (the engine, its parameter table,
 | `mod_macros.h` | macros page, SpectrumStrip | list/led_list; the 8 macros of SynthyBoy | **SPECIFIC** | - |
 | `mod_matrix.h` | ModRowSelector, the modulation matrix | list.h, mod_board.h | **SPECIFIC** | - |
 | `mod_targets.h` | ModTargetsPage | panel.h | **SPECIFIC** | - |
-| `voice_master.h` | MasterScreen, displays (portamento, keyboard, meters) | composite.h, led_list.h | **SPECIFIC** | - |
+| `voice_master.h` | MasterScreen, displays (portamento and meter geometry) | composite.h, led_list.h | **SPECIFIC** | - |
 | `voice_screen.h` | VoiceScreen | voice_grid.h, composite.h | **SPECIFIC** | - |
 | `choice_names.h` | names of the engine choices on the screen | none (names of SynthyBoy choices) | **SPECIFIC** | - |
 

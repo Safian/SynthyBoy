@@ -387,24 +387,19 @@ void testRoutePopup()
     r.stack.openDetail (OscUi::kPageRoute);   // (what the compact view's route button does)
     r.refresh();
     check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageRoute, "the route popup");
-    check (r.ui.routePanel().target.state.count == 7 && std::string (r.ui.routePanel().target.state.text) == "Filter 1", "the target stepper lists the seven destinations");
-    check (! r.ui.routePanel().balance.enabled(), "the balance knob is disabled unless the target is Filter blend");
+    namespace n = nativeui::oscdetail;
+    const auto& state = r.ui.prepareNativeDetail (true, 0);
+    check (state.frame == n::Plain && state.fields[0].target == Inst::idx ("osc1.destination"), "native routing edits OSC A");
+    check (state.fields[n::slot (1, 0)].target < 0 && r.inst.q[1] < 0, "balance unavailable for Filter 1");
     r.inst.set ("osc1.destination", 5.0f);
     r.refresh();
-    check (r.ui.routePanel().balance.enabled() && std::string (r.ui.routePanel().target.state.text) == "Filter blend", "Filter blend enables the balance knob");
-    // the Q group of the popup
-    check (r.inst.q[0] == Inst::idx ("osc1.destination") && r.inst.q[1] == Inst::idx ("osc1.filter_blend") && r.inst.q[2] == Inst::idx ("osc1.bus1_send") && r.inst.q[3] == Inst::idx ("osc1.bus2_send"), "the popup's group: destination, filter_blend, bus1_send, bus2_send");
-    // the target stepper: right half = next
-    const ui::Rect t = r.ui.routePanel().target.rect();
-    r.tap (t.x + t.w - 10, t.y + t.h / 2);
-    check (r.inst.get ("osc1.destination") == 6.0f, "the right half of the target stepper selects the next destination");
-    // a tap outside the popup closes it
-    r.tap (20, 130);
-    check (r.stack.depth() == 1, "a tap on the backdrop closes the popup");
-    r.stack.openDetail (OscUi::kPageRoute);
-    r.refresh();
-    r.tapC (r.ui.routePanel().close);
-    check (r.stack.depth() == 1, "the close button of the popup is back");
+    r.ui.prepareNativeDetail (true, 0);
+    check (state.fields[n::slot (1, 0)].target == Inst::idx ("osc1.filter_blend"), "Filter blend exposes its native dial");
+    check (r.inst.q[2] == Inst::idx ("osc1.bus1_send") && r.inst.q[3] == Inst::idx ("osc1.bus2_send"), "send Q-Links follow the selected source");
+    r.ui.applyNativeDetail (n::kCells, 1.0f, r.inst, r.stack);
+    check (r.inst.get ("osc1.destination") == 6.0f, "native stepper selects the next destination");
+    r.ui.applyNativeDetail (n::kBack, 1.0f, r.inst, r.stack);
+    check (r.stack.depth() == 1, "native back returns to the editor");
 }
 
 void testDetailPages()
@@ -589,7 +584,7 @@ void testDrawsOneSceneInsideTheCanvas()
             gpu::SceneBuilder sb (*data);
             sb.begin (gpu::kKindPlay, 0, 1280, 800);
             r.ui.draw (sb);
-            check (! sb.overflow && data->numOps > 20, "draw depth " + std::to_string (depth) + " instance " + std::to_string (sel) + ": one scene (" + std::to_string (data->numOps) + " ops)");
+            check (! sb.overflow && (depth == 2 ? data->numOps == 0 : data->numOps > 20), "draw depth " + std::to_string (depth) + " instance " + std::to_string (sel) + ": one scene (" + std::to_string (data->numOps) + " ops)");
             std::vector<uint32_t> cv;
             renderScene (*data, cv);
             check (cv.size() == 1280u * 800u, "the CPU renderer draws it");

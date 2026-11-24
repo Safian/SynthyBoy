@@ -64,7 +64,7 @@ public:
         kPanel = 200,                       // 200 + PanelSlot: the parts of the full screen's bottom band (and the position knob, the Sub's CRS and PHASE, the noise's KIND and STEREO of its top row)
         kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,   // (the Var ids are free: the warp PHASE knobs are on MORE now)
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
-        kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2, kRouteClose, kRouteBackdrop,
+        kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2,
         kList = 700, kListBackdrop, kListHeader,   // the list popup (source, warp types, the content browser: its header is the way up)
         kModsBack = 600, kModsRow = 610,    // 610 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsAddStep = 660, kModsAdd, kModsPage
@@ -119,9 +119,6 @@ public:
         const ui::Rect tab { 0, kTabY, w, kTabH };
         compact_.place ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 });
         full_.place (tab);
-        popupBox_ = { w / 2 - 340, kTabY + kTabH / 2 - 110, 680, 220 };
-        route_.place (popupBox_);
-        route_.setPopup (true, tab);
         list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kList);
@@ -210,7 +207,7 @@ public:
             return nativeDetailGraphRect();
         if (stackDepth_ == 0)
             return compact_.displayRect();
-        if (stackDepth_ == 1 || pageTop_ == kPageRoute || pageTop_ == kPageList)
+        if (stackDepth_ == 1 || pageTop_ == kPageList)
             return full_.displayRect();
         if (oscspec::isSpecPage (pageTop_))
             return spec_.displayRect();
@@ -278,7 +275,8 @@ public:
             mods_.draw (sb);
             return;
         }
-        full_.draw (sb);
+        if (pageTop_ != kPageRoute)
+            full_.draw (sb);
     }
     /** The envelope of the multisample oscillator as a curve in the display area of its page (the schematic of the six values: delay, attack, hold, decay, sustain level, release). */
     void drawEnvelope (gpu::SceneBuilder& sb) const
@@ -304,9 +302,7 @@ public:
         }
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods || oscspec::isSpecPage (pageTop_))
             return;
-        if (pageTop_ == kPageRoute)
-            route_.draw (sb);
-        else if (pageTop_ == kPageList)
+        if (pageTop_ == kPageList)
             list_.draw (sb);
     }
     /** What goes on top of the picture in the display rectangle (the full screen button of the compact view). */
@@ -500,7 +496,6 @@ public:
     {
         nativeModulations_.hide (inst, mods_);
     }
-    ui::RoutePanel& routePanel() noexcept { return route_; }
     ui::ListPopup& list() noexcept { return list_; }
     const std::vector<Item>& items() const noexcept { return main_; }
     const std::vector<Item>& pageItems() const noexcept { return page_; }
@@ -794,7 +789,8 @@ public:
         nativeDetailState_ = {};
         nativeDetailState_.preset = preset;
         const bool spec = oscspec::isSpecPage (pageTop_);
-        const bool detail = pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope;
+        const bool route = pageTop_ == kPageRoute;
+        const bool detail = route || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope;
         const bool root = stackDepth_ == 1 && pageTop_ == 0;
         if (! enabled || full_.inactive() || (! root && ! spec && ! detail))
         {
@@ -805,7 +801,7 @@ public:
             nativeDetail_ = n::Hidden;
             return nativeDetailState_;
         }
-        const bool graph = ! root && (spec ? spec_.spec()->display : true);
+        const bool graph = ! root && ! route && (spec ? spec_.spec()->display : true);
         const bool load = graph && loadShown_;
         if (graph)
             marksRect_ = nativeDetailGraphRect();
@@ -843,6 +839,25 @@ public:
             return state;
         }
         action (n::kBack, kDetailBack, "BACK");
+        if (route)
+        {
+            nativeDetailTitle_ = "ROUTING";
+            static const char* const labels[] = { "DESTINATION", "F1 / F2", "BUS 1", "BUS 2" };
+            for (int i = 0; i < 4; ++i)
+            {
+                auto* item = find (kRouteTarget + i);
+                if (! item || item->param < 0 || (i == 1 && ! routeFilter_))
+                    continue;
+                const int field = n::slot (i, 0);
+                const int kind = i == 0 ? n::Choice : i == 1 ? n::Bi : n::Uni;
+                nativeDetailItems_[field] = item;
+                state.fields[field] = { item->param, item->id, kind };
+                state.labels[field] = labels[i];
+                if (kind == n::Choice)
+                    state.fields[field + n::kCells] = state.fields[field];
+            }
+            return state;
+        }
         if (load)
             action (n::kLoad, kSpecLoad, loadLabel());
         const auto add = [&] (int block, int cell, Item* item, const char* label)
@@ -943,7 +958,7 @@ public:
     void focusNativeDetail (int field, IInstanceView& v)
     {
         namespace n = nativeui::oscdetail;
-        if (field >= 0 && field < n::kCells && nativeDetailItems_[field] != nullptr)
+        if (field >= 0 && field < n::kCells && nativeDetailItems_[field] && nativeDetailItems_[field]->c)
             focusNativeDetail (*nativeDetailItems_[field]->c, v);
     }
 
@@ -1024,7 +1039,7 @@ public:
             return true;
         }
         auto* item = nativeDetailItems_[field % n::kCells];
-        if (item == nullptr)
+        if (! item || (item->id == kRouteBalance && std::lround (v.param (nativeDetailState_.fields[n::slot (0, 0)].target)) != 5))
             return false;
         const auto& pi = info (cell.target);
         const float old = v.param (cell.target);
@@ -1227,7 +1242,7 @@ private:
         ui::Rect frame;
         for (int i = 0; i < n::kCells; ++i)
             if (const auto* part = nativeDetailItems_[i])
-                if (nativeDetailQ (part->c).first == active)
+                if (pageTop_ == kPageRoute || nativeDetailQ (part->c).first == active)
                 {
                     const auto rect = part->type == T::Mask ? part->c->rect() : nativeDetailRect (i);
                     frame = frame.empty() ? rect : ui::Rect::unite (frame, rect);
@@ -1654,13 +1669,10 @@ private:
             case kPageGrain: detail_.load (ui::presets::kGrainDetail, "GRAIN WINDOW"); bindDetail(); break;
             case kPageEnvelope: detail_.load (ui::presets::kEnvelopeDetail, "ENVELOPE"); bindDetail(); break;
             case kPageRoute:
-                bind (page_, kRouteTarget, &route_.target, T::Route, "destination");
-                bind (page_, kRouteBalance, &route_.balance, T::Knob, "filter_blend");
-                bind (page_, kRouteBus1, &route_.bus1, T::Knob, "bus1_send");
-                bind (page_, kRouteBus2, &route_.bus2, T::Knob, "bus2_send");
-                route_.close.setId (kRouteClose);
-                route_.setBackdropId (kRouteBackdrop);
-                route_.group.setActive (true);
+                bind (page_, kRouteTarget, nullptr, T::Stepper, "destination");
+                bind (page_, kRouteBalance, nullptr, T::Knob, "filter_blend");
+                bind (page_, kRouteBus1, nullptr, T::Knob, "bus1_send");
+                bind (page_, kRouteBus2, nullptr, T::Knob, "bus2_send");
                 break;
             case kPageMods: loadMods (inst); break;
             case oscspec::kWtMap: case oscspec::kMore: case oscspec::kOptions: case oscspec::kSampleRegion: case oscspec::kSampleSlice: case oscspec::kGrain: case oscspec::kSpecFilter: case oscspec::kSpecScan:
@@ -2010,12 +2022,6 @@ private:
                         rb->state.segment[0] = d == 0 || d == 2 || d == 5;
                         rb->state.segment[1] = d == 1 || d == 2 || d == 5;
                     }
-                    else
-                    {
-                        showStepper (&route_.target, it.param, plain);
-                        route_.setTargetIsFilter (d == 5);
-                        routeFilter_ = d == 5;
-                    }
                     break;
                 }
                 default: break;
@@ -2025,8 +2031,6 @@ private:
             it.c->setEnabled (true);
             if (it.type == T::Knob && (it.id == kWarp1Amount || it.id == kWarp2Amount))
                 it.c->setEnabled (! warpIsOff (it.id));
-            if (it.id == kRouteBalance)
-                it.c->setEnabled (routeFilter_);
             if (it.id == kRoute && sel_ == playosc::kSub)
                 it.c->setEnabled (false);   // the sub oscillator has no route button (its routing is the ROUTING block of its page): the hidden button takes no touch and no Q-Link
         }
@@ -2037,6 +2041,7 @@ private:
         const int di = indexOfKey (prefix_ + "destination"), li = indexOfKey (prefix_ + "level"), pi = indexOfKey (prefix_ + "pan");
         static const char* const kTarget[7] = { "F1", "F2", "F12", "M", "DIR", "BAL", "OFF" };
         const int d = di >= 0 ? std::clamp (static_cast<int> (std::lround (v.param (di))), 0, 6) : 0;
+        routeFilter_ = d == 5;
         const int whole = pi >= 0 ? static_cast<int> (std::lround (v.param (pi))) : 0;
         char pan[12], info[28];
         std::snprintf (pan, sizeof pan, whole == 0 ? "C" : (whole < 0 ? "L %d" : "R %d"), std::abs (whole));
@@ -2174,7 +2179,7 @@ private:
         if (pageTop_ == kPageMods)
             return &mods_;
         if (pageTop_ == kPageRoute)
-            return &route_;
+            return nullptr;
         if (pageTop_ == kPageList)
             return &list_;
         return &full_;
@@ -2226,7 +2231,7 @@ private:
                         mods_.setPickingSource (true);
                     }
                     return;
-                case kClose: case kDetailBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
+                case kClose: case kDetailBack: stack.back(); return;
                 case kTuneMore:
                     if (sel_ != playosc::kSub && sel_ != playosc::kNoise)
                         stack.openDetail (oscspec::kMore);
@@ -2990,7 +2995,11 @@ private:
         else if (pageTop_ == kPageRoute)
         {
             name = "Route";
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (route_.group, t); });
+            qSlots_.publish (v, 1, 0, [&] (int, int* t) {
+                for (int i = 0; i < 4; ++i)
+                    if (const auto* item = find (kRouteTarget + i))
+                        t[i] = full_.inactive() || (i == 1 && ! routeFilter_) ? -1 : item->param;
+            });
         }
         else if (full_.activeGroup() < 0 && tuneFocus_ >= 0 && full_.hasNativeTune() && isNativeRoutingActive())
         {
@@ -3038,7 +3047,6 @@ private:
     ui::OscillatorFullScreen full_;
     ui::DetailPage detail_;
     ui::ModulationsPage mods_;
-    ui::RoutePanel route_;
     ui::ListPopup list_;
     const char* sourceRows_[playosc::kInstances] = {};
     bool srcPopup_ = false;   // the list of the source selector of the compact view is open (main state only)
@@ -3068,7 +3076,6 @@ private:
     bool stepValid_ = false;
     std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     int listParam_ = -1;
-    ui::Rect popupBox_;
     std::vector<Item> main_, page_;
     bool bindingFull_ = false;   // bind () marks the items of the full screen
     ui::Component* gesture_ = nullptr;

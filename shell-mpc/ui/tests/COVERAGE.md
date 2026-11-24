@@ -217,18 +217,6 @@ For each component class, it records what it does in one line, its public behavi
 | **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | not tested |
 | **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | not tested |
 
-### 21. `RoutePanel` (composite.h)
-**Description**: Destination selector popup with balance knob, send levels, and close button
-
-| Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
-| :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `ui_composite_host.cpp`: "route panel: a tap on the backdrop closes" |
-| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
-| **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
-| **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
-| **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | `ui_composite_host.cpp`: "route panel: its minimum size" |
-| **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | `ui_composite_host.cpp`: "route panel: the picture fits one scene" |
-
 ### 22. `EnvGraph` (env_graph.h)
 **Description**: Interactive multi-stage envelope visualizer with draggable time/level/curve nodes
 
@@ -766,18 +754,6 @@ For each component class, it records what it does in one line, its public behavi
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
 | **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
-| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
-| **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
-| **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
-| **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | not tested |
-| **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | not tested |
-
-### 68. `MiniKeyboardDisplay` (voice_master.h)
-**Description**: Visual keyboard indicator highlighting root key, musical scale, and active notes
-
-| Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
-| :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `mastervoice_ui_host.cpp`: "keyboard: ..." (reports, no write to `state`, the picture unchanged until the owner writes back) |
 | **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |

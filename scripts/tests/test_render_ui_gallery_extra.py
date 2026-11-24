@@ -75,7 +75,6 @@ EXTRA_PAGES = [
     "voice_row_pan",
     "voice_row_detune",
     "lib_list_popup",
-    "lib_route_panel",
 ]
 
 FAKE_HOST = r'''#!/usr/bin/env python3
