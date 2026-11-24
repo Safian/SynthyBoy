@@ -275,6 +275,10 @@ static std::string buildStateChunk (PluginInstance* inst);   // the chunk effGet
 
 struct PluginInstance
 {
+#if MPCKIT_DEV_LOG
+    inline static std::atomic<unsigned> nextLogId { 1 };
+    const unsigned logId = nextLogId.fetch_add (1, std::memory_order_relaxed);
+#endif
     // Core
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::StateContent content;
@@ -5202,6 +5206,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         // index: 0 = bank, 1 = program
         const void* chunk = ptr;
         VstInt32 size = value;
+        MPCKIT_LOG ("host-edit", info, "effSetChunk instance=%u index=%d bytes=%d",
+                    inst->logId, static_cast<int> (index), static_cast<int> (size));
 #if SYNTHYBOY_MPC_OVERLAY
         if (synthyboy_mpc::PlayLog::enabled())
         {
@@ -5221,6 +5227,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 // Try to extract program number from chunk
                 int idx = synthyboy_mpc::programFromChunk(chunk, static_cast<size_t>(size));
+                MPCKIT_LOG ("host-edit", info, "effSetChunk decoded instance=%u program=%d notePoints=%zu velocityPoints=%zu",
+                            inst->logId, idx, newContent.noteCurve.size(), newContent.velocityCurve.size());
 
 #if SYNTHYBOY_MPC_OVERLAY
                 const PluginInstance::QBindingRestore qBindingRestore (*inst);
@@ -6502,7 +6510,13 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     const int slot = offset - nativeui::kFilterValueBase;
                     if (slot >= 0 && slot < nativeui::FilterSlots && slot != nativeui::FilterModel && slot != nativeui::FilterStyle
                         && std::fabs (parameter - inst->nativeFilterValue (slot)) > 1.0e-6f)
-                        inst->nativeFilter.post (inst->nativeFilter.at (slot), parameter);
+                    {
+                        const auto binding = inst->nativeFilter.at (slot);
+                        MPCKIT_LOG ("host-edit", info, "setParameter instance=%u index=%d filterSlot=%s target=%d norm=%.9g",
+                                    inst->logId, static_cast<int> (index), nativeui::kFilterNames[slot], binding.cell().target,
+                                    static_cast<double> (parameter));
+                        inst->nativeFilter.post (binding, parameter);
+                    }
                 }
                 else if (offset >= nativeui::kLfoBase)
                 {
@@ -6581,6 +6595,13 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         }
         if (static_cast<size_t> (index) < synthyboy::paramCount())
         {
+#if MPCKIT_DEV_LOG
+            // A restore may replay the whole table. Keep the default trace scoped to the Filter observation.
+            const char* key = synthyboy::paramTable()[index].key;
+            if (std::strncmp (key, "filter1.", 8) == 0 || std::strncmp (key, "filter2.", 8) == 0 || std::strcmp (key, "filter.routing") == 0)
+                MPCKIT_LOG ("host-edit", info, "setParameter instance=%u index=%d key=%s norm=%.9g restoreWindow=%d",
+                            inst->logId, static_cast<int> (index), key, static_cast<double> (parameter), restoring ? 1 : 0);
+#endif
             // a real parameter: in the restore window the value the plugin reports is an echo (the float round trip of a normalised value may differ in the last bit); anything else is an ordinary
             // edit and ends the window
             if (restoring)
