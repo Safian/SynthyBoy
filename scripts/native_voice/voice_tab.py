@@ -157,7 +157,7 @@ def _definition(children, action, target="", triggers=("Mouse Down",)):
     background = {"version": 1, "colour": style.native_color("transparent"), "image": ""}
     focus = _component("focus", "Focus", {
         "version": 1, "backgroundColour": style.argb("surface.control"), "outlineColour": style.argb("accent.cyan"),
-        "backgroundInset": _ui_style.size('screen.voice_tab.backgroundinset'), "outlineThickness": 1.0,
+        "backgroundInset": _ui_style.size('screen.voice_tab.backgroundinset'), "outlineThickness": style.size('voice.controls.focus_outline'),
     }, dict(_bounds((0, 0, 1, 1), proportional=True), whenVisible="WhenFocussed"))
     return {
         "version": 2,
@@ -171,9 +171,10 @@ def _definition(children, action, target="", triggers=("Mouse Down",)):
 
 
 def _dial(skins, width, height, *, pan=False):
-    diameter = min(90,height-40)
-    rects = {"focus": (0,0,width,height), "knob": ((width-diameter)//2,18,diameter,diameter),
-             "name": (0,0,width,18), "value": (0,18+diameter,width,height-18-diameter)}
+    diameter = min(style.size('voice.controls.dial_max'),height-style.size('voice.controls.dial_vertical_reserve'))
+    caption_h = style.size('voice.controls.dial_caption_height')
+    rects = {"focus": (0,0,width,height), "knob": ((width-diameter)//2,caption_h,diameter,diameter),
+             "name": (0,0,width,caption_h), "value": (0,caption_h+diameter,width,height-caption_h-diameter)}
     result = compact_dial_definition(level_definition(skins_dir=skins), rects=rects)
     for child in result["componentsData"]:
         if child["componentData"]["name"] == "knob":
@@ -205,21 +206,24 @@ def voice_definitions(skins_dir=None):
     skins = Path(skins_dir) if skins_dir else Path(tempfile.gettempdir()) / "synthyboy-voice-assets"
     skins.mkdir(parents=True,exist_ok=True)
     rows = []
+    row_size = style.size('voice.controls.row_size')
+    row_origin = style.size('voice.controls.row_origin')
+    row_pitch = style.size('voice.controls.row_pitch')
     for i, label in enumerate(VOICE_ROWS):
         from components.native.radio_button.radio_button import render_segmented_button_art
         on,off = f"voice_row_{i}_on.png",f"voice_row_{i}_off.png"
-        render_segmented_button_art(label,True,114,56).save(skins/on)
-        render_segmented_button_art(label,False,114,56).save(skins/off)
+        render_segmented_button_art(label,True,*row_size).save(skins/on)
+        render_segmented_button_art(label,False,*row_size).save(skins/off)
         from components.native.selector.selector import button
-        rows.append(button(f"row {i}",(4+(i%2)*118,24+(i//2)*60,114,56),on,off,index=i,count=6))
+        rows.append(button(f"row {i}",(row_origin[0]+(i%2)*row_pitch[0],row_origin[1]+(i//2)*row_pitch[1],*row_size),on,off,index=i,count=6))
     definitions = {
-        "voiceNativeRowList": _definition([_label("Name",tuple(_ui_style.size('screen.voice_tab.voicenativerowlist.rect')),16),*rows],"",triggers=()),
+        "voiceNativeRowList": _definition([_label("Name",tuple(_ui_style.size('screen.voice_tab.voicenativerowlist.rect')),style.size('voice.controls.row_caption_font')),*rows],"",triggers=()),
         "voiceNativeStepSelect": selector_definition(None,"fx editor choice menu",tuple(_ui_style.size('screen.voice_tab.voicenativestepselect.size')),skins),
-        "voiceNativeStepValue": build_name_value_definition(rect=tuple(_ui_style.size('screen.voice_tab.voicenativestepvalue.rect')),skins_dir=skins,box_width=112),
-        "voiceNativeNumber": build_name_value_definition(rect=tuple(_ui_style.size('screen.voice_tab.voicenativenumber.rect')),skins_dir=skins,box_width=80),
-        "voiceNativeDial": _dial(skins,124,130),
-        "voiceNativePanDepth": _dial(skins,124,130,pan=True),
-        "voiceNativeScaleDial": _dial(skins,180,120),
+        "voiceNativeStepValue": build_name_value_definition(rect=tuple(_ui_style.size('screen.voice_tab.voicenativestepvalue.rect')),skins_dir=skins,box_width=style.size('voice.controls.step_value_box_width')),
+        "voiceNativeNumber": build_name_value_definition(rect=tuple(_ui_style.size('screen.voice_tab.voicenativenumber.rect')),skins_dir=skins,box_width=style.size('voice.controls.number_box_width')),
+        "voiceNativeDial": _dial(skins,*style.size('voice.controls.dial_size')),
+        "voiceNativePanDepth": _dial(skins,*style.size('voice.controls.dial_size'),pan=True),
+        "voiceNativeScaleDial": _dial(skins,*style.size('voice.controls.scale_dial_size')),
         "voiceNativeChoice": build_titled_selector(None, "fx editor choice menu", tuple(_ui_style.size('screen.voice_tab.voicenativechoice.size')), skins, caption_handle="Caption", play_face=True),
     }
     caption = next(c for c in definitions["voiceNativeStepValue"]["componentsData"] if c["componentData"]["data"].get("handleName") == "Caption")
@@ -243,7 +247,7 @@ def voice_definitions(skins_dir=None):
     alternate["bounds"]["additionalInvalidatingHandles"] = ["IndexedEnabling/1/2/Mode"]
     alternate["componentData"]["data"].update(type="Text",text="LFO RATE")
     scale["componentsData"].append(alternate)
-    definitions["voiceNativeScaleEnv"] = _dial(skins,180,120)
+    definitions["voiceNativeScaleEnv"] = _dial(skins,*style.size('voice.controls.scale_dial_size'))
     definitions["voiceNativeTargets"] = build_titled_active_text_group_definition(
         "voiceNativeTargets",
         VOICE_TARGET_SCOPE_TITLE,

@@ -19,8 +19,10 @@ import copy
 
 import native_ui_params
 from components.native.button.button import write_panel_selector_assets
+from components.native.level.level import master_control_definition as _definition
 from components.native.meter.meter import write_peak_scale as write_native_peak_scale
 from native_meter import meter_data
+from components.native.name_value.name_value import _label_component
 
 # Explicit list of unconverted controls retained in overlay
 UNCONVERTED_CONTROLS = [
@@ -361,7 +363,6 @@ MASTER_SPECS = [
         "widget": "dial_uni",
         "side": "tuning",
         "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.38')),
-        "condition": {"param": "master.mpe.on", "choice": 1, "numChoices": 2},
     },
     {
         "key": "master.mpe.xyz_macro",
@@ -387,7 +388,6 @@ MASTER_SPECS = [
         "widget": "toggle",
         "side": "tuning",
         "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.41')),
-        "condition": {"param": "master.mpe.on", "choice": 1, "numChoices": 2},
     },
     {
         "key": "master.mpe.y_bipolar",
@@ -437,58 +437,13 @@ def _child(name, kind, data, rect):
 
 def _label(caption, rect):
     name, handle, kind = ("caption", "Caption", "Name") if caption else ("value", "Data", "Value")
-    return _child(name, "Label", {
-        "version": 1,
-        "textStyle": {
-            "version": 1,
-            "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": 16.0 if caption else 20.0},
-            "colour": _ui_style.argb('master.meter.scale.text') if caption else _ui_style.argb('text.icon'),
-            "justification": "horizontallyCentred verticallyCentred", "case": "Original",
-        },
-        "type": kind, "handleName": handle,
-    }, rect)
-
-
-def _definition(kind, w, h):
-    def action(trigger, handler, popup=""):
-        return {"version": 1, "onAction": trigger, "handler": handler,
-                "handleName": "Data", "additionalData": popup}
-
-    if kind.startswith("dial_"):
-        inset = 4
-        children = [_label(True, (inset, 0, w - 2 * inset, 24)),
-                    _child("dial", "Knob", {"version": 5, "knobType": "GenericNoLabel",
-                           "polarity": "BiPolar" if kind == "dial_bi" else "UniPolar",
-                           "dragOrientation": "Vertical", "handleName": "Data"},
-                           (inset, 24, w - 2 * inset, h - 48)),
-                    _label(False, (inset, h - 24, w - 2 * inset, 24))]
-        for child, relative in zip(children, ("4, 0, parent.width - 4, 24",
-                                               "4, 24, parent.width - 4, parent.height - 24",
-                                               "4, parent.height - 24, parent.width - 4, parent.height")):
-            bounds = child["bounds"]
-            bounds.pop("bounds")
-            bounds.update(boundsType="Relative", relativeBounds=relative)
-        actions = [action(trigger, "Show Overlay", "fx editor number menu")
-                   for trigger in ("Double Click", "Enter Pressed")]
-    else:
-        caption_width = w * 3 // 5
-        children = [_label(True, (2, 0, caption_width - 4, h)),
-                    _label(False, (caption_width, 0, w - caption_width - 2, h))]
-        if kind == "selector":
-            # Long choice names get the full width below their caption.
-            children = [_label(True, (4, 0, w - 8, 24)), _label(False, (4, 24, w - 8, h - 24))]
-        handler = "Toggle Switch" if kind == "toggle" else "Show Overlay"
-        popup = {"selector": "fx editor choice menu", "number": "fx editor number menu"}.get(kind, "")
-        actions = [action(trigger, handler, popup) for trigger in ("Mouse Down", "Enter Pressed")]
-    return {
-        "version": 2,
-        "actions": actions,
-        "backgroundData": {"version": 1, "focussed": {"version": 1, "colour": _ui_style.argb('field.focus'), "image": ""},
-                           "unfocussed": {"version": 1, "colour": _ui_style.argb('button.surface'), "image": ""}},
-        "ignoreMousePresses": False,
-        "disableCoarseDataWheel": False,
-        "componentsData": children,
-    }
+    child = _label_component(
+        name, kind, handle, rect,
+        _ui_style.size("level.master.control")["caption_font" if caption else "value_font"],
+        _ui_style.argb("master.meter.scale.text" if caption else "text.icon"),
+        "horizontallyCentred verticallyCentred")
+    child["bounds"]["showWhenDataModelInvalid"] = "Hide"
+    return child
 
 
 def get_master_control_specs():
@@ -674,6 +629,15 @@ def apply_master_native_controls(tui, qlinks, ctx):
             {"key": "Caption", "value": f"WithName[{spec['caption']}]/Parameter {param_idx}"},
         ]
         component["bounds"] = _make_bounds(spec["rect"], handles)
+        if spec["key"].startswith("master.mpe.") and spec["key"] != "master.mpe.on":
+            # Keep the original control and readout visible when MPE is off.
+            # These native definitions use Knob/Label plus compound actions:
+            # their inactive state removes actions, focus and knob dragging.
+            _ui_style.bind_control_active(
+                component, f"Parameter {_param_index(ctx, 'master.mpe.on')}", ctx,
+                tui["pageData"]["componentDefinitions"]["localComponentDefinitions"],
+                active_focus="Yes")
+            component["bounds"]["acceptsHWFocus"] = "Children"
         components.append(component)
         created_count += 1
 
