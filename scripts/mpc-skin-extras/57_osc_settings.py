@@ -15,11 +15,14 @@ if str(SCRIPTS) not in sys.path:
 from PIL import Image, ImageDraw
 
 from components import style
-from components.native.level.level import synthyboy_dial_data as _level_dial_data
-from components.native.pan.pan import synthyboy_dial_data as _pan_dial_data
-from components.native.selector.selector import OSC_TAB_NAMES, passive_layer, save_png_filter0 as _save_png_filter0
+from components.native.level.level import COMPACT_48_RECTS, DEFAULT_DIAL_RECTS, compact_level_definition, level_definition
+from components.native.pan.pan import compact_pan_definition, pan_definition
+from components.native.name_value.name_value import DEFAULT_BOX_WIDTH, DEFAULT_HEIGHT, build_name_value_definition
+from components.native.active_text.active_text import active_text_definition, write_active_text_assets
+from components.native.selector.selector import OSC_TAB_NAMES, labelled_choice_drawer, passive_layer, selector_definition
+import native_warp_picker
 from native_ui_params import (
-    OSC_ABC_SETTINGS, OSC_ABC_SETTINGS_FIELDS, OSC_SETTINGS, OSC_SETTINGS_FIELDS, OSC_SETTINGS_LAYOUTS,
+    OSC_ABC_SETTINGS, OSC_ABC_SETTINGS_FIELDS, OSC_POWER, OSC_SETTINGS, OSC_SETTINGS_FIELDS, OSC_SETTINGS_LAYOUTS,
     OSC_SETTINGS_VIEW, OSC_SOURCE, OSC_WARP_LAYOUT, mixer_peek_index,
 )
 
@@ -67,63 +70,77 @@ def _label(kind, rect, *, text=None, height=None, align="horizontallyCentred ver
     return _entry(kind.lower(), "Label", data, rect, relative=True)
 
 
-def _definition(children, handler=None, popup="", transparent=False):
-    bg = {"version": 1, "colour": "0" if transparent else style.argb("button.surface"), "image": ""}
-    focused_bg = bg if transparent else dict(bg, colour=style.argb("field.focus"))
+def _definition(children, handler=None, popup=""):
+    bg = {"version": 1, "colour": "0", "image": ""}
     actions = [{"version": 1, "onAction": trigger, "handler": handler, "handleName": "Data", "additionalData": popup}
                for trigger in ("Mouse Down", "Enter Pressed")] if handler else []
     return {"version": 2, "actions": actions,
-            "backgroundData": {"version": 1, "focussed": focused_bg, "unfocussed": bg},
-            "ignoreMousePresses": transparent, "disableCoarseDataWheel": False, "componentsData": children}
+            "backgroundData": {"version": 1, "focussed": bg, "unfocussed": bg},
+            "ignoreMousePresses": False, "disableCoarseDataWheel": False, "componentsData": children}
 
 
-def _ensure_field_box_art(skins_dir):
-    box_file = "osc_native_field_box.png"
-    box_path = skins_dir / box_file
-    if not box_path.is_file():
-        w, h = 160, 56
-        im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        d = ImageDraw.Draw(im)
-        d.rounded_rectangle(
-            (1, 1, w - 2, h - 2),
-            radius=style.size("radius.field"),
-            fill=style.color("field.surface"),
-            outline=style.color("field.border"),
-            width=2,
-        )
-        _save_png_filter0(im, box_path)
-    return _entry("box", "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": box_file},
-                  (0.08, 0.46, 0.84, 0.42), relative=True)
+def _fit_catalog_dial(kind, size, skins_dir):
+    width, height = size
+    # Use the two catalog sizes. Keep every filmstrip frame square, including in the
+    # narrow OSC detail grid. Only the name and value fields use the remaining width.
+    compact = width < DEFAULT_DIAL_RECTS["knob"][2] + style.size("height.high") or height < DEFAULT_DIAL_RECTS["focus"][3]
+    if compact:
+        build = compact_pan_definition if kind == "dial_bi" else compact_level_definition
+        rects = COMPACT_48_RECTS
+    else:
+        build = pan_definition if kind == "dial_bi" else level_definition
+        rects = DEFAULT_DIAL_RECTS
+    result = build(skins_dir=skins_dir)
+    face_height = rects["focus"][3]
+    top = (height - face_height) // 2
+    for child in result["componentsData"]:
+        bounds = child["bounds"]
+        x, y, w, h = map(int, bounds["bounds"].split())
+        native = child["componentData"]
+        if native["type"] == "Label":
+            w = width - x
+        elif native["type"] == "Focus":
+            w = width
+        elif native["type"] == "Knob":
+            bounds["acceptsHWFocus"] = "Yes"
+        bounds["bounds"] = f"{x} {y+top} {w} {h}"
+    return result
 
 
-def _ensure_toggle_led_art(skins_dir):
-    on_file, off_file = "osc_native_toggle_on.png", "osc_native_toggle_off.png"
-    for filename, color_token in ((on_file, "accent.cyan"), (off_file, "tune.track.off")):
-        path = skins_dir / filename
-        if not path.is_file():
-            sz = 32
-            im = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
-            d = ImageDraw.Draw(im)
-            d.ellipse((6, 6, sz - 7, sz - 7), fill=style.color(color_token))
-            _save_png_filter0(im.resize((16, 16), Image.Resampling.LANCZOS), path)
-    return _entry("led", "Indicator", {
-        "version": 1, "onImage": on_file, "offImage": off_file,
-        "indicatorId": 1, "numIndicatorsInGroup": 1, "handleName": "Data",
-    }, (0.13, 0.58, 0.11, 0.18), relative=True)
-
-
-def _control(kind, side, skins_dir=None):
+def _control(kind, side, skins_dir=None, size=None, caption=""):
+    # The base names are also embedded in the OSC detail tiles. Their narrowest
+    # catalog-sized variant fits the small detail cell without clipping text or art.
+    width, height = size or (style.size("name_value.width"), style.size("height.high"))
     if kind.startswith("dial_"):
-        # Keep the dial's hit rectangle >=56 px in each generated cell.
-        rect = (0.04, 0.07, 0.35, 0.86) if side else (0.16, 0.03, 0.68, 0.60)
-        is_bi = "bi" in kind
-        knob_data = _pan_dial_data(skins_dir, frame_size=90, bipolar=True) if is_bi else _level_dial_data(
-            skins_dir, frame_size=90, bipolar=False
-        )
-        knob = _entry("knob", "Knob", knob_data, rect, focus=True, relative=True)
-        name, value = ((0.42, 0.08, 0.55, 0.42), (0.42, 0.50, 0.55, 0.42)) if side else (
-            (0.02, 0.64, 0.96, 0.16), (0.02, 0.80, 0.96, 0.18))
-        return _definition([knob, _label("Name", name), _label("Value", value)])
+        return _fit_catalog_dial(kind, (width, height), skins_dir)
+    if kind == "number":
+        definition = build_name_value_definition(rect=(0,0,width,DEFAULT_HEIGHT), skins_dir=skins_dir,
+                                                 box_width=min(DEFAULT_BOX_WIDTH,width//2), popup=NUMBER_MENU)
+        for child in definition["componentsData"]:
+            bounds = child["bounds"]
+            x, y, w, h = map(int, bounds["bounds"].split())
+            bounds["bounds"] = f"{x} {y+(height-DEFAULT_HEIGHT)//2} {w} {h}"
+        return definition
+    if kind in ("menu","source"):
+        control = selector_definition(None, CHOICE_MENU, (width,height), skins_dir, name="Caption")
+        if kind == "source":
+            for action in control["actions"]:
+                action.update(handler="Toggle Switch", additionalData="")
+        return control
+    if kind == "toggle":
+        h = style.size("height.high")
+        text = caption or "ON"
+        suffix = "".join(c.lower() if c.isalnum() else "_" for c in text)
+        on, off = write_active_text_assets(skins_dir, text, width=width, height=h,
+                                          on_name=f"osc_active_{suffix}_{width}_on.png",
+                                          off_name=f"osc_active_{suffix}_{width}_off.png")
+        result = active_text_definition(text, on, off, (width,h), handle="Data")
+        button = result["componentsData"][0]
+        button["bounds"]["bounds"] = f"0 {(height-h)//2} {width} {h}"
+        button["bounds"]["acceptsHWFocus"] = "Yes"
+        if not caption:
+            result["componentsData"].append(_label("Name", (0,0,1,.25)))
+        return result
 
     if kind == "table":
         parts = []
@@ -137,46 +154,9 @@ def _control(kind, side, skins_dir=None):
             _label("Text", (0.16, 0.06, 0.68, 0.32), text="SOURCE", height=12),
             _label("Value", (0.16, 0.38, 0.68, 0.56), height=17),
         ])
-    if kind == "source":
-        return _definition([
-            _label("Text", (0.04, 0.06, 0.92, 0.32), text="SOURCE", height=12),
-            _label("Value", (0.04, 0.38, 0.92, 0.56), height=17),
-        ], "Toggle Switch")
     if kind == "action":
         return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=13)], "Toggle Switch")
-    if kind == "toggle":
-        kids = [_label("Name", (0.04, 0.06, 0.92, 0.36))]
-        if skins_dir is not None:
-            kids.append(_ensure_field_box_art(skins_dir))
-            kids.append(_ensure_toggle_led_art(skins_dir))
-            kids.append(_label("Value", (0.26, 0.46, 0.62, 0.42), height=16))
-        else:
-            kids.append(_label("Value", (0.04, 0.48, 0.92, 0.42), height=16))
-        return _definition(kids, "Toggle Switch")
-    if kind == "number":
-        kids = [_label("Name", (0.04, 0.06, 0.92, 0.36))]
-        if skins_dir is not None:
-            kids.append(_ensure_field_box_art(skins_dir))
-        kids.append(_label("Value", (0.10, 0.46, 0.80, 0.42), height=18))
-        return _definition(kids, "Show Overlay", NUMBER_MENU)
-    children = [_label("Name", (0.02, 0.06, 0.96, 0.38)), _label("Value", (0.02, 0.48, 0.86, 0.44))]
-    if kind == "menu" and skins_dir is not None:
-        chevron_file = "osc_native_menu_chevron.png"
-        chevron_path = skins_dir / chevron_file
-        if not chevron_path.is_file():
-            im_ch = Image.new("RGBA", (16 * 4, 16 * 4), (0, 0, 0, 0))
-            d_ch = ImageDraw.Draw(im_ch)
-            d_ch.line(((3 * 4, 6 * 4), (8 * 4, 11 * 4), (13 * 4, 6 * 4)), fill=style.color("text.muted"), width=2 * 4)
-            _save_png_filter0(im_ch.resize((16, 16), Image.Resampling.LANCZOS), chevron_path)
-        chevron = _entry(
-            "chevron",
-            "Image",
-            {"version": 2, "imageType": "Regular", "colour": "0", "image": chevron_file},
-            (0.90, 0.58, 0.06, 0.28),
-            relative=True,
-        )
-        return _definition([*children, chevron], "Show Overlay", CHOICE_MENU)
-    return _definition(children, "Show Overlay", CHOICE_MENU if kind == "menu" else NUMBER_MENU)
+    raise ValueError("Unknown OSC control " + kind)
 
 
 def apply(tui, qlinks, ctx):
@@ -189,11 +169,38 @@ def apply(tui, qlinks, ctx):
     base = mixer_peek_index(ctx.param_count)
     view = f"Parameter {base + OSC_SETTINGS_VIEW}"
     warp_layout = f"Parameter {base + OSC_WARP_LAYOUT}"
-    definitions, menus, cells, abc_cells = set(), {}, [], []
+    definitions, drawers, menus, cells, abc_cells, abc_cells_off = set(), set(), {}, [], [], []
     variants_by_layout = defaultdict(set)
     geometry = {}
 
-    def add(field, gates, abc):
+    skins_dir = getattr(ctx, "skins_dir", None)
+    if skins_dir is not None:
+        for i, filename in enumerate(TABLE_ART):
+            art_path = skins_dir / filename
+            if not art_path.is_file():
+                art = Image.new("RGBA", (56, 56))
+                if i != 1:
+                    tip, side = (19, 35) if i == 0 else (37, 21)
+                    ImageDraw.Draw(art).line((side, 15, tip, 28, side, 41), fill=style.color("text.icon"), width=3)
+                art.save(art_path)
+
+    # These shared names are referenced by the standalone detail grid and expanded views.
+    for kind in ("dial_uni", "dial_bi", "menu", "toggle", "number", "dial_uni_side"):
+        key = "oscNativeSetting_" + kind
+        ctx.add_component_definition(key, _control(kind.removesuffix("_side"), kind.endswith("_side"), skins_dir))
+        definitions.add(key)
+
+    # Detail tiles use the existing generic-sized Selector; root cells get
+    # geometry-specific instances of the same native Warp drawer contract.
+    warp_control = _control("menu", False, skins_dir)
+    for action in warp_control["actions"]:
+        action["additionalData"] = native_warp_picker.DRAWER
+    ctx.add_component_definition(native_warp_picker.CONTROL, warp_control)
+    ctx.add_component_definition(native_warp_picker.CONTROL + "Off",
+                                 style.apply_control_state(warp_control, skins_dir, active=False))
+    definitions.add(native_warp_picker.CONTROL)
+
+    def add(field, gates, abc, power_gates=()):
         slot, kind, rect = field["slot"], field["kind"], field["rect"]
         if abc and field["id"] in (110, 112):  # OCT and FIN live in the native TUNE card
             return
@@ -202,14 +209,51 @@ def apply(tui, qlinks, ctx):
             raise ValueError(f"Unexpected OSC settings field: {field}")
         side = kind.startswith("dial_") and rect[3] < 94
         definition = f"oscNativeSetting_{kind}{'_side' if side else ''}"
+        choices = field.get("choices", [])
+        drawer = None
+        warp = kind == "menu" and field["key"] in ("osc1.warp.type", "osc1.warp2.type")
+        if warp:
+            definition, drawer = native_warp_picker.CONTROL, native_warp_picker.DRAWER
+        elif kind == "menu" and 2 <= len(choices) <= 9:
+            definition += "_" + field["label"]
+            drawer = definition + "Choices"
+        if kind not in ("table", "action"):
+            if kind == "toggle":
+                definition += "_" + field["label"]
+            definition += f"_{rect[2]}x{rect[3]}"
+        definition_off = f"{definition}Off"
         if definition not in definitions:
-            ctx.add_component_definition(definition, _control(kind, side, getattr(ctx, "skins_dir", None)))
+            ctrl_def = _control(kind, side, skins_dir, tuple(rect[2:]), field["label"])
+            if drawer:
+                if drawer not in drawers:
+                    overlay = native_warp_picker.warp_picker(choices, skins_dir) if warp else labelled_choice_drawer(drawer, choices)
+                    ctx.add_component_definition(drawer, overlay)
+                    drawers.add(drawer)
+                for action in ctrl_def["actions"]:
+                    action["additionalData"] = drawer
+            ctx.add_component_definition(definition, ctrl_def)
+            ctx.add_component_definition(
+                definition_off,
+                style.apply_control_state(ctrl_def, skins_dir, active=False),
+            )
             definitions.add(definition)
         data = f"OscAbc{slot}" if abc else f"Parameter {base + OSC_SETTINGS + slot}"
         remap = [("Data", data), ("Caption", f"WithName[{field['label']}]/{data}")]
-        (abc_cells if abc else cells).append(
-            _entry(field["key"] or field["label"], definition, {"version": 1, "handleName": "Data"}, rect, remap, gates, kind != "table")
-        )
+        if abc:
+            abc_cells.append(
+                _entry(field["key"] or field["label"], definition, {"version": 1, "handleName": "Data"}, rect, remap, gates, kind != "table")
+            )
+            abc_cells_off.append(
+                _entry(f"{field['key'] or field['label']} Off", definition_off, {"version": 1, "handleName": "Data"}, rect, remap, gates, False)
+            )
+        else:
+            power_on_gate, power_off_gate = power_gates
+            cells.append(
+                _entry(field["key"] or field["label"], definition, {"version": 1, "handleName": "Data"}, rect, remap, [*gates, power_on_gate], kind != "table")
+            )
+            cells.append(
+                _entry(f"{field['key'] or field['label']} Off", definition_off, {"version": 1, "handleName": "Data"}, rect, remap, [*gates, power_off_gate], False)
+            )
         if kind in ("menu", "toggle") and field.get("choices"):
             targets = [f"Parameter {base + OSC_ABC_SETTINGS + source * OSC_ABC_SETTINGS_FIELDS + slot}" for source in range(3)] if abc else [data]
             for target in targets:
@@ -223,8 +267,13 @@ def apply(tui, qlinks, ctx):
             raise ValueError(f"Unexpected OSC settings layout: {layout}")
         gate = f"IndexedEnabling/{layout}/{OSC_SETTINGS_LAYOUTS}/{view}"
         if "warp" not in variant:
+            power_idx = base + OSC_POWER + (0 if layout == 1 else 4)
+            power_gates = (
+                f"IndexedEnabling/1/2/Parameter {power_idx}",
+                f"IndexedEnabling/0/2/Parameter {power_idx}",
+            )
             for field in variant["fields"]:
-                add(field, [gate], False)
+                add(field, [gate], False, power_gates)
             continue
         mask = variant["warp"]
         variants_by_layout[layout].add(mask)
@@ -257,19 +306,24 @@ def apply(tui, qlinks, ctx):
 
     if abc_cells:
         ctx.add_component_definition(ABC_LAYER, passive_layer(abc_cells))
+        ctx.add_component_definition(f"{ABC_LAYER}Off", passive_layer(abc_cells_off))
         for i, label in enumerate(("Osc A", "Osc B", "Osc C")):
+            source_idx = i + 1
+            power_idx = base + OSC_POWER + source_idx
             remaps = [("Data", view), *((f"OscAbc{slot}", f"Parameter {base + OSC_ABC_SETTINGS + i * OSC_ABC_SETTINGS_FIELDS + slot}")
                                          for slot in range(OSC_ABC_SETTINGS_FIELDS))]
-            cells.append(_entry(label, ABC_LAYER, {"version": 1, "handleName": "Data"}, (0, 0, 1280, 628), remaps,
-                                [f"IndexedEnabling/{i + 1}/5/Parameter {base + OSC_SOURCE}"]))
-
-    if "oscNativeSetting_table" in definitions:
-        for i, filename in enumerate(TABLE_ART):
-            art = Image.new("RGBA", (56, 56))
-            if i != 1:
-                tip, side = (19, 35) if i == 0 else (37, 21)
-                ImageDraw.Draw(art).line((side, 15, tip, 28, side, 41), fill=style.color("text.icon"), width=3)
-            art.save(ctx.skins_dir / filename)
+            cells.append(_entry(
+                label, ABC_LAYER, {"version": 1, "handleName": "Data"}, (0, 0, 1280, 628), remaps,
+                [f"IndexedEnabling/{source_idx}/5/Parameter {base + OSC_SOURCE}",
+                 f"IndexedEnabling/1/2/Parameter {power_idx}"],
+                focus="Children",
+            ))
+            cells.append(_entry(
+                f"{label} Off", f"{ABC_LAYER}Off", {"version": 1, "handleName": "Data"}, (0, 0, 1280, 628), remaps,
+                [f"IndexedEnabling/{source_idx}/5/Parameter {base + OSC_SOURCE}",
+                 f"IndexedEnabling/0/2/Parameter {power_idx}"],
+                focus=False,
+            ))
 
     ctx.add_component_definition(LAYER, passive_layer(cells))
     tui["pageData"].setdefault("replacementStrings", []).extend(

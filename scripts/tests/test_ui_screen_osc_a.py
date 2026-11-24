@@ -183,11 +183,40 @@ class TestOscAScreen(unittest.TestCase):
             self.assertIn("Native Modulation Editor", tab_comp_names)
             self.assertIn("Osc Native Surface", tab_comp_names)
 
+            self.check_warp_picker(tui)
+
             # Check that no visible Q-Link numbers appear anywhere in Osc A tab text
             tab_str = json.dumps(osc_tab)
             import re
             self.assertFalse(bool(re.search(r'"text":\s*"[^"]*\bQ[1-9]\b[^"]*"', tab_str)),
                              "No visible Q-Link numbers (Q1..Q4) allowed in text fields")
+
+    def check_warp_picker(self, tui):
+        definitions = {item["key"]: item["value"] for item in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        params = {param["key"]: param for param in json.loads(PARAMS_JSON.read_text())["params"]}
+        choices = params["osc1.warp.type"]["choices"]
+        items = definitions["oscWarpChoices"]["componentsData"]
+        local = "Local/7/synthyboyWarpPage"
+        rows = [item for item in items if item["componentData"]["name"].startswith("Choose ")]
+        self.assertEqual(len(rows), 99)
+        for index, (choice, row) in enumerate(zip(choices, rows)):
+            self.assertEqual(row["componentData"]["name"], "Choose " + choice)
+            value = row["componentData"]["data"]
+            self.assertEqual((value["buttonId"], value["numButtonsInGroup"], value["handleName"]), (index, 99, "Data"))
+            gates = [f"IndexedEnabling/{index // 16}/7/{local}"]
+            self.assertEqual(row["bounds"]["additionalInvalidatingHandles"], gates)
+            label = next(item for item in items if item["componentData"]["name"] == choice)
+            self.assertEqual(label["componentData"]["data"]["text"], choice)
+            self.assertEqual(label["bounds"]["additionalInvalidatingHandles"], gates)
+        navigation = [item for item in items if item["handle remapping"]["map"] == [{"key": "Data", "value": local}]]
+        self.assertEqual([item["componentData"]["data"]["buttonId"] for item in navigation], list(range(7)))
+        trigger = definitions["oscNativeSettingWarpChoice"]
+        self.assertEqual({action["additionalData"] for action in trigger["actions"]}, {"oscWarpChoices"})
+        for action in trigger["actions"]:
+            self.assertEqual(action["handleName"], "Data")
+        self.assertFalse(definitions["oscNativeSettingWarpChoiceOff"]["actions"])
+        detail = definitions["oscDetailTile"]["componentsData"]
+        self.assertTrue(any(item["componentData"]["type"] == "oscNativeSettingWarpChoice" for item in detail))
 
     def test_rendered_preview_exists_and_verified(self):
         """Verify that the full-screen verified visual preview image exists and has correct dimensions."""

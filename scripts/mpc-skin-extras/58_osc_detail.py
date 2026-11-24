@@ -11,6 +11,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from components import style
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
+from native_warp_picker import CONTROL as WARP_CONTROL
 from native_ui_params import (OSC_ABC_SETTINGS, OSC_DETAIL, OSC_DETAIL_CELLS, OSC_ROOT_LOAD,
                               OSC_ROOT_LOAD_VIEW, OSC_SETTINGS_VIEW, OSC_SETTINGS_LAYOUTS, mixer_peek_index)
 
@@ -73,7 +74,8 @@ def apply(tui, qlinks, ctx):
     params = {info["key"]: info for info in ctx.params}
     for i, suffix in enumerate(contract["menus"]):
         parameter = f"Parameter {base + 4 + 3 * count + i}"
-        tile.append(custom(str(i + 7), "oscNativeSetting_menu", (0, 0, 1, 1),
+        control = WARP_CONTROL if suffix in ("warp.type", "warp2.type") else "oscNativeSetting_menu"
+        tile.append(custom(str(i + 7), control, (0, 0, 1, 1),
                            (("Caption", "Data"), ("Data", parameter)), f"IndexedEnabling/{i + 7}/{visual_steps}/Kind", "Yes", True))
         # The root's Warp2 menu already has the release display names for this domain.
         warp2 = f"Parameter {native_base + OSC_ABC_SETTINGS + 10}"
