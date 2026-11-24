@@ -30,7 +30,6 @@ public:
         addKid (chainBar);
         addKid (slotEditor);
         addKid (gallery, false);
-        setNativeChain (true);
         setNativeControls (true);
     }
 
@@ -118,7 +117,7 @@ private:
     int headerInset_ = 0;   // a Mixer panel reserves room for its CLOSE button
     bool editorShown_ = false;
     bool nativeControls_ = true;
-    bool nativeChain_ = true;
+    bool nativeChain_ = false;
 };
 
 }} // namespace synthyboy_mpc::ui

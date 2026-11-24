@@ -584,26 +584,40 @@ static void testNativePagePopups()
     check (plane.planeOn && controller.currentIndex() == filter, "closing the Filter menu restores its view");
 
     show (voice, 0);
+    using synthyboy_mpc::ui::VoiceGrid;
+    const auto gridBounds = synthyboy_mpc::ui::voicelayout::kSequenceGrid;
+    VoiceGrid grid;
+    grid.place ({ gridBounds.x, layout::kTabOriginY + gridBounds.y, gridBounds.w, gridBounds.h });
+    const auto knob = grid.knobRect (1);
+    const int knobX = knob.x + knob.w / 2, knobY = knob.y + knob.h / 2;
     const auto voiceTouchCount = controller.touchTaken();
-    controller.touchEvent ({ TouchEvent::Down, 340, 247 }, now);
-    check (controller.touchTaken() == voiceTouchCount + 1, "the standalone Voice grid accepts a touch before the host popup");
+    controller.touchEvent ({ TouchEvent::Down, knobX, knobY }, now);
+    controller.touchEvent ({ TouchEvent::Up, knobX, knobY }, now);
+    check (controller.touchTaken() == voiceTouchCount, "the native Voice step knob owns its pointer");
+    const auto column = grid.columnRect (1);
+    const int headerY = column.y + 1;
     const int voiceWrites = inst.writes;
+    controller.touchEvent ({ TouchEvent::Down, knobX, headerY }, now);
+    check (controller.touchTaken() == voiceTouchCount + 1 && inst.voiceBank.at (sequence::kStep).cell().target == 1
+           && inst.writes == voiceWrites, "the Voice column header selects its step without writing a value");
     show (-1, 3);
     check (! plane.planeOn && controller.state() == "hidden: native Voice editor" && controller.currentIndex() == voice && inst.qN == 0,
            "the Voice SDK popup owns the screen and suspends Q-Links");
     const auto voiceWheelCount = controller.wheelTaken();
-    controller.wheelEvent (340, 247, 1, now);
-    controller.touchEvent ({ TouchEvent::Move, 480, 280 }, now);
+    controller.wheelEvent (knobX, knobY, 1, now);
+    controller.touchEvent ({ TouchEvent::Move, knobX, knobY }, now);
     check (controller.touchTaken() == voiceTouchCount + 1 && controller.wheelTaken() == voiceWheelCount && inst.writes == voiceWrites,
            "the Voice SDK popup blocks overlay touch and wheel writes");
     show (voice, 0);
-    controller.touchEvent ({ TouchEvent::Move, 580, 280 }, now);
-    controller.touchEvent ({ TouchEvent::Up, 580, 280 }, now);
+    controller.touchEvent ({ TouchEvent::Move, knobX, knobY }, now);
+    controller.touchEvent ({ TouchEvent::Up, knobX, knobY }, now);
     check (plane.planeOn && controller.currentIndex() == voice && inst.qN == 16 && inst.writes == voiceWrites,
            "closing the Voice popup restores Q-Links and drops the pre-popup grid gesture");
-    controller.touchEvent ({ TouchEvent::Down, 580, 247 }, now);
-    controller.touchEvent ({ TouchEvent::Up, 580, 247 }, now);
-    check (inst.writes > voiceWrites, "the restored Voice grid accepts a fresh edit");
+    const auto next = grid.columnRect (2);
+    controller.touchEvent ({ TouchEvent::Down, next.x + next.w / 2, headerY }, now);
+    controller.touchEvent ({ TouchEvent::Up, next.x + next.w / 2, headerY }, now);
+    check (inst.voiceBank.at (sequence::kStep).cell().target == 2 && inst.writes == voiceWrites,
+           "the restored Voice grid selects a new edit target without touching its value");
 
     // A native keypad commits through the held Voice editor session. If the
     // host recalls a preset while the keypad is up, its previous edit expires.
