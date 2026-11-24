@@ -4,63 +4,63 @@
     {
       "name": "play",
       "title": "Play",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/play-screen-preview.png",
       "migration_current_source_commit": "044e1808"
     },
     {
       "name": "macros",
       "title": "Macros",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/macros-screen-preview.png",
       "migration_current_source_commit": "ddfa0c14"
     },
     {
       "name": "osc_a",
       "title": "Osc A",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/osc-a-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "osc_b",
       "title": "Osc B",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/osc-b-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "osc_c",
       "title": "Osc C",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/osc-c-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "sub",
       "title": "Sub",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/sub-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "noise",
       "title": "Noise",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/noise-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "env",
       "title": "Env",
-      "status": "Aktuális TUI + C++ EnvUi · szintetikus offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/env-screen-preview.png",
       "migration_current_source_commit": "5d96c5ae"
     },
     {
       "name": "lfo",
       "title": "LFO",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/lfo-screen-preview.png",
       "migration_current_source_commit": "f0d4b8aa"
     },
@@ -74,14 +74,14 @@
     {
       "name": "fx",
       "title": "FX",
-      "status": "Mai natív TUI + aktuális C++ FX overlay · szintetikus offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/fx-native-screen-preview.png",
       "migration_current_source_commit": "4c7c9c02"
     },
     {
       "name": "mixer",
       "title": "Mixer",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-components/komponensek/mixer-preview.png",
       "migration_current_source_commit": "8bac702e",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_mixer.png",
@@ -90,7 +90,7 @@
     {
       "name": "filter",
       "title": "Filter",
-      "status": "MPC XL hardverfelvétel · Filter 1 és NOTE görbe",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/filter-preview-host-render.png",
       "migration_current_source_commit": "fb5f1371",
       "migration_reference_source": "docs/ui-map/filter-bold-cut/before/Init_filter1.png",
@@ -99,7 +99,7 @@
     {
       "name": "mod",
       "title": "Mod",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-components/komponensek/mod-screen-preview.png",
       "migration_current_source_commit": "ceb2ea02",
       "migration_reference_source": "docs/ui-map/q-link-mapping/before/Init_mod_rows.png",
@@ -108,7 +108,7 @@
     {
       "name": "master",
       "title": "Master",
-      "status": "Átvett korábbi fejlesztési előnézet · nem a mai build hitelesítése",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/user-guide/img/master-main.png",
       "migration_current_source_commit": "e1cc61d6",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_master_main.png",
@@ -117,7 +117,7 @@
     {
       "name": "voice",
       "title": "Voice",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC XL hardverfelvétel · 8c65be5e",
       "migration_current_source": "docs/ui-map/voice-preview-host-render.png",
       "migration_current_source_commit": "594ac6dd"
     }

@@ -314,4 +314,4 @@
 - [ ] Mixer valódi sztereó mérők mind a 10 sávon: független L/R csúcs, hold és jelalapú clip; natív 2×8 px kijelző és 95 px fader, egy célzott jel/bekötés ellenőrzés után develop. (fut: detached mixer-stereo)
 
 
-- [ ] Tulajdonosi Mixer-regressziójelzés a developon (2026-11-24): a jelenlegi felület hibásnak látszik a sztereó átvezetés után; a pontos megjelenítési hely és tünet még tisztázandó. Kész, ha a tényleges generált natív felület és a jelzett futó nézet az elfogadott mixerrel egyezik, a célzott sztereó Mac-próba sikeres, és a konkrét eltérés javítva. (fut: mixer-stereo)
+- [ ] Mixer: a 8c65be5e XL-csomagon az aktív MIXER fül alatt a tíz csatornasáv helye üres, az alsó fülsor látszik (docs/screens/mixer.jpg). Vizsgáld meg a natív strip-példányok láthatósági feltételeit és host-feloldását. Kész, ha az XL-en mind a tíz sáv megjelenik és a sztereó mérők a megfelelő csatornát követik.
