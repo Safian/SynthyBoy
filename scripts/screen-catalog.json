@@ -90,7 +90,7 @@
     {
       "name": "filter",
       "title": "Filter",
-      "status": "Nem elfogadott fejlesztési előnézet · a natív megjelenés javítása folyamatban",
+      "status": "MPC XL hardverfelvétel · Filter 1 és NOTE görbe",
       "migration_current_source": "docs/ui-map/filter-preview-host-render.png",
       "migration_current_source_commit": "fb5f1371",
       "migration_reference_source": "docs/ui-map/filter-bold-cut/before/Init_filter1.png",
