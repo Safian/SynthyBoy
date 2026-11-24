@@ -1,4 +1,9 @@
 # SynthyBoy — nyitott teendők
+- [ ] A tulajdonos által elvetett pöttyös RadioButton még aktív: `53_lfo_smooth.py` HZ/BPM/KEY és `98_filter_native.py` kapcsolók `radio_dot` képet generálnak; átvezetendők az elfogadott RadioButton megjelenésre, a kizárólagos rajzoló/token/teszt/minták eltávolításával. A `99_ui_screen_lfo.py` téves jóváhagyási állítása is javítandó.
+
+- [ ] A natív LFO/FX/Mixer vezérlőkhöz tartozó GPU-s statikus rajzolás és fallback bemenet eltávolítása, a natív feliratok/vezérlők megtartásával és élő grafika ellenőrzésével. (fut: LFO agy/gemini-worker-96073cd12c; FX agy/gemini-worker-13801c554f; Mixer agy/gemini-worker-06745eeffb)
+
+- [ ] XL natív oldalváltási késés: LFO→ENV→LFO megnyitásakor az alsó vezérlők eltűnnek, majd részletekben térnek vissza. LFO-visszatérésnél a füljelzés után kb. 0,6 s alatt állt össze az alsó natív panel (kb. 0,2 s mintavétel). Bizonyíték: .hw-local/mpc-perf/xl-load-incident-7b5a79da/lfo-transition-live/back-lfo.json és back-lfo.jpg. Kész, ha az ok javítva és a normál oldalváltásnál együtt jelennek meg a vezérlők.
 
 
 
