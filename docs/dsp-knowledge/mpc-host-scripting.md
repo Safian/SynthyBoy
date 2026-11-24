@@ -49,6 +49,13 @@ The selected track's program also stores `padNoteMap.noteForPad`. The XPJ fields
 
 Opened sources: the XL and Key 61 project originals under `.hw-local/mpc-perf/xl-load-incident-7b5a79da/project-originals/`; the XL manual under `.hw-local/mpc-knowledge/manuals-extended/`. Earlier Key 61 hardware measurements correlated raw pad input with its resulting MIDI pitch (see `docs/MPC.md`, device level sweep). Those measurements required sending pad events.
 
+### Live factory Pad Perform dependencies (read-only device inspection, 2026-11-24)
+
+- Both the Key 61 and XL installed `/usr/bin/MPC` contain the same constructor signature for `TouchPadPerformComponent`. It takes references to `PadPerformConnector`, `PadPerformMode`, `PadPerformSettings`, `BanksAsync`, `Pads` and `CurrentThings`, among others. The signature identifies live dependencies. It does not identify a callable per-pad label getter.
+- The XL executable contains listener types for changes to the active program, Pad Perform type, scale, base note, chord type and bank behaviour. It also contains `PadPerform.BaseNote`, `PadPerform.ScaleType` and related strings. No binding from a plugin skin to these string keys was established.
+- The XL scripting registrar describes `CurrentBank` as the selected MPC pad bank. The adjacent documented pad operations include visible/pressed state, velocity and light colour. The installed `/usr/share/Akai/SME0/Devices/Akai/mpkMiniMkIV.lua` reads `mpc.controlSurface.pads[index].Colour.value` (line 921). Its `AddNoteToMpcPad` (line 959) assigns an external controller message to a physical pad. Neither operation reads the mapped musical notes.
+- XL dynamic-symbol inspection of the installed executable (`llvm-objdump -T`) found no exported name containing `PadPerform`, `BanksAsync`, `GetNoteForPad` or `PadNoteMap`. The plugin SDK host contract and TUI reference provide no identified bridge to that resolved layout. No live label subscription or bank-switch behaviour was tested.
+
 ## Rejected / out of scope
 
 - Writing scripts or files under `/usr/share/Akai` (rootfs): owner decision, not done, not planned.
