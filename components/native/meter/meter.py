@@ -85,3 +85,21 @@ def write_stereo_meter_assets(directory, height):
         image.save(directory / filename)
     for filename, image in zip(('mixer_meter_clip_idle.png', 'mixer_meter_clip_peak.png'), stereo_meter_images(cap, clip=True)):
         image.save(directory / filename)
+
+
+def write_peak_scale(directory, size, filename="master_peak_scale.png"):
+    """Static scale furniture owned by the native meter component."""
+    from pathlib import Path
+    from PIL import Image, ImageDraw
+    from components.native.button.button import semibold
+    from components.style import color
+
+    geometry = _style_size("master.meter.scale")
+    image = Image.new("RGB", tuple(size), color("button.surface"))
+    pen = ImageDraw.Draw(image)
+    font = semibold(geometry["font"])
+    for caption, y in geometry["captions"]:
+        pen.text((geometry["caption_x"], y), caption, fill=color("master.meter.scale.text"), font=font, anchor="mm")
+    for channel, x in geometry["channels"]:
+        pen.text((x, geometry["channel_y"]), channel, fill=color("text.icon"), font=font, anchor="mm")
+    image.save(Path(directory) / filename)

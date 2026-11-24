@@ -854,18 +854,20 @@ private:
             return;
         }
         const int rack = synthyboy::fxItemRack (plain_.data(), selectedItem_);
-        if (ed.pageIndex() != nativeFxPage_ || rack != nativeFxRack_ || layout != nativeFxLayout_)
+        if (ed.pageIndex() != nativeFxPage_ || rack != nativeFxRack_ || layout != nativeFxLayout_
+            || ed.power.state.on != nativeFxPower_)
         {
             inst.setNativeFxCells (0, nullptr);
             nativeFxPage_ = ed.pageIndex();
             nativeFxRack_ = rack;
+            nativeFxPower_ = ed.power.state.on;
         }
         nativeui::FxCell cells[nativeui::kFxCells];
         for (int slot = 0; slot < nativeui::kFxCells; ++slot)
         {
             const auto cell = nativeCell (slot);
             float value;
-            if (inst.takeNativeFxCell (slot, cell, value) && cell.target >= 0)
+            if (inst.takeNativeFxCell (slot, cell, value) && cell.target >= 0 && ed.power.state.on)
             {
                 const float norm = nativeui::fxEngineValue (cell, value);
                 const auto& real = synthyboy::paramTable()[cell.target];
@@ -1803,6 +1805,7 @@ private:
     int rackOnly_ = -1; // embedded FX PEEK: restrict the chain and ADD target to Bus 1/2
     bool nativeControls_ = false;
     int nativeFxPage_ = -1, nativeFxRack_ = -1, nativeFxLayout_ = 0;
+    bool nativeFxPower_ = false;
     const IInstanceView* lastInstance_ = nullptr;
     int scope_ = 0;                                         // 0: the chain of Main / Bus 1 / Bus 2; 3 .. 9: the chain of a band rack
     uint32_t gallerySig_ = 0;

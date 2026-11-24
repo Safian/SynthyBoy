@@ -192,7 +192,7 @@ def _choice_definition(tui, ctx, name, width, height, *, active=True):
     definition = ui_selector.selector_definition(
         source, popup, (width, height), ctx.skins_dir,
         caption_text="MODEL" if "Model" in name else "STYLE",
-        filename=f"filter_selector_{width}x{height}.png", label_height=18,
+        filename=f"filter_selector_{width}x{height}.png", label_height=style.size("filter.choice_definition.caption_height"),
     )
     if not active:
         definition["actions"] = []
@@ -234,7 +234,7 @@ def _readouts(ctx, manifest, state, power_frame):
         labels = []
         for i, (caption, _, unit) in enumerate(rows):
             y, bottom = i * h // len(rows), (i + 1) * h // len(rows)
-            unit_w = 24 if unit else 0
+            unit_w = style.size("filter.readouts.unit_width") if unit else 0
             labels.append(_readout_label(caption + " caption", caption,
                                          (style.size("filter.readout.caption_x"), y,
                                           style.size("filter.readout.value_x") - style.size("filter.readout.caption_x"), bottom - y),
@@ -256,9 +256,9 @@ def _readouts(ctx, manifest, state, power_frame):
     glide = manifest["glide"]
     _, _, w, h = glide
     kind = "filterNativeGlide"
-    glide_children = [_readout_label("GLIDE", "GLIDE", (0, 0, 100, h)),
-                      _readout_label("GLIDE value", None, (100, 0, w - 145, h), "Data"),
-                      _readout_label("GLIDE unit", "ms", (w - 45, 0, 45, h))]
+    glide_children = [_readout_label("GLIDE", "GLIDE", (0, 0, style.size("filter.readouts.glide_caption_width"), h)),
+                      _readout_label("GLIDE value", None, (style.size("filter.readouts.glide_caption_width"), 0, w - style.size("filter.readouts.glide_reserved_width"), h), "Data"),
+                      _readout_label("GLIDE unit", "ms", (w - style.size("filter.readouts.glide_unit_width"), 0, style.size("filter.readouts.glide_unit_width"), h))]
     ctx.add_component_definition(kind, _readout_panel(glide_children, style.argb("button.surface")))
     for frame, source in ((3, "note"), (4, "velocity")):
         legato = ctx.param_index(f"curve.{source}.legato")
@@ -298,7 +298,7 @@ def _pz_toolbar(ctx, rects):
     film.save(ctx.skins_dir / film_name)
 
     kind = "filterNativePzToolbar"
-    ctx.add_component_definition(kind, _readout_panel(children, "00000000"))
+    ctx.add_component_definition(kind, _readout_panel(children, style.native_color("transparent")))
     for source in (1, 2):
         entry = _entry(f"PZ Toolbar F{source}", kind, {"version": 1, "handleName": "Data"},
                        (0, 0, 1280, 72), base + PZ_ACTIONS + source - 1,
@@ -311,9 +311,9 @@ def _ensure_dial_definition(ctx, w, h, bipolar, active, dial_assets, side_layout
     # The compact row has 182/185/187px cells from integer column division.
     # Reuse the narrowest control subtree; the at-most-five trailing pixels are
     # parent spacing, not a new dial/caption/value component variant.
-    if side_layout and h == 76:
-        w = 182
-    layout_tag = "side" if (side_layout or w >= 170) else "top"
+    if side_layout and h == style.size("filter.ensure_dial_definition.side_height"):
+        w = style.size("filter.ensure_dial_definition.side_min_width")
+    layout_tag = "side" if (side_layout or w >= style.size("filter.ensure_dial_definition.side_threshold")) else "top"
     kind = f"filterNativeDial_{layout_tag}_{'bi' if bipolar else 'uni'}_{'on' if active else 'off'}_{w}x{h}"
     defs = ctx._filter_dial_defs if hasattr(ctx, "_filter_dial_defs") else setattr(ctx, "_filter_dial_defs", set()) or ctx._filter_dial_defs
     if kind in defs:
@@ -321,16 +321,16 @@ def _ensure_dial_definition(ctx, w, h, bipolar, active, dial_assets, side_layout
     defs.add(kind)
 
     if layout_tag == "side":
-        dial_rect = (4, (h - DIAL_SIZE) // 2, DIAL_SIZE, DIAL_SIZE)
-        tx = 4 + DIAL_SIZE + 6
-        tw = max(48, w - tx - 2)
-        cap_rect = (tx, max(4, h // 2 - 24), tw, 20)
-        val_rect = (tx, max(24, h // 2 - 2), tw, 26)
+        dial_rect = (style.size("filter.ensure_dial_definition.padding"), (h - DIAL_SIZE) // 2, DIAL_SIZE, DIAL_SIZE)
+        tx = style.size("filter.ensure_dial_definition.padding") + DIAL_SIZE + style.size("filter.ensure_dial_definition.gap")
+        tw = max(style.size("filter.ensure_dial_definition.min_label_width"), w - tx - style.size("filter.ensure_dial_definition.end_padding"))
+        cap_rect = (tx, max(style.size("filter.ensure_dial_definition.padding"), h // 2 - style.size("filter.ensure_dial_definition.vertical_gap")), tw, style.size("filter.ensure_dial_definition.caption_height"))
+        val_rect = (tx, max(style.size("filter.ensure_dial_definition.vertical_gap"), h // 2 - style.size("filter.ensure_dial_definition.end_padding")), tw, style.size("filter.ensure_dial_definition.value_height"))
         align = "left"
     else:
-        dial_rect = ((w - DIAL_SIZE) // 2, 18, DIAL_SIZE, DIAL_SIZE)
-        cap_rect = (2, 84, max(40, w - 4), 22)
-        val_rect = (2, 108, max(40, w - 4), 24)
+        dial_rect = ((w - DIAL_SIZE) // 2, style.size("filter.ensure_dial_definition.knob_y"), DIAL_SIZE, DIAL_SIZE)
+        cap_rect = (style.size("filter.ensure_dial_definition.end_padding"), style.size("filter.ensure_dial_definition.caption_y"), max(style.size("filter.ensure_dial_definition.top_min_width"), w - style.size("filter.ensure_dial_definition.padding")), style.size("filter.ensure_dial_definition.top_caption_height"))
+        val_rect = (style.size("filter.ensure_dial_definition.end_padding"), style.size("filter.ensure_dial_definition.value_y"), max(style.size("filter.ensure_dial_definition.top_min_width"), w - style.size("filter.ensure_dial_definition.padding")), style.size("filter.ensure_dial_definition.vertical_gap"))
         align = "horizontallyCentred"
 
     # Compose the shared Level/Pan control, changing only this screen's layout.
@@ -342,21 +342,17 @@ def _ensure_dial_definition(ctx, w, h, bipolar, active, dial_assets, side_layout
         name = data["name"]
         if name == "knob":
             child["bounds"]["bounds"] = "%d %d %d %d" % dial_rect
-            if active:
-                data["data"] = copy.deepcopy(dial_assets["bi_on" if bipolar else "uni_on"])
-            else:
-                off_img = dial_assets["bi_off_img"] if bipolar else dial_assets["uni_off_img"]
-                replacement = _image("off dial", off_img, dial_rect)
-                child.update(replacement)
+            data["data"] = copy.deepcopy(dial_assets["bi_on" if bipolar else "uni_on"])
         elif name in ("name", "value"):
             child["bounds"]["bounds"] = "%d %d %d %d" % (cap_rect if name == "name" else val_rect)
             ts = data["data"]["textStyle"]
-            ts["font"]["height"] = 15 if name == "name" else 17
+            ts["font"]["height"] = style.size("filter.ensure_dial_definition.caption_font") if name == "name" else style.size("filter.ensure_dial_definition.value_font")
             ts["justification"] = align + " verticallyCentred"
             ts["colour"] = style.argb(("text.caption" if name == "name" else "text.icon") if active else "smooth.value.off")
     transparent = {"version": 1, "colour": style.native_color("transparent"), "image": ""}
     definition.update(actions=[], ignoreMousePresses=not active, disableCoarseDataWheel=not active,
                       backgroundData={"version": 1, "focussed": transparent, "unfocussed": transparent})
+    definition = style.apply_control_state(definition, ctx.skins_dir, active=active)
     ctx.add_component_definition(kind, definition)
     return kind
 
@@ -384,9 +380,9 @@ def _emit_dial(ctx, container, name, rect, param, caption, bipolar, active_gates
             container.append(off_entry)
 
 
-def _emit_toggle(container, name, rect, param, caption, active_gates, passive_gates, skins_dir, *, model_proxy=None, passive_models=()):
+def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passive_gates, skins_dir, *, model_proxy=None, passive_models=()):
     x, y, w, h = rect
-    tw, th = min(w, 120), min(h, 56)
+    tw, th = min(w, style.size("filter.emit_toggle.max_width")), min(h, style.size("filter.emit_toggle.max_height"))
     tx, ty = x + (w - tw) // 2, y + (h - th) // 2
     key = caption.lower().replace(" ", "_")
     on_name = f"filter_native_toggle_{key}_{tw}x{th}_on.png"
@@ -398,20 +394,15 @@ def _emit_toggle(container, name, rect, param, caption, active_gates, passive_ga
     btn["bounds"]["showWhenDataModelInvalid"] = "Hide"
     container.append(btn)
     if passive_gates:
-        passive_art = active_text.render_active_text_art(caption, False, width=tw, height=th)
-        r, g, b, a = passive_art.split()
-        passive_dim = Image.merge("RGBA", (r.point(lambda p: p * 65 // 100),
-                                           g.point(lambda p: p * 65 // 100),
-                                           b.point(lambda p: p * 65 // 100),
-                                           a.point(lambda p: p * 70 // 100)))
-        off_file = f"filter_native_toggle_{key}_{tw}x{th}_passive.png"
-        passive_dim.save(skins_dir / off_file)
-        for suffix, selection_gate, raw_model in passive_models:
+        for suffix, selection_gate, raw_model, raw_parameter in passive_models:
             gates = [*(gate.replace(f"Parameter {model_proxy}", f"Parameter {raw_model}") for gate in passive_gates), selection_gate]
-            container.append(_image(name + suffix + " off", off_file, (tx, ty, tw, th), gates))
+            passive = active_text.active_text_entry(NATIVE + name + suffix + " off", on_name, off_name,
+                                                     (tx, ty, tw, th), handle="Data", gates=gates)
+            passive["handle remapping"]["map"] = [{"key": "Data", "value": f"Parameter {raw_parameter}"}]
+            container.append(style.set_leaf_control_active(passive, ctx, active=False))
 
 
-def _emit_routing(container, name, rect, param, active_gates, passive_gates, skins_dir, variant_key, *, active_alternatives=()):
+def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates, skins_dir, variant_key, *, active_alternatives=()):
     x, y, w, h = rect
     for index, caption in enumerate(ROUTING):
         top = index * h // 3
@@ -425,23 +416,16 @@ def _emit_routing(container, name, rect, param, active_gates, passive_gates, ski
             suffix = " alternative" if branch else ""
             container.append(_button(f"{name} {index}{suffix}", part, param, gates, index, 3, (on_file, off_file)))
         if passive_gates:
-            off_art = ui_radio.render_radio_dot_button_art(caption, False, pw, ph)
-            r, g, b, a = off_art.split()
-            dim_art = Image.merge("RGBA", (r.point(lambda p: p * 55 // 100),
-                                           g.point(lambda p: p * 55 // 100),
-                                           b.point(lambda p: p * 55 // 100),
-                                           a.point(lambda p: p * 70 // 100)))
-            passive_file = f"filter_native_route_{variant_key}_{index}_{pw}x{ph}_passive.png"
-            dim_art.save(skins_dir / passive_file)
-            container.append(_image(f"{name} {index} off", passive_file, part, passive_gates))
+            passive = _button(f"{name} {index} off", part, ctx.param_index("filter.routing"), passive_gates, index, len(ROUTING), (on_file, off_file))
+            container.append(style.set_leaf_control_active(passive, ctx, active=False))
 
 
 def _ensure_nv_definition(ctx, w, h):
     # Integer row division produces 119..121px cells. A common 119px subtree
     # preserves every >=56px value hitbox without serialising three copies.
-    if h == 56:
-        w = 119
-    bw = max(44, min(60, w // 2))
+    if h == style.size("filter.ensure_nv_definition.row_height"):
+        w = style.size("filter.ensure_nv_definition.min_width")
+    bw = max(style.size("filter.ensure_nv_definition.min_box_width"), min(style.size("filter.ensure_nv_definition.max_box_width"), w // 2))
     kind = f"filterNativeNv_{w}x{h}"
     defs = ctx._filter_nv_defs if hasattr(ctx, "_filter_nv_defs") else setattr(ctx, "_filter_nv_defs", set()) or ctx._filter_nv_defs
     if kind in defs:
@@ -465,11 +449,11 @@ def _emit_curve_controls(ctx, container, rects, base, action, state, displays, *
             host_value = base + slot
             if slot == ACTION - 1:  # Legato
                 prefix = "Split " if is_split else ""
-                _emit_toggle(container, f"{prefix}Curve {field_name}", rect, host_value, "LEGATO",
+                _emit_toggle(ctx, container, f"{prefix}Curve {field_name}", rect, host_value, "LEGATO",
                              split_or_curve_gates, (), ctx.skins_dir)
             elif slot in TOGGLES:
                 prefix = "Split " if is_split else ""
-                _emit_toggle(container, f"{prefix}Curve {field_name}", rect, host_value, field_name.upper(),
+                _emit_toggle(ctx, container, f"{prefix}Curve {field_name}", rect, host_value, field_name.upper(),
                              split_or_curve_gates, (), ctx.skins_dir)
             else:
                 kind = _ensure_nv_definition(ctx, w, h)
@@ -587,15 +571,15 @@ def apply(tui, qlinks, ctx):
                 active_gates = [enabled, *model_gate]
                 passive_gates = [passive, *model_gate]
                 if slot in TOGGLES:
-                    _emit_toggle(filter_items, name, rect, host_value, FIELDS[slot].upper(),
+                    _emit_toggle(ctx, filter_items, name, rect, host_value, FIELDS[slot].upper(),
                                  active_gates, passive_gates, ctx.skins_dir, model_proxy=model,
                                  passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
-                                                  ctx.param_index(f"filter{f}.model")) for f in (1, 2)])
+                                                  ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
                 elif slot == ROUTE:
                     # ROUTING belongs to both filters, including in the full view.
                     # The dual-view indicator is not an "other filter on" bit.
                     f1, f2 = ctx.param_index("filter1.on"), ctx.param_index("filter2.on")
-                    _emit_routing(filter_items, name, rect, host_value,
+                    _emit_routing(ctx, filter_items, name, rect, host_value,
                                   [f"IndexedEnabling/1/2/Parameter {f1}"],
                                   [f"IndexedEnabling/0/2/Parameter {f1}", f"IndexedEnabling/0/2/Parameter {f2}"],
                                   ctx.skins_dir, "exp", active_alternatives=[
@@ -779,12 +763,12 @@ def apply(tui, qlinks, ctx):
                 active_gates = [split_sel_on, *model_gate]
                 passive_gates = [split_sel_off, *model_gate]
                 if slot in TOGGLES:
-                    _emit_toggle(split_left, name, rect, host_value, FIELDS[slot].upper(),
+                    _emit_toggle(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
                                  active_gates, passive_gates, ctx.skins_dir, model_proxy=model,
                                  passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
-                                                  ctx.param_index(f"filter{f}.model")) for f in (1, 2)])
+                                                  ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
                 elif slot == ROUTE:
-                    _emit_routing(split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir, "split")
+                    _emit_routing(ctx, split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir, "split")
                 else:
                     _emit_dial(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
                                slot in BIPOLAR, active_gates, passive_gates, dial_assets, side_layout=True,

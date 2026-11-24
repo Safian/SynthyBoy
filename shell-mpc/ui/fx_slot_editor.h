@@ -183,7 +183,7 @@ public:
 
     int nativeLayout() const noexcept
     {
-        if (! nativeControls_ || ! moduleEnabled_)
+        if (! nativeControls_)
             return 0;
         const int top = knobArea_.y - 110 + displayShrink();
         for (int i = 0; i < nativeui::kFxLayoutLast; ++i)

@@ -264,3 +264,29 @@ def text_face(label, size, *, geometry, surface, border, text):
     pen.text((width / 2, height / 2), label, anchor="mm", font=semibold(metrics["font"]),
              fill=_style_color(text))
     return image
+
+
+def write_panel_selector_assets(directory, panels):
+    """Shared native panel selection faces; labels/geometry come from the caller."""
+    for index, (name, rect) in enumerate(panels, 1):
+        for state in ("on", "off"):
+            image = text_face(name, tuple(rect[2:]), geometry="master.panel.face",
+                              surface="button.surface", border=f"master.panel.border.{state}", text="text.icon")
+            plate = Image.new("RGB", image.size, _style_color("button.surface"))
+            plate.paste(image, mask=image.getchannel("A"))
+            plate.save(Path(directory) / f"master_panel_{index}_{state}.png")
+
+
+def write_switch_asset(path, active):
+    """Shared native switch face used only when an SDK switch asset is absent."""
+    geometry = _style_size("button.switch.face")
+    width, height = geometry["size"]
+    image = Image.new("RGBA", (width, height))
+    pen = ImageDraw.Draw(image)
+    pen.rounded_rectangle((0, 0, width - 1, height - 1), radius=geometry["radius"],
+                           fill=_style_color("accent.cyan" if active else "button.surface"),
+                           outline=_style_color("button.switch.border"), width=geometry["stroke"])
+    x = geometry["thumb_on_x" if active else "thumb_off_x"]
+    y, size = geometry["thumb_y"], geometry["thumb_size"]
+    pen.ellipse((x, y, x + size, y + size), fill=_style_color("text.icon"))
+    image.save(path)

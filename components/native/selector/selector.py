@@ -1423,3 +1423,18 @@ def write_wave_selector_icon(skins_dir):
     ImageDraw.Draw(image).line(points, fill=_style_color("play.wave.icon"), width=stroke)
     image.resize(tuple(_style_size("play.wave.icon_size")), Image.Resampling.LANCZOS).save(Path(skins_dir) / filename)
     return filename
+
+
+def write_osc_table_navigation_assets(directory, filenames):
+    """Shared previous/center/next artwork for the standalone table selector."""
+    top, middle, bottom = _style_size("selector.table.arrow_y")
+    for index, filename in enumerate(filenames):
+        path = Path(directory) / filename
+        if path.is_file():
+            continue
+        image = Image.new("RGBA", tuple(_style_size("screen.osc_settings.art.size")))
+        if index != 1:
+            tip, side = _style_size("screen.osc_settings.apply.size" if index == 0 else "screen.osc_settings.apply.size.2")
+            ImageDraw.Draw(image).line((side, top, tip, middle, side, bottom), fill=_style_color("text.icon"),
+                                       width=_style_size("screen.osc_settings.apply.width"))
+        image.save(path)

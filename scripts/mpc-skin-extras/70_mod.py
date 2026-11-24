@@ -14,11 +14,14 @@ for p in (str(REPO_ROOT), str(SCRIPTS)):
 import native_ui_params as handles
 from components.style import (
     argb as _style_argb,
+    native_color as _style_native_color,
     color as _style_color,
     size as _style_size,
 )
 from components.native.mod_row.mod_row import (
     build_cell_definition,
+    build_editor_cell_definition,
+    editor_label as _label,
     build_mod_row_definitions,
     build_mod_row_instance,
 )
@@ -49,66 +52,8 @@ def _entry(name, kind, data, rect, remap=(), gates=(), focus=False):
             "bounds": bounds}
 
 
-def _label(kind, rect, just="horizontallyCentred verticallyCentred"):
-    name = kind == "Name"
-    font_h = _style_size("mod_row.font.label") if name else _style_size("mod_row.font.value")
-    data = {"version": 1, "textStyle": {
-        "version": 1, "font": {"version": 1, "name": _style_size("font.family"),
-                                "style": _style_size("font.style.semibold"), "height": float(font_h)},
-        "colour": _style_argb("mod_row.text_label") if name else _style_argb("mod_row.text_value"),
-        "justification": just, "case": "Original"},
-        "type": kind, "handleName": "Caption" if name else "Data"}
-    return _entry(kind.lower(), "Label", data, rect)
-
-
 def _definition(kind, w, h):
-    if kind in ("bar", "toggle", "list", "action", "delete"):
-        return build_cell_definition("action" if kind == "delete" else kind, w, h)
-    actions = []
-    if kind.startswith("mode"):
-        tag = kind
-        data = {"version": 2, "onImage": f"mod_mode_{tag}_on.png", "offImage": f"mod_mode_{tag}_off.png",
-                "buttonId": int(kind[4:]), "numButtonsInGroup": 4, "handleName": "Data", "gestureBehaviour": "Instant"}
-        children = [_entry("mode", "Button", data, (0, 0, w, h))]
-    elif kind == "group":
-        name_h = 24 if h > 100 else 0
-        if name_h:
-            name_lbl = _label("Name", (4, 4, w - 8, name_h), just="horizontallyCentred verticallyCentred")
-            val_lbl = _label("Value", (12, name_h + 8, w - 36, h - name_h - 16), just="left verticallyCentred")
-            children = [name_lbl, val_lbl]
-        else:
-            children = [_label("Value", (12, 0, w - 36, h), just="left verticallyCentred")]
-        actions = [{"version": 1, "onAction": trigger, "handler": "Show Overlay",
-                    "handleName": "Data", "additionalData": CHOICE_MENU}
-                   for trigger in ("Mouse Down", "Enter Pressed")]
-    elif kind in ("dial_uni", "dial_bi"):
-        dial_size = _style_size("dial.diameter")
-        dial_x = (w - dial_size) // 2
-        name_h, val_h = 24, 24
-        knob_y = name_h + max(0, (h - name_h - val_h - dial_size) // 2)
-        strip = "mod_dial_90_bi.png" if kind == "dial_bi" else "mod_dial_90_uni.png"
-        knob_data = {
-            "version": 3,
-            "knobType": "FilmStrip",
-            "filmStrip": strip,
-            "numFrames": 127,
-            "invert": False,
-            "dragOrientation": "Vertical",
-            "handleName": "Data",
-        }
-        control = _entry("knob", "Knob", knob_data, (dial_x, knob_y, dial_size, dial_size), focus="Yes")
-        name_lbl = _label("Name", (4, 4, w - 8, name_h), just="horizontallyCentred verticallyCentred")
-        val_lbl = _label("Value", (4, knob_y + dial_size + 4, w - 8, val_h), just="horizontallyCentred verticallyCentred")
-        children = [name_lbl, control, val_lbl]
-    else:
-        control = _entry("dial", "Knob", {"version": 5, "knobType": "GenericNoLabel",
-                         "polarity": "BiPolar" if kind == "dial_bi" else "UniPolar",
-                         "dragOrientation": "Vertical", "handleName": "Data"}, (4, 26, w - 8, h - 52))
-        children = [_label("Name", (4, 0, w - 8, 26)), control, _label("Value", (4, h - 26, w - 8, 26))]
-    default = {"version": 1, "colour": "00000000", "image": ""}
-    return {"version": 2, "actions": actions,
-            "backgroundData": {"version": 1, "focussed": dict(default, colour=_style_argb("mod_row.focus")), "unfocussed": default},
-            "ignoreMousePresses": False, "disableCoarseDataWheel": kind in ("action", "list", "group"), "componentsData": children}
+    return build_editor_cell_definition(kind, w, h, choice_menu=CHOICE_MENU)
 
 
 def apply(tui, qlinks, ctx):

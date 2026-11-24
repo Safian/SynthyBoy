@@ -19,6 +19,7 @@ from pathlib import Path
 
 from components.style import (
     argb as _style_argb,
+    native_color as _style_native_color,
     color as _style_color,
     size as _style_size,
 )
@@ -102,26 +103,14 @@ def _entry(name, kind, data, bounds_rect, remaps=(), gates=(), focus="Yes"):
     }
 
 
-def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticallyCentred", font_size=16.0):
+def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticallyCentred", font_size=_style_size("mod_row.font.label")):
+    from components.native.name_value.name_value import _label_component
     name_mode = kind == "Name"
-    data = {
-        "version": 1,
-        "textStyle": {
-            "version": 1,
-            "font": {
-                "version": 1,
-                "name": _style_size("font.family"),
-                "style": _style_size("font.style.semibold"),
-                "height": float(font_size),
-            },
-            "colour": _style_argb("mod_row.text_label") if name_mode else _style_argb("mod_row.text_value"),
-            "justification": justification,
-            "case": "Original",
-        },
-        "type": kind,
-        "handleName": "Caption" if name_mode else "Data",
-    }
-    return _entry(kind.lower(), "Label", data, bounds_rect, focus="No")
+    label = _label_component(kind.lower(), kind, "Caption" if name_mode else "Data", bounds_rect,
+                             font_size, _style_argb("mod_row.text_label" if name_mode else "mod_row.text_value"),
+                             justification)
+    label["bounds"]["showWhenDataModelInvalid"] = "Hide"
+    return label
 
 
 def build_cell_definition(kind, width, height, *, image_name=None):
@@ -148,8 +137,8 @@ def build_cell_definition(kind, width, height, *, image_name=None):
             "revealedImage": revealed_img,
             "thumbTrackVisible": False,
             "revealType": "Bipolar",
-            "backgroundColour": "00000000",
-            "outlineColour": "00000000",
+            "backgroundColour": _style_native_color("transparent"),
+            "outlineColour": _style_native_color("transparent"),
             "valueColour": _style_argb("mod_row.amount_fill"),
             "isBipolar": True,
             "handleName": "Data",
@@ -160,26 +149,26 @@ def build_cell_definition(kind, width, height, *, image_name=None):
             "track_bg",
             "Image",
             {"version": 2, "imageType": "Regular", "colour": "0", "image": track_img},
-            (4, 0, bar_w, height),
+            (_style_size("mod_row.build_cell_definition.padding"), 0, bar_w, height),
             focus="No",
         )
-        control = _entry("amount", "Slider", slider_data, (4, 0, bar_w, height), focus="Yes")
+        control = _entry("amount", "Slider", slider_data, (_style_size("mod_row.build_cell_definition.padding"), 0, bar_w, height), focus="Yes")
         readout = _label_entry(
             "Value",
-            (width - 96, 0, 96, height),
+            (width - _style_size("mod_row.build_cell_definition.value_width"), 0, _style_size("mod_row.build_cell_definition.value_width"), height),
             justification="right verticallyCentred",
             font_size=_style_size("mod_row.font.value"),
         )
         children = [track_bg, control, readout]
-        bg_unfocussed = {"version": 1, "colour": "00000000", "image": ""}
+        bg_unfocussed = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
         bg_focussed = {"version": 1, "colour": _style_argb("mod_row.focus"), "image": ""}
 
     elif kind == "toggle":
-        if width > 100:
+        if width > _style_size("mod_row.build_cell_definition.split_threshold"):
             name_w = int(width * 0.55)
             val_w = width - name_w
-            name_lbl = _label_entry("Name", (8, 0, name_w - 8, height), justification="left verticallyCentred")
-            val_lbl = _label_entry("Value", (name_w, 0, val_w - 8, height), justification="right verticallyCentred")
+            name_lbl = _label_entry("Name", (_style_size("mod_row.build_cell_definition.double_padding"), 0, name_w - _style_size("mod_row.build_cell_definition.double_padding"), height), justification="left verticallyCentred")
+            val_lbl = _label_entry("Value", (name_w, 0, val_w - _style_size("mod_row.build_cell_definition.double_padding"), height), justification="right verticallyCentred")
             children = [name_lbl, val_lbl]
         else:
             children = [_label_entry("Value", (0, 0, width, height), font_size=_style_size("mod_row.font.value"))]
@@ -193,7 +182,7 @@ def build_cell_definition(kind, width, height, *, image_name=None):
         children = [
             _label_entry(
                 "Value",
-                (12, 0, width - 36, height),
+                (_style_size("mod_row.build_cell_definition.value_padding"), 0, width - _style_size("mod_row.build_cell_definition.selector_reserved_width"), height),
                 justification="left verticallyCentred",
                 font_size=_style_size("mod_row.font.value"),
             )
@@ -247,7 +236,7 @@ def build_mod_row_definition(skins_dir=None, *, layout="normal", row_type=None):
                 focus="Yes",
             )
         )
-    clear = {"version": 1, "colour": "00000000", "image": ""}
+    clear = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
     return {
         "version": 2,
         "actions": [],
@@ -329,15 +318,15 @@ def build_mod_row_instance(
     return entry
 
 
-def draw_selector_frame(width, height, radius=6):
+def draw_selector_frame(width, height, radius=_style_size("mod_row.draw_selector_frame.radius")):
     """Draw a dark dropdown selector box with outline and subtle dropdown chevron."""
     if Image is None:
         return None
-    scale = 4
+    scale = _style_size("mod_row.draw_selector_frame.unit")
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
-    pad = 2 * scale
+    pad = _style_size("mod_row.draw_selector_frame.padding") * scale
     r = radius * scale
 
     draw.rounded_rectangle(
@@ -349,51 +338,51 @@ def draw_selector_frame(width, height, radius=6):
     )
 
     # Subtle dropdown chevron on the right side
-    cx = w - 18 * scale
+    cx = w - _style_size("mod_row.draw_selector_frame.chevron_inset") * scale
     cy = h // 2
-    cw = 5 * scale
+    cw = _style_size("mod_row.draw_selector_frame.chevron_half_width") * scale
     draw.polygon(
-        [(cx - cw, cy - 2 * scale), (cx + cw, cy - 2 * scale), (cx, cy + 3 * scale)],
+        [(cx - cw, cy - _style_size("mod_row.draw_selector_frame.padding") * scale), (cx + cw, cy - _style_size("mod_row.draw_selector_frame.padding") * scale), (cx, cy + _style_size("mod_row.draw_selector_frame.chevron_lower_arm") * scale)],
         fill=_style_color("mod_row.chevron"),
     )
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def draw_arrow(width=22, height=56):
+def draw_arrow(width=_style_size("mod_row.draw_arrow.width"), height=_style_size("mod_row.draw_arrow.height")):
     """Draw slim arrow separator -> between source and target."""
     if Image is None:
         return None
-    scale = 4
+    scale = _style_size("mod_row.draw_arrow.unit")
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
 
     cy = h // 2
-    ax = 4 * scale
-    aw = 14 * scale
+    ax = _style_size("mod_row.draw_arrow.unit") * scale
+    aw = _style_size("mod_row.draw_arrow.shaft") * scale
     col = _style_color("mod_row.arrow")
-    draw.line([(ax, cy), (ax + aw, cy)], fill=col, width=2 * scale)
+    draw.line([(ax, cy), (ax + aw, cy)], fill=col, width=_style_size("mod_row.draw_arrow.stroke") * scale)
     draw.line(
-        [(ax + aw - 5 * scale, cy - 4 * scale), (ax + aw, cy), (ax + aw - 5 * scale, cy + 4 * scale)],
+        [(ax + aw - _style_size("mod_row.draw_arrow.head_width") * scale, cy - _style_size("mod_row.draw_arrow.unit") * scale), (ax + aw, cy), (ax + aw - _style_size("mod_row.draw_arrow.head_width") * scale, cy + _style_size("mod_row.draw_arrow.unit") * scale)],
         fill=col,
-        width=2 * scale,
+        width=_style_size("mod_row.draw_arrow.stroke") * scale,
     )
 
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def draw_slider_track(width, height=56):
+def draw_slider_track(width, height=_style_size("mod_row.draw_slider_track.height")):
     """Draw thin track art inside a full 56px high image with center zero tick and quarter/half static marks."""
     if Image is None:
         return None
-    scale = 4
+    scale = _style_size("mod_row.draw_slider_track.unit")
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
 
     track_h = TRACK_HEIGHT * scale
     track_y = (h - track_h) // 2
-    pad = 4 * scale
+    pad = _style_size("mod_row.draw_slider_track.unit") * scale
 
     draw.rounded_rectangle(
         [(pad, track_y), (w - pad - 1, track_y + track_h - 1)],
@@ -410,7 +399,7 @@ def draw_slider_track(width, height=56):
 
     # (fraction, height_fraction, color_token, line_width)
     ticks = [
-        (0.0, 1.0, "mod_row.tick_center", 2),
+        (0.0, 1.0, "mod_row.tick_center", _style_size("mod_row.draw_slider_track.inset_and_center_stroke")),
         (-0.5, 0.65, "mod_row.tick_major", 1),
         (0.5, 0.65, "mod_row.tick_major", 1),
         (-0.25, 0.40, "mod_row.tick_minor", 1),
@@ -423,26 +412,26 @@ def draw_slider_track(width, height=56):
 
     for frac, h_ratio, col_key, w_factor in ticks:
         tx = mid_x + int(round(frac * (half_span - scale)))
-        th = int(round((track_h - 2 * scale) * h_ratio))
-        ty0 = track_y + scale + (track_h - 2 * scale - th) // 2
+        th = int(round((track_h - _style_size("mod_row.draw_slider_track.inset_and_center_stroke") * scale) * h_ratio))
+        ty0 = track_y + scale + (track_h - _style_size("mod_row.draw_slider_track.inset_and_center_stroke") * scale - th) // 2
         ty1 = ty0 + th
         draw.line([(tx, ty0), (tx, ty1)], fill=_style_color(col_key), width=w_factor * scale)
 
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def draw_slider_revealed(width, height=56):
+def draw_slider_revealed(width, height=_style_size("mod_row.draw_slider_revealed.height")):
     """Draw bipolar cyan fill art inside a full 56px high image for TrackAndThumb slider."""
     if Image is None:
         return None
-    scale = 4
+    scale = _style_size("mod_row.draw_slider_revealed.unit")
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
 
     track_h = TRACK_HEIGHT * scale
     track_y = (h - track_h) // 2
-    pad = 4 * scale
+    pad = _style_size("mod_row.draw_slider_revealed.unit") * scale
 
     # Full fill rectangle inside the track bounds
     draw.rectangle(
@@ -452,19 +441,19 @@ def draw_slider_revealed(width, height=56):
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def draw_slider_thumb(width=8, height=56):
+def draw_slider_thumb(width=_style_size("mod_row.draw_slider_thumb.width"), height=_style_size("mod_row.draw_slider_thumb.height")):
     """Draw thumb indicator cap inside a full 56px high image for TrackAndThumb slider."""
     if Image is None:
         return None
-    scale = 4
+    scale = _style_size("mod_row.draw_slider_thumb.unit")
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
 
     track_h = TRACK_HEIGHT * scale
     track_y = (h - track_h) // 2
-    cap_h = track_h + 4 * scale
-    cap_y = track_y - 2 * scale
+    cap_h = track_h + _style_size("mod_row.draw_slider_thumb.unit") * scale
+    cap_y = track_y - _style_size("mod_row.draw_slider_thumb.inset") * scale
     mid_x = w // 2
 
     draw.rectangle(
@@ -724,3 +713,90 @@ if __name__ == "__main__":
         sys.path.insert(0, str(repo_root))
     write_assets()
     print("ModRow assets and previews generated successfully.")
+
+
+def write_route_button_art(directory, key, caption, rect, active):
+    """Shared route editor action face with native button state palette."""
+    from components.native.button.button import text_face
+    image = text_face(caption, tuple(rect[2:]), geometry="filter.pz.button",
+                      surface="filter.pz.active.surface",
+                      border="mod_targets.border.active" if active else "filter.pz.active.border",
+                      text="text.icon")
+    filename = f"mod_targets_{key}.png"
+    image.save(Path(directory) / filename)
+    return filename
+
+
+def write_route_pagination_art(directory, width, height):
+    """Availability filmstrip; page value and hit targets remain native widgets."""
+    from components.native.button.button import text_face
+    geometry = _style_size("mod_targets.pagination")
+    film = Image.new("RGBA", (width, height * 4))
+    for mode in range(1, 4):
+        image = text_face("", (width, height), geometry="filter.pz.button",
+                          surface="filter.pz.active.surface", border="filter.pz.active.border", text="text.icon")
+        pen = ImageDraw.Draw(image)
+        inset = geometry["arrow_inset"]
+        for arrow, x, active in (("‹", inset, mode <= 2), ("›", width - inset, mode >= 2)):
+            pen.text((x, height / 2), arrow, anchor="mm", font=semibold(geometry["arrow_font"]),
+                     fill=_style_color("text.icon" if active else "mod_targets.arrow.disabled"))
+        film.paste(image, (0, height * mode))
+    filename = "mod_targets_pages.png"
+    film.save(Path(directory) / filename)
+    return filename
+
+
+def editor_label(kind, rect, just="horizontallyCentred verticallyCentred"):
+    name = kind == "Name"
+    font_h = _style_size("mod_row.font.label") if name else _style_size("mod_row.font.value")
+    return _label_entry(kind, rect, justification=just, font_size=font_h)
+
+
+def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice menu"):
+    if kind in ("bar", "toggle", "list", "action", "delete"):
+        return build_cell_definition("action" if kind == "delete" else kind, w, h)
+    actions = []
+    if kind.startswith("mode"):
+        tag = kind
+        data = {"version": 2, "onImage": f"mod_mode_{tag}_on.png", "offImage": f"mod_mode_{tag}_off.png",
+                "buttonId": int(kind[4:]), "numButtonsInGroup": 4, "handleName": "Data", "gestureBehaviour": "Instant"}
+        children = [_entry("mode", "Button", data, (0, 0, w, h), focus="No")]
+    elif kind == "group":
+        name_h = _style_size("mod_row.build_editor_cell_definition.label_height") if h > _style_size("mod_row.build_editor_cell_definition.tall_threshold") else 0
+        if name_h:
+            name_lbl = editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), name_h), just="horizontallyCentred verticallyCentred")
+            val_lbl = editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.value_padding"), name_h + _style_size("mod_row.build_editor_cell_definition.double_padding"), w - _style_size("mod_row.build_editor_cell_definition.value_reserved"), h - name_h - _style_size("mod_row.build_editor_cell_definition.value_vertical_reserved")), just="left verticallyCentred")
+            children = [name_lbl, val_lbl]
+        else:
+            children = [editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.value_padding"), 0, w - _style_size("mod_row.build_editor_cell_definition.value_reserved"), h), just="left verticallyCentred")]
+        actions = [{"version": 1, "onAction": trigger, "handler": "Show Overlay",
+                    "handleName": "Data", "additionalData": choice_menu}
+                   for trigger in ("Mouse Down", "Enter Pressed")]
+    elif kind in ("dial_uni", "dial_bi"):
+        dial_size = _style_size("dial.diameter")
+        dial_x = (w - dial_size) // 2
+        name_h, val_h = _style_size("mod_row.build_editor_cell_definition.label_height"), _style_size("mod_row.build_editor_cell_definition.label_height")
+        knob_y = name_h + max(0, (h - name_h - val_h - dial_size) // 2)
+        strip = "mod_dial_90_bi.png" if kind == "dial_bi" else "mod_dial_90_uni.png"
+        knob_data = {
+            "version": 3,
+            "knobType": "FilmStrip",
+            "filmStrip": strip,
+            "numFrames": 127,
+            "invert": False,
+            "dragOrientation": "Vertical",
+            "handleName": "Data",
+        }
+        control = _entry("knob", "Knob", knob_data, (dial_x, knob_y, dial_size, dial_size), focus="Yes")
+        name_lbl = editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), name_h), just="horizontallyCentred verticallyCentred")
+        val_lbl = editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.padding"), knob_y + dial_size + _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), val_h), just="horizontallyCentred verticallyCentred")
+        children = [name_lbl, control, val_lbl]
+    else:
+        control = _entry("dial", "Knob", {"version": 5, "knobType": "GenericNoLabel",
+                         "polarity": "BiPolar" if kind == "dial_bi" else "UniPolar",
+                         "dragOrientation": "Vertical", "handleName": "Data"}, (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.fallback_label_height"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), h - _style_size("mod_row.build_editor_cell_definition.fallback_labels_height")))
+        children = [editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), 0, w - _style_size("mod_row.build_editor_cell_definition.double_padding"), _style_size("mod_row.build_editor_cell_definition.fallback_label_height"))), control, editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.padding"), h - _style_size("mod_row.build_editor_cell_definition.fallback_label_height"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), _style_size("mod_row.build_editor_cell_definition.fallback_label_height")))]
+    default = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
+    return {"version": 2, "actions": actions,
+            "backgroundData": {"version": 1, "focussed": dict(default, colour=_style_argb("mod_row.focus")), "unfocussed": default},
+            "ignoreMousePresses": False, "disableCoarseDataWheel": kind in ("action", "list", "group"), "componentsData": children}

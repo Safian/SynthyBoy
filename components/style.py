@@ -127,7 +127,7 @@ def apply_control_state(definition, skins_dir, *, active):
     return result
 
 
-def bind_control_active(entry, active_handle, ctx, definitions):
+def bind_control_active(entry, active_handle, ctx, definitions, *, frames=None, frame_count=2):
     """Bind a native component's two presentation states to a boolean handle.
 
     Both states use the same native control subtree and value bindings. The
@@ -149,7 +149,10 @@ def bind_control_active(entry, active_handle, ctx, definitions):
         leaf = native_entry("Control", kind, copy.deepcopy(widget["data"]), (0, 0, 1, 1))
         leaf["bounds"]["boundsType"] = "Proportional"
         base = passive_layer([leaf])
+    state_frames = ((0, False), (1, True)) if frames is None else tuple(frames)
     state_name = "NativeActive " + identity
+    if frames is not None:
+        state_name += " " + hashlib.sha256(repr((state_frames, frame_count)).encode()).hexdigest()[:12]
 
     def inactive(name, source):
         target = "NativeInactive " + name
@@ -171,18 +174,44 @@ def bind_control_active(entry, active_handle, ctx, definitions):
             ctx.add_component_definition(on_name, base)
         off_name = inactive(identity, base)
         states = []
-        for value, type_name in ((0, off_name), (1, on_name)):
+        for value, active in state_frames:
+            type_name = on_name if active else off_name
             child = native_entry("State", type_name, {"version": 1, "handleName": "Data"},
                                  (0, 0, 1, 1), gates=(f"NativeActiveGate{value}",),
-                                 focus="No" if value == 0 else "Children")
+                                 focus="Children" if active else "No")
             child["bounds"]["boundsType"] = "Proportional"
             states.append(child)
         ctx.add_component_definition(state_name, passive_layer(states))
     entry["componentData"] = {"version": 1, "name": widget["name"], "type": state_name,
                               "data": {"version": 1, "handleName": "Data"}}
-    for value in (0, 1):
+    for value, _ in state_frames:
         entry["handle remapping"]["map"].append({
             "key": f"NativeActiveGate{value}",
-            "value": f"IndexedEnabling/{value}/2/{active_handle}",
+            "value": f"IndexedEnabling/{value}/{frame_count}/{active_handle}",
         })
+    return entry
+
+
+def set_leaf_control_active(entry, ctx, *, active):
+    """Retain one native leaf control and its value bindings in a fixed state."""
+    if active:
+        return entry
+    import hashlib
+    from components.native.button.button import entry as native_entry
+    from components.native.selector.selector import passive_layer
+
+    model = entry["componentData"]
+    key = "NativeInactiveLeaf " + hashlib.sha256(
+        json.dumps((model["type"], model["data"]), sort_keys=True).encode()).hexdigest()[:16]
+    registered = getattr(ctx, "_native_inactive_leaves", None)
+    if registered is None:
+        registered = ctx._native_inactive_leaves = set()
+    if key not in registered:
+        leaf = native_entry("Control", model["type"], copy.deepcopy(model["data"]), (0, 0, 1, 1))
+        leaf["bounds"]["boundsType"] = "Proportional"
+        ctx.add_component_definition(key, apply_control_state(passive_layer([leaf]), ctx.skins_dir, active=False))
+        registered.add(key)
+    entry["componentData"] = {"version": 1, "name": model["name"], "type": key,
+                              "data": {"version": 1, "handleName": "Data"}}
+    entry["bounds"]["acceptsHWFocus"] = "No"
     return entry
