@@ -165,7 +165,7 @@ def _definitions(ctx):
     return {
         "Uni": _dial("UniPolar", ctx), "Bi": _dial("BiPolar", ctx),
         # The compact Play page binds its RND stereo handle to this shared control.
-        "Toggle": _definition([_label("Name", (0.02, 0.03, 0.96, 0.36), 13, proportional=True),
+        "Toggle": _definition([_label("Name", (0.02, 0.03, 0.96, 0.36), _ui_style.size("lfo.editor.toggle_font"), proportional=True),
                                _button((0.12, 0.38, 0.76, 0.58), 1, 1, ("toggle_on.png", "toggle_off.png"))]),
         "Choice": _choice(ctx, 300, 62), "Number": _choice(ctx, 236, 56, number=True),
     }
@@ -292,7 +292,7 @@ def _apply_shape_editor(tui, items, ctx):
     def text_label(text=None, colour=_ui_style.argb('text.icon'), size=_ui_style.size("lfo.dial.choice_font")):
         return _label("Name" if text is None else "Text", (0, 0, 1, 1), size, colour, text, proportional=True)
 
-    generic_action = _action(ctx, 150, 56, text=" ")
+    generic_action = _action(ctx, *_ui_style.size("lfo.editor.action_size"), text=" ")
     generic_action["componentsData"][0]["bounds"].update(boundsType="Proportional", bounds="0 0 1 1")
     generic_action["componentsData"].append(text_label())
     defs = {
@@ -300,12 +300,11 @@ def _apply_shape_editor(tui, items, ctx):
     }
 
     for display in ("CURVE", "SCALE"):
-        for enabled in (True,):
-            colour = _ui_style.argb('text.icon') if enabled else _ui_style.argb('screen.lfo_smooth.colour.2')
-            defs[display + ("Active" if enabled else "Disabled")] = _definition([
-                _label("Text", (0.02, 0.03, 0.96, 0.42), colour=colour, text=display, proportional=True),
-                _label("Value", (0.02, 0.43, 0.96, 0.54), 17, colour, proportional=True),
-            ], popup="fx editor number menu" if enabled else None, inactive=not enabled)
+        defs[display + "Active"] = _definition([
+            _label("Text", (0.02, 0.03, 0.96, 0.42), text=display, proportional=True),
+            _label("Value", (0.02, 0.43, 0.96, 0.54),
+                   _ui_style.size("lfo.editor.curve_value_font"), proportional=True),
+        ], popup="fx editor number menu")
 
     def widget(name, kind, rect, handle, gates, available=None):
         remap = [("Data", handle)]
@@ -437,9 +436,9 @@ def _apply_shape_detail(tui, items, ctx):
             kind = inactive_kind
         items.append(_entry(prefix + name, kind, payload, rect, (("Data", handle),), gates, focus=focus))
 
-    name = _label("Name", (0.025, 0, 0.95, 1), 19, proportional=True)
+    name = _label("Name", (0.025, 0, 0.95, 1), _ui_style.size("lfo.detail.header_font"), proportional=True)
     name["componentData"]["data"]["textStyle"]["justification"] = "left verticallyCentred"
-    action = _action(ctx, 300, 56, text=" ")
+    action = _action(ctx, *_ui_style.size("lfo.detail.row_size"), text=" ")
     action["componentsData"][0]["bounds"].update(boundsType="Proportional", bounds="0 0 1 1")
     action["componentsData"].append(name)
     action["disableCoarseDataWheel"] = True
