@@ -6294,7 +6294,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                 {
                     const auto snapshot = inst->nativeOscSettings.at (field);
                     const auto cell = snapshot.cell();
-                    if (cell.target >= 0 && std::fabs (parameter - inst->nativeOscSettingValue (cell)) > 1.0e-6f)
+                    if (inst->nativeOsc.snapshot().powered() && cell.target >= 0
+                        && std::fabs (parameter - inst->nativeOscSettingValue (cell)) > 1.0e-6f)
                         inst->nativeOscSettings.post (snapshot, parameter);
                     return;
                 }
@@ -6442,7 +6443,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     {
                         const auto snapshot = inst->nativeFxEndpoint (offset);
                         const auto cell = snapshot.cell();
-                        if (cell.target >= 0 && std::fabs (parameter - inst->nativeFxValue (cell)) > 1.0e-6f)
+                        if (inst->nativeFxHeader.state().on() && cell.target >= 0
+                            && std::fabs (parameter - inst->nativeFxValue (cell)) > 1.0e-6f)
                             inst->nativeFxCells.post (snapshot, parameter);
                     }
                 }

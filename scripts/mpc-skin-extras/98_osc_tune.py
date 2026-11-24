@@ -19,7 +19,9 @@ from components.native.tune.tune import (
     build_standalone_osc_tune,
     build_standalone_osc_tune_definitions,
 )
+from components.style import bind_control_active
 from native_ui_params import (
+    OSC_POWER,
     OSC_SETTINGS_VIEW,
     OSC_SOURCE,
     mixer_peek_index,
@@ -66,4 +68,5 @@ def apply(tui, qlinks, ctx):
                 name=comp_name,
                 gates=gates,
             )
+            bind_control_active(tune_entry, f"Parameter {base + OSC_POWER + src_idx}", ctx, local_defs)
             items.append(tune_entry)

@@ -205,7 +205,8 @@ public:
             if (isNativeTuneActive() && tuneArea().contains (ev.x, ev.y))
             {
                 const auto r = tuneArea();
-                osc_.focusNativeTune (ev.y >= r.y + 98 && ev.x < r.x + 143, inst);
+                if (! osc_.full().inactive())
+                    osc_.focusNativeTune (ev.y >= r.y + 98 && ev.x < r.x + 143, inst);
                 nativePress_ = osc_.nativeModTarget (ev.x, ev.y);
                 nativePointer_ = true;
                 pressX_ = ev.x;
@@ -377,7 +378,7 @@ public:
     }
     bool hostBackground() const noexcept
     {
-        return nativeGroundReady_ && osc_.topPage() == 0 && ! osc_.full().inactive()
+        return nativeGroundReady_ && osc_.topPage() == 0
             && &ui::theme::L() == &ui::theme::kLook1;
     }
     // The page owns the ground of its fallback and the marker covers of its native root.
@@ -395,7 +396,7 @@ public:
     ui::Rect routingArea() const noexcept { return osc_.routingArea(); }
     bool isNativeTuneActive() const noexcept
     {
-        return nativeSettingsPublished_ && osc_.topPage() == 0 && ! osc_.full().inactive() && osc_.full().hasNativeTune();
+        return nativeSettingsPublished_ && osc_.topPage() == 0 && osc_.full().hasNativeTune();
     }
     static constexpr ui::Rect tuneArea() noexcept { return ui::OscillatorFullScreen::tuneAreaAt (0, page::kTabY); }
 
@@ -460,13 +461,17 @@ private:
     {
         namespace n = nativeui::osc;
         const auto view = osc_.nativeSettingsView();
-        if (view == n::SettingsHidden || ! nativeRoot (stack) || osc_.full().inactive() || ! inst.nativeOscSettingsSupported()
+        if (view == n::SettingsHidden || ! nativeRoot (stack) || ! inst.nativeOscSettingsSupported()
             || inst.stateGeneration() != preset_)
         {
             hideNativeSettings (inst);
             return false;
         }
 
+        const bool powered = ! osc_.full().inactive();
+        if (nativeSettingsPublished_ && nativeSettingsPowered_ != powered)
+            hideNativeSettings (inst);   // expire pending edits across the ON/OFF boundary
+        nativeSettingsPowered_ = powered;
         const auto items = osc_.nativeSettingsItems();
         std::array<nativeui::FxCell, n::kSettingsAll> fields {};
         for (int slot = 0; slot < n::kSettingsAll; ++slot)
@@ -484,7 +489,7 @@ private:
             float value;
             auto* item = items[slot];
             if (item != nullptr && inst.takeNativeOscSetting (slot, fields[slot], value) && inst.stateGeneration() == preset_
-                && osc_.applyNativeSetting (*item, inst, stack, value))
+                && powered && osc_.applyNativeSetting (*item, inst, stack, value))
             {
                 hideNativeSettings (inst);
                 return true;   // A layout or stack change expires the pending edits from the former root.
@@ -582,7 +587,7 @@ private:
     int pressX_ = 0, pressY_ = 0, nativeMenu_ = -1;
     double pressAt_ = 0.0;
     bool nativeSelector_ = false, nativeRouting_ = false, nativePublished_ = false, nativeGroundReady_ = false;
-    bool nativeSettingsPublished_ = false;
+    bool nativeSettingsPublished_ = false, nativeSettingsPowered_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay
