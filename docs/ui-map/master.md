@@ -63,6 +63,8 @@ The page structure consists of a top header bar and two switchable side views co
        - Top row (height about 144 px): LED toggle `mpeOn` ("MPE", about 202 px), NumberField `mpeBend` ("MPE BEND", about 202 px, hidden while MPE is off), and LED list `mpeMacro` ("XYZ TO MACROS", about 204 px, options: Off, XYZ, YZ). With MPE off the remaining two cells are about 306 px each (`shell-mpc/ui/voice_master.h:788-796`).
        - Bottom row (height 56 px): LED toggle `mpeYModwheel` ("Y TO WHEEL"), LED toggle `mpeBendToX` ("BEND TO X", hidden while MPE is off), and LED toggle `mpeYBipolar` ("Y BIPOLAR"), about 202 px each (MPE off: two of about 306 px).
 
+**KEY mode.** On TUNING & MPE, ACTIVATE SCALE INPUT switches incoming live notes to root selection. The active button shows KEY MODE and returns to playing when tapped. Leaving the page or loading a preset also exits the mode. A native 4×4 pad grid shows the C chromatic layout, numbered from the bottom left, with the selected pitch class highlighted. Touching a displayed pad selects its labelled root. For physical pads with a different Pad Perform map the plugin follows the MIDI pitch supplied by the host. During transport playback, only notes flagged live are eligible for capture.
+
 ## Controls
 In the gesture column `Qn` is slot n INSIDE the control's Q group; where the group sits on the knobs (XL slots, Key 61 banks) is under "Q-Link groups". Controls marked touch only have no Q slot.
 

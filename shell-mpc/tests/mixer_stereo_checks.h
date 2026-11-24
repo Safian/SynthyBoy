@@ -110,7 +110,7 @@ void testMixerStereoSignalAndReadonlyBridge()
 
     Rig rig;
     namespace ns = synthyboy_mpc::nativeui;
-    check (ns::kMixerStereoBase == 900 && ns::kCount == 960, "new stereo fields append after all existing native IDs");
+    check (ns::kMixerStereoBase == 900 && ns::kMasterScaleInput == 960, "new stereo fields append after all existing native IDs");
     for (int strip = 0; strip < 10; ++strip)
     {
         const float fields[] { leftTap.stripPeakL[strip], leftTap.stripPeakR[strip], leftTap.stripHoldL[strip],

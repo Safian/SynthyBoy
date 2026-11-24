@@ -93,6 +93,13 @@ public:
             full_.setSide (panel >= 0.75f ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain);
             qSlots_.forget();
         }
+        full_.showKeyPads = nativeView() == nativeui::master::Tuning && inst.masterScaleInputActive();
+        if (full_.showKeyPads)
+        {
+            const int root = inst.takeMasterScaleRoot();
+            if (root >= 0)
+                uibind::writePlain (inst, item (kScaleKey)->param, static_cast<float> (root));
+        }
         pull (inst);
         full_.setBendLinked (inst.param (bendLinkIdx_) >= 0.5f);   // what does not apply is hidden (not dimmed): BEND DOWN while LINK is on, MPE BEND and BEND TO X while MPE is off
         full_.setMpeOn (inst.param (mpeOnIdx_) >= 0.5f);

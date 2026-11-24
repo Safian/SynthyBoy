@@ -632,12 +632,28 @@ struct PluginInstance
             const auto preset = inst.stateGeneration.load (std::memory_order_acquire);
             if (preset != inst.nativeMasterPanelPreset.load (std::memory_order_relaxed))
                 inst.nativeMasterPanel.invalidate();
+            if (view != nativeui::master::Tuning || preset != inst.nativeMasterPanelPreset.load (std::memory_order_relaxed))
+                inst.scaleInput.store (ScaleInputHidden);
+            if (view == nativeui::master::Tuning)
+            {
+                int hidden = ScaleInputHidden;
+                inst.scaleInput.compare_exchange_strong (hidden, ScaleInputOff);
+            }
             const auto cell = masterPanelCell (view);
             inst.nativeMasterPanel.publish (view, &cell);
             inst.nativeMasterPanelPreset.store (preset, std::memory_order_release);
             inst.nativeMasterView.store (view, std::memory_order_relaxed);
             if (view != nativeui::master::Main)
                 inst.nativeMasterClearPending.store (false, std::memory_order_relaxed);
+        }
+        bool masterScaleInputActive() const noexcept override { return inst.scaleInput.load() >= ScaleInputArmed; }
+        int takeMasterScaleRoot() noexcept override
+        {
+            int root = inst.scaleInput.load();
+            if (root >= 0 && inst.nativeMasterPanelPreset.load() == inst.stateGeneration.load()
+                && inst.scaleInput.compare_exchange_strong (root, ScaleInputArmed))
+                return root;
+            return -1;
         }
         bool nativeMasterPanelSupported() const noexcept override { return true; }
         bool takeNativeMasterPanel (nativeui::master::View view, float& value) noexcept override
@@ -1611,6 +1627,12 @@ struct PluginInstance
     std::array<bool, nativeui::osc::kSettingsAll> nativeOscSettingAcks {};   // display thread only
     bool nativeOscSourceLabelChanged = false;                               // display thread only
     std::atomic<int> nativeMasterView { 0 };
+    // One atomic mailbox per instrument. A new capture replaces the previous pending root.
+    enum { ScaleInputHidden = -3, ScaleInputOff = -2, ScaleInputArmed = -1 };
+    std::atomic<int> scaleInput { ScaleInputHidden };
+    // MIDI delivery may use multiple threads. Preserve releases for notes played before arming.
+    enum { Released, Sounding, Captured };
+    std::array<std::atomic<uint8_t>, 16 * 128> scaleInputKeys {};
     nativeui::NativeCellBank<1> nativeMasterPanel;
     std::atomic<uint64_t> nativeMasterPanelPreset {};
     std::atomic<float> nativeMasterValues[nativeui::master::ClearClip] {};
@@ -1916,6 +1938,8 @@ struct PluginInstance
             return offset == nativeui::kFxBandMode ? static_cast<float> (state.bandMode) / h::MidAndHigh
                    : offset - nativeui::kFxBandBase == state.item ? state.value (h::kBand) : 0.0f;
         }
+        if (offset == nativeui::kMasterScaleInput)
+            return scaleInput.load() >= ScaleInputArmed ? 1.0f : 0.0f;
         if (offset == nativeui::kMasterPanel)
             return nativeUiValue (nativeui::kMasterView);
         if (nativeui::isOscDetailOffset (offset))
@@ -2296,6 +2320,7 @@ struct PluginInstance
         const auto panel = nativeMasterPanel.at (0);
         reportNativeValue (e, nativeui::kMasterPanel, view, view != 0.0f && nativeMasterPanel.needsReport (panel));
         nativeMasterPanel.report (panel);
+        reportNativeValue (e, nativeui::kMasterScaleInput, nativeUiValue (nativeui::kMasterScaleInput));
         reportNativeValue (e, nativeui::kMasterView, view);
     }
 
@@ -2451,7 +2476,7 @@ struct PluginInstance
         nativeOscDetailPoll (e);
         nativeMasterPoll (e);
         nativeMixerPoll (e);
-        for (int offset = nativeui::kMixerStereoBase; offset < nativeui::kCount; ++offset)
+        for (int offset = nativeui::kMixerStereoBase; offset < nativeui::kMasterScaleInput; ++offset)
             reportNativeValue (e, offset, nativeUiValue (offset));
         if (nativeMacroTargets.layout() || nativeMacroTargetAck >= 0)
         {
@@ -3595,6 +3620,7 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
     if (inst->engine)
         inst->engine->readyContent();   // not the audio thread: the built-in tables the state names are there before the next block (a table another thread is still making is waited for)
 #if SYNTHYBOY_MPC_OVERLAY
+    inst->scaleInput.store (PluginInstance::ScaleInputHidden);
     inst->publishOverlayContent();
     if (namesChanged)
         inst->macroNamesDue.store (true, std::memory_order_release);   // the display thread tells the host the names of the Q proxies are other now
@@ -3687,6 +3713,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr
     if (opcode == effProcessEvents && ptr)
     {
         const VstEvents* events = static_cast<const VstEvents*>(ptr);
+#if SYNTHYBOY_MPC_OVERLAY
+        int transportPlaying = -1;
+#endif
         for (VstInt32 i = 0; i < events->numEvents; ++i)
         {
             const VstEvent* ev = events->events[i];
@@ -4124,6 +4153,12 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 const char* display = offset - nativeui::kFxBandBase == state.item && state.band >= 0 && state.band < 3
                     ? choices[state.band] : "";
                 synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? name : opcode == effGetParamDisplay ? display : "");
+                return 1;
+            }
+            if (offset == nativeui::kMasterScaleInput)
+            {
+                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Scale Root Input"
+                    : opcode == effGetParamDisplay ? (inst->scaleInput.load() >= PluginInstance::ScaleInputArmed ? "Select root" : "Play") : "");
                 return 1;
             }
             if (offset == nativeui::kMasterPanel)
@@ -5064,6 +5099,38 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 const int hostVel = numBytes >= 3 ? (data[2] & 0x7F) : 0;
                 const bool isNoteOn = (status == 0x90 && hostVel > 0);
+#if SYNTHYBOY_MPC_OVERLAY
+                const int note = data[1] & 127;
+                auto& key = inst->scaleInputKeys[(data[0] & 15) * 128 + note];
+                if (!isNoteOn && key.exchange (PluginInstance::Released) == PluginInstance::Captured)
+                    continue;
+                if (isNoteOn)
+                {
+                    int mode = inst->scaleInput.load();
+                    if (mode >= PluginInstance::ScaleInputArmed)
+                    {
+                        const bool live = (midiEv->flags & kVstMidiEventIsRealtime) != 0;
+                        if (!live && transportPlaying < 0)
+                        {
+                            auto* time = inst->audioMaster ? reinterpret_cast<VstTimeInfo*> (
+                                inst->audioMaster (e, audioMasterGetTime, 0, kVstTransportPlaying, nullptr, 0)) : nullptr;
+                            transportPlaying = !time || (time->flags & kVstTransportPlaying) != 0;
+                        }
+                        if (live || transportPlaying == 0)
+                        {
+                            while (mode >= PluginInstance::ScaleInputArmed
+                                   && !inst->scaleInput.compare_exchange_weak (mode, note % 12)) {}
+                            if (mode >= PluginInstance::ScaleInputArmed)
+                            {
+                                uint8_t released = PluginInstance::Released;
+                                key.compare_exchange_strong (released, PluginInstance::Captured);
+                                continue;
+                            }
+                        }
+                    }
+                    key.store (PluginInstance::Sounding);
+                }
+#endif
                 if (isNoteOn)
                 {
                     synthyboy_mpc::noteDiagnostics().noteOn (hostVel);
@@ -5332,12 +5399,12 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->stepInteger = 1;
             return 1;
         }
-        if (nativeOffset == nativeui::kMasterPanel)
+        if (nativeOffset == nativeui::kMasterPanel || nativeOffset == nativeui::kMasterScaleInput)
         {
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
             props->minInteger = 0;
-            props->maxInteger = nativeui::master::kLastFrame;
+            props->maxInteger = nativeOffset == nativeui::kMasterScaleInput ? 1 : nativeui::master::kLastFrame;
             props->stepInteger = 1;
             return 1;
         }
@@ -6257,6 +6324,16 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                         && std::fabs (parameter - state.value (h::kBand)) > 1.0e-6f)
                         inst->nativeFxHeader.post (offset - nativeui::kFxBandBase, h::kBand, parameter,
                                                   inst->stateGeneration.load (std::memory_order_acquire));
+                    return;
+                }
+                if (offset == nativeui::kMasterScaleInput)
+                {
+                    int mode = inst->scaleInput.load();
+                    if (parameter >= 0.5f && mode == PluginInstance::ScaleInputOff)
+                        inst->scaleInput.compare_exchange_strong (mode, PluginInstance::ScaleInputArmed);
+                    else if (parameter < 0.5f)
+                        while (mode >= PluginInstance::ScaleInputArmed
+                               && !inst->scaleInput.compare_exchange_weak (mode, PluginInstance::ScaleInputOff)) {}
                     return;
                 }
                 if (offset == nativeui::kMasterPanel)

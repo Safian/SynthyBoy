@@ -122,7 +122,8 @@ constexpr int kMixerMuteVisual = kMixerSoloVisual + kMixerStrips;
 constexpr int kModBoardControl = kMixerMuteVisual + kMixerStrips;
 constexpr int kMixerStereoBase = kModBoardControl + modboard::kHandles;
 constexpr int kMixerStereoFields = 6; // PeakL, PeakR, HoldL, HoldR, ClipL, ClipR (10 strips each)
-constexpr int kCount = kMixerStereoBase + kMixerStereoFields * kMixerStrips;
+constexpr int kMasterScaleInput = kMixerStereoBase + kMixerStereoFields * kMixerStrips;
+constexpr int kCount = kMasterScaleInput + 1;
 constexpr int kMixerTabs = 6;
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }
@@ -138,7 +139,7 @@ constexpr bool isMixerSoloVisualOffset (int offset) noexcept { return offset >= 
 constexpr bool isMixerMuteVisualOffset (int offset) noexcept { return offset >= kMixerMuteVisual && offset < kModBoardControl; }
 constexpr bool isModDetailControlOffset (int offset) noexcept { return offset >= kModDetailControl && offset < kMixerActiveTab; }
 constexpr bool isModBoardControlOffset (int offset) noexcept { return offset >= kModBoardControl && offset < kMixerStereoBase; }
-constexpr bool isMixerStereoOffset (int offset) noexcept { return offset >= kMixerStereoBase && offset < kCount; }
+constexpr bool isMixerStereoOffset (int offset) noexcept { return offset >= kMixerStereoBase && offset < kMasterScaleInput; }
 namespace pz
 {
 enum Action { Back = 1, Reset, Remove, Apply };

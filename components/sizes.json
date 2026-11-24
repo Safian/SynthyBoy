@@ -1242,6 +1242,8 @@
     "play.title.height": 28,
     "play.lfo.selector.size": [396, 56],
     "mod_targets.pagination": {"arrow_inset": 22, "arrow_font": 27},
+    "master.key_pads.rect": [384, 562, 512, 168],
+    "master.scale_input.rect": [704, 114, 560, 56],
     "master.panel.face": {"font": 19, "radius": 5, "stroke": 2, "inset": 1, "end_inset": 2},
     "master.meter.scale": {"font": 15, "caption_x": 19, "captions": [["0", 10], ["-12", 26], ["-24", 45], ["-48", 84]], "channels": [["L", 51], ["R", 81]], "channel_y": 113},
     "screen.env.cols.rect": [23, 343, 663, 983],

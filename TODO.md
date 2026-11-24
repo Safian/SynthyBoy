@@ -1,4 +1,5 @@
 # SynthyBoy — nyitott teendők
+- [ ] Master KEY mód hardveres ellenőrzése XL-en és Key 61-en: pad/billentyű alaphangot válasszon hangindítás nélkül, a nézet jelezze a módot és a gyökérhangot; lejátszáskor ellenőrizendő a host élő MIDI jelölése és a szekvenszer hangjainak megőrzése.
 - [ ] A controller_host helyi futásában az FX popup és Voice grid ellenőrzések hibát jeleztek. Kész, ha a célkonfigurációval az ok tisztázott és e két útvonal megfelelően működik.
 - [ ] A `27e711cc` natív UI-auditból igazolt megmaradó GPU-kezelők: `ListPopup` az OSC/LFO/ENV/Filter/Macro/Voice/FX/Mixer útvonalakon; OSC interaktív `NoteMask` (`drawNativeDetail`). Kész, ha a működésazonos natív helyettesítések és bekötések elkészültek, a régi rajzolás/bemenet törölve. A külön követett TextEntry/PointMod/FX fallback feladatokhoz kapcsolódik; a már eltávolított ShapeEditor-kezelőket ne építsük újra.
 

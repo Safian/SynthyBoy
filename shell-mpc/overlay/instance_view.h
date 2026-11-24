@@ -147,6 +147,8 @@ public:
     virtual bool takeNativeOscDetail (const nativeui::oscdetail::State&, int, float&) noexcept { return false; }
     virtual void setNativeOscDetailMenu (int) noexcept {}
     virtual void setNativeMasterView (nativeui::master::View /*view*/) noexcept {}
+    virtual bool masterScaleInputActive() const noexcept { return false; }
+    virtual int takeMasterScaleRoot() noexcept { return -1; }
     virtual bool nativeMasterPanelSupported() const noexcept { return false; }
     virtual bool takeNativeMasterPanel (nativeui::master::View /*view*/, float& /*value*/) noexcept { return false; }
     virtual bool nativeVoiceSequenceControls() const noexcept { return false; }
