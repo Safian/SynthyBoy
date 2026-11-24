@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 _ROOT = str(Path(__file__).resolve().parents[2])
 if _ROOT not in sys.path:
@@ -23,7 +23,8 @@ from components.native.level.level import (
     synthyboy_dial_data,
 )
 from components.native.selector.selector import build_shape_selector, selector_definition
-from components.style import argb as _style_argb, opacity as _style_opacity, size as _style_size
+from components.native.radio_button.radio_button import create_segmented_radio_button_group
+from components.style import argb as _style_argb, opacity as _style_opacity, size as _style_size, apply_control_state
 from native_ui_params import PLAY_ENV_LFO, PLAY_LFO_STANDARD_SYNC, mixer_peek_index
 
 ENV_EXPAND, LFO_EXPAND, SHAPE, RATE, DIVISION, STYLE, SYNC, STEREO, CHOOSE, STANDARD_SYNC = range(10)
@@ -48,19 +49,6 @@ def _entry(name, kind, data, rect, bindings=(), gates=(), focus=True):
         "handle remapping": {"version": 1, "map": [{"key": k, "value": v} for k, v in bindings]},
         "bounds": bounds,
     }
-
-
-def _sync_button(ctx, label, width, height, selected):
-    filename = f"play_env_lfo_sync_{label.lower()}_{'on' if selected else 'off'}.png"
-    font_path = Path(__file__).resolve().parents[2] / "shell-mpc" / "overlay" / "fonts" / "TitilliumWeb-SemiBold.ttf"
-    font = ImageFont.truetype(str(font_path), 16)
-    image = Image.new("RGBA", (width, height))
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((1, 1, width - 2, height - 2), radius=6, fill="#283853" if selected else "#171d32",
-                           outline="#90edc0" if selected else "#46516b")
-    draw.text((width // 2, height // 2), label, fill="#e6e6e6", font=font, anchor="mm")
-    image.save(ctx.skins_dir / filename)
-    return filename
 
 
 def _blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_rect, value_rect, *,
@@ -220,6 +208,13 @@ def apply(tui, items, ctx, contract):
         if entry["key"] in blue_dials:
             entry["value"] = blue_dials[entry["key"]]
             definitions[entry["key"]] = entry["value"]
+        elif entry["key"].startswith("NativeInactive "):
+            # OSC state bindings are registered before this shared dial upgrade.
+            # Keep their inactive state on the exact same final native component.
+            original = entry["key"][len("NativeInactive "):]
+            if original in blue_dials:
+                entry["value"] = apply_control_state(blue_dials[original], ctx.skins_dir, active=False)
+                definitions[entry["key"]] = entry["value"]
     for k, v in blue_dials.items():
         if k not in definitions:
             local_defs.append({"key": k, "value": v})
@@ -295,14 +290,9 @@ def apply(tui, items, ctx, contract):
             handle = f"Parameter {base + 1 + field}"
             if field == STANDARD_SYNC:
                 handle = f"Parameter {native_base + PLAY_LFO_STANDARD_SYNC}"
-                x, y, width, height = rect
-                for i, label in enumerate(("HZ", "BPM", "KEY")):
-                    left, right = width * i // 3, width * (i + 1) // 3
-                    data = {"version": 2, "onImage": _sync_button(ctx, label, right - left, height, True),
-                            "offImage": _sync_button(ctx, label, right - left, height, False),
-                            "buttonId": i, "numButtonsInGroup": 3, "handleName": "Data", "gestureBehaviour": "Instant"}
-                    items.append(_entry(f"Play Native EnvLfo SYNC {label} {first}-{last}", "Button", data,
-                                        (x + left, y, right - left, height), (("Data", handle),), (modal_gate, visible)))
+                items.extend(create_segmented_radio_button_group(
+                    f"Play Native EnvLfo SYNC {first}-{last}", rect, ("HZ", "BPM", "KEY"),
+                    handle, ctx.skins_dir, gates=(modal_gate, visible)))
             elif field in (ENV_EXPAND, LFO_EXPAND):
                 data = {"version": 2, "onImage": "lfo_native_expand.png", "offImage": "lfo_native_expand.png",
                         "buttonId": 1, "numButtonsInGroup": 1, "handleName": "Data", "gestureBehaviour": "Instant"}
