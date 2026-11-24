@@ -1,4 +1,5 @@
 # SynthyBoy — nyitott teendők
+- [ ] A `27e711cc` natív UI-auditból igazolt megmaradó GPU-kezelők: `ListPopup` az OSC/LFO/ENV/Filter/Macro/Voice/FX/Mixer útvonalakon; OSC `RoutePanel` (`osc_ui.h` drawPopup) és interaktív `NoteMask` (`drawNativeDetail`); Master Scale `MiniKeyboardDisplay`. Kész, ha a működésazonos natív helyettesítések és bekötések elkészültek, a régi rajzolás/bemenet törölve. A külön követett TextEntry/PointMod/FX fallback feladatokhoz kapcsolódik; a már eltávolított ShapeEditor-kezelőket ne építsük újra.
 - [ ] A tulajdonos által elvetett pöttyös RadioButton még aktív: `53_lfo_smooth.py` HZ/BPM/KEY és `98_filter_native.py` kapcsolók `radio_dot` képet generálnak; átvezetendők az elfogadott RadioButton megjelenésre, a kizárólagos rajzoló/token/teszt/minták eltávolításával. A `99_ui_screen_lfo.py` téves jóváhagyási állítása is javítandó.
 
 - [ ] A natív LFO/FX/Mixer vezérlőkhöz tartozó GPU-s statikus rajzolás és fallback bemenet eltávolítása, a natív feliratok/vezérlők megtartásával és élő grafika ellenőrzésével. (fut: LFO agy/gemini-worker-96073cd12c; FX agy/gemini-worker-13801c554f; Mixer agy/gemini-worker-06745eeffb)
