@@ -29,7 +29,7 @@ class OscPageUi
 {
 public:
     static constexpr int kElementPage = OscUi::kElementOsc;
-    static constexpr ui::Rect expandedCloseRect() noexcept { return { 1152, page::kTabY + 120, 120, 56 }; }
+    static constexpr ui::Rect expandedCloseRect() noexcept { return { 1148, page::kTabY + 194, 120, 56 }; }
 
     OscPageUi() : ownedOsc_ (std::make_unique<OscUi>()), ownedDisplay_ (std::make_unique<OscDisplay>()),
                   osc_ (*ownedOsc_), display_ (*ownedDisplay_) {}
@@ -119,7 +119,9 @@ public:
         const ui::Rect r = osc_.displayRect();
         if (! r.empty() && display_.valid())
         {
-            display_.draw (sb, r, false, osc_.plotArea());
+            const bool nativeRootPower = osc_.topPage() == 0 && osc_.full().hasNativePower();
+            const std::array<ui::Rect, 3> header { powerArea(), inPlay_ ? expandedCloseRect() : ui::Rect {}, ui::Rect {} };
+            display_.draw (sb, r, false, osc_.plotArea(), nativeRootPower ? &header : nullptr);
             display_.draw (sb, r, true, osc_.plotArea());
             if (marks_.any())
                 marks_.draw (sb, r);
@@ -127,6 +129,8 @@ public:
         osc_.drawOnDisplay (sb);
         osc_.drawPopup (sb);
         osc_.clearNativeDetailPixels (sb);
+        if (osc_.topPage() == 0 && osc_.full().hasNativePower())
+            ui::clearNativeCell (sb, powerArea());
         if (inPlay_ && osc_.topPage() == 0)
             ui::clearNativeCell (sb, expandedCloseRect());
     }

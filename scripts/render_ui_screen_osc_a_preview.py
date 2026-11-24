@@ -75,11 +75,8 @@ def render_preview():
     # Dropdown chevron
     draw.polygon([(192, 168), (200, 168), (196, 174)], fill=CYAN_ACCENT)
 
-    # (c) Power button at (212, 143, 276, 199) [tab: 212 33 64 56]
-    draw.rounded_rectangle((212, 143, 276, 199), radius=6, fill=(24, 30, 48, 255), outline=BORDER_COL, width=1)
-    # Power icon inside (48x48 centered)
-    p_icon = icon_button("power", "#5cff9d").resize((32, 32))
-    canvas.paste(p_icon, (228, 155), p_icon)
+    p_icon = icon_button("power", "#5cff9d")
+    canvas.paste(p_icon, (300, 304), p_icon)
 
     # (d) Type selector at (280, 135, 433, 207) [tab: 280 25 153 72]
     draw.rounded_rectangle((280, 143, 433, 199), radius=6, fill=(24, 30, 48, 255), outline=BORDER_COL, width=1)

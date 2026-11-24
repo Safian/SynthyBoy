@@ -31,9 +31,9 @@ Choose PZ SVF on F1 or F2 and tap the four-corner expand icon at the top right o
 ```
 y=110 +-------------------------------------------------------------------------------------------------------------------------+
       |  chip lane (16 px: the chips of MODEL and STYLE)                                                                         |
-      | [POWER] [F1|F2|NOTE|VELO] (o) F1+F2   [<  MODEL  >]  [<  STYLE  >]  (o) CLEAN                                          | top bar (56 px)
+      | [F1|F2|NOTE|VELO] (o) F1+F2   [<  MODEL  >]  [<  STYLE  >]  (o) CLEAN                                          | top bar (56 px)
       +-------------------------------------------------------------------------------------------------------------------------+
-      |                                  FREQUENCY RESPONSE DISPLAY (or the FORMANT XY pad + the FORMANT block at its right)      |
+      |                                  [POWER]   FREQUENCY RESPONSE DISPLAY / FORMANT XY   [EXPAND]      |
       +----------------------------+-------------------------------+----------------------------------------------------------+
       | MAIN                       | TRACK                         | OUT                                                      |
       | CUTOFF RESO DRIVE MIX      | KEYTRACK ENV 1 VAR  COMB      | BLEND  ROUTING (3 rows)  SET ON MIXER: DEST BUS 1 BUS 2   |
@@ -54,7 +54,7 @@ Hidden, not dimmed: COMB unless the Comb model (the fourth TRACK slot); VAR, CLE
 ### Native Power Switches & OFF Navigation Invariants
 
 Standalone Filter 1 and Filter 2 native power switches bind per-instance to `filter1.on` and `filter2.on` (the engine parameter is `.on`, not `.power`).
-- **Transparent Host Aperture:** On standalone filter tabs, the plugin overlay cuts a transparent aperture in the background ground around `power.rect()` (coordinates `(12, 126, 56, 56)` on screen, `(12, 16, 56, 56)` in tab coordinates) and suppresses plugin drawing of `power`, allowing the underlying host native switch to show through seamlessly in both ON and OFF states.
+- **Transparent Host Aperture:** On standalone filter tabs, the plugin overlay cuts a transparent aperture in the background ground around `power.rect()` (coordinates `(16, 190, 56, 56)` on screen, `(16, 80, 56, 56)` in tab coordinates) and suppresses plugin drawing of `power`, allowing the underlying host native switch to show through seamlessly in both ON and OFF states.
 - **Exclusive Native Touch Ownership:** Touch handling in `FilterUi::covers()` excludes `power.rect()` when native power is active, rejecting touch and wheel events in the plugin overlay so the host control receives them exclusively.
 - **OFF Navigation Invariants:** When powered OFF (`0`):
   - Power toggle remains operable and visible (`showWhenDataModelInvalid="Show"`, `whenVisible="Always"`, `acceptsHWFocus="Yes"`; self-disabling `Enable` and `IndexedEnabling` handles stripped).

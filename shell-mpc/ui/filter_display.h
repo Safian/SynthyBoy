@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "scalar_curve_editor.h"
+
 #include "native_apertures.h"
 #include "../native_filter_controls.h"
 
@@ -119,9 +121,20 @@ public:
     }
 
     /** The plot area inside the block: a margin at the left for the dB scale and at the bottom for the frequencies (the formant pad uses the whole inside). */
+    void placeGraph (Rect graph, Rect power, Rect expand)
+    {
+        headerCorners_ = { power, expand };
+        place (graph);
+    }
+
     Rect plot() const noexcept
     {
-        const Rect in = rect_.inset (8);
+        Rect in = rect_.inset (8);
+        if (! headerCorners_[0].empty())
+        {
+            in.y += 56;
+            in.h = std::max (0, in.h - 56);
+        }
         return state.isFormant ? in : Rect { in.x + 30, in.y + 14, std::max (0, in.w - 30 - 6), std::max (0, in.h - 14 - 20) };
     }
     /** The x of a frequency inside the plot. */
@@ -186,8 +199,8 @@ public:
         // Curve polylines are emitted directly through SceneBuilder; pass the
         // inactive look to the Pen so their chromatic strokes are greyed too.
         Pen pen (sb, enabled_ || inactive_, inactive_);
+        paintAroundNativeCells (sb, rect_, headerCorners_, [&] { drawNativeGraphFrame (pen, rect_); });
         Cell cell (sb, rect_);
-        pen.block (rect_, false);
         const Rect in = plot();
         if (in.w < 20 || in.h < 20)
             return;
@@ -483,6 +496,8 @@ protected:
 
     Change onDown (int x, int y, double /*nowMs*/) override
     {
+        if (! headerCorners_[0].empty() && y < headerCorners_[0].bottom())
+            return Change::none();
         dragging_ = true;
         grabbed_ = state.isFormant ? 0 : state.activeFilter;
         if (state.dual && ! state.isFormant)
@@ -501,7 +516,7 @@ protected:
 
     Change onMove (int x, int y) override
     {
-        return updateTouch (x, y, false);
+        return dragging_ ? updateTouch (x, y, false) : Change::none();
     }
 
     Change onUp (int /*x*/, int /*y*/) override
@@ -543,6 +558,7 @@ protected:
 private:
     int idCutoff_ = 0, idReso_ = 0;
     int idFormantX_ = 0, idFormantY_ = 0;
+    std::array<Rect, 2> headerCorners_ {};
     // gesture data (not the value): the finger is down, the handle it holds (1, 2, 0 = formant), the position of the last report, the second change of a touch
     bool dragging_ = false;
     int grabbed_ = 0;
@@ -877,20 +893,20 @@ protected:
         scalarView.place ({ rx, topLeft.y, std::max (116, rw - 130 - 6), kTopH });
 
         // 2. Left bottom band: TRACK (2x2 >=56 px slots) + OUT (BLEND side-dial + vertical ROUTING), MAIN above it
-        const int bandH = 210, bandY = rect_.bottom() - m - bandH;
-        const int mainH = 114, mainY = bandY - 6 - mainH;
+        const int bandH = 192, bandY = rect_.bottom() - m - bandH;
+        const int mainH = 100, mainY = bandY - 6 - mainH;
 
         // 3. Left graph card: POWER at top-left, EXPAND at top-right, FilterDisplay below top 64 px band
         const int graphY = topLeft.bottom() + 8;
         graphRect_ = { lx, graphY, lw, std::max (204, mainY - 6 - graphY) };
         power.place ({ graphRect_.x + 8, graphRect_.y + 4, 56, 56 });
         expand.place ({ graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
-        display.place ({ graphRect_.x, graphRect_.y + 64, graphRect_.w, std::max (60, graphRect_.h - 64) });
+        display.placeGraph (graphRect_, power.rect(), expand.rect());
 
         // 4. MAIN: 4 side-dials (CUTOFF, RESO, DRIVE, MIX)
         mainBlock_ = { lx, mainY, lw, mainH };
         {
-            const Rect in { mainBlock_.x + 4, mainBlock_.y + 32, mainBlock_.w - 8, 76 };
+            const Rect in { mainBlock_.x + 4, mainBlock_.y + 20, mainBlock_.w - 8, 76 };
             const int gap = 4, cw = (in.w - 3 * gap) / 4;
             Component* ms[4] = { &cutoff, &resonance, &drive, &mix };
             for (int i = 0; i < 4; ++i)
@@ -903,7 +919,7 @@ protected:
         outBlock_ = { lx + trackW + midGap, bandY, lw - trackW - midGap, bandH };
         {
             const int tx = trackBlock_.x + 4, tw = trackBlock_.w - 8, cGap = 6, cw = (tw - cGap) / 2;
-            const int row1Y = trackBlock_.y + 34, rowH = 76, row2Y = row1Y + rowH + kQLane;
+            const int row1Y = trackBlock_.y + 20, rowH = 76, row2Y = row1Y + rowH + kQLane;
             keytrack.place ({ tx, row1Y, cw, rowH });
             const Rect third { tx + cw + cGap, row1Y, tw - cw - cGap, rowH };
             var.place (third);
@@ -912,7 +928,7 @@ protected:
             combOffset.place ({ tx + cw + cGap, row2Y, tw - cw - cGap, rowH });
         }
         {
-            const int ox = outBlock_.x + 4, oy = outBlock_.y + 34, ow = outBlock_.w - 8;
+            const int ox = outBlock_.x + 4, oy = outBlock_.y + 20, ow = outBlock_.w - 8;
             const int listW = 156, bGap = 6, bw = std::max (56, ow - listW - bGap);
             blend.place ({ ox, oy, bw, 76 });
             routing.place ({ ox + bw + bGap, oy, listW, 168 });
@@ -933,7 +949,7 @@ protected:
         const int m = 8, W = rect_.w;
         scalarView.place ({});
 
-        // 1. the top bar: CLOSE (a page has none), (PEEK keeps power on top bar; Expanded Filter puts power/expand inside the graph header).
+        // Keep the selector and model positions common to the native page and Mixer dock.
         const int peekSpace = nativePeekGeometry_ ? 0 : peekHeader_;
         const bool isPeek = peekHeader_ > 0 || nativePeekGeometry_;
         const bool isExpCurve = curveView() && ! isPeek;
@@ -942,8 +958,6 @@ protected:
         const int fixed[7] = { peekSpace ? peekSpace : (pageMode_ ? 0 : 84), isExpCurve ? 0 : 56, peekSpace ? 0 : 4 * kViewCellW, peekSpace ? 0 : LedToggle::widthFor ("F1+F2"), 0, 0, LedToggle::widthFor ("CLEAN") }, weight[7] = { 0, 0, 0, 0, 5, 4, 0 };
         layoutRow (top, fixed, weight, 7, kGap, r);
         close.place (r[0]);
-        if (! isExpCurve)
-            power.place (r[1]);
         view.place (r[2]);
         both.place (r[3]);
         model.place (r[4]);
@@ -951,7 +965,8 @@ protected:
         clean.place (r[6]);
         if (isExpCurve)
         {
-            expand.place ({ rect_.right() - m - 56, top.y, 56, 56 });
+            const int graphRight = rect_.right() - 2 * m - ScalarCurveEditor::kSideW;
+            expand.place ({ graphRight - 8 - 56, top.bottom() + m + 4, 56, 56 });
             power.place ({});
             graphRect_ = {};
             display.place ({});
@@ -1012,18 +1027,10 @@ protected:
         const int midY = top.bottom() + 4, midH = std::max (60, bandY - m - midY);
         const int fw = isFormant_ ? std::min (440, (W - 2 * m) * 36 / 100) : 0;
         const int gw = isFormant_ ? (W - 2 * m - fw - kBlockGap) : (W - 2 * m);
-        if (isPeek)
-        {
-            graphRect_ = {};
-            expand.place ({});
-            display.place ({ rect_.x + m, midY, gw, midH });
-        }
-        else
-        {
-            graphRect_ = { rect_.x + m, midY, gw, midH };
-            expand.place ({ graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
-            display.place ({ graphRect_.x, graphRect_.y + 64, graphRect_.w, std::max (60, graphRect_.h - 64) });
-        }
+        graphRect_ = { rect_.x + m, midY, gw, midH };
+        power.place ({ graphRect_.x + 8, graphRect_.y + 4, 56, 56 });
+        expand.place (isPeek ? Rect {} : Rect { graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
+        display.placeGraph (graphRect_, power.rect(), expand.rect());
         if (isFormant_)
         {
             formantBlock_ = { rect_.right() - m - fw, midY, fw, midH };

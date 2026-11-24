@@ -365,8 +365,6 @@ protected:
     {
         const theme::Look& T = theme::L();
         const Rect pl = plot();
-        p.rrect (pl, T.rControl, p.c (colour::rgba (T.bg1, 255)));
-        p.rrect (pl, T.rControl, p.c (colour::rgba (T.keyline, 255)), T.frame);
         // the grid and the axes: GRID X / GRID Y divisions
         for (int i = 1; i < gridXc(); ++i)
         {
@@ -751,34 +749,8 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen p (sb, enabled_, inactive_);
-        // The compact graph header owns a native expand action as well as
-        // the editor fields. Keep its host artwork clear of the block paint.
-        std::array<Rect, kNativeFields + kNativeButtons + 1> apertures {};
-        const auto fields = nativeRects();
-        std::copy (fields.begin(), fields.end(), apertures.begin());
-        apertures.back() = nativeExpandRect();
-        if (compact_)
-        {
-            for (const Rect& block : { blocks_[0], graphRect_ })
-                outsideNativeCells (block, apertures, [&] (Rect r)
-                {
-                    Cell cell (sb, r, 0);
-                    gpu::ScopedClip clip (sb, r.x, r.y, r.right(), r.bottom());
-                    if (!clip) return;
-                    p.block (block);
-                });
-        }
-        else
-        {
-            for (const Rect& block : { blocks_[0], blocks_[1], usedRect_ })
-                outsideNativeCells (block, apertures, [&] (Rect r)
-                {
-                    Cell cell (sb, r, 0);
-                    gpu::ScopedClip clip (sb, r.x, r.y, r.right(), r.bottom());
-                    if (!clip) return;
-                    p.block (block);
-                });
-        }
+        const std::array<Rect, 1> corner { expandBtn.rect() };
+        paintAroundNativeCells (sb, graphRect_, corner, [&] { drawNativeGraphFrame (p, graphRect_); });
         canvas.draw (sb);
         if (! compact_) usedList.draw (sb);
         Cell cell (sb, rect_);
@@ -826,12 +798,13 @@ protected:
             layoutCompact();
             return;
         }
-        graphRect_ = {};
-        expandBtn.place ({});
         const int m = kMargin;
         const int bandY = rect_.bottom() - m - kBandH;
         const Rect gr { rect_.x + m, rect_.y + m, std::max (0, rect_.w - 3 * m - kSideW), std::max (0, bandY - m - (rect_.y + m)) };
-        canvas.place (gr);
+        graphRect_ = gr;
+        expandBtn.place ({ gr.right() - 8 - 56, gr.y + 4, 56, 56 });
+        // The Filter owner exposes the native collapse action above the graph.
+        canvas.place ({ gr.x, gr.y + 64, gr.w, std::max (0, gr.h - 64) });
         // ---- the side column: the three buttons, the glide chip, the USED BY block with TARGETS at its foot
         const int sx = gr.right() + m, sw = rect_.right() - m - sx;
         const int bw = (sw - 2 * kGap) / 3;
@@ -900,18 +873,6 @@ protected:
         init.place ({ X, bottomY, aw, bottomRowH });
         undoButton.place ({ X + aw + ag, bottomY, aw, bottomRowH });
         del.place ({ X + 2 * (aw + ag), bottomY, W - 2 * (aw + ag), bottomRowH });
-    }
-    void drawUnder (Pen& p) const override
-    {
-        if (compact_)
-        {
-            p.block (graphRect_);
-            p.block (blocks_[0]);
-            return;
-        }
-        for (const Rect& b : blocks_)
-            p.block (b);
-        p.block (usedRect_);
     }
     void drawExtra (Pen& p) const override
     {

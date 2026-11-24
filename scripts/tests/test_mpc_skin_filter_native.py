@@ -100,7 +100,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             self.assertEqual(exp["bounds"]["additionalInvalidatingHandles"][0], f"RangedEnabling/1/2/5/Parameter {state}")
         power = by_name["Filter Native Power"]
         self.assertEqual(handle(power), state + 1)
-        self.assertEqual(rect(power), (12, 16, 56, 56))
+        self.assertEqual(rect(power), (16, 80, 56, 56))
         self.assertEqual(power["bounds"].get("additionalInvalidatingHandles", []), [])
         self.assertEqual(self.surface["bounds"]["additionalInvalidatingHandles"][0],
                          f"RangedEnabling/1/2/5/Parameter {state}")

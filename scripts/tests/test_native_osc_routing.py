@@ -431,7 +431,7 @@ class TestNativeOscRouting(unittest.TestCase):
             self.assertEqual(widgets[OSC_ROUTING_CONTROL_NAME]["componentData"]["type"], "oscNativeRoutingLayer")
             self.assertEqual(widgets[OSC_ROUTING_CONTROL_NAME]["bounds"]["bounds"], "%d %d %d %d" % STANDALONE_COMPACT_OSC_ROUTING_RECT)
             self.assertEqual(widgets["Osc Native Power"]["componentData"]["type"], "oscNativePowerLayer")
-            self.assertEqual(widgets["Osc Native Power"]["bounds"]["bounds"], "212 33 64 56")
+            self.assertEqual(widgets["Osc Native Power"]["bounds"]["bounds"], "12 194 352 56")
             self.assertEqual(widgets["Osc Native Power"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2886"])
             self.assertEqual(widgets["Osc Native Settings"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2986"])
 
@@ -514,7 +514,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 data = power["componentData"]["data"]
                 self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]), (1, 1, "Instant"))
                 self.assertEqual(power["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {2972 + i}"}])
-                self.assertEqual(power["bounds"]["bounds"], "0 0 64 56")
+                self.assertEqual(power["bounds"]["bounds"], f"{288 if i in (1, 2, 3) else 0} 0 64 56")
                 self.assertEqual(power["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{i}/5/Parameter 2884"])
                 with Image.open(skins / data["onImage"]) as on, Image.open(skins / data["offImage"]) as off:
                     self.assertEqual((on.size, off.size), ((64, 56), (64, 56)))

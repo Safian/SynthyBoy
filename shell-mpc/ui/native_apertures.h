@@ -57,6 +57,14 @@ inline void clearNativeCell (gpu::SceneBuilder& sb, Rect cell)
         sb.clear (0);
 }
 
+/** The same solid canvas as the host shows through a transparent native icon slot. */
+inline void drawNativeGraphFrame (Pen& pen, Rect graph)
+{
+    const auto& look = theme::L();
+    pen.rrect (graph, look.rBlock, theme::rgba (theme::kNativeCanvas));
+    pen.rrect (graph, look.rBlock, pen.c (look.keyline, 255), look.frame);
+}
+
 /** Keep the same background gradient and border outside the cut-outs. */
 template <size_t N, class Draw>
 void paintAroundNativeCells (gpu::SceneBuilder& sb, Rect base, const std::array<Rect, N>& cells, Draw&& draw)

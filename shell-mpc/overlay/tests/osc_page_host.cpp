@@ -1540,7 +1540,7 @@ int main (int argc, char** argv)
                 const int before = r.inst.writes;
                 const auto power = r.page.powerArea();
                 const int x = power.x + power.w / 2, y = power.y + power.h / 2;
-                check (power == ui::Rect { 212, 143, 64, 56 } && ! r.page.covers (x, y)
+                check (power == ui::playrows::powerRect (r.page.ui().full().displayRect()) && ! r.page.covers (x, y)
                        && ! hasLeaf (r.page.ui().full(), &r.page.ui().full().power) && r.inst.native.snapshot().powerValue (source) == 1.0f,
                        std::string (keys[source - 1]) + " starts in the exclusive host POWER aperture");
                 check (! r.page.touch (ev (TouchEvent::Down, x, y), r.stack, r.inst, r.now)

@@ -176,13 +176,13 @@ class TestNativeFilterPower(unittest.TestCase):
 
         self.assertEqual(len(tab1_comps), 1)
         self.assertEqual(tab1_comps[0]["componentData"]["name"], "Filter 1 Power")
-        self.assertEqual(tab1_comps[0]["bounds"]["bounds"], "12 16 56 56")
+        self.assertEqual(tab1_comps[0]["bounds"]["bounds"], "16 80 56 56")
         val1 = next(m for m in tab1_comps[0]["handle remapping"]["map"] if m.get("key") == "Value")
         self.assertEqual(val1["value"], "Parameter 10")
 
         self.assertEqual(len(tab2_comps), 1)
         self.assertEqual(tab2_comps[0]["componentData"]["name"], "Filter 2 Power")
-        self.assertEqual(tab2_comps[0]["bounds"]["bounds"], "12 16 56 56")
+        self.assertEqual(tab2_comps[0]["bounds"]["bounds"], "16 80 56 56")
         val2 = next(m for m in tab2_comps[0]["handle remapping"]["map"] if m.get("key") == "Value")
         self.assertEqual(val2["value"], "Parameter 20")
 

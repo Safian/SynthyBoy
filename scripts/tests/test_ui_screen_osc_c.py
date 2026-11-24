@@ -95,7 +95,7 @@ class OscCScreenTests(unittest.TestCase):
         self.assertEqual(kid_names["Osc Native Routing"]["bounds"]["bounds"], "1122 37 150 48")
 
         self.assertIn("Osc Native Power", kid_names)
-        self.assertEqual(kid_names["Osc Native Power"]["bounds"]["bounds"], "212 33 64 56")
+        self.assertEqual(kid_names["Osc Native Power"]["bounds"]["bounds"], "12 194 352 56")
 
         self.assertIn("Osc Native Settings", kid_names)
         self.assertEqual(kid_names["Osc Native Settings"]["bounds"]["bounds"], "0 0 1280 628")

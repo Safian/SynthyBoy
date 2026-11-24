@@ -7,7 +7,7 @@ Composes:
 1. Native Host Skin Layer:
    - Root background: overlay_bg_osc.png (ff1e1d1e base)
    - Instance Selector: 200 x 56 px native dropdown [ NOISE v ] at (8, 33, 200, 56)
-   - Power Button: 64 x 56 px antialiased green power button at (212, 33, 64, 56)
+   - Power Button: 64 x 56 px antialiased green power button at (12, 194, 64, 56)
    - Settings Layer (Layout 2: Generated Noise):
      * KIND: 226 x 72 px stepper/menu at (280, 25, 226, 72)
      * SOUND: 226 x 72 px stepper/menu at (510, 25, 226, 72)
@@ -97,9 +97,9 @@ def create_noise_screen_preview():
     arr_x, arr_y = sel_x + sel_w - 24, sel_y + 26
     draw.line([(arr_x - 5, arr_y - 2), (arr_x, arr_y + 3), (arr_x + 5, arr_y - 2)], fill="#829bc4", width=2)
 
-    # 2. Power Button: (212, 33, 64, 56)
+    # 2. Power Button: (12, 194, 64, 56)
     pwr_img = icon_button("power", "#5cff9d")
-    canvas.paste(pwr_img, (212, ty(33)), pwr_img)
+    canvas.paste(pwr_img, (12, ty(194)), pwr_img)
 
     # 3. KIND Selector: (280, 25, 226, 72)
     kind_x, kind_y, kind_w, kind_h = 280, ty(25), 226, 72

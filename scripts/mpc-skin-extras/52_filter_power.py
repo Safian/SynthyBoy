@@ -7,7 +7,7 @@ from pathlib import Path
 
 from components.native.button.button import build_filter_power, filter_power_param_key, sanitize_tab_navigation
 
-FILTER_POWER_RECT = (12, 16, 56, 56)
+FILTER_POWER_RECT = (16, 80, 56, 56)
 
 
 def _default_toggle_template():

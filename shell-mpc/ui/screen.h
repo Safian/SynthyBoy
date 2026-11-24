@@ -481,7 +481,6 @@ protected:
         layoutRow (topR, fixed, weight, 4, kGap, r);
         selectorArea_ = { r[0].x, topR.y + (topH - 56) / 2, r[0].w, 56 };
         close.place (selectorArea_);
-        power.place ({ r[1].x, topR.y + (topH - 56) / 2, r[1].w, 56 });
         // The native mix controls occupy the first row. Keep Basic at full width below them.
         if (nativeRouting_)
             r[2].y += topH;
@@ -502,6 +501,7 @@ protected:
             display_.w -= left - display_.x;
             display_.x = left;
         }
+        power.place (playrows::powerRect (display_));
         panel.place ({ rect_.x + m, panelY, W - 2 * m - (inst_ == OscInstance::Noise ? 0 : kMoreW + m), bottomH });
         const Rect card = tuneArea();
         more.place (hasNativeTune() ? Rect { card.x + 143, card.y + 98, 125, 48 }

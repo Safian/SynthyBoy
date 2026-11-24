@@ -644,7 +644,21 @@ def apply(tui, qlinks, ctx):
 
     exp_rect = manifest["expand_filter"]
     exp_art = _write_action_slot_art(ctx.skins_dir, "expand", tuple(exp_rect[2:]), icon="expand")
-    items.append(_button("Expand Filter", exp_rect, action, expanded_filter_gates, EXPAND_FILTER_ACTION, FILTER_ACTION_COUNT, (exp_art, exp_art)))
+    off_exp_art = _write_action_slot_art(ctx.skins_dir, "expand_off", tuple(exp_rect[2:]),
+                                         icon="expand", colour=style.color("smooth.value.off"))
+
+    def add_filter_expand(container, name, rect, gates):
+        for suffix, power_gate, artwork in (("", enabled, exp_art), (" Off", passive, off_exp_art)):
+            container.append(_button(name + suffix, rect, action, [*gates, power_gate],
+                                     EXPAND_FILTER_ACTION, FILTER_ACTION_COUNT, (artwork, artwork)))
+
+    for f in (1, 2):
+        selected = f"IndexedEnabling/{f}/5/Parameter {state}"
+        model_param = ctx.param_index(f"filter{f}.model")
+        for start, end in ((0, 4), (5, 5), (6, 26)):
+            rect = manifest["expand_filter_formant"] if start == 5 else exp_rect
+            gate = f"RangedEnabling/{start}/{end}/27/Parameter {model_param}"
+            add_filter_expand(items, f"Expand Filter F{f} {start}", rect, [*expanded_filter_gates, selected, gate])
 
     pz_rect = manifest["pz_expand"]
     pz_gates = [*expanded_filter_gates, enabled, f"IndexedEnabling/{PZ_MODEL}/27/Parameter {model}"]
@@ -693,7 +707,7 @@ def apply(tui, qlinks, ctx):
     split_left.append(_button("Split Power", split_pwr_rect, base + POWER, (), art=power_art))
 
     split_exp_rect = split["filter_expand"]
-    split_left.append(_button("Split Expand Filter", split_exp_rect, action, (), EXPAND_FILTER_ACTION, FILTER_ACTION_COUNT, (exp_art, exp_art)))
+    add_filter_expand(split_left, "Split Expand Filter", split_exp_rect, ())
 
     split_pz_rect = split["pz_expand"]
     split_pz = _button("Split Edit PZ Curve", split_pz_rect, action,

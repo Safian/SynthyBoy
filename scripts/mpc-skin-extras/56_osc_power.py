@@ -16,7 +16,7 @@ from native_icon_button import icon_button
 from native_ui_params import OSC_POWER, OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
 
 # OscillatorFullScreen::layout, tab-local coordinates.
-POWER_RECT = (212, 33, 64, 56)
+POWER_RECT = (12, 194, 352, 56)
 POWER_ON, POWER_OFF = "osc_native_power_on.png", "osc_native_power_off.png"
 
 
@@ -34,6 +34,8 @@ def apply(tui, qlinks, ctx):
     view = f"Parameter {base + OSC_VISIBILITY}"
     children = []
     for source, label in enumerate(OSC_TAB_NAMES):
+        # A/B/C reserve the TUNE card to the left of the waveform.
+        x = 288 if source in (1, 2, 3) else 0
         children.append({
             "version": 2,
             "componentData": {"version": 1, "name": f"Osc Native {label} Power", "type": "Button", "data": {
@@ -42,7 +44,7 @@ def apply(tui, qlinks, ctx):
             }},
             "handle remapping": {"version": 1, "map": [{"key": "Data", "value": f"Parameter {base + OSC_POWER + source}"}]},
             "bounds": {"version": 2, "acceptsHWFocus": "Yes", "showWhenDataModelInvalid": "Hide",
-                       "whenVisible": "Always", "boundsType": "Absolute", "bounds": "0 0 64 56",
+                       "whenVisible": "Always", "boundsType": "Absolute", "bounds": f"{x} 0 64 56",
                        "additionalInvalidatingHandles": [
                            f"IndexedEnabling/{source}/{len(OSC_TAB_NAMES)}/Parameter {base + OSC_SOURCE}",
                        ]},

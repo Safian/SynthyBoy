@@ -4,6 +4,8 @@
 // Included by theme.h inside its namespace, after the Look structure.
 #pragma once
 
+inline constexpr uint32_t kNativeCanvas = 0x090d19;
+
 inline const Look kLook1 = {
     "neon",
     0x0b1026, // bg0

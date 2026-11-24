@@ -1513,6 +1513,10 @@ static void exportNativeFilterContract ()
     rect (full.view.rect());
     std::printf (",\n  \"both\": ");
     rect (full.both.rect());
+    full.setFormantMode (true);
+    std::printf (",\n  \"expand_filter_formant\": ");
+    rect (full.nativeExpandFilterRect());
+    full.setFormantMode (false);
     std::printf (",\n  \"expand_filter\": ");
     rect (full.nativeExpandFilterRect());
     std::printf (",\n  \"out\": ");

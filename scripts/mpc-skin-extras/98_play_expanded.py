@@ -72,7 +72,7 @@ def apply(tui, qlinks, ctx):
     if names.intersection((*OSC_TAB_NAMES, "Osc")):
         _insert_play(play, _entry("Play Expanded Oscillator Controls", "oscNativeSurface",
                                   (0, 0, 1280, 628), view, f"RangedEnabling/1/2/7/{view}"))
-        _close(play, (1152, 120, 120, 56), 1, close, view, "Oscillator")
+        _close(play, (1148, 194, 120, 56), 1, close, view, "Oscillator")
 
     if "Env" in names:
         env = ctx.tab("Env")

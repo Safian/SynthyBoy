@@ -54,7 +54,7 @@ REBUILT_NATIVE_COMPONENTS = (
         "id": "osc_power",
         "name": "Osc Native Power",
         "kind": "oscNativePowerLayer",
-        "rect": (212, 33, 64, 56),
+        "rect": (12, 194, 352, 56),
         "role": "Oszcillátor modul POWER ikongomb (#5cff9d aktív, #ff4f4f inaktív)",
         "status": "MEGÉPÍTETT (48x48 px)",
     },

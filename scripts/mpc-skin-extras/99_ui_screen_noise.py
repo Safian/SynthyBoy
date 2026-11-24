@@ -5,7 +5,7 @@
 
 Verifies, validates, and guarantees host-native MPC control integration on the Noise tab:
 - Instance selector (Sub / Osc A / Osc B / Osc C / Noise) at STANDALONE_OSC_SELECTOR_RECT (8, 33, 200, 56)
-- Power button with antialiased state indicator at POWER_RECT (212, 33, 64, 56) bound to noise.on
+- Power button with antialiased state indicator at POWER_RECT (12, 194, 64, 56) bound to noise.on
 - Native routing button at STANDALONE_OSC_ROUTING_RECT (1122, 33, 150, 56) bound to noise.destination
 - Noise Generated layout (Layout 2: KIND, SOUND, FILTER, STEREO, PITCH, FINE, KEY TRACK, ENV 1)
 - Noise Sample layout (Layout 3: KIND, FILTER, STEREO, PITCH, FINE, KEY TRACK, ENV 1, START, RANDOM, LOOP, BOUNCE)

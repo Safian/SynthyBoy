@@ -10,7 +10,7 @@ Verifies and guarantees that:
    - Detail layer: Bound to the C instance detail/spec pages and content loader
 2. The approved native component layout is preserved:
    - Native instance selector at (8, 33, 200, 56)
-   - Native power button at (212, 33, 64, 56)
+   - Native power button at (300, 194, 64, 56)
    - Native routing destination menu at (1122, 33, 150, 56)
    - Settings surface and detail surface at (0, 0, 1280, 628)
 3. No visible Q-Link frames/numbers on screen:

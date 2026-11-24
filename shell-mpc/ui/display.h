@@ -213,7 +213,11 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
         sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, dt::a (rgb (T.keyline), 255), T.frame);
     };
     if (d.nativeHeader != nullptr)
-        paintAroundNativeCells (sb, r, *d.nativeHeader, block);
+        paintAroundNativeCells (sb, r, *d.nativeHeader, [&]
+        {
+            Pen pen (sb, true);
+            drawNativeGraphFrame (pen, r);
+        });
     Cell ground (sb, r);
     if (d.nativeHeader == nullptr)
         block();
