@@ -22,17 +22,9 @@ PEEK_LABELS = ("FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
 NATIVE_PREFIX = "Mixer Native "
 
 REQUIRED_DEFINITIONS = (
-    "mixerStripSource",
-    "mixerStripBus",
-    "mixerStripMaster",
-    "mixerStripHeaderSource",
-    "mixerStripHeaderBus",
-    "mixerStripHeaderMaster",
-    "soloMutePairSource",
-    "soloMutePairBus",
-    "soloMutePairMaster",
-    "mixerMeterBlockSource",
-    "mixerMeterBlockBus",
+    "mixerStripSourceFrame",
+    "mixerStripBusFrame",
+    "mixerStripMasterFrame",
     "mixerDestination56",
     "mixerSliderLEVEL198",
     "mixerSliderLEVEL414",

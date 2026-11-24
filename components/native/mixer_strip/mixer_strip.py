@@ -733,17 +733,19 @@ def create_mixer_strip_instance(
     )
 
     remaps = []
-    for k in required:
-        val = handles[k]
-        val_str = f"Parameter {val}" if isinstance(val, int) else str(val)
-        remaps.append((k, val_str))
+    for key in required:
+        handle = handles[key]
+        target = f"Parameter {handle}" if isinstance(handle, int) else handle
+        remaps.append((key, target))
+        if key == "Level":
+            remaps.insert(0, ("Data", target))
 
     inst_name = name or f"MixerStrip_{variant.capitalize()}_{rect[0]}_{rect[1]}"
 
     return _entry(
         name=inst_name,
         kind=type_name,
-        data={"version": 1, "handleName": "Level"},
+        data={"version": 1, "handleName": "Data"},
         rect=rect,
         remaps=remaps,
         gates=gates,

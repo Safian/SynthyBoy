@@ -1,6 +1,7 @@
 # SynthyBoy - native MPC Mixer controls, meters and PEEK buttons.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from copy import deepcopy
 from pathlib import Path
 
 from native_ui_params import (
@@ -42,6 +43,47 @@ PEEK_LABELS = ("FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
 NATIVE = "Mixer Native "
 
 
+def _bind_strip_cells(strip, definitions, caption):
+    """Place shared native controls on the tab with host parameter bindings."""
+    shell = deepcopy(strip)
+    cells = [shell]
+    root = strip["componentData"]["type"]
+    shell["componentData"]["type"] = root + "Frame"
+
+    def place(parent, origin, bindings, gates):
+        for template in definitions[parent]["componentsData"]:
+            cell = deepcopy(template)
+            model = cell["componentData"]
+            bounds = cell["bounds"]
+            x, y, w, h = map(int, bounds["bounds"].split())
+            x, y = x + origin[0], y + origin[1]
+            bounds["bounds"] = f"{x} {y} {w} {h}"
+            remaps = cell["handle remapping"]["map"]
+            def resolve(handle):
+                prefix, slash, key = handle.rpartition("/")
+                return prefix + slash + bindings.get(key, key)
+            for pair in remaps:
+                pair["value"] = resolve(pair["value"])
+            children = dict(bindings)
+            children.update((pair["key"], pair["value"]) for pair in remaps)
+            visible = [*gates, *(resolve(v) for v in bounds.get("additionalInvalidatingHandles", []))]
+            if model["type"].startswith(("mixerStripHeader", "soloMutePair", "mixerMeterBlock")):
+                place(model["type"], (x, y), children, visible)
+                continue
+            if model["name"] == "name" and parent.startswith("mixerStripHeader"):
+                model["data"].update(type="Text", text=caption)
+            if model["name"] in ("pan", "send1", "send2"):
+                remaps.append({"key": "Caption", "value": children["Data"]})
+            model["name"] = strip["componentData"]["name"] + " " + model["name"]
+            bounds.update(version=2, additionalInvalidatingHandles=visible)
+            cells.append(cell)
+
+    x, y, _, _ = map(int, strip["bounds"]["bounds"].split())
+    handles = {m["key"]: m["value"] for m in strip["handle remapping"]["map"]}
+    place(root, (x, y), handles, strip["bounds"]["additionalInvalidatingHandles"])
+    return cells
+
+
 def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
@@ -69,8 +111,11 @@ def apply(tui, qlinks, ctx):
 
     # Register reusable compound component definitions
     skins_dir = getattr(ctx, "skins_dir", None)
-    for name, def_data in build_mixer_strip_definitions(skins_dir).items():
+    definitions = build_mixer_strip_definitions(skins_dir)
+    for name, def_data in definitions.items():
         ctx.add_component_definition(name, def_data)
+        if name in ("mixerStripSource", "mixerStripBus", "mixerStripMaster"):
+            ctx.add_component_definition(name + "Frame", dict(def_data, componentsData=[], ignoreMousePresses=True))
 
     # Write all native artwork assets into skins directory
     if hasattr(ctx, "skins_dir") and ctx.skins_dir:
@@ -144,14 +189,15 @@ def apply(tui, qlinks, ctx):
             handles[name] = base + MIXER_STEREO_BASE + field * len(STRIPS) + i
         tag = f"{NATIVE}{caption} Strip"
         strip_gates = (modal_gate[0], f"IndexedEnabling/0/{MIXER_TABS}/Parameter {base + MIXER_ACTIVE_TAB}")
-        components.append(create_mixer_strip_instance(
+        strip = create_mixer_strip_instance(
             variant=variant,
             rect=rect,
             handles=handles,
             gates=strip_gates,
             focus="Yes",
             name=tag,
-        ))
+        )
+        components.extend(_bind_strip_cells(strip, definitions, caption))
 
     # Native 6-tab navigation action row (MIXER=0, FLT 1=1, FLT 2=2, MAIN FX=3, BUS 1=4, BUS 2=5).
     # Gated on modal_gate (< 19) so tabs remain active in MIXER and all 5 docked editors (where

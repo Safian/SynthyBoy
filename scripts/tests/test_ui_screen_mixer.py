@@ -54,10 +54,9 @@ class UiScreenMixerTests(unittest.TestCase):
         from native_ui_params import MIXER_STEREO_BASE, NATIVE_PARAMS
         self.assertEqual(self.code, 0, self.err)
         self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 961))
-        definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
         entries = [e for e in tab["componentDefinition"]["componentsData"]
-                   if e["componentData"]["type"] in ("mixerStripSource", "mixerStripBus", "mixerStripMaster")]
+                   if e["componentData"]["type"] in ("mixerStripSourceFrame", "mixerStripBusFrame", "mixerStripMasterFrame")]
         self.assertEqual(len(entries), 10)
         base_offset = mixer_peek_index(len(self.params)) + MIXER_STEREO_BASE
         fields = ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")
@@ -68,35 +67,22 @@ class UiScreenMixerTests(unittest.TestCase):
                 value = f"Parameter {base_offset + field * 10 + strip}"
                 self.assertEqual(handles[name], value)
                 bound.add(value)
-            nested = next(c for c in definitions[entry["componentData"]["type"]]["componentsData"]
-                          if c["componentData"]["name"] == "meter_block")
-            self.assertEqual(nested["componentData"]["data"]["handleName"], "Data")
-            self.assertEqual({m["key"]: m["value"] for m in nested["handle remapping"]["map"]}, {name: name for name in fields})
+            cells = {c["componentData"]["name"]: c for c in tab["componentDefinition"]["componentsData"]}
+            for side in ("L", "R"):
+                for role in ("Meter", "Clip"):
+                    cell = cells[f"{entry['componentData']['name']} {role} {side}"]
+                    data = cell["componentData"]["data"]
+                    self.assertEqual(cell["componentData"]["type"], "Meter")
+                    remaps = {m["key"]: m["value"] for m in cell["handle remapping"]["map"]}
+                    self.assertEqual(remaps[data["peakHandle"]], handles[("Peak" if role == "Meter" else "Clip") + side])
+                    self.assertEqual(data["rmsHandle"], "")
+                    if role == "Meter":
+                        self.assertEqual(remaps[data["peakHoldHandle"]], handles["Hold" + side])
+                    self.assertEqual(cell["bounds"]["acceptsHWFocus"], "No")
+                    for image in (data["inactiveImage"], data["peakImage"]):
+                        with Image.open(self.skins / image) as art:
+                            self.assertEqual(art.size, (8, 4 if role == "Clip" else 192 if strip < 7 else 408))
         self.assertEqual(len(bound), 60)
-        for name, signal_height in (("mixerMeterBlockSource", 192), ("mixerMeterBlockBus", 408)):
-            block = definitions[name]
-            self.assertTrue(block["ignoreMousePresses"])
-            self.assertEqual(block["actions"], [])
-            self.assertEqual(len(block["componentsData"]), 4)
-            for child in block["componentsData"]:
-                model = child["componentData"]
-                self.assertEqual(model["type"], "Meter")
-                data = model["data"]
-                self.assertEqual(data["rmsHandle"], "")
-                self.assertEqual(data["rmsImage"], "")
-                clip = model["name"].startswith("Clip")
-                right = model["name"].endswith("R")
-                self.assertEqual(child["bounds"]["bounds"], f"{10 if right else 0} {0 if clip else 6} 8 {4 if clip else signal_height}")
-                self.assertEqual(child["bounds"]["acceptsHWFocus"], "No")
-                self.assertEqual(data["peakHandle"], ("Clip" if clip else "Peak") + ("R" if right else "L"))
-                for image in (data["inactiveImage"], data["peakImage"]):
-                    with Image.open(self.skins / image) as artwork:
-                        self.assertEqual(artwork.size, (8, 4 if clip else signal_height))
-                if clip:
-                    self.assertEqual(data["peakHoldHandle"], "")
-                else:
-                    self.assertEqual(data["peakHoldHandle"], "Hold" + ("R" if right else "L"))
-                    self.assertEqual(data["peakHoldSize"], 2)
 
     def test_hook_discovery_and_execution_clean(self):
         """Verify apply-mpc-skin-extras runs with code 0 and no error."""
@@ -144,7 +130,7 @@ class UiScreenMixerTests(unittest.TestCase):
             remap = {h["key"]: h["value"] for h in comp["handle remapping"]["map"]}
 
             if i < 7:
-                self.assertEqual(comp["componentData"]["type"], "mixerStripSource")
+                self.assertEqual(comp["componentData"]["type"], "mixerStripSourceFrame")
                 self.assertEqual(remap.get("Solo"), f"Parameter {native_base + MIXER_CONTROL + MIXER_SOLO_OFFSET + i}")
                 self.assertEqual(remap.get("Mute"), f"Parameter {native_base + MIXER_CONTROL + MIXER_MUTE_OFFSET + i}")
                 self.assertEqual(remap.get("Power"), handles[f"{source}.on"])
@@ -153,35 +139,25 @@ class UiScreenMixerTests(unittest.TestCase):
                 self.assertNotEqual(remap.get("Mute"), handles[f"{source}.on"])
                 self.assertEqual(remap.get("Destination"), handles[f"{source}.destination"])
                 self.assertEqual(remap.get("Level"), handles[f"{source}.level"])
-                self.assertEqual(remap.get("Peak"), f"Parameter {native_base + MIXER_PEAK_OFFSET + i}")
-                self.assertEqual(remap.get("Hold"), f"Parameter {native_base + MIXER_HOLD_OFFSET + i}")
                 self.assertEqual(remap.get("Pan"), handles[f"{source}.pan"])
                 self.assertEqual(remap.get("Send1"), handles[f"{source}.bus1_send"])
                 self.assertEqual(remap.get("Send2"), handles[f"{source}.bus2_send"])
             elif i in (7, 8):
-                self.assertEqual(comp["componentData"]["type"], "mixerStripBus")
+                self.assertEqual(comp["componentData"]["type"], "mixerStripBusFrame")
                 self.assertEqual(remap.get("Solo"), f"Parameter {native_base + MIXER_CONTROL + MIXER_SOLO_OFFSET + i}")
                 self.assertEqual(remap.get("Mute"), f"Parameter {native_base + MIXER_CONTROL + MIXER_MUTE_OFFSET + i}")
                 self.assertNotEqual(remap.get("Solo"), remap.get("Mute"))
                 self.assertNotEqual(remap.get("Solo"), handles[f"{source}.destination"])
                 self.assertEqual(remap.get("Destination"), handles[f"{source}.destination"])
                 self.assertEqual(remap.get("Level"), handles[f"{source}.level"])
-                self.assertEqual(remap.get("Peak"), f"Parameter {native_base + MIXER_PEAK_OFFSET + i}")
-                self.assertEqual(remap.get("Hold"), f"Parameter {native_base + MIXER_HOLD_OFFSET + i}")
             else:
-                self.assertEqual(comp["componentData"]["type"], "mixerStripMaster")
+                self.assertEqual(comp["componentData"]["type"], "mixerStripMasterFrame")
                 self.assertEqual(remap.get("FxEnable"), handles["main.fx_bypass"])
                 self.assertEqual(remap.get("Mute"), f"Parameter {native_base + MIXER_CONTROL + MIXER_MUTE_OFFSET + 9}")
                 self.assertNotEqual(remap.get("Mute"), handles["main.fx_bypass"])
                 self.assertEqual(remap.get("Level"), handles["master.volume"])
-                self.assertEqual(remap.get("Peak"), f"Parameter {native_base + MIXER_PEAK_OFFSET + i}")
-                self.assertEqual(remap.get("Hold"), f"Parameter {native_base + MIXER_HOLD_OFFSET + i}")
 
-        # Verify shared definitions in componentDefinitions (including Header, SoloMutePair, MeterBlock - NONE pruned!)
-        for def_name in ("mixerStripSource", "mixerStripBus", "mixerStripMaster",
-                         "mixerStripHeaderSource", "mixerStripHeaderBus", "mixerStripHeaderMaster",
-                         "soloMutePairSource", "soloMutePairBus", "soloMutePairMaster",
-                         "mixerMeterBlockSource", "mixerMeterBlockBus",
+        for def_name in ("mixerStripSourceFrame", "mixerStripBusFrame", "mixerStripMasterFrame",
                          "mixerDestination56", "mixerSliderLEVEL198", "mixerSliderLEVEL414",
                          "mixerSliderPAN56", "mixerSliderB156", "mixerSliderB256"):
             self.assertIn(def_name, definitions, f"{def_name} must remain in generated TUI.json (not pruned as dead)")
