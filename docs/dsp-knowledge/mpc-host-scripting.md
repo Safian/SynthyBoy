@@ -41,6 +41,14 @@ Scratchpad paths below are the session scratchpad
   by a host touch (HYPOTHESIS: from skin behaviour; no script/plugin route seen). `PageIndex/Set/1,N` is
   the Q-Link bank selector (HYPOTHESIS: matches the skin generator's use, not re-checked on the device).
 
+## Pad Perform data on MPC OS 3.10.1.12
+
+The gzip-compressed XPJ project contains JSON after its five-line ACVS header. In the saved project, `data.padPerformSettings` supplies the mode (`type`), root (`baseNote`), scale (`scaleType`), starting octave and bank behaviour. The project key lives separately at `data.key`. For example, the XL remix stores project key C Major and Pad Perform A# Harmonic Minor in Scales mode. The Key 61 fixture stores C Major in Scales mode. Both use “Start on root note”.
+
+The selected track's program also stores `padNoteMap.noteForPad`. The XPJ fields alone do not establish the resolved live pad labels, the identity of the Pad Perform bank, or a notification on bank changes. In particular, the separate field `currentAssignablePadBank` needs independent identification. The Akai XL manual (v3.10.1, pp. 81–82) documents the factory Pad Perform window as displaying the current bank.
+
+Opened sources: the XL and Key 61 project originals under `.hw-local/mpc-perf/xl-load-incident-7b5a79da/project-originals/`; the XL manual under `.hw-local/mpc-knowledge/manuals-extended/`. Earlier Key 61 hardware measurements correlated raw pad input with its resulting MIDI pitch (see `docs/MPC.md`, device level sweep). Those measurements required sending pad events.
+
 ## Rejected / out of scope
 
 - Writing scripts or files under `/usr/share/Akai` (rootfs): owner decision, not done, not planned.
