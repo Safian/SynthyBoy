@@ -71,8 +71,9 @@ def _bind_strip_cells(strip, definitions, caption):
                 continue
             if model["name"] == "name" and parent.startswith("mixerStripHeader"):
                 model["data"].update(type="Text", text=caption)
-            if model["name"] in ("pan", "send1", "send2"):
-                remaps.append({"key": "Caption", "value": children["Data"]})
+            dial_caption = {"pan": "PAN", "send1": "B1", "send2": "B2"}.get(model["name"].removesuffix(" off"))
+            if dial_caption:
+                remaps.append({"key": "Caption", "value": f"WithName[{dial_caption}]/{children['Data']}"})
             model["name"] = strip["componentData"]["name"] + " " + model["name"]
             bounds.update(version=2, additionalInvalidatingHandles=visible)
             cells.append(cell)

@@ -57,6 +57,7 @@ except ImportError:
     Image = ImageDraw = ImageFont = None
 
 from components.style import (
+    apply_control_state,
     argb as _style_argb,
     color as _style_color,
     rgb as _style_rgb,
@@ -660,6 +661,18 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
 
     # SOURCE VARIANT
     power_gate = ("IndexedEnabling/1/2/Power",)
+    dials = []
+    for name, kind, rect, handle in (
+        ("pan", TYPE_SLIDER_PAN_56, rect_pan, "Pan"),
+        ("send1", TYPE_SLIDER_B1_56, rect_send1, "Send1"),
+        ("send2", TYPE_SLIDER_B2_56, rect_send2, "Send2"),
+    ):
+        inactive = kind + "Inactive"
+        defs[inactive] = apply_control_state(defs[kind], skins_dir, active=False)
+        data = {"version": 1, "handleName": "Data"}
+        bindings = (("Data", handle),)
+        dials.append(_entry(name, kind, data, rect, bindings, power_gate))
+        dials.append(_entry(name + " off", inactive, data, rect, bindings, ("IndexedEnabling/0/2/Power",), focus="No"))
     defs[TYPE_STRIP_SOURCE] = {
         "version": 2,
         "actions": [],
@@ -671,9 +684,7 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
             _entry("destination", TYPE_DESTINATION_56, {"version": 1, "handleName": "Data"}, rect_destination, (("Data", "Destination"),), power_gate),
             _entry("level", TYPE_FADER_LEVEL_198, {"version": 1, "handleName": "Data"}, rect_level_source, (("Data", "Level"),)),
             _entry("meter_block", TYPE_METER_BLOCK_SOURCE, {"version": 1, "handleName": "Data"}, rect_meter_source, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
-            _entry("pan", TYPE_SLIDER_PAN_56, {"version": 1, "handleName": "Data"}, rect_pan, (("Data", "Pan"),), power_gate),
-            _entry("send1", TYPE_SLIDER_B1_56, {"version": 1, "handleName": "Data"}, rect_send1, (("Data", "Send1"),), power_gate),
-            _entry("send2", TYPE_SLIDER_B2_56, {"version": 1, "handleName": "Data"}, rect_send2, (("Data", "Send2"),), power_gate),
+            *dials,
         ],
     }
 
