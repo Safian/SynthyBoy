@@ -418,7 +418,7 @@ def _apply_shape_detail(tui, items, ctx):
     payload = {"version": 1, "handleName": "Data"}
 
     detail_definitions = set()
-    def add(name, kind, rect, handle, gates, focus=True):
+    def add(name, kind, rect, handle, gates, focus=True, active=True):
         if kind in ("lfoNativeChoice", "lfoNativeNumber"):
             variant = kind + f"_{rect[2]}x{rect[3]}"
             if variant not in detail_definitions:
@@ -426,6 +426,15 @@ def _apply_shape_detail(tui, items, ctx):
                                                               number=kind == "lfoNativeNumber"))
                 detail_definitions.add(variant)
             kind = variant
+        if not active:
+            inactive_kind = kind + "Inactive"
+            if inactive_kind not in detail_definitions:
+                definitions = {entry["key"]: entry["value"] for entry in
+                               tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+                ctx.add_component_definition(inactive_kind, _ui_style.apply_control_state(
+                    definitions[kind], ctx.skins_dir, active=False))
+                detail_definitions.add(inactive_kind)
+            kind = inactive_kind
         items.append(_entry(prefix + name, kind, payload, rect, (("Data", handle),), gates, focus=focus))
 
     name = _label("Name", (0.025, 0, 0.95, 1), 19, proportional=True)
@@ -456,8 +465,8 @@ def _apply_shape_detail(tui, items, ctx):
         for low, high in disabled:
             gate = (f"IndexedEnabling/{low}/5/{point}" if low == high
                     else f"RangedEnabling/{low}/{high}/5/{point}")
-            passive = "lfoEditDisabledAction" if field == 3 else "lfoNativeDisabled"
-            add(title + f" unavailable {low}", passive, rects[field], handle, (point_view, gate), focus=False)
+            add(title + f" unavailable {low}", kind, rects[field], handle,
+                (point_view, gate), focus=False, active=False)
 
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     replacements.append({"key": f"Parameter {base + 2}", "value": ["TIME", "LEVEL", "CURVE"]})
