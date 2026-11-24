@@ -663,22 +663,6 @@ private:
     void drawNativeBaseScreen (gpu::SceneBuilder& sb) const
     {
         screen_.routingBar.draw (sb);
-        for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
-        {
-            const ui::MixerStrip& st = screen_.strips[s];
-            if (! isNativeOwned (s, 0))
-                st.power.draw (sb);
-            if (st.hasDestination() && ! isNativeOwned (s, 1))
-                st.destButton.draw (sb);
-            if (st.hasPan() && ! isNativeOwned (s, 2))
-                st.pan.draw (sb);
-            if (st.hasSend1() && ! isNativeOwned (s, 3))
-                st.send1.draw (sb);
-            if (st.hasSend2() && ! isNativeOwned (s, 4))
-                st.send2.draw (sb);
-            if (st.hasLevel() && ! isNativeOwned (s, 5))
-                st.fader.draw (sb);
-        }
         screen_.groups[screen_.activeGroup()].draw (sb);
     }
 
