@@ -180,14 +180,8 @@ def render_preview(states_out: Path = None, meter_readout=None):
     tab_bg = _render_mixer_tab_canvas(active_tab=0, meter_readout=meter_readout)
     screen.alpha_composite(tab_bg, (0, 110))
 
-    # Host static runtime backdrop (clean console background under native components)
-    out_bg = ROOT / "scripts" / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_bg_mixer.png"
-    out_bg.parent.mkdir(parents=True, exist_ok=True)
-    render_mixer_full_screen_background().save(out_bg, format="PNG")
-
     canonical = screen_path("mixer")
     save_screen(screen, canonical)
-    print(f"Saved host background to {out_bg}")
     print(f"Saved canonical mixer screen to {canonical}")
 
     if states_out is not None:

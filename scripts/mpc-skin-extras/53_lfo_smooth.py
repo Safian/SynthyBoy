@@ -194,17 +194,12 @@ def apply(tui, qlinks, ctx):
 
     items = tab["componentDefinition"]["componentsData"]
     items[:] = [c for c in items if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
-    # The host paints the existing LFO furniture beneath its native widgets.
-    # Assets are rendered offline from the same LfoFullScreen layout.
-    import shutil
+    # Group captions are real native Labels, never baked into a background.
+    from native_static_captions import caption_entries
     for layout in range(1, LAYOUT_STEPS):
-        art_layout = (1, 1, 3, 4, 4, 6)[layout - 1]
-        filename = f"lfo_native_furniture_{art_layout}.png"
-        shutil.copyfile(CONTRACT.parent / "overlay-backgrounds" / filename, ctx.skins_dir / filename)
-        gate = (f"IndexedEnabling/{layout}/{LAYOUT_STEPS}/Parameter {base + LAYOUT}",)
-        items.insert(0, _entry(PREFIX + f"Furniture {layout}", "Image",
-                            {"version": 2, "imageType": "Regular", "colour": "0", "image": filename},
-                            (0, 8, 1280, 620), gates=gate))
+        caption_layout = (1, 1, 3, 4, 4, 6)[layout - 1]
+        gates = (f"IndexedEnabling/{layout}/{LAYOUT_STEPS}/Parameter {base + LAYOUT}",)
+        items.extend(caption_entries(f"lfo{caption_layout}", prefix=PREFIX + f"Group {layout}", gates=gates))
     ranges = {}
     for layout, field, action, *rect in sorted(contract):
         spans = ranges.setdefault((field, action, tuple(rect)), [])

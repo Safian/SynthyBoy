@@ -1,0 +1,249 @@
+{
+  "master": [
+    {
+      "text": "OUTPUT",
+      "rect": [
+        20,
+        73,
+        50,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "PITCH",
+      "rect": [
+        668,
+        73,
+        37,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "VOICES",
+      "rect": [
+        20,
+        309,
+        45,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "GLIDE",
+      "rect": [
+        808,
+        309,
+        37,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "QUALITY",
+      "rect": [
+        230,
+        256,
+        52,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "voice": [
+    {
+      "text": "RANDOM",
+      "rect": [
+        20,
+        375,
+        56,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SCALING",
+      "rect": [
+        548,
+        375,
+        52,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TARGETS",
+      "rect": [
+        936,
+        375,
+        55,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "env1": [
+    {
+      "text": "ENV",
+      "rect": [
+        12,
+        27,
+        35,
+        26
+      ],
+      "size": 17,
+      "colour": "text.caption"
+    },
+    {
+      "text": "ADSR",
+      "rect": [
+        18,
+        445,
+        35,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        478,
+        445,
+        42,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        825,
+        445,
+        32,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "mod": [
+    {
+      "text": "MOD MATRIX",
+      "rect": [
+        58,
+        11,
+        166,
+        42
+      ],
+      "size": 28,
+      "colour": "text.value"
+    }
+  ],
+  "lfo1": [
+    {
+      "text": "RATE",
+      "rect": [
+        18,
+        333,
+        33,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIMING",
+      "rect": [
+        400,
+        333,
+        45,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "MOTION",
+      "rect": [
+        907,
+        333,
+        51,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "lfo3": [
+    {
+      "text": "RATE - FOLLOWS THE KEY",
+      "rect": [
+        18,
+        333,
+        150,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIMING",
+      "rect": [
+        400,
+        333,
+        45,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "MOTION",
+      "rect": [
+        907,
+        333,
+        51,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "lfo4": [
+    {
+      "text": "RANDOM",
+      "rect": [
+        18,
+        427,
+        56,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "lfo6": [
+    {
+      "text": "RANDOM - RATE FOLLOWS THE KEY",
+      "rect": [
+        18,
+        427,
+        206,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ]
+}

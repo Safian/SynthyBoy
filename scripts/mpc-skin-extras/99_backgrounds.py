@@ -1,4 +1,4 @@
-# SynthyBoy - MPC skin extra: pre-rendered static page backgrounds for the OVERLAY skin variant.
+# SynthyBoy - MPC skin extra: fixed plain canvas assets for the OVERLAY skin variant.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -16,7 +16,7 @@ ASSETS_DIR = HERE / "overlay-backgrounds"
 # The backgrounds the generator can make: view -> (tab name, committed asset, sentinel x, y, RRGGBB). The SENTINEL (tab coordinates, a 5 x 5 square) is the spot where the background has a flat colour the
 # host's own picture of the tab (its native widgets on the host's tab colour 1e1d1e, or the tab before the switch) does not have, outside the three marker spots, the host's left-edge handle tab (x 0 .. 9) and the host's
 # Q-Link panel (x >= 1020). The plugin reads it from the host's primary framebuffer (shell-mpc/overlay/page_detector.h) and keeps its own plane OPAQUE until it matches (shell-mpc/overlay/host_background.h).
-# A test compares the colour with the PNG.
+# The detector colour lives in a separate fixed native Image widget; background PNGs are plain canvas.
 OSC_ASSET = "overlay_bg_osc.png"
 OSC_SENTINEL = (900, 8, "0f253f")
 
@@ -58,17 +58,21 @@ BACKGROUND_TABS = load_manifest()
 
 
 def install_background(source, destination, sentinel):
-    from PIL import Image
+    """Copy the owner-approved static asset verbatim. Never redraw or patch it."""
+    shutil.copyfile(source, destination)
 
-    x, y, rgb = sentinel
-    color = tuple(bytes.fromhex(rgb))
-    box = (x, y, x + 5, y + 5)
-    with Image.open(source) as image:
-        if image.crop(box).getcolors() == [(25, color)]:
-            shutil.copyfile(source, destination)
-        else:
-            image.paste(color, box)
-            image.save(destination, optimize=True)
+
+def sentinel_entry(view, filename, sentinel):
+    x, y, _ = sentinel
+    return {
+        "version": 2,
+        "componentData": {"version": 1, "name": "Overlay Background Sentinel " + view,
+                          "type": "Image", "data": {"version": 2, "imageType": "Regular",
+                          "colour": "0", "image": filename}},
+        "handle remapping": {"version": 1, "map": []},
+        "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show",
+                   "whenVisible": "Always", "boundsType": "Absolute", "bounds": f"{x} {y} 5 5"},
+    }
 
 
 def apply(tui, qlinks, ctx):
@@ -88,6 +92,17 @@ def apply(tui, qlinks, ctx):
 
         tab = ctx.tab(tab_name)
         root = tab["componentDefinition"]
+        marker = "sentinel_" + view + ".png"
+        if getattr(ctx, "skins_dir", None):
+            shutil.copyfile(ASSETS_DIR / marker, Path(ctx.skins_dir) / marker)
+        children = root["componentsData"]
+        children[:] = [entry for entry in children if not entry["componentData"]["name"].startswith(
+            ("Overlay Background Sentinel ", "Native Caption " + view))]
+        children.append(sentinel_entry(view, marker, SENTINELS[view]))
+        # LFO captions belong to its layout-gated native hook.
+        if view != "lfo1":
+            from native_static_captions import caption_entries
+            children.extend(caption_entries(view, prefix="Native Caption " + view))
         bg = root["backgroundData"]
         for state in ("focussed", "unfocussed"):
             bg[state] = dict(bg[state], image=asset_name)

@@ -107,29 +107,13 @@ class MpcBackgroundsTests(unittest.TestCase):
             self.assertEqual(im.mode, "RGB", "Background must be fully opaque RGB (no alpha)")
             self.assertEqual(im.format, "PNG")
 
-    def test_factory_furniture_matches_current_page_renderers(self):
-        generator = load_module("factory_furniture", ROOT / "scripts/render-native-furniture.py")
-        with tempfile.TemporaryDirectory() as tmp:
-            generator.render(Path(tmp))
-            for view in ("master", "voice", "osc", "mod", "env", "mixer", "lfo"):
-                asset = f"overlay_bg_{view}.png"
-                with Image.open(Path(tmp) / asset) as reference, Image.open(ASSETS_DIR / asset) as actual:
-                    self.assertEqual((actual.size, actual.mode), ((1280, 628), "RGB"))
-                    self.assertEqual(actual.tobytes(), reference.tobytes(), view)
-
-    def test_play_asset_is_reproducible_and_no_live_data_is_baked_into_the_plots(self):
-        generator = load_module("factory_play_root", ROOT / "scripts/render-play-background.py")
-        with Image.open(ASSETS_DIR / "overlay_bg_play.png") as image:
-            self.assertEqual((image.size, image.mode), ((1280, 628), "RGB"))
-            self.assertEqual(image.tobytes(), generator.render().tobytes())
-            for left, right in ((29, 407), (461, 819), (879, 1245)):
-                for y in range(157, 340):
-                    self.assertEqual(len(set(image.crop((left, y, right, y + 1)).getdata())), 1)
-        # Even a stale image of the other native page cannot satisfy the detector.
-        x, y, play_rgb = bg_mod.SENTINELS["play1"]
-        with Image.open(ASSETS_DIR / "overlay_bg_macros.png") as macros:
-            actual = macros.getpixel((x + 2, y + 2))
-        self.assertGreater(max(abs(int(play_rgb[i:i + 2], 16) - actual[i // 2]) for i in (0, 2, 4)), 2)
+    def test_backgrounds_are_fixed_plain_canvas(self):
+        from components import style
+        expected = tuple(bytes.fromhex(style.color("surface.canvas").lstrip("#")))
+        for asset in ASSETS_DIR.glob("overlay_bg_*.png"):
+            with Image.open(asset) as image:
+                self.assertEqual((image.size, image.mode), ((1280, 628), "RGB"))
+                self.assertEqual(image.getcolors(), [(1280 * 628, expected)])
 
     def test_inactive_on_production_skin(self):
         ctx = MockCtx(meta=None, param_count=2637)
@@ -171,15 +155,16 @@ class MpcBackgroundsTests(unittest.TestCase):
             tui = {"pageData": {"tabs": [tab, other]}}
             for _ in range(2):
                 bg_mod.apply(tui, qlinks, ctx)
-                self.assertEqual(mac["componentsData"], markers)
+                self.assertEqual([c for c in mac["componentsData"] if not c["componentData"]["name"].startswith("Overlay Background Sentinel ")], [c for c in markers if not c["componentData"]["name"].startswith("Overlay Background Sentinel ")])
                 for state in ("focussed", "unfocussed"):
                     self.assertEqual(mac["backgroundData"][state], dict(fallback[state], image="overlay_bg_macros.png"))
                 self.assertEqual(other, before_other)
                 self.assertEqual(qlinks, before_qlinks)
                 with Image.open(Path(tmp) / "overlay_bg_macros.png") as installed, Image.open(ASSETS_DIR / "overlay_bg_macros.png") as original:
                     x, y, rgb = bg_mod.SENTINELS["macros"]
-                    self.assertEqual(ImageChops.difference(installed, original).getbbox(), (x, y, x + 5, y + 5))
-                    self.assertEqual(installed.getpixel((x, y)), tuple(bytes.fromhex(rgb)))
+                    self.assertIsNone(ImageChops.difference(installed, original).getbbox())
+                    with Image.open(Path(tmp) / "sentinel_macros.png") as marker:
+                        self.assertEqual(marker.getcolors(), [(25, tuple(bytes.fromhex(rgb)))])
 
     def test_the_known_backgrounds(self):
         self.assertEqual(sorted(bg_mod.KNOWN), ["env1", "filter1", "fx", "lfo1", "macros", "master", "mixer", "mod", "osca", "oscb", "oscc", "oscnoise", "oscsub", "play1", "voice"])
@@ -209,10 +194,12 @@ class MpcBackgroundsTests(unittest.TestCase):
                 ctx.add_mock_tab(name)
             bg_mod.apply({}, {}, ctx)
             assets = {}
-            for _, _, asset in bg_mod.BACKGROUND_TABS:
+            for view, _, asset in bg_mod.BACKGROUND_TABS:
                 if asset not in assets:
                     with Image.open(Path(tmp) / asset) as im:
                         assets[asset] = im.convert("RGB")
+                    with Image.open(Path(tmp) / ("sentinel_" + view + ".png")) as marker:
+                        assets[asset].paste(marker, bg_mod.SENTINELS[view][:2])
         for view_name, tab_name, asset_name in bg_mod.BACKGROUND_TABS:
             view = next(v for v in layout["views"] if v["name"] == view_name)
             x, y, rgb = bg_mod.SENTINELS[view_name]
@@ -281,7 +268,7 @@ class MpcBackgroundsTests(unittest.TestCase):
             ("marker1", m1["x"] - 1, m1["y"] - 1, m1["x"] + m1["w"] + 1, m1["y"] + m1["h"] + 1),
         ]
 
-        expected_ground_rgb = (11, 16, 37)  # 0x0b1025
+        expected_ground_rgb = (9, 13, 25)  # surface.canvas #090d19
         with Image.open(asset) as im:
             for name, x0, y0, x1, y1 in spots:
                 for y in range(y0, y1):

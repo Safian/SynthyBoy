@@ -318,14 +318,14 @@ def apply(tui, qlinks, ctx):
     editor_items = [e for e in native_items if e["componentData"]["name"].startswith(PREFIX + "Editor ")]
     detail_items = [e for e in native_items if e["componentData"]["name"].startswith(PREFIX + "Detail ")]
 
-    furniture = [e for e in root_items if e["componentData"]["name"].startswith(PREFIX + "Furniture ")]
-    controls = [e for e in root_items if e not in furniture]
+    captions = [e for e in root_items if e["componentData"]["name"].startswith(PREFIX + "Group ")]
+    controls = [e for e in root_items if e not in captions]
     # Two SYNC composites became six directly bound Button leaves apiece.
     # The 25 scalar composites and two action Buttons retain their contracts.
     if len(controls) != 39 or sum(e["componentData"]["type"] == "Button" for e in controls) != 14:
         raise ValueError(f"Expected 39 root native LFO controls including 14 Buttons, found {len(controls)}")
-    if len(furniture) != 6 or any(e["componentData"]["type"] != "Image" or _rect(e) != (0, 8, 1280, 620) for e in furniture):
-        raise ValueError("Expected six native LFO furniture states below the marker strip")
+    if len(captions) != 12 or any(e["componentData"]["type"] != "Label" for e in captions):
+        raise ValueError("Expected twelve layout-gated native LFO group captions")
     if len(editor_items) != 29:
         raise ValueError(f"Expected 29 Shape Editor widgets, found {len(editor_items)}")
     if len(detail_items) != 18:
@@ -336,7 +336,7 @@ def apply(tui, qlinks, ctx):
         x, y, w, h = _rect(item)
         if x < 0 or y < 0 or x + w > 1280 or y + h > 628:
             raise ValueError(f"Widget {item['componentData']['name']} out of bounds: {(x, y, w, h)}")
-        if min(w, h) < 56:
+        if item not in captions and min(w, h) < 56:
             raise ValueError(f"Widget {item['componentData']['name']} too small: {(w, h)} < 56")
 
     # 6. Resolve the definitions ACTUALLY referenced after shared-tree deduplication.

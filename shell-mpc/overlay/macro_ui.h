@@ -240,7 +240,11 @@ public:
         else
         {
             if (hostBackground() || nativeControls_)
+            {
+                // Axis/grid belongs to the live graph, never the plain canvas PNG.
+                view_.spectrum.drawStatic (sb);
                 view_.drawLive (sb);
+            }
             else
                 view_.draw (sb);
         }

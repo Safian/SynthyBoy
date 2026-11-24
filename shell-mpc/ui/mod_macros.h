@@ -32,7 +32,6 @@ public:
         Pen p (sb, enabled_);
         Cell cell (sb, rect_);
         const theme::Look& T = theme::L();
-        p.block (rect_);
         const Rect in { rect_.x + 10, rect_.y + 22, std::max (0, rect_.w - 20), std::max (0, rect_.h - 22 - 20) };
         if (in.w < 20 || in.h < 20)
             return;
