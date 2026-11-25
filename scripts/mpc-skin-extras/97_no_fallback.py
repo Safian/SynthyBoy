@@ -1,17 +1,12 @@
-# SynthyBoy - MPC skin extra: NO HOST FALLBACK in the OVERLAY skin variant (owner decision, 2026-11-21: the release ships the overlay skin only).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Inactive unless skin-meta.json says "variant": "overlay". What it does to every tab of such a skin, after the modules that make the host widgets (10_env .. 95_subtabs) and before 98_tile.py / 99_backgrounds.py:
-#   - REMOVES every componentsData entry of the tab except the components the overlay needs from the skin: the marker squares ("Overlay Marker ...") and the instance picture ("Overlay Instance ...") by which the
-#     plugin finds its page. The three compact Play selectors are deliberate exceptions, as are the ENV ADSR dials whose C++ page provides transparent holes/touch pass-through.
-#     Other fallback controls (faders, meters, graphs and unrelated knobs) are gone: the plugin draws those parts.
-#   - what STAYS besides those: the Q proxies "Q 1" .. "Q 16" (parameters, NOT widgets: Q-Links.json maps the hardware knobs to them, 82_play.py / 83_pages.py), the
-#     hide rule's handle (nothing is left to hide, the rule is harmless), the optional host background (99_backgrounds.py, manifest empty by default: it runs after this module and adds its Image to the tabs it lists).
-#   - SETS qlinkBoundsData to [] on every tab (owner photo, XL, 2026-11-21: the host drew its own Q-Link highlight, the frames of the old fallback grid with numbered badges 3 / 7 / 4 / 8, from the 4 frames
-#     of 90_frames.py INSIDE the plugin page's Env and LFO graphs while a knob was turned). "Use [] to draw no highlight" (ui-reference.md 3.6, the key is required, [] is valid). The plugin page draws its own Q frames and badges.
-#   - drops the component definitions that no remaining component uses (the Play selector's named slider definition and menu overlay are retained) and the PNG files of the skin folder that TUI.json no
-#     longer refers to (the kit film strips, the LFO pictures and cursor strip, the spectrum pictures, the Play background and panel pictures): they would be unpacked into the host's picture cache at every start.
+"""Remove SDK scaffolding after mounting the native controls.
+
+Keep the page and instance markers on top, preserve Q-Link mappings, and
+suppress host Q-Link highlight rectangles inside the plugin editor. Remove
+unreferenced local definitions and artwork before later native hooks extend
+the skin.
+"""
 
 import sys
 from pathlib import Path
@@ -65,8 +60,7 @@ def _keep_component(tab, component):
     if tab.get("tabName") == "Voice":
         return name in VOICE_NATIVE_CONTROL_NAMES
     # Full-tab candidate generators use stable module prefixes and private
-    # native widget types.  Keep those entries after 85_names has rewritten
-    # the tab labels; exact-name tables alone lose them on the release TUI.
+    # native widget types.  Keep those entries on native pages; exact-name tables alone lose them on the release TUI.
     native_generated = name.startswith(("Master ", "Mod ", "Macro ", "Macros ", "FX ", "Mixer ", "Osc Native ")) \
             or name.endswith((" Power", " Smooth Native")) \
             or component.get("componentData", {}).get("type", "").startswith(("masterNative", "voiceNative", "modNative", "fxNative", "oscNative"))

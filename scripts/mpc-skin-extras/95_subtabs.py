@@ -7,7 +7,7 @@
 # fnKeyIndex and the sub-tab indexes 0 .. k - 1 (the host steps through them when the key is pressed again; the key shows the tabName of the current
 # sub-tab, observed on the Key 61), puts the tab list in that order and renumbers Q-Links.json: Tab = fnKeyIndex + 1, SubTab = fnKeySubIndex + 1,
 # entries in the order of the tabs. Every module before this one finds its tab by name, and the Q-Link entry of a tab by the generator's numbering
-# (one key per page), which is why this module runs last (after 90_frames.py).
+# (one key per page), before this hook groups them.
 # Labels: skin-meta.json may have "labels" ({page name: label}, from "label" in the layout file). The host draws the tabName of the current sub-tab on the function key, so the tab that is first under
 # its key gets the short label as its tabName (the first row of keys reads Play, Osc, Filter, Env, LFO, ...) while the other sub-tabs keep their longer names (which the key shows while they are
 # on screen). Every module before this one, the overlay views and the tests refer to the page by its unique INTERNAL name; only the finished skin carries the label. A skin-meta.json without

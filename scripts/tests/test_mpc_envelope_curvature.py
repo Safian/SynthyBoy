@@ -35,20 +35,6 @@ class EnvelopeCurvatureTest(unittest.TestCase):
             self.assertFalse(doc_info["documented"], "Quadratic curve formula is not documented in MPC SDK")
             self.assertIn("Nincs dokumentálva", doc_info["message"])
 
-    def test_skin_extras_envelope_config(self):
-        """Verifies that scripts/mpc-skin-extras/10_env.py sets Quadratic and maps shape handles."""
-        skin_script = ROOT / "scripts" / "mpc-skin-extras" / "10_env.py"
-        self.assertTrue(skin_script.is_file(), "10_env.py must exist")
-        content = skin_script.read_text(encoding="utf-8")
-
-        self.assertIn('"curveType": "Quadratic"', content)
-        self.assertIn('"forceCurveShape": 0.5', content)
-        self.assertIn('"forceHideShapeHandles": False', content)
-
-        # Check shape mapping
-        for handle, key in (("AttackShape", "attack_curve"), ("DecayShape", "decay_curve"), ("ReleaseShape", "release_curve")):
-            self.assertIn(f'("{handle}", "{key}")', content)
-
     def test_param_table_curve_definitions(self):
         """Verifies that core/src/param_table.cpp defines curves in [-20, 20] with expected defaults."""
         param_table = ROOT / "core" / "src" / "param_table.cpp"

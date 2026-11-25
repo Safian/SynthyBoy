@@ -12,7 +12,7 @@
 #   Decay:   y = 1.0 - powerShape(t, decay_curve)         (s.decayCurve = decay_curve, sustain=0)
 #   Release: y = 1.0 - powerShape(t, release_curve)       (s.releaseCurve = release_curve)
 #
-# Host drawing (scripts/mpc-skin-extras/10_env.py and ~/.local/share/local-worker/ext/mpc-sdk):
+# Historical SDK Envelope drawing used for comparison:
 #   The MPC SDK docs (docs/ui-reference.md section 6.13) document curveType enum ("Quadratic", "Exponential")
 #   and forceCurveShape (0.5), but DO NOT document any mathematical formula for the Quadratic curve.
 #   In 2D UI drawing, Quadratic curves are standard Quadratic Bézier curves with control point (0.5, y_c),

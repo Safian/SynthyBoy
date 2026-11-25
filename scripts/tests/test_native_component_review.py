@@ -116,7 +116,7 @@ class NativeComponentReviewTest(unittest.TestCase):
 
     def test_macro_definition_without_export_does_not_render_discarded_strip(self):
         macro = load("macro_card")
-        with patch.object(macro, "write_level_strip", side_effect=AssertionError("unexpected render")):
+        with patch("components.native.level.level.write_strip", side_effect=AssertionError("unexpected render")):
             definition = macro.macro_level_definition()
         knob = next(c for c in definition["componentsData"] if c["componentData"]["name"] == "knob")
         self.assertEqual(knob["componentData"]["data"]["filmStrip"], "play_sub_level_90.png")
@@ -129,11 +129,9 @@ class NativeComponentReviewTest(unittest.TestCase):
             "handle remapping": {"version": 1, "map": []},
             "bounds": {"version": 1, "bounds": "0 0 56 56"},
         }
-        button = load("button")
         level = load("level")
         selector = load("selector")
         entries = [
-            button.build_filter_power(None, template, 1, 10, (0, 0, 56, 56), overlay_param=20),
             level.build_standalone_smooth(template, "LFO 2", 10, (0, 0, 56, 56), overlay_param=20),
             selector.build_standalone_osc_selector(None, template, "Osc A", 10, overlay_param=20),
         ]
@@ -141,7 +139,7 @@ class NativeComponentReviewTest(unittest.TestCase):
             self.assertEqual(entry["bounds"]["version"], 2)
             self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"],
                              ["RangedEnabling/0/18/33/Parameter 20"])
-        self.assertEqual(entries[1]["componentData"]["name"], "LFO 2 Smooth Native")
+        self.assertEqual(entries[0]["componentData"]["name"], "LFO 2 Smooth Native")
         self.assertEqual(template["bounds"]["version"], 1)
 
 

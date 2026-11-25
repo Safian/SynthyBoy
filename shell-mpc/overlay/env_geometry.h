@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: where the native envelope widget (SDK `Envelope`, type DAHDSR, skin of scripts/mpc-skin-extras/10_env.py) draws the points of its curve. Measured on the
+// SynthyBoy - MPC overlay: where the native envelope widget (SDK `Envelope`, type DAHDSR, historical host skin) draws the points of its curve. Measured on the
 // Key 61 (firmware 3.10.1.12) from screenshots of the primary plane at several settings (docs/MPC.md "Overlay (experimental)", results file "D terv, 5. proba").
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

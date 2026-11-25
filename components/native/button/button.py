@@ -1,7 +1,6 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Native MPC button construction, 48 px action-button component, and FilterPower variant."""
-import copy
+"""Native MPC button construction, action-button components and Filter tab navigation."""
 import hashlib
 import math
 from pathlib import Path
@@ -163,66 +162,6 @@ def filter_power_param_key(filter_num):
     return "filter%d.on" % filter_num
 
 
-def build_filter_power(clone, template, filter_num, parameter_index, rect, overlay_param=-1, last_visible_frame=18):
-    """Builds a native standalone Filter 1 or Filter 2 power switch component.
-
-    Ensures:
-    1. Correct per-instance binding:
-       - Filter 1 binds to filter1.on (Parameter <idx1>)
-       - Filter 2 binds to filter2.on (Parameter <idx2>)
-    2. OFF navigation & operable power switch:
-       - No self-disabling condition on power state (strips 'Enable' mapping and IndexedEnabling handles).
-       - Power toggle remains touchable when OFF (showWhenDataModelInvalid='Show', whenVisible='Always').
-    3. Overlay precedence:
-       - In overlay skin variant, optionally adds RangedEnabling on overlay_param so the host widget
-         hides while the plugin's GPU overlay is active (frame 24) and remains visible during frames 0..18.
-    """
-    name = "Filter %d Power" % filter_num
-    if clone is None:
-        entry = copy.deepcopy(template)
-        entry["componentData"]["name"] = name
-        entry["bounds"]["bounds"] = " ".join(map(str, rect))
-        remaps = entry.setdefault("handle remapping", {"version": 1, "map": []})["map"]
-        if not any(item.get("key", item.get("from")) in ("Value", "Data") for item in remaps):
-            remaps.append({"key": "Data", "value": f"Parameter {parameter_index}"})
-    else:
-        entry = clone(template, name, parameter_index, rect)
-
-    # Invalidate / remapping safety: strip self-disabling handles
-    if "handle remapping" in entry:
-        entry["handle remapping"]["map"] = [
-            m for m in entry["handle remapping"].get("map", [])
-            if m.get("from") != "Enable" and m.get("key") != "Enable"
-        ]
-        # Ensure Value or Data is correctly bound to parameter_index
-        val_map = next((m for m in entry["handle remapping"]["map"] if m.get("key") in ("Value", "Data") or m.get("from") in ("Value", "Data")), None)
-        if val_map:
-            val_map["value"] = "Parameter %d" % parameter_index
-        else:
-            entry["handle remapping"]["map"].append({"key": "Data", "value": "Parameter %d" % parameter_index})
-
-    # Bounds configuration for persistent operability
-    bounds = entry.setdefault("bounds", {})
-    bounds["acceptsHWFocus"] = template.get("bounds", {}).get("acceptsHWFocus", "Yes")
-    bounds["showWhenDataModelInvalid"] = "Show"
-    bounds["whenVisible"] = "Always"
-
-    # Remove any IndexedEnabling handles on its own power parameter
-    handles = list(bounds.get("additionalInvalidatingHandles", []))
-    handles = [h for h in handles if not h.endswith("Parameter %d" % parameter_index)]
-
-    # Overlay hiding precedence (if overlay_param is supplied)
-    if overlay_param >= 0:
-        overlay_handle = "RangedEnabling/0/%d/33/Parameter %d" % (last_visible_frame, overlay_param)
-        if overlay_handle not in handles:
-            handles.append(overlay_handle)
-
-    if handles:
-        bounds["version"] = 2
-    bounds["additionalInvalidatingHandles"] = handles
-    return entry
-
-
 def sanitize_tab_navigation(tab, filter_power_params):
     """Ensures standalone filter tab navigation is not locked out when power is OFF.
 
@@ -260,7 +199,6 @@ __all__ = [
     "action_button",
     "icon_button",
     "filter_power_param_key",
-    "build_filter_power",
     "sanitize_tab_navigation",
 ]
 

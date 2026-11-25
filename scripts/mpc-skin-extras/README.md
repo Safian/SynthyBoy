@@ -2,7 +2,7 @@
 
 Modules in this folder post-process the generated MPC skin (`Plugin Skins/TUI.json` and `Q-Links.json`).
 `scripts/apply-mpc-skin-extras.py` runs after the SDK `gen_ui.py` (see `scripts/build-mpc.sh`; `--meta skin-meta.json` is the file `scripts/gen-mpc-ui.py --layout` writes next to ui.json), loads every
-`*.py` file here in name order (`10_env.py`, `50_filter_overlay.py`, `80_layout.py`, `85_names.py`, `90_frames.py`, `95_subtabs.py`, `98_tile.py`, ...) and calls
+`*.py` file here in name order (for example `20_fx.py`, `50_filter_overlay.py`, `95_subtabs.py` and `98_tile.py`) and calls
 
     def apply(tui: dict, qlinks: dict, ctx) -> None
 
@@ -17,8 +17,8 @@ leaves everything alone; if no module changes anything the two JSON files are no
 | `ctx.tab(title)` | The tab object whose `tabName` is `title` (the dict inside `tui["pageData"]["tabs"]`). Unknown or ambiguous title: error listing the tab names. |
 | `ctx.param_key(index)` | The `docs/params.json` key of a parameter index (the inverse of `param_index`), or the key a module registered with `add_param_key`. |
 | `ctx.param_count` | Number of entries of `docs/params.json`; the plugin's own parameters (LFO cursors, spectrum columns, pad pressure) have the indexes after it. |
-| `ctx.add_param_key(index, key)` | Names a parameter of the plugin that `params.json` does not list (index >= `param_count`), so that the modules that run later (`80_layout.py`, `85_names.py`) treat a control bound to it like any other (`45_pad_pressure.py`; its short name goes into `ctx.meta`). |
-| `ctx.meta` | The parsed `skin-meta.json` (`fnKeys`: function keys and their tab names; `tabs`: per tab the short names of its controls; `variant`: only when the layout file names a skin variant, e.g. `"overlay"`) or `None` without `--meta`; `85_names.py` and `95_subtabs.py` raise without it. A module of a variant (`50_filter_overlay.py`) returns at once unless `variant` is its own: the production skin stays byte for byte as it is. |
+| `ctx.add_param_key(index, key)` | Registers the name of a shell parameter for subsequent hooks. |
+| `ctx.meta` | The parsed `skin-meta.json` (`fnKeys`: function keys and their tab names; `tabs`: per tab the short names of its controls; `variant`: only when the layout file names a skin variant, e.g. `"overlay"`) or `None` without `--meta`; `95_subtabs.py` raises without it. A module of a variant (`50_filter_overlay.py`) returns at once unless `variant` is its own: the production skin stays byte for byte as it is. |
 | `ctx.skins_dir` | `pathlib.Path` of the `Plugin Skins` folder; put PNGs here, reference them by bare file name. |
 | `ctx.add_component_definition(name, obj)` | Appends `{"key": name, "value": obj}` to `pageData.componentDefinitions.localComponentDefinitions`. Name clash: error. |
 

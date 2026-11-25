@@ -1,14 +1,10 @@
-# SynthyBoy - MPC skin extra: the PAGES the plugin draws entirely, of the OVERLAY skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json): the tabs Filter 1 / 2, Osc A / B / C / Sub / Noise, Env 1 .. 4, LFO 1 .. 4, Macros, Mixer, Mod, FX, Master and
-# Voice (the views of shell-mpc/overlay/overlay_layout.json whose kind is one of the page kinds; the Play tabs are 82_play.py's). Copyright (C) 2026 Safian Szabolcs
+# SynthyBoy native editor page bindings
+# Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Inactive unless skin-meta.json says "variant": "overlay" (the production skin stays byte for byte as it is). What it does to such a tab, the same as the Play page does to its own:
-#   - the host widgets of the tab (the knobs, the faders, the meters ...) stay where the other modules put them, so that with the overlay off or disabled the tab works as before. Overlay-owned widgets are hidden while
-#     the plugin's page is up (RangedEnabling on the display parameter "Overlay Instance": the plugin reports the frame 24 then, 82_play.py); explicitly native controls are exempt and have transparent holes/touch pass-through in their C++ page. The marker squares and
-#     the instance picture (50_filter_overlay.py) are never hidden: the plugin finds the page by them.
-#   - the hardware knobs of the tab (Q-Link 1 .. 16) are the Q proxies "Q 1" .. "Q 16" (shell-mpc/q_router.h): the page sets what they act on (the active group on Q 1 .. 4, the next groups on 5 .. 16), bank direction "Row"
-#     (bank 1 = Q-Link 1 .. 4 = the bottom row of the grid, then 5 .. 8, 9 .. 12, 13 .. 16; the MPC XL has all 16 knobs at once).
-# Runs after 82_play.py (the Q proxies are registered by it), before 85_names.py and 90_frames.py.
+# Route the 16 hardware Q-Links to the selected page's proxies. The SDK
+# scaffolding is still present at this stage. The production SynthyBoy skin
+# drops it in 97_no_fallback.py. template-mpc also uses this hook.
 
 import json
 import os

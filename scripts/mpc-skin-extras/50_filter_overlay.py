@@ -2,11 +2,8 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Inactive unless skin-meta.json says "variant": "overlay" (the layout file of that variant sets it; the production layout does not, and this module then changes nothing).
-# The overlay draws over tabs (shell-mpc/overlay/overlay_layout.json: the VIEWS): the PAGES it draws entirely (the Play tabs, Filter 1 / 2, Osc A / B / C / Sub / Noise, Env 1 .. 4, LFO 1 .. 4,
-# Macros, Mixer, Mod, FX, Master, Voice: 82_play.py and 83_pages.py hide their host widgets while the plugin's page is up and give them the Q proxies). Every view has a region and a pair of marker squares of
-# colours that no other view uses; this module draws them (and the instance picture) on the tab of every view. It does not move any control: the tabs keep what the other modules made of them, which is what
-# the player sees when the overlay is off or disabled.
+# Adds page-detection and instance markers to the SDK tab. The SynthyBoy
+# packaging pipeline retains these markers with the project-owned components.
 #
 # The marker pictures (overlay_marker_<view>_<left|right>.png, solid squares of the colours in shell-mpc/overlay/overlay_layout.json at the positions given there, drawn 1:1) are
 # what the plugin's page detector looks for in the primary framebuffer; the plugin paints the dark picture over them, so the player sees only the dark area. The numbers are in
@@ -18,9 +15,7 @@
 # reads in the primary framebuffer says which instance's page is on screen. The strips are RGB PNGs with the settings of the marker pictures (no alpha), width = the picture, height =
 # 33 frames one under the other (like the cursor strip the LFO host tab had).
 #
-# Runs before 80_layout.py, which places the slots, 85_names.py and 90_frames.py.
 
-import copy
 import json
 import os
 import struct
@@ -29,9 +24,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
-COLS = (23, 343, 663, 983)
-ROWS = (45, 196, 346, 497)
-QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2   # the parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h, shell-mpc/pad_pressure.h)
 # Another plugin (template-mpc) uses these modules with its own layout: the file comes from skin-meta ("layout_path") or the environment (MPC_OVERLAY_LAYOUT), the parameters before "Overlay Instance" from the
 # JSON key "paramsBefore" (SynthyBoy's number is the default), the kind "page" is the generic page the plugin draws entirely.
@@ -87,33 +79,6 @@ def _image(name, file, rect):
             "handle remapping": {"version": 1, "map": []},
             "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute",
                        "bounds": "%d %d %d %d" % rect}}
-
-
-def _param_of(component):
-    return component["handle remapping"]["map"][0]["value"]
-
-
-def _place(component, row, col):
-    component["bounds"]["bounds"] = "%d %d 278 107" % (COLS[col], ROWS[row])
-
-
-def _qlink(row, col):
-    return "Q-Link %d" % (4 * (3 - row) + col + 1)
-
-
-def _row_map(qlinks, tab):
-    return next(m for m in qlinks["Screen Mode Q-Links"]["map"] if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1)
-
-
-def _take(items, name):
-    found = [c for c in items if c["componentData"]["name"] == name]
-    if len(found) != 1:
-        raise ValueError("tab has %d components named %r" % (len(found), name))
-    return found[0]
-
-
-def _meta_tab(ctx, name):
-    return next(t for t in ctx.meta["tabs"] if t["name"] == name)
 
 
 def _add_markers(view, ctx, items):

@@ -48,14 +48,10 @@ class MasterScreenVerificationTests(unittest.TestCase):
 
         self.assertIn("75_master.py", all_hooks, "75_master.py must exist as the primary Master screen hook")
         idx_master = all_hooks.index("75_master.py")
-        idx_layout = all_hooks.index("80_layout.py")
         idx_pages = all_hooks.index("83_pages.py")
-        idx_names = all_hooks.index("85_names.py")
         idx_no_fallback = all_hooks.index("97_no_fallback.py")
 
-        self.assertLess(idx_master, idx_layout, "75_master.py must run before 80_layout.py")
         self.assertLess(idx_master, idx_pages, "75_master.py must run before 83_pages.py")
-        self.assertLess(idx_master, idx_names, "75_master.py must run before 85_names.py")
         self.assertLess(idx_master, idx_no_fallback, "75_master.py must run before 97_no_fallback.py")
 
         # 99_ui_screen_master.py is NOT needed and must not duplicate 75_master.py

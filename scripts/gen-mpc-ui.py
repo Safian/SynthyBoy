@@ -252,7 +252,7 @@ def _unique_page_name(name, used_names):
 # (docs/kick-pages.json "shortLabel", "Detune" instead of "Osc 1 Unison Detune"), unless scripts/mpc-short-names.json overrides the key
 # (cut-off or ambiguous shortLabels). Two controls of one tab with the same name get the leading words of their full parameter names
 # that are not shared ("Osc 1 Filt Blend", "Osc 2 Filt Blend"): the longest common word suffix of the full names is dropped, what is left in front is the prefix.
-# The names are drawn upper case in a bold font (scripts/mpc-skin-extras/85_names.py); name_width() estimates the width.
+# name_width() estimates the width of the upper-case short name.
 
 NAME_AREA_W = 272          # inner width of a Q-Link column frame (frame 288, 8 px each side)
 DEFAULT_SHORT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mpc-short-names.json")

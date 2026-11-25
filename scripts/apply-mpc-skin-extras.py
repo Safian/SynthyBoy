@@ -81,7 +81,7 @@ class Context:
         return self._keys[index]
 
     def add_param_key(self, index, key):
-        """Names a parameter of the shell that params.json does not list (index >= param_count) so that the later modules (80_layout, 85_names) can treat a control bound to it like any other."""
+        """Names a parameter of the shell that params.json does not list (index >= param_count) for later hooks."""
         if index < len(self._keys) or key in self._index or key in self._extra.values() or index in self._extra:
             raise ExtrasError("cannot register parameter %r as %r: index inside params.json or already registered" % (index, key))
         self._extra[index] = key
