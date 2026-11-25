@@ -21,12 +21,12 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from components import style
-from components.native.button.button import TRANSPARENT_HIT
+from components.native.button.button import action_button
 from components.native.level.level import COMPACT_48_RECTS, DEFAULT_DIAL_RECTS, compact_level_definition, level_definition
 from components.native.pan.pan import compact_pan_definition, pan_definition
 from components.native.name_value.name_value import DEFAULT_BOX_WIDTH, DEFAULT_HEIGHT, build_name_value_definition
 from components.native.active_text.active_text import active_text_definition, write_active_text_assets
-from components.native.selector.selector import OSC_TAB_NAMES, labelled_choice_drawer, passive_layer, selector_definition, write_osc_table_navigation_assets
+from components.native.selector.selector import OSC_TAB_NAMES, labelled_choice_drawer, passive_layer, selector_definition, command_stepper_definition
 import native_warp_picker
 from native_ui_params import (
     OSC_ABC_SETTINGS, OSC_ABC_SETTINGS_FIELDS, OSC_POWER, OSC_SETTINGS, OSC_SETTINGS_FIELDS, OSC_SETTINGS_LAYOUTS,
@@ -37,7 +37,6 @@ CONTRACT = Path(__file__).with_name("osc-native-settings.json")
 LAYER = "oscNativeSettingsLayer"
 CHOICE_MENU = "fx editor choice menu"
 NUMBER_MENU = "fx editor number menu"
-TABLE_ART = ("osc_native_table_prev.png", TRANSPARENT_HIT, "osc_native_table_next.png")
 ABC_LAYER = "oscNativeAbcSettings"
 
 
@@ -149,17 +148,9 @@ def _control(kind, side, skins_dir=None, size=None, caption=""):
         return result
 
     if kind == "table":
-        parts = []
-        for i, (art, x, width) in enumerate(zip(TABLE_ART, (0, 0.14, 0.86), (0.14, 0.72, 0.14)), 1):
-            parts.append(_entry(f"Source action {i}", "Button", {
-                "version": 2, "onImage": art, "offImage": art, "buttonId": i, "numButtonsInGroup": 4,
-                "handleName": "Data", "gestureBehaviour": "Instant",
-            }, (x, 0.05, width, 0.90), focus=True, relative=True))
-        return _definition([
-            *parts,
-            _label("Text", (0.16, 0.06, 0.68, 0.32), text="SOURCE", height=_ui_style.size('screen.osc_settings.control.height')),
-            _label("Value", (0.16, 0.38, 0.68, 0.56), height=_ui_style.size('screen.osc_settings.control.height.2')),
-        ])
+        return command_stepper_definition(skins_dir, (width, height), caption)
+    if kind == "action" and caption == "BROWSE":
+        return _definition([action_button(skins_dir, caption, (0, 0, width, height), "Data", text="…")])
     if kind == "action":
         return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=_ui_style.size('screen.osc_settings.control.height.3'))], "Toggle Switch")
     raise ValueError("Unknown OSC control " + kind)
@@ -181,8 +172,6 @@ def apply(tui, qlinks, ctx):
     abc_captions = {}
 
     skins_dir = getattr(ctx, "skins_dir", None)
-    if skins_dir is not None:
-        write_osc_table_navigation_assets(skins_dir, TABLE_ART)
 
     # These shared names are referenced by the standalone detail grid and expanded views.
     for kind in ("dial_uni", "dial_bi", "menu", "toggle", "number", "dial_uni_side"):
@@ -217,6 +206,8 @@ def apply(tui, qlinks, ctx):
         elif kind == "menu" and 2 <= len(choices) <= 9:
             definition += "_" + field["label"]
             drawer = definition + "Choices"
+        if kind == "action" and field["label"] == "BROWSE":
+            definition += "_browse"
         if kind not in ("table", "action"):
             if kind == "toggle":
                 definition += "_" + field["label"]

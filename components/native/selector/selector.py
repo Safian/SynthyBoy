@@ -1282,16 +1282,17 @@ def write_wave_selector_icon(skins_dir):
     return filename
 
 
-def write_osc_table_navigation_assets(directory, filenames):
-    """Shared previous/center/next artwork for the standalone table selector."""
-    top, middle, bottom = _style_size("selector.table.arrow_y")
-    write_transparent_hit(directory)
-    for index in (0, 2):
-        path = Path(directory) / filenames[index]
-        if path.is_file():
-            continue
-        image = Image.new("RGBA", tuple(_style_size("screen.osc_settings.art.size")))
-        tip, side = _style_size("screen.osc_settings.apply.size" if index == 0 else "screen.osc_settings.apply.size.2")
-        ImageDraw.Draw(image).line((side, top, tip, middle, side, bottom), fill=_style_color("text.icon"),
-                                   width=_style_size("screen.osc_settings.apply.width"))
-        image.save(path)
+def command_stepper_definition(skins_dir, slot, caption):
+    """Show the bound value and dispatch previous/open/next as command IDs 1/2/3."""
+    width, height = slot
+    face = selector_definition(None, "", slot, skins_dir, arrows=True, caption_text=caption)
+    face["actions"] = []
+    hit = write_transparent_hit(skins_dir)
+    edge = _style_size("selector.hit.minimum")
+    for command, (name, x, span) in enumerate((
+        ("Previous", 0, edge),
+        ("Open", edge, width - 2 * edge),
+        ("Next", width - edge, edge),
+    ), 1):
+        face["componentsData"].append(button(name, (x, 0, span, height), hit, index=command, count=4))
+    return face
