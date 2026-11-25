@@ -142,7 +142,8 @@ def action_button(ctx, name, rect, action, *, icon=None, text=None, width=None, 
     filename = f"native_action_{digest}.png"
     skins_dir = getattr(ctx, "skins_dir", ctx)
     image.save(Path(skins_dir) / filename)
-    return button(name, rect, filename, remaps=(("Data", action),), gates=gates)
+    remaps = () if action == "Data" else (("Data", action),)
+    return button(name, rect, filename, remaps=remaps, gates=gates)
 
 
 def icon_button(symbol, colour):
