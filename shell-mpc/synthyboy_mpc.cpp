@@ -537,11 +537,26 @@ struct PluginInstance
         }
         bool nativePlayEnvLfoControls() const noexcept override { return true; }
         uint64_t nativePlayEnvLfoRevision() const noexcept override { return inst.playEnvLfoRevision.load (std::memory_order_acquire); }
-        void setNativePlayEnvLfoPopup (int field) noexcept override { inst.nativePlayEnvLfo.setPopup (field); }
-        void setNativePlayEnvLfo (const nativeui::playenvlfo::State& state) noexcept override { inst.nativePlayEnvLfo.publish (state); }
-        void suspendNativePlayEnvLfo() noexcept override { inst.nativePlayEnvLfo.suspend(); }
+        void setNativePlayEnvLfoPopup (int field) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
+            inst.nativePlayEnvLfo.setPopup (field);
+        }
+        void setNativePlayEnvLfo (const nativeui::playenvlfo::State& state) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
+            if (state.context.view != nativeui::playenvlfo::Hidden && (state.context.preset != stateGeneration() || state.context.selection != nativePlayEnvLfoRevision()))
+                return;
+            inst.nativePlayEnvLfo.publish (state);
+        }
+        void suspendNativePlayEnvLfo() noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
+            inst.nativePlayEnvLfo.suspend();
+        }
         bool takeNativePlayEnvLfo (const nativeui::playenvlfo::State& state, int field, float& value) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
             return inst.nativePlayEnvLfo.take (state, field, value);
         }
         void setNativeLfoState (const nativeui::lfo::ViewState& state) noexcept override { inst.nativeLfo.publish (state); }
@@ -810,6 +825,9 @@ struct PluginInstance
         uint64_t playOscSelectionRevision() const noexcept override { return inst.playOscSelectionRev.load (std::memory_order_acquire); }
         void setNativePlayOsc (const nativeui::playoscui::State& state, const char* sourceName) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
+            if (state.source != 0 && (state.preset != stateGeneration() || state.selection != playOscSelectionRevision()))
+                return;
             inst.nativePlayOsc.publish (state);
             if (state.source == 0)
                 return;   // Hidden controls have no new caption to publish.
@@ -821,12 +839,21 @@ struct PluginInstance
                 inst.nativePlayOscLabelChanged = true;
             }
         }
-        void suspendNativePlayOsc() noexcept override { inst.nativePlayOsc.suspend(); }
+        void suspendNativePlayOsc() noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
+            inst.nativePlayOsc.suspend();
+        }
         bool takeNativePlayOsc (const nativeui::playoscui::State& state, int field, float& value) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
             return inst.nativePlayOsc.take (state, field, value);
         }
-        void setNativePlayOscPopup (int field) noexcept override { inst.nativePlayOsc.setPopup (field); }
+        void setNativePlayOscPopup (int field) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
+            inst.nativePlayOsc.setPopup (field);
+        }
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         void setQGroup (const int* targets, int n) noexcept override { inst.qBank.setGroup (targets, n); }
         uint64_t qBindingRevision() const noexcept override { return inst.qBindingState.load (std::memory_order_acquire); }
@@ -1668,13 +1695,17 @@ struct PluginInstance
     nativeui::lfodetail::Bank nativeLfoDetail;
     std::array<bool, nativeui::lfodetail::kCount> nativeLfoDetailAcks {};   // display thread only
     static_assert (nativeui::kLfoDetailHandles == nativeui::lfodetail::kHandles);
+    // Program/chunk restoration can run concurrently with the overlay. Both writers
+    // publish complete banks here. Host parameter reads and audio callbacks never lock.
+    std::mutex playPresentationMutex;
+    std::atomic<bool> preparedOscDue { false }, preparedEnvLfoDue { false };
     nativeui::playenvlfo::Bank nativePlayEnvLfo;
     std::atomic<uint64_t> playEnvLfoRevision { 0 };
     static_assert (nativeui::kPlayEnvLfoHandles == nativeui::playenvlfo::kOriginalHandles);
     static_assert (nativeui::kPlayOscHandles == nativeui::playoscui::kHandles);
     nativeui::playoscui::Bank nativePlayOsc;
     std::shared_ptr<const std::string> nativePlayOscSourceName;
-    bool nativePlayOscLabelChanged = false;   // display thread only
+    std::atomic<bool> nativePlayOscLabelChanged { false };
     nativeui::FilterCellBank nativeFilter;
     nativeui::NativeCellBank<2> nativePzActions;
     std::atomic<uint64_t> nativePzToolbarPreset {};
@@ -2257,6 +2288,28 @@ struct PluginInstance
             audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
+    void preparePlayPresentation()
+    {
+        namespace ov = synthyboy_mpc::overlay;
+        // Private models build the exact same compact bindings as Play without touching
+        // the displayed page, its Q group, pending gestures or the audio engine.
+        auto osc = std::make_unique<ov::OscUi>();
+        std::string sourceName;
+        const auto oscState = osc->prepareCompactPresentation (overlayView, sourceName);
+        auto lfo = std::make_unique<ov::LfoUi>();
+        lfo->prepareCompactPresentation (overlayView);
+        const auto envLfo = ov::PlayEnvLfo::compactPresentation (overlayView, *lfo);
+        std::lock_guard<std::mutex> guard (playPresentationMutex);
+        if (oscState.preset != overlayView.stateGeneration() || oscState.selection != overlayView.playOscSelectionRevision()
+            || envLfo.context.preset != oscState.preset || envLfo.context.selection != overlayView.nativePlayEnvLfoRevision())
+            return;
+        nativePlayOsc.publish (oscState, false);
+        nativePlayEnvLfo.publish (envLfo, false);
+        std::atomic_store (&nativePlayOscSourceName, std::make_shared<const std::string> (std::move (sourceName)));
+        preparedOscDue.store (true, std::memory_order_release);
+        preparedEnvLfoDue.store (true, std::memory_order_release);
+    }
+
     void nativePlayOscPoll (AEffect* e)
     {
         constexpr int base = nativeui::kPlayOsc;
@@ -2264,12 +2317,9 @@ struct PluginInstance
             return nativePlayOscValue (field, cell);
         }, [&] (int handle, float value, bool force) {
             reportNativeValue (e, base + handle, value, force);
-        });
-        if (nativePlayOscLabelChanged)
-        {
-            nativePlayOscLabelChanged = false;
+        }, preparedOscDue.exchange (false, std::memory_order_acq_rel));
+        if (nativePlayOscLabelChanged.exchange (false))
             requestProxyNames();
-        }
     }
 
     void nativePlayEnvLfoPoll (AEffect* e)
@@ -2277,7 +2327,7 @@ struct PluginInstance
         namespace n = nativeui::playenvlfo;
         constexpr int base = nativeui::kPlayEnvLfo;
         const float view = nativeUiValue (base);
-        if (nativePlayEnvLfo.suspended() || (view == 0.0f && nativeUiReported[base] == 0.0f))
+        if ((! preparedEnvLfoDue.exchange (false, std::memory_order_acq_rel) && nativePlayEnvLfo.suspended()) || (view == 0.0f && nativeUiReported[base] == 0.0f))
             return;
         bool rebind = false;
         for (int field = 0; field < n::Count; ++field)
@@ -3567,6 +3617,9 @@ struct PluginInstance
 #endif
             }
         }
+#if SYNTHYBOY_MPC_OVERLAY
+        preparePlayPresentation();
+#endif
         synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kDefaultParams);
     }
 
@@ -3986,6 +4039,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy_mpc::noteDiagnostics().setTierTrimDb (trimDb);
         }
 
+#if SYNTHYBOY_MPC_OVERLAY
+        inst->preparePlayPresentation();
+#endif
         inst->currentProgram.store (prog, std::memory_order_relaxed);
         inst->setNoProgram (false, std::string());
         // Request display update from host
@@ -5398,6 +5454,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     for (int f = 0; f < synthyboy_mpc::tabview::kFields; ++f)
                         inst->tabViewState[f].store (tv[f], std::memory_order_relaxed);
                 }
+                inst->preparePlayPresentation();
 #endif
                 {
                     // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default, kOutputLimiterDefaultOn: off);
@@ -5605,7 +5662,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             else
             {
                 props->flags = kVstParameterUsesIntegerMinMax;
-                props->minInteger = cell.kind == n::Semitone ? -11 : 0;
+                props->minInteger = handle >= n::kValue && handle < n::kStep && cell.kind == n::Semitone ? -11 : 0;
                 props->maxInteger = handle == n::kView ? static_cast<int> (n::LastFrame)
                                   : handle >= n::kKind && handle < n::kNavigation ? n::kVisualKinds
                                   : handle >= n::kStep && handle < n::kKind ? 3

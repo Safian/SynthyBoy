@@ -132,6 +132,39 @@ int target (const char* key)
     return info == nullptr ? -1 : synthyboy::findParamIndex (info->id);
 }
 
+void testColdPlayPresentation()
+{
+    namespace osc = nativeui::playoscui;
+    const int oscView = PluginInstance::nativeUiBase() + nativeui::kPlayOsc;
+    auto first = std::make_unique<Rig>();
+    auto restored = std::make_unique<Rig>();
+    check (first->effect.getParameter (&first->effect, oscView) > 0 && first->read (-1) > 0,
+           "fresh Play exposes both compact layouts before its first marker or display poll");
+    first->plugin.playSetSelector (0, 3);
+    first->legacyChoice (4);
+    first->plugin.overlayView.setTabView (ovt::IInstanceView::kTabViewRnd, 2);
+    check (restored->restore (first->save()), "restore nondefault OSC and RND selection in another instance");
+    auto& r = *restored;
+    const int pan = oscView + 1 + 2 * osc::kFields + osc::Pan;
+    check (osc::Bank::source (r.plugin.nativePlayOsc.view()) == 3
+           && r.plugin.nativePlayOsc.at (osc::Pan).cell().target == target ("osc2.pan")
+           && r.plugin.nativePlayEnvLfo.source() == 12
+           && r.plugin.nativePlayEnvLfo.at (n::Style).cell().target == target ("rlfo2.style"),
+           "restored fields bind selected OSC B and RND 2 before the overlay sees Play");
+    check (osc::Bank::source (first->plugin.nativePlayOsc.view()) == 1,
+           "another instance's restore preserves the original instance's presentation");
+    const float oscLayout = r.effect.getParameter (&r.effect, oscView);
+    const float lfoLayout = r.read (-1);
+    const float previous = r.effect.getParameter (&r.effect, pan);
+    r.expireRestoreWindow();
+    r.effect.setParameter (&r.effect, pan, previous < 0.5f ? 1.0f : 0.0f);
+    check (r.plugin.nativePlayEnvLfo.suspended(), "cold presentation has no input owner");
+    r.tick();
+    check (oscLayout == r.effect.getParameter (&r.effect, oscView) && lfoLayout == r.read (-1)
+           && previous == r.effect.getParameter (&r.effect, pan),
+           "first interactive frame preserves the prepared layouts and discards pre-entry gestures");
+}
+
 void testEnvLfoRootMask()
 {
     using namespace synthyboy_mpc::overlay;
@@ -277,6 +310,28 @@ void testEnvTargetCount ()
     tick();
     check (stack.top() == EnvUi::kPageTargets && shown().empty() && r.save() == chunk,
            "the stock TARGETS action opens routing once, retires the count and does not write project state");
+}
+
+void testOscDetailSemitoneProperties()
+{
+    namespace detail = synthyboy_mpc::nativeui::oscdetail;
+    auto r = std::make_unique<Rig>();
+    detail::State state;
+    state.frame = detail::Plain;
+    state.fields[0] = { target ("osc1.transpose"), 0, detail::Semitone };
+    r->plugin.nativeOscDetail.publish (state);
+    const auto checkRange = [&] (int handle, int minimum, int maximum)
+    {
+        VstParameterProperties props {};
+        const int parameter = PluginInstance::nativeUiBase() + synthyboy_mpc::nativeui::kOscDetail + handle;
+        check (r->effect.dispatcher (&r->effect, effGetParameterProperties, parameter, 0, &props, 0) == 1
+               && (props.flags & kVstParameterUsesIntegerMinMax) && props.minInteger == minimum
+               && props.maxInteger == maximum && props.stepInteger == 1,
+               "OSC detail semitone value and control metadata publish their own integer ranges");
+    };
+    checkRange (detail::kValue, -11, 11);
+    checkRange (detail::kKind, 0, detail::kVisualKinds);
+    checkRange (detail::kStep, 0, 3);
 }
 
 void testStandaloneOscDetailVst ()
@@ -2331,6 +2386,11 @@ void testPlayCompactSmoothNativeHost ()
 
 int main (int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp (argv[1], "--cold-play") == 0)
+    {
+        testColdPlayPresentation();
+        return failures != 0;
+    }
     if (argc == 2 && std::strcmp (argv[1], "--lfo-navigation") == 0)
     {
         testLfoNavigationButtons();
@@ -2347,6 +2407,7 @@ int main (int argc, char** argv)
         testFxCardSwitch();
         return failures != 0;
     }
+    testColdPlayPresentation();
     auto rig = std::make_unique<Rig>();
     auto& r = *rig;
     const int shape4 = target ("lfo4.shape"), shape5 = target ("lfo5.shape");
@@ -2505,6 +2566,7 @@ int main (int argc, char** argv)
     testEnvTargetCount();
     testLfoNavigationButtons();
     testEnvLfoRootMask();
+    testOscDetailSemitoneProperties();
     testStandaloneOscDetailVst();
     testNativeModulationsVst();
     testMasterPanelNavigation();

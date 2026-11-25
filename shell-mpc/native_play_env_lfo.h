@@ -54,8 +54,10 @@ public:
         setPopup (-1);
     }
 
-    void publish (const State& state) noexcept
+    void publish (const State& state, bool interactive = true) noexcept
     {
+        if (! interactive)
+            suspend();
         if (suspended_.load (std::memory_order_relaxed))
             renewInputRevisions();
         if (state.context.view == Hidden)
@@ -67,7 +69,7 @@ public:
         NativeCellBank<Count>::publish (context_.view, state.fields.data());
         publishedPreset_.store (context_.preset, std::memory_order_release);
         publishedSelection_.store (context_.selection, std::memory_order_release);
-        suspended_.store (false, std::memory_order_release);
+        suspended_.store (! interactive, std::memory_order_release);
     }
 
     void setPopup (int field) noexcept

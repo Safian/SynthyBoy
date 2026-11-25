@@ -114,15 +114,23 @@ private:
         static_assert (n::kStandardLfos == uibind::kSelLfos && n::kSources == uibind::kSelLfos + uibind::kSelRnds);
         if (! v.nativePlayEnvLfoControls() || ! stack.isMain() || &ui::theme::L() != &ui::theme::kLook1)
             return {};
+        if (uibind::selectedLfo (v) != lfo.selection() + (lfo.random() ? uibind::kRndBase : 0) || env.selection() != uibind::selectedEnv (v))
+            return {};
+        return compactPresentation (v, lfo);
+    }
+
+public:
+    static playenvlfo::State compactPresentation (const IInstanceView& v, const LfoUi& lfo)
+    {
+        namespace n = playenvlfo;
         n::State state;
         const bool random = lfo.random();
         const auto mode = lfo.compact().rate.mode();
         const auto view = static_cast<n::View> ((random ? n::RndHz : n::LfoHz) + static_cast<int> (mode));
         const int lfoId = uibind::selectedLfo (v);
-        if (lfoId != lfo.selection() + (random ? uibind::kRndBase : 0) || env.selection() != uibind::selectedEnv (v))
-            return {};
-        state.context = { view, env.selection(), lfoId, v.stateGeneration(), v.nativePlayEnvLfoRevision() };
-        state.fields[n::EnvExpand] = { n::EnvExpand, env.selection(), nativeui::kFxToggle };
+        const int envId = uibind::selectedEnv (v);
+        state.context = { view, envId, lfoId, v.stateGeneration(), v.nativePlayEnvLfoRevision() };
+        state.fields[n::EnvExpand] = { n::EnvExpand, envId, nativeui::kFxToggle };
         state.fields[n::LfoExpand] = { n::LfoExpand, lfoId, nativeui::kFxToggle };
         state.fields[n::Choose] = { n::Choose, lfoId, nativeui::kFxDial };
         auto bind = [&] (int field)
@@ -149,6 +157,7 @@ private:
         return state;
     }
 
+private:
     IInstanceView* owner_ = nullptr;
     playenvlfo::State state_;
 };

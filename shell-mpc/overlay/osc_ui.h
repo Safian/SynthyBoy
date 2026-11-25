@@ -541,6 +541,20 @@ public:
         return state;
     }
 
+    // Prepare only the compact bindings and display values. Running update() here would also
+    // publish Q bindings and consume pending wavetable gestures before this page owns input.
+    nativeui::playoscui::State prepareCompactPresentation (IInstanceView& inst, std::string& sourceName)
+    {
+        const int source = std::clamp (inst.playSelection (0), 1, playosc::kInstances);
+        const int type = typeParam (source);
+        configure (&inst, source, false, type >= 0 ? static_cast<int> (std::lround (inst.param (type))) : 0);
+        pull (inst, main_);
+        const auto state = compactNativeState (inst);
+        if ((state.layout == nativeui::playoscui::AbcWave || state.layout == nativeui::playoscui::AbcContent) && state.powered)
+            sourceName = compact_.basic.source.stepper.state.text;
+        return state;
+    }
+
     void publishCompactNative (IInstanceView& inst, bool shown, bool leavingTab = false)
     {
         namespace n = nativeui::playoscui;

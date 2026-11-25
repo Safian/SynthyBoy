@@ -42,8 +42,10 @@ public:
         setPopup (kNoPopup);
     }
 
-    void publish (const State& state) noexcept
+    void publish (const State& state, bool interactive = true) noexcept
     {
+        if (! interactive)
+            suspend();
         if (suspended_.load (std::memory_order_relaxed))
             links_.renewInputRevisions();
         if (state.source == 0)
@@ -55,7 +57,7 @@ public:
         preset_.store (state.preset, std::memory_order_release);
         selection_.store (state.selection, std::memory_order_release);
         view_.store (state.source | (state.layout << 3) | (state.powered ? 1 << 6 : 0), std::memory_order_release);
-        suspended_.store (false, std::memory_order_release);
+        suspended_.store (! interactive, std::memory_order_release);
     }
 
     int view() const noexcept { return view_.load (std::memory_order_acquire); }
@@ -126,9 +128,9 @@ public:
 
     /** Only the visible source has reports. Presentation follows its values. */
     template <class Value, class Report>
-    void poll (float lastFrame, Value&& read, Report&& send)
+    void poll (float lastFrame, Value&& read, Report&& send, bool prepared = false)
     {
-        if (suspended_.load (std::memory_order_relaxed))
+        if (! prepared && suspended_.load (std::memory_order_relaxed))
             return;
         const int presentation = view();
         const int selected = source (presentation);
