@@ -472,14 +472,27 @@ class TestNativeOscRouting(unittest.TestCase):
                                       {"key": "Caption", "value": f"Parameter {index}"}])
             self.assertEqual(len(viewport), 10)
             tile = defs["oscDetailTile"]["componentsData"]
-            long_menus = tile[6:]
+            shared = tile[6]
+            self.assertEqual(shared["bounds"]["additionalInvalidatingHandles"], ["RangedEnabling/7/16/17/Kind"])
+            face = defs[shared["componentData"]["type"]]
+            self.assertTrue(face["ignoreMousePresses"])
+            self.assertEqual([item["componentData"]["name"] for item in face["componentsData"]], ["Selector face", "Name"])
+            self.assertEqual(face["componentsData"][1]["componentData"]["data"]["handleName"], "Caption")
+            long_menus = tile[7:]
             self.assertEqual(len(long_menus), len(detail["menus"]))
             all_replacements = {x["key"]: x["value"] for x in tui["pageData"]["replacementStrings"]}
             self.assertEqual(all_replacements["Parameter 3458"], all_replacements["Parameter 3022"])
             self.assertEqual(len(all_replacements["Parameter 3458"]), 99)
             for i, child in enumerate(long_menus):
                 index = base + 4 + 3 * OSC_DETAIL_CELLS + i
-                self.assertEqual(child["componentData"]["type"], "oscNativeSettingWarpChoice" if detail["menus"][i] in ("warp.type", "warp2.type") else "oscNativeSetting_menu")
+                original = "oscNativeSettingWarpChoice" if detail["menus"][i] in ("warp.type", "warp2.type") else "oscNativeSetting_menu"
+                widget = defs[child["componentData"]["type"]]
+                self.assertEqual(child["componentData"]["type"], original + "DetailValue")
+                popup = "oscWarpChoices" if original.endswith("WarpChoice") else "fx editor choice menu"
+                self.assertEqual([(a["onAction"], a["handler"], a["handleName"], a["additionalData"]) for a in widget["actions"]],
+                                 [(event, "Show Overlay", "Data", popup) for event in ("Mouse Down", "Enter Pressed")])
+                label, = widget["componentsData"]
+                self.assertEqual(label["componentData"]["data"]["handleName"], "Data")
                 self.assertIn({"key": "Data", "value": f"Parameter {index}"}, child["handle remapping"]["map"])
                 self.assertGreater(len(all_replacements[f"Parameter {index}"]), 6)
 

@@ -1,5 +1,4 @@
 # SynthyBoy — nyitott teendők
-- [ ] Key 61 Play további gyorsítása: a zárt OSC panel hozzáadása FX → Play esetén kb. 0,25 s többletet adott. Vizsgáld meg, hogyan csökkenthető a zárt panel felépítési költsége a működő OSC nagyítás és a közös natív komponensek megtartásával; azonos látható képpel mérd vissza. Alapmérés: .hw-local/mpc-perf/key61-env-lfo-osc-panel-5tysMc/.
 - [ ] Egyeztesd az LFO, FX és többoldalas hosttesztek régebbi elvárásait a jelenlegi natív képernyőkkel (lfo_ui_host, mixfx_ui_host, page_view_host és a skin-tesztek); minden fennmaradó eltéréshez legyen igazolt működés vagy javítás.
 - [ ] A `test_mpc_skin_filter_native.py` négy korábbi elvárását egyeztesd a natív Filterrel: külön sentinel a markereken kívül, önálló feliratok a readout hátlapján, inaktív Knob és arányos gyerek érintési mérete. Kész, ha az érintett négy eset az elfogadott komponensek tényleges működését ellenőrzi.
 - [ ] Közös natív komponensekre átvezetendő képernyőkezelők: Mod Targets amount (98_mod_targets.py) és Filter pontszerkesztő eszköztár (98_filter_native.py). Kész, ha a lap csak a közös változat elrendezését és kötését adja, és az állapotváltások működnek a készüléken.

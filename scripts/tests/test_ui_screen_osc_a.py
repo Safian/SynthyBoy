@@ -210,7 +210,7 @@ class TestOscAScreen(unittest.TestCase):
             self.assertEqual(label["bounds"]["additionalInvalidatingHandles"], gates)
         navigation = [item for item in items if item["handle remapping"]["map"] == [{"key": "Data", "value": local}]]
         self.assertEqual([item["componentData"]["data"]["buttonId"] for item in navigation], list(range(7)))
-        trigger = definitions["oscNativeSettingWarpChoice"]
+        trigger = definitions["oscNativeSettingWarpChoiceDetailValue"]
         self.assertEqual({action["additionalData"] for action in trigger["actions"]}, {"oscWarpChoices"})
         for action in trigger["actions"]:
             self.assertEqual(action["handleName"], "Data")
@@ -220,7 +220,7 @@ class TestOscAScreen(unittest.TestCase):
         for control in off_controls:
             self.assertFalse(control["actions"])
         detail = definitions["oscDetailTile"]["componentsData"]
-        self.assertTrue(any(item["componentData"]["type"] == "oscNativeSettingWarpChoice" for item in detail))
+        self.assertTrue(any(item["componentData"]["type"] == "oscNativeSettingWarpChoiceDetailValue" for item in detail))
 
     def test_rendered_preview_exists_and_verified(self):
         """Verify that the full-screen verified visual preview image exists and has correct dimensions."""

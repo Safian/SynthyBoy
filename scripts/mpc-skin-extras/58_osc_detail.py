@@ -79,10 +79,27 @@ def apply(tui, qlinks, ctx):
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     existing = {row["key"]: row["value"] for row in replacements}
     params = {info["key"]: info for info in ctx.params}
+    # Each physical tile can show only one menu at a time. Its shared native
+    # selector frame and caption are independent of the selected menu domain.
+    definitions = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+    shared = None
+    for control in ("oscNativeSetting_menu", WARP_CONTROL):
+        definition = definitions[control]
+        children = definition["componentsData"]
+        common = [child for child in children if child["componentData"]["name"] in ("Selector face", "Name")]
+        if len(common) != 2 or (shared is not None and common != shared):
+            raise ValueError("OSC detail selectors must share their frame and caption")
+        shared = common
+        ctx.add_component_definition(control + "DetailValue", {
+            **definition, "componentsData": [child for child in children if child not in common],
+        })
+    ctx.add_component_definition("oscDetailMenuFace", passive_layer(shared))
+    tile.append(custom("Menu face", "oscDetailMenuFace", (0, 0, 1, 1), (("Caption", "Data"),),
+                       f"RangedEnabling/7/{visual_steps - 1}/{visual_steps}/Kind", "No", True))
     for i, suffix in enumerate(contract["menus"]):
         parameter = f"Parameter {base + 4 + 3 * count + i}"
         control = WARP_CONTROL if suffix in ("warp.type", "warp2.type") else "oscNativeSetting_menu"
-        tile.append(custom(str(i + 7), control, (0, 0, 1, 1),
+        tile.append(custom(str(i + 7), control + "DetailValue", (0, 0, 1, 1),
                            (("Caption", "Data"), ("Data", parameter)), f"IndexedEnabling/{i + 7}/{visual_steps}/Kind", "Yes", True))
         # The root's Warp2 menu already has the release display names for this domain.
         warp2 = f"Parameter {native_base + OSC_ABC_SETTINGS + 10}"
