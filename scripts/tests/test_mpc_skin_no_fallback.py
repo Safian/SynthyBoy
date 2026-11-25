@@ -178,6 +178,30 @@ class NoFallbackTests(unittest.TestCase):
                     self.assertEqual(data.get("data"), {"version": 1, "handleName": "Data"}, data["name"])
         self.assertEqual(unresolved, [])
 
+    def test_static_captions_have_a_read_only_host_model_and_respect_layout_gates(self):
+        captions = json.loads((base.REAL_EXTRAS / "static-native-captions.json").read_text())
+        tabs = self.tui["pageData"]["tabs"]
+        labels = {c["componentData"]["name"]: c for tab in tabs
+                  for c in base.standalone_editor_entries(tab, self.definitions)}
+        def check(view, prefix, gates=()):
+            for index, row in enumerate(captions[view]):
+                name = f"{prefix} {index}"
+                with self.subTest(caption=name):
+                    c = labels[name]
+                    data = c["componentData"]["data"]
+                    self.assertEqual(c["componentData"]["type"], "Label")
+                    self.assertEqual((data["type"], data["text"], data["handleName"]), ("Text", row["text"], "Data"))
+                    self.assertEqual(c["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 0"}])
+                    self.assertEqual(c["bounds"]["acceptsHWFocus"], "No")
+                    self.assertEqual(c["bounds"].get("additionalInvalidatingHandles", []), list(gates))
+                    if gates:
+                        self.assertEqual(c["bounds"]["showWhenDataModelInvalid"], "Hide")
+
+        for view in ("env1", "mod", "voice", "master"):
+            check(view, f"Native Caption {view}")
+        for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
+            check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2833",))
+
     def test_the_q_proxies_are_on_all_15_tabs(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
         self.assertEqual(len(self.qlinks), 15)

@@ -1424,6 +1424,14 @@ void testStandaloneEnvNativeControlsAcrossInstancesAndPresets()
 
     for (const auto& cell : r.ui.full().nativeApertures())
         check (checkTransparent (cell), "each native cell remains transparent after a preset change");
+    // The marker masks end at y=31 in tab coordinates, above the ENV glyphs.
+    check (checkTransparent ({12, page::kTabY + 32, 35, 20}), "the host owns the ENV caption");
+    for (int i = 0; i < ui::EnvFullScreen::kMaxGroups; ++i)
+    {
+        const auto group = r.ui.full().block (i);
+        check (checkTransparent ({group.x + ui::KnobPanel::kBlockPad + 4, group.y + 3, 70, 16}),
+               "the host owns each native group caption");
+    }
 }
 
 void testEnvEditorHostsOnlyCurrentFields()
@@ -1511,7 +1519,11 @@ static void testEnvFactoryComposite()
             gpu::SceneBuilder sb (*scene);
             sb.begin (gpu::kKindPlay, 0, 1280, 800);
             if (host)
+            {
                 sb.rect (0, page::kTabY, page::kW, page::kTabY + page::kTabH, ui::theme::rgba (ui::theme::kNativeCanvas));
+                ui::Pen pen (sb, true, false);
+                r.ui.full().drawFixedLabels (pen);  // Stand-in for the native skin's four static Labels.
+            }
             for (auto cell : r.ui.full().nativeApertures())
                 if (!cell.empty())
                     sb.rect (cell.x, cell.y, cell.right(), cell.bottom(), gpu::rgba8FromRgb (0x593c50, 255));

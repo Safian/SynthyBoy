@@ -530,9 +530,11 @@ public:
         }
     }
 
-    void drawPage (gpu::SceneBuilder& sb, bool nativeGround) const
+    enum class Ground { Overlay, Apertures, Host };
+
+    void drawPage (gpu::SceneBuilder& sb, Ground ground) const
     {
-        if (! nativeGround)
+        if (ground == Ground::Overlay)
         {
             Pen pen (sb, enabled_, inactive_);
             Cell cell (sb, rect_);
@@ -542,7 +544,8 @@ public:
         {
             Pen p (sb, enabled_, inactive_);
             Cell cell (sb, rect_);
-            drawFixedLabels (p);
+            if (ground != Ground::Host)
+                drawFixedLabels (p);
             drawLiveLabels (p);
         }
         for (int i = 0; i < kMaxGroups; ++i)
@@ -560,7 +563,7 @@ public:
         }
     }
 
-    void draw (gpu::SceneBuilder& sb) const override { drawPage (sb, false); }
+    void draw (gpu::SceneBuilder& sb) const override { drawPage (sb, Ground::Overlay); }
     void drawLive (gpu::SceneBuilder& sb) const { graph.drawLive (sb); }
 
 protected:

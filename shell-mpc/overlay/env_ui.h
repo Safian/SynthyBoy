@@ -285,13 +285,13 @@ public:
         if (hostBackground())
         {
             drawNativeMarkerCovers (sb, "env1");
-            full_.drawPage (sb, true);
+            full_.drawPage (sb, ui::EnvFullScreen::Ground::Host);
             return;
         }
         if (pageTop_ == 0 && (page_ || nativePlayEditor_))
         {
             full_.drawNativeGround (sb);
-            full_.drawPage (sb, true);
+            full_.drawPage (sb, ui::EnvFullScreen::Ground::Apertures);
             return;
         }
         page::ground (sb);
@@ -300,7 +300,7 @@ public:
         else if (pageTop_ == kPageMods)
             mods_.draw (sb);
         else
-            full_.drawPage (sb, false);
+            full_.draw (sb);
     }
     void drawPopup (gpu::SceneBuilder& sb) const
     {
