@@ -12,6 +12,7 @@ Develop and release SynthyBoy exclusively for standalone Akai MPC hardware. Foll
 
 - A release has TWO zips, built with the Open MPC tool: `armv7` (MPC Key 61 and the other 32-bit devices) and `aarch64` (MPC XL). Both hold the same plugin, with the display layer (overlay) enabled.
 - Use the [overlay skin](scripts/overlay-skin/mpc-ui-pages-overlay.json) to review the release UI, tabs and Q-Link mappings. The legacy 32/34-tab host-only layouts are historical. The host can draw static backgrounds beneath the overlay.
+- Ship only the SynthyBoy native editor. Give disabled controls their own visible, read-only presentation. Build, release and installation must reject a missing or broken native skin before replacing the working package. For display-path changes, check the active and inactive states on the requested MPC and check what the host displays while the overlay is off and after it returns.
 - During development and testing build ONLY for the architecture of the device being worked on (Key 61: armv7, XL: aarch64). Both architectures are built together only for a release or a release candidate.
 - Leave the XL on the package required by the current task. Keep the accepted build installed between tasks. Save new device measurements, including package identity, raw evidence and sampling limitations, under the shared `.hw-local/mpc-perf/` directory. Remove disproved derived results and link their replacement.
 - Open items live in [TODO.md](TODO.md): a finished item is deleted there, the commit message is the history.
