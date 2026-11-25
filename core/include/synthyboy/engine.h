@@ -99,6 +99,8 @@ public:
 
     /** Sets a parameter (plain value, constrained to the parameter's range); unknown ids and NaN are ignored. */
     virtual void setParam (uint32_t id, float plain) noexcept = 0;
+    /** Applies the parameter table of a decoded preset. Call on the state-loading thread. */
+    virtual void setPresetParams (const ParamValues& values) noexcept = 0;
     virtual float getParam (uint32_t id) const noexcept = 0;
 
     /** The areas of functionality added after state version 2 that this engine implements (engine_caps.h). The default is none: the

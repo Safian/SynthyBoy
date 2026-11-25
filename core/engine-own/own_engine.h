@@ -58,6 +58,7 @@ public:
     /** Measurements only (setOwnSavingsOff): the OwnSaving bits that are switched off. Any thread, lock free; read at the start of every block. */
     void setSavingsOff (uint32_t off) noexcept { savingsOff.store (off, std::memory_order_relaxed); }
     void reset() override;
+    void setPresetParams (const ParamValues& values) noexcept override;
     void setParam (uint32_t id, float plain) noexcept override;
     float getParam (uint32_t id) const noexcept override;
     bool supportsParam (uint32_t id) const noexcept override;
@@ -117,6 +118,7 @@ public:
     const spectral::StartLedger& startLedgerForTest() const noexcept { return spectralScratch->start; }
 
 private:
+    void storeParamAt (int i, float plain) noexcept;
     static constexpr int numChannels = 16;
     static constexpr int kSpareVoices = 4; // the spare voices of the Kill mode (document 01, 3.1)
 

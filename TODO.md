@@ -135,7 +135,7 @@
 - [ ] 8. Ellenőrizd az MPC-n futó motor denormális-védelmét a két ARM célon.
 - [ ] 11. Az importált presetek 4x túlmintavételezés-kapcsolója a „low" szinten nincs korlátozva; a „low" szint 5 effektet teljesen kihagy 31+ gyári presetnél, takarékos pótlék nélkül.
 - [ ] 12. `process()`: fölösleges nullázás és felülírás, néma buszok feldolgozása, egy `assign()`, ami túlméretes mono blokknál foglalhat.
-- [ ] 13. MPC shell: az eseménysor pörgő zárat használ; a preset betöltése 2637 paramétert egyenként ír (szakadozó hang presetváltáskor).
+- [ ] 13. MPC shell: az eseménysor pörgő zárat használ. A kötegelt presetbetöltés után Key 61-en mérendő a hangfolytonosság és a koppintástól az első új hangig eltelt idő.
 - [ ] 14. Nulla hangerejű, de még aktív hangok teljes költséggel futnak; a kijelző-visszaolvasás `exp` / `log10` hívásokat végez a hangszálon.
 - [ ] 16. A saját motor SIMD-puffereinél mérd meg, melyik forró ciklus költsége függ az igazítástól. A `fastmath::log2` pozitív normál számot vár. Ellenőrizd a hívókat, beleértve a kompresszor `powG` útját, és a ténylegesen elérhető szélső értékekhez adj regressziót.
 

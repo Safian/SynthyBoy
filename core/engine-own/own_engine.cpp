@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include "own_engine.h"
+#include "synthyboy/state.h"
 #include "osc/lib_osc.h"
 #include "synthyboy/spectral/start_cache.h"
 
@@ -254,9 +255,23 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
     const int i = findParamIndex (id);
     if (i < 0 || std::isnan (plain))
         return;
+    storeParamAt (i, plain);
+    paramGen.fetch_add (1u, std::memory_order_release);
+}
+
+void OwnEngine::setPresetParams (const ParamValues& values) noexcept
+{
+    const int count = static_cast<int> (paramCount());
+    for (int i = 0; i < count; ++i)
+        if (! std::isnan (values.plain[i]))
+            storeParamAt (i, values.plain[i]);
+    paramGen.fetch_add (1u, std::memory_order_release);
+}
+
+void OwnEngine::storeParamAt (int i, float plain) noexcept
+{
     const float v = constrainValue (paramTable()[i], plain);
     params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
-    paramGen.fetch_add (1u, std::memory_order_release);
     for (int k = 0; k < 6; ++k)
         if (wtParamIdx[k] == i)
         {

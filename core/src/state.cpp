@@ -987,7 +987,7 @@ private:
             if (! truncated)
             {
                 if (const auto* info = findParamByKey (key))
-                    index = findParamIndex (info->id);
+                    index = static_cast<int> (info - paramTable());
                 else
                     legacy = legacyIndex (key);
             }

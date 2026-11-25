@@ -10,6 +10,7 @@
 #include "osc/wavetable_bank.h"
 #include "voice/filter_unit.h"
 #include "synthyboy/engine.h"
+#include "synthyboy/state.h"
 #include "synthyboy/modulation.h"
 #include "test_runner.h"
 #include "test_util.h"
@@ -86,6 +87,22 @@ double rmsOf (const std::vector<float>& x, size_t a, size_t b)
 } // namespace
 
 // The source ids of the engine are the choice values of modNN.source: the order of the table must not change under it.
+TEST (preset_batch_matches_single_parameter_writes)
+{
+    auto batch = createOwnEngine();
+    auto individual = createOwnEngine();
+    auto values = ParamValues::defaults();
+    const auto* table = paramTable();
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        values.plain[i] = i % 13 == 0 ? std::nanf ("") : table[i].min + (table[i].max - table[i].min) * 0.7f;
+        individual->setParam (table[i].id, values.plain[i]);
+    }
+    batch->setPresetParams (values);
+    for (size_t i = 0; i < paramCount(); ++i)
+        CHECK_EQ (batch->getParam (table[i].id), individual->getParam (table[i].id));
+}
+
 TEST (own_source_ids_match_the_table)
 {
     const char* expected[] = { "env1", "env2", "env3", "env4", "env5", "env6", "lfo1", "lfo2", "lfo3", "lfo4", "lfo5", "lfo6", "lfo7", "lfo8", "rlfo1", "rlfo2",

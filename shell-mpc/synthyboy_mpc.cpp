@@ -3682,8 +3682,7 @@ static std::string buildStateChunk (PluginInstance* inst)
 
 static void applyState (PluginInstance* inst, const synthyboy::ParamValues& values, synthyboy::StateContent&& content)
 {
-    const auto* table = synthyboy::paramTable();
-    size_t count = synthyboy::paramCount();
+    const size_t count = synthyboy::paramCount();
     if (inst->engine)
         inst->engine->readyContentFor (values.plain, count);   // not the audio thread: the tables the state names are built BEFORE its parameters are set, so index and table take effect together
     for (size_t i = 0; i < count; ++i)
@@ -3692,9 +3691,9 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
 #if SYNTHYBOY_MPC_OVERLAY
         inst->paramUndo[i].store (std::nanf (""), std::memory_order_relaxed);   // a whole new state: no "value before the last change" any more
 #endif
-        if (inst->engine)
-            inst->engine->setParam(table[i].id, values.plain[i]);
     }
+    if (inst->engine)
+        inst->engine->setPresetParams (values);
 #if SYNTHYBOY_MPC_OVERLAY
     inst->ensureUserWavetableRootsFor (content);   // a file of the user wavetable folders: the drives are pack roots before the engine reads the reference (the lock below is not held yet)
     std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
