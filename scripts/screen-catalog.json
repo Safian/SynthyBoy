@@ -18,21 +18,21 @@
     {
       "name": "osc_a",
       "title": "Osc A",
-      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI 9e935c2a39dc",
+      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI cf71f101c3ea",
       "migration_current_source": "docs/ui-map/osc-a-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "osc_b",
       "title": "Osc B",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI cf71f101c3ea",
       "migration_current_source": "docs/ui-map/osc-b-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "osc_c",
       "title": "Osc C",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI cf71f101c3ea",
       "migration_current_source": "docs/ui-map/osc-c-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },

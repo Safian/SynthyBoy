@@ -150,7 +150,7 @@ def _control(kind, side, skins_dir=None, size=None, caption=""):
     if kind == "table":
         return command_stepper_definition(skins_dir, (width, height), caption)
     if kind == "action" and caption == "BROWSE":
-        return _definition([action_button(skins_dir, caption, (0, 0, width, height), "Data", text="…")])
+        return _definition([action_button(skins_dir, caption, (0, 0, width, height), "Data", text=caption)])
     if kind == "action":
         return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=_ui_style.size('screen.osc_settings.control.height.3'))], "Toggle Switch")
     raise ValueError("Unknown OSC control " + kind)

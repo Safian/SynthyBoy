@@ -120,7 +120,7 @@ public:
         if (! r.empty() && display_.valid())
         {
             const bool nativeRootPower = osc_.topPage() == 0 && osc_.full().hasNativePower();
-            const std::array<ui::Rect, 3> header { powerArea(), inPlay_ ? expandedCloseRect() : ui::Rect {}, ui::Rect {} };
+            const std::array<ui::Rect, 3> header { powerArea(), inPlay_ ? expandedCloseRect() : ui::Rect {}, osc_.full().isNativeRoutingActive() ? routingArea() : ui::Rect {} };
             display_.draw (sb, r, false, osc_.plotArea(), nativeRootPower ? &header : nullptr);
             display_.draw (sb, r, true, osc_.plotArea());
             if (marks_.any())
@@ -131,6 +131,8 @@ public:
         osc_.clearNativeDetailPixels (sb);
         if (osc_.topPage() == 0 && osc_.full().hasNativePower())
             ui::clearNativeCell (sb, powerArea());
+        if (! inPlay_ && osc_.topPage() == 0 && osc_.full().isNativeRoutingActive())
+            ui::clearNativeCell (sb, routingArea());
         if (inPlay_ && osc_.topPage() == 0)
             ui::clearNativeCell (sb, expandedCloseRect());
     }

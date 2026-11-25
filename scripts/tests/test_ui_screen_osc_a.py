@@ -214,7 +214,11 @@ class TestOscAScreen(unittest.TestCase):
         self.assertEqual({action["additionalData"] for action in trigger["actions"]}, {"oscWarpChoices"})
         for action in trigger["actions"]:
             self.assertEqual(action["handleName"], "Data")
-        self.assertFalse(definitions["oscNativeSettingWarpChoiceOff"]["actions"])
+        off_controls = [definition for name, definition in definitions.items()
+                        if name.startswith("oscNativeSettingWarpChoice") and name.endswith("Off")]
+        self.assertTrue(off_controls)
+        for control in off_controls:
+            self.assertFalse(control["actions"])
         detail = definitions["oscDetailTile"]["componentsData"]
         self.assertTrue(any(item["componentData"]["type"] == "oscNativeSettingWarpChoice" for item in detail))
 

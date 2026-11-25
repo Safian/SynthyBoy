@@ -191,6 +191,7 @@ public:
             group.set (i, i < n_row_ ? row_[i] : nullptr);
         layout();
     }
+    void setNativeColumn (bool enabled) noexcept { nativeColumn_ = enabled; }
     void setCardOctave (bool on)
     {
         if (inst_ != OscInstance::Sub && inst_ != OscInstance::Noise)
@@ -220,6 +221,20 @@ protected:
     {
         if (n_row_ == 0)
             return;
+        if (nativeColumn_)
+        {
+            selector.place ({ rect_.x, rect_.y - 4, rect_.w, 56 });
+            source.place ({ rect_.x, rect_.y + 54, rect_.w, 56 });
+            if (! source.compact())
+            {
+                const int browseWidth = 104;
+                source.stepper.place ({ source.rect().x, source.rect().y, rect_.w - browseWidth - kGap, source.rect().h });
+                source.dropdown.place ({ source.rect().right() - browseWidth, source.rect().y, browseWidth, source.rect().h });
+            }
+            pos.place ({ rect_.x, rect_.y + 264, rect_.w, 48 });
+            oct.place ({ rect_.x, rect_.y + 110, 64, 48 });
+            return;
+        }
         int fixed[4] = {}, weight[4] = {};
         Rect r[4];
         for (int i = 0; i < n_row_; ++i)
@@ -232,6 +247,7 @@ protected:
             row_[i]->place ({ r[i].x, r[i].y + (r[i].h - h) / 2, r[i].w, h });
         }
     }
+    bool nativeColumn_ = false;
     OscInstance inst_ = OscInstance::A;
     OscKind kind_ = OscKind::Wavetable;
     bool noiseSample_ = false;
@@ -470,7 +486,9 @@ protected:
         if (nativeSelector_)
             selectorArea_ = { rect_.x, rect_.bottom() - 48, W, 48 };
         close.place (selectorArea_);
-        top.place (r[2]);
+        const bool column = nativeSelector_ && hasNativeTune();
+        top.setNativeColumn (column);
+        top.place (column ? Rect { tuneArea().x, rect_.y + 4, tuneArea().w, 314 } : r[2]);
         top.setCardOctave (hasNativeTune());
         panel.setShown (PanelSlot::Fin, ! hasNativeTune());
         const int routeH = nativeRouting_ ? 48 : 56;
@@ -479,7 +497,7 @@ protected:
         show (mix, ! nativeRouting_);
         const int gap = kGap + 4;
         const int panelY = rect_.bottom() - (nativeSelector_ ? 96 : isTab ? 0 : m) - bottomH;
-        const int midY = top.rect().bottom() + gap;
+        const int midY = column ? rect_.y + 28 : top.rect().bottom() + gap;
         display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
         if (hasNativeTune())
         {
