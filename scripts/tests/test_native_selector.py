@@ -19,6 +19,7 @@ import native_selector as ns
 from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
     OSC_SOURCE_OVERLAY_NAME,
+    dropdown_definition,
     selector_definition,
 )
 
@@ -73,6 +74,25 @@ class TestNativeSelector(unittest.TestCase):
         self.assertEqual(wave.mode, "RGBA")
 
 
+
+    def test_plain_dropdown_shares_appearance_and_preserves_custom_command(self):
+        actions = [{"version": 1, "onAction": "Mouse Down", "handler": "Toggle Switch",
+                    "handleName": "Open", "additionalData": ""}]
+        normal = selector_definition(None, "Choices", (176, 56), self.skins_dir)
+        custom = dropdown_definition(176, 56, skins_dir=self.skins_dir, actions=actions, value_handle="Value",
+                                     remaps=[("Value", "Data")])
+        self.assertEqual(custom["actions"], actions)
+        self.assertEqual({action["additionalData"] for action in normal["actions"]}, {"Choices"})
+        face, label = custom["componentsData"]
+        normal_face, normal_label = normal["componentsData"]
+        self.assertEqual(face, normal_face)
+        self.assertEqual(label["componentData"]["data"]["textStyle"], normal_label["componentData"]["data"]["textStyle"])
+        self.assertEqual(label["componentData"]["data"]["handleName"], "Value")
+        self.assertEqual(label["handle remapping"]["map"], [{"key": "Value", "value": "Data"}])
+        self.assertEqual(label["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred")
+        with Image.open(self.skins_dir / face["componentData"]["data"]["image"]) as art:
+            self.assertEqual(art.getpixel((0, 0))[3], 0)
+            self.assertNotEqual(art.getpixel((25, 12)), art.getpixel((25, 44)))
 
     def test_shape_variant(self):
         """Verifies SHAPE variant with static caption, value label and stepper chevrons."""

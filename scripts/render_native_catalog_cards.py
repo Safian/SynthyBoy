@@ -153,7 +153,10 @@ def _render_selector_face(width, height, *, name=None, value="Sine", **variants)
             elif component["type"] == "Label":
                 style = data["textStyle"]
                 text = data.get("text", value)
-                font = selector_font(round(style["font"]["height"]))
+                font_height = style["font"]["height"]
+                if font_height == _style_size("selector.dropdown")["font"] and not (name or variants):
+                    font_height = _style_size("selector.dropdown.preview_font")
+                font = selector_font(round(font_height))
                 draw = ImageDraw.Draw(result)
                 bounds = draw.textbbox((0, 0), text, font=font)
                 tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]

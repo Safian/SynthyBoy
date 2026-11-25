@@ -288,6 +288,62 @@ def build_step_buttons(skins_dir, width, height, hit_width, labels, count, *, ne
             yield step
 
 
+def dropdown_asset_name(width, height):
+    return f"selector_dropdown_{width}x{height}.png"
+
+
+def render_dropdown_face(width, height, *, chevron=True):
+    """Reference MenuButton panel and V glyph, both inside the native touch bounds."""
+    geometry = _style_size("selector.dropdown")
+    theme = _style_size("theme.neon")
+    scale = _style_size("sampling.standard")
+    size = (width * scale, height * scale)
+    inset = geometry["inset"] * scale
+    box = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)
+    radius = round(theme["rControl"] * scale)
+    mask = Image.new("L", size)
+    ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
+    face = Image.new("RGBA", size)
+    pen = ImageDraw.Draw(face)
+    top, bottom = _style_rgb("theme.neon.panel0"), _style_rgb("theme.neon.panel1")
+    for y in range(box[1], box[3] + 1):
+        # The four equally spaced gradient stops are top, top, bottom, bottom.
+        t = min(1., max(0., 3. * (y - inset) / max(1, box[3] - inset) - 1.))
+        colour = tuple(round(lo + t * (hi - lo)) for lo, hi in zip(top, bottom))
+        pen.line((box[0], y, box[2], y), fill=colour)
+    face.putalpha(mask)
+    pen.rounded_rectangle(box, radius, outline=_style_color("theme.neon.keyline"), width=round(theme["frame"] * scale))
+    if chevron:
+        cx = (width - geometry["inset"] - geometry["chevron_lane"] / 2) * scale
+        cy = height * scale / 2
+        dx, dy = geometry["chevron_width"] * scale / 2, geometry["chevron_height"] * scale / 2
+        pen.line(((cx - dx, cy - dy), (cx, cy + dy), (cx + dx, cy - dy)),
+                 fill=_style_color("theme.neon.textDim"), width=round(geometry["chevron_stroke"] * scale), joint="curve")
+    return face.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def dropdown_definition(width, height, *, actions, skins_dir=None, value_handle="Data", value_name="Value",
+                        remaps=(), filename=None, frame_name="Selector face"):
+    """A native value selector whose caller owns all commands and value bindings."""
+    filename = filename or dropdown_asset_name(width, height)
+    if skins_dir is not None:
+        directory = Path(skins_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        save_png_filter0(render_dropdown_face(width, height), directory / filename)
+    style = _style_size("selector.dropdown")
+    inset = style["inset"]
+    left = inset + style["text_inset"]
+    value = _value_label(value_name, (left, left, width - left - inset - style["chevron_lane"], height - 2 * left),
+                         style["font"])
+    value["componentData"]["data"]["handleName"] = value_handle
+    value["componentData"]["data"]["textStyle"]["colour"] = _style_argb("theme.neon.text")
+    value["handle remapping"]["map"] = [{"key": key, "value": target} for key, target in remaps]
+    face = _image_component(frame_name, filename, (0, 0, width, height))
+    definition = passive_layer([face, value])
+    definition.update(ignoreMousePresses=False, actions=copy.deepcopy(list(actions)))
+    return definition
+
+
 def selector_definition(
     template,
     popup,
@@ -348,6 +404,29 @@ def selector_definition(
     scale = _style_size('selector.selector_definition.scale')
 
     navigable = bool(neighbors or steps)
+
+    plain = not (frame or play_face or icon or name or caption_text or stepper or arrows or navigable or neutral)
+    if plain:
+        # Keep the caller's navigation, focus and any explicit typography overrides.
+        label_name = "Title" if title == "Data" else title
+        popup_definition = build_choice_definition(template, popup, (0, 0, width, slot_height), label_name)
+        for action in popup_definition["actions"]:
+            if action.get("handler") == "Show Overlay":
+                action["handleName"] = title
+        native = dropdown_definition(width, height, skins_dir=skins_dir, actions=popup_definition["actions"],
+                                    value_handle=title, value_name=label_name, filename=filename, frame_name=frame_name)
+        frame_child, value = native["componentsData"]
+        for child in (frame_child, value):
+            x, y, w, h = map(int, child["bounds"]["bounds"].split())
+            child["bounds"]["bounds"] = f"{x} {y + top} {w} {h}"
+        text_style = value["componentData"]["data"]["textStyle"]
+        if justification:
+            text_style["justification"] = justification
+        if label_height != _style_size("font.selector"):
+            text_style["font"]["height"] = float(label_height)
+        popup_definition["backgroundData"] = native["backgroundData"]
+        popup_definition["componentsData"][-1:] = native["componentsData"]
+        return popup_definition
 
     if not frame:
         fill_col = _style_rgb("selector.neutral.surface") if neutral else _style_color("selector.surface")
@@ -765,8 +844,9 @@ def write_routing_assets(skins_dir):
 
 
 def build_compact_osc_routing_definition(source_def, skins_dir):
-    return selector_definition(source_def, OSC_ROUTING_OVERLAY_NAME,
-                               STANDALONE_COMPACT_OSC_ROUTING_RECT[2:], skins_dir)
+    width, height = STANDALONE_COMPACT_OSC_ROUTING_RECT[2:]
+    return selector_definition(source_def, OSC_ROUTING_OVERLAY_NAME, (width, height), skins_dir,
+                               filename=f"selector_face_{width}x{height}.png")
 
 
 def _mark_native_menu(items):
