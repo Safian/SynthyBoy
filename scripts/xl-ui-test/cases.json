@@ -575,6 +575,9 @@
     "steps": [
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "vst": {"2850": 0.25}},
       {"op": "tap", "x": 44, "y": 222},
       {"op": "expect", "target": "filter1.on", "change": "only", "from": "baseline"}
@@ -582,7 +585,10 @@
     "restore": [
       {"op": "tap", "x": 44, "y": 222, "if_changed": {"from": "baseline", "target": "filter1.on"}},
       {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "x": 37, "y": 154}
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49}
     ]
   },
   {
@@ -590,7 +596,10 @@
     "view": "filter1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "x": 95, "y": 154},
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 199},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "vst": {"2850": 0.5}},
       {"op": "tap", "x": 44, "y": 222},
       {"op": "expect", "target": "filter2.on", "change": "only", "from": "baseline"}
@@ -598,7 +607,10 @@
     "restore": [
       {"op": "tap", "x": 44, "y": 222, "if_changed": {"from": "baseline", "target": "filter2.on"}},
       {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "x": 37, "y": 154}
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49}
     ]
   },
   {
@@ -1660,6 +1672,9 @@
     "steps": [
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "vst": {"2850": 0.25}},
       {"op": "tap", "x": 862, "y": 154},
       {"op": "tap", "control": "filter1/Filter Native Split Right Note/Filter Native Split Expand Curve"},
@@ -1670,6 +1685,9 @@
     ],
     "restore": [
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "tap", "x": 862, "y": 154},
       {"op": "navigate", "view": "play1"}
     ]
@@ -1680,6 +1698,9 @@
     "steps": [
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "vst": {"2850": 0.25}},
       {"op": "tap", "x": 1044, "y": 154},
       {"op": "tap", "control": "filter1/Filter Native Split Right Velo/Filter Native Split Expand Curve"},
@@ -1690,6 +1711,9 @@
     ],
     "restore": [
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "tap", "x": 862, "y": 154},
       {"op": "navigate", "view": "play1"}
     ]
@@ -1699,7 +1723,10 @@
     "view": "filter1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "x": 95, "y": 154},
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 199},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "vst": {"2850": 0.5}},
       {"op": "tap", "x": 862, "y": 154},
       {"op": "tap", "control": "filter1/Filter Native Split Right Note/Filter Native Split Expand Curve"},
@@ -1710,6 +1737,9 @@
     ],
     "restore": [
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "tap", "x": 862, "y": 154},
       {"op": "navigate", "view": "play1"}
     ]
@@ -1719,7 +1749,10 @@
     "view": "filter1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "x": 95, "y": 154},
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 199},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "vst": {"2850": 0.5}},
       {"op": "tap", "x": 1044, "y": 154},
       {"op": "tap", "control": "filter1/Filter Native Split Right Velo/Filter Native Split Expand Curve"},
@@ -1730,6 +1763,9 @@
     ],
     "restore": [
       {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "status": {"view": "none"}},
+      {"op": "tap", "x": 700, "y": 134},
+      {"op": "tap", "x": 106, "y": 49},
       {"op": "tap", "x": 862, "y": 154},
       {"op": "navigate", "view": "play1"}
     ]
