@@ -1338,7 +1338,7 @@ def macro_bank_definition(template):
     return definition
 
 
-def append_choice_rows(ctx, definition, labels, field):
+def append_choice_rows(ctx, definition, labels, field, *, header_title=None, marks=()):
     """Native explicit rows for hosts whose drawer loses proxy step metadata.
 
     The existing host drawer header remains the commit/dismiss target.
@@ -1348,13 +1348,14 @@ def append_choice_rows(ctx, definition, labels, field):
     geometry = _style_size("selector.choice.rows")
     definition["ignoreMousePresses"] = False
     font = semibold(geometry["font"])
-    hint = f"play_sub_{field}_apply.png"
+    prefix = field if header_title else f"play_sub_{field}"
+    hint = f"{prefix}_apply.png"
     header_rect = geometry["header"]
     header = Image.new("RGBA", tuple(header_rect[2:]))
     draw = ImageDraw.Draw(header)
     draw.line(tuple(geometry["back"]), fill=_style_color("text.white"), width=geometry["stroke"])
-    title = "WAVEFORM" if field == "wave" else "OCTAVE"
-    draw.text(tuple(geometry["title"]), f"Tap PLAY SUB {title} to apply", anchor="lm", font=font,
+    title = header_title or ("PLAY SUB WAVEFORM" if field == "wave" else "PLAY SUB OCTAVE")
+    draw.text(tuple(geometry["title"]), f"Tap {title} to apply", anchor="lm", font=font,
               fill=_style_color("text.white"))
     header.save(ctx.skins_dir / hint)
     definition["componentsData"].append(_entry("Apply hint", "Image", {
@@ -1365,13 +1366,31 @@ def append_choice_rows(ctx, definition, labels, field):
         rect = (x, y + i * geometry["stride"], width, height)
         images = []
         for state in ("on", "off"):
-            filename = f"play_sub_{field}_{i}_{state}.png"
+            filename = f"{prefix}_{i}_{state}.png"
             image = Image.new("RGB", (width, height), _style_color(f"selector.choice.{state}"))
             ImageDraw.Draw(image).text((width / 2, height / 2), label, anchor="mm", font=font,
                                        fill=_style_color("text.white"))
             image.save(ctx.skins_dir / filename)
             images.append(filename)
         definition["componentsData"].append(button(label, rect, *images, index=i, count=len(labels)))
+        if marks:
+            # Independent marks track the actual edited source and signal routing.
+            # Reading the popup's single staged Data choice cannot represent both.
+            parameter, frames = marks[i]
+            tick = render_pipa_icon()
+            strip = Image.new("RGBA", (tick.width, tick.height * len(frames)))
+            for frame, marked in enumerate(frames):
+                if marked:
+                    strip.paste(tick, (0, frame * tick.height))
+            filename = f"{prefix}_mark_{i}.png"
+            save_png_filter0(strip, ctx.skins_dir / filename)
+            tx = x + width - 2 * tick.width
+            ty = rect[1] + (height - tick.height) // 2
+            definition["componentsData"].append(_entry(label + " current", "Image", {
+                "version": 2, "imageType": "FilmStrip", "image": filename, "numFrames": len(frames),
+                "colour": _style_native_color("transparent"), "handleName": "Data"
+            }, (tx, ty, tick.width, tick.height), remaps=(("Data", f"Parameter {parameter}"),), focus="No"))
+
 
 
 def write_source_navigation_assets(skins_dir):

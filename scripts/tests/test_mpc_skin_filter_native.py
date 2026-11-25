@@ -384,10 +384,12 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         face = definition["componentsData"][0]["componentData"]["data"]
         self.assertEqual((face["imageType"], face["numFrames"], face["handleName"]), ("FilmStrip", 4, "Edited"))
         actions = definition["actions"]
-        self.assertEqual([a["additionalData"] for a in actions], ["fx editor choice menu"] * 2)
+        self.assertEqual([a["additionalData"] for a in actions], ["filterNativeChainChoices"] * 2)
         self.assertEqual([a["onAction"] for a in actions], ["Mouse Down", "Enter Pressed"])
         self.assertEqual(sum(c["componentData"]["type"] == "MenuOverlay"
-                             for c in defs["fx editor choice menu"]["componentsData"]), 1)
+                             for c in defs["filterNativeChainChoices"]["componentsData"]), 1)
+        rows = [c for c in defs["filterNativeChainChoices"]["componentsData"] if c["componentData"]["type"] == "Button"]
+        self.assertEqual([r["componentData"]["data"]["buttonId"] for r in rows], list(range(5)))
         for pool in (self.controls, self.split_left_controls):
             self.assertFalse(any("Routing " in c["componentData"]["name"] for c in pool))
 

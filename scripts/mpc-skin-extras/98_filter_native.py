@@ -367,8 +367,15 @@ def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passi
 
 def _register_filter_chain(ctx, tui, f2_state):
     kind = "filterNativeChain"
-    ctx.add_component_definition(kind, ui_selector.filter_chain_definition(ctx.skins_dir, "fx editor choice menu"))
     route = ctx.param_index("filter.routing")
+    definitions = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
+    menu = copy.deepcopy(next(d["value"] for d in definitions if d["key"] == "fx editor choice menu"))
+    popup = "filterNativeChainChoices"
+    marks = [(f2_state, (True, True, False, False)), (f2_state, (False, False, True, True))]
+    marks.extend((route, tuple(frame == index for frame in range(3))) for index in range(3))
+    ui_selector.append_choice_rows(ctx, menu, CHAIN_CHOICES, "filter_chain", header_title="FILTER CHAIN", marks=marks)
+    ctx.add_component_definition(popup, menu)
+    ctx.add_component_definition(kind, ui_selector.filter_chain_definition(ctx.skins_dir, popup))
     shared = [("Edited", f"Parameter {f2_state}")]
     shared.extend((f"Power{f}", f"Parameter {ctx.param_index(f'filter{f}.on')}") for f in (1, 2))
     first = ctx.param_count + LEGACY_EXTRAS + FILTER_CHAIN_MENU
