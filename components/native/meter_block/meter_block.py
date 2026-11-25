@@ -62,31 +62,37 @@ def build_meter_block_definition(
     hold: bool = True,
     with_clip: bool = True,
 ) -> Dict[str, Any]:
-    """Produces the SDK Composite definition for a native MeterBlock."""
+    """Build the mono Peak/Hold block or the Mixer's calibrated stereo block with clip."""
     from components.native.meter.meter import stereo_meter_assets
     w = _style_size("mixer_strip.meter.width") if width is None else width
     h = _style_size("mixer_strip.fader.height_source") if height is None else height
-    channel_w = _style_size("meter.stereo.channel_width")
-    gap = _style_size("meter.stereo.channel_gap")
-    clip_h = _style_size("meter.stereo.clip_height")
-    meter_y = clip_h + _style_size("meter.stereo.clip_gap")
     clear = {"version": 1, "colour": _style_argb("ink.black", 0), "image": ""}
     components = []
-    for channel, x in (("L", 0), ("R", channel_w + gap)):
-        for clip in (False, True):
-            data = _raw_meter_data(direction="Up", hold=hold and not clip,
-                assets=("mixer_meter_clip_idle.png", "mixer_meter_clip_peak.png") if clip else stereo_meter_assets(h - meter_y))
-            data["peakHandle"] = "Clip" + channel if clip else "Peak" + channel
-            data["peakHoldHandle"] = "" if clip or not hold else "Hold" + channel
-            names = ("Clip" + channel,) if clip else ("Peak" + channel, "Hold" + channel)
-            components.append({
-                "version": 2,
-                "componentData": {"version": 1, "name": ("Clip " if clip else "Meter ") + channel, "type": "Meter", "data": data},
-                "handle remapping": {"version": 1, "map": [{"key": name, "value": name} for name in names]},
-                "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide",
-                           "whenVisible": "Always", "boundsType": "Absolute",
-                           "bounds": f"{x} {0 if clip else meter_y} {channel_w} {clip_h if clip else h - meter_y}"},
-            })
+
+    def add_meter(name, rect, assets, peak, peak_hold=""):
+        data = _raw_meter_data(direction="Up", hold=bool(peak_hold), assets=assets)
+        data.update(peakHandle=peak, peakHoldHandle=peak_hold)
+        components.append({
+            "version": 2,
+            "componentData": {"version": 1, "name": name, "type": "Meter", "data": data},
+            "handle remapping": {"version": 1, "map": [{"key": key, "value": key} for key in (peak, peak_hold) if key]},
+            "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide",
+                       "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect},
+        })
+
+    if with_clip:
+        channel_w = _style_size("meter.stereo.channel_width")
+        gap = _style_size("meter.stereo.channel_gap")
+        clip_h = _style_size("meter.stereo.clip_height")
+        meter_y = clip_h + _style_size("meter.stereo.clip_gap")
+        signal_h = h - meter_y
+        for channel, x in (("L", 0), ("R", channel_w + gap)):
+            add_meter("Meter " + channel, (x, meter_y, channel_w, signal_h), stereo_meter_assets(signal_h),
+                      "Peak" + channel, "Hold" + channel if hold else "")
+            add_meter("Clip " + channel, (x, 0, channel_w, clip_h),
+                      ("mixer_meter_clip_idle.png", "mixer_meter_clip_peak.png"), "Clip" + channel)
+    else:
+        add_meter("Meter", (0, 0, w, h), METER_ASSETS, "Peak", "Hold" if hold else "")
     return {"version": 2, "actions": [],
             "backgroundData": {"version": 1, "focussed": clear.copy(), "unfocussed": clear.copy()},
             "ignoreMousePresses": True, "disableCoarseDataWheel": False, "componentsData": components}
@@ -97,19 +103,24 @@ def create_meter_block_instance(
     def_name: str,
     rect: Tuple[int, int, int, int],
     peak_handle: Union[int, str],
-    hold_handle: Union[int, str],
+    hold_handle: Optional[Union[int, str]],
     clip_handle: Optional[Union[int, str]] = None,
     gates: Sequence[str] = (),
     focus: str = "No",
     *,
-    peak_right_handle: Union[int, str],
-    hold_right_handle: Union[int, str],
-    clip_right_handle: Union[int, str],
+    peak_right_handle: Optional[Union[int, str]] = None,
+    hold_right_handle: Optional[Union[int, str]] = None,
+    clip_right_handle: Optional[Union[int, str]] = None,
 ) -> Dict[str, Any]:
     """Instantiates a native MeterBlock with remapped Peak/Hold handles."""
-    values = {"PeakL": peak_handle, "PeakR": peak_right_handle,
-              "HoldL": hold_handle, "HoldR": hold_right_handle,
-              "ClipL": clip_handle, "ClipR": clip_right_handle}
+    if peak_right_handle is None:
+        if any(handle is not None for handle in (clip_handle, clip_right_handle, hold_right_handle)):
+            raise ValueError("Stereo clip/hold bindings require a right peak readout")
+        values = {"Peak": peak_handle, "Hold": hold_handle}
+    else:
+        values = {"PeakL": peak_handle, "PeakR": peak_right_handle,
+                  "HoldL": hold_handle, "HoldR": hold_right_handle,
+                  "ClipL": clip_handle, "ClipR": clip_right_handle}
     remaps = [{"key": key, "value": f"Parameter {value}" if isinstance(value, int) else str(value)}
               for key, value in values.items() if value is not None]
 

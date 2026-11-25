@@ -156,13 +156,24 @@ class TestNativeMixerComponents(unittest.TestCase):
         self.assertEqual(format_fader_value(0.0, SCALE_SKEW_DB), "0.0 dB")
 
     def test_meter_block_composition(self):
-        mb_def = build_meter_block_definition("testMeterBlock", width=12, height=198, hold=True, with_clip=False)
-        self.assertIn("componentsData", mb_def)
-        comps = mb_def["componentsData"]
-        self.assertEqual(len(comps), 1)  # Honest meter without fake clip
-        meter = comps[0]
-        self.assertEqual(meter["componentData"]["type"], "Meter")
-        self.assertEqual(meter["componentData"]["data"]["peakHoldHandle"], "Hold")
+        for hold in (False, True):
+            with self.subTest(hold=hold):
+                rect = (0, 0, 12, 198)
+                mb_def = build_meter_block_definition("testMeterBlock", width=12, height=198, hold=hold, with_clip=False)
+                meter, = mb_def["componentsData"]
+                self.assertEqual(meter["bounds"]["bounds"], "0 0 12 198")
+                self.assertEqual(meter["bounds"]["acceptsHWFocus"], "No")
+                self.assertEqual(meter["componentData"]["type"], "Meter")
+                data = meter["componentData"]["data"]
+                self.assertEqual((data["peakHandle"], data["peakHoldHandle"]), ("Peak", "Hold" if hold else ""))
+                bindings = {"Peak": "Parameter 123"}
+                if hold:
+                    bindings["Hold"] = "Parameter 124"
+                self.assertEqual(meter["handle remapping"]["map"], [{"key": k, "value": k} for k in bindings])
+                instance = create_meter_block_instance("Test", "testMeterBlock", rect, 123, 124 if hold else None)
+                self.assertEqual(instance["handle remapping"]["map"], [{"key": k, "value": v} for k, v in bindings.items()])
+                self.assertTrue(mb_def["ignoreMousePresses"])
+                self.assertEqual(mb_def["actions"], [])
 
     def test_strip_header_definition(self):
         hdr_src = build_mixer_strip_header_definition(VARIANT_SOURCE)
