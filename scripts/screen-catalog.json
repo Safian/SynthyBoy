@@ -108,7 +108,7 @@
     {
       "name": "master",
       "title": "Master",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 466df9a0e8fd · TUI be4b5924cbe3",
       "migration_current_source": "docs/user-guide/img/master-main.png",
       "migration_current_source_commit": "e1cc61d6",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_master_main.png",
@@ -117,7 +117,7 @@
     {
       "name": "voice",
       "title": "Voice",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 466df9a0e8fd · TUI be4b5924cbe3",
       "migration_current_source": "docs/ui-map/voice-preview-host-render.png",
       "migration_current_source_commit": "594ac6dd"
     }

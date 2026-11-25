@@ -82,6 +82,25 @@ def segmented_radio_entry(name, label, rect, index, count, handle, skins_dir, *,
     return item
 
 
+def titled_radio_grid(skins_dir, labels, rects, *, size, caption_rect, caption_height):
+    """A focusable group of native radio choices with a parameter-bound title."""
+    from components.native.button.button import entry
+    from components.native.name_value.name_value import _label_component
+    from components.native.selector.selector import passive_layer
+    from components.style import argb, focus_ring_data
+
+    if len(labels) != len(rects) or len(labels) < 2:
+        raise ValueError("A radio grid needs one cell for each of at least two choices")
+    focus = entry("focus", "Focus", focus_ring_data(), (0, 0, *size), focus="No")
+    focus["bounds"]["whenVisible"] = "WhenFocussed"
+    caption = _label_component("name", "Name", "Caption", caption_rect, caption_height,
+                               argb("text.caption"), "horizontallyCentred verticallyCentred")
+    return passive_layer([focus, caption, *[
+        segmented_radio_entry(f"row {index}", label, rect, index, len(labels), None, skins_dir)
+        for index, (label, rect) in enumerate(zip(labels, rects))
+    ]])
+
+
 def create_segmented_radio_button_group(name, rect, labels, handle, skins_dir, *, gates=(), focus="Yes", vertical=False):
     """Tile the available width or height, including the last remainder pixel."""
     count = len(labels)

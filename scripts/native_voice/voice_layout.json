@@ -4,7 +4,7 @@
       "name": "Voice Rand Pan",
       "key": "voicectl.rand.pan",
       "kind": "dial",
-      "type": "voiceNativePanDepth",
+      "type": "voiceNativeDial",
       "rect": [
         14,
         408,
@@ -188,7 +188,7 @@
       "kind": "number",
       "type": "voiceNativeNumber",
       "rect": [
-        884,
+        836,
         20,
         180,
         56
@@ -214,7 +214,7 @@
       "Voice Step Select",
       "voiceNativeStepSelect",
       [
-        668,
+        620,
         20,
         208,
         56
@@ -226,7 +226,7 @@
       "Voice Step Value",
       "voiceNativeStepValue",
       [
-        1072,
+        1024,
         20,
         200,
         56

@@ -133,17 +133,30 @@ def button(name, rect, on, off=None, index=1, count=1, remaps=(), gates=()):
     )
 
 
-def action_button(ctx, name, rect, action, *, icon=None, text=None, width=None, gates=()):
-    """Bind one immediate MPC action to a centered 48 px icon or label."""
-    if not action:
-        raise ValueError("An action handle is required")
-    image = in_slot(action_art(icon=icon, text=text, width=width), tuple(rect[2:]))
+def _store_action_face(ctx, rect, *, icon=None, text=None, width=None, colour=None):
+    ink = {} if colour is None else {"colour": colour}
+    image = in_slot(action_art(icon=icon, text=text, width=width, **ink), tuple(rect[2:]))
     digest = hashlib.sha256(str(image.size).encode() + image.tobytes()).hexdigest()[:20]
     filename = f"native_action_{digest}.png"
     skins_dir = getattr(ctx, "skins_dir", ctx)
     image.save(Path(skins_dir) / filename)
+    return filename
+
+
+def action_button(ctx, name, rect, action, *, icon=None, text=None, width=None, gates=(), colour=None):
+    """Bind one immediate MPC action to a centered icon or label."""
+    if not action:
+        raise ValueError("An action handle is required")
+    filename = _store_action_face(ctx, rect, icon=icon, text=text, width=width, colour=colour)
     remaps = () if action == "Data" else (("Data", action),)
     return button(name, rect, filename, remaps=remaps, gates=gates)
+
+
+def mode_button(ctx, name, rect, handle, *, on_text, off_text, gates=()):
+    width = rect[2]
+    on = _store_action_face(ctx, rect, text=on_text, width=width, colour=_style_color("accent.cyan"))
+    off = _store_action_face(ctx, rect, text=off_text, width=width)
+    return button(name, rect, on, off, remaps=(("Data", handle),), gates=gates)
 
 
 def icon_button(symbol, colour):
@@ -217,17 +230,6 @@ def text_face(label, size, *, geometry, surface, border, text):
     pen.text((width / 2, height / 2), label, anchor="mm", font=semibold(metrics["font"]),
              fill=_style_color(text))
     return image
-
-
-def write_panel_selector_assets(directory, panels):
-    """Shared native panel selection faces; labels/geometry come from the caller."""
-    for index, (name, rect) in enumerate(panels, 1):
-        for state in ("on", "off"):
-            image = text_face(name, tuple(rect[2:]), geometry="master.panel.face",
-                              surface="button.surface", border=f"master.panel.border.{state}", text="text.icon")
-            plate = Image.new("RGB", image.size, _style_color("button.surface"))
-            plate.paste(image, mask=image.getchannel("A"))
-            plate.save(Path(directory) / f"master_panel_{index}_{state}.png")
 
 
 def write_switch_asset(path, active):

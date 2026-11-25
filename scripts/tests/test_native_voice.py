@@ -53,11 +53,11 @@ _spec_97.loader.exec_module(no_fallback_extra)
 
 
 class MockContext:
-    def __init__(self, params_dict):
+    def __init__(self, params_dict, skins_dir):
         self.params = params_dict["params"]
         self._index = {p["key"]: i for i, p in enumerate(self.params)}
         self.meta = {"variant": "overlay"}
-        self.skins_dir = str(ROOT / "build")
+        self.skins_dir = skins_dir
 
     def param_index(self, key):
         if key not in self._index:
@@ -73,7 +73,9 @@ class TestNativeVoiceTab(unittest.TestCase):
     def setUp(self):
         with open(PARAMS_JSON, "r", encoding="utf-8") as f:
             self.params_data = json.load(f)
-        self.ctx = MockContext(self.params_data)
+        skins = tempfile.TemporaryDirectory()
+        self.addCleanup(skins.cleanup)
+        self.ctx = MockContext(self.params_data, skins.name)
         self.ctx.voice_tab = {
             "tabName": VOICE_TAB_NAME,
             "fnKeyIndex": 4,
@@ -142,7 +144,7 @@ class TestNativeVoiceTab(unittest.TestCase):
         """Unconverted controls must be explicitly listed with technical justification."""
         unconverted_names = {u["name"] for u in UNCONVERTED_CONTROLS}
         self.assertIn("Voice Step Grid", unconverted_names)
-        self.assertIn("Voice Step Readout Strip", unconverted_names)
+        self.assertNotIn("Voice Step Readout Strip", unconverted_names)
         for u in UNCONVERTED_CONTROLS:
             self.assertTrue(len(u["reason"]) > 20, f"{u['name']} must have detailed justification")
 
@@ -170,8 +172,8 @@ class TestNativeVoiceTab(unittest.TestCase):
     def test_approved_components_and_mode_contract(self):
         with tempfile.TemporaryDirectory() as folder:
             definitions=voice_definitions(folder)
-            pan=next(c["componentData"]["data"] for c in definitions["voiceNativePanDepth"]["componentsData"] if c["componentData"]["type"]=="Knob")
-            self.assertTrue(pan["filmStrip"].startswith("voice_pan_depth_"))
+            pan=next(c["componentData"]["data"] for c in definitions["voiceNativeDial"]["componentsData"] if c["componentData"]["type"]=="Knob")
+            self.assertEqual(pan["filmStrip"], "play_sub_level_90.png")
             self.assertTrue((Path(folder)/pan["filmStrip"]).is_file())
             param=next(p for p in self.ctx.params if p["key"]=="voicectl.rand.pan")
             self.assertEqual((param["min"],param["max"]),(0,100))
@@ -185,7 +187,8 @@ class TestNativeVoiceTab(unittest.TestCase):
                 self.assertEqual(on.size,tuple(ctrl["rect"][2:]))
                 self.assertEqual(on.getchannel("A").tobytes(),off.getchannel("A").tobytes())
                 self.assertNotEqual(on.tobytes(),off.tobytes())
-                self.assertEqual(definition["actions"],[])
+                self.assertEqual([(a["onAction"], a["handler"], a["handleName"]) for a in definition["actions"]],
+                                 [("Enter Pressed", "Toggle Switch", "Data")])
             targets_def = definitions["voiceNativeTargets"]
             self.assertEqual(targets_def["actions"], [])
             target_buttons = [c for c in targets_def["componentsData"] if c["componentData"]["type"] == "Button"]
@@ -198,7 +201,7 @@ class TestNativeVoiceTab(unittest.TestCase):
                 self.assertEqual(on.getchannel("A").tobytes(), off.getchannel("A").tobytes())
                 self.assertNotEqual(on.tobytes(), off.tobytes())
             scale=definitions["voiceNativeScaleDial"]["componentsData"]
-            names=[c for c in scale if c["componentData"]["name"] in ("name","rate caption")]
+            names=[c for c in scale if c["componentData"]["name"] in ("name","alternate caption")]
             self.assertEqual({c["bounds"]["additionalInvalidatingHandles"][0] for c in names},
                              {"TimeCaption","RateCaption"})
             self.assertTrue(any(c["componentData"]["data"].get("text")=="LFO RATE" for c in names))
@@ -239,7 +242,8 @@ class TestNativeVoiceTab(unittest.TestCase):
         tab = next(t for t in page["tabs"] if t["tabName"] == VOICE_TAB_NAME)
         definitions = {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}
         components = {c["componentData"]["name"]: c for c in tab["componentDefinition"]["componentsData"]
-                      if not c["componentData"]["name"].startswith(("Overlay Instance", "Overlay Marker"))}
+                      if not c["componentData"]["name"].startswith(("Overlay Instance", "Overlay Marker",
+                                                                     "Overlay Background Sentinel ", "Native Caption "))}
         self.assertEqual(set(components), VOICE_NATIVE_CONTROL_NAMES)
 
         target = "Parameter %d" % self.ctx.param_index("voicectl.scale.lfo_mode")
@@ -287,7 +291,7 @@ class TestNativeVoiceTab(unittest.TestCase):
                 self.assertNotEqual(data["onImage"],data["offImage"])
                 _,_,w,h=map(int,button["bounds"]["bounds"].split())
                 self.assertGreaterEqual(w,56);self.assertGreaterEqual(h,56)
-                self.assertEqual(definition["actions"],[],"No second toggle action on the parent")
+                self.assertEqual([a["onAction"] for a in definition["actions"]], ["Enter Pressed"])
             else:
                 expected = "fx editor number menu" if kind == "number" else "fx editor choice menu"
                 self.assertEqual({(a["onAction"],a["additionalData"]) for a in definition["actions"]},
@@ -364,7 +368,7 @@ class TestNativeVoiceTab(unittest.TestCase):
             for step in range(1, 9):
                 name = f"{VOICE_STEP_KNOB_PREFIX}{label} {step}"
                 comp = components[name]
-                family = 'voiceNativeStepPan' if row_idx == 0 else 'voiceNativeStepLevel'
+                family = 'voiceNativeStepLevel'
                 self.assertEqual(comp['componentData']['type'],family)
                 self.assertEqual(definitions[family]['componentsData'][-1]['componentData']['type'],'Knob')
                 self.assertEqual(comp["bounds"]["acceptsHWFocus"], "Yes", name)
@@ -385,12 +389,32 @@ class TestNativeVoiceTab(unittest.TestCase):
         components, definitions = self.assert_native_widgets(page)
         output = subprocess.check_output([VOICE_HOST, "--voice-skin-contract"], text=True)
         actual = {line.split()[0]: tuple(map(int, line.split()[1:])) for line in output.splitlines()}
-        expected = {control["key"]: (self.ctx.param_index(control["key"]),
-                                    *map(int, components[control["name"]]["bounds"]["bounds"].split()))
-                    for control in VOICE_NATIVE_CONTROLS}
-        expected.update({f"shell.voice_{key}": (sequence_base(self.ctx) + offset,
-                                                *map(int, components[name]["bounds"]["bounds"].split()))
-                         for offset, (name, _, _, _, key) in enumerate(VOICE_SEQUENCE_CONTROLS)})
+        def binding(component, handle="Data"):
+            mapping = {h["key"]: h["value"] for h in component["handle remapping"]["map"]}
+            model, index = mapping[handle].split()
+            self.assertEqual(model, "Parameter")
+            return int(index)
+
+        def rect(component):
+            return tuple(map(int, component["bounds"]["bounds"].split()))
+
+        expected = {}
+        for control in VOICE_STANDALONE_CONTROLS:
+            widget = components[control["name"]]
+            expected[control["key"]] = (binding(widget), *rect(widget))
+        for name, _, _, _, key in VOICE_SEQUENCE_CONTROLS:
+            widget = components[name]
+            expected[f"shell.voice_{key}"] = (binding(widget), *rect(widget))
+
+        group = components["Voice Target Scope"]
+        gx, gy, _, _ = rect(group)
+        children = definitions[group["componentData"]["type"]]["componentsData"]
+        buttons = {c["componentData"]["data"]["handleName"]: c for c in children
+                   if c["componentData"]["type"] == "Button"}
+        for target in VOICE_TARGET_ITEMS:
+            handle = target["handle"]
+            x, y, w, h = rect(buttons[handle])
+            expected[target["key"]] = (binding(group, handle), gx + x, gy + y, w, h)
         self.assertEqual(actual, expected)
         for name, leaf in (("fx editor choice menu", "MenuOverlay"), ("fx editor number menu", "NumericOverlay")):
             entries = definitions[name]["componentsData"]
@@ -524,7 +548,7 @@ class TestNativeVoiceTab(unittest.TestCase):
         """All converted controls and unconverted regions correspond strictly to VoiceScreen geometry."""
         # Header apertures
         length_ctrl = next(c for c in VOICE_NATIVE_CONTROLS if c["name"] == "Voice Length")
-        self.assertEqual(length_ctrl["rect"], (884, 20, 180, 56))
+        self.assertEqual(length_ctrl["rect"], (836, 20, 180, 56))
 
         # Block 0 (RANDOM) inner rect: (14, 408, 508, 206)
         block0_ctrls = [c for c in VOICE_NATIVE_CONTROLS if c["block"] == 0]
@@ -559,8 +583,6 @@ class TestNativeVoiceTab(unittest.TestCase):
         # Unconverted regions
         grid_unc = next(u for u in UNCONVERTED_CONTROLS if u["name"] == "Voice Step Grid")
         self.assertEqual(grid_unc["rect"], (268, 84, 1004, 236))
-        strip_unc = next(u for u in UNCONVERTED_CONTROLS if u["name"] == "Voice Step Readout Strip")
-        self.assertEqual(strip_unc["rect"], (8, 326, 1264, 40))
         row = next(c for c in VOICE_SEQUENCE_CONTROLS if c[0] == "Voice Row List")
         self.assertEqual(row[2], (14, 106, 240, 208))
 
@@ -575,7 +597,7 @@ class TestNativeVoiceTab(unittest.TestCase):
         for row, label in enumerate(VOICE_ROWS):
             for step in range(1, 9):
                 knob = knobs[row * 8 + step - 1]
-                family = 'voiceNativeStepPan' if row == 0 else 'voiceNativeStepLevel'
+                family = 'voiceNativeStepLevel'
                 self.assertEqual(knob['componentData']['type'], family)
                 self.assertEqual(knob['bounds']['additionalInvalidatingHandles'],
                                  [ROOT_GATE, f'IndexedEnabling/{row}/6/{row_handle}'])

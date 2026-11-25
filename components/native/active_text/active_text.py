@@ -105,12 +105,13 @@ def write_active_text_assets(
     *,
     on_name="active_text_on.png",
     off_name="active_text_off.png",
+    font_size=None,
 ):
     """Write ON and OFF state image assets to the specified skin directory."""
     dir_path = Path(directory)
     dir_path.mkdir(parents=True, exist_ok=True)
-    img_on = render_active_text_art(text, True, width=width, height=height)
-    img_off = render_active_text_art(text, False, width=width, height=height)
+    img_on = render_active_text_art(text, True, width=width, height=height, font_size=font_size)
+    img_off = render_active_text_art(text, False, width=width, height=height, font_size=font_size)
     img_on.save(dir_path / on_name)
     img_off.save(dir_path / off_name)
     return on_name, off_name
@@ -191,6 +192,17 @@ def active_text_definition(name, on_image, off_image, size, handle="Active", act
         "disableCoarseDataWheel": True,
         "componentsData": [child],
     }
+
+
+def build_active_text_toggle(skins_dir, name, caption, size, *, font_size=None):
+    """Register both faces of a standalone wheel-editable ActiveText toggle."""
+    on, off = write_active_text_assets(skins_dir, caption, *size, on_name=name + "_on.png",
+                                       off_name=name + "_off.png", font_size=font_size)
+    enter = {"version": 1, "onAction": "Enter Pressed", "handler": "Toggle Switch",
+             "handleName": "Data", "additionalData": ""}
+    result = active_text_definition(name, on, off, size, handle="Data", actions=[enter])
+    result["disableCoarseDataWheel"] = False
+    return result
 
 
 def build_titled_active_text_group_definition(

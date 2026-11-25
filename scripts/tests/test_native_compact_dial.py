@@ -9,7 +9,7 @@ from PIL import Image
 
 from components import style
 from components.native.level.level import (
-    compact_dial_definition, compact_level_definition, master_control_definition,
+    compact_dial_definition, compact_level_definition, stacked_dial_definition,
 )
 from components.native.pan.pan import compact_pan_definition
 
@@ -92,10 +92,10 @@ class CompactNativeDialTests(unittest.TestCase):
                 self.assertEqual(result["backgroundData"]["focussed"]["colour"], style.native_color("transparent"))
                 self.assertEqual(result["backgroundData"]["unfocussed"]["colour"], style.native_color("transparent"))
 
-    def test_master_dials_ship_art_and_bind_to_data(self):
+    def test_stacked_dials_ship_art_and_bind_to_data(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for kind, family in (("dial_uni", "level"), ("dial_bi", "pan")):
-                definition = master_control_definition(kind, 120, 124, skins_dir=tmp)
+            for polarity, family in (("UniPolar", "level"), ("BiPolar", "pan")):
+                definition = stacked_dial_definition(tmp, (120, 124), diameter=90, caption_height=16, polarity=polarity)
                 knob = next(child["componentData"]["data"] for child in definition["componentsData"]
                             if child["componentData"]["type"] == "Knob")
                 self.assertEqual(knob["knobType"], "FilmStrip")

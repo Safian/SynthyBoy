@@ -53,13 +53,6 @@ class VoiceSkinSketch(OscSkinSketch):
         if not self._passes_gates(entry.get('bounds', {}).get('additionalInvalidatingHandles', []), merged):
             return
         data = model.get('data', {})
-        if model['type'] == 'Button' and data.get('numButtonsInGroup',1)>1:
-            _, handle = self._resolve_handle(data['handleName'], merged)
-            selected = round(self._norm_for_handle(handle)*(data['numButtonsInGroup']-1)) == data['buttonId']
-            image = self._open_image(data['onImage'] if selected else data['offImage'])
-            x,y,w,h = map(int, entry['bounds']['bounds'].split())
-            canvas.alpha_composite(image.resize((w,h),Image.Resampling.LANCZOS),(origin[0]+x,origin[1]+y))
-            return
         if model['type'] == 'Knob' and data.get('knobType') != 'FilmStrip':
             # Generic host knobs have no portable artwork in this repo. Never fake them.
             self.unsupported.add(data.get('knobType', 'unknown'))

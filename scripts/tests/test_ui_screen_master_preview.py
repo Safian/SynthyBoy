@@ -77,8 +77,6 @@ class MasterScreenVerificationTests(unittest.TestCase):
 
             # Validate generated assets
             self.assertTrue((skins / "master_peak_scale.png").is_file())
-            self.assertTrue((skins / "master_panel_1_on.png").is_file())
-            self.assertTrue((skins / "master_panel_2_on.png").is_file())
 
             # Validate Master tab in TUI
             master_tab = next((t for t in tui["pageData"]["tabs"] if t.get("tabName") == "Master"), None)
@@ -103,6 +101,13 @@ class MasterScreenVerificationTests(unittest.TestCase):
             # Panels present
             self.assertIn("Master Panel MAIN", comp_names)
             self.assertIn("Master Panel TUNING & MPE", comp_names)
+
+            for control in components:
+                if control["componentData"]["name"].startswith("Master Panel "):
+                    for key in ("onImage", "offImage"):
+                        image = control["componentData"]["data"][key]
+                        self.assertTrue(image.startswith("choice_segmented_"))
+                        self.assertTrue((skins / image).is_file())
 
             # No visible Q-Link numbers/chips: qlinkBoundsData must be empty in release overlay
             self.assertEqual(
@@ -148,8 +153,7 @@ class MasterScreenVerificationTests(unittest.TestCase):
 
         self.assertNotIn("Mini Keyboard", names)
 
-        self.assertIn("List Popup", names)
-        self.assertIn("Numeric Keyboard", names)
+        self.assertEqual(set(names), {"Glide Slope Curve"})
 
 
 if __name__ == "__main__":

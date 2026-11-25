@@ -1,12 +1,7 @@
-// SynthyBoy - MPC overlay: the VOICE UI (the voice control), the page of the Voice tab (the plugin draws the whole tab, page_view.h): the 8 step sequence with its six rows, the random spreads, the scaling and the
-// targets (shell-mpc/ui/voice_screen.h, voice_grid.h) wired to the engine's parameters voicectl.*. One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls
-// update () / touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Master and Voice UI".
+// SynthyBoy Voice page. The host owns the native controls and readouts.
+// The overlay publishes Q-Link bindings and draws live sounding-step indicators.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// The sequence uses eight native knobs; overlay text and live dots retain selection and sounding steps.
-// is lit (LiveValues::voiceStep: each of the newest voices plays the step (note number - 1) modulo the length), the selected step has its frame, and under the grid every row's value of the selected step is written.
-// Q groups: STEP (the step, the row (both virtual targets of the router), the length and the value of the selected step), RANDOM, SCALING (10x, ENV TIME, LFO TIME, LFO MODE), TARGETS (NOISE is touch only).
 #pragma once
 
 #include "../native_voice_controls.h"
@@ -21,7 +16,6 @@
 #include <vector>
 
 #include "../q_router.h"
-#include "../ui/list.h"
 #include "../ui/theme.h"
 #include "../ui/voice_screen.h"
 #include "instance_view.h"
@@ -40,7 +34,6 @@ class VoiceUi
 public:
     static constexpr int kElementPage = 10;          // the page of the Voice tab
     static constexpr int kElementVoice = kElementPage;
-    enum Page { kPageList = 15 };
     static constexpr int kVirtualStep = 0, kVirtualRow = 1;   // the virtual Q targets of the group STEP
 
     enum Id : int
@@ -50,11 +43,10 @@ public:
         kGridBase = 100,
         kRandPan = 200, kRandDetune, kRandCutoff, kRandEnv, kRandDetune10x,
         kScaleEnv = 210, kScaleLfo, kScaleLfoMode,
-        kOscA = 220, kOscB, kOscC, kOscSub, kOscNoise,
-        kList = 700, kListBackdrop = 701
+        kOscA = 220, kOscB, kOscC, kOscSub, kOscNoise
     };
 
-    enum class T : uint8_t { Knob, Number, Toggle, Stepper, List, GridStep, Inert };
+    enum class T : uint8_t { Knob, Number, Toggle, List, GridStep, Inert };
 
     struct Item
     {
@@ -64,8 +56,6 @@ public:
         std::string key;
         int param = -1;
         float presentedValue = std::numeric_limits<float>::quiet_NaN();
-        int row = -1;
-        int step = -1;
     };
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
@@ -73,27 +63,14 @@ public:
     VoiceUi()
     {
         setCanvas (kCanvasW, kCanvasH);
-        full_.setNativeControls (true);
         configure();
     }
 
-    void setNativeControls (bool on) noexcept
+    void setCanvas (int w, int)
     {
-        full_.setNativeControls (on);
-        if (! on)
-            full_.setNativeSequenceControls (false);
-    }
-    bool nativeControls() const noexcept { return full_.nativeControls(); }
-
-    void setCanvas (int w, int h)
-    {
-        w_ = w; h_ = h;
+        w_ = w;
         const ui::Rect tab { 0, kTabY, w, kTabH };
         full_.place (tab);
-        list_.place ({ 340, kTabY + 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (tab);
-        list_.setId (kList);
-        list_.setBackdropId (kListBackdrop);
     }
 
     /** Reads the instance: every value, the step a voice plays, the virtual Q targets (step, row), the pages of the stack, the Q group. */
@@ -101,8 +78,8 @@ public:
     {
         (void) nowMs;
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
-        const bool native = inst.nativeVoiceSequenceControls() && full_.nativeControls() && pageTop_ == 0;
-        full_.setNativeSequenceControls (native);
+        const bool native = inst.nativeVoiceSequenceControls() && pageTop_ == 0;
+        sequenceAvailable_ = native;
         const uint64_t preset = inst.stateGeneration();
         if (gestureDown_ && gesturePreset_ != preset)
             dropGesture();
@@ -132,29 +109,13 @@ public:
         const int step = full_.grid.state.selectedStep, row = full_.grid.state.activeRow;
         full_.qStepSelect.state.count = ui::VoiceGrid::kNumSteps;
         full_.qStepSelect.state.index = step;
-        if (step != formattedStep_)
-        {
-            char stepBuf[32];
-            std::snprintf (stepBuf, sizeof stepBuf, "STEP %d", step + 1);
-            full_.qStepSelect.setItem (stepBuf);
-            formattedStep_ = step;
-        }
-        full_.rowList.state.index = std::clamp (row, 0, ui::VoiceGrid::kNumRows - 1);
-        const int value = static_cast<int> (std::lround (full_.grid.value (row, step) * 100.0f));
-        full_.stepValue.state.value = value;
-        if (row != formattedRow_ || value != formattedValue_)
-        {
-            if (row != formattedRow_)
-                full_.stepValue.setLabel (ui::VoiceGrid::rowName (row));
-            ui::VoiceGrid::formatValue (row, value / 100.0f, full_.stepValue.state.text, sizeof full_.stepValue.state.text);
-            formattedRow_ = row;
-            formattedValue_ = value;
-        }
+        full_.rowList.state.index = row;
+        full_.stepValue.state.value = inst.param (stepParam (row, step));
         inst.setQVirtual (kVirtualStep, static_cast<float> (full_.grid.state.selectedStep) / 7.0f);
         inst.setQVirtual (kVirtualRow, static_cast<float> (full_.grid.state.activeRow) / 5.0f);
 
         inst.setNativeVoiceState (sequenceState (inst));
-        inst.setUiFullOpen (! full_.nativeControls() || pageTop_ != 0);
+        inst.setUiFullOpen (pageTop_ != 0);
         publishQGroup (inst);
     }
 
@@ -162,7 +123,7 @@ public:
     {
         if (! ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y))
             return false;
-        if (pageTop_ == 0 && full_.nativeControls() && full_.isNativeControl (x, y))
+        if (pageTop_ == 0 && full_.isNativeControl (x, y))
             return false;
         return true;
     }
@@ -173,18 +134,6 @@ public:
         ui::Component* top = topComponent();
         if (ev.kind == TouchEvent::Down)
         {
-            // Host-native knobs own all value drags. Column headers/footers
-            // select the step only; never turn a header tap into a +100% write.
-            if (pageTop_ == 0 && full_.nativeStepKnobs() && full_.grid.rect().contains (x,y) && covers (x,y))
-            {
-                for (int step = 0; step < ui::VoiceGrid::kNumSteps; ++step)
-                    if (full_.grid.columnRect (step).contains (x,y))
-                    {
-                        selectStep (step);
-                        inst.setNativeVoiceState (sequenceState (inst));
-                        return true;
-                    }
-            }
             gesture_ = nullptr;
             if (! covers (x, y) || ! top)
                 return false;
@@ -259,33 +208,20 @@ public:
         return ch;
     }
 
-    void setHostBackground (bool on) noexcept { nativeGround_ = on; }
-    bool hostBackground() const noexcept
-    {
-        return nativeGround_ && pageTop_ == 0 && w_ == page::kW && h_ == page::kH
-            && &ui::theme::L() == &ui::theme::kLook1;
-    }
+    void setHostBackground (bool) noexcept {}
+    bool hostBackground() const noexcept { return true; }
 
     void draw (gpu::SceneBuilder& sb) const
     {
-        const bool nativeMode = pageTop_ == 0 && (hostBackground() || full_.nativeControls());
-        if (nativeMode)
+        if (pageTop_ == 0)
+        {
             drawNativeMarkerCovers (sb, "voice");
-        else
-            page::ground (sb);
-        // Native Voice controls own the converted lower blocks even when the
-        // controller did not provide the optional background sentinel.  Pass
-        // the effective native mode to suppress the overlay block furniture;
-        // otherwise its labels/frames are painted over the host dials and make
-        // the native touch surface look clipped and ambiguous.
-        full_.drawPage (sb, nativeMode);
-        if (pageTop_ == kPageList)
-            list_.draw (sb);
+            full_.draw (sb);
+        }
     }
 
     // ---- access for the tests
     ui::VoiceScreen& screen() noexcept { return full_; }
-    ui::ListPopup& list() noexcept { return list_; }
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept
     {
@@ -299,13 +235,12 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
 
 private:
-    void bind (int id, ui::Component* c, T type, const std::string& key, int row = -1, int step = -1)
+    void bind (int id, ui::Component* c, T type, const std::string& key)
     {
         Item it;
         it.id = id; it.c = c; it.type = type;
         it.key = key;
         it.param = uibind::indexOfKey (key);
-        it.row = row; it.step = step;
         if (c != nullptr)
             c->setId (id);
         items_.push_back (it);
@@ -320,12 +255,11 @@ private:
         bind (kStepValue, &full_.stepValue, T::Inert, "");
 
         static const char* const kRows[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
-        full_.grid.baseId = kGridBase;
         for (int row = 0; row < ui::VoiceGrid::kNumRows; ++row)
             for (int step = 0; step < ui::VoiceGrid::kNumSteps; ++step)
             {
-                bind (kGridBase + row * ui::VoiceGrid::kNumSteps + step, &full_.grid, T::GridStep,
-                      "voicectl.s" + std::to_string (step + 1) + "." + kRows[row], row, step);
+                bind (kGridBase + row * ui::VoiceGrid::kNumSteps + step, nullptr, T::GridStep,
+                      "voicectl.s" + std::to_string (step + 1) + "." + kRows[row]);
                 gridParams_[row][step] = items_.back().param;
             }
 
@@ -372,7 +306,6 @@ private:
                     ui::Knob* kn = static_cast<ui::Knob*> (it.c);
                     kn->state.value = kn->state.modValue = uibind::normOf (it.param, val);
                     kn->state.defaultValue = uibind::normOf (it.param, p.def);
-                    uibind::formatValue (p, val, kn->state.valueText, sizeof kn->state.valueText);
                     break;
                 }
                 case T::Number:
@@ -387,28 +320,14 @@ private:
                 case T::Toggle:
                     static_cast<ui::ToggleIcon*> (it.c)->state.on = val > 0.5f;
                     break;
-                case T::Stepper:
-                {
-                    ui::Stepper* st = static_cast<ui::Stepper*> (it.c);
-                    st->state.count = p.numChoices > 0 ? p.numChoices : 2;
-                    st->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, st->state.count - 1);
-                    if (p.numChoices > 0)
-                        st->setItem (p.choices[st->state.index]);
-                    break;
-                }
                 case T::List:
                 {
                     ui::LedList* ll = static_cast<ui::LedList*> (it.c);
-                    if (it.id == kScaleLfoMode)
-                        full_.scaleLfo.setLabel (val >= 0.5f ? "LFO RATE" : "LFO TIME");
                     ll->setOptions (p.choices, p.numChoices > 0 ? p.numChoices : 0);
                     ll->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, std::max (0, ll->state.count - 1));
                     break;
                 }
                 case T::GridStep:
-                    if (it.row >= 0 && it.step >= 0)   // (the grid draws only what is set here: a bar under the finger follows the parameter the finger wrote)
-                        full_.grid.setValue (it.row, it.step, val * 0.01f);
-                    break;
                 case T::Inert:
                     break;
             }
@@ -416,24 +335,12 @@ private:
         resyncAfterInput_ = false;
     }
 
-    void handle (const ui::Change& ch, UiStack& stack, IInstanceView& inst)
+    void handle (const ui::Change& ch, UiStack&, IInstanceView& inst)
     {
         // Local controls can edit their own presentation before the host confirms a write.
         resyncAfterInput_ = true;
         if (ch.kind == ui::ChangeKind::None)
             return;
-        if (ch.id == kListBackdrop)
-        {
-            stack.back();
-            return;
-        }
-        if (ch.id == kList && ch.kind == ui::ChangeKind::Index)
-        {
-            if (listParam_ >= 0)
-                uibind::writePlain (inst, listParam_, ch.index);
-            stack.back();
-            return;
-        }
         if (ch.id == kStepSelect && ch.kind == ui::ChangeKind::Index)
         {
             selectStep (ch.index);
@@ -454,32 +361,11 @@ private:
         const Item* it = item (ch.id);
         if (! it || it->param < 0)
             return;
-        if (it->type == T::Stepper && ch.kind == ui::ChangeKind::Request)
-        {
-            const synthyboy::ParamInfo& pi = uibind::info (it->param);
-            if (pi.numChoices > 0)
-            {
-                listParam_ = it->param;
-                list_.state.items = pi.choices;
-                list_.state.count = pi.numChoices;
-                list_.state.current = static_cast<int> (std::lround (inst.param (it->param)));
-                list_.showCurrent();
-                stack.openDetail (kPageList);
-                pageTop_ = kPageList;
-            }
-            return;
-        }
         switch (ch.kind)
         {
             case ui::ChangeKind::Value:
                 if (it->type == T::Knob)
                     uibind::writeNorm (inst, it->param, ch.value);
-                else if (it->type == T::GridStep)
-                {
-                    uibind::writePlain (inst, it->param, ch.value * 100.0);   // -1 .. +1 of the grid is -100 .. +100 of the parameter
-                    if (it->step >= 0)
-                        selectStep (it->step);   // the id of a change names the step the finger (or the knob) is on: the owner holds the selection
-                }
                 else
                     uibind::writePlain (inst, it->param, ch.value);
                 break;
@@ -496,7 +382,7 @@ private:
 
     nativeui::voice::ViewState sequenceState (const IInstanceView& inst) const
     {
-        if (! full_.nativeSequenceControls() || pageTop_ != 0)
+        if (! sequenceAvailable_ || pageTop_ != 0)
             return {};
         const int row = full_.grid.state.activeRow, step = full_.grid.state.selectedStep;
         return { true, row, step, stepParam (row, step), inst.stateGeneration() };
@@ -539,7 +425,7 @@ private:
     {
         const int g = full_.activeGroup();
         constexpr int kN = ui::VoiceScreen::kMaxGroups;
-        const bool list = pageTop_ == kPageList;
+        const bool list = pageTop_ != 0;
         qSlots_.publish (inst, list ? 0 : kN, g, [this] (int k, int* t)
         {
             std::copy_n (groupTargets_[k], ui::QGroup::kSlots, t);
@@ -552,21 +438,19 @@ private:
 
     ui::Component* topComponent() noexcept
     {
-        return pageTop_ == kPageList ? static_cast<ui::Component*> (&list_) : static_cast<ui::Component*> (&full_);
+        return pageTop_ == 0 ? &full_ : nullptr;
     }
 
     ui::VoiceScreen full_;
-    ui::ListPopup list_;
+    bool sequenceAvailable_ = false;
     std::vector<Item> items_;
     bool resyncAfterInput_ = false;
     int groupTargets_[ui::VoiceScreen::kMaxGroups][ui::QGroup::kSlots] {};
-    int formattedRow_ = -1, formattedStep_ = -1, formattedValue_ = 0;
     int gridParams_[ui::VoiceGrid::kNumRows][ui::VoiceGrid::kNumSteps] {};
 
-    bool nativeGround_ = false;
     uint64_t gesturePreset_ = 0;
-    int w_ = kCanvasW, h_ = kCanvasH;
-    int pageTop_ = 0, listParam_ = -1;
+    int w_ = kCanvasW;
+    int pageTop_ = 0;
 
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;

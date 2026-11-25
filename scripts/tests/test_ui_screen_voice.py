@@ -1,11 +1,11 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests for Voice screen production extra (99_ui_screen_voice.py), hook discovery, and native geometry."""
-import copy
+"""Tests for Voice screen production extra (84_voice.py), hook discovery, and native geometry."""
 import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,7 +16,6 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from scripts.native_voice.voice_tab import (
-    KEEP,
     UNCONVERTED_CONTROLS,
     VOICE_NATIVE_CONTROL_NAMES,
     VOICE_NATIVE_CONTROLS,
@@ -30,7 +29,6 @@ from scripts.native_voice.voice_tab import (
 PARAMS_JSON = ROOT / "docs" / "params.json"
 EXTRA_84_PATH = SCRIPTS / "mpc-skin-extras" / "84_voice.py"
 EXTRA_97_PATH = SCRIPTS / "mpc-skin-extras" / "97_no_fallback.py"
-EXTRA_99_VOICE_PATH = SCRIPTS / "mpc-skin-extras" / "99_ui_screen_voice.py"
 
 # Import 84_voice.py dynamically
 _spec_84 = importlib.util.spec_from_file_location("mpc_skin_extra_84_voice", EXTRA_84_PATH)
@@ -42,18 +40,12 @@ _spec_97 = importlib.util.spec_from_file_location("mpc_skin_extra_97_no_fallback
 no_fallback_extra = importlib.util.module_from_spec(_spec_97)
 _spec_97.loader.exec_module(no_fallback_extra)
 
-# Import 99_ui_screen_voice.py dynamically
-_spec_99_voice = importlib.util.spec_from_file_location("mpc_skin_extra_99_ui_screen_voice", EXTRA_99_VOICE_PATH)
-ui_screen_voice_extra = importlib.util.module_from_spec(_spec_99_voice)
-_spec_99_voice.loader.exec_module(ui_screen_voice_extra)
-
-
 class MockContext:
-    def __init__(self, params_dict):
+    def __init__(self, params_dict, skins_dir):
         self.params = params_dict["params"]
         self._index = {p["key"]: i for i, p in enumerate(self.params)}
         self.meta = {"variant": "overlay"}
-        self.skins_dir = str(ROOT / "build")
+        self.skins_dir = skins_dir
 
     def param_index(self, key):
         if key not in self._index:
@@ -71,7 +63,9 @@ class TestUiScreenVoice(unittest.TestCase):
     def setUp(self):
         with open(PARAMS_JSON, "r", encoding="utf-8") as f:
             self.params_data = json.load(f)
-        self.ctx = MockContext(self.params_data)
+        skins = tempfile.TemporaryDirectory()
+        self.addCleanup(skins.cleanup)
+        self.ctx = MockContext(self.params_data, skins.name)
         self.ctx.voice_tab = {
             "tabName": VOICE_TAB_NAME,
             "fnKeyIndex": 4,
@@ -100,50 +94,13 @@ class TestUiScreenVoice(unittest.TestCase):
             }
         }
 
-    def test_hook_discovery_and_order(self):
-        """99_ui_screen_voice.py is present in scripts/mpc-skin-extras/ and sorts at end of pipeline."""
-        extras_dir = SCRIPTS / "mpc-skin-extras"
-        py_files = sorted(p.name for p in extras_dir.glob("*.py"))
-        self.assertIn("99_ui_screen_voice.py", py_files)
-        idx_84 = py_files.index("84_voice.py")
-        idx_97 = py_files.index("97_no_fallback.py")
-        idx_99 = py_files.index("99_ui_screen_voice.py")
-        self.assertLess(idx_84, idx_97)
-        self.assertLess(idx_97, idx_99)
-
-    def test_apply_chain_with_84_and_99_does_not_duplicate_definitions(self):
-        """Applying 84_voice followed by 99_ui_screen_voice must not crash with duplicate definition errors."""
-        # 1. Run 84_voice
+    def test_no_fallback_preserves_voice_components(self):
         voice_extra_84.apply(self.ctx.tui, {}, self.ctx)
-        # 2. Run 97_no_fallback
         no_fallback_extra.apply(self.ctx.tui, {}, self.ctx)
-        # 3. Run 99_ui_screen_voice
-        ui_screen_voice_extra.apply(self.ctx.tui, {}, self.ctx)
-
         tab = self.ctx.tui["pageData"]["tabs"][0]
         comp_names = {c["componentData"]["name"] for c in tab["componentDefinition"]["componentsData"]}
         self.assertEqual(set(comp_names), VOICE_NATIVE_CONTROL_NAMES | {"Overlay Marker Left", "Overlay Instance Voice"})
         # Enforce Rule 5b: NO visible Q-Link frames or numbers
-        self.assertEqual(tab["qlinkBoundsData"], [])
-
-    def test_apply_standalone_without_84_populates_voice_tab(self):
-        """If 84_voice did not run, 99_ui_screen_voice successfully populates and verifies the tab."""
-        fresh_ctx = MockContext(self.params_data)
-        fresh_ctx.voice_tab = copy.deepcopy(self.ctx.voice_tab)
-        fresh_ctx.tui = {
-            "pageData": {
-                "tabs": [fresh_ctx.voice_tab],
-                "componentDefinitions": {
-                    "localComponentDefinitions": []
-                },
-                "replacementStrings": [],
-            }
-        }
-        ui_screen_voice_extra.apply(fresh_ctx.tui, {}, fresh_ctx)
-
-        tab = fresh_ctx.tui["pageData"]["tabs"][0]
-        comp_names = {c["componentData"]["name"] for c in tab["componentDefinition"]["componentsData"]}
-        self.assertTrue(VOICE_NATIVE_CONTROL_NAMES.issubset(comp_names))
         self.assertEqual(tab["qlinkBoundsData"], [])
 
     def test_all_17_native_controls_geometry_rules(self):
@@ -163,7 +120,7 @@ class TestUiScreenVoice(unittest.TestCase):
             self.assertLessEqual(y + h, 628, f"{ctrl['name']} bottom edge exceeds 628")
 
     def test_no_overlap_between_converted_controls_and_unconverted_regions(self):
-        """Native apertures must not overlap each other or retained dynamic regions (VoiceGrid, stripRect)."""
+        """Native apertures must not overlap each other or the live step indicator region."""
         all_rects = [(c["name"], c["rect"]) for c in VOICE_NATIVE_CONTROLS]
         all_rects.extend((name, rect) for name, _, rect, _, _ in VOICE_SEQUENCE_CONTROLS)
 
@@ -183,7 +140,6 @@ class TestUiScreenVoice(unittest.TestCase):
     def test_replacement_strings_populated(self):
         """Replacement strings for mode, rows and steps are properly populated."""
         voice_extra_84.apply(self.ctx.tui, {}, self.ctx)
-        ui_screen_voice_extra.apply(self.ctx.tui, {}, self.ctx)
         replacements = {r["key"]: r["value"] for r in self.ctx.tui["pageData"]["replacementStrings"]}
 
         mode_key = f"Parameter {self.ctx.param_index('voicectl.scale.lfo_mode')}"
@@ -198,9 +154,8 @@ class TestUiScreenVoice(unittest.TestCase):
 
 
     def test_voice_step_knobs_shipping_integration(self):
-        """Verify eight visible knobs share two existing native families on the shipping page."""
+        """Verify eight visible knobs share one bipolar definition on the shipping page."""
         voice_extra_84.apply(self.ctx.tui, {}, self.ctx)
-        ui_screen_voice_extra.apply(self.ctx.tui, {}, self.ctx)
         tab = self.ctx.tui["pageData"]["tabs"][0]
         comps_by_name = {c["componentData"]["name"]: c for c in tab["componentDefinition"]["componentsData"]}
 
@@ -212,8 +167,7 @@ class TestUiScreenVoice(unittest.TestCase):
                 name = f"Voice Native Step Knob {label} {step}"
                 self.assertIn(name, comps_by_name)
                 comp = comps_by_name[name]
-                self.assertEqual(comp["componentData"]["type"], "voiceNativeStepPan" if row_idx == 0 else "voiceNativeStepLevel")
-                defs = {d["key"]:d["value"] for d in self.ctx.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+                self.assertEqual(comp["componentData"]["type"], "voiceNativeStepLevel")
                 bounds = comp["bounds"]
                 self.assertEqual(bounds["acceptsHWFocus"], "Yes")
                 self.assertEqual(bounds["showWhenDataModelInvalid"], "Hide")

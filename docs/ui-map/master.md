@@ -22,12 +22,11 @@ The Master page occupies the entire MPC overlay tab region `(0, 110, 1280, 628)`
 The page structure consists of a top header bar and two switchable side views containing distinct functional blocks:
 
 1. **Header Area** (y = 114 to y = 170, height 56 px, header lane 64 px):
-   - Page Title: "MASTER" at `(rect.x + 14, rect.y + 4, 270, 56)` (`shell-mpc/ui/voice_master.h:812`).
+   - The shared native label displays MASTER to the right of the host detection markers.
    - Side Switcher Buttons:
      - `sideMain`: "MAIN" at `(rect.x + 300, rect.y + 4, 160, 56)` (`shell-mpc/ui/voice_master.h:437,695`).
      - `sideTuning`: "TUNING & MPE" at `(rect.x + 468, rect.y + 4, 220, 56)` (`shell-mpc/ui/voice_master.h:438,696`).
-     - The stock Master Panel buttons highlight the selected side. They switch the view and its Q-Links without editing the preset.
-   - Horizontal separator line below header at y = 172 (`shell-mpc/ui/voice_master.h:803`).
+     - The shared segmented radio buttons highlight the selected side. They switch the view and its Q-Links without editing the preset.
 
 2. **Side 0: MAIN** (`shell-mpc/ui/voice_master.h:698-755`; the block rectangles are `blockRect`, `shell-mpc/ui/voice_master.h:660-674`):
    Divided into a 2x2 asymmetric block grid:
@@ -45,7 +44,7 @@ The page structure consists of a top header bar and two switchable side views co
      - **Block 2: VOICES** at `(rect.x + 8, rect.y + 308, 780, 312)` (`shell-mpc/ui/voice_master.h:729-746`):
        - Row 1: Four cells (width about 189 px, height 56 px): NumberField `polyphony` ("POLY") and three LED toggles `legato` ("LEGATO"), `polyLegato` ("POLY LEG"), and `phaseLegato` ("PHASE LEG").
        - Row 2: (the former VOICE OPTS group, now touch only) NumberField `velocityTrack` ("VEL TRACK", about 189 px wide, 112 px high), LED list `sameNote` ("SAME NOTE", about 226 px, 3 options: Steal, Stack, Ignore), and LED list `stealPriority` ("STEAL", 345 px, 5 options: Newest, Oldest, Highest, Lowest, Velocity).
-       - Row 3: native PAD PRESS switch and PAD % number field (189 × 56 px each), plus the live overlay voice count bar (`voiceMeter`, 382 × 44 px). The MAIN subpage gate controls both native cells. PAD PRESS also gates the amount field. The overlay-only screen uses the same cells with its LED toggle and number field.
+       - Row 3: native PAD PRESS switch and PAD % number field (189 × 56 px each), plus the native voice count meter (`voiceMeter`, 382 × 44 px). The MAIN subpage gate controls both native cells. PAD PRESS also gates the amount field.
      - **Block 3: GLIDE** at `(rect.x + 796, rect.y + 308, 476, 312)` (`shell-mpc/ui/voice_master.h:747-755`):
        - Left section (about 214 px): two medium knobs `portaTime` ("GLIDE", about 105 px) and `portaSlope` ("SLOPE", about 105 px) on top; two LED toggles `portaAlways` ("ALWAYS") and `portaScaled` ("SCALED") below, 56 px high. These four are the GLIDE Q group.
        - Right section (about 246 x 268 px): Portamento curve display `portaCurve` (`PortamentoCurveDisplay`) showing exponential glide shape.

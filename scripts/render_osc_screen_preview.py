@@ -334,7 +334,7 @@ class OscSkinSketch(NativeTabSketch):
             if n_grp == 1:
                 is_on = norm >= 0.5
             else:
-                is_on = (int(round(norm * (n_grp - 1))) + 1) == bid
+                is_on = round(norm * (n_grp - 1)) == bid
             img_name = data.get("onImage") if is_on else data.get("offImage")
             if not img_name:
                 img_name = data.get("offImage") or data.get("onImage", "")

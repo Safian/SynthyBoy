@@ -1,11 +1,6 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Standalone Master tab migration to host-native MPC controls.
-
-Builds host-native MPC controls for standard dials, buttons, toggles,
-selectors and lists on the Master tab, while dynamic curves, meters,
-and visualizers share the tab with the hardware overlay layer.
-"""
+"""Bind shared native controls and meters to the two Master panels."""
 import sys as _token_sys
 from pathlib import Path as _TokenPath
 _token_root = str(_TokenPath(__file__).resolve().parents[2])
@@ -18,11 +13,14 @@ import copy
 
 
 import native_ui_params
-from components.native.button.button import button, text_face, write_panel_selector_assets
-from components.native.level.level import master_control_definition as _definition
-from components.native.meter.meter import write_peak_scale as write_native_peak_scale
-from native_meter import meter_data
-from components.native.name_value.name_value import _label_component
+from components.native.active_text.active_text import build_active_text_toggle
+from components.native.button.button import action_button, entry, mode_button
+from components.native.level.level import stacked_dial_definition
+from components.native.meter.meter import labelled_horizontal_meter, write_peak_scale as write_native_peak_scale
+from components.native.meter_block.meter_block import build_meter_block_definition
+from components.native.name_value.name_value import build_name_value_definition
+from components.native.radio_button.radio_button import segmented_radio_entry
+from components.native.selector.selector import bind_list_choices, selector_definition
 
 # Explicit list of unconverted controls retained in overlay
 UNCONVERTED_CONTROLS = [
@@ -32,20 +30,6 @@ UNCONVERTED_CONTROLS = [
         "side": "main",
         "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.2')),
         "reason": "Mathematical exponential portamento curvature graph responding dynamically to master.portamento.slope.",
-    },
-    {
-        "name": "List Popup",
-        "component": "ListPopup",
-        "side": "both",
-        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.4')),
-        "reason": "Dynamic modal list overlay for large selection lists (20 musical scales, 12 root keys).",
-    },
-    {
-        "name": "Numeric Keyboard",
-        "component": "TextEntry",
-        "side": "both",
-        "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.5')),
-        "reason": "Full-screen modal keypad popup for direct numeric entry on knob taps.",
     },
 
 ]
@@ -418,27 +402,6 @@ MASTER_INTEGER_FIELDS = {
 }
 
 
-def _child(name, kind, data, rect):
-    return {
-        "version": 2,
-        "componentData": {"version": 1, "name": name, "type": kind, "data": data},
-        "handle remapping": {"version": 1, "map": []},
-        "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide",
-                   "whenVisible": "Always", "boundsType": "Absolute", "bounds": _format_bounds(rect)},
-    }
-
-
-def _label(caption, rect):
-    name, handle, kind = ("caption", "Caption", "Name") if caption else ("value", "Data", "Value")
-    child = _label_component(
-        name, kind, handle, rect,
-        _ui_style.size("level.master.control")["caption_font" if caption else "value_font"],
-        _ui_style.argb("master.meter.scale.text" if caption else "text.icon"),
-        "horizontallyCentred verticallyCentred")
-    child["bounds"]["showWhenDataModelInvalid"] = "Hide"
-    return child
-
-
 def get_master_control_specs():
     """Return a copy of the master control specifications."""
     return copy.deepcopy(MASTER_SPECS)
@@ -449,29 +412,9 @@ def get_unconverted_controls():
     return copy.deepcopy(UNCONVERTED_CONTROLS)
 
 
-def _format_bounds(rect):
-    return "%d %d %d %d" % tuple(rect)
-
-
-def _make_bounds(rect, handles=None):
-    # Convert screen coordinates (y >= 110) to tab-relative coordinates (y in 0..628)
-    tab_rect = (
-        rect[0],
-        rect[1] - 110 if rect[1] >= 110 else rect[1],
-        rect[2],
-        rect[3],
-    )
-    b = {
-        "version": 2 if handles else 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide" if handles else "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": _format_bounds(tab_rect),
-    }
-    if handles:
-        b["additionalInvalidatingHandles"] = list(handles)
-    return b
+def _tab_rect(rect):
+    x, y, w, h = rect
+    return x, y - 110, w, h
 
 
 PEAK_SCALE_IMAGE = "master_peak_scale.png"
@@ -481,71 +424,43 @@ def write_peak_scale(directory):
     write_native_peak_scale(directory, MASTER_OUTPUT_WIDGETS["Master Peak Meters"][2:], PEAK_SCALE_IMAGE)
 
 
-def write_master_panel_art(directory):
-    write_panel_selector_assets(directory, MASTER_PANELS)
+def _toggle(ctx, name, caption, rect, parameter, gates):
+    w, h = rect[2:]
+    kind = f"masterNativeActiveText_{caption.replace(' ', '_')}_{w}x{h}"
+    ctx.add_component_definition(kind, build_active_text_toggle(ctx.skins_dir, kind, caption, (w, h)))
+    return entry(name, kind, {"version": 1, "handleName": "Data"}, _tab_rect(rect),
+                 (("Data", parameter),), gates=gates)
 
 
-def _output_widgets(ctx, view, standard_widget):
+def _output_widgets(ctx, view):
     n = native_ui_params
     base = n.mixer_peek_index(ctx.param_count)
-    main_gate = f"IndexedEnabling/1/3/Parameter {view}"
+    main = (f"IndexedEnabling/1/3/Parameter {view}",)
 
-    def add(name, kind, definition, links, gates=(main_gate,), focus=False):
-        rect = MASTER_OUTPUT_WIDGETS[name]
-        if definition is not None:
-            ctx.add_component_definition(kind, definition)
-        item = _child(name, kind, {"version": 1, "handleName": "Data"}, rect)
-        item["handle remapping"]["map"] = [
-            {"key": handle, "value": f"Parameter {base + offset}"} for handle, offset in links
-        ]
-        item["bounds"] = _make_bounds(rect, gates)
-        item["bounds"]["acceptsHWFocus"] = "Yes" if focus else "No"
-        return item
+    def meter(name, kind, definition, links):
+        ctx.add_component_definition(kind, definition)
+        return entry(name, kind, {"version": 1, "handleName": "Data"}, _tab_rect(MASTER_OUTPUT_WIDGETS[name]),
+                     [(key, f"Parameter {base + offset}") for key, offset in links],
+                     gates=main, focus="No")
 
-    def text(value, rect, colour=_ui_style.argb('text.icon')):
-        label = _label(False, rect)
-        label["componentData"]["name"] = value
-        data = label["componentData"]["data"]
-        data.update({"type": "Text", "text": value, "handleName": "Data"})
-        data["textStyle"].update(colour=colour)
-        data["textStyle"]["font"]["height"] = 15.0
-        return label
-
-    def panel(children, colour=_ui_style.argb('button.surface'), actions=(), image=""):
-        background = {"version": 1, "colour": colour, "image": image}
-        return {"version": 2, "actions": list(actions), "backgroundData": {"version": 1,
-                     "focussed": background, "unfocussed": background},
-                "ignoreMousePresses": not actions, "disableCoarseDataWheel": True, "componentsData": children}
-
-    peak_children = []
-    for channel, x in (("L", 38), ("R", 68)):
-        data = meter_data()
-        data.update(peakHandle="Peak" + channel, rmsHandle="Peak" + channel, peakHoldHandle="Hold" + channel)
-        peak_children.append(_child("Peak " + channel, "Meter", data, (x, 4, 26, 98)))
-    yield add("Master Peak Meters", "masterNativeOutputMeters", panel(peak_children, image=PEAK_SCALE_IMAGE),
-              (("Data", n.MASTER_PEAK_L), ("PeakL", n.MASTER_PEAK_L), ("PeakR", n.MASTER_PEAK_R),
-               ("HoldL", n.MASTER_HOLD_L), ("HoldR", n.MASTER_HOLD_R)))
-
-    voice_bar = _child("voice bar", "Meter", meter_data("Right", hold=False), tuple(_ui_style.size('screen.master_controls.voice_bar.rect')))
-    yield add("Master Voice Meter", "masterNativeVoiceMeter",
-              panel([voice_bar, _label(False, tuple(_ui_style.size('screen.master_controls.output_widgets.rect')))]),
-              (("Peak", n.MASTER_VOICE_RATIO), ("Data", n.MASTER_VOICE_COUNT)))
-
-    limiter_type = standard_widget("toggle", *MASTER_OUTPUT_WIDGETS["Master Output Limiter"][2:])
-    limiter = add("Master Output Limiter", limiter_type, None,
-                  (("Data", n.MASTER_LIMITER),), focus=True)
-    limiter["handle remapping"]["map"].append(
-        {"key": "Caption", "value": f"WithName[LIMIT]/Parameter {base + n.MASTER_LIMITER}"})
-    yield limiter
-
-    for active, colour, text_colour in ((0, _ui_style.argb('button.surface'), _ui_style.argb('master.meter.scale.text')), (1, _ui_style.argb('screen.master_controls.output_widgets'), _ui_style.argb('text.white'))):
-        suffix = "On" if active else "Off"
-        actions = [{"version": 1, "onAction": trigger, "handler": "Toggle Switch",
-                    "handleName": "Data", "additionalData": ""} for trigger in ("Mouse Down", "Enter Pressed")]
-        yield add("Master Clip " + suffix, "masterNativeClip" + suffix,
-                  panel([text("CLIP", tuple(_ui_style.size('screen.master_controls.output_widgets.rect.2')), text_colour)], colour, actions),
-                  (("Data", n.MASTER_CLEAR_CLIP),),
-                  (main_gate, f"IndexedEnabling/{active}/2/Parameter {base + n.MASTER_CLIP}"), focus=True)
+    peaks = build_meter_block_definition("masterNativeOutputMeters", with_clip=False,
+                                         stereo_rects=_ui_style.size("master.peak_channels"),
+                                         scale_image=PEAK_SCALE_IMAGE)
+    yield meter("Master Peak Meters", "masterNativeOutputMeters", peaks,
+                (("Data", n.MASTER_PEAK_L), ("PeakL", n.MASTER_PEAK_L), ("PeakR", n.MASTER_PEAK_R),
+                 ("HoldL", n.MASTER_HOLD_L), ("HoldR", n.MASTER_HOLD_R)))
+    voices = labelled_horizontal_meter(_ui_style.size("screen.master_controls.voice_bar.rect"),
+                                       _ui_style.size("screen.master_controls.output_widgets.rect"))
+    yield meter("Master Voice Meter", "masterNativeVoiceMeter", voices,
+                (("Peak", n.MASTER_VOICE_RATIO), ("Data", n.MASTER_VOICE_COUNT)))
+    yield _toggle(ctx, "Master Output Limiter", "LIMIT", MASTER_OUTPUT_WIDGETS["Master Output Limiter"],
+                  f"Parameter {base + n.MASTER_LIMITER}", main)
+    for state, label in enumerate(("Off", "On")):
+        name = "Master Clip " + label
+        yield action_button(ctx, name, _tab_rect(MASTER_OUTPUT_WIDGETS[name]),
+                            f"Parameter {base + n.MASTER_CLEAR_CLIP}", text="CLIP",
+                            colour=_ui_style.rgb("accent.red" if state else "text.muted"),
+                            gates=(*main, f"IndexedEnabling/{state}/2/Parameter {base + n.MASTER_CLIP}"))
 
 
 def apply_master_native_controls(tui, qlinks, ctx):
@@ -559,22 +474,6 @@ def apply_master_native_controls(tui, qlinks, ctx):
         tab = ctx.tab("Master")
     except Exception:
         return 0
-
-    # sliderWithFocusMenu gets its choices from pageData.replacementStrings;
-    # populate replacement choices for all 8 selector parameters on Master tab.
-    replacement = tui.setdefault("pageData", {}).setdefault("replacementStrings", [])
-    for spec in MASTER_SPECS:
-        if spec.get("widget") == "selector" and "choices" in spec:
-            try:
-                param_idx = _param_index(ctx, spec["key"])
-            except Exception:
-                continue
-            key_str = "Parameter %d" % param_idx
-            entry = next((r for r in replacement if r.get("key") == key_str), None)
-            if entry is None:
-                replacement.append({"key": key_str, "value": list(spec["choices"])})
-            else:
-                entry["value"] = list(spec["choices"])
 
     components = tab["componentDefinition"]["componentsData"]
 
@@ -591,10 +490,23 @@ def apply_master_native_controls(tui, qlinks, ctx):
     added_definitions = set()
 
     def standard_widget(kind, w, h):
-        definition = f"masterNative_{kind}" if kind.startswith("dial_") else f"masterNative_{kind}_{w}x{h}"
-        if definition not in added_definitions:
-            ctx.add_component_definition(definition, _definition(kind, w, h, skins_dir=ctx.skins_dir))
-            added_definitions.add(definition)
+        definition = f"masterNative_{kind}_{w}x{h}"
+        if definition in added_definitions:
+            return definition
+        if kind == "number":
+            widget = build_name_value_definition(rect=(0, 0, w, h), skins_dir=ctx.skins_dir,
+                                                 box_height=_ui_style.size("height.small"),
+                                                 box_width=min(w // 3, _ui_style.size("name_value.box.width")))
+        elif kind == "selector":
+            widget = selector_definition(None, "fx editor choice menu", (w, h), ctx.skins_dir,
+                                         name="Caption", play_face=True)
+        else:
+            caption_h = _ui_style.size("active_text.default.height")
+            diameter = min(_ui_style.size("voice.controls.dial_max"), h - 2 * caption_h, w)
+            widget = stacked_dial_definition(ctx.skins_dir, (w, h), diameter=diameter, caption_height=caption_h,
+                                             polarity="BiPolar" if kind == "dial_bi" else "UniPolar")
+        ctx.add_component_definition(definition, widget)
+        added_definitions.add(definition)
         return definition
 
     created_count = 0
@@ -602,10 +514,9 @@ def apply_master_native_controls(tui, qlinks, ctx):
     frames = {"main": 1, "tuning": 2}
 
     for spec in (*MASTER_SPECS, MASTER_LINKED_BEND):
-        try:
-            param_idx = _param_index(ctx, spec["key"])
-        except Exception:
-            continue
+        param_idx = _param_index(ctx, spec["key"])
+        if "choices" in spec:
+            bind_list_choices(tui, param_idx, spec["caption"], spec["choices"])
 
         handles = [f"IndexedEnabling/{frames[spec['side']]}/3/Parameter {view}"]
         if "condition" in spec:
@@ -615,13 +526,14 @@ def apply_master_native_controls(tui, qlinks, ctx):
 
         kind = "number" if spec["key"] in MASTER_INTEGER_FIELDS else spec["widget"]
         _, _, w, h = spec["rect"]
-        definition = standard_widget(kind, w, h)
-        component = _child(spec["name"], definition, {"version": 1, "handleName": "Data"}, spec["rect"])
-        component["handle remapping"]["map"] = [
-            {"key": "Data", "value": f"Parameter {param_idx}"},
-            {"key": "Caption", "value": f"WithName[{spec['caption']}]/Parameter {param_idx}"},
-        ]
-        component["bounds"] = _make_bounds(spec["rect"], handles)
+        parameter = f"Parameter {param_idx}"
+        if kind == "toggle":
+            component = _toggle(ctx, spec["name"], spec["caption"], spec["rect"], parameter, handles)
+        else:
+            definition = standard_widget(kind, w, h)
+            component = entry(spec["name"], definition, {"version": 1, "handleName": "Data"},
+                              _tab_rect(spec["rect"]), (("Data", parameter),
+                              ("Caption", f"WithName[{spec['caption']}]/{parameter}")), gates=handles)
         active_key = spec.get("active_key")
         if spec["key"].startswith("master.mpe.") and spec["key"] != "master.mpe.on":
             active_key = "master.mpe.on"
@@ -637,25 +549,17 @@ def apply_master_native_controls(tui, qlinks, ctx):
         components.append(component)
         created_count += 1
 
-    rect = _ui_style.size("master.scale_input.rect")
-    for state, caption in (("off", "ACTIVATE SCALE INPUT"), ("on", "KEY MODE  •  SELECT ROOT  •  TAP TO PLAY")):
-        face = text_face(caption, rect[2:], geometry="master.panel.face", surface="button.surface",
-                         border=f"master.panel.border.{state}", text="accent.cyan" if state == "on" else "text.icon")
-        face.save(_TokenPath(ctx.skins_dir) / f"master_scale_input_{state}.png")
-    control = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_SCALE_INPUT
-    switch = button("Master Scale Input", rect, "master_scale_input_on.png", "master_scale_input_off.png",
-                    remaps=(("Data", f"FromGesture/Parameter {control}"),))
-    switch["bounds"] = _make_bounds(rect, [f"IndexedEnabling/2/3/Parameter {view}"])
+    base = native_ui_params.mixer_peek_index(ctx.param_count)
+    control = base + native_ui_params.MASTER_SCALE_INPUT
+    switch = mode_button(ctx, "Master Scale Input", _tab_rect(_ui_style.size("master.scale_input.rect")),
+                         f"Parameter {control}", on_text="KEY MODE  •  SELECT ROOT  •  TAP TO PLAY",
+                         off_text="ACTIVATE SCALE INPUT", gates=(f"IndexedEnabling/2/3/Parameter {view}",))
     components.append(switch)
-
-    created_count += 1
-
-    output = list(_output_widgets(ctx, view, standard_widget))
+    output = list(_output_widgets(ctx, view))
     components.extend(output)
-    panel = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_PANEL
-    for i, (name, rect) in enumerate(MASTER_PANELS, 1):
-        component = button(f"Master Panel {name}", rect, f"master_panel_{i}_on.png", f"master_panel_{i}_off.png",
-                           index=i, count=3, remaps=(("Data", f"WithName[{name}]/FromGesture/Parameter {panel}"),))
-        component["bounds"] = _make_bounds(rect, [f"NonZero/Parameter {view}"])
-        components.append(component)
-    return created_count + len(output) + len(MASTER_PANELS)
+    panel = base + native_ui_params.MASTER_PANEL
+    for i, (name, rect) in enumerate(MASTER_PANELS):
+        components.append(segmented_radio_entry(f"Master Panel {name}", name, _tab_rect(rect), i, len(MASTER_PANELS),
+                          f"Parameter {panel}", ctx.skins_dir,
+                          gates=(f"NonZero/Parameter {view}",)))
+    return created_count + 1 + len(output) + len(MASTER_PANELS)

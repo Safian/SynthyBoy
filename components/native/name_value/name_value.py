@@ -202,6 +202,7 @@ def build_name_value_definition(
     popup=POPUP_NUMBER_MENU,
     handle="Data",
     caption_handle="Caption",
+    caption_kind="Name",
     label_size=None,
     value_size=None,
     label_colour=_style_argb("text.label"),
@@ -299,7 +300,7 @@ def build_name_value_definition(
     label_rect = (px, 0, name_w, h)
     label_comp = _label_component(
         "name",
-        "Name",
+        caption_kind,
         caption_handle,
         label_rect,
         lbl_sz,

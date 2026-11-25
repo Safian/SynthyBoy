@@ -768,6 +768,8 @@ __all__ = [
     # CompactDial API
     "DEFAULT_RECTS",
     "compact_dial_definition",
+    "bare_dial_definition",
+    "stacked_dial_definition",
     # Smooth API
     "PLAY_SMOOTH_RECTS",
     "clone",
@@ -805,53 +807,56 @@ def blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_r
     return definition
 
 
-def master_control_definition(kind, w, h, *, skins_dir=None):
-    """Native master control composition with calibrated relative dial geometry."""
+def bare_dial_definition(skins_dir, diameter, *, polarity):
+    """A focused, draggable native knob without a caption or value."""
     from components.native.button.button import entry
+    from components.native.selector.selector import passive_layer
+
+    rect = (0, 0, diameter, diameter)
+    focus = entry("focus", "Focus", focus_ring_data(), rect, focus="No")
+    focus["bounds"]["whenVisible"] = "WhenFocussed"
+    knob = entry("knob", "Knob", _dial_for_polarity(skins_dir, polarity, diameter), rect)
+    return passive_layer([focus, knob])
+
+
+def stacked_dial_definition(skins_dir, size, *, diameter, caption_height,
+                            polarity="UniPolar", alternate_caption=None):
+    """Caption above an editable dial and host-formatted value below it.
+
+    alternate_caption is (normal gate, alternate gate, alternate text).
+    """
     from components.native.name_value.name_value import _label_component
-    metrics = _style_size("level.master.control")
-    inset, half, label_h = metrics["padding"], metrics["half_padding"], metrics["label_height"]
 
-    def label(caption, rect):
-        child = _label_component("caption" if caption else "value", "Name" if caption else "Value",
-                                 "Caption" if caption else "Data", rect,
-                                 metrics["caption_font" if caption else "value_font"],
-                                 _style_argb("master.meter.scale.text" if caption else "text.icon"),
-                                 "horizontallyCentred verticallyCentred")
-        child["bounds"]["showWhenDataModelInvalid"] = "Hide"
-        return child
+    width, height = size
+    rects = {"focus": (0, 0, width, height),
+             "knob": ((width - diameter) // 2, caption_height, diameter, diameter),
+             "name": (0, 0, width, caption_height),
+             "value": (0, caption_height + diameter, width, height - caption_height - diameter)}
+    if min(rects["value"][3], caption_height, diameter) <= 0 or diameter > width:
+        raise ValueError("Stacked dial needs space for its caption, knob and value")
 
-    def action(trigger, handler, popup=""):
-        return {"version": 1, "onAction": trigger, "handler": handler,
-                "handleName": "Data", "additionalData": popup}
-
-    is_dial = kind.startswith("dial_")
-    if is_dial:
-        children = [label(True, (inset, 0, w - 2 * inset, label_h)),
-                    entry("dial", "Knob", _dial_for_polarity(
-                          skins_dir, "BiPolar" if kind == "dial_bi" else "UniPolar", SIZE),
-                          (inset, label_h, w - 2 * inset, h - 2 * label_h), focus="No"),
-                    label(False, (inset, h - label_h, w - 2 * inset, label_h))]
-        for child, relative in zip(children, metrics["relative_bounds"]):
-            bounds = child["bounds"]
-            bounds.pop("bounds")
-            bounds.update(boundsType="Relative", relativeBounds=relative)
-        actions = [action(trigger, "Show Overlay", "fx editor number menu")
-                   for trigger in ("Double Click", "Enter Pressed")]
-    else:
-        caption_width = w * 3 // 5
-        children = [label(True, (half, 0, caption_width - inset, h)),
-                    label(False, (caption_width, 0, w - caption_width - half, h))]
-        if kind == "selector":
-            children = [label(True, (inset, 0, w - 2 * inset, label_h)),
-                        label(False, (inset, label_h, w - 2 * inset, h - label_h))]
-        handler = "Toggle Switch" if kind == "toggle" else "Show Overlay"
-        popup = {"selector": "fx editor choice menu", "number": "fx editor number menu"}.get(kind, "")
-        actions = [action(trigger, handler, popup) for trigger in ("Mouse Down", "Enter Pressed")]
-    return {"version": 2, "actions": actions,
-            "backgroundData": {"version": 1,
-                "focussed": {"version": 1, "colour": _style_argb("field.focus"), "image": ""},
-                "unfocussed": {"version": 1,
-                               "colour": _style_native_color("transparent") if is_dial else _style_argb("button.surface"),
-                               "image": ""}},
-            "ignoreMousePresses": False, "disableCoarseDataWheel": False, "componentsData": children}
+    definition = bare_dial_definition(skins_dir, diameter, polarity=polarity)
+    focus, knob = definition["componentsData"]
+    focus["bounds"]["bounds"] = " ".join(map(str, rects["focus"]))
+    knob["bounds"]["bounds"] = " ".join(map(str, rects["knob"]))
+    centre = "horizontallyCentred verticallyCentred"
+    caption = _label_component("name", "Name", "Caption", rects["name"],
+                               _style_size("font.caption"), _style_argb("text.icon"), centre)
+    value = _label_component("value", "Value", "Data", rects["value"],
+                             _style_size("font.value"), _style_argb("text.value"), centre)
+    definition["componentsData"].extend([caption, value])
+    if alternate_caption:
+        normal_gate, alt_gate, alt_text = alternate_caption
+        caption["bounds"].update(version=2, showWhenDataModelInvalid="Hide", additionalInvalidatingHandles=[normal_gate])
+        alternate = copy.deepcopy(caption)
+        alternate["bounds"]["additionalInvalidatingHandles"] = [alt_gate]
+        alternate["componentData"]["name"] = "alternate caption"
+        alternate["componentData"]["data"].update(type="Text", text=alt_text)
+        definition["componentsData"].append(alternate)
+    definition["ignoreMousePresses"] = False
+    definition["actions"] = [
+        {"version": 1, "onAction": trigger, "handler": "Show Overlay",
+         "handleName": "Data", "additionalData": "fx editor number menu"}
+        for trigger in ("Double Click", "Enter Pressed")
+    ]
+    return definition

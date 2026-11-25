@@ -1,7 +1,5 @@
-// SynthyBoy - MPC overlay: the MASTER UI, the page of the Master tab (the plugin draws the whole tab, page_view.h): the blocks of the master section (shell-mpc/ui/voice_master.h) wired to the engine's parameters
-// master.*: OUTPUT (volume, stereo spread, routing, voice override, the meters), PITCH (tune, transpose, bend range), VOICES (polyphony, legato, same note, steal), GLIDE (portamento), and on the second side
-// SCALE, TUNING and MPE. One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the
-// instance as IInstanceView. Docs: docs/MPC.md "Master and Voice UI".
+// Master panel bindings, Q-Link routing and the live portamento curve.
+// Native skin components own the controls and readouts on both panels.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
@@ -92,7 +90,7 @@ public:
         const auto view = nativeView();
         if (view != nativeui::master::Hidden && inst.takeNativeMasterPanel (view, panel))
         {
-            full_.setSide (panel >= 0.75f ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain);
+            full_.setSide (panel >= 0.5f ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain);
             qSlots_.forget();
         }
         if (nativeView() == nativeui::master::Tuning && inst.masterScaleInputActive())
@@ -250,29 +248,13 @@ public:
         return ch;
     }
 
-    void setHostBackground (bool on) noexcept { nativeGround_ = on; }
-    bool hostBackground() const noexcept
-    {
-        return nativeGround_ && pageTop_ == 0 && w_ == page::kW && h_ == page::kH
-            && &ui::theme::L() == &ui::theme::kLook1;
-    }
-
-    void drawPageGround (gpu::SceneBuilder& sb) const
-    {
-        if (hostBackground())
-            return;
-        if (pageTop_ == 0)
-            full_.drawNativeGround (sb);
-        else
-            page::ground (sb);
-    }
+    bool hostBackground() const noexcept { return true; }
 
     void draw (gpu::SceneBuilder& sb) const
     {
         drawNativeMarkerCovers (sb, "master");
-        if (pageTop_ != 0)
-            full_.drawStaticFurniture (sb);
-        full_.drawPage (sb, pageTop_ == 0, !hostBackground() || full_.side() != ui::MasterScreen::SideMain);
+        if (pageTop_ == 0)
+            full_.draw (sb);
     }
 
     // ---- access for the tests
@@ -505,7 +487,6 @@ private:
     std::vector<Item> items_;
     bool resyncAfterInput_ = false;
 
-    bool nativeGround_ = false;
     int w_ = kCanvasW, h_ = kCanvasH;
     int pageTop_ = 0;
     const IInstanceView* lastInstance_ = nullptr;

@@ -447,9 +447,11 @@ Evidence: `shell-mpc/ui/tests/ui_composite_host.cpp` (`testNativePanLevel`), `sh
 
 ### Native Voice step knob ownership
 
-VoiceGrid keeps its step labels, formatted values, selection and sounding-voice indicators. The host owns all eight knob bodies; the retired GPU knob branch and its availability setter are removed. Its unused modulation-value array had no producer. The native sequence binding is supplied by the MPC shell independently of host-background detection.
+Voice step selection, all eight column values and the selected step summary use native buttons and labels. Each of the six rows binds the same shared bipolar dial definition to eight fixed engine parameters. The display reads only the current cell for Q4. VoiceGrid paints the sounding-step indicators. Both Master panels and Voice leave the native canvas visible before the background sentinel is detected. Their native titles start to the right of the host marker and instance patches.
 
-Evidence: `shell-mpc/ui/tests/ui_voice_grid_host.cpp` checks transparent knob apertures without an availability flag; `shell-mpc/overlay/tests/mastervoice_ui_host.cpp` checks native sequence routing, disabled inputs and retained live voice indicators. These are Mac source/scene/input checks.
+The generated skin is compared against the compiled input geometry in `scripts/tests/test_native_voice.py`. The rendering and input checks are in `shell-mpc/overlay/tests/mastervoice_ui_host.cpp` and `shell-mpc/ui/tests/ui_voice_grid_host.cpp`.
+
+The Key 61 production skin `be4b5924cbe3` and ARMv7 plugin `466df9a0e8fd` were measured on Sbtest / Acid Saw Reso with the 85 ms footer-tap probe. In two returns per page the first fully settled sample ended at 436.10 and 436.46 ms for Master/Main, and 439.20 and 436.76 ms for Voice/PAN. All four matched their resting full-screen references across the plugin and footer. Raw timing traces, reference comparisons and package digests are under `.hw-local/mpc-perf/key61-native-master-voice-be4b5924cbe3/`.
 
 ### FX native ownership across overlays
 

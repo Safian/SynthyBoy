@@ -61,6 +61,9 @@ def build_meter_block_definition(
     height: Optional[int] = None,
     hold: bool = True,
     with_clip: bool = True,
+    *,
+    stereo_rects=None,
+    scale_image="",
 ) -> Dict[str, Any]:
     """Build the mono Peak/Hold block or the Mixer's calibrated stereo block with clip."""
     from components.native.meter.meter import stereo_meter_assets
@@ -77,10 +80,16 @@ def build_meter_block_definition(
             "componentData": {"version": 1, "name": name, "type": "Meter", "data": data},
             "handle remapping": {"version": 1, "map": [{"key": key, "value": key} for key in (peak, peak_hold) if key]},
             "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide",
-                       "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect},
+                       "whenVisible": "Always", "boundsType": "Absolute", "bounds": "%d %d %d %d" % tuple(rect)},
         })
 
-    if with_clip:
+    if stereo_rects is not None:
+        if with_clip or len(stereo_rects) != 2:
+            raise ValueError("A scaled stereo meter requires two channel slots and a separate clip control")
+        clear["image"] = scale_image
+        for channel, rect in zip(("L", "R"), stereo_rects):
+            add_meter("Meter " + channel, rect, METER_ASSETS, "Peak" + channel, "Hold" + channel if hold else "")
+    elif with_clip:
         channel_w = _style_size("meter.stereo.channel_width")
         gap = _style_size("meter.stereo.channel_gap")
         clip_h = _style_size("meter.stereo.clip_height")

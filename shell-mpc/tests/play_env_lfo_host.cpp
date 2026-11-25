@@ -1355,29 +1355,54 @@ void testMasterPanelNavigation()
     };
     page.setHostBackground (true);
     tick();
-    check (panel == 3460 && read (panel) == 0.5f && aperture (page.ui().screen().sideTuning.rect()),
+    VstParameterProperties props {};
+    char label[synthyboy_mpc::kParamStrBytes] {};
+    const auto display = [&] {
+        r.effect.dispatcher (&r.effect, effGetParamDisplay, panel, 0, label, 0);
+        return std::string (label);
+    };
+    check (r.effect.dispatcher (&r.effect, effGetParameterProperties, panel, 0, &props, 0) == 1
+           && props.minInteger == 0 && props.maxInteger == 1 && props.stepInteger == 1
+           && display() == "Main" && read (base + n::kMasterView) == 0.5f
+           && r.plugin.nativeUiReported[n::kMasterPanel] == 0.0f,
+           "Master navigation has two choices independent of the three-frame visibility gate");
+    check (panel == 3460 && read (panel) == 0.0f && aperture (page.ui().screen().sideTuning.rect()),
            "the Master MAIN surface yields its TUNING navigation button to the actual host handle");
     post (1.0f);
     tick();
-    check (read (panel) == 1.0f && read (base + n::kMasterView) == 1.0f
+    check (read (panel) == 1.0f && display() == "Tuning & MPE" && read (base + n::kMasterView) == 1.0f
+           && r.plugin.nativeUiReported[n::kMasterPanel] == 1.0f
            && page.ui().qTargets()[0] == target ("master.scale.type") && aperture (page.ui().screen().sideMain.rect()) && r.save() == saved,
            "native TUNING replaces the Q group and the new MAIN button has a transparent aperture");
+    const int scaleInput = base + n::kMasterScaleInput;
+    r.effect.setParameter (&r.effect, scaleInput, 1.0f);
+    tick();
+    check (read (scaleInput) == 1.0f && r.plugin.overlayView.masterScaleInputActive(),
+           "the native KEY toggle arms scale input on the Tuning panel");
+    r.effect.setParameter (&r.effect, scaleInput, 0.0f);
+    tick();
+    check (read (scaleInput) == 0.0f && ! r.plugin.overlayView.masterScaleInputActive(),
+           "the native KEY toggle returns to playing");
     r.effect.setParameter (&r.effect, base + n::kMasterView, 0.5f);
     tick();
     check (read (panel) == 1.0f, "the existing Master view remains display-only");
     post (0.5f);
     tick();
-    check (read (panel) == 0.5f && page.ui().qTargets()[0] == target ("master.volume"),
+    check (read (panel) == 1.0f, "a stale three-frame value cannot select a panel");
+    post (0.0f);
+    tick();
+    check (read (panel) == 0.0f && r.plugin.nativeUiReported[n::kMasterPanel] == 0.0f
+           && page.ui().qTargets()[0] == target ("master.volume"),
            "native MAIN restores its own Q group");
     post (1.0f);
     check (r.restore (saved), "the actual Master navigation fixture restores the original chunk");
     r.expireRestoreWindow();
     tick();
-    check (read (panel) == 0.5f && r.save() == saved, "preset recall invalidates an outstanding Master panel choice");
+    check (read (panel) == 0.0f && r.save() == saved, "preset recall invalidates an outstanding Master panel choice");
     page.onHidden();
     post (1.0f);
     tick();
-    check (read (panel) == 0.5f && r.save() == saved, "a late navigation callback after leaving Master cannot change the panel");
+    check (read (panel) == 0.0f && r.save() == saved, "a late navigation callback after leaving Master cannot change the panel");
     const int link = target ("master.bend_down_link");
     r.effect.setParameter (&r.effect, link, 1.0f);
     tick();

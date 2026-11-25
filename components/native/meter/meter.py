@@ -29,6 +29,15 @@ def meter_data(direction="Up", hold=True, assets=METER_ASSETS):
     }
 
 
+def labelled_horizontal_meter(bar_rect, value_rect):
+    from components.native.button.button import entry
+    from components.native.level.level import value_label
+    from components.native.selector.selector import passive_layer
+
+    bar = entry("Meter", "Meter", meter_data("Right", hold=False), bar_rect, focus="No")
+    return passive_layer([bar, value_label("value", value_rect)])
+
+
 def write_meter_assets(directory):
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))

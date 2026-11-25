@@ -106,6 +106,9 @@ def apply(tui, qlinks, ctx):
             if view == "master":
                 import native_ui_params
                 master_view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
+                children.extend(caption_entries("master_header", prefix="Native Caption master header"))
+                children.extend(caption_entries("master_tuning", prefix="Native Caption master tuning",
+                                                gates=(f"IndexedEnabling/2/3/Parameter {master_view}",)))
                 gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)
             children.extend(caption_entries(view, prefix="Native Caption " + view, gates=gates))
         bg = root["backgroundData"]

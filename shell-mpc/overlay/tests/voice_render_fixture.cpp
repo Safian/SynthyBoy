@@ -66,6 +66,10 @@ int main (int argc, char** argv)
         char text[80] {};
         if (p.numChoices > 0)
             std::snprintf (text,sizeof text,"%s",p.choices[std::clamp (static_cast<int> (std::lround (r.inst.param (static_cast<int> (i))-p.min)),0,p.numChoices-1)]);
+        else if (i >= static_cast<size_t> (demo::Inst::idx ("voicectl.s1.pan"))
+                 && i <= static_cast<size_t> (demo::Inst::idx ("voicectl.s8.mod2")))
+            ui::VoiceGrid::formatValue ((i - demo::Inst::idx ("voicectl.s1.pan")) % ui::VoiceGrid::kNumRows,
+                                        r.inst.param (static_cast<int> (i)) * .01f, text, sizeof text);
         else
             uibind::formatValue (p, r.inst.param (static_cast<int> (i)), text, sizeof text);
         if (!first) js << ',';

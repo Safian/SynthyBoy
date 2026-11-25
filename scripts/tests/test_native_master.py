@@ -109,7 +109,7 @@ class MasterNativeControlsTests(unittest.TestCase):
 
         # Verify specific remappings
         vol = next(c for c in tab_components if c["componentData"]["name"] == "Master Volume")
-        self.assertEqual(vol["componentData"]["type"], "masterNative_dial_bi")
+        self.assertEqual(vol["componentData"]["type"], "masterNative_dial_bi_119x124")
         # The dial is a local component definition; the instance carries only
         # its Data handle. The shared child provides the bipolar filmstrip.
         self.assertEqual(vol["componentData"]["data"], {"version": 1, "handleName": "Data"})
@@ -130,7 +130,7 @@ class MasterNativeControlsTests(unittest.TestCase):
             self.assertLessEqual(y + h, 628, f"{c['componentData']['name']}: tab-relative y+h must fit in tab (<= 628)")
 
         legato = next(c for c in tab_components if c["componentData"]["name"] == "Master Legato")
-        self.assertEqual(legato["componentData"]["type"], "masterNative_toggle_189x56")
+        self.assertEqual(legato["componentData"]["type"], "masterNativeActiveText_LEGATO_189x56")
 
         # Second apply is idempotent
         second_created = apply_master_native_controls(tui, {}, ctx)
@@ -233,6 +233,8 @@ class MasterNativeControlsTests(unittest.TestCase):
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
         for spec in specs:
             comp = next(c for c in tab_components if c["componentData"]["name"] == spec["name"])
+            if spec["widget"] == "toggle":
+                continue  # ActiveText supplies the caption in its two shared faces.
             caption_entry = next(m for m in comp["handle remapping"]["map"] if m["key"] == "Caption")
             expected_prefix = f"WithName[{spec['caption']}]/Parameter"
             self.assertTrue(
@@ -348,7 +350,8 @@ class MasterNativeControlsTests(unittest.TestCase):
                 self.assertEqual(widget["bounds"]["bounds"], f"{x} {y - 110} {width} {height}")
                 binding = {link["key"]: link["value"] for link in widget["handle remapping"]["map"]}
                 self.assertEqual(binding["Data"], f"Parameter {indices[spec['key']]}")
-                self.assertEqual(binding["Caption"], f"WithName[{spec['caption']}]/Parameter {indices[spec['key']]}")
+                if spec["widget"] != "toggle":
+                    self.assertEqual(binding["Caption"], f"WithName[{spec['caption']}]/Parameter {indices[spec['key']]}")
                 definition = definitions[widget["componentData"]["type"]]
                 if "NativeActiveGate0" in binding:
                     self.assertTrue(spec["key"].startswith("master.mpe.") or spec["key"] == "shell.pad_pressure_amount")
@@ -362,30 +365,22 @@ class MasterNativeControlsTests(unittest.TestCase):
                     definition = definitions[on["componentData"]["type"]]
                 actions = definition["actions"]
                 children = [child["bounds"] for child in definition["componentsData"]]
+                for child in children:
+                    cx, cy, cw, ch = map(int, child["bounds"].split())
+                    self.assertGreaterEqual(min(cx, cy), 0)
+                    self.assertLessEqual(cx + cw, width)
+                    self.assertLessEqual(cy + ch, height)
                 if spec["widget"].startswith("dial_") and spec["key"] not in MASTER_INTEGER_FIELDS:
-                    self.assertTrue(all(b["boundsType"] == "Relative" for b in children))
-                    sizes = {"parent.width": width, "parent.height": height}
-
-                    def edge(expression):
-                        anchor, separator, inset = expression.strip().partition(" - ")
-                        position = sizes[anchor] if anchor in sizes else int(anchor)
-                        return position - int(inset) if separator else position
-
-                    self.assertEqual([tuple(map(edge, b["relativeBounds"].split(","))) for b in children], [
-                        (4, 0, width - 4, 24), (4, 24, width - 4, height - 24),
-                        (4, height - 24, width - 4, height),
-                    ])
-                    self.assertGreaterEqual(height - 48, 56)
-                    self.assertGreaterEqual(width - 8, 56)
-                else:
-                    for child in children:
-                        cx, cy, cw, ch = map(int, child["bounds"].split())
-                        self.assertGreaterEqual(min(cx, cy), 0)
-                        self.assertLessEqual(cx + cw, width)
-                        self.assertLessEqual(cy + ch, height)
+                    knob = next(c for c in definition["componentsData"] if c["componentData"]["type"] == "Knob")
+                    _, _, kw, kh = map(int, knob["bounds"]["bounds"].split())
+                    self.assertEqual(kw, kh)
+                    self.assertGreaterEqual(kw, 56)
                 if spec["widget"] == "toggle":
-                    self.assertEqual({(a["onAction"], a["handler"], a["handleName"]) for a in actions},
-                                     {("Mouse Down", "Toggle Switch", "Data"), ("Enter Pressed", "Toggle Switch", "Data")})
+                    btn, = definition["componentsData"]
+                    self.assertEqual(btn["componentData"]["type"], "Button")
+                    data = btn["componentData"]["data"]
+                    self.assertEqual((data["handleName"], data["gestureBehaviour"]), ("Data", "Instant"))
+                    self.assertNotEqual(data["offImage"], data["onImage"])
                 else:
                     popup = "fx editor choice menu" if spec["widget"] == "selector" else "fx editor number menu"
                     trigger = "Mouse Down" if spec["widget"] in ("selector", "number") or spec["key"] in MASTER_INTEGER_FIELDS else "Double Click"
@@ -395,15 +390,15 @@ class MasterNativeControlsTests(unittest.TestCase):
                     self.assertIn(popup, definitions)
 
         by_name = {widget["componentData"]["name"]: widget for widget in widgets}
-        for i, (name, rect) in enumerate((("MAIN", "300 4 160 56"), ("TUNING & MPE", "468 4 220 56")), 1):
+        for i, (name, rect) in enumerate((("MAIN", "300 4 160 56"), ("TUNING & MPE", "468 4 220 56"))):
             button = by_name[f"Master Panel {name}"]
             self.assertEqual(button["bounds"]["bounds"], rect)
             self.assertEqual(button["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2887"])
             self.assertEqual(button["componentData"]["type"], "Button")
             data = button["componentData"]["data"]
-            self.assertEqual((data["buttonId"], data["numButtonsInGroup"]), (i, 3))
+            self.assertEqual((data["buttonId"], data["numButtonsInGroup"]), (i, 2))
             self.assertEqual(button["handle remapping"]["map"],
-                             [{"key": "Data", "value": f"WithName[{name}]/FromGesture/Parameter 3460"}])
+                             [{"key": "Data", "value": "Parameter 3460"}])
         main_gate = "IndexedEnabling/1/3/Parameter 2887"
 
         def output(name, rect, links, gates=(), focus=False):
@@ -412,7 +407,7 @@ class MasterNativeControlsTests(unittest.TestCase):
             self.assertEqual(item["bounds"]["additionalInvalidatingHandles"], [main_gate, *gates])
             self.assertEqual(item["bounds"]["acceptsHWFocus"], "Yes" if focus else "No")
             self.assertEqual({m["key"]: m["value"] for m in item["handle remapping"]["map"]}, links)
-            return definitions[item["componentData"]["type"]]
+            return definitions.get(item["componentData"]["type"], item)
 
         peaks = output("Master Peak Meters", "14 166 100 128", {
             "Data": "Parameter 2977", "PeakL": "Parameter 2977", "PeakR": "Parameter 2978",
@@ -429,15 +424,16 @@ class MasterNativeControlsTests(unittest.TestCase):
         self.assertEqual([skin.leaf_model(c, definitions)["type"] for c in voice["componentsData"]], ["Meter", "Label"])
         self.assertEqual(voice["componentsData"][0]["componentData"]["data"]["direction"], "Right")
         limiter = output("Master Output Limiter", "122 238 96 56", {
-            "Data": "Parameter 2983", "Caption": "WithName[LIMIT]/Parameter 2983",
+            "Data": "Parameter 2983",
         }, focus=True)
         clips = [output("Master Clip " + label, "14 110 100 56", {"Data": "Parameter 2985"},
                         (f"IndexedEnabling/{state}/2/Parameter 2984",), focus=True)
                  for state, label in enumerate(("Off", "On"))]
-        self.assertNotEqual(clips[0]["backgroundData"], clips[1]["backgroundData"])
-        for definition in (limiter, *clips):
-            self.assertEqual({(a["onAction"], a["handler"], a["handleName"]) for a in definition["actions"]},
-                             {("Mouse Down", "Toggle Switch", "Data"), ("Enter Pressed", "Toggle Switch", "Data")})
+        self.assertEqual(limiter["componentsData"][0]["componentData"]["type"], "Button")
+        self.assertNotEqual(clips[0]["componentData"]["data"]["onImage"], clips[1]["componentData"]["data"]["onImage"])
+        for clip in clips:
+            self.assertEqual(clip["componentData"]["type"], "Button")
+            self.assertEqual(clip["componentData"]["data"]["gestureBehaviour"], "Instant")
 
 
 if __name__ == "__main__":

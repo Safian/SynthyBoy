@@ -377,7 +377,7 @@ public:
         }
         else
         {
-            areas = { Rect { rect_.x + 704, rect_.y + 4, 560, 56 }, scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
+            areas = { Rect { rect_.x + 704, rect_.y + 4, 520, 56 }, scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
                       mtsEsp.rect(), mtsNoteOn.rect(), mpeOn.rect(), mpeMacro.rect(), mpeYModwheel.rect(),
                       mpeYBipolar.rect(), mpeOn_ ? mpeBend.rect() : Rect {}, mpeOn_ ? mpeBendToX.rect() : Rect {} };
         }
@@ -392,30 +392,11 @@ public:
         return std::any_of (areas.begin(), areas.end(), [=] (Rect r) { return r.contains (x, y); });
     }
 
-    void drawNativeGround (gpu::SceneBuilder& sb) const
+    void draw (gpu::SceneBuilder& sb) const override
     {
-        drawNativeCanvas (sb, rect_, nativeApertures());
-    }
-
-    void drawStaticFurniture (gpu::SceneBuilder& sb) const
-    {
-        Pen p (sb, enabled_, inactive_);
-        Cell cell (sb, rect_);
-        drawUnder (p);
-    }
-
-    void draw (gpu::SceneBuilder& sb) const override { drawPage (sb); }
-
-    void drawPage (gpu::SceneBuilder& sb, bool showQGroups = true, bool showFixedLabels = true) const
-    {
-        Pen p (sb, enabled_, inactive_);
-        if (showFixedLabels)
-            drawFixedLabels (p);
-        drawLiveLabels (p);
         if (side_ == SideMain)
             portaCurve.draw (sb);
-        if (showQGroups)
-            drawQGroups (sb);
+        drawQGroups (sb);
     }
 
     void drawQGroups (gpu::SceneBuilder& sb) const
@@ -555,36 +536,6 @@ protected:
             mpeBendToX.place ({ in.x + cw + g, y2, cw, th });
             mpeYBipolar.place ({ in.x + 2 * (cw + g), y2, in.right() - (in.x + 2 * (cw + g)), th });
         }
-    }
-
-    void drawUnder (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kHeaderH - 2), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kHeaderH - 2), 1.5f, p.c (T.keyline, 255));
-        for (int b = 0; b < kBlocks; ++b)
-            if (blockVisible (b))
-                p.block (blockRect (b), false);
-    }
-
-
-
-    void drawFixedLabels (Pen& p) const
-    {
-        const theme::Look& T = theme::L();
-        for (int b = 0; b < kBlocks; ++b)
-            if (blockVisible (b))
-            {
-                const Rect r = blockRect (b);
-                p.textLeft ({ r.x + kBlockPad + 6, r.y + 3, std::max (0, r.w - 20), 16 }, blockName (b), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-            }
-        if (side_ == SideMain && ! qualityCaption_.empty())
-            p.textLeft (qualityCaption_, "QUALITY", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-    }
-
-    void drawLiveLabels (Pen& p) const
-    {
-        const theme::Look& T = theme::L();
-        p.textLeft ({ rect_.x + 14, rect_.y + 4, 270, 56 }, "MASTER", T.fTitle, p.c (T.text, 255), T.fMin);
     }
 
 private:

@@ -40,4 +40,5 @@ def apply(tui, qlinks, ctx):
     replacement.extend({"key": key, "value": value} for key, value in names.items())
 
     populate_voice_tab(tab, ctx, root_gate)
+    tab["qlinkBoundsData"] = []
     # The shared 83_pages extra already assigns the full sixteen Q proxies.

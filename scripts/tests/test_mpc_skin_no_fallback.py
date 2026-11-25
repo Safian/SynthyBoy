@@ -211,8 +211,27 @@ class NoFallbackTests(unittest.TestCase):
                     if gates:
                         self.assertEqual(c["bounds"]["showWhenDataModelInvalid"], "Hide")
 
-        for view in ("env1", "mod", "voice", "master"):
+        for view in ("env1", "mod", "voice"):
             check(view, f"Native Caption {view}")
+        from native_ui_params import MASTER_VIEW, mixer_peek_index
+        handle = mixer_peek_index(len(self.params)) + MASTER_VIEW
+        check("master_header", "Native Caption master header")
+        check("master", "Native Caption master", (f"IndexedEnabling/1/3/Parameter {handle}",))
+        check("master_tuning", "Native Caption master tuning", (f"IndexedEnabling/2/3/Parameter {handle}",))
+        for view, names in (
+            ("master", ("Native Caption master header 0", "Master Scale Input")),
+            ("voice", ("Native Caption voice 3", "Voice Step Value")),
+        ):
+            tab = next(tab for tab in tabs if tab["tabName"].lower() == view)
+            entries = tab["componentDefinition"]["componentsData"]
+            markers = [entry for entry in entries
+                       if entry["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
+            for name in names:
+                x, y, w, h = map(int, labels[name]["bounds"]["bounds"].split())
+                for marker in markers:
+                    mx, my, mw, mh = map(int, marker["bounds"]["bounds"].split())
+                    # The overlay covers one extra pixel around every marker.
+                    self.assertTrue(x > mx + mw or mx > x + w or y > my + mh or my > y + h, name)
         for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
             check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2833",))
 

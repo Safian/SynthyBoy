@@ -2004,7 +2004,7 @@ struct PluginInstance
         if (offset == nativeui::kMasterScaleInput)
             return scaleInput.load() >= ScaleInputArmed ? 1.0f : 0.0f;
         if (offset == nativeui::kMasterPanel)
-            return nativeUiValue (nativeui::kMasterView);
+            return nativeui::master::panelValue (nativeMasterSkinPanel.load (std::memory_order_relaxed));
         if (nativeui::isOscDetailOffset (offset))
         {
             namespace n = nativeui::oscdetail;
@@ -2386,7 +2386,8 @@ struct PluginInstance
         if (nativeMasterClearAck.exchange (false, std::memory_order_relaxed))
             reportNativeValue (e, base + m::ClearClip, 0.0f, true);
         const auto panel = nativeMasterPanel.at (0);
-        reportNativeValue (e, nativeui::kMasterPanel, view, view != 0.0f && nativeMasterPanel.needsReport (panel));
+        reportNativeValue (e, nativeui::kMasterPanel, nativeUiValue (nativeui::kMasterPanel),
+                           panel.cell().target >= 0 && nativeMasterPanel.needsReport (panel));
         nativeMasterPanel.report (panel);
         reportNativeValue (e, nativeui::kMasterScaleInput, nativeUiValue (nativeui::kMasterScaleInput));
         reportNativeValue (e, nativeui::kMasterView, view);
@@ -5100,6 +5101,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             float plain = inst->paramMirror[index].load(std::memory_order_relaxed);
 #if SYNTHYBOY_MPC_OVERLAY
+            static const auto* firstStep = synthyboy::findParamByKey ("voicectl.s1.pan");
+            static const auto* lastStep = synthyboy::findParamByKey ("voicectl.s8.mod2");
+            if (firstStep && lastStep && info >= firstStep && info <= lastStep)
+            {
+                const int row = static_cast<int> (info - firstStep) % synthyboy_mpc::ui::VoiceGrid::kNumRows;
+                synthyboy_mpc::ui::VoiceGrid::formatValue (row, plain * 0.01f, buf, kCap);
+                return 1;
+            }
             // Passive native Filter selectors read the engine handle without an
             // editable proxy. STYLE still uses that filter's current model names.
             const bool filter1Style = std::strcmp (info->key, "filter1.style") == 0;
@@ -5566,7 +5575,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
             props->minInteger = 0;
-            props->maxInteger = nativeOffset == nativeui::kMasterScaleInput ? 1 : nativeui::master::kLastFrame;
+            props->maxInteger = 1;
             props->stepInteger = 1;
             return 1;
         }
@@ -6516,14 +6525,17 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     else if (parameter < 0.5f)
                         while (mode >= PluginInstance::ScaleInputArmed
                                && !inst->scaleInput.compare_exchange_weak (mode, PluginInstance::ScaleInputOff)) {}
+                    if (logging)
+                        synthyboy_mpc::PlayLog::line ("key-mode input=%.3f state=%d", parameter, inst->scaleInput.load());
                     return;
                 }
                 if (offset == nativeui::kMasterPanel)
                 {
                     const auto link = inst->nativeMasterPanel.at (0);
                     const auto preset = inst->nativeMasterPanelPreset.load (std::memory_order_acquire);
-                    if (preset == inst->stateGeneration.load (std::memory_order_acquire) && parameter >= 0.25f
-                        && std::fabs (parameter - static_cast<float> (link.cell().source) / nativeui::master::kLastFrame) > 1.0e-6f)
+                    if (preset == inst->stateGeneration.load (std::memory_order_acquire)
+                        && (parameter == 0.0f || parameter == 1.0f) && link.cell().target >= 0
+                        && parameter != nativeui::master::panelValue (link.cell().source))
                         inst->nativeMasterPanel.post (link, parameter);
                     return;
                 }

@@ -89,6 +89,17 @@
       ],
       "size": 13,
       "colour": "text.caption"
+    },
+    {
+      "text": "VOICE CONTROL",
+      "rect": [
+        64,
+        4,
+        260,
+        56
+      ],
+      "size": 26,
+      "colour": "text.value"
     }
   ],
   "env1": [
@@ -240,6 +251,54 @@
         18,
         427,
         206,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "master_header": [
+    {
+      "text": "MASTER",
+      "rect": [
+        64,
+        4,
+        220,
+        56
+      ],
+      "size": 26,
+      "colour": "text.value"
+    }
+  ],
+  "master_tuning": [
+    {
+      "text": "SCALE",
+      "rect": [
+        20,
+        73,
+        120,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TUNING",
+      "rect": [
+        20,
+        189,
+        120,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "MPE",
+      "rect": [
+        656,
+        189,
+        120,
         20
       ],
       "size": 13,

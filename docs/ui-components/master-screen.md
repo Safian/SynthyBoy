@@ -7,14 +7,14 @@ The Master page: two sides switched by MAIN / TUNING & MPE buttons. MAIN: OUTPUT
 `shell-mpc/ui/voice_master.h`: `MasterScreen : Composite`, `MasterScreen::Side { SideMain = 0, SideTuning = 1 }`; displays in [voice-displays.md](voice-displays.md).
 
 ## State
-Members: `sideMain`, `sideTuning` (`MenuButton`); OUTPUT: `clip` (`ClipReadout`), `volume`, `spread`, `stereoRouting` (`Knob`), `meters`, `voiceOverride` (`LedList`), `outputLimiter`, `noSmoothing`, `oversample4x` (`LedToggle`); PITCH: `tune` (`Knob`), `transpose`, `bendUp`, `bendDown` (`NumberField`), `bendLink`; VOICES: `polyphony`, `velocityTrack`, `padAmount` (`NumberField`), `legato`, `polyLegato`, `phaseLegato`, `padPressure` (`LedToggle`), `sameNote`, `stealPriority` (`LedList`), `voiceMeter`; GLIDE: `portaTime`, `portaSlope` (`Knob`), `portaAlways`, `portaScaled`, `portaCurve`; SCALE: `scaleType`, `scaleKey` (`Stepper`: 20 scales, 12 keys), `scaleMode` (`LedList`), `keyboard`; TUNING: `tuningA4` (`NumberField`), `tuningScale` (`LedList`), `mtsEsp`, `mtsNoteOn`; MPE: `mpeOn`, `mpeYModwheel`, `mpeBendToX`, `mpeYBipolar`, `mpeBend`, `mpeMacro`; `groups[kMaxGroups = 9]`.
+Members: `sideMain`, `sideTuning` (`MenuButton`); OUTPUT: `clip` (`ClipReadout`), `volume`, `spread`, `stereoRouting` (`Knob`), `meters`, `voiceOverride` (`LedList`), `outputLimiter`, `noSmoothing`, `oversample4x` (`LedToggle`); PITCH: `tune` (`Knob`), `transpose`, `bendUp`, `bendDown` (`NumberField`), `bendLink`; VOICES: `polyphony`, `velocityTrack`, `padAmount` (`NumberField`), `legato`, `polyLegato`, `phaseLegato`, `padPressure` (`LedToggle`), `sameNote`, `stealPriority` (`LedList`), `voiceMeter`; GLIDE: `portaTime`, `portaSlope` (`Knob`), `portaAlways`, `portaScaled`, `portaCurve`; SCALE: `scaleType`, `scaleKey` (`Stepper`: 20 scales, 12 keys), `scaleMode` (`LedList`), the KEY input activation button; TUNING: `tuningA4` (`NumberField`), `tuningScale` (`LedList`), `mtsEsp`, `mtsNoteOn`; MPE: `mpeOn`, `mpeYModwheel`, `mpeBendToX`, `mpeYBipolar`, `mpeBend`, `mpeMacro`; `groups[kMaxGroups = 9]`.
 API: `side()`, `setSide (s)`, static `sideOfGroup (g)`, `numGroups()`, `activeGroup()`, `setActiveGroup (g)`, static `groupName (g)` (OUTPUT, PITCH, VOICES, VOICE OPTS, GLIDE, SCALE, TUNING, MPE, MPE Y), `setBendLinked (bool)` (LINK on: BEND DOWN hidden, BEND UP reads BEND), `setMpeOn (bool)` (MPE off: MPE BEND and BEND TO X hidden), constant `kFirstTuningGroup` 5, static `blockName (b)`, `turnQ`. Constants `kBlocks` 7, `kHeaderH` 64, `kTopBlockH` 228, `kTopLeftW` 640, `kBottomLeftW` 780.
 
 ## Size
 `minSize()` 1280 x 628.
 
 ## Touch and knob behaviour
-The MPC host owns the knobs, fields, lists, toggles, meters, CLIP and both side selectors. Their C++ objects retain geometry, formatting and Q/state data outside the overlay children. The overlay draws the glide curve. Native panel callbacks select MAIN or TUNING; parameter callbacks use their original engine indices. A touch on a native aperture can select its four-knob Q group without editing the value.
+The MPC host owns the knobs, fields, lists, toggles, meters, CLIP and both side selectors. Their C++ objects retain geometry, formatting and Q/state data outside the overlay children. Native labels supply the page title and section names on both panels. The overlay draws the glide curve and hardware Q-Link group indicators. Native panel callbacks select MAIN or TUNING; parameter callbacks use their original engine indices. A touch on a native aperture can select its four-knob Q group without editing the value.
 
 Parent enabled/inactive state explicitly propagates to the adapters. Disabled MPE and linked BEND parameters leave their Q groups; their stored values remain intact.
 
@@ -42,7 +42,7 @@ if (c.kind == ChangeKind::Value && c.id == 700) volNorm = c.value;
 ```
 
 ## Used on
-`shell-mpc/overlay/master_ui.h` (`MasterUi`, `kElementPage` 9; `T::Knob, Number, Toggle, Stepper, List, Inert`). Pictures: `docs/screens/master.jpg`, `master-tuning.png`.
+`shell-mpc/overlay/master_ui.h` (`MasterUi`, `kElementPage` 9; `T::Knob, Number, Toggle, Stepper, List, Inert`). [Current Master hardware capture](../screens/master.jpg).
 
 ## Limits and pitfalls
 - The pad pressure layer (`padPressure`, `padAmount`), the output limiter (`outputLimiter`) and the quality switches (`noSmoothing`, `oversample4x`) are not Q members.
