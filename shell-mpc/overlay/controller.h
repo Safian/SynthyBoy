@@ -484,6 +484,8 @@ private:
             nativeTabSource_ = -1;
             nativeParameterModal_ = false;
             hideCurrentView();
+            if (killed_)
+                closeUiExcept (-1);   // release the full-screen marker before losing the slot needed to identify this page
             presenter_.hide();
             hideGpu (nowMs);
             current_ = shownView_ = -1;
@@ -979,10 +981,14 @@ private:
     {
         if (! d.readable || ! rotationUsable)
             return;
-        std::lock_guard<std::mutex> g (mu_);
         if (d.view >= 0 && isUiPage (d.view) && (d.slot == kSlotUnknown || d.slot == kSlotNone))
             return;
-        const int keep = d.view >= 0 && isUiPage (d.view) ? d.slot : -1;
+        closeUiExcept (d.view >= 0 && isUiPage (d.view) ? d.slot : -1);
+    }
+
+    void closeUiExcept (int keep)
+    {
+        std::lock_guard<std::mutex> g (mu_);
         for (int s = 0; s < mpckit::kMaxInstances; ++s)
             if (s != keep && ui_[s].closeAll())
             {

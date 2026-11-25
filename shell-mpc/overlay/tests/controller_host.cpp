@@ -89,6 +89,24 @@ static void testProductionTabDetectionTour()
         const std::string label = expected.name;
         check (plane.planeOn && controller.currentIndex() == tab && controller.activeSlot() == slot,
                "the production detector shows the right instance of " + label);
+        if (label == "mixer")
+        {
+            auto& inst = tab % 2 == 0 ? first : second;
+            check (inst.fullOpen, "the Mixer base has an open page stack");
+            dir.touch ("off");
+            for (int i = 0; i < 12; ++i) tick();   // the three-second disable used on the Key 61
+            check (! plane.planeOn && ! inst.fullOpen && controller.uiState (slot).isMain(),
+                   "disabling the Mixer releases the instance marker reported by the plugin");
+            frame.setViewInstanceRgb (tab, layout::kInstanceBlankRgb, true, 90);
+            dir.remove ("off");
+            for (int i = 0; i < 5; ++i) tick();
+            check (! plane.planeOn && controller.activeSlot() < 0, "a stale blank frame cannot select either instance after re-enable");
+            if (! inst.fullOpen)
+                frame.setViewInstance (tab, slot, true, 90);
+            tick();
+            check (plane.planeOn && controller.activeSlot() == slot && controller.currentIndex() == tab,
+                   "the reported marker restores the same Mixer without another tab press");
+        }
         if (label == "filter1" || label == "mod")
         {
             // RGB at the damaged left marker in the 5f006ab8 XL captures.
