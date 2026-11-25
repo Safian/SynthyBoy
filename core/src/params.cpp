@@ -107,11 +107,8 @@ const ParamInfo* findParamByKey (const char* key) noexcept
 {
     if (key == nullptr)
         return nullptr;
-    const auto* table = paramTable();
-    for (size_t i = 0; i < paramCount(); ++i)
-        if (std::strcmp (table[i].key, key) == 0)
-            return &table[i];
-    return nullptr;
+    const auto* match = findParam (hashKey (key));
+    return match != nullptr && std::strcmp (match->key, key) == 0 ? match : nullptr;
 }
 
 float toNormalised (const ParamInfo& info, float plain) noexcept

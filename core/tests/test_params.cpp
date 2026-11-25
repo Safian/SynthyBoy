@@ -128,6 +128,8 @@ TEST (table_sanity)
         CHECK (p.decimals <= 4);
     }
     CHECK (findParam (12345u) == nullptr);
+    static_assert (hashKey ("pTc1.on") == hashKey ("osc1.on"));
+    CHECK (findParamByKey ("pTc1.on") == nullptr);
     CHECK (findParamByKey ("nope") == nullptr);
     CHECK (findParamByKey (nullptr) == nullptr);
     CHECK_EQ (findParamIndex (0u), -1);

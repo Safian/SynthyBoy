@@ -51,3 +51,7 @@ With the same native skin, a two-second C4 and its release generated 207 unbound
 Raw process samples, package hashes, phase timestamps and notification logs are under the shared hardware evidence directory `.hw-local/mpc-perf/key61-voice-master-resources-20261125/`.
 
 On the installed fix, the repeated 40-tap run ended at its starting RSS (905,796 KiB) and anonymous PSS (761,980 KiB), with 53 host threads and 72 descriptors at every sample. The helper retained one thread and 7,488 KiB anonymous PSS. The host main thread accumulated 37.77 CPU seconds during 47.57 seconds of switching. The samples identify the busiest thread but do not distinguish its host layout, painting or data-loading costs.
+
+## Parameter key lookup (Mac arm64, 2026-11-25)
+
+Against baseline `c06ac6f3`, an optimized C++17 microbenchmark searched all 2,637 keys 32 times per sample, checking pointer identity. Two alternating baseline/changed pairs with four samples each took 183–240 ms per baseline sample and 1.9–6.1 ms using the existing ID index with a final string comparison. This measures key lookup alone. The parameter suite verifies every table entry and rejects an unknown key with the same hash as a real key.
