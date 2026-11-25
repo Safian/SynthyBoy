@@ -131,7 +131,7 @@
     "button.slot.height": 56,
     "radio.group.width": 240,
     "radio.preview.width": 256,
-    "selector.dropdown": {"inset": 3, "text_inset": 2, "chevron_lane": 28, "chevron_width": 12, "chevron_height": 7.2, "chevron_stroke": 2.2, "font": 25},
+    "selector.dropdown": {"inset": 3, "text_inset": 2, "chevron_lane": 28, "chevron_width": 12, "chevron_height": 7.2, "chevron_stroke": 2.2, "font": 26},
     "selector.dropdown.preview_font": 17,
     "selector.route.width": 150,
     "selector.instance.width": 200,
