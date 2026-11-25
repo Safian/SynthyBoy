@@ -36,8 +36,16 @@ class Bank
 public:
     using Link = NativeCellBank<kFields>::Snapshot;
 
+    void suspend() noexcept
+    {
+        suspended_.store (true, std::memory_order_release);
+        setPopup (kNoPopup);
+    }
+
     void publish (const State& state) noexcept
     {
+        if (suspended_.load (std::memory_order_relaxed))
+            links_.renewInputRevisions();
         if (state.source == 0)
             setPopup (kNoPopup);
         if (! state_.sameBinding (state))
@@ -47,6 +55,7 @@ public:
         preset_.store (state.preset, std::memory_order_release);
         selection_.store (state.selection, std::memory_order_release);
         view_.store (state.source | (state.layout << 3) | (state.powered ? 1 << 6 : 0), std::memory_order_release);
+        suspended_.store (false, std::memory_order_release);
     }
 
     int view() const noexcept { return view_.load (std::memory_order_acquire); }
@@ -95,6 +104,8 @@ public:
             || selection_.load (std::memory_order_acquire) != selection)
             return;
         const auto link = links_.at (field);
+        if (suspended_.load (std::memory_order_acquire))
+            return;
         const auto popup = popupField_.load (std::memory_order_acquire);
         if ((popup != kNoPopup && popup != field) || (usesPopup (link.cell().kind)
             && (popup != field || popupLink_.load (std::memory_order_acquire) != link.link)))
@@ -104,6 +115,8 @@ public:
 
     bool take (const State& expected, int field, float& value) noexcept
     {
+        if (suspended_.load (std::memory_order_relaxed))
+            return false;
         const bool allowed = expected.sameBinding (state_) && (field == Power || expected.powered);
         const bool taken = links_.take (field, allowed ? expected.fields[field] : FxCell {}, value);
         if (taken && osc::settingsAction (expected.fields[field].kind))
@@ -115,6 +128,8 @@ public:
     template <class Value, class Report>
     void poll (float lastFrame, Value&& read, Report&& send)
     {
+        if (suspended_.load (std::memory_order_relaxed))
+            return;
         const int presentation = view();
         const int selected = source (presentation);
         const float frameValue = static_cast<float> (frame (presentation)) / kLastView;
@@ -137,6 +152,7 @@ public:
     }
 
 private:
+    std::atomic<bool> suspended_ { false };
     State state_;
     NativeCellBank<kFields> links_;
     std::atomic<int> view_ {}, popupField_ { kNoPopup };

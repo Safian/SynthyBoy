@@ -68,7 +68,7 @@ public:
         state_ = current (v, stack, env, lfo);
         env.compact().full.setHostPainted (state_.fields[n::EnvExpand].target >= 0);
         lfo.setCompactNativeParts (state_);
-        if (state_.context.view != n::Hidden || owner_ == &v)
+        if (v.nativePlayEnvLfoControls())
             v.setNativePlayEnvLfo (state_);
         owner_ = state_.context.view != n::Hidden ? &v : nullptr;
     }
@@ -82,7 +82,7 @@ public:
     void leave()
     {
         if (owner_ != nullptr)
-            owner_->setNativePlayEnvLfo ({});
+            owner_->suspendNativePlayEnvLfo();
         owner_ = nullptr;
         state_ = {};
     }

@@ -222,7 +222,9 @@ public:
         if (! effectiveNative)
             galleryOpen_ = false;
         refreshEditor (inst, sig);
-        inst.setUiFullOpen (true);
+        // The standalone native editor uses the regular instance marker. Only an
+        // embedded rack or a plugin-drawn page needs to mask the underlying tab.
+        inst.setUiFullOpen (rackOnly_ >= 0 || ! effectiveNative || listOpen_);
         if (rackOnly_ < 0 || nativePeek_)
         {
             if (syncNativeChain (inst)

@@ -744,6 +744,43 @@ void testVoiceValueReports()
            "leaving Voice sends no hidden values and sequence edits need no global metadata refresh");
 }
 
+void testPlayMetadataRefresh()
+{
+    Rig r;
+    nativeui::playoscui::State osc;
+    osc.source = 2;
+    osc.layout = nativeui::playoscui::AbcContent;
+    nativeui::playenvlfo::State lfo;
+    lfo.context.view = n::LfoHz;
+    lfo.context.lfo = 1;
+
+    const int before = displayRefreshes;
+    r.plugin.overlayView.setNativePlayOsc (osc, "Table A");
+    r.plugin.nativePlayEnvLfo.publish (lfo);
+    r.plugin.nativePlayOscPoll (&r.effect);
+    r.plugin.nativePlayEnvLfoPoll (&r.effect);
+    check (displayRefreshes == before, "Play publishes its controls before invalidating host metadata");
+    r.plugin.flushProxyNames (&r.effect, PluginInstance::steadyMs());
+    check (displayRefreshes == before + 1, "compact Play metadata changes share one refresh");
+
+    r.plugin.overlayView.suspendNativePlayOsc();
+    r.plugin.overlayView.suspendNativePlayEnvLfo();
+    check (r.plugin.nativePlayEnvLfo.layout() == n::LfoHz
+               && nativeui::playoscui::Bank::source (r.plugin.nativePlayOsc.view()) == osc.source,
+           "both compact panels retain their first-paint gates while the host opens another tab");
+    r.plugin.nativePlayOscPoll (&r.effect);
+    r.plugin.nativePlayEnvLfoPoll (&r.effect);
+    r.plugin.flushProxyNames (&r.effect, PluginInstance::steadyMs());
+    check (displayRefreshes == before + 1, "hiding the Play controls does not rebuild host menus");
+    r.plugin.overlayView.setNativePlayOsc (osc, "Table A");
+    r.plugin.nativePlayEnvLfo.publish (lfo);
+    r.plugin.nativePlayOscPoll (&r.effect);
+    r.plugin.nativePlayEnvLfoPoll (&r.effect);
+    r.plugin.flushProxyNames (&r.effect, PluginInstance::steadyMs());
+    check (displayRefreshes == before + 1, "returning to the same Play selection needs no metadata refresh");
+
+}
+
 void testMixerPeekDisplayRefresh()
 {
     Rig r;
@@ -1071,6 +1108,7 @@ void testFxCardSwitch()
     write (target ("chorus.on"), 1.0f);
     tick();
     tick();
+    check (! r.plugin.uiFullOpen.load(), "the native FX root keeps the instance marker visible for a direct return to Play");
     const auto chunk = r.save();
     for (int slot : {1, 0})
     {
@@ -2362,6 +2400,7 @@ int main (int argc, char** argv)
     testExpandedOscVst();
     testMixerPeekVst();
     testVoiceValueReports();
+    testPlayMetadataRefresh();
     testMixerPeekDisplayRefresh();
     testMixerTabsAndRouteClosureVisuals();
     testEnvTargetCount();

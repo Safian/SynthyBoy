@@ -15,6 +15,7 @@
 #include "../native_fx_cells.h"
 #include "../native_fx_header.h"
 #include "../native_fx_chain.h"
+#include "../native_play_env_lfo.h"
 #include "../spectrum.h"
 #include "../ui/clip_hold.h"
 #include "synthyboy/content_state.h"
@@ -32,7 +33,6 @@
 
 namespace synthyboy { namespace own { struct ContentSet; } }
 namespace synthyboy_mpc::nativeui::lfodetail { struct State; }
-namespace synthyboy_mpc::nativeui::playenvlfo { struct State; }
 namespace synthyboy_mpc::nativeui::oscdetail { struct State; }
 namespace synthyboy_mpc::nativeui::targets { struct State; }
 namespace synthyboy_mpc::nativeui::expandedplay { struct State; }
@@ -112,6 +112,7 @@ public:
     virtual uint64_t nativePlayEnvLfoRevision() const noexcept { return 0; }
     virtual void setNativePlayEnvLfoPopup (int /*field*/) noexcept {}
     virtual void setNativePlayEnvLfo (const nativeui::playenvlfo::State&) noexcept {}
+    virtual void suspendNativePlayEnvLfo() noexcept { setNativePlayEnvLfo ({}); }
     virtual bool takeNativePlayEnvLfo (const nativeui::playenvlfo::State&, int /*field*/, float& /*value*/) noexcept { return false; }
     virtual void setNativeFxCells (int /*layout*/, const nativeui::FxCell* /*cells*/) noexcept {}
     virtual bool takeNativeFxCell (int /*slot*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
@@ -175,6 +176,7 @@ public:
     virtual bool nativePlayOscControls() const noexcept { return false; }
     virtual uint64_t playOscSelectionRevision() const noexcept { return 0; }
     virtual void setNativePlayOsc (const nativeui::playoscui::State&, const char* /*sourceName*/) noexcept {}
+    virtual void suspendNativePlayOsc() noexcept { setNativePlayOsc ({}, ""); }
     virtual bool takeNativePlayOsc (const nativeui::playoscui::State&, int /*field*/, float& /*value*/) noexcept { return false; }
     virtual void setNativePlayOscPopup (int /*field*/) noexcept {}
     /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */

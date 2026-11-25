@@ -539,6 +539,7 @@ struct PluginInstance
         uint64_t nativePlayEnvLfoRevision() const noexcept override { return inst.playEnvLfoRevision.load (std::memory_order_acquire); }
         void setNativePlayEnvLfoPopup (int field) noexcept override { inst.nativePlayEnvLfo.setPopup (field); }
         void setNativePlayEnvLfo (const nativeui::playenvlfo::State& state) noexcept override { inst.nativePlayEnvLfo.publish (state); }
+        void suspendNativePlayEnvLfo() noexcept override { inst.nativePlayEnvLfo.suspend(); }
         bool takeNativePlayEnvLfo (const nativeui::playenvlfo::State& state, int field, float& value) noexcept override
         {
             return inst.nativePlayEnvLfo.take (state, field, value);
@@ -810,6 +811,8 @@ struct PluginInstance
         void setNativePlayOsc (const nativeui::playoscui::State& state, const char* sourceName) noexcept override
         {
             inst.nativePlayOsc.publish (state);
+            if (state.source == 0)
+                return;   // Hidden controls have no new caption to publish.
             const auto old = std::atomic_load (&inst.nativePlayOscSourceName);
             if ((old == nullptr || *old != sourceName) && (old != nullptr || sourceName[0] != '\0'))
             {
@@ -818,6 +821,7 @@ struct PluginInstance
                 inst.nativePlayOscLabelChanged = true;
             }
         }
+        void suspendNativePlayOsc() noexcept override { inst.nativePlayOsc.suspend(); }
         bool takeNativePlayOsc (const nativeui::playoscui::State& state, int field, float& value) noexcept override
         {
             return inst.nativePlayOsc.take (state, field, value);
@@ -2262,7 +2266,7 @@ struct PluginInstance
         if (nativePlayOscLabelChanged)
         {
             nativePlayOscLabelChanged = false;
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestProxyNames();
         }
     }
 
@@ -2271,7 +2275,7 @@ struct PluginInstance
         namespace n = nativeui::playenvlfo;
         constexpr int base = nativeui::kPlayEnvLfo;
         const float view = nativeUiValue (base);
-        if (view == 0.0f && nativeUiReported[base] == 0.0f)
+        if (nativePlayEnvLfo.suspended() || (view == 0.0f && nativeUiReported[base] == 0.0f))
             return;
         bool rebind = false;
         for (int field = 0; field < n::Count; ++field)
@@ -2283,8 +2287,8 @@ struct PluginInstance
             rebind |= moved;
         }
         reportNativeValue (e, base, view);
-        if (rebind)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+        if (rebind && view != 0.0f)
+            requestProxyNames();
     }
 
     void nativeLfoPoll (AEffect* e)
@@ -2594,12 +2598,14 @@ struct PluginInstance
         }
         nativeVoicePoll (e);
         nativeEnvPoll (e);
+        const bool refreshFxLabels = ! fxCardChangedThisPoll
+            && (currentFxSource > 0.0f || nativeFxChain.value (nativeui::fxchain::View) > 0.0f);
         const float layout = nativeUiValue (nativeui::kFxLayout);
         if (layout == 0.0f && nativeUiReported[nativeui::kFxLayout] == 0.0f)
         {
             reportNativeValue (e, nativeui::kMixerPeekView, peek);
-            if (fxLabelsChanged && ! fxCardChangedThisPoll)
-                audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            if (fxLabelsChanged && refreshFxLabels)
+                requestProxyNames();
             return;
         }
         for (int slot = 0; slot < nativeui::kFxCells; ++slot)
@@ -2617,13 +2623,13 @@ struct PluginInstance
             if (moved)
             {
                 nativeFxCells.report (snapshot);
-                fxLabelsChanged = true;
+                fxLabelsChanged |= cell.target >= 0;
             }
         }
         reportNativeValue (e, nativeui::kFxLayout, layout);
         reportNativeValue (e, nativeui::kMixerPeekView, peek);
-        if (fxLabelsChanged && ! fxCardChangedThisPoll)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+        if (fxLabelsChanged && refreshFxLabels)
+            requestProxyNames();
     }
 
     void nativeEnvPoll (AEffect* e)
@@ -3036,7 +3042,7 @@ struct PluginInstance
             }
         }
         if (targetChanged)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestProxyNames();
 
         reportNativeValue (e, nativeui::kPlayLfoStandard, nativeUiValue (nativeui::kPlayLfoStandard));
 

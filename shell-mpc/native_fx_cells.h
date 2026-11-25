@@ -133,6 +133,19 @@ public:
         }
     }
 
+    // A returning tab can reuse its display bindings while invalidating gestures from
+    // the previous visit. An unreported binding still needs its normal first report.
+    void renewInputRevisions() noexcept
+    {
+        for (int i = 0; i < CellCount; ++i)
+        {
+            auto old = links_[i].load (std::memory_order_relaxed);
+            const auto renewed = next (old, static_cast<uint32_t> (old));
+            links_[i].store (renewed, std::memory_order_release);
+            reported_[i].compare_exchange_strong (old, renewed, std::memory_order_acq_rel);
+        }
+    }
+
     int layout() const noexcept { return layout_.load (std::memory_order_relaxed); }
     Snapshot at (int slot) const noexcept
     {

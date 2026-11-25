@@ -541,7 +541,7 @@ public:
         return state;
     }
 
-    void publishCompactNative (IInstanceView& inst, bool shown)
+    void publishCompactNative (IInstanceView& inst, bool shown, bool leavingTab = false)
     {
         namespace n = nativeui::playoscui;
         const auto state = shown ? compactNativeState (inst) : n::State {};
@@ -564,7 +564,10 @@ public:
         }
         compact_.setNativeHeader ({ compactNativeCells_[n::Power], compactNativeCells_[n::Expand], compactNativeCells_[n::Route] });
         const bool abc = state.layout == n::AbcWave || state.layout == n::AbcContent;
-        inst.setNativePlayOsc (state, abc && state.powered ? compact_.basic.source.stepper.state.text : "");
+        if (leavingTab)
+            inst.suspendNativePlayOsc();
+        else
+            inst.setNativePlayOsc (state, abc && state.powered ? compact_.basic.source.stepper.state.text : "");
     }
 
     bool syncCompactNative (IInstanceView& inst, UiStack& stack)

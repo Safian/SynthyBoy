@@ -436,7 +436,7 @@ public:
     {
         if (nativeOscIo_ != nullptr)
         {
-            osc_->publishCompactNative (*nativeOscIo_, false);
+            osc_->publishCompactNative (*nativeOscIo_, false, true);
             nativeOscIo_ = nullptr;
         }
         if (nativeExpandedIo_ != nullptr)

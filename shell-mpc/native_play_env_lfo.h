@@ -48,8 +48,16 @@ struct State
 class Bank : public NativeCellBank<Count>
 {
 public:
+    void suspend() noexcept
+    {
+        suspended_.store (true, std::memory_order_release);
+        setPopup (-1);
+    }
+
     void publish (const State& state) noexcept
     {
+        if (suspended_.load (std::memory_order_relaxed))
+            renewInputRevisions();
         if (state.context.view == Hidden)
             setPopup (-1);
         if (! (state.context == context_))
@@ -59,6 +67,7 @@ public:
         NativeCellBank<Count>::publish (context_.view, state.fields.data());
         publishedPreset_.store (context_.preset, std::memory_order_release);
         publishedSelection_.store (context_.selection, std::memory_order_release);
+        suspended_.store (false, std::memory_order_release);
     }
 
     void setPopup (int field) noexcept
@@ -77,21 +86,27 @@ public:
             || publishedSelection_.load (std::memory_order_acquire) != selection)
             return;
         const auto link = at (field);
+        if (suspended_.load (std::memory_order_acquire))
+            return;
         if (usesPopup (field) && (popupField_.load (std::memory_order_acquire) != field
             || popupLink_.load (std::memory_order_acquire) != link.link))
             return;
         NativeCellBank<Count>::post (link, value);
     }
 
+    bool suspended() const noexcept { return suspended_.load (std::memory_order_relaxed); }
     int source() const noexcept { return source_.load (std::memory_order_relaxed); }
     float selection() const noexcept { return choiceValue (source()); }
 
     bool take (const State& expected, int field, float& value) noexcept
     {
+        if (suspended_.load (std::memory_order_relaxed))
+            return false;
         return NativeCellBank<Count>::take (field, expected.context == context_ ? expected.fields[field] : FxCell {}, value);
     }
 
 private:
+    std::atomic<bool> suspended_ { false };
     Context context_;   // overlay thread
     int popup_ = -1;
     std::atomic<int> source_ { 0 }, popupField_ { -1 };
