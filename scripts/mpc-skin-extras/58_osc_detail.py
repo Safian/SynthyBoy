@@ -17,7 +17,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components import style
-from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
+from components.native.selector.selector import OSC_TAB_NAMES, passive_layer, write_source_navigation_assets
 from native_warp_picker import CONTROL as WARP_CONTROL
 from native_ui_params import (OSC_ABC_SETTINGS, OSC_DETAIL, OSC_DETAIL_CELLS, OSC_ROOT_LOAD,
                               OSC_ROOT_LOAD_VIEW, OSC_SETTINGS_VIEW, OSC_SETTINGS_LAYOUTS, mixer_peek_index)
@@ -40,10 +40,10 @@ def custom(name, kind, rect, bindings=(), gate=None, focus="Children", proportio
     return entry(name, kind, rect, {"version": 1, "handleName": "Data"}, bindings, gate, focus, proportional)
 
 
-def stepper():
+def stepper(artwork):
     kids = []
-    for i, (name, image, x) in enumerate((("Previous", "osc_native_table_prev.png", 0),
-                                          ("Next", "osc_native_table_next.png", 0.61))):
+    for i, (name, image, x) in enumerate((("Previous", artwork["left"], 0),
+                                          ("Next", artwork["right"], 0.61))):
         data = {"version": 2, "onImage": image, "offImage": image, "buttonId": 1 if i == 0 else 3,
                 "numButtonsInGroup": 4, "handleName": "Step", "gestureBehaviour": "Instant"}
         kids.append(entry(name, "Button", (x, 0.39, 0.39, 0.61), data, proportional=True))
@@ -67,7 +67,7 @@ def apply(tui, qlinks, ctx):
     count = OSC_DETAIL_CELLS
     view = f"Parameter {base}"
     visual_steps = 7 + len(contract["menus"])
-    ctx.add_component_definition("oscDetailStepper", stepper())
+    ctx.add_component_definition("oscDetailStepper", stepper(write_source_navigation_assets(ctx.skins_dir)))
     tile = []
     for i, definition in enumerate(("oscNativeSetting_dial_uni", "oscNativeSetting_dial_bi", "oscNativeSetting_toggle",
                                     "oscNativeSetting_dial_uni", "oscDetailStepper", "oscNativeSetting_action"), 1):
