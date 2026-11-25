@@ -8,6 +8,12 @@
       "images": [
         {
           "presentation": "sample",
+          "caption": "Filter · F1/F2",
+          "file": "catalog-filter-chain.png",
+          "alt": "F1 kiválasztva, F1 bekapcsolva, F2 kikapcsolva"
+        },
+        {
+          "presentation": "sample",
           "caption": "Filter · MODEL",
           "file": "catalog-selector-56-nameval.png",
           "alt": "Selector {size:height.high} px név + érték"

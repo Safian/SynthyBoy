@@ -1079,7 +1079,7 @@ public:
         std::array<Rect, nativeui::FilterPoint> out {};
         const auto controls = nativeControls();
         for (int slot = 0; slot < nativeui::FilterPoint; ++slot)
-            if (includePassive ? hasNativeGeometry (slot) : hasNativeControl (slot))
+            if (slot != nativeui::FilterRouting && (includePassive ? hasNativeGeometry (slot) : hasNativeControl (slot)))
                 out[slot] = controls[slot]->rect();
         return out;
     }
@@ -1163,9 +1163,6 @@ protected:
         for (int i = 0; i < kMaxGroups; ++i)
             if ((i != 3 || (isFormant_ && ! splitMode_)) && ! blocks[i].empty())
                 p.textLeft ({ blocks[i].x + kBlockPad + 4, blocks[i].y + 3, std::max (0, blocks[i].w - 2 * kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (activeGroup_ == i ? T.q : T.textDim, 255), T.fMin);
-        // the name of the LED list in the title strip of its block (the list has no title of its own: the three rows use the whole height); the read-only part says where it is edited
-        p.textLeft ({ routing.rect().x + (splitMode_ ? 2 : 28), splitMode_ ? trackBlock_.y + 3 : outBlock_.y + 3, std::max (0, routing.rect().w - 28), 16 }, "ROUTING", T.fLabel - 2.0f,
-                    p.c (anyOn_ ? (activeGroup_ == 2 ? T.q : T.textDim) : T.textFaint, 255), T.fMin);
         if (! splitMode_ && ! outReadout.rect().empty())
             p.textLeft ({ outReadout.rect().x + 4, outBlock_.y + 3, std::max (0, outReadout.rect().w - 4), 16 }, "SET ON MIXER", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
     }

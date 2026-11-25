@@ -1,6 +1,7 @@
 {
   "version": 1,
   "sizes": {
+    "filter.chain": {"width": 56, "height": 48, "lamp_y": 1, "lamp_height": 5, "lamp_gap": 4, "face_y": 9, "peek_offset": 108},
     "height.small": 32,
     "height.intermediate": 40,
     "height.medium": 48,

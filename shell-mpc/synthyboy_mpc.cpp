@@ -1871,6 +1871,8 @@ struct PluginInstance
 
     float nativeUiValue (int offset) const noexcept
     {
+        if (nativeui::isFilterChainMenu (offset))
+            return (nativeFilterIndicators[1].load (std::memory_order_relaxed) & 2) ? 1.0f / nativeui::kFilterChainLastChoice : 0.0f;
         if (nativeui::isMixerStereoOffset (offset))
             return nativeStereoMeters[offset - nativeui::kMixerStereoBase].load (std::memory_order_relaxed);
         if (nativeui::isModDetailControlOffset (offset))
@@ -2275,6 +2277,8 @@ struct PluginInstance
         const float view = nativeUiValue (nativeui::kFilterBase);
         if (view == 0.0f && nativeUiReported[nativeui::kFilterBase] == 0.0f)
             return;
+        for (int i = 0; i < nativeui::kFilterChainRoutes; ++i)
+            reportNativeValue (e, nativeui::kFilterChainMenu + i, nativeUiValue (nativeui::kFilterChainMenu + i));
         bool changed = false;
         for (int slot = 0; slot < nativeui::FilterSlots; ++slot)
         {
@@ -3959,6 +3963,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             // may supply an uninitialised buffer while enumerating a saved track.
             buf[0] = '\0';
             const int offset = index - PluginInstance::nativeUiBase();
+            if (nativeui::isFilterChainMenu (offset))
+            {
+                if (opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, "Filter chain");
+                else if (opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "F2" : "F1");
+                return 1;
+            }
             if (nativeui::isModDetailControlOffset (offset))
             {
                 const int field = offset - nativeui::kModDetailControl;
@@ -5345,6 +5357,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
 #if SYNTHYBOY_MPC_OVERLAY
         const int nativeOffset = index - PluginInstance::nativeUiBase();
+        if (nativeui::isFilterChainMenu (nativeOffset))
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = nativeui::kFilterChainLastChoice;
+            props->stepInteger = 1;
+            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+            return 1;
+        }
         if (nativeui::isMixerStereoOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
@@ -6266,6 +6287,24 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
+                if (nativeui::isFilterChainMenu (offset))
+                {
+                    if (! std::isfinite (parameter) || parameter < 0.0f || parameter > 1.0f || inst->nativeFilter.layout() == 0)
+                        return;
+                    const int choice = static_cast<int> (std::lround (parameter * nativeui::kFilterChainLastChoice));
+                    if (choice >= 2)
+                    {
+                        const auto* route = synthyboy::findParamByKey ("filter.routing");
+                        if (route != nullptr)
+                            inst->uiWrite (static_cast<int> (route - synthyboy::paramTable()), static_cast<float> (choice - 2) / 2.0f);
+                    }
+                    else if (inst->nativeMixerPeekView.load (std::memory_order_acquire) == nativeui::MixerPeekFilter)
+                        inst->mixerPeek.post (static_cast<float> (choice + 1) / nativeui::kMixerPeekTargets);
+                    else
+                        inst->nativeFilter.post (inst->nativeFilter.at (nativeui::FilterAction),
+                            static_cast<float> (nativeui::FilterF1 + choice) / nativeui::FilterLastAction);
+                    return;
+                }
                 if (nativeui::isMixerStereoOffset (offset)) return;
                 if (nativeui::isModDetailControlOffset (offset))
                 {

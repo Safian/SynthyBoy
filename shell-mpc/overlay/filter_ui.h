@@ -553,11 +553,9 @@ public:
         ui::Component* top = topComponent (x, y);
         if (! full_.power.state.on && filterShown() && pageTop_ == 0 && top == &full_)
         {
-            const bool allowRouting = full_.anyFilterOn() && full_.routing.rect().contains (x, y);
             if (! full_.power.rect().contains (x, y) && ! full_.view.rect().contains (x, y)
                 && ! full_.both.rect().contains (x, y) && ! full_.close.rect().contains (x, y)
-                && ! full_.expand.rect().contains (x, y) && ! full_.scalarView.rect().contains (x, y)
-                && ! allowRouting)
+                && ! full_.expand.rect().contains (x, y) && ! full_.scalarView.rect().contains (x, y))
                 return false;
         }
         if (gestureDown_ || ! top || ! covers (x, y))
@@ -705,6 +703,11 @@ private:
             int idx = 0;
             if (peekFilter_ < 0)
                 out[idx++] = full_.view.rect();
+            else if (nativePeek_)
+            {
+                const auto close = nativePeekCloseRect();
+                out[idx++] = { close.right() + 8, close.y, 56, close.h };
+            }
             if (isSplit())
             {
                 out[idx++] = full_.scalarView.rect();

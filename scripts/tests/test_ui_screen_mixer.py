@@ -53,7 +53,7 @@ class UiScreenMixerTests(unittest.TestCase):
         from PIL import Image
         from native_ui_params import MIXER_STEREO_BASE, NATIVE_PARAMS
         self.assertEqual(self.code, 0, self.err)
-        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 961))
+        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 964))
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
         entries = [e for e in tab["componentDefinition"]["componentsData"]
                    if e["componentData"]["type"] in ("mixerStripSourceFrame", "mixerStripBusFrame", "mixerStripMasterFrame")]

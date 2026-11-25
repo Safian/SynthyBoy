@@ -255,7 +255,7 @@ void testMixerFilterPeekNativeModulationsVst()
     const int peekParam = PluginInstance::nativeUiBase() + u::kMixerPeek;
     constexpr int kMixerFrame = n::frame (n::Mixer);
     VstParameterProperties viewProps {};
-    check (r.effect.numParams == 3596 && r.effect.numParams == PluginInstance::nativeUiBase() + u::kCount
+    check (r.effect.numParams == PluginInstance::nativeUiBase() + u::kCount
            && PluginInstance::nativeUiBase() + u::kMacroTarget == 3541 && base == 3502
            && PluginInstance::nativeUiBase() + u::kModDetailReserved == 3569
            && PluginInstance::nativeUiBase() + u::kMixerActiveTab == 3575

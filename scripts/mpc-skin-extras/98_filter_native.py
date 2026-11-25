@@ -22,7 +22,7 @@ from components.native.pan import pan as ui_pan
 from components.native.radio_button import radio_button as ui_radio
 from components.native.selector import selector as ui_selector
 from native_skin_font import semibold
-from native_ui_params import (FILTER_STATE_OFFSET, FX_DOMAIN_OFFSET, LEGACY_EXTRAS, MIXER_PEEK_VIEW,
+from native_ui_params import (FILTER_CHAIN_MENU, FILTER_STATE_OFFSET, FX_DOMAIN_OFFSET, LEGACY_EXTRAS, MIXER_PEEK_VIEW,
                               PZ_ACTIONS, PZ_AVAILABILITY, PZ_SOURCE)
 
 
@@ -37,7 +37,7 @@ FIELDS = (
 )
 SELECT = ("F1", "F2", "NOTE", "VELO")
 CURVE_ACTIONS = ("Init", "Undo", "Delete Point", "Targets")
-ROUTING = ("Parallel", "Series 1 to 2", "Series 2 to 1")
+CHAIN_CHOICES = ("F1", "F2", "Parallel", "F1 → F2", "F2 → F1")
 POWER = 0
 ROUTE = 10
 MODEL, STYLE = 17, 18
@@ -365,25 +365,25 @@ def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passi
             container.append(style.set_leaf_control_active(passive, ctx, active=False))
 
 
-def _emit_routing(ctx, container, name, rect, param, active_gates, passive_gates, skins_dir, *, active_alternatives=(), compact=False):
-    rows = ui_radio.create_segmented_radio_button_group(
-        NATIVE + name, rect, ("Parallel", "1 → 2", "2 → 1") if compact else ROUTING,
-        f"Parameter {param}", skins_dir, vertical=not compact, gates=active_gates)
-    for index, row in enumerate(rows):
-        row_name = f"{NATIVE}{name} {index}"
-        row["componentData"]["name"] = row_name
-        container.append(row)
-        for gates in active_alternatives:
-            alternative = copy.deepcopy(row)
-            alternative["componentData"]["name"] = row_name + " alternative"
-            alternative["bounds"]["additionalInvalidatingHandles"] = list(gates)
-            container.append(alternative)
-        if passive_gates:
-            passive = copy.deepcopy(row)
-            passive["componentData"]["name"] = row_name + " off"
-            passive["bounds"]["additionalInvalidatingHandles"] = list(passive_gates)
-            passive["handle remapping"]["map"][0]["value"] = f"Parameter {ctx.param_index('filter.routing')}"
-            container.append(style.set_leaf_control_active(passive, ctx, active=False))
+def _register_filter_chain(ctx, tui, f2_state):
+    kind = "filterNativeChain"
+    ctx.add_component_definition(kind, ui_selector.filter_chain_definition(ctx.skins_dir, "fx editor choice menu"))
+    route = ctx.param_index("filter.routing")
+    shared = [("Edited", f"Parameter {f2_state}")]
+    shared.extend((f"Power{f}", f"Parameter {ctx.param_index(f'filter{f}.on')}") for f in (1, 2))
+    first = ctx.param_count + LEGACY_EXTRAS + FILTER_CHAIN_MENU
+    for index in range(3):
+        labels = [label + (" ✓" if row == index + 2 else "") for row, label in enumerate(CHAIN_CHOICES)]
+        ui_selector.ensure_routing_replacement_strings(tui, [first + index], labels)
+
+    def instances(name, x, y, height, gates=()):
+        geometry = style.size("filter.chain")
+        rect = (x, y + (height - geometry["height"]) // 2, geometry["width"], geometry["height"])
+        for index in range(3):
+            gate = f"IndexedEnabling/{index}/3/Parameter {route}"
+            yield ui_button.entry(NATIVE + name + (f" {index}" if index else ""), kind, {"version": 1, "handleName": "Data"},
+                                  rect, [("Data", f"Parameter {first + index}"), *shared], (*gates, gate), focus="Yes")
+    return instances
 
 
 def _ensure_nv_definition(ctx, w, h):
@@ -458,6 +458,7 @@ def apply(tui, qlinks, ctx):
     base = state + 1
     action = base + ACTION
     displays = action + 1
+    chain = _register_filter_chain(ctx, tui, displays + 1)
     note_ind = displays + 2
     velo_ind = displays + 3
     power_frame = displays + 4
@@ -523,7 +524,7 @@ def apply(tui, qlinks, ctx):
                                    (style_x, style_y, style_w, style_h), model, gates))
 
     for slot in range(1, POINT):
-        if slot in (MODEL, STYLE):
+        if slot in (ROUTE, MODEL, STYLE):
             continue
         groups = {}
         for model_id in range(27):
@@ -543,15 +544,6 @@ def apply(tui, qlinks, ctx):
                                  active_gates, passive_gates, ctx.skins_dir, model_proxy=model,
                                  passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
                                                   ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
-                elif slot == ROUTE:
-                    # ROUTING belongs to both filters, including in the full view.
-                    # The dual-view indicator is not an "other filter on" bit.
-                    f1, f2 = ctx.param_index("filter1.on"), ctx.param_index("filter2.on")
-                    _emit_routing(ctx, filter_items, name, rect, host_value,
-                                  [f"IndexedEnabling/1/2/Parameter {f1}"],
-                                  [f"IndexedEnabling/0/2/Parameter {f1}", f"IndexedEnabling/0/2/Parameter {f2}"],
-                                  ctx.skins_dir, active_alternatives=[
-                                      [f"IndexedEnabling/0/2/Parameter {f1}", f"IndexedEnabling/1/2/Parameter {f2}"]])
                 else:
                     _emit_dial(ctx, filter_items, name, rect, host_value, FIELDS[slot].upper(),
                                slot in BIPOLAR, active_gates, passive_gates, dial_assets, side_layout=False,
@@ -595,6 +587,8 @@ def apply(tui, qlinks, ctx):
                 ch = min(ch, cell_h)
             c["bounds"]["bounds"] = f"{cx} {cy} {cw} {ch}"
             docked_items.append(c)
+        vx, vy, _, vh = manifest["view"]
+        docked_items.extend(chain("Peek Chain", vx + style.size("filter.chain")["peek_offset"], vy, vh))
         dock_kind = "mixerPeekFilterEditorSurface"
         ctx.add_component_definition(dock_kind, {
             "version": 2, "actions": [], "ignoreMousePresses": True, "disableCoarseDataWheel": True,
@@ -611,9 +605,11 @@ def apply(tui, qlinks, ctx):
                             if item["componentData"]["name"].startswith("Overlay ")), len(mix_items))
         mix_items.insert(first_marker, peek)
 
-    # Expanded Filter top bar (F1 | F2 | NOTE | VELO, dual) + Graph corner Expand & PZ Edit
+    # Expanded top bar, graph corner Expand and PZ Edit
     vx, vy, vw, vh = manifest["view"]
-    for i, label in enumerate(SELECT):
+    items.extend(chain("Chain", vx, vy, vh, expanded_filter_gates))
+    items.extend(chain("Curve Chain", vx, vy, vh, expanded_curve_gates))
+    for i, label in enumerate(SELECT[2:], 2):
         rect = (vx + i * vw // style.size("filter.apply.rect.4"), vy, vw // style.size("filter.apply.rect.4"), vh)
         file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_{label.lower()}.png", rect[2:],
                                              [(label + (" ·" if i >= 2 and k & 1 else ""), bool(k & 2)) for k in range(4)])
@@ -672,24 +668,15 @@ def apply(tui, qlinks, ctx):
 
     # =========================================================================
     # 3. 60/40 Split Left Filter surface (filterNativeSplitLeftSurface)
-    #    - 2883 == 0: Both OFF (Filter OFF + ROUTING passive)
-    #    - 2883 == 1: Selected Filter OFF, Other Filter ON (Filter OFF + ROUTING ACTIVE)
-    #    - 2883 == 2: Selected Filter ON (Filter ON + ROUTING ACTIVE)
+    #    Power frame 0: both off, 1: other filter on, 2: selected filter on.
     # =========================================================================
     split = manifest["split"]
     split_sel_on = f"IndexedEnabling/2/4/Parameter {power_frame}"
     split_sel_off = f"RangedEnabling/0/1/4/Parameter {power_frame}"
-    split_routing_on = f"RangedEnabling/1/2/4/Parameter {power_frame}"
-    split_routing_passive = f"IndexedEnabling/0/4/Parameter {power_frame}"
 
     split_left = []
-    svx, svy, svw, svh = split["view"]
-    for i, label in enumerate(("F1", "F2")):
-        rect = (svx + i * svw // 2, svy, svw // 2, svh)
-        file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_split_{label.lower()}.png", rect[2:],
-                                             [(label, bool(k & 2)) for k in range(4)])
-        split_left.extend((_film(f"Split {label} art", file, rect, displays + i, (), 4),
-                           _hidden_hit(f"Split {label}", rect, action, i + 1, ())))
+    svx, svy, _, svh = split["view"]
+    split_left.extend(chain("Split Chain", svx, svy, svh))
 
     split_pwr_rect = split["filter"][0][POWER]
     split_left.append(_button("Split Power", split_pwr_rect, base + POWER, (), art=power_art))
@@ -731,7 +718,7 @@ def apply(tui, qlinks, ctx):
                                  (ssx, ssy, ssw, ssh), model, gates))
 
     for slot in range(1, POINT):
-        if slot in (MODEL, STYLE):
+        if slot in (ROUTE, MODEL, STYLE):
             continue
         groups = {}
         for model_id in range(27):
@@ -751,8 +738,6 @@ def apply(tui, qlinks, ctx):
                                  active_gates, passive_gates, ctx.skins_dir, model_proxy=model,
                                  passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
                                                   ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
-                elif slot == ROUTE:
-                    _emit_routing(ctx, split_left, name, rect, host_value, [split_routing_on], [split_routing_passive], ctx.skins_dir, compact=True)
                 else:
                     _emit_dial(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
                                slot in BIPOLAR, active_gates, passive_gates, split_dial_assets, side_layout=True,
@@ -797,5 +782,4 @@ def apply(tui, qlinks, ctx):
         entry["bounds"]["acceptsHWFocus"] = "Children"
         items.append(entry)
 
-    tui["pageData"].setdefault("replacementStrings", []).append({"key": f"Parameter {base + ROUTE}", "value": list(ROUTING)})
     items.sort(key=lambda item: item["componentData"]["name"].startswith(("Overlay Marker ", "Overlay Instance ")))

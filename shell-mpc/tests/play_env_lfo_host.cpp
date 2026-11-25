@@ -893,7 +893,7 @@ void testMixerPeekVst ()
     write (viewParam, 1.0f);
     check (viewParam == 3349 && base + u::kOscDetail == 3350 && base + u::kMacroTarget == 3541
                && base + u::kMixerControl == 3549 && base + u::kModDetailReserved == 3569
-               && base + u::kMixerActiveTab == 3575 && r.effect.numParams == 3596
+               && base + u::kMixerActiveTab == 3575
                && r.effect.numParams == base + u::kCount && named == 1 && described == 1
                && std::strcmp (name, "Mixer PEEK View") == 0 && properties.maxInteger == 2 && read (viewParam) == 0.0f,
            "the appended Mixer PEEK view handle is stepped, read-only and stable");

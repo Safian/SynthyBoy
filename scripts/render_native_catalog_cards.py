@@ -30,7 +30,7 @@ from PIL import Image, ImageDraw
 # Component-specific native imports
 from components.style import color as _style_color, rgba as _style_rgba, opacity as _style_opacity, size as _style_size
 from components.native.button.button import action_art
-from components.native.selector.selector import selector_definition, semibold as selector_font
+from components.native.selector.selector import filter_chain_definition, selector_definition, semibold as selector_font
 from native_name_value import render_name_value_preview
 from components.native.selector.selector import render_compact_route_face
 from components.native.macro_card.macro_card import render_macro_card, macro_level_definition, CARD_WIDTH, CARD_HEIGHT
@@ -174,6 +174,18 @@ def render_selector_cards():
     out_dir = REPO_ROOT / "components/native/selector/img"
     out_dir.mkdir(parents=True, exist_ok=True)
     
+    # F1 selected, F1 powered, F2 bypassed. Compose the live control's image entries.
+    definition = filter_chain_definition(out_dir, "fx editor choice menu")
+    geom = _style_size("filter.chain")
+    sample = Image.new("RGBA", (geom["width"], geom["height"]))
+    for child in definition["componentsData"]:
+        item = child["componentData"]
+        x, y, w, h = map(int, child["bounds"]["bounds"].split())
+        with Image.open(out_dir / item["data"]["image"]) as image:
+            first_y = h if item["name"] == "F1 power" else 0
+            sample.alpha_composite(image.crop((0, first_y, w, first_y + h)), (x, y))
+    sample.save(out_dir / "catalog-filter-chain.png")
+
     # Filter MODEL uses a named selector in the canonical runtime geometry.
     contract = json.loads((REPO_ROOT / "scripts/mpc-skin-extras/filter-native-contract.json").read_text())
     width, height = contract["filter"][0][17][2:]

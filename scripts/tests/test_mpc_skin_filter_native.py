@@ -90,7 +90,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         action = state + 28
         by_name = {c["componentData"]["name"]: c for c in self.native}
         self.assertEqual(len(by_name), len(self.native))
-        for index, label in enumerate(("F1", "F2", "NOTE", "VELO"), 1):
+        for index, label in enumerate(("NOTE", "VELO"), 3):
             c = by_name[f"Filter Native {label}"]
             self.assertEqual(handle(c), action)
             self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], [f"RangedEnabling/3/4/5/Parameter {state}"])
@@ -120,6 +120,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             args = {state: view, state + 18: model, state + 31: 2 if (split and scalar == 0) else 0,
                     state + 32: 2 if (split and scalar == 1) else 0, state + 33: power_frame}
             args.update((i, 0) for i, p in enumerate(self.params) if p["key"] in ("curve.note.legato", "curve.velocity.legato"))
+            args.update((i, 0) for i, p in enumerate(self.params) if p["key"] == "filter.routing")
             args.update((i, model) for i, p in enumerate(self.params) if p["key"] in ("filter1.model", "filter2.model"))
             for i, p in enumerate(self.params):
                 if p["key"] in ("filter1.on", "filter2.on"):
@@ -157,7 +158,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             off = current_names(view, 5, 0)
             self.assertIn("Power", off)
             self.assertFalse(any(n.startswith("Cutoff ") and not n.endswith(" off") for n in off))
-            self.assertTrue({"Exp F1", "Exp F2", "Exp NOTE", "Exp VELO", "dual"} <= off)
+            self.assertTrue({"Chain", "Exp NOTE", "Exp VELO", "dual"} <= off)
             for model in range(27):
                 names = current_names(view, model, 2)
                 self.assertEqual(sum(n.startswith("Cutoff ") and not n.endswith(" off") for n in names), 1)
@@ -170,21 +171,10 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(any(n.startswith("Split Var ") for n in passive), model != 5)
                 self.assertEqual(any(n.startswith("Split Comb ") for n in passive), model == 6)
                 self.assertEqual(any(n.startswith("Split Clean ") for n in passive), model not in (5, 6))
-            # Expanded shared ROUTING uses raw F1/F2 power, not the dual-view bit.
-            expanded_both_off = current_names(view, 3, 0)
-            self.assertFalse(any(n.startswith("Routing ") and not n.endswith(" off") for n in expanded_both_off))
-            expanded_other_on = current_names(view, 3, 1)
-            self.assertEqual(sum(n.startswith("Routing ") and not n.endswith(" off") for n in expanded_other_on), 3)
-            self.assertFalse(any(n.startswith("Routing ") and n.endswith(" off") for n in expanded_other_on))
-            # Split mode: independent F1/F2 + NOTE/VELO + shared ROUTING active when only one filter is OFF (power_frame=1)
-            split_both_off = current_names(view, 3, 0, split=True, scalar=0)
-            self.assertIn("Split Power", split_both_off)
-            self.assertIn("Split Routing 0 0 off", split_both_off)
-            self.assertNotIn("Split Routing 0 0", split_both_off)
-            self.assertIn("Split Curve Point", split_both_off)
+            for power in (0, 1, 2):
+                self.assertIn("Chain", current_names(view, 3, power))
+                self.assertIn("Split Chain", current_names(view, 3, power, split=True))
             split_one_off = current_names(view, 3, 1, split=True, scalar=1)
-            self.assertIn("Split Routing 0 0", split_one_off)
-            self.assertNotIn("Split Routing 0 0 off", split_one_off)
             self.assertIn(f"Split Cutoff 0 F{view} off", split_one_off)
             self.assertIn("Split Curve Point", split_one_off)
             split_on = current_names(view, 5, 2, split=True, scalar=0)
@@ -373,33 +363,33 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         check_children(self.controls + self.curve_controls, 56)
         check_children(self.split_left_controls + self.split_right_controls, 48)
 
-    def test_each_routing_caption_is_in_its_exact_single_button_hitbox(self):
-        manifest = json.loads((base.REAL_EXTRAS / "filter-native-contract.json").read_text())
-        for prefix, source in (("Filter Native Routing ", manifest["filter"][0][10]),
-                               ("Filter Native Split Routing ", manifest["split"]["filter"][0][10])):
-            pool = self.controls if prefix == "Filter Native Routing " else self.split_left_controls
-            routes = [c for c in pool if c["componentData"]["name"].startswith(prefix)
-                      and not c["componentData"]["name"].endswith(" off")]
-            branches = [[c for c in routes if " alternative" not in c["componentData"]["name"]]]
-            if prefix == "Filter Native Routing ":
-                branches.append([c for c in routes if " alternative" in c["componentData"]["name"]])
-            self.assertEqual(len(routes), 3 * len(branches), prefix)
-            x, y, w, h = source
-            for branch in branches:
-                self.assertEqual(len(branch), 3)
-                for index, route in enumerate(branch):
-                    data = route["componentData"]["data"]
-                    self.assertTrue(data["onImage"].startswith("choice_segmented_"))
-                    horizontal = prefix == "Filter Native Split Routing "
-                    extent = w if horizontal else h
-                    start, end = extent * index // 3, extent * (index + 1) // 3
-                    expected = (x + start, y, end - start, h) if horizontal else (x, y + start, w, end - start)
-                    self.assertEqual(rect(route), expected)
-                    self.assertEqual((data["buttonId"], data["numButtonsInGroup"], handle(route)), (index, 3, 2861))
-                    px, py, pw, ph = expected
-                    point = (px + pw // 2, py + ph // 2, 1, 1)
-                    self.assertEqual([c for c in branch if overlaps(point, rect(c))], [route])
-
+    def test_compact_filter_chain_shares_native_menu_and_actual_power(self):
+        defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        instances = [item for item in (*self.top_native, *self.split_left_controls, *defs["mixerPeekFilterEditorSurface"]["componentsData"])
+                     if item["componentData"]["type"] == "filterNativeChain"]
+        self.assertEqual(len(instances), 12)
+        params = {p["key"]: i for i, p in enumerate(self.params)}
+        replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
+        for instance in instances:
+            bindings = {r["key"]: r["value"] for r in instance["handle remapping"]["map"]}
+            for f in (1, 2):
+                self.assertEqual(bindings[f"Power{f}"], "Parameter " + str(params[f"filter{f}.on"]))
+            labels = replacements[bindings["Data"]]
+            self.assertEqual(labels[:2], ["F1", "F2"])
+            route, = [i - 2 for i, text in enumerate(labels) if text.endswith(" ✓")]
+            self.assertIn(f"IndexedEnabling/{route}/3/Parameter {params['filter.routing']}",
+                          instance["bounds"]["additionalInvalidatingHandles"])
+            self.assertEqual(bindings["Edited"], "Parameter 2880")
+        definition = defs["filterNativeChain"]
+        face = definition["componentsData"][0]["componentData"]["data"]
+        self.assertEqual((face["imageType"], face["numFrames"], face["handleName"]), ("FilmStrip", 4, "Edited"))
+        actions = definition["actions"]
+        self.assertEqual([a["additionalData"] for a in actions], ["fx editor choice menu"] * 2)
+        self.assertEqual([a["onAction"] for a in actions], ["Mouse Down", "Enter Pressed"])
+        self.assertEqual(sum(c["componentData"]["type"] == "MenuOverlay"
+                             for c in defs["fx editor choice menu"]["componentsData"]), 1)
+        for pool in (self.controls, self.split_left_controls):
+            self.assertFalse(any("Routing " in c["componentData"]["name"] for c in pool))
 
 
 if __name__ == "__main__":

@@ -708,6 +708,45 @@ def build_native_list_overlay(name):
     return overlay
 
 
+def filter_chain_definition(skins_dir, popup):
+    """One native tap target with an edited-filter strip and two independent power lamps."""
+    geometry = _style_size("filter.chain")
+    w, h = geometry["width"], geometry["height"]
+    face_y, gap = geometry["face_y"], geometry["lamp_gap"]
+    size = (w, h - face_y)
+    faces = Image.new("RGBA", (w, size[1] * 4))
+    for n in range(2):
+        face = render_dropdown_face(*size, chevron=False)
+        ImageDraw.Draw(face).text((w / 2, size[1] / 2), f"F{n + 1}", font=semibold(_style_size("selector.dropdown.preview_font")),
+                                  fill=_style_color("theme.neon.text"), anchor="mm")
+        for frame in (2 * n, 2 * n + 1):
+            faces.paste(face, (0, frame * size[1]))
+    filename = "filter_chain_selected.png"
+    save_png_filter0(faces, Path(skins_dir) / filename)
+    items = [_entry("Edited filter", "Image", {"version": 2, "imageType": "FilmStrip", "image": filename,
+                    "colour": _style_native_color("transparent"), "numFrames": 4, "handleName": "Edited"},
+                    (0, face_y, *size), focus="No")]
+    lamp_w = (w - gap) // 2
+    lamp_h = geometry["lamp_height"]
+    lamps = Image.new("RGBA", (lamp_w, 2 * lamp_h))
+    for frame, colour in enumerate(("theme.neon.track", "accent.cyan")):
+        top = frame * lamp_h
+        ImageDraw.Draw(lamps).rounded_rectangle((0, top, lamp_w - 1, top + lamp_h - 1),
+                                                radius=lamp_h // 2, fill=_style_color(colour))
+    lamp_image = "filter_chain_power.png"
+    save_png_filter0(lamps, Path(skins_dir) / lamp_image)
+    for n in range(2):
+        items.append(_entry(f"F{n + 1} power", "Image",
+                            {"version": 2, "imageType": "FilmStrip", "image": lamp_image, "colour": _style_native_color("transparent"),
+                             "numFrames": 2, "handleName": f"Power{n + 1}"},
+                            (n * (lamp_w + gap), geometry["lamp_y"], lamp_w, lamp_h), focus="No"))
+    definition = passive_layer(items)
+    definition.update(ignoreMousePresses=False, disableCoarseDataWheel=True, actions=[
+        {"version": 1, "onAction": event, "handler": "Show Overlay", "handleName": "Data", "additionalData": popup}
+        for event in ("Mouse Down", "Enter Pressed")])
+    return definition
+
+
 def bind_list_choices(tui, parameter_index, title, choices):
     """Supply the drawer labels and return its titled, instance-specific handle."""
     choices = tuple(choices)
