@@ -41,3 +41,13 @@
 ## Mac bold-cut overlay timings
 
 The [per-page table](../ui-map/bold-cut-mac-audit.md#overlay-work-per-update) compares the original gallery revisions with the native and opaque fallback paths of `c251bf06` on an Apple M5 Pro. The fixture uses the production Controller and times its `IView::update` and `IView::describe` calls. LFO and FX show the clearest reductions. The Play edit series overlaps and the Filter edit cost varies across runs. Draw calls to the stock host, VST report traffic and physical GPU time are outside this measurement. Raw samples and the probe are in `.hw-local/mpc-perf/mac-bold-cut/`.
+
+## Key 61 Voice and Master page resources (2026-11-25)
+
+The baseline 40 alternating footer taps had 53 MPC threads, 72 open descriptors and 265 mappings at every sample. Anonymous PSS returned to 761,820 KiB after settling. The display helper kept one thread. During the 47.43 s switching interval the MPC main thread consumed 33.23 s of CPU and the in-process overlay thread consumed 1.69 s. These process-level samples cannot identify allocations inside individual host widgets.
+
+With the same native skin, a two-second C4 and its release generated 207 unbound LFO/spectrum host notifications on Voice and 204 on Master in the diagnostic baseline. Both counts fell to zero with the packaged-skin default. Master still published its live native values. Both pages were quiet during their initial four-second idle windows. Each group change sent one metadata notification and 16 Q-slot values. MPC then requested parameter names and display strings across the plugin. Incoming dispatcher reads are counted separately from outgoing automation. Opt-in debug traces record them as `ui-reads` and `ui-send`.
+
+Raw process samples, package hashes, phase timestamps and notification logs are under the shared hardware evidence directory `.hw-local/mpc-perf/key61-voice-master-resources-20261125/`.
+
+On the installed fix, the repeated 40-tap run ended at its starting RSS (905,796 KiB) and anonymous PSS (761,980 KiB), with 53 host threads and 72 descriptors at every sample. The helper retained one thread and 7,488 KiB anonymous PSS. The host main thread accumulated 37.77 CPU seconds during 47.57 seconds of switching. The samples identify the busiest thread but do not distinguish its host layout, painting or data-loading costs.

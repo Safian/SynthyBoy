@@ -2,6 +2,7 @@
 """Check the native skin that the MPC looks up for the SynthyBoy instrument."""
 import argparse
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -32,7 +33,22 @@ def walk(value):
             yield from walk(child)
 
 
-def validate_package(package):
+def check_legacy_display_bindings(page, qlinks):
+    first = json.loads((ROOT / "docs/params.json").read_bytes())["count"]
+    live = range(first, first + 4 + 32)  # shell-mpc/lfo_live.h and shell-mpc/spectrum.h
+    for value in walk([page["tabs"], page["componentDefinitions"]]):
+        if isinstance(value, str):
+            for match in re.finditer(r"\bParameter (\d+)\b", value):
+                if int(match[1]) in live:
+                    raise ValueError(f"unnotified legacy display binding in native skin: {match[0]}")
+    groups = [row["Q-Links"] for row in qlinks["Screen Mode Q-Links"]["map"]] + [qlinks["Program Mode Q-Links"]]
+    for group in groups:
+        for index in group.values():
+            if index in live:
+                raise ValueError(f"unnotified legacy display binding in native Q-Links: {index}")
+
+
+def validate_package(package, *, check_live=False):
     manifest = json.loads((package / "plugin.json").read_bytes())
     if (package.name, manifest["uid"], manifest["manufacturer"], manifest["name"]) != (
             "Safian - VST - SynthyBoy", "SfSB", "Safian", "SynthyBoy"):
@@ -46,6 +62,8 @@ def validate_package(package):
 
     page = json.loads((skins / "TUI.json").read_bytes())["pageData"]
     qlinks = json.loads((skins / "Q-Links.json").read_bytes())
+    if check_live:
+        check_legacy_display_bindings(page, qlinks)
     if (page["version"], page["componentDefinitions"]["version"], qlinks["version"],
             qlinks["Screen Mode Q-Links"]["version"]) != (1, 2, 4, 4):
         raise ValueError("unsupported native skin or Q-Link version")
@@ -124,8 +142,10 @@ def validate_package(package):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package_dir", type=Path)
+    parser.add_argument("--check-legacy-display-bindings", action="store_true")
+    args = parser.parse_args()
     try:
-        validate_package(parser.parse_args().package_dir)
+        validate_package(args.package_dir, check_live=args.check_legacy_display_bindings)
     except (OSError, ValueError, KeyError, TypeError, AttributeError, ET.ParseError, SyntaxError) as exc:
         print(f"Invalid SynthyBoy skin: {exc}", file=sys.stderr)
         return 1

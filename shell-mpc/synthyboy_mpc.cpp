@@ -399,6 +399,17 @@ struct PluginInstance
                 return 0;
             if (opcode != audioMasterVersion && (closingFlag->load (std::memory_order_acquire) || ! knowsFlag->load (std::memory_order_acquire)))
                 return 0;
+#if SYNTHYBOY_MPC_DEBUG_HOOKS && SYNTHYBOY_MPC_OVERLAY
+            if ((opcode == audioMasterAutomate || opcode == audioMasterUpdateDisplay) && synthyboy_mpc::PlayLog::enabled())
+            {
+                if (opcode == audioMasterAutomate)
+                    synthyboy_mpc::PlayLog::line ("ui-send value instance=%p index=%d native_offset=%d q_slot=%d value=%.9g",
+                        e->object, index, isNativeUiParam (index) ? index - nativeUiBase() : -1,
+                        isQParam (index) ? index - qBase() + 1 : 0, static_cast<double> (opt));
+                else
+                    synthyboy_mpc::PlayLog::line ("ui-send metadata instance=%p", e->object);
+            }
+#endif
             return raw (e, opcode, index, value, ptr, opt);
         }
     };
@@ -1620,6 +1631,24 @@ struct PluginInstance
     nativeui::MixerPeekRequest mixerPeek;
     std::atomic<bool> hostMixerWidgetsHidden { false };
     int nativeVoiceDisplayedRow = -1;   // display thread only
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+    long long nextUiLogMs = 0;
+    int loggedMasterView = -1, loggedVoiceView = -1;
+    std::atomic<unsigned> uiNameReads {}, uiLabelReads {}, uiTextReads {}, uiPropsReads {};
+    std::atomic<uint64_t> uiReadNs {};
+    void countUiRead (VstInt32 opcode, int64_t ns) noexcept
+    {
+        switch (opcode)
+        {
+            case effGetParamName: uiNameReads.fetch_add (1, std::memory_order_relaxed); break;
+            case effGetParamLabel: uiLabelReads.fetch_add (1, std::memory_order_relaxed); break;
+            case effGetParamDisplay: uiTextReads.fetch_add (1, std::memory_order_relaxed); break;
+            case effGetParameterProperties: uiPropsReads.fetch_add (1, std::memory_order_relaxed); break;
+            default: return;
+        }
+        uiReadNs.fetch_add (ns, std::memory_order_relaxed);
+    }
+#endif
     long long proxyNamesRequestedAt = -1;   // display thread only
     std::atomic<int> nativeMixerPeekView { nativeui::MixerBase };
     std::atomic<int> nativeMixerActiveTab { 0 };
@@ -2927,6 +2956,24 @@ struct PluginInstance
         const VstInt32 base = firstParam;
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
         synthyboy_mpc::PlayLog::refresh();
+        if (synthyboy_mpc::PlayLog::enabled())
+        {
+            const auto ms = steadyMs();
+            const int master = nativeMasterView.load (std::memory_order_relaxed);
+            const int voice = nativeVoice.layout();
+            if (ms >= nextUiLogMs || master != loggedMasterView || voice != loggedVoiceView)
+            {
+                synthyboy_mpc::PlayLog::line ("ui-state instance=%p uptime_ms=%lld master=%d voice=%d",
+                    static_cast<void*> (this), ms, master, voice);
+                synthyboy_mpc::PlayLog::line ("ui-reads instance=%p name=%u label=%u display=%u properties=%u dispatch_ns=%llu",
+                    static_cast<void*> (this), uiNameReads.load (std::memory_order_relaxed), uiLabelReads.load (std::memory_order_relaxed),
+                    uiTextReads.load (std::memory_order_relaxed), uiPropsReads.load (std::memory_order_relaxed),
+                    static_cast<unsigned long long> (uiReadNs.load (std::memory_order_relaxed)));
+                nextUiLogMs = ms + 1000;
+                loggedMasterView = master;
+                loggedVoiceView = voice;
+            }
+        }
         synthyboy_mpc::PlayLog::drain();   // the lines the host's threads put into the ring, written here: the only place the play log touches a file
         bool vst = false, display = false;
         if (synthyboy_mpc::PlayLog::takeDumpRequest (overlaySlot.load (std::memory_order_relaxed), vst, display))
@@ -3738,7 +3785,14 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
     try { result = dispatch(e, opcode, index, value, ptr, opt); }
     catch (...) { result = 0; }
     if (slot >= 0)
-        synthyboy_mpc::startupTimes().callDone (static_cast<synthyboy_mpc::StartupTimes::Call> (slot), synthyboy_mpc::StartupTimes::nowNs() - t0);
+    {
+        const auto ns = synthyboy_mpc::StartupTimes::nowNs() - t0;
+        synthyboy_mpc::startupTimes().callDone (static_cast<synthyboy_mpc::StartupTimes::Call> (slot), ns);
+#if SYNTHYBOY_MPC_DEBUG_HOOKS && SYNTHYBOY_MPC_OVERLAY
+        if (slot == synthyboy_mpc::StartupTimes::kCallParamInfo && synthyboy_mpc::PlayLog::enabled() && e && e->object)
+            getInstance (e)->countUiRead (opcode, ns);
+#endif
+    }
     return result;
 }
 

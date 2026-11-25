@@ -101,7 +101,13 @@ endif()
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
 option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)
 set(SYNTHYBOY_MPC_LFO_LIVE_HZ 10 CACHE STRING "MPC shell: refresh rate of the LFO display thread (ticks a second; 10 = every 100 ms)")
-option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "MPC shell: tell the host (audioMasterAutomate) when a cursor moves; OFF = CPU baseline, the host never redraws" ON)
+option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
+set(live_notify_default ON)
+if(SYNTHYBOY_PACKAGED_NATIVE_SKIN AND SYNTHYBOY_MPC_OVERLAY)
+    # The shipped native skin has no bindings to the legacy LFO or spectrum handles.
+    set(live_notify_default OFF)
+endif()
+option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "Notify host widgets when a legacy LFO or spectrum display value changes" ${live_notify_default})
 option(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST "MPC shell: sweep the four cursors without a voice (host-side measurements only)" OFF)
 if(SYNTHYBOY_MPC_LFO_LIVE)
     find_package(Threads REQUIRED)
@@ -147,7 +153,6 @@ endif()
 # No display constant of any model is compiled in: the CRTC, the planes, the panel, the refresh and the rotation are found at run time (shell-mpc/overlay/discovery.h).
 # The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
 # reports it to the host, so the overlay needs SYNTHYBOY_MPC_LFO_LIVE.
-option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
 # Debug hooks: the /tmp files that only the host tests and the acceptance runs on the device use (fake slot, fake Q group / write, fake page write, Q step travel, the play log and its dump, the display thread's
 # fault injection). OFF (default, and always for the package): the plugin does not look at them, and no thread of the host can reach a file through them. Needs the overlay.
 option(SYNTHYBOY_MPC_DEBUG_HOOKS "MPC shell: debug / acceptance switch files in /tmp (host tests, device checks); never in the package" OFF)

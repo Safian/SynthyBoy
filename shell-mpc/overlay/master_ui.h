@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,7 @@ public:
         T type = T::Inert;
         std::string key;
         int param = -1;
+        float presentedValue = std::numeric_limits<float>::quiet_NaN();
     };
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
@@ -349,11 +351,14 @@ private:
 
     void pull (IInstanceView& inst)
     {
-        for (const Item& it : items_)
+        for (Item& it : items_)
         {
             if (it.param < 0 || ! it.c)
                 continue;
             const float val = inst.param (it.param);
+            if (! resyncAfterInput_ && it.presentedValue == val)
+                continue;
+            it.presentedValue = val;
             const synthyboy::ParamInfo& p = uibind::info (it.param);
             switch (it.type)
             {
@@ -417,10 +422,13 @@ private:
                     break;
             }
         }
+        resyncAfterInput_ = false;
     }
 
     void handle (const ui::Change& ch, UiStack&, IInstanceView& inst)
     {
+        // Local controls can edit their own presentation before the host confirms a write.
+        resyncAfterInput_ = true;
         if (ch.kind == ui::ChangeKind::None)
             return;
         const Item* it = item (ch.id);
@@ -495,6 +503,7 @@ private:
 
     ui::MasterScreen full_;
     std::vector<Item> items_;
+    bool resyncAfterInput_ = false;
 
     bool nativeGround_ = false;
     int w_ = kCanvasW, h_ = kCanvasH;

@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,7 @@ public:
         T type = T::Inert;
         std::string key;
         int param = -1;
+        float presentedValue = std::numeric_limits<float>::quiet_NaN();
         int row = -1;
         int step = -1;
     };
@@ -114,7 +116,6 @@ public:
         if (native)
             takeNativeSequence (inst);
         pull (inst);
-        full_.scaleLfo.setLabel (inst.param (uibind::indexOfKey ("voicectl.scale.lfo_mode")) >= 0.5f ? "LFO RATE" : "LFO TIME");
 
         // the steps the newest voices play, lit in the grid
         uint8_t mask = 0;
@@ -128,16 +129,27 @@ public:
         full_.grid.state.voiceStepMask = mask;
 
         // the step and the row of the header: the selectors, the value of the step
-        char stepBuf[32];
-        std::snprintf (stepBuf, sizeof stepBuf, "STEP %d", full_.grid.state.selectedStep + 1);
-        full_.qStepSelect.state.count = 8;
-        full_.qStepSelect.state.index = full_.grid.state.selectedStep;
-        full_.qStepSelect.setItem (stepBuf);
-        full_.rowList.state.index = std::clamp (full_.grid.state.activeRow, 0, ui::VoiceGrid::kNumRows - 1);
-        const float sv = full_.grid.value (full_.grid.state.activeRow, full_.grid.state.selectedStep) * 100.0f;
-        full_.stepValue.state.value = std::round (sv);
-        ui::VoiceGrid::formatValue (full_.grid.state.activeRow, static_cast<float> (std::round (sv)) / 100.0f, full_.stepValue.state.text, sizeof full_.stepValue.state.text);   // one text for one value: the same as the cell and the strip
-        full_.stepValue.setLabel (ui::VoiceGrid::rowName (full_.grid.state.activeRow));
+        const int step = full_.grid.state.selectedStep, row = full_.grid.state.activeRow;
+        full_.qStepSelect.state.count = ui::VoiceGrid::kNumSteps;
+        full_.qStepSelect.state.index = step;
+        if (step != formattedStep_)
+        {
+            char stepBuf[32];
+            std::snprintf (stepBuf, sizeof stepBuf, "STEP %d", step + 1);
+            full_.qStepSelect.setItem (stepBuf);
+            formattedStep_ = step;
+        }
+        full_.rowList.state.index = std::clamp (row, 0, ui::VoiceGrid::kNumRows - 1);
+        const int value = static_cast<int> (std::lround (full_.grid.value (row, step) * 100.0f));
+        full_.stepValue.state.value = value;
+        if (row != formattedRow_ || value != formattedValue_)
+        {
+            if (row != formattedRow_)
+                full_.stepValue.setLabel (ui::VoiceGrid::rowName (row));
+            ui::VoiceGrid::formatValue (row, value / 100.0f, full_.stepValue.state.text, sizeof full_.stepValue.state.text);
+            formattedRow_ = row;
+            formattedValue_ = value;
+        }
         inst.setQVirtual (kVirtualStep, static_cast<float> (full_.grid.state.selectedStep) / 7.0f);
         inst.setQVirtual (kVirtualRow, static_cast<float> (full_.grid.state.activeRow) / 5.0f);
 
@@ -330,15 +342,28 @@ private:
         bind (kOscC, &full_.oscC, T::Toggle, "voicectl.osc.c");
         bind (kOscSub, &full_.oscSub, T::Toggle, "voicectl.osc.sub");
         bind (kOscNoise, &full_.oscNoise, T::Toggle, "voicectl.osc.noise");
+
+        for (int group = 0; group < ui::VoiceScreen::kMaxGroups; ++group)
+            for (int slot = 0; slot < ui::QGroup::kSlots; ++slot)
+            {
+                const auto* member = full_.groups[group].member (slot);
+                const auto* binding = member ? item (member->id()) : nullptr;
+                groupTargets_[group][slot] = binding ? binding->param : -1;
+            }
+        groupTargets_[0][0] = QRouter::encode (kVirtualStep, QRouter::kVirtual);
+        groupTargets_[0][1] = QRouter::encode (kVirtualRow, QRouter::kVirtual);
     }
 
     void pull (IInstanceView& inst)
     {
-        for (const Item& it : items_)
+        for (Item& it : items_)
         {
             if (it.param < 0 || ! it.c)
                 continue;
             const float val = inst.param (it.param);
+            if (! resyncAfterInput_ && it.presentedValue == val)
+                continue;
+            it.presentedValue = val;
             const synthyboy::ParamInfo& p = uibind::info (it.param);
             switch (it.type)
             {
@@ -374,6 +399,8 @@ private:
                 case T::List:
                 {
                     ui::LedList* ll = static_cast<ui::LedList*> (it.c);
+                    if (it.id == kScaleLfoMode)
+                        full_.scaleLfo.setLabel (val >= 0.5f ? "LFO RATE" : "LFO TIME");
                     ll->setOptions (p.choices, p.numChoices > 0 ? p.numChoices : 0);
                     ll->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, std::max (0, ll->state.count - 1));
                     break;
@@ -386,10 +413,13 @@ private:
                     break;
             }
         }
+        resyncAfterInput_ = false;
     }
 
     void handle (const ui::Change& ch, UiStack& stack, IInstanceView& inst)
     {
+        // Local controls can edit their own presentation before the host confirms a write.
+        resyncAfterInput_ = true;
         if (ch.kind == ui::ChangeKind::None)
             return;
         if (ch.id == kListBackdrop)
@@ -512,28 +542,9 @@ private:
         const bool list = pageTop_ == kPageList;
         qSlots_.publish (inst, list ? 0 : kN, g, [this] (int k, int* t)
         {
-            if (k == 0)   // STEP: the step and the row (virtual targets), the length, the value of the selected step
-            {
-                t[0] = QRouter::encode (kVirtualStep, QRouter::kVirtual);
-                t[1] = QRouter::encode (kVirtualRow, QRouter::kVirtual);
-                t[2] = uibind::indexOfKey ("voicectl.length");
+            std::copy_n (groupTargets_[k], ui::QGroup::kSlots, t);
+            if (k == 0)
                 t[3] = stepParam (full_.grid.state.activeRow, full_.grid.state.selectedStep);
-            }
-            else if (k == 1)
-            {
-                t[0] = uibind::indexOfKey ("voicectl.rand.pan"); t[1] = uibind::indexOfKey ("voicectl.rand.detune");
-                t[2] = uibind::indexOfKey ("voicectl.rand.cutoff"); t[3] = uibind::indexOfKey ("voicectl.rand.env");
-            }
-            else if (k == 2)   // SCALING with the 10x switch in front: 10x DETUNE, ENV TIME, LFO TIME, LFO MODE
-            {
-                t[0] = uibind::indexOfKey ("voicectl.rand.detune10x"); t[1] = uibind::indexOfKey ("voicectl.scale.env");
-                t[2] = uibind::indexOfKey ("voicectl.scale.lfo"); t[3] = uibind::indexOfKey ("voicectl.scale.lfo_mode");
-            }
-            else if (k == 3)   // TARGETS (NOISE, the 17th value, is touch only)
-            {
-                t[0] = uibind::indexOfKey ("voicectl.osc.a"); t[1] = uibind::indexOfKey ("voicectl.osc.b");
-                t[2] = uibind::indexOfKey ("voicectl.osc.c"); t[3] = uibind::indexOfKey ("voicectl.osc.sub");
-            }
         });
         for (int i = 0; i < kN; ++i)
             full_.groups[i].setBlock (list ? -1 : QRouter::blockOfGroup (kN, g, i));
@@ -547,6 +558,9 @@ private:
     ui::VoiceScreen full_;
     ui::ListPopup list_;
     std::vector<Item> items_;
+    bool resyncAfterInput_ = false;
+    int groupTargets_[ui::VoiceScreen::kMaxGroups][ui::QGroup::kSlots] {};
+    int formattedRow_ = -1, formattedStep_ = -1, formattedValue_ = 0;
     int gridParams_[ui::VoiceGrid::kNumRows][ui::VoiceGrid::kNumSteps] {};
 
     bool nativeGround_ = false;

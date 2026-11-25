@@ -18,7 +18,7 @@ from pathlib import Path
 import test_mpc_skin_extras as base
 from test_mpc_backgrounds import bg_mod
 from native_ui_params import LEGACY_EXTRAS, MIXER_STEREO_BASE, NATIVE_PARAMS
-from validate_synthyboy_skin import validate_package
+from validate_synthyboy_skin import check_legacy_display_bindings, validate_package
 
 SHARED_JSON = base.ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
 OVERLAY_LAYOUT = base.ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
@@ -82,6 +82,20 @@ class NoFallbackTests(unittest.TestCase):
         title_type = entries["Mod Native Picker Title"]["componentData"]["type"]
         children = self.definitions[title_type]["componentsData"]
         self.assertEqual([child["componentData"]["type"] for child in children], ["Label"])
+
+    def test_native_skin_has_no_legacy_live_display_consumers(self):
+        page = self.tui["pageData"]
+        qlinks = json.loads((self.skins / "Q-Links.json").read_bytes())
+        first = json.loads((base.ROOT / "docs/params.json").read_bytes())["count"]
+        check_legacy_display_bindings(page, qlinks)
+        for section in ("tabs", "componentDefinitions"):
+            with self.subTest(section=section):
+                binding = {"handle remapping": {"map": [{"key": "Data", "value": f"FromGesture/Parameter {first}"}]}}
+                with self.assertRaisesRegex(ValueError, "legacy display binding"):
+                    check_legacy_display_bindings(dict(page, **{section: [binding]}), qlinks)
+        qlinks["Program Mode Q-Links"]["Q-Link 1"] = first + 35
+        with self.assertRaisesRegex(ValueError, "legacy display binding in native Q-Links"):
+            check_legacy_display_bindings(page, qlinks)
 
     def test_native_package_rejects_fallbacks_in_the_finished_skin(self):
         with tempfile.TemporaryDirectory() as tmp:

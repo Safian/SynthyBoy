@@ -109,6 +109,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+native_skin=OFF
+if [[ -z "$plugin_dir" && -z "$skins_dir" && "$skin_layout" -ef "$repo_root/scripts/overlay-skin/mpc-ui-pages-overlay.json" ]]; then
+    native_skin=ON
+fi
+
 if [[ "$release" == 1 ]]; then
     cmake_args+=("-DSYNTHYBOY_MPC_DEV_LOG=OFF" "-DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF")
 fi
@@ -219,7 +224,7 @@ if [[ "$skin_only" != 1 ]]; then
         echo "$me: === building $a ==="
         "$docker_cmd" run --rm \
             -v "$repo_root":/src:ro -v "$build_dir/$a":/build -v "$build_dir/$a-bench":/build-bench -v "$out_dir":/out -v "$MPC_SDK":/mpc-sdk:ro \
-            -e ARCH="$a" -e JOBS="$jobs" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
+            -e ARCH="$a" -e JOBS="$jobs" -e NATIVE_SKIN="$native_skin" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
             ${plugin_env[@]+"${plugin_env[@]}"} "$image" bash /src/scripts/mpc-container-build.sh
     done
 fi
@@ -425,7 +430,11 @@ if [[ -n "$plugin_dir" ]]; then
     python3 -I "$repo_root/scripts/gen-mpc-manifest.py" --package-manifest "$P_MANIFEST" --plugin-dir "$plugin_folder" ${manifest_args[@]+"${manifest_args[@]}"}
 else
     python3 "$repo_root/scripts/gen-mpc-manifest.py" --plugin-dir "$plugin_folder" ${manifest_args[@]+"${manifest_args[@]}"}
-    python3 "$repo_root/scripts/validate_synthyboy_skin.py" "$plugin_folder"
+    skin_checks=()
+    if [[ "$native_skin" == ON ]]; then
+        skin_checks+=(--check-legacy-display-bindings)
+    fi
+    python3 "$repo_root/scripts/validate_synthyboy_skin.py" ${skin_checks[@]+"${skin_checks[@]}"} "$plugin_folder"
 fi
 
 # ---- 3. the SDK's own validator on the finished folder ----------------------------------------------------------------------------------------------
