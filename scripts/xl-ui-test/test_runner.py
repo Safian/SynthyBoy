@@ -83,6 +83,32 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.dev.status()["view"], "play1")
         self.assertTrue((self.out / "power.after.png").exists())
 
+    def test_delayed_write_and_restore_are_witnessed(self):
+        base = self.dev.params()
+        changed = dict(base, **{"osc1.on": 1})
+        with patch.object(self.dev, "params", side_effect=[base, base, changed, changed, changed, base]), patch("run.time.sleep"):
+            self.runner.run_case({"id": "delayed", "view": "osca", "steps": [
+                {"op": "snapshot"}, {"op": "tap", "control": "Power"},
+                {"op": "expect", "target": "osc1.on", "change": "only"}], "restore": [
+                {"op": "tap", "control": "Power", "if_changed": {"target": "osc1.on"}},
+                {"op": "expect", "target": "*", "change": "restored"}]})
+        self.assertEqual(self.runner.results[-1]["status"], "PASS")
+        self.assertEqual(self.dev.value, 0)
+
+    def test_unrelated_change_immediately_fails_write_and_restore(self):
+        base = self.dev.params()
+        bad = dict(base, unchanged=0)
+        for mode, target in (("only", "osc1.on"), ("restored", "*")):
+            with self.subTest(mode=mode), patch.object(self.dev, "params", return_value=bad) as read:
+                with self.assertRaises(AssertionError):
+                    self.runner.expect({"target": target, "change": mode}, {"baseline": base}, {}, {"osc1.on"})
+                read.assert_called_once()
+
+    def test_vst_expectation_waits_for_all_values_in_one_snapshot(self):
+        with patch.object(self.dev, "snapshot", create=True, side_effect=[
+                {"vst": {3233: 1, 3234: 0}}, {"vst": {3233: 0, 3234: 1}}]), patch("run.time.sleep"):
+            self.runner.expect({"vst": {"3233": 0, "3234": 1}}, {}, {})
+
     def test_unwitnessed_input_does_not_count_in_coverage(self):
         self.runner.run_case({"id": "unverified", "view": "osca", "steps": [{"op": "tap", "control": "Power"}],
                               "restore": [{"op": "tap", "control": "Power"}]})
@@ -91,7 +117,7 @@ class RunnerTest(unittest.TestCase):
 
     def test_failure_does_not_invert_an_already_restored_value(self):
         self.runner.run_case({"id": "fail", "view": "osca", "steps": [
-            {"op": "snapshot", "name": "baseline"}, {"op": "expect", "target": "osc1.on", "value": 1}],
+            {"op": "snapshot", "name": "baseline"}, {"op": "expect", "target": "osc1.on", "value": 1, "timeout": 0}],
             "restore": [{"op": "tap", "control": "Power", "if_changed": {"target": "osc1.on"}}]})
         self.assertEqual(self.runner.results[-1]["status"], "FAIL")
         self.assertEqual(self.dev.value, 0)

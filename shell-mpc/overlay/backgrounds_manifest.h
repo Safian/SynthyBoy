@@ -22,7 +22,7 @@ inline constexpr BackgroundTab kBackgroundTabs[] = {
     { "macros", "Macros", "overlay_bg_macros.png", 900, 20, 0x0b1028u },
     { "play1", "Play", "overlay_bg_play.png", 900, 20, 0x141a3bu },
     { "mixer", "Mix", "overlay_bg_mixer.png", 900, 18, 0x141a35u },
-    { "fx", "FX", "overlay_bg_fx.png", 900, 80, 0x0c1029u },
+    { "fx", "FX", "overlay_bg_fx.png", 900, 2, 0x0c1029u },
     { "master", "Master", "overlay_bg_master.png", 960, 386, 0x141a38u },
     { "voice", "Voice", "overlay_bg_voice.png", 792, 574, 0x0c1023u },
     { "filter1", "Filter", "overlay_bg_filter.png", 900, 95, 0x171c35u },

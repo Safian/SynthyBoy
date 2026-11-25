@@ -33,7 +33,7 @@ KNOWN = {
     "master": ("Master", "overlay_bg_master.png", 960, 386, "141a38"),
     "voice": ("Voice", "overlay_bg_voice.png", 792, 574, "0c1023"),
     "mixer": ("Mix", "overlay_bg_mixer.png", 900, 18, "141a35"),
-    "fx": ("FX", "overlay_bg_fx.png", 900, 80, "0c1029"),
+    "fx": ("FX", "overlay_bg_fx.png", 900, 2, "0c1029"),
     "macros": ("Macros", "overlay_bg_macros.png", 900, 20, "0b1028"),
     "play1": ("Play", "overlay_bg_play.png", 900, 20, "141a3b"),
 }

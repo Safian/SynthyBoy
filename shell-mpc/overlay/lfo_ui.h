@@ -456,6 +456,8 @@ public:
             if (displayHot_)
                 ui::lfodisplay::draw (sb, full_.displayRect(), data, false, ui::lfodisplay::Part::Data);
             ui::lfodisplay::drawLive (sb, full_.displayRect(), data);
+            if (nativePlayEditor_ && pageTop_ == 0)
+                ui::clearNativeCell (sb, full_.close.rect());
         }
     }
     /** What the current state draws, as one number (the picture changes when it does): a scene of everything, the live parts included. */

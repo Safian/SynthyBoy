@@ -184,8 +184,18 @@ class NativeFxHeaderTests(unittest.TestCase):
             self.assertEqual(w, n * width)
             return [(x + dx + col * width, y + dy) for col in range(n)]
 
-        roots = repeated("fxNativeChainRow", 16, [("Data", 3233), ("Power", 3249), ("Select", 3233)],
-                         ["RangedEnabling/{Increment:Base=1}/16/17/Parameter 3232"])
+        tiles = definitions["fxNativeChainRow"]["componentsData"]
+        self.assertEqual(len(tiles), 16)
+        roots = []
+        for slot, tile in enumerate(tiles):
+            roots.append(rect(tile)[:2])
+            bindings = {entry["key"]: entry["value"] for entry in tile["handle remapping"]["map"]}
+            self.assertEqual(tile["bounds"]["additionalInvalidatingHandles"], ["Present"])
+            self.assertEqual(bindings["Present"], f"RangedEnabling/{slot + 1}/16/17/Parameter 3232")
+            self.assertEqual(bindings["Select"], f"Parameter {3233 + slot}")
+            self.assertEqual(bindings["Power"], f"Parameter {3249 + slot}")
+            for enabled, name in enumerate(("Bypassed", "Powered")):
+                self.assertEqual(bindings[name], f"IndexedEnabling/{enabled}/2/Parameter {3249 + slot}")
         card = definitions["fxNativeChainCard"]["componentsData"]
         power = card[0]
         self.assertEqual(power["componentData"]["type"], "Button")
@@ -193,7 +203,7 @@ class NativeFxHeaderTests(unittest.TestCase):
         selections = [c for c in card[1:] if c["componentData"]["type"] == "Button"]
         self.assertEqual(len(selections), 2)
         for enabled, selection in enumerate(selections):
-            self.assertEqual(selection["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{enabled}/2/Power"])
+            self.assertEqual(selection["bounds"]["additionalInvalidatingHandles"], [("Bypassed", "Powered")[enabled]])
             self.assertEqual(selection["handle remapping"]["map"], [{"key": "Data", "value": "Select"}])
             for i, (x, y) in enumerate(roots):
                 actual = [[x + a, y + b, w, h] for a, b, w, h in (rect(power), rect(selection))]
@@ -221,7 +231,8 @@ class NativeFxHeaderTests(unittest.TestCase):
         for (x, y, w, h), (xx, yy, ww, hh) in combinations(hitboxes, 2):
             self.assertTrue(x + w <= xx or xx + ww <= x or y + h <= yy or yy + hh <= y)
         markers = {c["componentData"]["name"]: c for c in self.root if c["componentData"]["name"].startswith("Overlay ")}
-        self.assertEqual(set(markers), {"Overlay Marker fx left", "Overlay Marker fx right", "Overlay Instance fx"})
+        self.assertEqual(set(markers), {"Overlay Marker fx left", "Overlay Marker fx right", "Overlay Instance fx",
+                                        "Overlay Background Sentinel fx"})
         for marker in markers.values():
             x, y, w, h = rect(marker)
             for xx, yy, ww, hh in hitboxes[1:]:   # the grip is drawn on the separate overlay plane

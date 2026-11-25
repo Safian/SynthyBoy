@@ -500,7 +500,7 @@ def _add_native_chain(tui, tab, ctx, contract, base):
     toggle_power["handle remapping"]["map"] = [{"key": "Data", "value": "Power"}]
     card_widgets = [toggle_power]
     for enabled, idle, active in ((0, select_bypassed, select_bypassed_on), (1, select_off, select_on)):
-        gates = (f"IndexedEnabling/{enabled}/2/Power",)
+        gates = ("Powered" if enabled else "Bypassed",)
         select_card = button("select", None, (0, down, w, h), gates, idle, active, domain=2)
         select_card["handle remapping"]["map"] = [{"key": "Data", "value": "Select"}]
         card_widgets.append(select_card)
@@ -514,11 +514,26 @@ def _add_native_chain(tui, tab, ctx, contract, base):
             label["bounds"]["additionalInvalidatingHandles"] = list(gates)
             card_widgets.append(label)
     ctx.add_component_definition("fxNativeChainCard", transparent(card_widgets, True))
-    repeated("fxNativeChainRow", "fxNativeChainCard", (power_rect[0], power_rect[1], w, down + h), slots,
-             contract["cards"][1][0][0] - power_rect[0],
-             {"Data": f"Parameter {increment(select)}", "Power": f"Parameter {increment(power)}",
-              "Select": f"Parameter {increment(select)}"},
-             f"RangedEnabling/{increment(1)}/{slots}/{slots + 1}/Parameter {count}")
+    tiles = []
+    for slot, (power_box, _) in enumerate(contract["cards"]):
+        tile = _native_entry(f"Slot {slot + 1}", "fxNativeChainCard",
+                             {"version": 1, "handleName": "Present"},
+                             (power_box[0], power_box[1], w, down + h), gates=("Present",))
+        tile["bounds"]["acceptsHWFocus"] = "Children"
+        tile["handle remapping"]["map"] = [
+            {"key": "Present", "value": f"RangedEnabling/{slot + 1}/{slots}/{slots + 1}/Parameter {count}"},
+            {"key": "Data", "value": f"Parameter {select + slot}"},
+            {"key": "Select", "value": f"Parameter {select + slot}"},
+            {"key": "Power", "value": f"Parameter {power + slot}"},
+            {"key": "Powered", "value": f"IndexedEnabling/1/2/Parameter {power + slot}"},
+            {"key": "Bypassed", "value": f"IndexedEnabling/0/2/Parameter {power + slot}"},
+        ]
+        tiles.append(tile)
+    ctx.add_component_definition("fxNativeChainRow", transparent(tiles, True))
+    row = _native_entry("FX fxNativeChainRow", "fxNativeChainRow", {"version": 1, "handleName": "Data"},
+                        (0, 0, contract["cards"][-1][0][0] + w, select_rect[1] + h), view)
+    row["bounds"]["acceptsHWFocus"] = "Children"
+    items.append(row)
 
     add = contract["add"]
     caption = _native_label("Text", (0, 0, add[2], add[3]), style.size("fx.add_native_chain.native_label.16"))

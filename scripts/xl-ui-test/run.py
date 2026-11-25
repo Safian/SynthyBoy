@@ -153,7 +153,7 @@ class Runner:
         self.alive()
         return {"ocr": words, "view": confirmed["view"], "primary_image": name + ".png"}
 
-    def expect(self, spec, snapshots, result):
+    def expect(self, spec, snapshots, result, restoring=()):
         if not any(k in spec for k in ("target", "status", "ocr", "vst", "overlay_clear", "overlay_visible")):
             raise ValueError("expect requires an observable")
         deadline = time.monotonic() + float(spec.get("timeout", 5))
@@ -188,42 +188,58 @@ class Runner:
                 if changed != (prop == "overlay_visible"):
                     raise AssertionError(f"{prop} failed in {spec[prop]}")
         if "vst" in spec:
-            actual = self.dev.snapshot(vst=True)["vst"]
-            result["vst"] = {}
-            if not spec["vst"]:
+            expected = spec["vst"]
+            if not expected:
                 raise ValueError("VST expectation requires at least one index")
-            for key, expected in spec["vst"].items():
-                index = int(key)
-                if index not in actual:
-                    raise Unavailable(f"normalized VST value unavailable for index {index}")
-                result["vst"][key] = actual[index]
-                if not math.isclose(actual[index], float(expected), abs_tol=1e-6, rel_tol=0):
-                    raise AssertionError(f"VST {index}: expected {expected}, observed {actual[index]}")
+            deadline = time.monotonic() + float(spec.get("timeout", 5))
+            while True:
+                actual = self.dev.snapshot(vst=True)["vst"]
+                for key in expected:
+                    if int(key) not in actual:
+                        raise Unavailable(f"normalized VST value unavailable for index {key}")
+                result["vst"] = {key: actual[int(key)] for key in expected}
+                if all(math.isclose(result["vst"][k], float(v), abs_tol=1e-6, rel_tol=0)
+                       for k, v in expected.items()):
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError(f"VST expected {expected}, observed {result['vst']}")
+                time.sleep(.2)
         if "target" in spec:
-            target, actual = spec["target"], self.dev.params()
-            if target != "*" and target not in actual:
-                raise Unavailable("engine parameter unavailable: " + target)
-            if "value" in spec and actual[target] != float(spec["value"]):
-                raise AssertionError(f"{target}: expected {spec['value']}, got {actual[target]}")
-            if "change" in spec:
-                reference = snapshots[spec.get("from", "baseline")]
-                diff = differences(reference, actual)
-                mode = spec["change"]
-                result["engine_changes"] = diff
-                if mode == "only":
-                    ok = set(diff) == {target}
-                elif mode == "changed":
-                    ok = target in diff
-                elif mode in ("unchanged", "restored"):
-                    ok = not diff if target == "*" else target not in diff
-                else:
-                    raise ValueError("unknown change check " + mode)
-                if not ok:
-                    raise AssertionError(f"{target}: expected {mode}; observed {diff}")
-            elif "value" not in spec:
+            target = spec["target"]
+            mode = spec.get("change")
+            if mode not in (None, "only", "changed", "unchanged", "restored"):
+                raise ValueError("unknown change check " + mode)
+            if mode is None and "value" not in spec:
                 raise ValueError("parameter expectation requires value or change")
+            reference = snapshots[spec.get("from", "baseline")] if mode else None
+            deadline = time.monotonic() + float(spec.get("timeout", 5))
+            while True:
+                actual = self.dev.params()
+                if target != "*" and target not in actual:
+                    raise Unavailable("engine parameter unavailable: " + target)
+                expected = spec.get("value")
+                ok = expected is None or actual[target] == float(expected)
+                if mode:
+                    diff = differences(reference, actual)
+                    result["engine_changes"] = diff
+                    if mode == "only" and diff.keys() - {target}:
+                        raise AssertionError(f"{target}: unrelated changes {diff}")
+                    if mode in ("changed", "only"):
+                        ok = ok and target in diff
+                    else:
+                        if target == "*" and mode == "restored" and diff.keys() - set(restoring):
+                            raise AssertionError(f"unexpected changes during restore: {diff}")
+                        ok = ok and (not diff if target == "*" else target not in diff)
+                        if mode == "unchanged" and not ok:
+                            raise AssertionError(f"{target}: expected unchanged, observed {diff}")
+                if ok:
+                    break
+                if time.monotonic() >= deadline:
+                    observed = result.get("engine_changes", actual.get(target))
+                    raise AssertionError(f"{target}: expected {spec}, observed {observed}")
+                time.sleep(.2)
 
-    def step(self, spec, case, snapshots, result):
+    def step(self, spec, case, snapshots, result, restoring=()):
         op = spec["op"]
         if "if_changed" in spec:
             guard = spec["if_changed"]
@@ -238,7 +254,7 @@ class Runner:
         elif op == "navigate":
             self.root(spec["view"])
         elif op == "expect":
-            self.expect(spec, snapshots, result)
+            self.expect(spec, snapshots, result, restoring)
         elif op == "capture":
             self.capture(case + "." + spec.get("name", "capture"))
         elif op in ("drag", "tap"):
@@ -276,11 +292,15 @@ class Runner:
         snaps, verified = {}, set()
         def phase(key):
             pending = set()
+            restoring = {}
             for spec in case.get(key, []):
                 result = {"spec": spec, "local_unix_s": time.time()}
                 record[key].append(result)
                 self.event("step", case=case_id, phase=key, spec=spec)
-                self.step(spec, case_id, snaps, result)
+                if key == "restore" and "if_changed" in spec:
+                    guard = spec["if_changed"]
+                    restoring.setdefault(guard.get("from", "baseline"), set()).add(guard["target"])
+                self.step(spec, case_id, snaps, result, restoring.get(spec.get("from", "baseline"), ()))
                 if result.get("control"):
                     pending = {result["control"]}
                 elif spec["op"] in ("navigate", "tap", "drag"):

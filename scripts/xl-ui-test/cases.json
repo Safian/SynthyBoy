@@ -71,8 +71,7 @@
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "play1/Play Native EnvLfo ENV Expand 1-6"},
       {"op": "expect", "status": {"view": "play1", "ui_depth": "1"}},
-      {"op": "expect", "ocr": ["CLOSE"], "rect": [58, 122, 96, 56]},
-      {"op": "tap", "x": 106, "y": 150},
+      {"op": "tap", "control": "play1/Play Expanded Envelope Close"},
       {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}},
       {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
     ],
@@ -87,8 +86,7 @@
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "play1/Play Native EnvLfo LFO Expand 1-6"},
       {"op": "expect", "status": {"view": "play1", "ui_depth": "1"}},
-      {"op": "expect", "ocr": ["CLOSE"], "rect": [968, 320, 96, 56]},
-      {"op": "tap", "x": 1016, "y": 348},
+      {"op": "tap", "control": "play1/Play Expanded LFO Close"},
       {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}},
       {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
     ],
@@ -103,10 +101,9 @@
       {"op": "snapshot", "name": "baseline"},
       {"op": "expect", "status": {"play_osc": "2"}},
       {"op": "expect", "target": "osc1.on", "value": 1},
-      {"op": "tap", "control": "play1/Play Native OSC Osc A/expand"},
+      {"op": "tap", "control": "play1/Play Native OSC Osc A expand/State [2]/Control"},
       {"op": "expect", "status": {"ui_depth": "1"}},
-      {"op": "expect", "ocr": ["CLOSE"], "rect": [1152, 230, 120, 56]},
-      {"op": "tap", "x": 1212, "y": 258},
+      {"op": "tap", "control": "play1/Play Expanded Oscillator Close"},
       {"op": "expect", "status": {"ui_depth": "0"}},
       {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
     ],
@@ -144,9 +141,9 @@
     "id": "master.mpe.power",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
-      {"op": "expect", "ocr": ["MPE"], "rect": [640, 492, 230, 180]},
       {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
+      {"op": "expect", "vst": {"2887": 1}},
       {"op": "tap", "control": "master/Master MPE On"},
       {"op": "expect", "target": "master.mpe.on", "change": "only", "from": "baseline"}
     ],
@@ -576,10 +573,9 @@
     "id": "filter.split.f1.power",
     "view": "filter1",
     "steps": [
-      {"op": "tap", "x": 37, "y": 154},
-      {"op": "expect", "ocr": ["NOTE"], "rect": [836, 143, 50, 21]},
-      {"op": "expect", "ocr": ["VELO"], "rect": [1019, 143, 50, 21]},
       {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 37, "y": 154},
+      {"op": "expect", "vst": {"2850": 0.25}},
       {"op": "tap", "x": 44, "y": 222},
       {"op": "expect", "target": "filter1.on", "change": "only", "from": "baseline"}
     ],
@@ -593,10 +589,9 @@
     "id": "filter.split.f2.power",
     "view": "filter1",
     "steps": [
-      {"op": "tap", "x": 95, "y": 154},
-      {"op": "expect", "ocr": ["NOTE"], "rect": [836, 143, 50, 21]},
-      {"op": "expect", "ocr": ["VELO"], "rect": [1019, 143, 50, 21]},
       {"op": "snapshot", "name": "baseline"},
+      {"op": "tap", "x": 95, "y": 154},
+      {"op": "expect", "vst": {"2850": 0.5}},
       {"op": "tap", "x": 44, "y": 222},
       {"op": "expect", "target": "filter2.on", "change": "only", "from": "baseline"}
     ],
@@ -1744,15 +1739,15 @@
     "view": "fx",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "x": 168, "y": 206},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 2/select [2]"},
       {"op": "expect", "vst": {"3234": 1}},
-      {"op": "tap", "x": 100, "y": 206},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
       {"op": "expect", "vst": {"3233": 1}},
       {"op": "expect", "vst": {"3234": 0}},
       {"op": "expect", "target": "*", "change": "unchanged"}
     ],
     "restore": [
-      {"op": "tap", "x": 100, "y": 206},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
       {"op": "navigate", "view": "play1"}
     ]
   },
@@ -1761,15 +1756,15 @@
     "view": "fx",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "x": 100, "y": 206},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
       {"op": "expect", "vst": {"3233": 1}},
-      {"op": "tap", "x": 168, "y": 206},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 2/select [2]"},
       {"op": "expect", "vst": {"3234": 1}},
       {"op": "expect", "vst": {"3233": 0}},
       {"op": "expect", "target": "*", "change": "unchanged"}
     ],
     "restore": [
-      {"op": "tap", "x": 100, "y": 206},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
       {"op": "navigate", "view": "play1"}
     ]
   },
