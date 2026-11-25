@@ -375,7 +375,8 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             for f in (1, 2):
                 self.assertEqual(bindings[f"Power{f}"], "Parameter " + str(params[f"filter{f}.on"]))
             labels = replacements[bindings["Data"]]
-            self.assertEqual(labels[:2], ["F1", "F2"])
+            self.assertEqual([label.removesuffix(" ✓") for label in labels],
+                             ["F1", "F2", "Parallel", "F1 to F2", "F2 to F1"])
             route, = [i - 2 for i, text in enumerate(labels) if text.endswith(" ✓")]
             self.assertIn(f"IndexedEnabling/{route}/3/Parameter {params['filter.routing']}",
                           instance["bounds"]["additionalInvalidatingHandles"])

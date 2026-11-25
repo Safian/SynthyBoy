@@ -37,7 +37,7 @@ FIELDS = (
 )
 SELECT = ("F1", "F2", "NOTE", "VELO")
 CURVE_ACTIONS = ("Init", "Undo", "Delete Point", "Targets")
-CHAIN_CHOICES = ("F1", "F2", "Parallel", "F1 → F2", "F2 → F1")
+CHAIN_CHOICES = ("F1", "F2", "Parallel", "F1 to F2", "F2 to F1")
 POWER = 0
 ROUTE = 10
 MODEL, STYLE = 17, 18
