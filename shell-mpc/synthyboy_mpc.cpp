@@ -4136,8 +4136,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     if (field == n::Page)
                         std::snprintf (buf, kCap, "%d / %d", cell.source + 1, cell.target);
                     else if (part == n::Amount)
-                        synthyboy_mpc::overlay::uibind::formatValue (synthyboy::paramTable()[cell.target],
-                            inst->paramMirror[cell.target].load (std::memory_order_relaxed), buf, kCap);
+                        synthyboy_mpc::overlay::uibind::formatModAmount (inst->paramMirror[cell.target].load (std::memory_order_relaxed), buf, kCap);
                     else if (part == n::Polarity || part == n::Active)
                     {
                         const bool on = inst->nativeModTargetValue (field, cell) > 0.5f;
@@ -4682,6 +4681,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     const auto& pi = synthyboy::paramTable()[target];
                     if (opcode == effGetParamLabel)
                         synthyboy_mpc::putBounded (buf, kCap, synthyboy::unitLabel (pi.unit));
+                    else if (field == n::kDetail + n::DetailAmount || (field >= 0 && field < n::kDetail && field % n::kRowFields == n::Amount))
+                        synthyboy_mpc::overlay::uibind::formatModAmount (inst->paramMirror[target].load (std::memory_order_relaxed), buf, kCap);
                     else
                         synthyboy_mpc::overlay::uibind::formatValue (pi, inst->paramMirror[target].load (std::memory_order_relaxed), buf, kCap);
                 }

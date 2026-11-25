@@ -464,7 +464,7 @@ int main (int argc, char** argv)
                 const float amt = act ? activeRows[r].amt : 0.0f;
                 const float amtNorm = act ? (amt * 0.01f + 1.0f) * 0.5f : 0.5f;
                 char amtDisp[32];
-                std::snprintf (amtDisp, sizeof amtDisp, "%+.1f %%", static_cast<double> (amt));
+                uibind::formatModAmount (amt, amtDisp, sizeof amtDisp);
                 const bool bi = act ? activeRows[r].bi : false;
                 const bool byp = act ? activeRows[r].byp : false;
 
@@ -501,7 +501,7 @@ int main (int argc, char** argv)
                 const float amt = inst.param (sp.amount);
                 const float amtNorm = (amt * 0.01f + 1.0f) * 0.5f;
                 char amtDisp[32];
-                std::snprintf (amtDisp, sizeof amtDisp, "%+.1f %%", static_cast<double> (amt));
+                uibind::formatModAmount (amt, amtDisp, sizeof amtDisp);
                 const bool bi = inst.param (sp.bipolar) > 0.5f;
                 const bool byp = inst.param (sp.bypass) > 0.5f;
 

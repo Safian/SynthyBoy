@@ -15,7 +15,6 @@ for p in (str(REPO_ROOT), str(SCRIPTS)):
 
 from components import style
 from components.native.level.level import write_strip
-from components.native.mod_row.mod_row import write_skin_assets as write_mod_row_assets
 from components.native.radio_button.radio_button import render_segmented_button_art
 from components.native.button.button import action_art, in_slot
 from components.native.button.button import button as native_button
@@ -30,9 +29,6 @@ MODE_BUTTONS = (
 def _ensure_assets(skins_dir):
     """Generate verified native button and indicator PNGs into ctx.skins_dir."""
     skins_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. Compose public assets from components.native.mod_row (selectors, buttons, slider art, etc.)
-    write_mod_row_assets(skins_dir)
 
     # 2. Segmented Mode buttons (ALL, BY SOURCE, BY DEST)
     for tag, label, w, h in MODE_BUTTONS:
@@ -102,23 +98,6 @@ def apply(tui, qlinks, ctx):
             native_button("Delete confirm", rect, "mod_detail_confirm.png", remaps=(("Data", "Data"),),
                           gates=("IndexedEnabling/1/2/Confirm",)),
         ]
-
-    # Upgrade dropdown group selector
-    if "modNative_group_260x56" in defs:
-        definition = defs["modNative_group_260x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_selector_260x56.png"}
-        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_260x56.png"}
-
-    # Upgrade row list selectors
-    if "modNative_list_176x56" in defs:
-        definition = defs["modNative_list_176x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_selector_176x56.png"}
-        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_176x56.png"}
-
-    if "modNative_list_244x56" in defs:
-        definition = defs["modNative_list_244x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_selector_244x56.png"}
-        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_selector_244x56.png"}
 
     # Tab background is neutral dark surface; Matrix and Detail backgrounds are gated components
     mod_tab = next((t for t in tui["pageData"]["tabs"] if t.get("tabName") == "Mod"), None)

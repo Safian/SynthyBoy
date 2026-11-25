@@ -1,14 +1,14 @@
 # ModRow Native Component
 
-Host-native MPC compound component for modulation matrix rows, preserving the authentic dark blue / white / cyan aesthetic from [mod.png](file:///Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-gemini-worker-11404c31ef/docs/user-guide/img/mod.png).
+Host-native MPC compound component for modulation matrix rows. [Historical Mod screen](../../../docs/screens/mod_old.jpg).
 
 ## Public API (`mod_row.py`)
 
 - `build_cell_definition(kind, width, height, *, image_name=None)`:
   Builds local component definitions for row cells:
-  - `"bar"`: full 56 px high Slider input hitbox (`sliderType`: `TrackAndThumb`, `isBipolar`: `True`, touch target >= 56 px) with thin centered 16 px track art and signed readout.
+  - `"bar"`: full 56 px high Slider input hitbox (`sliderType`: `TrackAndThumb`, `isBipolar`: `True`, touch target >= 56 px) with a 5 px bipolar rail, a 16 px round thumb and signed readout.
   - `"toggle"`: compact button for POLARITY (`UNI`/`BI`) and ROUTE (`ON`/`OFF`), single value label without repeated header.
-  - `"list"` / `"group"`: dropdown list selector box with left-aligned value label and subtle chevron.
+  - `"list"` / `"group"`: shared Selector dropdown with centered value and chevron.
   - `"action"`: MORE button with instant toggle action.
 - `build_mod_row_definition(skins_dir=None, *, layout="normal", row_type=None)`:
   Constructs the compound row definition containing all 6 interactive controls (`AMOUNT`, `POLARITY`, `ROUTE`, `SOURCE`, `TARGET`, `MORE`) with individual 56 px touch hitboxes.
@@ -21,7 +21,7 @@ Host-native MPC compound component for modulation matrix rows, preserving the au
 - `render_standalone_mod_row(...)`:
   Authentic offline renderer generating fullwidth (1280 px) row previews with zero right-edge clipping.
 - `extract_historical_before_crop(source_path)`:
-  Extracts the real historical first-row crop from `docs/user-guide/img/mod.png`, preserving the original yellow Q-Link bank frame and numbered Q badges.
+  Extracts the real historical first-row crop from `docs/screens/mod_old.jpg`, preserving the original yellow Q-Link bank frame and numbered Q badges.
 
 ## Verification & Limitations
 

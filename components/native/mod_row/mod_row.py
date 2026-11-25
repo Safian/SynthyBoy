@@ -3,7 +3,7 @@
 """Reusable host-native MPC ModRow compound component and definitions.
 
 Faithfully preserves our authentic dark blue / white / cyan aesthetic
-from docs/user-guide/img/mod.png:
+from docs/screens/mod_old.jpg:
 - Slim bipolar horizontal amount bar with center zero tick, center-origin fill, and signed readout
 - Full 56px input rectangle for native Slider (touch target >= 56px)
 - Source and destination dropdown selectors with subtle chevron
@@ -14,7 +14,6 @@ from docs/user-guide/img/mod.png:
 """
 
 import copy
-import math
 from pathlib import Path
 
 from components.style import (
@@ -23,10 +22,11 @@ from components.style import (
     color as _style_color,
     size as _style_size,
 )
+from components.native.selector.selector import dropdown_definition, render_dropdown_face, save_png_filter0
 from components.native.button.button import action_art, button as native_button, entry as _entry, in_slot
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageColor, ImageDraw, ImageFont
 except ImportError:
     Image = ImageDraw = ImageFont = None
 
@@ -48,11 +48,7 @@ ARROW_WIDTH = _style_size("mod_row.arrow_width")
 TARGET_WIDTH = _style_size("mod_row.target_width")
 AMOUNT_WIDTH_NORMAL = _style_size("mod_row.amount_width_normal")
 AMOUNT_WIDTH_SCROLL = _style_size("mod_row.amount_width_scroll")
-SLIDER_WIDTH_NORMAL = _style_size("mod_row.slider_width_normal")
-SLIDER_WIDTH_SCROLL = _style_size("mod_row.slider_width_scroll")
-SLIDER_HEIGHT = _style_size("mod_row.slider_height")
 TRACK_HEIGHT = _style_size("mod_row.track_height")
-TRACK_RADIUS = _style_size("mod_row.track_radius")
 POLARITY_WIDTH = _style_size("mod_row.polarity_width")
 ROUTE_WIDTH = _style_size("mod_row.route_width")
 MORE_WIDTH = _style_size("mod_row.more_width")
@@ -94,7 +90,7 @@ def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticall
     return label
 
 
-def build_cell_definition(kind, width, height, *, image_name=None):
+def build_cell_definition(kind, width, height, *, image_name=None, skins_dir=None, choice_menu="fx editor choice menu"):
     """Factory for standard cell definitions used within a ModRow.
     
     Ensures all interactive components have a touch hitbox of at least 56px.
@@ -104,11 +100,13 @@ def build_cell_definition(kind, width, height, *, image_name=None):
     bg_focussed = {"version": 1, "colour": _style_argb("mod_row.focus"), "image": image_name or ""}
 
     if kind == "bar":
-        # Full 56px native Slider with slim centered bipolar track artwork and signed readout
-        bar_w = width - 108
-        track_img = image_name or f"mod_slider_track_{bar_w}x56.png"
-        revealed_img = f"mod_slider_revealed_{bar_w}x56.png"
-        thumb_img = "mod_slider_thumb.png"
+        left, bar_w = amount_track_geometry(width)
+        track_img = image_name or f"mod_slider_track_{bar_w}x{height}.png"
+        revealed_img = f"mod_slider_revealed_{bar_w}x{height}.png"
+        thumb_img = f"mod_slider_thumb_{height}.png"
+        panel = f"mod_amount_{width}x{height}.png"
+        if skins_dir is not None:
+            write_amount_assets(skins_dir, width, height)
 
         slider_data = {
             "version": 4,
@@ -124,25 +122,23 @@ def build_cell_definition(kind, width, height, *, image_name=None):
             "isBipolar": True,
             "handleName": "Data",
         }
-        # Explicit Image component for track artwork placed at (4, 0, bar_w, height),
-        # strictly avoiding background stretch across the entire cell into the value readout.
         track_bg = _entry(
             "track_bg",
             "Image",
             {"version": 2, "imageType": "Regular", "colour": "0", "image": track_img},
-            (_style_size("mod_row.build_cell_definition.padding"), 0, bar_w, height),
+            (left, 0, bar_w, height),
             focus="No",
         )
-        control = _entry("amount", "Slider", slider_data, (_style_size("mod_row.build_cell_definition.padding"), 0, bar_w, height), focus="Yes")
+        control = _entry("amount", "Slider", slider_data, (left, 0, bar_w, height), focus="Yes")
         readout = _label_entry(
             "Value",
-            (width - _style_size("mod_row.build_cell_definition.value_width"), 0, _style_size("mod_row.build_cell_definition.value_width"), height),
+            (width - READOUT_WIDTH, 0, READOUT_WIDTH - _style_size("mod_row.amount.readout_inset"), height),
             justification="right verticallyCentred",
-            font_size=_style_size("mod_row.font.value"),
+            font_size=_style_size("mod_row.font.amount"),
         )
         children = [track_bg, control, readout]
-        bg_unfocussed = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
-        bg_focussed = {"version": 1, "colour": _style_argb("mod_row.focus"), "image": ""}
+        bg_unfocussed = {"version": 1, "colour": _style_native_color("transparent"), "image": panel}
+        bg_focussed = dict(bg_unfocussed, colour=_style_argb("mod_row.focus"))
 
     elif kind == "toggle":
         if width > _style_size("mod_row.build_cell_definition.split_threshold"):
@@ -159,20 +155,15 @@ def build_cell_definition(kind, width, height, *, image_name=None):
         ]
 
     elif kind in ("list", "group"):
-        # Dropdown list selector box with left-aligned value text and chevron
-        children = [
-            _label_entry(
-                "Value",
-                (_style_size("mod_row.build_cell_definition.value_padding"), 0, width - _style_size("mod_row.build_cell_definition.selector_reserved_width"), height),
-                justification="left verticallyCentred",
-                font_size=_style_size("mod_row.font.value"),
-            )
-        ]
-        handler, extra = ("Show Overlay", "fx editor choice menu") if kind == "group" else ("Toggle Switch", "")
+        handler, extra = ("Show Overlay", choice_menu) if kind == "group" else ("Toggle Switch", "")
         actions = [
             {"version": 1, "onAction": trigger, "handler": handler, "handleName": "Data", "additionalData": extra}
             for trigger in ("Mouse Down", "Enter Pressed")
         ]
+
+        definition = dropdown_definition(width, height, actions=actions, skins_dir=skins_dir)
+        definition["disableCoarseDataWheel"] = True
+        return definition
 
     elif kind == "action":
         # Action button (e.g. MORE)
@@ -233,10 +224,10 @@ def build_mod_row_definitions(skins_dir=None):
     defs = {}
     # 1. Base cell definitions
     for w in (AMOUNT_WIDTH_NORMAL, AMOUNT_WIDTH_SCROLL):
-        defs[f"modNative_bar_{w}x56"] = build_cell_definition("bar", w, ROW_HEIGHT)
+        defs[f"modNative_bar_{w}x56"] = build_cell_definition("bar", w, ROW_HEIGHT, skins_dir=skins_dir)
     defs["modNative_toggle_72x56"] = build_cell_definition("toggle", POLARITY_WIDTH, ROW_HEIGHT)
-    defs["modNative_list_176x56"] = build_cell_definition("list", SOURCE_WIDTH, ROW_HEIGHT)
-    defs["modNative_list_244x56"] = build_cell_definition("list", TARGET_WIDTH, ROW_HEIGHT)
+    defs["modNative_list_176x56"] = build_cell_definition("list", SOURCE_WIDTH, ROW_HEIGHT, skins_dir=skins_dir)
+    defs["modNative_list_244x56"] = build_cell_definition("list", TARGET_WIDTH, ROW_HEIGHT, skins_dir=skins_dir)
     defs["modNative_action_76x56"] = build_cell_definition("action", MORE_WIDTH, ROW_HEIGHT)
 
     # 2. Compound row definitions
@@ -299,36 +290,6 @@ def build_mod_row_instance(
     return entry
 
 
-def draw_selector_frame(width, height, radius=_style_size("mod_row.draw_selector_frame.radius")):
-    """Draw a dark dropdown selector box with outline and subtle dropdown chevron."""
-    if Image is None:
-        return None
-    scale = _style_size("mod_row.draw_selector_frame.unit")
-    w, h = width * scale, height * scale
-    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(im)
-    pad = _style_size("mod_row.draw_selector_frame.padding") * scale
-    r = radius * scale
-
-    draw.rounded_rectangle(
-        (pad, pad, w - pad - 1, h - pad - 1),
-        radius=r,
-        fill=_style_color("mod_row.field_surface"),
-        outline=_style_color("mod_row.field_border"),
-        width=scale,
-    )
-
-    # Subtle dropdown chevron on the right side
-    cx = w - _style_size("mod_row.draw_selector_frame.chevron_inset") * scale
-    cy = h // 2
-    cw = _style_size("mod_row.draw_selector_frame.chevron_half_width") * scale
-    draw.polygon(
-        [(cx - cw, cy - _style_size("mod_row.draw_selector_frame.padding") * scale), (cx + cw, cy - _style_size("mod_row.draw_selector_frame.padding") * scale), (cx, cy + _style_size("mod_row.draw_selector_frame.chevron_lower_arm") * scale)],
-        fill=_style_color("mod_row.chevron"),
-    )
-    return im.resize((width, height), Image.Resampling.LANCZOS)
-
-
 def draw_arrow(width=_style_size("mod_row.draw_arrow.width"), height=_style_size("mod_row.draw_arrow.height")):
     """Draw slim arrow separator -> between source and target."""
     if Image is None:
@@ -352,215 +313,110 @@ def draw_arrow(width=_style_size("mod_row.draw_arrow.width"), height=_style_size
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def draw_slider_track(width, height=_style_size("mod_row.draw_slider_track.height")):
-    """Draw thin track art inside a full 56px high image with center zero tick and quarter/half static marks."""
-    if Image is None:
-        return None
+def amount_track_geometry(width):
+    left = _style_size("mod_row.amount.track_left")
+    return left, width - READOUT_WIDTH - 2 * left
+
+
+def _slider_art(width, height, *, revealed=False, thumb=False):
     scale = _style_size("mod_row.draw_slider_track.unit")
     w, h = width * scale, height * scale
-    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(im)
-
-    track_h = TRACK_HEIGHT * scale
-    track_y = (h - track_h) // 2
-    pad = _style_size("mod_row.draw_slider_track.unit") * scale
-
-    draw.rounded_rectangle(
-        [(pad, track_y), (w - pad - 1, track_y + track_h - 1)],
-        radius=TRACK_RADIUS * scale,
-        fill=_style_color("mod_row.track"),
-        outline=_style_color("mod_row.track_border"),
-        width=scale,
-    )
-
-    # Static scale ticks (-100%, -75%, -50%, -25%, 0, +25%, +50%, +75%, +100%)
-    inner_w = (w - pad - 1) - (pad + 1)
-    mid_x = pad + 1 + inner_w // 2
-    half_span = inner_w // 2
-
-    # (fraction, height_fraction, color_token, line_width)
-    ticks = [
-        (0.0, 1.0, "mod_row.tick_center", _style_size("mod_row.draw_slider_track.inset_and_center_stroke")),
-        (-0.5, 0.65, "mod_row.tick_major", 1),
-        (0.5, 0.65, "mod_row.tick_major", 1),
-        (-0.25, 0.40, "mod_row.tick_minor", 1),
-        (-0.75, 0.40, "mod_row.tick_minor", 1),
-        (0.25, 0.40, "mod_row.tick_minor", 1),
-        (0.75, 0.40, "mod_row.tick_minor", 1),
-        (-1.0, 0.30, "mod_row.tick_minor", 1),
-        (1.0, 0.30, "mod_row.tick_minor", 1),
-    ]
-
-    for frac, h_ratio, col_key, w_factor in ticks:
-        tx = mid_x + int(round(frac * (half_span - scale)))
-        th = int(round((track_h - _style_size("mod_row.draw_slider_track.inset_and_center_stroke") * scale) * h_ratio))
-        ty0 = track_y + scale + (track_h - _style_size("mod_row.draw_slider_track.inset_and_center_stroke") * scale - th) // 2
-        ty1 = ty0 + th
-        draw.line([(tx, ty0), (tx, ty1)], fill=_style_color(col_key), width=w_factor * scale)
-
-    return im.resize((width, height), Image.Resampling.LANCZOS)
-
-
-def draw_slider_revealed(width, height=_style_size("mod_row.draw_slider_revealed.height")):
-    """Draw bipolar cyan fill art inside a full 56px high image for TrackAndThumb slider."""
-    if Image is None:
-        return None
-    scale = _style_size("mod_row.draw_slider_revealed.unit")
-    w, h = width * scale, height * scale
-    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(im)
-
-    track_h = TRACK_HEIGHT * scale
-    track_y = (h - track_h) // 2
-    pad = _style_size("mod_row.draw_slider_revealed.unit") * scale
-
-    # Full fill rectangle inside the track bounds
-    draw.rectangle(
-        [(pad + scale, track_y + scale), (w - pad - scale - 1, track_y + track_h - scale - 1)],
-        fill=_style_color("mod_row.amount_fill"),
-    )
-    return im.resize((width, height), Image.Resampling.LANCZOS)
-
-
-def draw_slider_thumb(width=_style_size("mod_row.draw_slider_thumb.width"), height=_style_size("mod_row.draw_slider_thumb.height")):
-    """Draw thumb indicator cap inside a full 56px high image for TrackAndThumb slider."""
-    if Image is None:
-        return None
-    scale = _style_size("mod_row.draw_slider_thumb.unit")
-    w, h = width * scale, height * scale
-    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(im)
-
-    track_h = TRACK_HEIGHT * scale
-    track_y = (h - track_h) // 2
-    cap_h = track_h + _style_size("mod_row.draw_slider_thumb.unit") * scale
-    cap_y = track_y - _style_size("mod_row.draw_slider_thumb.inset") * scale
-    mid_x = w // 2
-
-    draw.rectangle(
-        [(mid_x - scale, cap_y), (mid_x + scale - 1, cap_y + cap_h - 1)],
-        fill=_style_color("mod_row.amount_thumb"),
-    )
-    return im.resize((width, height), Image.Resampling.LANCZOS)
-
-
-def render_standalone_mod_row(
-    slot_num="01",
-    source="LFO 1",
-    target="Filter 1 Cutoff",
-    amount=0.65,
-    polarity="BI",
-    route="ON",
-    width=ROW_FULLWIDTH,
-    height=ROW_HEIGHT,
-):
-    """Render authentic standalone ModRow art at fullwidth using actual component definitions."""
-    if Image is None:
-        return None
-    im = Image.new("RGBA", (width, height), _style_color("mod_row.surface"))
-    draw = ImageDraw.Draw(im)
-
-    font_main = semibold(_style_size("mod_row.font.label")) or ImageFont.load_default()
-    font_bold = semibold(_style_size("mod_row.font.value")) or ImageFont.load_default()
-
-    # 1. Slot Number in left lane (x ~ 33)
-    draw.text(
-        (_style_size("mod_matrix.slot_num_x"), height // 2),
-        str(slot_num),
-        fill=_style_color("mod_row.text_label"),
-        font=font_main,
-        anchor="mm",
-    )
-
-    # 2. Source dropdown
-    sx, sy, sw, sh = 66, 0, SOURCE_WIDTH, height
-    sel_src = draw_selector_frame(sw, sh)
-    if sel_src:
-        im.alpha_composite(sel_src, (sx, sy))
-    draw.text((sx + 14, sy + sh // 2), source, fill=_style_color("mod_row.text_value"), font=font_main, anchor="lm")
-
-    # 3. Arrow
-    arr = draw_arrow(ARROW_WIDTH, height)
-    if arr:
-        im.alpha_composite(arr, (sx + sw + 6, 0))
-
-    # 4. Target dropdown
-    tx, ty, tw, th = sx + sw + 26, 0, TARGET_WIDTH, height
-    sel_dst = draw_selector_frame(tw, th)
-    if sel_dst:
-        im.alpha_composite(sel_dst, (tx, ty))
-    draw.text((tx + 14, ty + th // 2), target, fill=_style_color("mod_row.text_value"), font=font_main, anchor="lm")
-
-    # 5. Amount bar (full 56px with thin track)
-    bx, by, bw, bh = tx + tw + 6, 0, AMOUNT_WIDTH_NORMAL, height
-    bar_w = SLIDER_WIDTH_NORMAL
-    track_art = draw_slider_track(bar_w, height)
-    if track_art:
-        im.alpha_composite(track_art, (bx + 4, 0))
-
-    # Fill deflection
-    mid_x = bx + 4 + bar_w // 2
-    track_y = (height - TRACK_HEIGHT) // 2
-    val_fraction = max(-1.0, min(1.0, amount))
-    fill_len = int(round(val_fraction * (bar_w // 2 - 4)))
-    if fill_len > 0:
-        draw.rectangle(
-            [(mid_x, track_y + 2), (mid_x + fill_len, track_y + TRACK_HEIGHT - 3)],
-            fill=_style_color("mod_row.amount_fill"),
-        )
-    elif fill_len < 0:
-        draw.rectangle(
-            [(mid_x + fill_len, track_y + 2), (mid_x, track_y + TRACK_HEIGHT - 3)],
-            fill=_style_color("mod_row.amount_fill"),
-        )
-
-    # Thumb indicator
-    thumb = draw_slider_thumb(8, height)
+    art = Image.new("RGBA", (w, h))
+    pen = ImageDraw.Draw(art)
     if thumb:
-        im.alpha_composite(thumb, (mid_x + fill_len - 4, 0))
+        pen.ellipse((0, (h - w) // 2, w - 1, (h + w) // 2 - 1), fill=_style_color("mod_row.amount_thumb"))
+    else:
+        inset = _style_size("mod_row.amount.track_inset") * scale
+        rail = TRACK_HEIGHT * scale
+        pen.rounded_rectangle((inset, (h - rail) // 2, w - inset - 1, (h + rail) // 2 - 1),
+                              radius=rail // 2, fill=_style_color("mod_row.amount_fill" if revealed else "mod_row.track"))
+        if revealed:
+            colors = [ImageColor.getrgb(_style_color(f"theme.neon.flow.{i}")) for i in range(4)]
+            for x in range(inset, w - inset):
+                # The host reveals a slice from zero toward either endpoint.
+                phase = abs(x - w / 2) / (w / 2 - inset) * (len(colors) - 1)
+                index = min(int(phase), len(colors) - 2)
+                mix = phase - index
+                rgb = tuple(round(a + (b - a) * mix) for a, b in zip(colors[index], colors[index + 1]))
+                pen.line((x, (h - rail) // 2, x, (h + rail) // 2 - 1), fill=rgb)
+        else:
+            tick = _style_size("mod_row.amount.center_height") * scale
+            stroke = round(_style_size("mod_row.amount.center_width") * scale)
+            pen.rectangle(((w - stroke) // 2, (h - tick) // 2, (w + stroke) // 2 - 1, (h + tick) // 2 - 1),
+                          fill=_style_color("theme.neon.textDim"))
+    return art.resize((width, height), Image.Resampling.LANCZOS)
 
-    # Readout
-    sign = "+" if amount > 0 else ""
-    disp_text = f"{sign}{amount * 100.0:.1f} %"
-    draw.text((bx + bw - 12, height // 2), disp_text, fill=_style_color("mod_row.text_value"), font=font_bold, anchor="rm")
 
-    # 6. Polarity
-    px, py, pw, ph = bx + bw + 6, 0, POLARITY_WIDTH, height
-    draw.rounded_rectangle(
-        [(px, 2), (px + pw - 1, ph - 3)],
-        radius=_style_size("mod_row.button_radius"),
-        fill=_style_color("mod_row.button_surface"),
-        outline=_style_color("mod_row.button_border"),
-        width=1,
-    )
-    draw.text((px + pw // 2, ph // 2), polarity, fill=_style_color("mod_row.text_value"), font=font_bold, anchor="mm")
+def write_amount_assets(directory, width, height):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    _, rail_width = amount_track_geometry(width)
+    images = {
+        f"mod_amount_{width}x{height}.png": render_dropdown_face(width, height, chevron=False),
+        f"mod_slider_track_{rail_width}x{height}.png": _slider_art(rail_width, height),
+        f"mod_slider_revealed_{rail_width}x{height}.png": _slider_art(rail_width, height, revealed=True),
+        f"mod_slider_thumb_{height}.png": _slider_art(_style_size("mod_row.draw_slider_thumb.width"), height, thumb=True),
+    }
+    for filename, image in images.items():
+        save_png_filter0(image, directory / filename)
 
-    # 7. Route State (ON/OFF)
-    rx, ry, rw, rh = px + pw + 6, 0, ROUTE_WIDTH, height
-    draw.rounded_rectangle(
-        [(rx, 2), (rx + rw - 1, rh - 3)],
-        radius=_style_size("mod_row.button_radius"),
-        fill=_style_color("mod_row.button_surface"),
-        outline=_style_color("mod_row.button_border"),
-        width=1,
-    )
-    state_col = _style_color("mod_row.status_on") if route == "ON" else _style_color("mod_row.status_off")
-    draw.text((rx + rw // 2, rh // 2), route, fill=state_col, font=font_bold, anchor="mm")
 
-    # 8. EDIT
-    mx, my, mw, mh = rx + rw + 6, 0, MORE_WIDTH, height
-    draw.rounded_rectangle(
-        [(mx, 2), (mx + mw - 1, mh - 3)],
-        radius=_style_size("mod_row.button_radius"),
-        fill=_style_color("mod_row.button_surface"),
-        outline=_style_color("mod_row.button_border"),
-        width=1,
-    )
-    draw.text((mx + mw // 2, mh // 2), "EDIT", fill=_style_color("mod_row.text_value"), font=font_main, anchor="mm")
+def paint_amount_value(canvas, origin, normalized, revealed, thumb):
+    x, y = origin
+    width, height = revealed.size
+    normalized = min(1, max(0, normalized))
+    center = width // 2
+    handle = round(thumb.width / 2 + normalized * (width - thumb.width))
+    start, end = sorted((center, handle))
+    if end > start:
+        canvas.alpha_composite(revealed.crop((start, 0, end, height)), (x + start, y))
+    canvas.alpha_composite(thumb, (x + handle - thumb.width // 2, y))
 
-    # Bottom subtle divider line
-    draw.line([(8, height - 1), (width - 8, height - 1)], fill=_style_color("mod_row.divider"), width=1)
 
+def render_standalone_mod_row(slot_num="01", source="LFO 1", target="Filter 1 Cutoff",
+                              amount=0.65, polarity="BI", route="ON", width=ROW_FULLWIDTH, height=ROW_HEIGHT):
+    """Compose the catalogue row from its native field layout and actual skin images."""
+    from tempfile import TemporaryDirectory
+    im = Image.new("RGBA", (width, height), _style_color("mod_row.surface"))
+    pen = ImageDraw.Draw(im)
+    origin = _style_size("mod_matrix.header_center_source") - SOURCE_WIDTH // 2
+    pen.text((_style_size("mod_matrix.slot_num_x"), height // 2), slot_num,
+             fill=_style_color("mod_row.text_label"), font=semibold(_style_size("mod_row.font.label")), anchor="mm")
+    im.alpha_composite(draw_arrow(ARROW_WIDTH, height), (origin + SOURCE_WIDTH + 6, 0))
+    values = {"SOURCE": source, "TARGET": target, "AMOUNT": f"{amount * 100:+.1f}".removesuffix(".0") + "%",
+              "POLARITY": polarity, "ROUTE": route}
+    with TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        definitions = build_mod_row_definitions(directory)
+        for caption, kind, (offset, y, w, h) in ROW_FIELDS_NORMAL:
+            x = origin + offset
+            if kind == "action":
+                im.alpha_composite(in_slot(action_art(text="EDIT", width=w), (w, h)), (x, y))
+                continue
+            cell = definitions[f"modNative_{kind}_{w}x{h}"]
+            background = cell["backgroundData"]["unfocussed"]
+            if background["image"]:
+                with Image.open(directory / background["image"]) as face:
+                    im.alpha_composite(face, (x, y))
+            elif kind == "toggle":
+                pen.rectangle((x, y, x + w - 1, y + h - 1), fill=_style_color("mod_row.button_surface"))
+            for child in cell["componentsData"]:
+                info = child["componentData"]
+                data = info["data"]
+                dx, dy, cw, ch = map(int, child["bounds"]["bounds"].split())
+                cx, cy = x + dx, y + dy
+                if info["type"] == "Image":
+                    with Image.open(directory / data["image"]) as frame:
+                        im.alpha_composite(frame.convert("RGBA"), (cx, cy))
+                elif info["type"] == "Slider":
+                    with Image.open(directory / data["revealedImage"]) as fill, Image.open(directory / data["thumbImage"]) as thumb:
+                        paint_amount_value(im, (cx, cy), (amount + 1) / 2, fill, thumb)
+                elif info["type"] == "Label":
+                    style = data["textStyle"]
+                    right = "right" in style["justification"]
+                    font = {"bar": _style_size("mod_row.font.amount_preview"), "list": _style_size("selector.dropdown.preview_font")}.get(kind, style["font"]["height"])
+                    pen.text((cx + (cw if right else cw // 2), cy + ch // 2), values[caption],
+                             fill="#" + style["colour"][-6:], font=semibold(font), anchor="rm" if right else "mm")
     return im
 
 
@@ -574,42 +430,11 @@ def extract_historical_before_crop(source_path=HISTORICAL_SOURCE_IMAGE):
         return im.crop((0, y0, im.width, y1)).convert("RGBA")
 
 
-def write_skin_assets(dest_dir):
-    """Write the selector and slider PNGs referenced by the Mod skin."""
-    dest_dir = Path(dest_dir)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    # Selector backgrounds
-    s176 = draw_selector_frame(SOURCE_WIDTH, ROW_HEIGHT)
-    if s176:
-        s176.save(dest_dir / "mod_selector_176x56.png")
-
-    s244 = draw_selector_frame(TARGET_WIDTH, ROW_HEIGHT)
-    if s244:
-        s244.save(dest_dir / "mod_selector_244x56.png")
-
-    s260 = draw_selector_frame(260, ROW_HEIGHT)
-    if s260:
-        s260.save(dest_dir / "mod_selector_260x56.png")
-
-    # Slider TrackAndThumb assets (400x56 for normal, 356x56 for scroll)
-    for w in (SLIDER_WIDTH_NORMAL, SLIDER_WIDTH_SCROLL):
-        track_art = draw_slider_track(w, ROW_HEIGHT)
-        if track_art:
-            track_art.save(dest_dir / f"mod_slider_track_{w}x56.png")
-        revealed_art = draw_slider_revealed(w, ROW_HEIGHT)
-        if revealed_art:
-            revealed_art.save(dest_dir / f"mod_slider_revealed_{w}x56.png")
-
-    thumb_art = draw_slider_thumb(8, ROW_HEIGHT)
-    if thumb_art:
-        thumb_art.save(dest_dir / "mod_slider_thumb.png")
-
-
 def write_assets(dest_dir=IMG_DIR):
     """Export the runtime assets and standalone component catalog artwork."""
     dest_dir = Path(dest_dir)
-    write_skin_assets(dest_dir)
+    for width in (AMOUNT_WIDTH_NORMAL, AMOUNT_WIDTH_SCROLL):
+        write_amount_assets(dest_dir, width, ROW_HEIGHT)
 
     # 1. Standalone row previews at fullwidth (1280px)
     row_populated = render_standalone_mod_row(
@@ -662,7 +487,7 @@ def write_assets(dest_dir=IMG_DIR):
         # Before section
         draw_comp.text(
             (16, 12),
-            "HISTORICAL BEFORE (GEN 1): REAL FIRST-ROW CROP FROM docs/user-guide/img/mod.png",
+            "HISTORICAL BEFORE (GEN 1): REAL FIRST-ROW CROP FROM docs/screens/mod_old.jpg",
             fill=_style_color("accent.cyan"),
             font=font_cap,
         )
@@ -739,26 +564,15 @@ def editor_label(kind, rect, just="horizontallyCentred verticallyCentred"):
     return _label_entry(kind, rect, justification=just, font_size=font_h)
 
 
-def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice menu"):
-    if kind in ("bar", "toggle", "list", "action", "delete"):
-        return build_cell_definition("action" if kind == "delete" else kind, w, h)
+def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice menu", skins_dir=None):
+    if kind in ("bar", "toggle", "list", "group", "action", "delete"):
+        return build_cell_definition("action" if kind == "delete" else kind, w, h, skins_dir=skins_dir, choice_menu=choice_menu)
     actions = []
     if kind.startswith("mode"):
         mode = native_button("mode", (0, 0, w, h), f"mod_mode_{kind}_on.png",
                              f"mod_mode_{kind}_off.png", index=int(kind[4:]), count=4)
         mode["bounds"]["acceptsHWFocus"] = "No"
         children = [mode]
-    elif kind == "group":
-        name_h = _style_size("mod_row.build_editor_cell_definition.label_height") if h > _style_size("mod_row.build_editor_cell_definition.tall_threshold") else 0
-        if name_h:
-            name_lbl = editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), name_h), just="horizontallyCentred verticallyCentred")
-            val_lbl = editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.value_padding"), name_h + _style_size("mod_row.build_editor_cell_definition.double_padding"), w - _style_size("mod_row.build_editor_cell_definition.value_reserved"), h - name_h - _style_size("mod_row.build_editor_cell_definition.value_vertical_reserved")), just="left verticallyCentred")
-            children = [name_lbl, val_lbl]
-        else:
-            children = [editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.value_padding"), 0, w - _style_size("mod_row.build_editor_cell_definition.value_reserved"), h), just="left verticallyCentred")]
-        actions = [{"version": 1, "onAction": trigger, "handler": "Show Overlay",
-                    "handleName": "Data", "additionalData": choice_menu}
-                   for trigger in ("Mouse Down", "Enter Pressed")]
     elif kind in ("dial_uni", "dial_bi"):
         dial_size = _style_size("dial.diameter")
         dial_x = (w - dial_size) // 2

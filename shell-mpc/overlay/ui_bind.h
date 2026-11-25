@@ -44,6 +44,16 @@ inline void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out,
     mpckit::formatValue (mpckit::synthyboy_adapter::descOf (pi), plain, out, cap);
 }
 
+/** The matrix and route editor share a signed depth with one significant fractional digit. */
+inline void formatModAmount (float plain, char* out, size_t cap) noexcept
+{
+    const int tenths = static_cast<int> (std::lround (plain * 10.0f));
+    if (tenths % 10 == 0)
+        std::snprintf (out, cap, "%+d%%", tenths / 10);
+    else
+        std::snprintf (out, cap, "%+.1f%%", tenths / 10.0);
+}
+
 // ---- the modulation matrix
 inline const char* sourceName (int choice) noexcept
 {

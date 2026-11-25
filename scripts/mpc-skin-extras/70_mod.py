@@ -20,7 +20,6 @@ from components.style import (
 )
 from components.native.button.button import action_button
 from components.native.mod_row.mod_row import (
-    build_cell_definition,
     build_editor_cell_definition,
     editor_label as _label,
     build_mod_row_definitions,
@@ -53,8 +52,8 @@ def _entry(name, kind, data, rect, remap=(), gates=(), focus=False):
             "bounds": bounds}
 
 
-def _definition(kind, w, h):
-    return build_editor_cell_definition(kind, w, h, choice_menu=CHOICE_MENU)
+def _definition(kind, w, h, skins_dir):
+    return build_editor_cell_definition(kind, w, h, choice_menu=CHOICE_MENU, skins_dir=skins_dir)
 
 
 def apply(tui, qlinks, ctx):
@@ -83,7 +82,7 @@ def apply(tui, qlinks, ctx):
         w, h = rect[2:]
         definition = f"modNative_{kind}_{w}x{h}"
         if definition not in definitions:
-            ctx.add_component_definition(definition, _definition(kind, w, h))
+            ctx.add_component_definition(definition, _definition(kind, w, h, ctx.skins_dir))
             definitions.add(definition)
         return definition
 

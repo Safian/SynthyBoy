@@ -21,7 +21,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
-from components.native.mod_row.mod_row import write_route_button_art, write_route_pagination_art
+from components.native.mod_row.mod_row import build_cell_definition, write_route_button_art, write_route_pagination_art
 from native_ui_params import (MOD_TARGETS, MOD_TARGETS_PAGE_GATE, MOD_TARGETS_ROW_FIELDS,
                               MOD_TARGETS_ROW_GATE, MOD_TARGETS_ROWS, MOD_TARGETS_VIEW,
                               mixer_peek_index)
@@ -61,13 +61,11 @@ def _rows(ctx, geometry):
     """One reusable row owns its dynamic route name and four independent controls."""
     y = geometry[0][1]
     name, amount, polarity, active, remove = [(x, top - y, w, h) for x, top, w, h in geometry]
-    x, top, w, h = amount
-    data = {"version": 2, "sliderType": "ColourBar", "direction": "Horizontal",
-            "backgroundColour": _ui_style.argb('screen.mod_targets.backgroundcolour'), "outlineColour": _ui_style.argb('screen.mod_targets.outlinecolour'), "valueColour": _ui_style.argb('mod_targets.border.active'),
-            "isBipolar": True, "handleName": "Amount"}
+    w, h = amount[2:]
+    kind = f"modNative_bar_{w}x{h}"
+    ctx.add_component_definition(kind, build_cell_definition("bar", w, h, skins_dir=ctx.skins_dir))
     items = [_label("Target", name, "Name", "Amount", "IndexedEnabling/2/3/Present", "leftJustified"),
-             _entry("Amount", "Slider", amount, data, focus="Yes"),
-             _label("Depth", (x + w - 104, top, 104, h), "Value", "Amount")]
+             _custom("Amount", kind, amount, (("Data", "Amount"),), None)]
     for key, rect, captions in (("Polarity", polarity, ("BI", "UNI")), ("Active", active, ("ON", "OFF")),
                                 ("Remove", remove, ("×", "×"))):
         on = write_route_button_art(ctx.skins_dir, key.lower() + "_on", captions[0], rect, key != "Remove")

@@ -96,9 +96,14 @@ class NativeModTargetsTest(unittest.TestCase):
             x, top, w, h = expected
             self.assertEqual(rect(widgets[key]), [x, top - y, w, h])
         self.assertEqual(widgets["Target"]["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/2/3/Present"])
-        data = widgets["Amount"]["componentData"]["data"]
-        self.assertEqual((data["sliderType"], data["direction"], data["isBipolar"], data["handleName"]),
-                         ("ColourBar", "Horizontal", True, "Amount"))
+        self.assertEqual(remap(widgets["Amount"]), {"Data": "Amount"})
+        self.assertEqual(widgets["Amount"]["bounds"]["acceptsHWFocus"], "Children")
+        amount = self.definitions[widgets["Amount"]["componentData"]["type"]]
+        slider, = [child for child in amount["componentsData"] if child["componentData"]["type"] == "Slider"]
+        data = slider["componentData"]["data"]
+        self.assertEqual((data["sliderType"], data["direction"], data["revealType"], data["handleName"]),
+                         ("TrackAndThumb", "Horizontal", "Bipolar", "Data"))
+        self.assertNotIn("Depth", widgets)
         for control in ("Polarity", "Active", "Remove"):
             widget = widgets[control]
             self.assertEqual(widget["componentData"]["type"], "Button")

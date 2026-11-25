@@ -12,6 +12,7 @@ from PIL import Image
 
 import test_mpc_skin_extras as skin
 import native_ui_params as handles
+from components.native.selector.selector import dropdown_asset_name
 
 
 @unittest.skipUnless((skin.SDK / "tools" / "gen_ui.py").is_file(), "MPC SDK unavailable")
@@ -44,7 +45,7 @@ class TestUiScreenMod(unittest.TestCase):
             "mod_action_edit.png": (76, 56),
             "mod_detail_delete.png": (120, 56),
             "mod_detail_confirm.png": (120, 56),
-            "mod_selector_260x56.png": (260, 56),
+            dropdown_asset_name(260, 56): (260, 56),
         }
         for filename, (expected_w, expected_h) in expected_assets.items():
             path = self.skins / filename
@@ -79,8 +80,8 @@ class TestUiScreenMod(unittest.TestCase):
         self.assertEqual(len({c["data"]["onImage"] for c in (add, back, groups)}), 3)
         self.assertEqual(self.definitions["modNative_action_76x56"]["backgroundData"]["unfocussed"]["image"],
                          "mod_action_edit.png")
-        self.assertEqual(self.definitions["modNative_group_260x56"]["backgroundData"]["unfocussed"]["image"],
-                         "mod_selector_260x56.png")
+        self.assertEqual(self.definitions["modNative_group_260x56"]["componentsData"][0]["componentData"]["data"]["image"],
+                         dropdown_asset_name(260, 56))
 
     def test_no_visible_qlink_bounds_highlight(self):
         # Q-Link frames must not draw visible numbered host badges over the controls

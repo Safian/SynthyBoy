@@ -305,57 +305,11 @@ class ModSketchAdapter(NativeTabSketch):
             is_bipolar = data.get("isBipolar", False) or data.get("revealType") == "Bipolar"
 
             if stype == "TrackAndThumb":
-                draw = ImageDraw.Draw(canvas)
-                track_h = style.size("mod_row.track_height")
-                track_y = y + (h - track_h) // 2
-                pad = 4
-                # Track outline and surface
-                draw.rounded_rectangle(
-                    [(x + pad, track_y), (x + w - pad - 1, track_y + track_h - 1)],
-                    radius=style.size("mod_row.track_radius"),
-                    fill=style.color("mod_row.track"),
-                    outline=style.color("mod_row.track_border"),
-                    width=1,
-                )
-                mid_x = x + w // 2
-                half_w = (w - 2 * pad) // 2
-
-                # Center zero tick (prominent full height)
-                draw.line([(mid_x, track_y + 1), (mid_x, track_y + track_h - 2)],
-                          fill=style.color("mod_row.center_tick"), width=1)
-
-                # Major ticks (+/- 50%)
-                q_step = half_w // 2
-                for sx in (mid_x - q_step, mid_x + q_step):
-                    draw.line([(sx, track_y + 2), (sx, track_y + track_h - 3)],
-                              fill=style.color("mod_row.tick_major"), width=1)
-                # Minor quarter ticks (+/- 25%, +/- 75%)
-                oct_step = half_w // 4
-                for sx in (mid_x - 3 * oct_step, mid_x - oct_step, mid_x + oct_step, mid_x + 3 * oct_step):
-                    draw.line([(sx, track_y + 3), (sx, track_y + track_h - 4)],
-                              fill=style.color("mod_row.tick_minor"), width=1)
-
-                val_fraction = (norm - 0.5) * 2.0 if is_bipolar else norm
-                bar_len = int(round(val_fraction * (half_w - 4))) if is_bipolar else int(round(norm * (w - 2 * pad - 8)))
-                val_col = style.color("mod_row.amount_fill")
-                if is_bipolar:
-                    if bar_len > 0:
-                        draw.rectangle([(mid_x, track_y + 2), (mid_x + bar_len, track_y + track_h - 3)], fill=val_col)
-                    elif bar_len < 0:
-                        draw.rectangle([(mid_x + bar_len, track_y + 2), (mid_x, track_y + track_h - 3)], fill=val_col)
-                    thumb_pos = mid_x + bar_len
-                else:
-                    if bar_len > 0:
-                        draw.rectangle([(x + pad + 2, track_y + 2), (x + pad + 2 + bar_len, track_y + track_h - 3)], fill=val_col)
-                    thumb_pos = x + pad + 2 + bar_len
-
-                # Thumb indicator
-                thumb_img = self._open_image(data.get("thumbImage", ""))
-                if thumb_img is not None:
-                    canvas.alpha_composite(thumb_img, (thumb_pos - thumb_img.width // 2, y))
-                else:
-                    draw.rectangle([(thumb_pos - 2, track_y - 2), (thumb_pos + 1, track_y + track_h + 1)],
-                                   fill=val_col)
+                from components.native.mod_row.mod_row import paint_amount_value
+                fill = self._open_image(data.get("revealedImage", ""))
+                thumb = self._open_image(data.get("thumbImage", ""))
+                if fill is not None and thumb is not None:
+                    paint_amount_value(canvas, (x, y), norm, fill, thumb)
                 return
 
             if stype == "ColourBar":
@@ -412,6 +366,11 @@ class ModSketchAdapter(NativeTabSketch):
             ts = data.get("textStyle", {})
             font_info = ts.get("font", {})
             size = int(round(float(font_info.get("height", 14))))
+            amount_label = size == style.size("mod_row.font.amount")
+            if amount_label:
+                size = style.size("mod_row.font.amount_preview")
+            elif size == style.size("selector.dropdown.font"):
+                size = style.size("selector.dropdown.preview_font")
             font = self._font(size, font_info.get("style", "SemiBold"))
             ltype = data.get("type", "Text")
             local_h = data.get("handleName", "")
@@ -429,7 +388,7 @@ class ModSketchAdapter(NativeTabSketch):
                 draw = ImageDraw.Draw(canvas)
                 just = ts.get("justification", "horizontallyCentred verticallyCentred")
                 anchor_x = "l" if "left" in just else ("r" if "right" in just else "m")
-                tx = x + 8 if anchor_x == "l" else (x + w - 8 if anchor_x == "r" else x + w // 2)
+                tx = x + 8 if anchor_x == "l" else (x + w - (0 if amount_label else 8) if anchor_x == "r" else x + w // 2)
                 ty = y + h // 2
                 draw.text((tx, ty), txt, fill=col, font=font, anchor=f"{anchor_x}m")
             return

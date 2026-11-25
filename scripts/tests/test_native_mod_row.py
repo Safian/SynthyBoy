@@ -150,8 +150,11 @@ class TestNativeModRow(unittest.TestCase):
                 leaf_rect = [int(v) for v in leaf["bounds"]["bounds"].split()]
                 if leaf["componentData"]["type"] == "Slider":
                     self.assertEqual(leaf_rect[3], 56, f"Leaf slider {name} height must be 56px")
-                else:
-                    self.assertGreaterEqual(leaf_rect[3], 56, f"Leaf {name} height must be >= 56px")
+                elif name in ("SOURCE", "TARGET"):
+                    self.assertEqual(leaf["bounds"]["acceptsHWFocus"], "No")
+                    self.assertFalse(child_def["ignoreMousePresses"])
+                    self.assertEqual([action["onAction"] for action in child_def["actions"]],
+                                     ["Mouse Down", "Enter Pressed"])
 
     def test_row_before_crop_and_after_render_assets(self):
         """Verify mod_row_before is real crop with Q badges and after render is fullwidth 1280."""
@@ -195,8 +198,8 @@ class TestNativeModRow(unittest.TestCase):
         defs = nmr.build_mod_row_definitions(self.skins_dir)
         bar_def = defs["modNative_bar_508x56"]
 
-        # 1. Parent cell background must be empty (NOT stretched track_img)
-        self.assertEqual(bar_def["backgroundData"]["unfocussed"]["image"], "")
+        # 1. Panel and track are independent assets
+        self.assertEqual(bar_def["backgroundData"]["unfocussed"]["image"], "mod_amount_508x56.png")
 
         # 2. Dedicated child Image component for track background
         components = {c["componentData"]["name"]: c for c in bar_def["componentsData"]}
@@ -204,8 +207,8 @@ class TestNativeModRow(unittest.TestCase):
         track_bg_comp = components["track_bg"]
         self.assertEqual(track_bg_comp["componentData"]["type"], "Image")
         tb_bounds = [int(v) for v in track_bg_comp["bounds"]["bounds"].split()]
-        self.assertEqual(tb_bounds, [4, 0, 400, 56])
-        self.assertEqual(track_bg_comp["componentData"]["data"]["image"], "mod_slider_track_400x56.png")
+        self.assertEqual(tb_bounds, [10, 0, 392, 56])
+        self.assertEqual(track_bg_comp["componentData"]["data"]["image"], "mod_slider_track_392x56.png")
 
         # 3. Dedicated action EDIT asset must be generated with width 76
         nmr.write_assets(self.skins_dir)
@@ -214,11 +217,17 @@ class TestNativeModRow(unittest.TestCase):
         with Image.open(edit_file) as edit_im:
             self.assertEqual(edit_im.size, (76, 56))
 
-        # 4. Track image exists and has center zero tick and quarter/half static marks
-        track_file = self.skins_dir / "mod_slider_track_400x56.png"
+        # 4. Track image exists and has a center tick taller than the rail
+        track_file = self.skins_dir / "mod_slider_track_392x56.png"
         self.assertTrue(track_file.is_file())
         with Image.open(track_file) as track_im:
-            self.assertEqual(track_im.size, (400, 56))
+            self.assertEqual(track_im.size, (392, 56))
+            self.assertGreater(track_im.getpixel((196, 20))[3], 100)
+            self.assertEqual(track_im.getpixel((100, 20))[3], 0)
+        with Image.open(self.skins_dir / "mod_slider_thumb_56.png") as thumb:
+            self.assertEqual(thumb.size, (16, 56))
+            self.assertGreater(thumb.getpixel((8, 28))[0], 225)
+            self.assertLess(thumb.getpixel((0, 20))[3], 5)
 
     def test_detail_screen_components_and_assets(self):
         """Detail screen: 90px dial filmstrips, 3-column furniture, Back/Delete assets, contract rects."""
