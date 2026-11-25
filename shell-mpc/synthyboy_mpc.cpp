@@ -1680,6 +1680,9 @@ struct PluginInstance
         uiReadNs.fetch_add (ns, std::memory_order_relaxed);
     }
 #endif
+    static constexpr long long kNativePaintWindowMs = 150;
+    bool nativeNamesAwaitingPaint = false;
+    long long nativePagePaintUntil = -1;
     long long proxyNamesRequestedAt = -1;   // display thread only
     std::atomic<int> nativeMixerPeekView { nativeui::MixerBase };
     std::atomic<int> nativeMixerActiveTab { 0 };
@@ -2227,6 +2230,13 @@ struct PluginInstance
     {
         if (value == nativeUiReported[offset] && ! force)
             return;
+        const bool enteringLayout = nativeUiReported[offset] <= 0.0f
+            && (offset == nativeui::kFilterBase || offset == nativeui::kFxHeader
+                || offset == nativeui::kFxChain + nativeui::fxchain::View);
+        const bool switchingLfoLayout = offset == nativeui::kLfoBase + nativeui::lfo::kLayout
+            && value != nativeUiReported[offset];
+        if (value > 0.0f && (enteringLayout || switchingLfoLayout))
+            nativePagePaintUntil = steadyMs() + kNativePaintWindowMs;
         nativeUiReported[offset] = value;
         audioMaster (e, audioMasterAutomate, nativeUiBase() + offset, 0, nullptr, value);
     }
@@ -2256,7 +2266,7 @@ struct PluginInstance
             reportNativeValue (e, base + field, nativeUiValue (base + field));
         reportNativeValue (e, base + n::kView, shown ? 1.0f : 0.0f);
         if (rebind)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     void nativeLfoDetailPoll (AEffect* e)
@@ -2285,7 +2295,7 @@ struct PluginInstance
         reportNativeValue (e, base + n::kVisibleRows, static_cast<float> (display.rows) / n::kRows);
         reportNativeValue (e, base + n::kViewHandle, static_cast<float> (display.view) / n::LastView);
         if (rebind)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     void preparePlayPresentation()
@@ -2484,7 +2494,7 @@ struct PluginInstance
         reportNativeValue (e, nativeui::kOscRootLoadView, oscRootLoadView());
         reportNativeValue (e, base, view);
         if (namesChanged)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     void nativeOscSettingsPoll (AEffect* e)
@@ -2508,7 +2518,7 @@ struct PluginInstance
         reportNativeValue (e, nativeui::kOscWarpLayout, nativeUiValue (nativeui::kOscWarpLayout));
         reportNativeValue (e, nativeui::kOscSettingsView, view);
         if (changed)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     bool nativeFxHeaderPoll (AEffect* e)
@@ -2707,7 +2717,7 @@ struct PluginInstance
         }
         reportNativeValue (e, nativeui::kEnvView, view);
         if (changed)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     void nativeExpandedPlayPoll (AEffect* e)
@@ -2750,7 +2760,7 @@ struct PluginInstance
             reportNativeValue (e, base + field, nativeUiValue (base + field));
         reportNativeValue (e, base + n::kView, view);
         if (names)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     void nativeModPoll (AEffect* e)
@@ -2820,7 +2830,7 @@ struct PluginInstance
         reportNativeValue (e, base + n::Mode, mode);
         nativeModNavigation.report (snapshot);
         if (changed)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+            requestNativeControlNames();
     }
 
     /** The normalised value of a real parameter (table index) as the host reads it. */
@@ -2928,6 +2938,14 @@ struct PluginInstance
         audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
+    // Allow one primary-frame update before asking the MPC to rebuild parameter menus.
+    // A burst of rebinding controls shares the first request's deadline.
+    void requestNativeControlNames()
+    {
+        requestProxyNames();
+        nativeNamesAwaitingPaint = true;
+    }
+
     void requestProxyNames ()
     {
         if (proxyNamesRequestedAt < 0)
@@ -2944,6 +2962,10 @@ struct PluginInstance
         if (nativeMixerPeekView.load (std::memory_order_acquire) == nativeui::MixerPeekFilter
             && ! hostMixerWidgetsHidden.load (std::memory_order_relaxed) && nowMs - proxyNamesRequestedAt < maxWaitMs)
             return;
+        if ((nativeNamesAwaitingPaint && nowMs - proxyNamesRequestedAt < kNativePaintWindowMs)
+            || (nowMs < nativePagePaintUntil && nowMs - proxyNamesRequestedAt < maxWaitMs))
+            return;
+        nativeNamesAwaitingPaint = false;
         proxyNamesRequestedAt = -1;
         qNotifyGroup (e);
     }

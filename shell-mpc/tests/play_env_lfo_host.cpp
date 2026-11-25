@@ -924,6 +924,71 @@ void testPlayMetadataRefresh()
 
 }
 
+void testNativeRootPaintBeforeMetadata()
+{
+    namespace u = synthyboy_mpc::nativeui;
+    auto rig = std::make_unique<Rig>();
+    auto& r = *rig;
+    std::array<u::FxCell, u::env::kFields> env {};
+    const int attack = target ("env1.attack");
+    env[u::env::Attack] = { attack, attack, u::kFxDial };
+    r.effect.setParameter (&r.effect, attack, 0.43f);
+    r.plugin.overlayView.setNativeEnvEditor (true, env.data());
+    const int before = displayRefreshes;
+    r.plugin.nativeEnvPoll (&r.effect);
+    const auto request = r.plugin.proxyNamesRequestedAt;
+    check (r.plugin.nativeUiReported[u::kEnvView] == 1.0f
+               && std::fabs (r.plugin.nativeUiReported[u::kEnvFields + u::env::Attack] - 0.43f) < 1e-4f,
+           "the ENV layout and current attack reach the host on the first poll");
+    r.plugin.flushProxyNames (&r.effect, request);
+    check (request >= 0 && displayRefreshes == before, "ENV leaves the first paint free of metadata refreshes");
+    r.plugin.requestNativeControlNames();
+    const auto deadline = request + PluginInstance::kNativePaintWindowMs;
+    r.plugin.flushProxyNames (&r.effect, deadline - 1);
+    r.plugin.flushProxyNames (&r.effect, deadline);
+    r.plugin.flushProxyNames (&r.effect, deadline + 1);
+    check (displayRefreshes == before + 1, "repeated ENV requests keep the first deadline and refresh once");
+
+    u::lfo::ViewState lfo;
+    lfo.selection = 1;
+    lfo.layout = 1;
+    lfo.fields = u::lfo::bit (u::lfo::kSelection);
+    lfo.values[u::lfo::kSelection] = 0.0f;
+    lfo.values[u::lfo::kLayout] = 1.0f / u::lfo::kLayoutLast;
+    r.plugin.requestProxyNames();
+    r.plugin.overlayView.setNativeLfoState (lfo);
+    r.plugin.nativeLfoPoll (&r.effect);
+    const auto paint = r.plugin.nativePagePaintUntil;
+    check (paint >= 0 && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kLayout] == lfo.values[u::lfo::kLayout]
+               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kSelection] == lfo.values[u::lfo::kSelection],
+           "the first standalone LFO frame publishes its layout and selector together");
+    r.plugin.flushProxyNames (&r.effect, paint - 1);
+    check (displayRefreshes == before + 1, "a pending Q name refresh waits for the fresh LFO controls to paint");
+    r.plugin.flushProxyNames (&r.effect, paint);
+    check (displayRefreshes == before + 2, "the pending Q name refresh is delivered after the paint window");
+    // Move past the millisecond used by the first publication so rearming is observable.
+    std::this_thread::sleep_for (std::chrono::milliseconds (2));
+    lfo.selection = 11;
+    lfo.layout = 4;
+    lfo.values[u::lfo::kSelection] = 10.0f / (u::lfo::kInstances - 1);
+    lfo.values[u::lfo::kLayout] = 4.0f / u::lfo::kLayoutLast;
+    r.plugin.requestProxyNames();
+    r.plugin.overlayView.setNativeLfoState (lfo);
+    r.plugin.nativeLfoPoll (&r.effect);
+    const auto rndPaint = r.plugin.nativePagePaintUntil;
+    check (rndPaint > paint && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kLayout] == lfo.values[u::lfo::kLayout]
+               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kSelection] == lfo.values[u::lfo::kSelection],
+           "switching directly from LFO 1 to RND 1 opens a new paint window and publishes both controls");
+    std::this_thread::sleep_for (std::chrono::milliseconds (2));
+    r.plugin.overlayView.setNativeLfoState (lfo);
+    r.plugin.nativeLfoPoll (&r.effect);
+    check (r.plugin.nativePagePaintUntil == rndPaint, "republishing the unchanged RND layout preserves its deadline");
+    r.plugin.flushProxyNames (&r.effect, rndPaint - 1);
+    check (displayRefreshes == before + 2, "the pending Q names leave the switched RND layout time to paint");
+    r.plugin.flushProxyNames (&r.effect, rndPaint);
+    check (displayRefreshes == before + 3, "the RND name refresh is delivered at its original deadline");
+}
+
 void testMixerPeekDisplayRefresh()
 {
     Rig r;
@@ -1252,6 +1317,12 @@ void testFxCardSwitch()
     tick();
     tick();
     check (! r.plugin.uiFullOpen.load(), "the native FX root keeps the instance marker visible for a direct return to Play");
+    // The first card tap follows the initial host paint and its queued metadata refresh.
+    const auto rootDeadline = std::max (r.plugin.nativePagePaintUntil,
+                                        r.plugin.proxyNamesRequestedAt + PluginInstance::kNativePaintWindowMs);
+    std::this_thread::sleep_until (std::chrono::steady_clock::time_point (std::chrono::milliseconds (rootDeadline)));
+    tick();
+    check (r.plugin.proxyNamesRequestedAt < 0, "the FX root metadata refresh settles before the first card tap");
     const auto chunk = r.save();
     for (int slot : {1, 0})
     {
@@ -2386,6 +2457,11 @@ void testPlayCompactSmoothNativeHost ()
 
 int main (int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp (argv[1], "--native-root-paint") == 0)
+    {
+        testNativeRootPaintBeforeMetadata();
+        return failures != 0;
+    }
     if (argc == 2 && std::strcmp (argv[1], "--cold-play") == 0)
     {
         testColdPlayPresentation();
@@ -2560,6 +2636,7 @@ int main (int argc, char** argv)
     testExpandedOscVst();
     testMixerPeekVst();
     testVoiceValueReports();
+    testNativeRootPaintBeforeMetadata();
     testPlayMetadataRefresh();
     testMixerPeekDisplayRefresh();
     testMixerTabsAndRouteClosureVisuals();

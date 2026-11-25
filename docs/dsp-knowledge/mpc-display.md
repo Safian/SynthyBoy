@@ -599,3 +599,25 @@ The plugin now builds the compact native parameter bindings before exposing a ne
 Sharing the compact selector face and caption across the ten mutually exclusive OSC detail menu types removes 952 repeated native nodes from an instantiated OSC surface. Keeping the complete expandable surface on Play, the otherwise identical Key 61 package (ARM32 a042696b8c1b) had FX → Play median upper bounds of 1.05 s before (41b1896b35f3, range 1.02–1.13 s) and 0.92 s after (85bf0659c20f, range 0.92–0.93 s). Four returns per package matched the byte-identical resting image for 14 successive samples. This comparison includes host scheduling and sampling.
 
 A third cold run on the installed combination (0aaa59660883 / 85bf0659c20f) again showed OSC, ENV and LFO together on the first sampled Play frame. The standalone LFO navigation checks were repeated and the original 2,637 preset parameter values were verified on exit.
+
+### Key 61 · first visible controls across native pages
+
+The display thread reports native control values and their layout to the host. During rebinding, several editors also asked the host to reread all parameter metadata in the same poll. These requests now share the Q-Link metadata queue. The initial control publication gets a 150 ms paint window before the queued notification. The standalone LFO/RND, Filter and FX layout publications also protect their first frame from a pending Q-Link notification. Parameter writes and numeric reports keep their existing timing.
+
+On Key 61, with Sbtest / Acid Saw Reso and an identical skin (85bf0659c20f), the first traversal of all 15 host tabs compared ARM32 0aaa59660883 with d7bda6a435b3. The device recorded its uptime at the injected tap and after each composed host-plus-overlay frame. Each measurement below uses the last arriving region of changed bright pixels. In each qualifying region at least 90% matched the final sample within the colour tolerance. These are sampled arrival times, with roughly 0.17 s between frames. They measure entry to the visible page, including host work, and do not measure touch responsiveness after arrival or full instrument startup.
+
+| Page | Before (s) | After (s) |
+| --- | ---: | ---: |
+| OSC A | 3.58 | 1.34 |
+| OSC B | 3.39 | 1.50 |
+| ENV | 2.59 | 0.65 |
+| LFO | 2.56 | 0.52 |
+| FX | 3.91 | 1.21 |
+| Filter | 3.33 | 0.98 |
+| Mod | 3.44 | 0.68 |
+
+The intermediate build 2ad511e88803 coalesced editor notifications but did not protect standalone LFO, FX and Filter layout changes. Those three pages still took 2.72, 3.91 and 3.26 s in that build. All three used the same unchanged native skin in these comparisons. Raw frames, device timestamps, the test program and measurements live in the sibling directory `.hw-local/mpc-perf/key61-page-arrival-u0xtIq/`. The timing capture excludes the MPC system header and the analysis excludes the tab bar. OSC B and C both being off in this preset makes their shared resting controls unsuitable for measuring their arrival by subtraction. The host regression `play_env_lfo_host --native-root-paint` checks that initial values are immediately available and that metadata is delivered after the paint window.
+
+A second pass on d7bda6a435b3 measured LFO at 1.03 s, FX at 1.15 s and Filter at 1.02 s. In both passes the first and last qualifying LFO regions arrived in the same sample, as did the FX regions. On Filter, the native controls followed the curve by about one sample. Returning from ENV to OSC A took 2.05 s overall, with the controls following its graph by 0.18 s. Mixer reached its final regions at 1.67 s in both the baseline and updated traversals.
+
+The standalone SOURCE drawer uncovered a second case. On d7bda6a435b3 the RND 1 graph appeared 0.86–1.04 s before its controls after closing the drawer. LFO 1 and RND 1 both have visible layouts, so waiting only when entering from a hidden layout missed this switch. The final ARM32 build 132fdb30befc also protects a change between distinct visible LFO layouts. On two Key 61 runs, graph and controls were present in the same sample at 0.59 and 0.31 s after the close tap. The full native host regression passed, and all 2,637 engine values matched the pre-test project after returning to Play.
