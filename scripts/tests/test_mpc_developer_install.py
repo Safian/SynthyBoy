@@ -42,8 +42,11 @@ systemctl() {
 }
 sleep() { :; }
 md5sum() { test -s "$1"; }
+sha256sum() { shasum -a 256 "$@"; }
 '''
 archive = sys.stdin.buffer.read()
+if os.environ.get("CORRUPT_SKIN"):
+    archive = archive.replace(b"tile" + bytes(508), b"oops" + bytes(508), 1)
 if os.environ.get("BROKEN_UPLOAD"):
     archive = b"truncated archive"
 sys.exit(subprocess.run(["/bin/sh", "-c", stubs + command], input=archive).returncode)
@@ -56,7 +59,7 @@ class TestMpcDeveloperInstall(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.package = self.root / "Source package"
+        self.package = self.root / "source" / "Safian - VST - SynthyBoy"
         stub = self.root / "ssh"
         stub.write_text(f"#!{sys.executable}\n{SSH_STUB}", encoding="utf-8")
         stub.chmod(0o755)
@@ -79,10 +82,9 @@ class TestMpcDeveloperInstall(unittest.TestCase):
 
     def make_package(self, arch=None):
         files = {
-            "Plugin Skins/TUI.json": b"tui",
             "Plugin Skins/browser_images/soundsmode.png": b"tile",
-            "plugin.json": b"manifest",
-            "version.xml": b"version",
+            "plugin.json": b'{"manufacturer":"Safian","name":"SynthyBoy","uid":"SfSB"}',
+            "version.xml": b"<version><uiversion>0.1.0.0</uiversion></version>",
         }
         if arch:
             files.update({
@@ -95,6 +97,11 @@ class TestMpcDeveloperInstall(unittest.TestCase):
             })
         for name, contents in files.items():
             self.write(self.package, name, contents)
+        from mpc_skin_fixture import write_native_skin_stub
+        skins = self.package / "Plugin Skins"
+        write_native_skin_stub(skins)
+        files.update({str(p.relative_to(self.package)): p.read_bytes()
+                      for p in skins.glob("*") if p.is_file()})
         return files
 
     def assert_files(self, directory, files):
@@ -110,7 +117,7 @@ class TestMpcDeveloperInstall(unittest.TestCase):
             ("xl", "xl", "arm64", "arm32", "root@192.168.0.126"),
         ):
             with self.subTest(device=device):
-                self.package = self.root / f"Source package {device}"
+                self.package = self.root / device / "source" / "Safian - VST - SynthyBoy"
                 files = self.make_package(arch)
                 target = self.target(remote_name)
                 for folder in ("Plugin Skins", "Presets", "Content", "VST"):
@@ -158,6 +165,18 @@ class TestMpcDeveloperInstall(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Missing VST/synthyboy-arm32.so", result.stderr)
         self.assertFalse((self.root / "ssh.log").exists())
+
+    def test_missing_tui_fails_before_ssh(self):
+        self.make_package("arm32")
+        (self.package / "Plugin Skins/TUI.json").unlink()
+        self.assertNotEqual(self.run_installer("k61").returncode, 0)
+        self.assertFalse((self.root / "ssh.log").exists())
+
+    def test_corrupt_skin_transfer_leaves_installation_running(self):
+        self.make_package("arm32")
+        result = self.run_installer("k61", CORRUPT_SKIN="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "service.log").exists())
 
     def test_incomplete_transfer_leaves_installation_running(self):
         self.make_package("arm64")

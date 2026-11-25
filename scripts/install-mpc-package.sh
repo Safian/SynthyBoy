@@ -56,11 +56,14 @@ if [[ -e "$package/VST" && ! -s "$package/VST/synthyboy-$arch.so" ]]; then
 fi
 
 # Complete the local archive before the remote side can activate anything.
-archive=$(mktemp)
-trap 'rm -f "$archive"' EXIT
+python3 "$(dirname "$0")/validate_synthyboy_skin.py" "$package"
+scratch=$(mktemp -d)
+archive="$scratch/package.tar"
+trap 'rm -rf "$scratch"' EXIT
 trap 'exit 1' HUP INT TERM
+(cd "$package" && find 'Plugin Skins' -type f ! -name '._*' ! -name .DS_Store -exec shasum -a 256 {} +) > "$scratch/skin.sha256"
 # BusyBox tar on the MPC cannot restore the macOS default GNU sparse entries.
-COPYFILE_DISABLE=1 tar --format=ustar --exclude '._*' --exclude '.DS_Store' -C "$package" -cf "$archive" .
+COPYFILE_DISABLE=1 tar --format=ustar --exclude '._*' --exclude '.DS_Store' -cf "$archive" -C "$package" . -C "$scratch" skin.sha256
 
 remote=$(cat <<'REMOTE'
 set -eu
@@ -101,6 +104,8 @@ trap 'exit 1' HUP INT TERM
 
 mkdir "$candidate"
 tar -xf - -C "$candidate"
+(cd "$candidate" && sha256sum -c skin.sha256 > /dev/null)
+rm "$candidate/skin.sha256"
 
 # Package directories replace their installed counterparts. Keep optional
 # directories that were omitted, as on a skin-only build, and local extras.
