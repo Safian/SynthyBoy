@@ -405,7 +405,9 @@ class BuildMpcTest(unittest.TestCase):
     # ---- the xpl presets packaging -------------------------------------------------------------------------------------------
 
     def test_xpl_presets_skip_notice_when_tool_absent(self):
-        r = self.build("--no-validate", "--xpl-presets", "xl")
+        unavailable = self.tmp / "dump_mpc_chunks"
+        unavailable.touch(mode=0o600)
+        r = self.build("--no-validate", "--xpl-presets", "xl", "--dump-tool", str(unavailable))
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertIn("native dump tool (dump_mpc_chunks) or native plugin library not found", r.stdout)
         self.assertFalse((self.folder() / "Presets").exists())
@@ -481,9 +483,27 @@ class BuildMpcTest(unittest.TestCase):
         self.assertEqual([p.name for p in (self.folder() / "VST").iterdir()], ["synthyboy-arm32.so"])
         self.assertNotIn("file64", self.manifest())
 
-    def test_wrapper_keeps_its_old_defaults(self):
-        text = BUILD_ARMV7.read_text()
-        self.assertIn('--arch arm32 --out "$repo_root/build-armv7-mpc" --build-dir "$repo_root/build-armv7-mpc/tree" "$@"', text)
+    def test_wrapper_defaults_to_checkout_specific_scratch(self):
+        scripts = self.tmp.resolve() / "scripts"
+        scripts.mkdir()
+        wrapper = scripts / BUILD_ARMV7.name
+        shutil.copyfile(BUILD_ARMV7, wrapper)
+        downstream = scripts / BUILD_MPC.name
+        downstream.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+        downstream.chmod(0o700)
+        result = self.run_script(wrapper, "--jobs", "3")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = result.stdout.splitlines()
+        self.assertEqual(args[0:3], ["--arch", "arm32", "--out"])
+        self.assertEqual(args[4::2], ["--build-dir", "--jobs"])
+        out = Path(args[3])
+        self.assertEqual(out.parent.parent, Path("/tmp") / f"synthyboy-{os.getuid()}")
+        self.assertEqual((out.name, Path(args[5]), args[7]), ("build-armv7-mpc", out / "tree", "3"))
+        second = self.tmp.resolve() / "second-checkout" / "scripts"
+        shutil.copytree(scripts, second)
+        other = self.run_script(second / wrapper.name)
+        self.assertEqual(other.returncode, 0, other.stderr)
+        self.assertNotEqual(Path(other.stdout.splitlines()[3]), out)
 
     def test_wrapper_passes_usage_errors_through(self):
         self.assertEqual(self.run_script(BUILD_ARMV7, "--jobs", "0").returncode, 2)

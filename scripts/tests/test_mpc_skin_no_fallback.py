@@ -17,7 +17,7 @@ from pathlib import Path
 
 import test_mpc_skin_extras as base
 from test_mpc_backgrounds import bg_mod
-from native_ui_params import LEGACY_EXTRAS, NATIVE_PARAMS
+from native_ui_params import LEGACY_EXTRAS, MIXER_STEREO_BASE, NATIVE_PARAMS
 from validate_synthyboy_skin import validate_package
 
 SHARED_JSON = base.ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
@@ -25,7 +25,7 @@ OVERLAY_LAYOUT = base.ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.
 BASE_DECODED_BYTES = 9072 + 1234 * 190 * 4 + 408 * 56 * 4        # marker/instance art, compact Play art, selector frame
 
 NATIVE_NAME_PREFIXES = (
-    "Env Native ", "Filter ", "LFO 1 ", "Mixer ", "FX ", "Mod ",
+    "Native Caption ", "Overlay Background Sentinel ", "Env Native ", "Filter ", "LFO 1 ", "Mixer ", "FX ", "Mod ",
     "Master ", "Voice ", "Macro ", "Macros ", "Osc Native ", "Play Native EnvLfo ", "Play Native OSC ", "Play Expanded ",
 )
 NATIVE_TYPE_PREFIXES = (
@@ -128,8 +128,8 @@ class NoFallbackTests(unittest.TestCase):
                 self.assertEqual(tab["componentDefinition"]["backgroundData"][state]["image"], image, name)
             expected = ["Overlay Marker %s left" % view["name"], "Overlay Marker %s right" % view["name"], "Overlay Instance %s" % view["name"]]
             if name == "Play":
-                expected += ["Play Osc Select", "Play Env Select", "Play LFO Select", "Play Env Attack", "Play Env Decay", "Play Env Sustain", "Play Env Release", "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off", "Play LFO Smooth Switch"]
-                expected.extend(f"Play Native OSC {source}" for source in ("Sub power", "Osc A", "Osc B", "Osc C", "Noise"))
+                expected += ["Play Osc Select", "Play Env Select", "Play LFO Select", "Play Env Attack", "Play Env Decay", "Play Env Sustain", "Play Env Release", "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off"]
+                expected.extend(f"Play Native OSC {source} power" for source in ("Sub", "Osc A", "Osc B", "Osc C", "Noise"))
             required_native = {
                 "Env": {"Env Native Attack", "Env Native Decay", "Env Native Sustain", "Env Native Release",
                         "Env Native Attack Curve", "Env Native Decay Curve", "Env Native Release Curve",
@@ -139,11 +139,10 @@ class NoFallbackTests(unittest.TestCase):
             }.get(name, set())
             actual_names = {c["componentData"]["name"] for c in items}
             native_names = {c["componentData"]["name"] for c in items if is_native_component(c)}
-            self.assertTrue(set(expected) | required_native <= actual_names, name)
-            self.assertTrue(actual_names <= set(expected) | required_native | native_names, name)
+            self.assertEqual((set(expected) | required_native) - actual_names, set(), name)
+            self.assertEqual(actual_names - set(expected) - required_native - native_names, set(), name)
             expected_types = {"Image", "playOscSelector", "playModSelector", "compactNativeDial",
-                              "compactNativeRiseDial", "compactNativeSmoothTime", "compactNativeSmoothReadout",
-                              "compactNativeSmoothToggle"} if name == "Play" else {"Image"}
+                              "compactNativeRiseDial", "compactNativeSmoothWithIndicator", "compactNativeSmoothReadout"} if name == "Play" else {"Image"}
             native_types = {c["componentData"]["type"] for c in items if is_native_component(c)}
             self.assertEqual({c["componentData"]["type"] for c in items}, expected_types | native_types, "%s: only documented/native controls remain" % name)
             self.assertEqual(self.tui["pageData"]["tabs"].count(tab), 1)
@@ -187,14 +186,17 @@ class NoFallbackTests(unittest.TestCase):
             self.assertEqual(entry["Bank Direction"], "Row")
 
     def test_the_markers_and_the_instance_picture_are_what_the_plugin_reads(self):
+        from PIL import Image
+
         index = len(self.params) + 4 + 32 + 2
+        views = {v["name"]: v for v in self.layout["views"]}
         for tab in self.tui["pageData"]["tabs"]:
             for c in base.standalone_editor_entries(tab, self.definitions):
                 name = c["componentData"]["name"]
                 if name.startswith("Play Expanded "):
                     self.assertTrue(c["bounds"]["additionalInvalidatingHandles"][0].endswith("/7/Parameter 3537"), name)
                     continue
-                if name.startswith("Play ") and (name.startswith("Play Native EnvLfo ") or name.endswith(" Select") or name.startswith("Play Native OSC ") or name in ("Play Env Attack", "Play Env Decay", "Play Env Sustain", "Play Env Release", "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off", "Play LFO Smooth Switch")):
+                if name.startswith("Play ") and (name.startswith("Play Native EnvLfo ") or name.endswith(" Select") or name.startswith("Play Native OSC ") or name in ("Play Env Attack", "Play Env Decay", "Play Env Sustain", "Play Env Release", "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off")):
                     self.assertIn("RangedEnabling/0/18/33/Parameter %d" % (index), json.dumps(c["bounds"]))
                     continue
                 if c["componentData"]["type"] == "nativeModulationEditor":
@@ -216,7 +218,7 @@ class NoFallbackTests(unittest.TestCase):
                         expected = 3285
                     else:
                         expected = 3196 if name.startswith("LFO 1 Native Editor ") else 2833
-                    self.assertTrue(c["bounds"]["additionalInvalidatingHandles"][0].endswith(f"/Parameter {expected}"), name)
+                    self.assertTrue(any(gate.endswith(f"/Parameter {expected}") for gate in c["bounds"]["additionalInvalidatingHandles"]), name)
                     continue
                 if name.startswith("Filter Native "):
                     gate = 3496 if name.startswith("Filter Native PZ Toolbar ") else 2850
@@ -230,13 +232,28 @@ class NoFallbackTests(unittest.TestCase):
                 if name.startswith("Env Native "):
                     self.assertNotIn("RangedEnabling", json.dumps(c["bounds"]), "%s is host-owned on the native page" % name)
                     continue
-                self.assertNotIn("RangedEnabling", json.dumps(c["bounds"]), "%s is never hidden: the plugin finds its page by it" % name)
-                if name.startswith("Overlay Instance"):
-                    self.assertEqual(c["handle remapping"]["map"], [{"key": "Data", "value": "Parameter %d" % index}])
-                    self.assertEqual((c["componentData"]["data"]["imageType"], c["componentData"]["data"]["numFrames"]), ("FilmStrip", 33))
-                else:
-                    if c["componentData"]["type"] == "Image":
-                        self.assertEqual(png_size(self.skins / c["componentData"]["data"]["image"]), (6, 6))
+                if not name.startswith(("Overlay Instance ", "Overlay Marker ", "Overlay Background Sentinel ")):
+                    continue
+                self.assertFalse(c["bounds"].get("additionalInvalidatingHandles"), name)
+                data = c["componentData"]["data"]
+                x, y, width, height = map(int, c["bounds"]["bounds"].split())
+                with Image.open(self.skins / data["image"]) as art:
+                    if name.startswith("Overlay Instance "):
+                        region = views[name.split()[-1]]["instance"]
+                        inst = self.layout["instance"]
+                        self.assertEqual(c["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {index}"}])
+                        self.assertEqual((data["imageType"], data["numFrames"]), ("FilmStrip", inst["frames"]))
+                        self.assertEqual(art.size, (width, height * inst["frames"]))
+                        self.assertEqual((x, y, width, height), tuple(region[k] for k in ("x", "y", "w", "h")))
+                    elif name.startswith("Overlay Marker "):
+                        _, _, view, side = name.split()
+                        marker = views[view]["markers"][("left", "right").index(side)]
+                        self.assertEqual((x, y, width, height), tuple(marker[k] for k in ("x", "y", "w", "h")))
+                        self.assertEqual(art.convert("RGB").getcolors(), [(width * height, tuple(bytes.fromhex(marker["rgb"])))])
+                        self.assertEqual(art.size, (width, height))
+                    else:
+                        self.assertEqual(data["imageType"], "Regular")
+                        self.assertEqual(art.size, (width, height))
 
     def test_mixer_native_controls_use_real_parameters_and_keep_dry_racks_available(self):
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] == "Mix")
@@ -260,13 +277,16 @@ class NoFallbackTests(unittest.TestCase):
         for i, (caption, source) in enumerate(strips):
             c = native[f"{caption} Strip"]
             expected_kind = "mixerStripMaster" if i == 9 else "mixerStripBus" if i >= 7 else "mixerStripSource"
-            self.assertEqual(c["componentData"]["type"], expected_kind)
+            self.assertEqual(c["componentData"]["type"], expected_kind + "Frame")
             self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], [modal, f"IndexedEnabling/0/6/Parameter {native_base + 856}"])
             self.assertEqual(c["bounds"]["showWhenDataModelInvalid"], "Hide")
             self.assertEqual(tuple(map(int, c["bounds"]["bounds"].split())), (10 + 127 * i, 10, 115, 550))
             rm = remap(c)
-            self.assertEqual(rm["Peak"], f"Parameter {native_base + 1 + i}")
-            self.assertEqual(rm["Hold"], f"Parameter {native_base + 11 + i}")
+            for field, handle in enumerate(("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")):
+                param = f"Parameter {native_base + MIXER_STEREO_BASE + 10 * field + i}"
+                self.assertEqual(rm[handle], param)
+                leaf = ("Clip " if handle.startswith("Clip") else "Meter ") + handle[-1]
+                self.assertEqual(remap(native[f"{caption} Strip {leaf}"])[handle], param)
             self.assertEqual(rm["Level"], handles[f"{source}.level" if i < 9 else "master.volume"])
             self.assertEqual(rm["Name"], handles[f"{source}.level" if i < 9 else "master.volume"])
             self.assertEqual(rm["Mute"], f"Parameter {native_base + 840 + i}")
@@ -330,7 +350,13 @@ class NoFallbackTests(unittest.TestCase):
         self.assertTrue({"Filter Native F1", "Filter Native F2", "Filter Native dual", "Filter Native NOTE",
                          "Filter Native VELO", "Filter Native Edit PZ Curve"}.isdisjoint(f))
         fx = {c["componentData"]["type"] for c in definitions["mixerPeekFxEditorSurface"]["componentsData"]}
-        self.assertTrue({"fxNativeChainRow", "fxNativeHeader", "mixerPeekGalleryRow1", "fxNativeCellChoice"} <= fx)
+        self.assertTrue({"fxNativeChainRow", "fxNativeHeader", "mixerPeekGalleryRow1"} <= fx)
+        cell_group, = [entry for entry in definitions["mixerPeekFxEditorSurface"]["componentsData"]
+                       if entry["componentData"]["name"] == "FX parameter cells"]
+        states = definitions[cell_group["componentData"]["type"]]["componentsData"]
+        self.assertIn("mixerPeekFxParameterCells", {state["componentData"]["type"] for state in states})
+        self.assertIn("fxNativeCellChoice", {child["componentData"]["type"]
+                                             for child in definitions["mixerPeekFxParameterCells"]["componentsData"]})
 
     def test_expanded_play_mounts_the_same_editor_trees_and_three_independent_close_actions(self):
         tabs = {t["tabName"]: t["componentDefinition"]["componentsData"] for t in self.tui["pageData"]["tabs"]}
@@ -351,7 +377,7 @@ class NoFallbackTests(unittest.TestCase):
             self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], [f"{gate}/7/Parameter 3537"])
             self.assertLess(list(play).index(name), first_marker)
             self.assertTrue(self.definitions[kind]["ignoreMousePresses"])
-        for label, root, action, rect in (("Oscillator", 1, 3538, "1152 120 120 56"),
+        for label, root, action, rect in (("Oscillator", 1, 3538, "1148 116 120 56"),
                                           ("Envelope", 3, 3539, "58 12 96 56"),
                                           ("LFO", 5, 3540, "968 210 96 56")):
             entry = play[f"Play Expanded {label} Close"]
@@ -367,7 +393,7 @@ class NoFallbackTests(unittest.TestCase):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         components = base.standalone_editor_entries(env, definitions)
         scalars = {c["componentData"]["name"].removeprefix("Env Native "): c for c in components
-                   if c["componentData"]["type"] in {"envNativeDial", "envNativeCurve", "envNativeSwitch", "envNativeTargets"}}
+                   if c["componentData"]["type"] in {"envNativeDial", "envNativeCurve", "envNativeBeatsSwitch", "envNativeRetrigSwitch", "envNativeTargets"}}
         specs = ("Attack", "Decay", "Sustain", "Release", "Attack Curve", "Decay Curve", "Release Curve", "Delay", "Hold", "Beats", "Retrig")
         expected_x = (14, 125, 236, 347, 474, 584, 694, 821, 933, 1045, 1157)
         self.assertEqual(set(scalars), set(specs) | {"Targets"})
@@ -385,12 +411,16 @@ class NoFallbackTests(unittest.TestCase):
                 self.assertTrue(0 <= cx <= cx + cw <= w and 0 <= cy <= cy + ch <= h)
             actions = [(a["onAction"], a["handler"], a["handleName"], a["additionalData"])
                        for a in definition["actions"] if a["handler"] != "Q-Link"]
-            if caption == "Targets":
-                labels = [child["componentData"]["data"] for child in definition["componentsData"]]
-                self.assertEqual([(label["type"], label["handleName"]) for label in labels],
-                                 [("Name", "Caption"), ("Value", "Data")])
             if caption in {"Beats", "Retrig", "Targets"}:
-                self.assertEqual(actions, [(trigger, "Toggle Switch", "Data", "") for trigger in ("Mouse Down", "Enter Pressed")])
+                self.assertEqual(actions, [])
+                button, = definition["componentsData"]
+                self.assertEqual(button["componentData"]["type"], "Button")
+                data = button["componentData"]["data"]
+                self.assertEqual((data["gestureBehaviour"], data["handleName"], data["buttonId"],
+                                  data["numButtonsInGroup"]), ("Instant", "Data", 1, 1))
+                self.assertEqual(data["onImage"], f"env_{caption.lower()}_on.png")
+                self.assertEqual(data["offImage"], data["onImage"] if caption == "Targets" else
+                                 f"env_{caption.lower()}_off.png")
             else:
                 self.assertEqual(actions, [(trigger, "Show Overlay", "Data", "fx editor number menu")
                                            for trigger in ("Double Click", "Enter Pressed")])
@@ -418,9 +448,14 @@ class NoFallbackTests(unittest.TestCase):
             frame = lambda index: strip.crop((0, 56 * index, 88, 56 * (index + 1)))
             self.assertIsNone(frame(0).getbbox())
             self.assertIsNotNone(frame(1).getbbox())
-            self.assertNotEqual(frame(1).getpixel((44, 45)), frame(2).getpixel((44, 45)), "the used frame has a dot")
-            self.assertNotEqual(frame(1).getpixel((44, 2)), frame(3).getpixel((44, 2)), "the selected frame has an outline")
-            self.assertEqual(frame(5).tobytes(), frame(30).tobytes(), "every free candidate displays '+'")
+            from components.native.radio_button.radio_button import render_segmented_button_art
+            for number in range(1, 7):
+                for variant, (caption, selected) in enumerate(((str(number), False), (f"{number} ·", False),
+                                                               (str(number), True), (f"{number} ·", True), ("+", False))):
+                    expected = render_segmented_button_art(caption, selected, 88, 56)
+                    self.assertEqual(frame(1 + (number - 1) * 5 + variant).tobytes(), expected.tobytes(),
+                                     (number, variant))
+
 
         buttons = children[1:]
         self.assertEqual(len(buttons), 6)
