@@ -109,12 +109,8 @@ public:
     ui::Rect nativePeekCloseRect() const noexcept override { return screen_.chainBar.nativeBackRect(); }
     void clearNativePeekApertures (gpu::SceneBuilder& sb) const override
     {
-        if (! nativePeekReady())
-            return;
-        const auto clear = [&] (ui::Rect area) { ui::clearNativeCell (sb, area); };
-        visitNativeChainControls (clear);
-        if (screen_.editorShown())
-            screen_.slotEditor.visitNativeControls (clear);
+        if (nativePeekReady())
+            clearNativeApertures (sb);
     }
 
     void setCanvas (int w, int h)
@@ -242,11 +238,17 @@ public:
         publishQGroup (inst);
     }
 
+    void drawPageGround (gpu::SceneBuilder&) const noexcept {}
+
     void draw (gpu::SceneBuilder& sb) const override
     {
         const bool native = screen_.nativeControls();
         if (! hostBackground() && rackOnly_ < 0)
+        {
             page::ground (sb);
+            if (native && ! listOpen_)
+                clearNativeApertures (sb);
+        }
         else if (hostBackground())
         {
             if (native)
@@ -828,6 +830,14 @@ private:
             return true;
         }
         return false;
+    }
+
+    void clearNativeApertures (gpu::SceneBuilder& sb) const
+    {
+        const auto clear = [&] (ui::Rect area) { ui::clearNativeCell (sb, area); };
+        visitNativeChainControls (clear);
+        if (screen_.editorShown())
+            screen_.slotEditor.visitNativeControls (clear);
     }
 
     nativeui::FxCell nativeCell (int slot) const noexcept

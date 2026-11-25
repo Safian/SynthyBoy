@@ -200,6 +200,13 @@ void testChorus ()
     r.refresh();
     check (ed.nativeControls() && r.inst.bank.layout() != 0 && ! r.ui.covers (rate.x + 5, rate.y + 5),
            "losing the host background never revives the obsolete overlay controls");
+    sb.begin (gpu::kKindPlay, 0, FxUi::kCanvasW, FxUi::kCanvasH);
+    r.ui.draw (sb);
+    renderScene (*scene, pixels);
+    const int cx = rate.x + rate.w / 2, cy = rate.y + rate.h / 2;
+    check (pixels[cy * FxUi::kCanvasW + cx] >> 24 == 0 &&
+           pixels[FxUi::kTabY * FxUi::kCanvasW] >> 24 == 255,
+           "the standalone FX ground leaves its bound native cell visible before the sentinel returns");
     r.ui.setHostBackground (true);
     r.refresh();
     r.ui.leftTab (r.inst);
