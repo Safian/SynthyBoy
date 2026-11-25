@@ -63,11 +63,12 @@ public:
         if (sel != sel_ || ! group_)
         {
             sel_ = sel;
+            shownFrame_ = -1.0f;
             const int osc = playosc::oscNumber (sel_);
             const std::string prefix = sel_ == playosc::kSub ? "sub." : (sel_ == playosc::kNoise ? "noise." : "osc" + std::to_string (osc) + ".");
             group_ = std::make_unique<ParamGroup> (prefix);
             const auto* frame = synthyboy::findParamByKey ((prefix + "frame").c_str());
-            frameIndex_ = frame != nullptr ? synthyboy::findParamIndex (frame->id) : -1;
+            frameIndex_ = frame != nullptr ? static_cast<int> (frame - synthyboy::paramTable()) : -1;
             forced_ = true;
             have_ = false;
             changed = true;
@@ -136,15 +137,15 @@ public:
                 kind_ = res_.kind;
                 // an oscillator that is switched off: the picture of its current content (the table, the sample), drawn dim with a small OFF tag, not an empty display (`kind ()` stays off)
                 ghost_ = synthyboy::OscCycle::Kind::off;
-                if (kind_ == synthyboy::OscCycle::Kind::off && osc >= 1 && osc <= kOscs)
+                if (kind_ == synthyboy::OscCycle::Kind::off)
                 {
-                    const synthyboy::ParamInfo* on = synthyboy::findParamByKey ((std::string ("osc") + std::to_string (osc) + ".on").c_str());
+                    const synthyboy::ParamInfo* on = synthyboy::findParamByKey (osc == 4 ? "noise.on" : ("osc" + std::to_string (osc) + ".on").c_str());
                     if (on != nullptr)
                     {
                         synthyboy::ParamValues shown = group_->values();
-                        shown.plain[synthyboy::findParamIndex (on->id)] = 1.0f;
+                        shown.plain[on - synthyboy::paramTable()] = 1.0f;
                         const synthyboy::OscCycle::Result g = oc_->computeDisplay (shown, req, cycle_.data(), cycleMax_.data(), displayPoints_);
-                        if (g.kind == synthyboy::OscCycle::Kind::wavetable || g.kind == synthyboy::OscCycle::Kind::sample || g.kind == synthyboy::OscCycle::Kind::multisample || g.kind == synthyboy::OscCycle::Kind::granular || g.kind == synthyboy::OscCycle::Kind::spectral)
+                        if (g.kind != synthyboy::OscCycle::Kind::off && g.kind != synthyboy::OscCycle::Kind::other)
                         {
                             res_ = g;
                             ghost_ = g.kind;
@@ -181,6 +182,7 @@ public:
                 counters.lastComputeMs = budget_.costMs;
                 ++counters.recomputes;
                 group_->accept();
+                shownFrame_ = t[0] < 0.0f && frameIndex_ >= 0 ? group_->values().plain[frameIndex_] : t[0];
                 std::memcpy (lastTargets_, t, sizeof t);
                 have_ = true;
                 forced_ = false;
@@ -214,11 +216,11 @@ public:
                         }
                     }
                 }
-                if (sel_ == playosc::kSub)
+                if (sel_ == playosc::kSub && kind_ != synthyboy::OscCycle::Kind::off)
                     for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
                         nl.phases[v] = live->subPhase[v];
-                if (sel_ == playosc::kNoise && kind_ == synthyboy::OscCycle::Kind::noise)
-                    nl.noise = live->noisePos;
+                if (sel_ == playosc::kNoise && kind_ == synthyboy::OscCycle::Kind::sample)
+                    nl.heads[0] = live->noisePos;
             }
             if (nl.differs (live_))
             {
@@ -247,7 +249,7 @@ public:
             h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (v) * 1000.0)));
         return h;
     }
-    float framePosition() const noexcept { return lastTargets_[0]; }
+    float framePosition() const noexcept { return shownFrame_; }
 
     /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. `live`: the running parts only. `plotArea`: the rectangle the picture is drawn in (the compact view's, below its header band); empty = the display rectangle. */
     void draw (gpu::SceneBuilder& sb, const ui::Rect& r, bool live, const ui::Rect& plotArea = {},
@@ -274,7 +276,7 @@ public:
                 d.voices = std::clamp (static_cast<int> (group_->value ((base + "voices").c_str()) + 0.5f), 1, 16);
                 d.detune = std::clamp (group_->value ((base + "detune").c_str()) / 100.0f, 0.0f, 1.0f);
                 d.blend = std::clamp (group_->value ((base + "blend").c_str()) / 100.0f, 0.0f, 1.0f);
-                d.pos = std::clamp (lastTargets_[0] / 100.0f, 0.0f, 1.0f);
+                d.pos = std::clamp (framePosition() / 100.0f, 0.0f, 1.0f);
                 d.numStack = stackN_;
                 for (int i = 0; i < stackN_; ++i)
                     d.stack[i] = stack_[static_cast<size_t> (i)].data();
@@ -317,7 +319,6 @@ public:
         else
         {
             d.kind = ui::display::Data::Kind::Message;
-            d.noiseHead = live_.noise;
             d.message = kind == K::noise ? "NOISE" : (kind == K::noSample ? "NO SAMPLE" : (kind == K::off ? "OFF" : ""));
         }
         // while the data changes every picture (a knob dragged along the wavetable) it is drawn with the picture, not into a layer: the ground stays a cell where it is, the data comes with the live parts (after every
@@ -387,7 +388,7 @@ private:
     /** The live read-outs shown in the display (a change of one pixel or of a grain's step is a change of the picture). */
     struct Live
     {
-        float heads[ui::display::Data::kMaxHeads], phases[ui::display::Data::kMaxHeads], grainPos[ui::display::Data::kMaxGrains], grainLife[ui::display::Data::kMaxGrains], noise = -1.0f;
+        float heads[ui::display::Data::kMaxHeads], phases[ui::display::Data::kMaxHeads], grainPos[ui::display::Data::kMaxGrains], grainLife[ui::display::Data::kMaxGrains];
         int numGrains = 0;
         Live() { std::fill (heads, heads + ui::display::Data::kMaxHeads, -1.0f); std::fill (phases, phases + ui::display::Data::kMaxHeads, -1.0f); std::fill (grainPos, grainPos + ui::display::Data::kMaxGrains, 0.0f); std::fill (grainLife, grainLife + ui::display::Data::kMaxGrains, 0.0f); }
         static bool far (float a, float b, float tol) noexcept { return (a < 0.0f) != (b < 0.0f) || std::fabs (a - b) > tol; }
@@ -396,7 +397,7 @@ private:
             for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
                 if (far (heads[v], o.heads[v], 0.0025f) || far (phases[v], o.phases[v], 0.0025f))
                     return true;
-            if (numGrains != o.numGrains || far (noise, o.noise, 0.0025f))
+            if (numGrains != o.numGrains)
                 return true;
             for (int g = 0; g < numGrains; ++g)
                 if (far (grainPos[g], o.grainPos[g], 0.0025f) || far (grainLife[g], o.grainLife[g], 0.04f))
@@ -421,6 +422,7 @@ private:
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other, ghost_ = synthyboy::OscCycle::Kind::off;   // ghost_: the kind of the content an oscillator that is off still shows (off: none)
+    float shownFrame_ = -1.0f;
     float lastTargets_[4] = { -1, -1, -1, -1 };
     Live live_;
 };

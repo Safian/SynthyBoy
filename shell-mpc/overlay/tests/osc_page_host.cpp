@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "synthyboy/user_content.h"
 #include "../osc_page.h"
 #include "../scene_cpu.h"
 
@@ -103,6 +104,8 @@ public:
     std::vector<Request> requests;
     int loadState = 0;
     std::shared_ptr<const synthyboy::StateContent> contentPtr;
+    const synthyboy::IContentStore* store = nullptr;
+    const synthyboy::IContentStore* contentStore() const noexcept override { return store; }
     static int idx (const std::string& key) { const auto* p = synthyboy::findParamByKey (key.c_str()); return p ? static_cast<int> (p - synthyboy::paramTable()) : -1; }
     void set (const std::string& key, float v) { v_[idx (key)] = v; }
     float get (const std::string& key) const { return v_[idx (key)]; }
@@ -579,6 +582,49 @@ bool hasUsableControl (const ui::KnobPanel& panel, int blockIdx)
     return false;
 }
 } // namespace
+
+static void testNoiseSamplePlayhead()
+{
+    synthyboy::MemoryContentStore store;
+    const std::vector<float> samples (1024, 0.25f);
+    store.add ("test", "noise.wav", synthyboy::encodeWav (samples.data(), nullptr, samples.size(), 44100, 16));
+    auto content = std::make_shared<synthyboy::StateContent>();
+    synthyboy::ContentFileRef ref;
+    ref.pack = "test";
+    ref.file = "noise.wav";
+    synthyboy::attachSample (*content, 4, ref, 44100, 1024, 1);
+    Inst inst;
+    inst.contentPtr = content;
+    inst.store = &store;
+    inst.set ("noise.on", 1.0f);
+    inst.set ("noise.type", 1.0f);
+    OscDisplay display (0.0);
+    ViewCounters counters;
+    synthyboy::LiveValues live;
+    auto update = [&](double ms) { display.update (inst, playosc::kNoise, nullptr, &live, ms, counters); };
+    auto livePicture = [&] {
+        auto scene = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sb (*scene);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        display.draw (sb, { 10, 120, 500, 220 }, true);
+        return page::sceneHash (*scene);
+    };
+    update (0);
+    live.noisePos = 0.25f;
+    update (500);
+    const auto first = livePicture();
+    live.noisePos = 0.75f;
+    update (520);
+    check (display.kind() == synthyboy::OscCycle::Kind::sample && livePicture() != first,
+           "the Noise waveform cursor follows the sample playback position");
+    inst.set ("noise.on", 0.0f);
+    update (600);
+    const auto stopped = livePicture();
+    live.noisePos = 0.12f;
+    update (620);
+    check (display.kind() == synthyboy::OscCycle::Kind::off && livePicture() == stopped,
+           "the disabled Noise sample waveform has no moving cursor");
+}
 
 static void testNativeSourceSwitch()
 {
@@ -1078,6 +1124,7 @@ int main (int argc, char** argv)
     testNativeRootLoad();
     testSourceOwnedRouting();
     testNativeSourceSwitch();
+    testNoiseSamplePlayhead();
     {
         // the pages of the oscillator types on the OSC tab: BACK from each one returns to the page, the display draws a loaded sample and a non-default spectral setting
         for (int pageId = 16; pageId <= 22; ++pageId)

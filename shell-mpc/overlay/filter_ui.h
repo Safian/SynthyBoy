@@ -804,7 +804,8 @@ private:
             const int next = expandMode_ == tabview::kFilterSplit ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
             chooseSplitState (inst, filterSel_, scalarSel_, next);
         }
-        else if (curveShown() && action >= FilterInit && action <= FilterTargets)
+        else if (curveShown() && action >= FilterInit && action <= FilterTargets
+                 && (! isSplit() || action == FilterTargets))
         {
             using Editor = ui::ScalarCurveEditor;
             const int ids[] = { Editor::kIdInit, Editor::kIdUndo, Editor::kIdDelete, Editor::kIdTargets };

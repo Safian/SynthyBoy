@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageColor
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(HERE))
 
 import test_mpc_skin_extras as base
+from components.style import color
 import render_play_native_snapshot as snap
 import render_play_screen_preview as prev
 
@@ -273,13 +274,13 @@ class PlayPreviewRendererTests(unittest.TestCase):
                     non_zero = sum(1 for p in ap_crop.getdata() if p[3] != 0)
                     self.assertEqual(non_zero, 0, f"Overlay drew {non_zero} non-transparent pixels inside aperture {(x0, y0, x1, y1)}")
 
-                # Layout markers and instance pixel must be covered by production native_marker_covers (#141a38)
+                # Layout markers and instance pixel must be covered by the production native canvas
                 spots = [play_view["markers"][0], play_view["instance"], play_view["markers"][1]]
                 for spot in spots:
                     cx = spot["x"] + spot["w"] // 2
                     cy = spot["y"] + spot["h"] // 2
                     px = overlay_im.getpixel((cx, cy))
-                    self.assertEqual(px, (0x14, 0x1a, 0x38, 0xff), f"Marker spot {(cx, cy)} not covered properly: {px}")
+                    self.assertEqual(px, ImageColor.getcolor(color("surface.canvas"), "RGBA"), f"Marker spot {(cx, cy)} not covered properly: {px}")
 
                 # Inside display boxes curve pixels exist (alpha > 0)
                 osc_crop = overlay_im.crop((14, 74, 422, 366))
@@ -315,7 +316,7 @@ class PlayPreviewRendererTests(unittest.TestCase):
                 for spot in (play_view["markers"][0], play_view["instance"], play_view["markers"][1]):
                     cx = spot["x"] + spot["w"] // 2
                     cy = spot["y"] + spot["h"] // 2
-                    self.assertEqual(im.getpixel((cx, cy)), (0x14, 0x1a, 0x38, 0xff),
+                    self.assertEqual(im.getpixel((cx, cy)), ImageColor.getcolor(color("surface.canvas"), "RGBA"),
                                      f"Raw marker pixel visible in final composite at {(cx, cy)}")
 
                 # 4. Check native Sub PAN dial at (100, 560) is present and undisturbed

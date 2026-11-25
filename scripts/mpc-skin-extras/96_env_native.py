@@ -17,7 +17,7 @@ import copy
 import tempfile
 from pathlib import Path
 
-from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
+from components.native.button.button import TRANSPARENT_HIT, button as native_button, write_transparent_hit
 
 from components.native.level.level import compact_dial_definition, synthyboy_dial_data, level_definition
 from components.native.active_text.active_text import (
@@ -149,19 +149,10 @@ def _append_selector(ctx, items, selector_index, gate):
     }
     children = [_selector_entry("ENV cell artwork", "Image", art, rect, [], [])]
     for index in range(ENV_SELECTOR_CELLS):
-        button = {
-            "version": 2,
-            "onImage": TRANSPARENT_HIT,
-            "offImage": TRANSPARENT_HIT,
-            "buttonId": index,
-            "numButtonsInGroup": ENV_SELECTOR_CELLS,
-            "handleName": "Data",
-            "gestureBehaviour": "Instant",
-        }
-        children.append(_selector_entry(
-            f"Choose ENV {index + 1}", "Button", button, rect, [],
-            [f"Choice {index + 1} visible"],
-        ))
+        child = native_button(f"Choose ENV {index + 1}", rect, TRANSPARENT_HIT,
+                              index=index, count=ENV_SELECTOR_CELLS, gates=[f"Choice {index + 1} visible"])
+        child["bounds"]["acceptsHWFocus"] = "No"
+        children.append(child)
     empty = {"version": 1, "colour": "0", "image": ""}
     ctx.add_component_definition("envNativeSelectorCell", {
         "version": 2,

@@ -856,9 +856,8 @@ protected:
         usedList.place ({});
         legato.setEnabled (enabled_);
 
-        const int bottomRowH = 56, optRowH = 56, editH = 88;
-        const int bottomY = rect_.bottom() - bottomRowH;
-        const int optY = bottomY - 8 - optRowH;
+        const int optRowH = 56, editH = 88;
+        const int optY = rect_.bottom() - optRowH;
         const int editY = optY - 4 - editH;
         const int graphY = targets.rect().bottom() + 4;
         graphRect_ = { X, graphY, W, std::max (0, editY - 8 - graphY) };
@@ -879,10 +878,9 @@ protected:
         for (int i = 0; i < 4; ++i)
             opts[i]->place ({ X + i * (ow + og), optY, i == 3 ? W - 3 * (ow + og) : ow, optRowH });
 
-        const int ag = 6, aw = (W - 2 * ag) * 3 / 10;
-        init.place ({ X, bottomY, aw, bottomRowH });
-        undoButton.place ({ X + aw + ag, bottomY, aw, bottomRowH });
-        del.place ({ X + 2 * (aw + ag), bottomY, W - 2 * (aw + ag), bottomRowH });
+        init.place ({});
+        undoButton.place ({});
+        del.place ({});
     }
     void drawExtra (Pen& p) const override
     {

@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 
-#include "shell-mpc/overlay/native_marker_covers.h"
 #include "shell-mpc/overlay/play_view.h"
 #include "shell-mpc/overlay/tests/fakes.h"
 #include "shell-mpc/ui/tests/ui_test.h"
@@ -45,24 +44,6 @@ public:
 private:
     ovt::FakeInstance base_;
 };
-
-uint32_t alphaOver (uint32_t dst, uint32_t src) noexcept
-{
-    const uint32_t sa = (src >> 24) & 255u;
-    if (sa == 0u)
-        return dst;
-    if (sa == 255u)
-        return src;
-    const uint32_t da = (dst >> 24) & 255u;
-    const uint32_t inv = 255u - sa;
-    const auto blend = [&] (int shift) -> uint32_t {
-        const uint32_t s = (src >> shift) & 255u;
-        const uint32_t d = (dst >> shift) & 255u;
-        return std::min<uint32_t> (255u, s + (d * inv + 127u) / 255u);
-    };
-    const uint32_t outA = std::min<uint32_t> (255u, sa + (da * inv + 127u) / 255u);
-    return (outA << 24) | (blend (16) << 16) | (blend (8) << 8) | blend (0);
-}
 
 bool writePngRgba (const std::string& path, int W, int H, const uint32_t* px)
 {
@@ -191,21 +172,6 @@ int main (int argc, char** argv)
     const int fullW = 1280, fullH = 800;
     std::vector<uint32_t> fullPixels (static_cast<size_t> (fullW) * static_cast<size_t> (fullH), 0u);
     pv.render (fullPixels.data(), fullW, fullH);
-
-    // Cover layout markers and instance pixel using production native_marker_covers.h
-    // against the selector header panel ground (#141a38).
-    {
-        synthyboy_mpc::overlay::gpu::SceneData markerScene;
-        synthyboy_mpc::overlay::gpu::SceneBuilder msb (markerScene);
-        msb.begin (synthyboy_mpc::overlay::gpu::kKindPlay, 0, fullW, fullH);
-        msb.clear (0u);
-        synthyboy_mpc::overlay::drawNativeMarkerCovers (msb, "play1");
-        std::vector<uint32_t> markerPixels;
-        synthyboy_mpc::overlay::renderScene (markerScene, markerPixels);
-        const size_t n = std::min (fullPixels.size(), markerPixels.size());
-        for (size_t i = 0; i < n; ++i)
-            fullPixels[i] = alphaOver (fullPixels[i], markerPixels[i]);
-    }
 
     int outW = fullW;
     int outH = fullH;

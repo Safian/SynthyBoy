@@ -158,11 +158,11 @@
     "view": "mixer",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "mixer/Mixer Native MAIN Strip/header/solo_mute/FX Enable Button"},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN Strip FX Enable Button"},
       {"op": "expect", "target": "main.fx_bypass", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "mixer/Mixer Native MAIN Strip/header/solo_mute/FX Enable Button", "if_changed": {"from": "baseline", "target": "main.fx_bypass"}},
+      {"op": "tap", "control": "mixer/Mixer Native MAIN Strip FX Enable Button", "if_changed": {"from": "baseline", "target": "main.fx_bypass"}},
       {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
@@ -619,7 +619,7 @@
     "steps": [
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "fx/FX Native Surface/FX Chain Add Menu"},
-      {"op": "expect", "ocr": ["FX ADD EFFECT"], "rect": [30, 20, 290, 64]},
+      {"op": "expect", "ocr": ["Chorus", "Compressor", "Delay"], "rect": [0, 110, 1100, 620]},
       {"op": "tap", "x": 106, "y": 49},
       {"op": "expect", "status": {"view": "fx", "page_top": "0"}},
       {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
@@ -1775,15 +1775,15 @@
     "view": "fx",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 2/select [2]"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 2/select"},
       {"op": "expect", "vst": {"3234": 1}},
-      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select"},
       {"op": "expect", "vst": {"3233": 1}},
       {"op": "expect", "vst": {"3234": 0}},
       {"op": "expect", "target": "*", "change": "unchanged"}
     ],
     "restore": [
-      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select"},
       {"op": "navigate", "view": "play1"}
     ]
   },
@@ -1792,15 +1792,15 @@
     "view": "fx",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select"},
       {"op": "expect", "vst": {"3233": 1}},
-      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 2/select [2]"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 2/select"},
       {"op": "expect", "vst": {"3234": 1}},
       {"op": "expect", "vst": {"3233": 0}},
       {"op": "expect", "target": "*", "change": "unchanged"}
     ],
     "restore": [
-      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select [2]"},
+      {"op": "tap", "control": "fx/FX Native Surface/FX fxNativeChainRow/Slot 1/select"},
       {"op": "navigate", "view": "play1"}
     ]
   },

@@ -1045,6 +1045,57 @@ void testMixerTabsAndRouteClosureVisuals()
 
 
 
+void testFxCardSwitch()
+{
+    namespace u = synthyboy_mpc::nativeui;
+    using namespace synthyboy_mpc::overlay;
+    auto rig = std::make_unique<Rig>();
+    auto& r = *rig;
+    const int base = PluginInstance::nativeUiBase();
+    const int select = base + u::kFxChain + u::fxchain::Select;
+    const auto write = [&](int index, float norm) { r.effect.setParameter (&r.effect, index, norm); };
+    pages::FxPage page ("fx", 0);
+    pages::configureNativeTab (page, page.name());
+    page.setHostBackground (true);
+    r.stack.openFull (page.pageElement());
+    const auto tick = [&] {
+        ViewInput in;
+        in.instance = in.io = &r.plugin.overlayView;
+        in.ui = &r.stack;
+        in.nowMs = r.now += 75.0;
+        page.update (in);
+        r.plugin.nativeUiPoll (&r.effect);
+        r.plugin.qPoll (&r.effect);
+    };
+    write (target ("distortion.on"), 1.0f);
+    write (target ("chorus.on"), 1.0f);
+    tick();
+    tick();
+    const auto chunk = r.save();
+    for (int slot : {1, 0})
+    {
+        const int kind = r.plugin.nativeFxChain.card (slot).kind;
+        const auto title = std::string (synthyboy_mpc::ui::fxl::layoutOf (kind).name);
+        const int before = displayRefreshes;
+        write (select + slot, 1.0f);
+        tick();
+        const auto state = r.plugin.nativeFxHeader.state();
+        char label[128] {};
+        r.effect.dispatcher (&r.effect, effGetParamName, base + u::kFxHeader + 2 + state.item * u::fxheader::kFields,
+                             0, label, 0.0f);
+        check (kind > 0 && state.kind == kind && r.effect.getParameter (&r.effect, select + slot) == 1.0f
+               && r.effect.getParameter (&r.effect, select + 1 - slot) == 0.0f && label == title
+               && r.effect.getParameter (&r.effect, base + u::kFxEditorPower) == 1.0f,
+               "selecting either FX card publishes its title, active cells and selection in one view tick");
+        check (displayRefreshes == before, "FX card and Q-link rebinding publish values without a global refresh");
+        tick();
+        check (displayRefreshes == before + 1, "the next Q poll invalidates the host's cached physical knob names");
+        tick();
+        check (displayRefreshes == before + 1 && r.save() == chunk,
+               "the settled FX selection leaves host metadata and preset data untouched");
+    }
+}
+
 void testSavedDisabledEditors()
 {
     namespace u = synthyboy_mpc::nativeui;
@@ -2127,8 +2178,13 @@ void testPlayCompactSmoothNativeHost ()
 }
 }
 
-int main()
+int main (int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp (argv[1], "--fx-card-switch") == 0)
+    {
+        testFxCardSwitch();
+        return failures != 0;
+    }
     auto rig = std::make_unique<Rig>();
     auto& r = *rig;
     const int shape4 = target ("lfo4.shape"), shape5 = target ("lfo5.shape");
@@ -2293,6 +2349,7 @@ int main()
     testCompressorBandNavigation();
     testNativeRandomStereoOwnership();
     testHistoricalXlDirectHostControls();
+    testFxCardSwitch();
     testSavedDisabledEditors();
     testSavedDisabledNativeRoots();
     testPlayExpandedToCompactQParityVst();

@@ -33,7 +33,7 @@ KNOWN = {
     "master": ("Master", "overlay_bg_master.png", 960, 386, "141a38"),
     "voice": ("Voice", "overlay_bg_voice.png", 792, 574, "0c1023"),
     "mixer": ("Mix", "overlay_bg_mixer.png", 900, 18, "141a35"),
-    "fx": ("FX", "overlay_bg_fx.png", 900, 2, "0c1029"),
+    "fx": ("FX", "overlay_bg_fx.png", 900, 2, "0c1032"),
     "macros": ("Macros", "overlay_bg_macros.png", 900, 20, "0b1028"),
     "play1": ("Play", "overlay_bg_play.png", 900, 20, "141a3b"),
 }
@@ -102,7 +102,12 @@ def apply(tui, qlinks, ctx):
         # LFO captions belong to its layout-gated native hook.
         if view != "lfo1":
             from native_static_captions import caption_entries
-            children.extend(caption_entries(view, prefix="Native Caption " + view))
+            gates = ()
+            if view == "master":
+                import native_ui_params
+                master_view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
+                gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)
+            children.extend(caption_entries(view, prefix="Native Caption " + view, gates=gates))
         bg = root["backgroundData"]
         for state in ("focussed", "unfocussed"):
             bg[state] = dict(bg[state], image=asset_name)

@@ -870,7 +870,11 @@ public:
         const int maxG = (isFormant_ && ! splitMode_) ? kMaxGroups : 3;
         for (int i = 0; i < maxG; ++i)
             if (! blocks[i].empty())
-                groups[i].draw (sb, &blocks[i]);
+            {
+                // Leave room for the rounded bank frame at the edge of the native dials.
+                const Rect frame = splitMode_ ? blocks[i].inset (-1) : blocks[i];
+                groups[i].draw (sb, &frame);
+            }
         for (int i = 0; i < maxG; ++i)
             if (i != activeGroup_ && ! blocks[i].empty())
                 groups[i].drawMapped (sb);

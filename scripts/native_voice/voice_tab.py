@@ -237,11 +237,11 @@ def voice_definitions(skins_dir=None):
     # LFO TIME / RATE are state-dependent captions on the same real parameter.
     scale = definitions["voiceNativeScaleDial"]
     name = next(c for c in scale["componentsData"] if c["componentData"]["name"]=="name")
-    name["bounds"]["additionalInvalidatingHandles"] = ["IndexedEnabling/0/2/Mode"]
+    name["bounds"]["additionalInvalidatingHandles"] = ["TimeCaption"]
     name["bounds"]["version"] = 2
     alternate = copy.deepcopy(name)
     alternate["componentData"]["name"] = "rate caption"
-    alternate["bounds"]["additionalInvalidatingHandles"] = ["IndexedEnabling/1/2/Mode"]
+    alternate["bounds"]["additionalInvalidatingHandles"] = ["RateCaption"]
     alternate["componentData"]["data"].update(type="Text",text="LFO RATE")
     scale["componentsData"].append(alternate)
     definitions["voiceNativeScaleEnv"] = _dial(skins,*style.size('voice.controls.scale_dial_size'))
@@ -281,7 +281,9 @@ def populate_voice_tab(tab, ctx, root_gate, include_step_knobs=True):
         bounds["additionalInvalidatingHandles"] = [root_gate]
         remap = [("Data",model),("Caption",f"WithName[{ctrl['caption']}]/{model}")]
         if ctrl["key"] == "voicectl.scale.lfo":
-            remap.append(("Mode",f"Parameter {ctx.param_index('voicectl.scale.lfo_mode')}"))
+            mode = f"Parameter {ctx.param_index('voicectl.scale.lfo_mode')}"
+            remap.extend((("TimeCaption", f"IndexedEnabling/0/2/{mode}"),
+                          ("RateCaption", f"IndexedEnabling/1/2/{mode}")))
         native.append(_component(ctrl["name"],kind,{"version":1,"handleName":"Data"},bounds,remap))
 
     base = sequence_base(ctx)
@@ -308,10 +310,11 @@ def populate_voice_tab(tab, ctx, root_gate, include_step_knobs=True):
         "Voice Target Scope",
         "voiceNativeTargets",
         VOICE_TARGET_GROUP_BOUNDS,
-        target_mappings,
+        [("Data", target_mappings[0][1]), *target_mappings],
         gates=[root_gate],
-        focus="Yes",
+        focus="Children",
     )
+    targets["bounds"]["showWhenDataModelInvalid"] = "Hide"
     native.append(targets)
     components[:] = native + retained
     return components

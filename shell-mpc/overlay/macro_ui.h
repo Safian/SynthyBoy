@@ -143,10 +143,7 @@ public:
             if (top == kPageList)
                 fillList();
         }
-        {
-            const auto content = inst.content();   // the names of the macros (content.macro_names)
-            names_.load (content.get());
-        }
+        const bool namesChanged = names_.load (inst.content().get());
         const unsigned long qWrites = inst.qWriteCount();
         int hwBankMask = 0;
         for (int m = 0; m < 8; ++m)
@@ -156,11 +153,15 @@ public:
             const float v = inst.param (macroParams_[m]);
             if (macroInit_ && ! ui::QGroup::wideDevice() && qWrites != lastQWriteCount_ && std::fabs (v - prevMacroVal_[m]) > 1.0e-4f)
                 hwBankMask |= (1 << (m / 4));
-            prevMacroVal_[m] = v;
-            char text[16];
-            uibind::formatValue (uibind::info (macroParams_[m]), v, text, sizeof text);
-            view_.cards[m].setValue (uibind::normOf (macroParams_[m], v), text);
-            view_.cards[m].setMacro (m, cardName (m).c_str());
+            if (! macroInit_ || v != prevMacroVal_[m])
+            {
+                prevMacroVal_[m] = v;
+                char text[16];
+                uibind::formatValue (uibind::info (macroParams_[m]), v, text, sizeof text);
+                view_.cards[m].setValue (uibind::normOf (macroParams_[m], v), text);
+            }
+            if (! macroInit_ || namesChanged)
+                view_.cards[m].setMacro (m, cardName (m).c_str());
         }
         if (macroInit_ && ! ui::QGroup::wideDevice() && qWrites != lastQWriteCount_)
         {
@@ -192,7 +193,8 @@ public:
                 fillList();
             }
         }
-        updateSpectrum (inst, nowMs);
+        if (pageTop_ == 0)
+            updateSpectrum (inst, nowMs);
         inst.setUiFullOpen (pageTop_ != 0 || ! nativeControls_);
         publishQGroup (inst);
     }

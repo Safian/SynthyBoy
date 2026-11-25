@@ -321,6 +321,28 @@ class LfoSkinTest(unittest.TestCase):
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         self.assertEqual(replacements["Parameter 3287"], ["TIME", "LEVEL", "CURVE"])
 
+    def test_drawers_label_and_select_every_native_choice(self):
+        page = self.tui["pageData"]
+        definitions = {entry["key"]: entry["value"] for entry in page["componentDefinitions"]["localComponentDefinitions"]}
+        replacements = {entry["key"]: entry["value"] for entry in page["replacementStrings"]}
+        for field in (0, 1, 2, 8, 11, 12, 16):
+            names = replacements[f"Parameter {2827 + field}"]
+            children = definitions[f"lfoNativeChoiceDrawer{field}"]["componentsData"]
+            captions = [child["componentData"]["data"]["text"] for child in children
+                        if child["componentData"]["type"] == "Label"]
+            self.assertEqual(captions, names)
+            rows = [child for child in children if child["componentData"]["type"] == "Button"]
+            self.assertEqual(len(rows), len(names))
+            rectangles = []
+            for index, child in enumerate(rows):
+                model = child["componentData"]["data"]
+                self.assertEqual((model["buttonId"], model["numButtonsInGroup"]), (index, len(names)))
+                x, y, w, h = map(int, child["bounds"]["bounds"].split())
+                self.assertTrue(0 <= x < x + w <= 1280 and 0 <= y < y + h <= 800)
+                rectangles.append((x, y, w, h))
+            for (x, y, w, h), (px, py, pw, ph) in combinations(rectangles, 2):
+                self.assertTrue(x + w <= px or px + pw <= x or y + h <= py or py + ph <= y)
+
     def test_host_menus_and_physical_q_proxies(self):
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         params = {p["key"]: p for p in self.params}
@@ -335,7 +357,7 @@ class LfoSkinTest(unittest.TestCase):
         self.assertEqual(self.tab["qlinkBoundsData"], [])
 
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        for name, overlay in (("Choice", "fx editor choice menu"), ("Number", "fx editor number menu")):
+        for name, overlay in (("Choice", "lfoNativeChoiceDrawer0"), ("Number", "fx editor number menu")):
             field = 0 if name == "Choice" else 21
             entry = next(e for e in self.entries if e["componentData"]["name"].startswith("LFO 1 Native ")
                          and e["componentData"]["name"].split()[3].split(".")[1:3] == [str(field), "0"])

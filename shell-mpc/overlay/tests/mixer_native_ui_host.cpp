@@ -144,8 +144,20 @@ static std::vector<ui::Rect> nativeControlRects (const MixerUi& mix)
     return rects;
 }
 
-static void assertNativeRectsTransparent (const MixerUi& mix, const std::vector<uint32_t>& pixels)
+static void assertNativeRectsTransparent (const MixerUi& mix, std::vector<uint32_t> pixels)
 {
+    // The only foreground paint permitted inside the root's native controls is
+    // the opaque cover over each host identification marker (one-pixel margin).
+    for (const auto& view : layout::kViews)
+        if (std::strcmp (view.name, "mixer") == 0)
+            for (const auto spot : { view.markers[0].rect, view.instance, view.markers[1].rect })
+                for (int y = spot.y - 1; y <= spot.y + spot.h; ++y)
+                    for (int x = spot.x - 1; x <= spot.x + spot.w; ++x)
+                    {
+                        auto& pixel = pixels[static_cast<size_t> (y * MixerUi::kCanvasW + x)];
+                        assert ((pixel >> 24) == 255u);
+                        pixel = 0;
+                    }
     for (auto rect : nativeControlRects (mix))
     {
         if (rect.h > 56)

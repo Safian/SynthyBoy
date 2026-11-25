@@ -200,7 +200,7 @@ class TestNativeVoiceTab(unittest.TestCase):
             scale=definitions["voiceNativeScaleDial"]["componentsData"]
             names=[c for c in scale if c["componentData"]["name"] in ("name","rate caption")]
             self.assertEqual({c["bounds"]["additionalInvalidatingHandles"][0] for c in names},
-                             {"IndexedEnabling/0/2/Mode","IndexedEnabling/1/2/Mode"})
+                             {"TimeCaption","RateCaption"})
             self.assertTrue(any(c["componentData"]["data"].get("text")=="LFO RATE" for c in names))
             mode=next(c for c in VOICE_NATIVE_CONTROLS if c["key"]=="voicectl.scale.lfo_mode")
             for ctrl in VOICE_NATIVE_CONTROLS:
@@ -257,7 +257,8 @@ class TestNativeVoiceTab(unittest.TestCase):
             self.assertEqual(bounds["showWhenDataModelInvalid"], "Hide", name)
             model = f"Parameter {self.ctx.param_index(control['key'])}"
             expected_handles={"Data":model,"Caption":f"WithName[{control['caption']}]/{model}"}
-            if control["key"] == "voicectl.scale.lfo":expected_handles["Mode"]=target
+            if control["key"] == "voicectl.scale.lfo":
+                expected_handles.update(TimeCaption=f"IndexedEnabling/0/2/{target}", RateCaption=f"IndexedEnabling/1/2/{target}")
             self.assertEqual({h["key"]:h["value"] for h in comp["handle remapping"]["map"]},expected_handles,name)
 
             definition = definitions[control["type"]]
@@ -297,7 +298,7 @@ class TestNativeVoiceTab(unittest.TestCase):
         self.assertEqual(scope_comp["componentData"]["type"], "voiceNativeTargets")
         self.assertEqual(tuple(map(int, scope_comp["bounds"]["bounds"].split())), (930, 388, 336, 226))
         self.assertEqual(scope_comp["bounds"]["additionalInvalidatingHandles"], [ROOT_GATE])
-        self.assertEqual(scope_comp["bounds"]["acceptsHWFocus"], "Yes")
+        self.assertEqual(scope_comp["bounds"]["acceptsHWFocus"], "Children")
         self.assertEqual(scope_comp["bounds"]["showWhenDataModelInvalid"], "Hide")
         expected_target_remaps = {
             f"Active{suffix}": f"Parameter {self.ctx.param_index(key)}"
@@ -309,6 +310,7 @@ class TestNativeVoiceTab(unittest.TestCase):
                 ("Noise", "voicectl.osc.noise"),
             ]
         }
+        expected_target_remaps["Data"] = expected_target_remaps["ActiveA"]
         self.assertEqual({h["key"]: h["value"] for h in scope_comp["handle remapping"]["map"]}, expected_target_remaps)
 
         targets_def = definitions["voiceNativeTargets"]

@@ -416,6 +416,8 @@ def _ensure_nv_definition(ctx, w, h):
 def _emit_curve_controls(ctx, container, rects, base, action, state, displays, *, is_split, expand_rect=None):
     split_or_curve_gates = [] if is_split else _state_gates(state, (3, 4))
     for index, rect in enumerate(rects):
+        if rect is None:
+            continue
         slot = POINT + index
         x, y, w, h = rect
         if slot < ACTION:

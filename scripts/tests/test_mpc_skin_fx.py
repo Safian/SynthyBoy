@@ -252,11 +252,23 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
 
     def test_every_live_cell_matches_the_contract_and_has_one_input_owner(self):
         self.assertEqual(self.assert_apply, (0, ""))
-        items = self.definitions["fxNativeEditorSurface"]["componentsData"]
+        items = self.definitions["fxNativeParameterCells"]["componentsData"]
+        for surface in ("fxNativeEditorSurface", "mixerPeekFxEditorSurface"):
+            controls = {c["componentData"]["name"]: c for c in self.definitions[surface]["componentsData"]}
+            _, add_y, _, add_h = _rect(controls["FX Chain Add Menu"])
+            cells = controls["FX parameter cells"]
+            states = self.definitions[cells["componentData"]["type"]]["componentsData"]
+            self.assertEqual(len(states), 2, "active and bypassed editors each own one cell subtree")
+            bounds = _rect(cells)
+            self.assertGreaterEqual(bounds[1], add_y + add_h)
+        cells = next(c for c in self.definitions["fxNativeEditorSurface"]["componentsData"]
+                     if c["componentData"]["name"] == "FX parameter cells")
+        layer_x, layer_y, _, _ = _rect(cells)
+        self.assertTrue(self.definitions["fxNativeParameterCells"]["ignoreMousePresses"])
         native = [c for c in items if c["componentData"]["name"].startswith("FX Cell ")]
         marker_names = {c["componentData"]["name"] for c in self.fx["componentDefinition"]["componentsData"]
                         if c["componentData"]["name"].startswith("Overlay ")}
-        self.assertEqual(marker_names, {"Overlay Marker fx left", "Overlay Marker fx right", "Overlay Instance fx"})
+        self.assertEqual(marker_names, {"Overlay Marker fx left", "Overlay Marker fx right", "Overlay Instance fx", "Overlay Background Sentinel fx"})
         self.assertEqual(self.fx["qlinkBoundsData"], [])
         match = next(m for m in self.qlinks if m["Tab"] == self.fx["fnKeyIndex"] + 1
                      and m["SubTab"] == self.fx["fnKeySubIndex"] + 1)
@@ -295,6 +307,8 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
             row, col = divmod(slot, 4)
             row_h = (620 - top) // rows
             x, y, w, h = _rect(c)
+            x += layer_x
+            y += layer_y
             self.assertEqual((x, y, w, h), (8 + col * 318, top + 16 + row * row_h, 310, max(72, row_h - 16)))
             self.assertTrue(0 <= x < x + w <= 1280 and 176 <= y < y + h <= 628 and min(w, h) >= 56)
             observed[key] = _rect(c)
@@ -333,7 +347,9 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
                          (1, 1, "Instant"))
         for key, popup in (("fxNativeCellChoice", "fx editor choice menu"), ("fxNativeCellNumber", "fx editor number menu")):
             definition = defs[key]
-            self.assertEqual({base.leaf_model(c, defs)["data"]["type"] for c in definition["componentsData"]}, {"Name", "Value"})
+            cells = [base.leaf_model(c, defs) for c in definition["componentsData"]]
+            self.assertEqual({c["data"]["type"] for c in cells if c["type"] == "Label"}, {"Name", "Value"})
+            self.assertTrue(any(c["type"] == "Image" for c in cells))
             self.assertEqual([(a["onAction"], a["handler"], a["handleName"], a["additionalData"]) for a in definition["actions"]],
                              [(trigger, "Show Overlay", "Data", popup) for trigger in ("Mouse Down", "Enter Pressed")])
         self.assertEqual(defs["fxNativeCellReadOnly"]["actions"], [])

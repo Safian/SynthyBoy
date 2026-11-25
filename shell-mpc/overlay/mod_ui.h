@@ -236,7 +236,10 @@ public:
     void draw (gpu::SceneBuilder& sb) const
     {
         if (hostBackground())
+        {
+            drawNativeMarkerCovers (sb, "mod");
             return;
+        }
 
         const auto view = nativeView();
         const ui::Rect tab { 0, kTabY, w_, kTabH };

@@ -117,10 +117,10 @@ REBUILT_NATIVE_COMPONENTS = (
     {
         "id": "lfo_smooth_toggle",
         "name": "LFO Native SMOOTH Toggle",
-        "kind": "lfoNativeToggle",
+        "kind": "ActiveText",
         "rect": tuple(_ui_style.size('screen.ui_screen_lfo.rect.rect.8')),
         "role": "Simítás be-/kikapcsoló",
-        "status": "MEGÉPÍTETT (LED állapotjelző kapcsoló)",
+        "status": "MEGÉPÍTETT (natív szöveges kapcsoló)",
     },
     {
         "id": "lfo_smooth_time",

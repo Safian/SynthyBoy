@@ -651,11 +651,18 @@ inline void run()
     a = {};
     a.set ("chorus.on", 1);
     Instance inst;
-    a.apply ("Chorus MORE", inst);
+    a.apply ("Chorus", inst);
     Page chorus ("fx", inst);
     auto& editor = chorus.as<pages::FxPage>().ui().screen().slotEditor;
-    chorus.openFxMore();
-    check (editor.currentType() == synthyboy::kFxTypeChorus && editor.isMoreView() && ! editor.hasDisplay(),
-           "Chorus MORE has its controls and no custom graph in the production layout");
+    check (editor.currentType() == synthyboy::kFxTypeChorus && editor.numPages() == 1 && ! editor.hasDisplay()
+           && editor.rowsOnPage() == 3, "Chorus presents all three native rows on its main panel");
+    const char* keys[] = { "chorus.delay1", "chorus.delay2", "chorus.filter_cutoff", "chorus.filter_spread", "chorus.level" };
+    for (int i = 0; i < 5; ++i)
+    {
+        const int slot = 6 + i;
+        const int control = editor.memberControl (slot / 4, slot % 4);
+        check (control >= 0 && control == editor.controlOfKey (keys[i]),
+               std::string ("Chorus exposes its native control on the main panel: ") + keys[i]);
+    }
 }
 } // namespace preset_graph

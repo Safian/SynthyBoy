@@ -47,8 +47,11 @@ class PlayEnvLfoSkinTest(unittest.TestCase):
             name = item["componentData"]["name"]
             if not name.startswith(prefix):
                 continue
-            caption, span = name.removeprefix(prefix).rsplit(" ", 1)
-            standard_mode = caption.removeprefix("SYNC ") if caption.startswith("SYNC ") else None
+            body = name.removeprefix(prefix)
+            standard_mode = None
+            if body.split()[-1] in ("HZ", "BPM", "KEY"):
+                body, standard_mode = body.rsplit(" ", 1)
+            caption, span = body.rsplit(" ", 1)
             field = len(fields) if standard_mode else fields.index(caption)
             first, last = map(int, span.split("-"))
             index = 3348 if standard_mode else 3303 + field

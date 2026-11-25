@@ -47,6 +47,7 @@
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "native_mod_targets_ui.h"
+#include "native_marker_covers.h"
 #include "modulation_window.h"
 #include "ui_stack.h"
 #include "synthyboy/lfo_display.h"
@@ -372,6 +373,8 @@ public:
     /** The opaque ground of the whole tab and the page of the stack (the full screen, the editor, the targets, the modulations of a control). */
     void drawPage (gpu::SceneBuilder& sb) const
     {
+        if (page_ && pageTop_ == 0)
+            drawNativeMarkerCovers (sb, "lfo1");
         if (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor))
         {
             std::array<ui::Rect, nativeui::lfoeditor::kCount> cells {};

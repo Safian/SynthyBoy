@@ -53,10 +53,10 @@ class UiScreenMixerTests(unittest.TestCase):
         from PIL import Image
         from native_ui_params import MIXER_STEREO_BASE, NATIVE_PARAMS
         self.assertEqual(self.code, 0, self.err)
-        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 964))
+        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 965))
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
         entries = [e for e in tab["componentDefinition"]["componentsData"]
-                   if e["componentData"]["type"] in ("mixerStripSourceFrame", "mixerStripBusFrame", "mixerStripMasterFrame")]
+                   if e["componentData"]["type"] in ("mixerStripSourceFrame", "mixerStripFilterFrame", "mixerStripBusFrame", "mixerStripMasterFrame")]
         self.assertEqual(len(entries), 10)
         base_offset = mixer_peek_index(len(self.params)) + MIXER_STEREO_BASE
         fields = ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")
@@ -130,7 +130,7 @@ class UiScreenMixerTests(unittest.TestCase):
             remap = {h["key"]: h["value"] for h in comp["handle remapping"]["map"]}
 
             if i < 7:
-                self.assertEqual(comp["componentData"]["type"], "mixerStripSourceFrame")
+                self.assertEqual(comp["componentData"]["type"], "mixerStripFilterFrame" if i in (5, 6) else "mixerStripSourceFrame")
                 self.assertEqual(remap.get("Solo"), f"Parameter {native_base + MIXER_CONTROL + MIXER_SOLO_OFFSET + i}")
                 self.assertEqual(remap.get("Mute"), f"Parameter {native_base + MIXER_CONTROL + MIXER_MUTE_OFFSET + i}")
                 self.assertEqual(remap.get("Power"), handles[f"{source}.on"])
@@ -157,7 +157,7 @@ class UiScreenMixerTests(unittest.TestCase):
                 self.assertNotEqual(remap.get("Mute"), handles["main.fx_bypass"])
                 self.assertEqual(remap.get("Level"), handles["master.volume"])
 
-        for def_name in ("mixerStripSourceFrame", "mixerStripBusFrame", "mixerStripMasterFrame",
+        for def_name in ("mixerStripSourceFrame", "mixerStripFilterFrame", "mixerStripBusFrame", "mixerStripMasterFrame",
                          "mixerDestination56", "mixerSliderLEVEL198", "mixerSliderLEVEL414",
                          "mixerSliderPAN56", "mixerSliderB156", "mixerSliderB256"):
             self.assertIn(def_name, definitions, f"{def_name} must remain in generated TUI.json (not pruned as dead)")

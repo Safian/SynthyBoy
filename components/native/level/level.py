@@ -825,7 +825,8 @@ def master_control_definition(kind, w, h, *, skins_dir=None):
         return {"version": 1, "onAction": trigger, "handler": handler,
                 "handleName": "Data", "additionalData": popup}
 
-    if kind.startswith("dial_"):
+    is_dial = kind.startswith("dial_")
+    if is_dial:
         children = [label(True, (inset, 0, w - 2 * inset, label_h)),
                     entry("dial", "Knob", _dial_for_polarity(
                           skins_dir, "BiPolar" if kind == "dial_bi" else "UniPolar", SIZE),
@@ -850,5 +851,7 @@ def master_control_definition(kind, w, h, *, skins_dir=None):
     return {"version": 2, "actions": actions,
             "backgroundData": {"version": 1,
                 "focussed": {"version": 1, "colour": _style_argb("field.focus"), "image": ""},
-                "unfocussed": {"version": 1, "colour": _style_argb("button.surface"), "image": ""}},
+                "unfocussed": {"version": 1,
+                               "colour": _style_native_color("transparent") if is_dial else _style_argb("button.surface"),
+                               "image": ""}},
             "ignoreMousePresses": False, "disableCoarseDataWheel": False, "componentsData": children}

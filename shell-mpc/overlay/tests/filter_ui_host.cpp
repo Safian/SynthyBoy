@@ -1412,13 +1412,12 @@ static void testNativeFilterBindings ()
     r.refresh();
     check (r.inst.get ("curve.note.legato") == 1.0f && r.inst.get ("curve.velocity.legato") == 0.0f,
            "Split NOTE legato changes only the note curve parameter");
-    const auto powerBeforeExpand = r.ui.nativePowerRect();
     r.inst.action (FilterExpandCurve);
     r.refresh();
     r.refresh();
     check (r.inst.nativeFilter.layout() == 3 && r.inst.nativeFilter.at (FilterPower).cell().target < 0
            && r.inst.nativeFilter.at (FilterLegato).cell().target == FakeInst::idx ("curve.note.legato")
-           && r.ui.covers (powerBeforeExpand.x + 3, powerBeforeExpand.y + 3),
+           && r.ui.nativePowerRect().empty(),
            "Expanded NOTE is reachable from OFF, takes away POWER, and binds the note legato");
     check (! gpuShown (r, r.ui.full().view) && ! gpuShown (r, r.ui.full().expand),
            "Expanded native NOTE has one host header/expand owner, no fallback header drawn over it");
@@ -1725,8 +1724,8 @@ static void testSplit6040LayoutAndState ()
     check (f.routing.columns() == 3 && f.routing.rect().h == 48,
            "Split ROUTING has three horizontal choices in one 48 px row");
     check (c.gridX.rect().h >= 56 && c.gridY.rect().h >= 56 && c.snap.rect().h >= 56 && c.legato.rect().h >= 56
-           && c.init.rect().h >= 56 && c.undoButton.rect().h >= 56 && c.del.rect().h >= 56,
-           "Split right panel controls all have >=56 px touch height");
+           && c.init.rect().empty() && c.undoButton.rect().empty() && c.del.rect().empty(),
+           "Split exposes four full-size option cells and reserves editing actions for Expanded");
 
     // 3. Independent state round-trip (tabview 0..11) + independent F1/F2 & NOTE/VELO + Formant/Comb
     for (int fs = 0; fs < 2; ++fs)
@@ -1746,7 +1745,8 @@ static void testSplit6040LayoutAndState ()
     r.refresh();
     check (f.formantMode() && shown (r, f.formantRes) && ! shown (r, f.formantX),
            "Split Formant puts F RESO in TRACK and defers X/Y/TRANSPOSE/SPREAD to Expanded Filter");
-    r.drag (f.display.rect().x + 40, f.display.rect().y + 30, f.display.rect().x + 120, f.display.rect().y + 70);
+    const auto pad = f.display.plot();
+    r.drag (pad.x + 40, pad.y + 30, pad.x + 120, pad.y + 70);
     check (r.inst.lastWritten == FakeInst::idx ("filter2.formant.x") || r.inst.lastWritten == FakeInst::idx ("filter2.formant.y"),
            "Split Formant XY pad directly drives F2 formant X/Y");
     r.inst.set ("filter2.model", 6.0f);   // Comb in Split

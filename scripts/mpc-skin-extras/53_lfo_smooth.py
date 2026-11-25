@@ -8,6 +8,8 @@ from pathlib import Path
 
 from native_ui_params import LFO_OFFSET, mixer_peek_index
 from components import style as _ui_style
+from components.native.button.button import button as native_button
+from components.native.selector.selector import labelled_choice_drawer
 
 CONTRACT = Path(__file__).with_name("lfo-native-contract.json")
 PREFIX = "LFO 1 Native "
@@ -42,12 +44,6 @@ def _label(kind, rect, size=_ui_style.size("lfo.dial.caption_font"), colour=_ui_
     if text is not None:
         data["text"] = text
     return _entry(kind.lower(), "Label", data, rect, proportional=proportional)
-
-
-def _button(rect, index, count, art):
-    data = {"version": 2, "onImage": art[0], "offImage": art[1], "buttonId": index,
-            "numButtonsInGroup": count, "handleName": "Data", "gestureBehaviour": "Instant"}
-    return _entry("button", "Button", data, rect, proportional=True)
 
 
 def _definition(children, popup=None, inactive=False):
@@ -122,9 +118,9 @@ def _active_text(ctx, text, width, height):
     return active_text_definition(text, on, off, (width, height), handle="Active")
 
 
-def _choice(ctx, width, height, caption=None, number=False):
+def _choice(ctx, width, height, caption=None, number=False, popup=None):
     from components.native.selector.selector import selector_definition
-    return selector_definition(None, "fx editor number menu" if number else "fx editor choice menu",
+    return selector_definition(None, popup or ("fx editor number menu" if number else "fx editor choice menu"),
                                (width, height), ctx.skins_dir, title="Data",
                                caption_text=caption, label_height=_ui_style.size('screen.lfo_smooth.choice.label_height'))
 
@@ -160,9 +156,6 @@ def _definitions(ctx):
     # Generic definitions still used by the existing nested shape editor.
     return {
         "Uni": _dial("UniPolar", ctx), "Bi": _dial("BiPolar", ctx),
-        # The compact Play page binds its RND stereo handle to this shared control.
-        "Toggle": _definition([_label("Name", (0.02, 0.03, 0.96, 0.36), _ui_style.size("lfo.editor.toggle_font"), proportional=True),
-                               _button((0.12, 0.38, 0.76, 0.58), 1, 1, ("toggle_on.png", "toggle_off.png"))]),
         "Choice": _choice(ctx, 300, 62), "Number": _choice(ctx, 236, 56, number=True),
     }
 
@@ -184,6 +177,12 @@ def apply(tui, qlinks, ctx):
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     for field, names in choices.items():
         replacements.append({"key": f"Parameter {base + field}", "value": names})
+
+    for field, names in choices.items():
+        if field != 10:  # SYNC has its own native radio group.
+            ctx.add_component_definition(f"lfoNativeChoiceDrawer{field}",
+                                        labelled_choice_drawer(f"LFO {FIELD_CAPTIONS[field]}", names,
+                                                               columns=2 if len(names) > 8 else 1))
 
     definitions = _definitions(ctx)
 
@@ -244,12 +243,11 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
         if field in TOGGLE_FIELDS:
             definitions[widget] = _active_text(ctx, label, width, height)
         elif field in choices or field in NUMBER_FIELDS:
-            definitions[widget] = _choice(ctx, width, height, caption=label, number=field in NUMBER_FIELDS)
+            definitions[widget] = _choice(ctx, width, height, caption=label, number=field in NUMBER_FIELDS,
+                                          popup=f"lfoNativeChoiceDrawer{field}" if field in choices else None)
         else:
             definitions[widget] = _dial("BiPolar" if field == 18 else "UniPolar", ctx, width, height,
                                          smooth=field == SMOOTH_TIME)
-    if field == ACTION:
-        handle = "FromGesture/" + handle
     name = PREFIX + f"{first}-{last}.{field}.{action}"
     payload = {"version": 1, "handleName": "Data"}
     handles = [("Data", handle)]
@@ -353,11 +351,8 @@ def _apply_shape_editor(tui, items, ctx):
         if kind == "Tool":
             for i, tool in enumerate(contract["tools"]):
                 art_pair = (tool_art(i, tool, True), tool_art(i, tool, False))
-                item = _button(tool["rect"], i, len(contract["tools"]), art_pair)
-                item["componentData"]["name"] = prefix + "Tool " + tool["name"]
-                item["handle remapping"]["map"] = [{"key": "Data", "value": parameter}]
-                item["bounds"].update(version=2, acceptsHWFocus="Yes", boundsType="Absolute",
-                                      additionalInvalidatingHandles=[gate])
+                item = native_button(prefix + "Tool " + tool["name"], tool["rect"], *art_pair,
+                                     index=i, count=len(contract["tools"]), remaps=(("Data", parameter),), gates=(gate,))
                 items.append(item)
             continue
         if kind == "Choice":

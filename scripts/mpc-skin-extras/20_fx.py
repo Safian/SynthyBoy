@@ -17,15 +17,15 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components import style
-from components.native.name_value.name_value import _label_component
-from components.native.selector.selector import labelled_choice_drawer, write_routing_assets
+from components.native.name_value.name_value import _label_component, build_name_value_definition
+from components.native.selector.selector import dropdown_definition, labelled_choice_drawer, write_routing_assets
 from components.native.level.level import compact_dial_definition, default_level_template, synthyboy_dial_data
 from components.native.active_text.active_text import write_active_text_assets, active_text_child
 from components.native.radio_button.radio_button import create_segmented_radio_button_group, render_segmented_button_art
-from components.native.button.button import action_button, action_art, in_slot, button as native_button
+from components.native.button.button import action_button, action_art, in_slot, button as native_button, write_transparent_hit
 
 from native_ui_params import (FX_CELL_COUNT, FX_DOMAIN_COUNT, FX_DOMAIN_OFFSET,
-                              FX_BAND_BASE, FX_BAND_MODE, FX_HEADER, FX_HEADER_FIELDS, FX_HEADER_ITEMS,
+                              FX_BAND_BASE, FX_BAND_MODE, FX_EDITOR_POWER, FX_HEADER, FX_HEADER_FIELDS, FX_HEADER_ITEMS,
                               FX_KIND_OFFSET, FX_LAYOUT_OFFSET, FX_VALUE_OFFSET,
                               FX_CHAIN, MIXER_PEEK_VIEW,
                               mixer_peek_index)
@@ -343,6 +343,17 @@ def _native_editor_definitions(ctx):
                _native_label("Value", (style.size("fx.native_editor_definitions.choice_padding"), style.size("fx.native_editor_definitions.caption_height"), style.size("fx.native_editor_definitions.choice_width"), style.size("fx.native_editor_definitions.value_height")), style.size("fx.native_editor_definitions.value_font"))]
     on, off = write_active_text_assets(ctx.skins_dir, "ON", width=style.size("fx.native_editor_definitions.toggle_width"), height=style.size("fx.native_editor_definitions.toggle_height"),
                                       on_name="fx_active_on.png", off_name="fx_active_off.png")
+    choice = dropdown_definition(
+        style.size("fx.native_editor_definitions.choice_width"), style.size("fx.native_editor_definitions.value_height"),
+        actions=_native_definition([], popup=FX_CHOICE_MENU)["actions"], skins_dir=ctx.skins_dir)
+    for child in choice["componentsData"]:
+        x, y, w, h = map(int, child["bounds"]["bounds"].split())
+        child["bounds"]["bounds"] = f"{x + style.size('fx.native_editor_definitions.choice_padding')} {y + style.size('fx.native_editor_definitions.caption_height')} {w} {h}"
+    choice["componentsData"].append(choices[0])
+    number = build_name_value_definition(
+        rect=(0, 0, style.size("fx.native_dial.width"), style.size("fx.native_dial.height")),
+        box_width=style.size("fx.native_editor_definitions.number_width"), box_height=style.size("height.medium"),
+        skins_dir=ctx.skins_dir, caption_handle="Data", popup=FX_NUMBER_MENU)
     return {
         "fxNativeCellUni": _native_dial(ctx),
         "fxNativeCellBi": _native_dial(ctx, bipolar=True),
@@ -350,11 +361,8 @@ def _native_editor_definitions(ctx):
             active_text_child("active", on, off, (style.size("fx.native_editor_definitions.toggle_x"), style.size("fx.native_editor_definitions.choice_padding"), style.size("fx.native_editor_definitions.toggle_width"), style.size("fx.native_editor_definitions.toggle_height")), handle="Data"),
             _native_label("Name", (style.size("fx.native_editor_definitions.switch_label_x"), style.size("fx.native_editor_definitions.label_y"), style.size("fx.native_editor_definitions.switch_label_width"), style.size("fx.native_editor_definitions.label_height")), style.size("fx.native_editor_definitions.label_font")),
         ]),
-        "fxNativeCellChoice": _native_definition(choices, popup=FX_CHOICE_MENU),
-        "fxNativeCellNumber": _native_definition([
-            _native_label("Value", (style.size("fx.native_editor_definitions.toggle_x"), style.size("fx.native_editor_definitions.label_y"), style.size("fx.native_editor_definitions.number_width"), style.size("fx.native_editor_definitions.label_height")), style.size("fx.native_editor_definitions.number_font")),
-            _native_label("Name", (style.size("fx.native_editor_definitions.number_label_x"), style.size("fx.native_editor_definitions.label_y"), style.size("fx.native_editor_definitions.number_label_width"), style.size("fx.native_editor_definitions.label_height")), style.size("fx.native_editor_definitions.label_font")),
-        ], popup=FX_NUMBER_MENU),
+        "fxNativeCellChoice": choice,
+        "fxNativeCellNumber": number,
         "fxNativeCellReadOnly": _native_definition(copy.deepcopy(choices), read_only=True),
     }
 
@@ -501,9 +509,10 @@ def _add_native_chain(tui, tab, ctx, contract, base):
     card_widgets = [toggle_power]
     for enabled, idle, active in ((0, select_bypassed, select_bypassed_on), (1, select_off, select_on)):
         gates = ("Powered" if enabled else "Bypassed",)
-        select_card = button("select", None, (0, down, w, h), gates, idle, active, domain=2)
-        select_card["handle remapping"]["map"] = [{"key": "Data", "value": "Select"}]
-        card_widgets.append(select_card)
+        for selection, image in (("Unselected", idle), ("Selected", active)):
+            card_widgets.append(_native_entry(
+                "Selection face", "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": image},
+                (0, down, w, h), gates=(*gates, selection)))
         for handle, offsets, height in style.size("fx.chain.card.labels"):
             left, top, reserved, label_height = offsets
             label_bounds = (left, down + top, w - reserved, label_height)
@@ -513,6 +522,10 @@ def _add_native_chain(tui, tab, ctx, contract, base):
             label["bounds"]["version"] = 2
             label["bounds"]["additionalInvalidatingHandles"] = list(gates)
             card_widgets.append(label)
+    # The single foreground hit target receives presses anywhere on either caption.
+    select_card = native_button("select", (0, down, w, h), write_transparent_hit(ctx.skins_dir),
+                                index=1, count=2, remaps=(("Data", "Select"),))
+    card_widgets.append(select_card)
     ctx.add_component_definition("fxNativeChainCard", transparent(card_widgets, True))
     tiles = []
     for slot, (power_box, _) in enumerate(contract["cards"]):
@@ -524,6 +537,8 @@ def _add_native_chain(tui, tab, ctx, contract, base):
             {"key": "Present", "value": f"RangedEnabling/{slot + 1}/{slots}/{slots + 1}/Parameter {count}"},
             {"key": "Data", "value": f"Parameter {select + slot}"},
             {"key": "Select", "value": f"Parameter {select + slot}"},
+            {"key": "Selected", "value": f"IndexedEnabling/1/2/Parameter {select + slot}"},
+            {"key": "Unselected", "value": f"IndexedEnabling/0/2/Parameter {select + slot}"},
             {"key": "Power", "value": f"Parameter {power + slot}"},
             {"key": "Powered", "value": f"IndexedEnabling/1/2/Parameter {power + slot}"},
             {"key": "Bypassed", "value": f"IndexedEnabling/0/2/Parameter {power + slot}"},
@@ -537,7 +552,7 @@ def _add_native_chain(tui, tab, ctx, contract, base):
 
     add = contract["add"]
     caption = _native_label("Text", (0, 0, add[2], add[3]), style.size("fx.add_native_chain.native_label.16"))
-    caption["componentData"]["data"].update(text="+ ADD", handleName="Invalid")
+    caption["componentData"]["data"]["text"] = "+ ADD"
     caption["bounds"]["showWhenDataModelInvalid"] = "Show"
     definition = _native_definition([caption], popup=FX_ADD_MENU)
     definition["disableCoarseDataWheel"] = True
@@ -575,7 +590,7 @@ def _add_native_chain(tui, tab, ctx, contract, base):
         {"key": f"Parameter {menu}", "value": ["Select an effect"] + [name for name, _ in contract["gallery"]]})
 
 
-def _add_native_header(tui, tab, ctx, headers, band, base, panels):
+def _add_native_header(tui, tab, ctx, headers, band, base, panels, gallery):
     single, multi = headers
     y, height = single["power"][1], single["power"][3]
     layout_parameter = f"Parameter {base + FX_HEADER + 1}"
@@ -613,25 +628,25 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels):
     x, yy, w, h = single["remove"]
     children.append(action_button(ctx, "remove", (x, yy-y, w, h), "Remove", text="REMOVE", gates=("NonZero/Power",)))
 
-    # Dynamic native names share the existing source-bound action handles.
-    # The plugin publishes the actual title, nested path and content warning.
-    for panel in panels:
-        first = 7 + 2 * (panel["kind"] - 1)
-        gate = f"RangedEnabling/{first}/{first+1}/{frame_count}/{layout_parameter}"
-        for (name, handle, colour), rect, font in zip((
-            ("path", "Rack", "text.label"),
-            ("title", "Power", "text.white"),
-            ("notice", "Remove", "text.status.off"),
-        ), panel["text"], panel["text_font"]):
-            x, yy, w, h = rect
-            label = _native_label("Name", (x, yy-y, w, h), font)
-            label["componentData"]["name"] = f"fx_header_{name}_{panel['kind']}"
-            label["handle remapping"]["map"] = [{"key": "Data", "value": handle}]
-            label["componentData"]["data"]["textStyle"].update(
-                justification=("right" if name == "notice" else "left") + " verticallyCentred",
-                colour=style.argb(colour))
-            label["bounds"].update(version=2, additionalInvalidatingHandles=[gate])
-            children.append(label)
+    # All effects share the title and rack-path geometry. Only Convolve's
+    # missing impulse can publish a notice (FxUi::pullEditor).
+    convolve = next(panel for panel in panels if gallery[panel["kind"] - 1][0] == "Convolve")
+    notice_frame = 7 + 2 * (convolve["kind"] - 1)
+    for field, name, handle, colour, panel, gate in (
+        (0, "path", "Rack", "text.label", panels[0], f"NonZero/{layout_parameter}"),
+        (1, "title", "Power", "text.white", panels[0], f"NonZero/{layout_parameter}"),
+        (2, "notice", "Remove", "text.status.off", convolve,
+         f"RangedEnabling/{notice_frame}/{notice_frame+1}/{frame_count}/{layout_parameter}"),
+    ):
+        x, yy, w, h = panel["text"][field]
+        label = _native_label("Name", (x, yy-y, w, h), panel["text_font"][field])
+        label["componentData"]["name"] = f"fx_header_{name}"
+        label["handle remapping"]["map"] = [{"key": "Data", "value": handle}]
+        label["componentData"]["data"]["textStyle"].update(
+            justification=("right" if name == "notice" else "left") + " verticallyCentred",
+            colour=style.argb(colour))
+        label["bounds"].update(version=2, additionalInvalidatingHandles=[gate])
+        children.append(label)
     for panel in panels:
         kind, names = panel["kind"], panel["names"]
         off_frame, on_frame = 7 + 2 * (kind - 1), 8 + 2 * (kind - 1)
@@ -708,7 +723,7 @@ def _apply_native_editor(tui, tab, ctx):
 
     items = tab["componentDefinition"]["componentsData"]
     items.clear()
-    _add_native_header(tui, tab, ctx, manifest["editor_headers"], manifest["chain"]["band"], base, manifest["panels"])
+    _add_native_header(tui, tab, ctx, manifest["editor_headers"], manifest["chain"]["band"], base, manifest["panels"], manifest["chain"]["gallery"])
     _add_native_chain(tui, tab, ctx, manifest["chain"], base + FX_CHAIN)
     cells_start = len(items)
     scalars = {FX_DIAL: "fxNativeCellUni", FX_TOGGLE: "fxNativeCellSwitch", manifest["kind_last"]: "fxNativeCellBi"}
@@ -747,17 +762,25 @@ def _apply_native_editor(tui, tab, ctx):
 
     # Keep the original native cells visible while bypassed. Header and chain
     # navigation remain independently operable; the shared family owns OFF.
+    def cell_layer(children):
+        rects = [tuple(map(int, c["bounds"]["bounds"].split())) for c in children]
+        left = min(x for x, y, w, h in rects)
+        top = min(y for x, y, w, h in rects)
+        right = max(x + w for x, y, w, h in rects)
+        bottom = max(y + h for x, y, w, h in rects)
+        for child, (x, y, w, h) in zip(children, rects):
+            child["bounds"]["bounds"] = f"{x-left} {y-top} {w} {h}"
+        definition = _native_definition(children, read_only=True)
+        definition["backgroundData"] = _empty_bg()
+        return definition, (left, top, right-left, bottom-top)
+
     cells_kind = "fxNativeParameterCells"
-    cells_definition = _native_definition(list(items[cells_start:]))
-    cells_definition["backgroundData"] = _empty_bg()
+    cells_definition, cells_rect = cell_layer(list(items[cells_start:]))
     ctx.add_component_definition(cells_kind, cells_definition)
     cells_entry = _native_entry("FX parameter cells", cells_kind,
-                               {"version": 1, "handleName": "Data"}, style.size("fx.apply_native_editor.rect.2"))
-    frame_count = 7 + 2 * len(manifest["panels"])
-    frames = [(frame, frame % 2 == 0) for frame in range(1, frame_count)]
+                                {"version": 1, "handleName": "Data"}, cells_rect, base + FX_EDITOR_POWER)
     definitions = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
-    style.bind_control_active(cells_entry, f"Parameter {base + FX_HEADER + 1}", ctx, definitions,
-                              frames=frames, frame_count=frame_count)
+    style.bind_control_active(cells_entry, f"Parameter {base + FX_EDITOR_POWER}", ctx, definitions)
     cells_entry["bounds"]["acceptsHWFocus"] = "Children"
     items[cells_start:] = [cells_entry]
 
@@ -778,10 +801,6 @@ def _apply_native_editor(tui, tab, ctx):
         # Docked Mixer PEEK FX editor occupies (0, 0, 1280, 564) above the persistent bottom 6-tab bar.
         docked_h = style.size("fx.apply_native_editor.docked_h.564")
         docked_bottom = docked_h - style.size("fx.apply_native_editor.docked_bottom.8")  # 556
-        dock_items = []
-        for comp in items:
-            if comp["componentData"]["name"] == "FX Native Surface":
-                pass
         # Build docked copy of surface children fitted cleanly into 0..564 while preserving FX cell identity
         import copy as _copy
         dock_children = _copy.deepcopy(definition["componentsData"])
@@ -801,14 +820,14 @@ def _apply_native_editor(tui, tab, ctx):
         for child in dock_cells_definition["componentsData"]:
             name = child["componentData"]["name"]
             child["bounds"]["bounds"] = " ".join(map(str, dock_cell_rects[name]))
+        dock_cells_definition, dock_rect = cell_layer(dock_cells_definition["componentsData"])
         ctx.add_component_definition(dock_cells_kind, dock_cells_definition)
         for index, child in enumerate(dock_children):
             if child["componentData"]["name"] != "FX parameter cells":
                 continue
             dock_cells = _native_entry("FX parameter cells", dock_cells_kind,
-                                       {"version": 1, "handleName": "Data"}, (0, 0, style.size("fx.apply_native_editor.native_entry.1280"), docked_h))
-            style.bind_control_active(dock_cells, f"Parameter {base + FX_HEADER + 1}", ctx, definitions,
-                                      frames=frames, frame_count=frame_count)
+                                       {"version": 1, "handleName": "Data"}, dock_rect, base + FX_EDITOR_POWER)
+            style.bind_control_active(dock_cells, f"Parameter {base + FX_EDITOR_POWER}", ctx, definitions)
             dock_cells["bounds"]["acceptsHWFocus"] = "Children"
             dock_children[index] = dock_cells
 
@@ -818,7 +837,7 @@ def _apply_native_editor(tui, tab, ctx):
         if columns > 0:
             for r_idx in (0, 1):
                 row_y = style.size("fx.apply_native_editor.row_y.182") if r_idx == 0 else style.size("fx.apply_native_editor.row_y.372")
-                row_def = _copy.deepcopy(tui["pageData"]["componentDefinitions"]["localComponentDefinitions"])
+                row_def = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
                 row_key = f"fxNativeGalleryRow{r_idx + 1}"
                 src_row_def = next((d["value"] for d in row_def if d["key"] == row_key), None)
                 if src_row_def is not None:

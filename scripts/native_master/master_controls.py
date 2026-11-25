@@ -229,12 +229,12 @@ MASTER_SPECS = [
     },
     {
         "key": "shell.pad_pressure_amount",
-        "name": "Pad Amount",
+        "name": "Master Pad Amount",
         "caption": "PAD %",
         "widget": "number",
         "side": "main",
         "rect": tuple(_ui_style.size('screen.master_controls.rect.rect.25')),
-        "condition": {"param": "shell.pad_pressure", "choice": 1, "numChoices": 2},
+        "active_key": "shell.pad_pressure",
     },
     # ---- GLIDE BLOCK (SideMain)
     {
@@ -506,7 +506,7 @@ def _output_widgets(ctx, view, standard_widget):
         label = _label(False, rect)
         label["componentData"]["name"] = value
         data = label["componentData"]["data"]
-        data.update({"type": "Text", "text": value, "handleName": ""})
+        data.update({"type": "Text", "text": value, "handleName": "Data"})
         data["textStyle"].update(colour=colour)
         data["textStyle"]["font"]["height"] = 15.0
         return label
@@ -523,7 +523,7 @@ def _output_widgets(ctx, view, standard_widget):
         data.update(peakHandle="Peak" + channel, rmsHandle="Peak" + channel, peakHoldHandle="Hold" + channel)
         peak_children.append(_child("Peak " + channel, "Meter", data, (x, 4, 26, 98)))
     yield add("Master Peak Meters", "masterNativeOutputMeters", panel(peak_children, image=PEAK_SCALE_IMAGE),
-              (("PeakL", n.MASTER_PEAK_L), ("PeakR", n.MASTER_PEAK_R),
+              (("Data", n.MASTER_PEAK_L), ("PeakL", n.MASTER_PEAK_L), ("PeakR", n.MASTER_PEAK_R),
                ("HoldL", n.MASTER_HOLD_L), ("HoldR", n.MASTER_HOLD_R)))
 
     voice_bar = _child("voice bar", "Meter", meter_data("Right", hold=False), tuple(_ui_style.size('screen.master_controls.voice_bar.rect')))
@@ -622,12 +622,15 @@ def apply_master_native_controls(tui, qlinks, ctx):
             {"key": "Caption", "value": f"WithName[{spec['caption']}]/Parameter {param_idx}"},
         ]
         component["bounds"] = _make_bounds(spec["rect"], handles)
+        active_key = spec.get("active_key")
         if spec["key"].startswith("master.mpe.") and spec["key"] != "master.mpe.on":
+            active_key = "master.mpe.on"
+        if active_key:
             # Keep the original control and readout visible when MPE is off.
             # These native definitions use Knob/Label plus compound actions:
             # their inactive state removes actions, focus and knob dragging.
             _ui_style.bind_control_active(
-                component, f"Parameter {_param_index(ctx, 'master.mpe.on')}", ctx,
+                component, f"Parameter {_param_index(ctx, active_key)}", ctx,
                 tui["pageData"]["componentDefinitions"]["localComponentDefinitions"],
                 active_focus="Yes")
             component["bounds"]["acceptsHWFocus"] = "Children"
@@ -651,10 +654,8 @@ def apply_master_native_controls(tui, qlinks, ctx):
     components.extend(output)
     panel = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_PANEL
     for i, (name, rect) in enumerate(MASTER_PANELS, 1):
-        data = {"version": 2, "onImage": f"master_panel_{i}_on.png", "offImage": f"master_panel_{i}_off.png",
-                "buttonId": i, "numButtonsInGroup": 3, "handleName": "Data", "gestureBehaviour": "Instant"}
-        component = _child(f"Master Panel {name}", "Button", data, rect)
-        component["handle remapping"]["map"] = [{"key": "Data", "value": f"WithName[{name}]/FromGesture/Parameter {panel}"}]
+        component = button(f"Master Panel {name}", rect, f"master_panel_{i}_on.png", f"master_panel_{i}_off.png",
+                           index=i, count=3, remaps=(("Data", f"WithName[{name}]/FromGesture/Parameter {panel}"),))
         component["bounds"] = _make_bounds(rect, [f"NonZero/Parameter {view}"])
         components.append(component)
     return created_count + len(output) + len(MASTER_PANELS)

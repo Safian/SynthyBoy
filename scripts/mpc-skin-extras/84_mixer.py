@@ -24,6 +24,8 @@ from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
     create_mixer_strip_instance,
     write_mixer_strip_assets,
+    render_mixer_strip_background,
+    SCALE_LINEAR_DB,
     supply_replacement_strings,
     VARIANT_SOURCE,
     VARIANT_BUS,
@@ -42,12 +44,12 @@ PEEK_LABELS = ("FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
 NATIVE = "Mixer Native "
 
 
-def _bind_strip_cells(strip, definitions, caption):
+def _bind_strip_cells(strip, definitions, caption, frame):
     """Place shared native controls on the tab with host parameter bindings."""
     shell = deepcopy(strip)
     cells = [shell]
     root = strip["componentData"]["type"]
-    shell["componentData"]["type"] = root + "Frame"
+    shell["componentData"]["type"] = frame
 
     def place(parent, origin, bindings, gates):
         for template in definitions[parent]["componentsData"]:
@@ -116,6 +118,16 @@ def apply(tui, qlinks, ctx):
         ctx.add_component_definition(name, def_data)
         if name in ("mixerStripSource", "mixerStripBus", "mixerStripMaster"):
             ctx.add_component_definition(name + "Frame", dict(def_data, componentsData=[], ignoreMousePresses=True))
+
+    # F1/F2 use the source-strip controls with a -60..+12 dB fader scale.
+    filter_art = "mixer_strip_filter_bg.png"
+    filter_frame = dict(definitions["mixerStripSource"], componentsData=[], ignoreMousePresses=True)
+    filter_frame["backgroundData"] = deepcopy(filter_frame["backgroundData"])
+    for state in ("focussed", "unfocussed"):
+        filter_frame["backgroundData"][state]["image"] = filter_art
+    ctx.add_component_definition("mixerStripFilterFrame", filter_frame)
+    if skins_dir:
+        render_mixer_strip_background(VARIANT_SOURCE, scale_type=SCALE_LINEAR_DB).save(Path(skins_dir) / filter_art)
 
     # Write all native artwork assets into skins directory
     if hasattr(ctx, "skins_dir") and ctx.skins_dir:
@@ -197,7 +209,8 @@ def apply(tui, qlinks, ctx):
             focus="Yes",
             name=tag,
         )
-        components.extend(_bind_strip_cells(strip, definitions, caption))
+        frame = "mixerStripFilterFrame" if source in ("filter1", "filter2") else strip["componentData"]["type"] + "Frame"
+        components.extend(_bind_strip_cells(strip, definitions, caption, frame))
 
     # Native 6-tab navigation action row (MIXER=0, FLT 1=1, FLT 2=2, MAIN FX=3, BUS 1=4, BUS 2=5).
     # Gated on modal_gate (< 19) so tabs remain active in MIXER and all 5 docked editors (where

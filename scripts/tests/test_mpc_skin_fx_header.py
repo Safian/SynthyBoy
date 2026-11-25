@@ -73,6 +73,9 @@ class NativeFxHeaderTests(unittest.TestCase):
                             self.assertGreaterEqual(min(w, h), 56)
                 names = [c["componentData"]["name"] for c in active]
                 self.assertIn("power", names)
+                self.assertEqual(names.count("fx_header_title"), 1)
+                self.assertEqual(names.count("fx_header_path"), 1)
+                self.assertEqual("fx_header_notice" in names, panel["kind"] == 13)
                 self.assertEqual(any(n == "rack" for n in names), on)
                 self.assertEqual(any(n == "remove" for n in names), on)
                 tabs = [c for c in active if c["componentData"]["name"].startswith("FX panel ")]
@@ -201,13 +204,16 @@ class NativeFxHeaderTests(unittest.TestCase):
         self.assertEqual(power["componentData"]["type"], "Button")
         self.assertEqual(power["handle remapping"]["map"], [{"key": "Data", "value": "Power"}])
         selections = [c for c in card[1:] if c["componentData"]["type"] == "Button"]
-        self.assertEqual(len(selections), 2)
-        for enabled, selection in enumerate(selections):
-            self.assertEqual(selection["bounds"]["additionalInvalidatingHandles"], [("Bypassed", "Powered")[enabled]])
-            self.assertEqual(selection["handle remapping"]["map"], [{"key": "Data", "value": "Select"}])
-            for i, (x, y) in enumerate(roots):
-                actual = [[x + a, y + b, w, h] for a, b, w, h in (rect(power), rect(selection))]
-                self.assertEqual(actual, geometry["cards"][i])
+        selection, = selections
+        self.assertIs(selection, card[-1])
+        self.assertEqual(selection["handle remapping"]["map"], [{"key": "Data", "value": "Select"}])
+        self.assertEqual(selection["componentData"]["data"]["onImage"], "native_button_hit.png")
+        for i, (x, y) in enumerate(roots):
+            actual = [[x + a, y + b, w, h] for a, b, w, h in (rect(power), rect(selection))]
+            self.assertEqual(actual, geometry["cards"][i])
+        self.assertEqual({tuple(c["bounds"]["additionalInvalidatingHandles"]) for c in card
+                          if c["componentData"]["name"] == "Selection face"},
+                         {(power, state) for power in ("Powered", "Bypassed") for state in ("Selected", "Unselected")})
         for row in range(2):
             first = 3265 + row * 8
             gallery = repeated(f"fxNativeGalleryRow{row + 1}", 8, [("Data", first)],

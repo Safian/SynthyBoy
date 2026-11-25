@@ -19,7 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
+from components.native.button.button import TRANSPARENT_HIT, button as native_button, write_transparent_hit
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
 from components.native.mod_row.mod_row import build_cell_definition, write_route_button_art, write_route_pagination_art
 from native_ui_params import (MOD_TARGETS, MOD_TARGETS_PAGE_GATE, MOD_TARGETS_ROW_FIELDS,
@@ -51,10 +51,8 @@ def _label(name, rect, kind, handle, gate=None, align="horizontallyCentred"):
 
 
 def _button(name, rect, images, handle, gate=None, index=1, count=1):
-    on, off = images
-    data = {"version": 2, "onImage": on, "offImage": off, "buttonId": index,
-            "numButtonsInGroup": count, "handleName": "Data", "gestureBehaviour": "Instant"}
-    return _entry(name, "Button", rect, data, (("Data", handle),), gate, "Yes")
+    return native_button(name, rect, *images, index=index, count=count,
+                         remaps=(("Data", handle),), gates=(gate,) if gate else ())
 
 
 def _rows(ctx, geometry):

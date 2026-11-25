@@ -351,7 +351,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                 self.assertEqual(binding["Caption"], f"WithName[{spec['caption']}]/Parameter {indices[spec['key']]}")
                 definition = definitions[widget["componentData"]["type"]]
                 if "NativeActiveGate0" in binding:
-                    self.assertTrue(spec["key"].startswith("master.mpe."))
+                    self.assertTrue(spec["key"].startswith("master.mpe.") or spec["key"] == "shell.pad_pressure_amount")
                     off, on = definition["componentsData"]
                     self.assertEqual(off["bounds"]["additionalInvalidatingHandles"], ["NativeActiveGate0"])
                     self.assertEqual(on["bounds"]["additionalInvalidatingHandles"], ["NativeActiveGate1"])
@@ -415,7 +415,7 @@ class MasterNativeControlsTests(unittest.TestCase):
             return definitions[item["componentData"]["type"]]
 
         peaks = output("Master Peak Meters", "14 166 100 128", {
-            "PeakL": "Parameter 2977", "PeakR": "Parameter 2978",
+            "Data": "Parameter 2977", "PeakL": "Parameter 2977", "PeakR": "Parameter 2978",
             "HoldL": "Parameter 2979", "HoldR": "Parameter 2980",
         })
         for side in ("focussed", "unfocussed"):

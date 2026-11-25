@@ -158,24 +158,6 @@ public:
     uint64_t generation = 1;
 };
 
-uint32_t alphaOver (uint32_t dst, uint32_t src) noexcept
-{
-    const uint32_t sa = (src >> 24) & 255u;
-    if (sa == 0u)
-        return dst;
-    if (sa == 255u)
-        return src;
-    const uint32_t da = (dst >> 24) & 255u;
-    const uint32_t inv = 255u - sa;
-    const auto blend = [&] (int shift) -> uint32_t {
-        const uint32_t s = (src >> shift) & 255u;
-        const uint32_t d = (dst >> shift) & 255u;
-        return std::min<uint32_t> (255u, s + (d * inv + 127u) / 255u);
-    };
-    const uint32_t outA = std::min<uint32_t> (255u, sa + (da * inv + 127u) / 255u);
-    return (outA << 24) | (blend (16) << 16) | (blend (8) << 8) | blend (0);
-}
-
 bool writePngRgba (const std::string& path, int W, int H, const uint32_t* px)
 {
     FILE* f = std::fopen (path.c_str(), "wb");
@@ -402,19 +384,6 @@ int main (int argc, char** argv)
 
     uit::Image im = uit::render (*scene);
 
-    // Cover root markers
-    {
-        synthyboy_mpc::overlay::gpu::SceneData markerScene;
-        synthyboy_mpc::overlay::gpu::SceneBuilder msb (markerScene);
-        msb.begin (synthyboy_mpc::overlay::gpu::kKindUi, 0, fullW, fullH);
-        msb.clear (0u);
-        synthyboy_mpc::overlay::drawNativeMarkerCovers (msb, "lfo1");
-        std::vector<uint32_t> markerPixels;
-        synthyboy_mpc::overlay::renderScene (markerScene, markerPixels);
-        const size_t n = std::min (im.px.size(), markerPixels.size());
-        for (size_t k = 0; k < n; ++k)
-            im.px[k] = alphaOver (im.px[k], markerPixels[k]);
-    }
 
     // Crop to 1280x628 (tab area y = 110..738)
     const int tabW = 1280, tabH = 628;

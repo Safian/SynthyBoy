@@ -12,7 +12,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 from components import style
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
-from native_icon_button import icon_button
+from components.native.button.button import button, icon_button
 from native_ui_params import OSC_POWER, OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
 
 # OscillatorFullScreen::layout, tab-local coordinates.
@@ -36,19 +36,11 @@ def apply(tui, qlinks, ctx):
     for source, label in enumerate(OSC_TAB_NAMES):
         # A/B/C reserve the TUNE card to the left of the waveform.
         x, y = (42, 0) if source in (1, 2, 3) else (0, 108)
-        children.append({
-            "version": 2,
-            "componentData": {"version": 1, "name": f"Osc Native {label} Power", "type": "Button", "data": {
-                "version": 2, "onImage": POWER_ON, "offImage": POWER_OFF, "buttonId": 1,
-                "numButtonsInGroup": 1, "handleName": "Data", "gestureBehaviour": "Instant",
-            }},
-            "handle remapping": {"version": 1, "map": [{"key": "Data", "value": f"Parameter {base + OSC_POWER + source}"}]},
-            "bounds": {"version": 2, "acceptsHWFocus": "Yes", "showWhenDataModelInvalid": "Hide",
-                       "whenVisible": "Always", "boundsType": "Absolute", "bounds": f"{x} {y} 64 56",
-                       "additionalInvalidatingHandles": [
-                           f"IndexedEnabling/{source}/{len(OSC_TAB_NAMES)}/Parameter {base + OSC_SOURCE}",
-                       ]},
-        })
+        children.append(button(
+            f"Osc Native {label} Power", (x, y, 64, 56), POWER_ON, POWER_OFF,
+            remaps=(("Data", f"Parameter {base + OSC_POWER + source}"),),
+            gates=(f"IndexedEnabling/{source}/{len(OSC_TAB_NAMES)}/Parameter {base + OSC_SOURCE}",),
+        ))
     layer = "oscNativePowerLayer"
     ctx.add_component_definition(layer, passive_layer(children))
     for tab in tabs:

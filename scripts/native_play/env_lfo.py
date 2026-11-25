@@ -15,8 +15,10 @@ if _ROOT not in sys.path:
 
 from components.native.active_text.active_text import (
     active_text_child,
+    active_text_definition,
     write_active_text_assets,
 )
+from components.native.button.button import button
 from components.native.level.level import (
     PLAY_SMOOTH_RECTS,
     build_native_smooth_dial_with_indicator_definition,
@@ -138,7 +140,16 @@ def apply(tui, items, ctx, contract):
     )
     ctx.add_component_definition("playEnvLfoRate", rate_def)
 
-    kinds = {RATE: "playEnvLfoRate", STEREO: "lfoNativeToggle"}
+    cells = json.loads(Path(contract).read_text(encoding="utf-8"))
+    stereo_sizes = {(width, height) for _, field, _, _, width, height in cells if field == STEREO}
+    stereo_size, = stereo_sizes
+    stereo_on, stereo_off = write_active_text_assets(
+        ctx.skins_dir, "STEREO", *stereo_size,
+        on_name="play_stereo_on.png", off_name="play_stereo_off.png",
+    )
+    ctx.add_component_definition("playRndStereo", active_text_definition(
+        "STEREO", stereo_on, stereo_off, stereo_size, handle="Data"))
+    kinds = {RATE: "playEnvLfoRate", STEREO: "playRndStereo"}
     for field, (x, rgb) in POPUPS.items():
         caption = LABELS[field]
         menu = "playEnvLfoMenu " + caption
@@ -184,7 +195,7 @@ def apply(tui, items, ctx, contract):
         replacements.append({"key": f"Parameter {base + 1 + field}", "value": domains[field]})
 
     groups = {}
-    for view, field, *rect in sorted(json.loads(Path(contract).read_text(encoding="utf-8"))):
+    for view, field, *rect in sorted(cells):
         if field == CHOOSE and tuple(rect) != selectors:
             raise ValueError("the compact Play LFO selector geometry must match the C++ hit rect")
         spans = groups.setdefault((field, tuple(rect)), [])
@@ -204,8 +215,7 @@ def apply(tui, items, ctx, contract):
                     f"Play Native EnvLfo SYNC {first}-{last}", rect, ("HZ", "BPM", "KEY"),
                     handle, ctx.skins_dir, gates=(modal_gate, visible)))
             elif field in (ENV_EXPAND, LFO_EXPAND):
-                data = {"version": 2, "onImage": "lfo_native_expand.png", "offImage": "lfo_native_expand.png",
-                        "buttonId": 1, "numButtonsInGroup": 1, "handleName": "Data", "gestureBehaviour": "Instant"}
-                items.append(_entry(name, "Button", data, rect, (("Data", "FromGesture/" + handle),), (modal_gate, visible)))
+                items.append(button(name, rect, "lfo_native_expand.png",
+                                    remaps=(("Data", "FromGesture/" + handle),), gates=(modal_gate, visible)))
             else:
                 items.append(_entry(name, kinds[field], choice_data, rect, (("Data", handle),), (modal_gate, visible)))

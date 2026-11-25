@@ -4,84 +4,84 @@
     {
       "name": "play",
       "title": "Play",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/play-screen-preview.png",
       "migration_current_source_commit": "044e1808"
     },
     {
       "name": "macros",
       "title": "Macros",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/macros-screen-preview.png",
       "migration_current_source_commit": "ddfa0c14"
     },
     {
       "name": "osc_a",
       "title": "Osc A",
-      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI 3ce4bdb64df4",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/osc-a-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "osc_b",
       "title": "Osc B",
-      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI 3ce4bdb64df4",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/osc-b-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "osc_c",
       "title": "Osc C",
-      "status": "MPC XL hardverfelvétel · Acid Saw Reso · TUI 3ce4bdb64df4",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/osc-c-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "sub",
       "title": "Sub",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/sub-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "noise",
       "title": "Noise",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/noise-screen-preview.png",
       "migration_current_source_commit": "fbe230c5"
     },
     {
       "name": "env",
       "title": "Env",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/env-screen-preview.png",
       "migration_current_source_commit": "5d96c5ae"
     },
     {
       "name": "lfo",
       "title": "LFO",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/lfo-screen-preview.png",
       "migration_current_source_commit": "f0d4b8aa"
     },
     {
       "name": "rnd",
       "title": "RND",
-      "status": "Fejlesztési előnézet · offline render, nem hardveres felvétel",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-components/komponensek/lfo-rnd-kepernyo.png",
       "migration_current_source_commit": "f0d4b8aa"
     },
     {
       "name": "fx",
       "title": "FX",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/fx-native-screen-preview.png",
       "migration_current_source_commit": "4c7c9c02"
     },
     {
       "name": "mixer",
       "title": "Mixer",
-      "status": "MPC Key 61 hardverfelvétel · 027c5fa8",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-components/komponensek/mixer-preview.png",
       "migration_current_source_commit": "8bac702e",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_mixer.png",
@@ -90,7 +90,7 @@
     {
       "name": "filter",
       "title": "Filter",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · TUI 0a1d33ede6dd",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/filter-preview-host-render.png",
       "migration_current_source_commit": "fb5f1371",
       "migration_reference_source": "docs/ui-map/filter-bold-cut/before/Init_filter1.png",
@@ -99,7 +99,7 @@
     {
       "name": "mod",
       "title": "Mod",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · TUI a91db1cc1e53",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-components/komponensek/mod-screen-preview.png",
       "migration_current_source_commit": "ceb2ea02",
       "migration_reference_source": "docs/ui-map/q-link-mapping/before/Init_mod_rows.png",
@@ -108,7 +108,7 @@
     {
       "name": "master",
       "title": "Master",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 1b505c0a3779",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/user-guide/img/master-main.png",
       "migration_current_source_commit": "e1cc61d6",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_master_main.png",
@@ -117,7 +117,7 @@
     {
       "name": "voice",
       "title": "Voice",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 1b505c0a3779",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
       "migration_current_source": "docs/ui-map/voice-preview-host-render.png",
       "migration_current_source_commit": "594ac6dd"
     }

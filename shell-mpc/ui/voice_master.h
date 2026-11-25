@@ -406,10 +406,11 @@ public:
 
     void draw (gpu::SceneBuilder& sb) const override { drawPage (sb); }
 
-    void drawPage (gpu::SceneBuilder& sb, bool showQGroups = true) const
+    void drawPage (gpu::SceneBuilder& sb, bool showQGroups = true, bool showFixedLabels = true) const
     {
         Pen p (sb, enabled_, inactive_);
-        drawFixedLabels (p);
+        if (showFixedLabels)
+            drawFixedLabels (p);
         drawLiveLabels (p);
         if (side_ == SideMain)
             portaCurve.draw (sb);

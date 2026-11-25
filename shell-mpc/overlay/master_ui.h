@@ -272,7 +272,7 @@ public:
         drawNativeMarkerCovers (sb, "master");
         if (pageTop_ != 0)
             full_.drawStaticFurniture (sb);
-        full_.drawPage (sb, pageTop_ == 0);
+        full_.drawPage (sb, pageTop_ == 0, !hostBackground() || full_.side() != ui::MasterScreen::SideMain);
     }
 
     // ---- access for the tests

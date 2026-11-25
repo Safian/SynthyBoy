@@ -10,7 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
-from native_ui_params import ENV_VIEW, PLAY_EXPANDED, PLAY_EXPANDED_CLOSE, mixer_peek_index
+from native_ui_params import ENV_VIEW, LFO_OFFSET, PLAY_EXPANDED, PLAY_EXPANDED_CLOSE, mixer_peek_index
 
 
 def _entry(name, kind, rect, data, gate=None, focus="Children", caption=None):
@@ -95,7 +95,8 @@ def apply(tui, qlinks, ctx):
         lfo = ctx.tab("LFO")
         panel = "lfoNativeFullEditor"
         first = _extract(ctx, lfo, panel, lambda c: c["componentData"]["name"].startswith("LFO 1 Native "))
-        _components(lfo).insert(first, _entry("LFO 1 Native Full Editor", panel, (0, 0, 1280, 628), view))
+        lfo_layout = f"Parameter {base + LFO_OFFSET + 6}"
+        _components(lfo).insert(first, _entry("LFO 1 Native Full Editor", panel, (0, 0, 1280, 628), lfo_layout))
         _insert_play(play, _entry("Play Expanded LFO Controls", panel, (0, 0, 1280, 628), view,
                                   f"RangedEnabling/5/6/7/{view}"))
         _close(play, (968, 210, 96, 56), 5, close + 2, view, "LFO")

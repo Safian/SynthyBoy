@@ -1912,6 +1912,8 @@ struct PluginInstance
 
     float nativeUiValue (int offset) const noexcept
     {
+        if (offset == nativeui::kFxEditorPower)
+            return nativeFxHeader.state().on() ? 1.0f : 0.0f;
         if (nativeui::isFilterChainMenu (offset))
             return (nativeFilterIndicators[1].load (std::memory_order_relaxed) & 2) ? 1.0f / nativeui::kFilterChainLastChoice : 0.0f;
         if (nativeui::isMixerStereoOffset (offset))
@@ -2452,7 +2454,7 @@ struct PluginInstance
             audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
-    void nativeFxHeaderPoll (AEffect* e)
+    bool nativeFxHeaderPoll (AEffect* e)
     {
         namespace h = nativeui::fxheader;
         const auto state = nativeFxHeader.state();
@@ -2466,11 +2468,11 @@ struct PluginInstance
         {
             reportNativeValue (e, base + field, value, force);
         });
-        if (nativeFxHeader.takeLabelsChanged())
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+        reportNativeValue (e, nativeui::kFxEditorPower, state.on() ? 1.0f : 0.0f);
+        return nativeFxHeader.takeLabelsChanged();
     }
 
-    void nativeFxChainPoll (AEffect* e)
+    bool nativeFxChainPoll (AEffect* e)
     {
         namespace c = nativeui::fxchain;
         bool labelChanged = false;
@@ -2479,8 +2481,7 @@ struct PluginInstance
             reportNativeValue (e, nativeui::kFxChain + field, value, force);
             labelChanged |= force && field >= c::Select && field < c::Gallery;
         });
-        if (labelChanged)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+        return labelChanged;
     }
 
     void refreshNativeMixerVisuals() noexcept
@@ -2519,6 +2520,9 @@ struct PluginInstance
         }
     }
 
+    bool fxCardChangedThisPoll = false; // display thread, consumed by the following Q poll
+    bool fxQNamesDue = false;
+
     void nativeUiPoll (AEffect* e)
     {
         const float peek = nativeUiValue (nativeui::kMixerPeekView);
@@ -2532,8 +2536,11 @@ struct PluginInstance
                                                                    : nativeUiValues[offset].load (std::memory_order_relaxed);
             reportNativeValue (e, offset, value);
         }
-        nativeFxHeaderPoll (e);
-        nativeFxChainPoll (e);
+        const float previousFxSource = nativeUiReported[nativeui::kFxHeader];
+        bool fxLabelsChanged = nativeFxHeaderPoll (e);
+        const float currentFxSource = nativeUiReported[nativeui::kFxHeader];
+        fxCardChangedThisPoll = previousFxSource > 0.0f && currentFxSource > 0.0f && previousFxSource != currentFxSource;
+        fxLabelsChanged |= nativeFxChainPoll (e);
         nativeLfoPoll (e);
         nativeLfoEditorPoll (e);
         nativeLfoDetailPoll (e);
@@ -2590,9 +2597,10 @@ struct PluginInstance
         if (layout == 0.0f && nativeUiReported[nativeui::kFxLayout] == 0.0f)
         {
             reportNativeValue (e, nativeui::kMixerPeekView, peek);
+            if (fxLabelsChanged && ! fxCardChangedThisPoll)
+                audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
             return;
         }
-        bool changed = false;
         for (int slot = 0; slot < nativeui::kFxCells; ++slot)
         {
             const auto snapshot = nativeFxCells.at (slot);
@@ -2608,12 +2616,12 @@ struct PluginInstance
             if (moved)
             {
                 nativeFxCells.report (snapshot);
-                changed = true;
+                fxLabelsChanged = true;
             }
         }
         reportNativeValue (e, nativeui::kFxLayout, layout);
         reportNativeValue (e, nativeui::kMixerPeekView, peek);
-        if (changed)
+        if (fxLabelsChanged && ! fxCardChangedThisPoll)
             audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
@@ -2841,9 +2849,17 @@ struct PluginInstance
         if (programNameRefreshDue.exchange (false, std::memory_order_acq_rel))
             audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the host reads the program name again (and drops its own mark)
         const VstInt32 base = qBase();
+        const bool switchedFxCard = std::exchange (fxCardChangedThisPoll, false);
+        if (! switchedFxCard && std::exchange (fxQNamesDue, false))
+            requestProxyNames ();
         qBank.poll ([&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
                     [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); },
-                    [&] { requestProxyNames (); });
+                    [&] {
+                        if (switchedFxCard)
+                            fxQNamesDue = true;
+                        else
+                            requestProxyNames ();
+                    });
         flushProxyNames (e, steadyMs());
     }
     /** The group changed: the names, units and value texts of the Q proxies are other now. The host keeps what it read for good unless it is told (measured on the Key 61, docs/MPC.md "Q proxies and the
@@ -4033,6 +4049,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             // may supply an uninitialised buffer while enumerating a saved track.
             buf[0] = '\0';
             const int offset = index - PluginInstance::nativeUiBase();
+            if (offset == nativeui::kFxEditorPower)
+            {
+                if (opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, "FX Editor Power");
+                else if (opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "On" : "Off");
+                return 1;
+            }
             if (nativeui::isFilterChainMenu (offset))
             {
                 if (opcode == effGetParamName)
@@ -5427,6 +5451,13 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
 #if SYNTHYBOY_MPC_OVERLAY
         const int nativeOffset = index - PluginInstance::nativeUiBase();
+        if (nativeOffset == nativeui::kFxEditorPower)
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax | kVstParameterIsSwitch;
+            props->maxInteger = props->stepInteger = 1;
+            return 1;
+        }
         if (nativeui::isFilterChainMenu (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
@@ -6357,6 +6388,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
+                if (offset == nativeui::kFxEditorPower)
+                    return;
                 if (nativeui::isFilterChainMenu (offset))
                 {
                     if (! std::isfinite (parameter) || parameter < 0.0f || parameter > 1.0f || inst->nativeFilter.layout() == 0)

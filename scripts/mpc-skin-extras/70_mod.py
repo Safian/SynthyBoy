@@ -188,25 +188,13 @@ def apply(tui, qlinks, ctx):
         ("PITCH", 26, 160, 452), ("FIXED", 57, 272, 452),
     )
     for label, src_id, cx, cy in board_chips:
-        tag = label.lower().replace(" ", "")
-        data = {
-            "version": 2,
-            "onImage": f"mod_chip_{tag}.png",
-            "offImage": f"mod_chip_{tag}.png",
-            "buttonId": src_id,
-            "numButtonsInGroup": int(ctx.params[ctx.param_index("mod01.source")]["max"]) + 1,
-            "handleName": "Data",
-            "gestureBehaviour": "Instant",
-        }
-        items.append(_entry(
-            f"Mod Native Board Chip {label}",
-            "Button",
-            data,
-            (cx, cy, 100, 56),
-            remap=[("Data", f"Parameter {base + handles.MOD_BOARD_SOURCE}")],
-            gates=board_gates,
-            focus=True,
-        ))
+        rect = (cx, cy, *_style_size("screen.ui_screen_mod.chip_art.size"))
+        child = action_button(ctx, f"Mod Native Board Chip {label}", rect,
+                              f"Parameter {base + handles.MOD_BOARD_SOURCE}", text=label,
+                              width=_style_size("screen.ui_screen_mod.chip_art.width"), gates=board_gates)
+        child["componentData"]["data"].update(
+            buttonId=src_id, numButtonsInGroup=int(ctx.params[ctx.param_index("mod01.source")]["max"]) + 1)
+        items.append(child)
 
     add("Board All Sources", "ALL SOURCES", "action", _style_size("mod_picker.all_sources"),
         base + handles.MOD_BOARD_GROUP, board_gates)

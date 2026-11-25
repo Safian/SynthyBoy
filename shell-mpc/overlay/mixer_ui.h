@@ -370,6 +370,8 @@ public:
                 holes.back() = { 10, kTabY + 566, kCanvasW - 20, 56 };
                 ui::drawNativeCanvas (sb, screen_.rect(), holes);
             }
+            if (nativeBase())
+                drawNativeMarkerCovers (sb, "mixer");
             if (listOpen_)
                 list_.draw (sb);
         }

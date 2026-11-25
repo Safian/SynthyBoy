@@ -51,19 +51,6 @@ def _ensure_assets(skins_dir):
     write_strip(skins_dir / "mod_dial_90_uni.png", frame_size=style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=False, active=True)
     write_strip(skins_dir / "mod_dial_90_bi.png", frame_size=style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=True, active=True)
 
-    # 7. Board source chip button art
-    board_chips = (
-        ("ENV 1", 1), ("ENV 2", 2), ("ENV 3", 3),
-        ("LFO 1", 7), ("LFO 2", 8), ("LFO 3", 9), ("LFO 4", 10),
-        ("MACRO 1", 19), ("MACRO 2", 20), ("MACRO 3", 21), ("MACRO 4", 22),
-        ("WHEEL", 27), ("VELO", 23), ("AT", 25), ("KEY", 24),
-        ("PITCH", 26), ("FIXED", 57),
-    )
-    for label, _ in board_chips:
-        tag = label.lower().replace(" ", "")
-        chip_art = in_slot(action_art(text=label, width=style.size('screen.ui_screen_mod.chip_art.width')), tuple(style.size('screen.ui_screen_mod.chip_art.size')))
-        chip_art.save(skins_dir / f"mod_chip_{tag}.png")
-
 
 def apply(tui, qlinks, ctx):
     """Upgrade Mod screen definitions in place with verified native MPC components."""

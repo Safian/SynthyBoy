@@ -906,20 +906,22 @@ def build_standalone_osc_routing_choice_overlay(
     _mark_native_menu(items)
     return overlay
 
-def labelled_choice_drawer(name, choices):
+def labelled_choice_drawer(name, choices, *, columns=1):
     """Bind each visible native row to an explicit choice of the drawer's Data handle."""
     overlay = _choice_overlay(name)
     items = overlay["componentsData"]
     x, top, width, pitch = _style_size("selector.source.drawer_row")
     label_x, _, _, _ = _style_size("selector.source.drawer_name")
-    pitch = min(pitch, (800 - top) // len(choices))
+    rows = (len(choices) + columns - 1) // columns
+    pitch = min(pitch, (800 - top) // rows)
     for index, choice in enumerate(choices):
-        y = top + index * pitch
-        label = _value_label(choice, (label_x, y, width - 2 * label_x, pitch))
+        column, row = divmod(index, rows)
+        left, y = x + column * width, top + row * pitch
+        label = _value_label(choice, (left + label_x, y, width - 2 * label_x, pitch))
         data = label["componentData"]["data"]
         data.update(type="Text", text=choice)
         data["textStyle"]["justification"] = "left verticallyCentred"
-        items.extend([label, button("Choose " + choice, (x, y, width, pitch),
+        items.extend([label, button("Choose " + choice, (left, y, width, pitch),
                                     TRANSPARENT_HIT, index=index, count=len(choices))])
     _mark_native_menu(items)
     return overlay

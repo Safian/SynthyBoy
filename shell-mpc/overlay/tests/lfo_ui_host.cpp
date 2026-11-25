@@ -2715,11 +2715,11 @@ void testStandaloneLfoNativeGround()
             for (const auto& spot : { view->markers[0].rect, view->instance, view->markers[1].rect })
                 for (int y = spot.y - 1; y < spot.y + spot.h + 1; ++y)
                     for (int x = spot.x - 1; x < spot.x + spot.w + 1; ++x)
-                        covers &= foreground.at (x, y) == base.at (x, y);
+                        covers &= foreground.at (x, y) == (0xff000000u | ui::theme::kNativeCanvas);
             for (int y = sy; y < sy + 5; ++y)
                 for (int x = sx; x < sx + 5; ++x)
-                    covers &= foreground.at (x, y) == base.at (x, y);
-            check (covers, label + " covers every detector pixel with the corresponding host background shade");
+                    covers &= foreground.at (x, y) == 0u;
+            check (covers, label + " hides the three detector tiles in the native canvas and leaves the host sentinel visible");
 
             // Replay the SAME foreground scene over the ground before rasterizing.
             // This isolates 8-bit over() reassociation from layout/aperture changes:

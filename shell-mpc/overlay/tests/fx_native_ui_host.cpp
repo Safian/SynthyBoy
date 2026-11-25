@@ -187,9 +187,9 @@ void testChorus ()
     r.inst.writeHeader (nativeui::fxheader::Power, 0.0f);
     r.refresh();
     before = r.inst.writes;
-    check (r.inst.bank.layout() == 0 && ! ed.power.state.on && r.ui.covers (rate.x + 5, rate.y + 5)
+    check (r.inst.bank.layout() != 0 && ! ed.power.state.on && ! r.ui.covers (rate.x + 5, rate.y + 5)
            && r.inst.lastWritten == synthyboy::fxInstanceKeys (1).on,
-           "power OFF conceals and disarms native cells while its native switch stays usable");
+           "power OFF keeps the native cells and its power switch visible");
     r.inst.writeCell (0, 0.9f);
     r.refresh();
     check (r.inst.writes == before, "host movement on OFF writes nothing");
@@ -215,40 +215,26 @@ void testChorus ()
 
 void testNativeOwnershipDuringList ()
 {
+    namespace c = nativeui::fxchain;
     FxRig r;
-    r.ui.setNativeControls (false);
     addPool (r.inst, 0, synthyboy::kFxTypeChorus);
     r.refresh();
-    const auto add = r.ui.screen().chainBar.plusCard.rect();
-    r.tapAt (add.x + add.w / 2, add.y + add.h / 2);
-    check (r.ui.listOpen(), "legacy peek opens its retained modal type list");
-    r.ui.setNativeControls (true);
-    r.refresh();
-    check (r.ui.listOpen() && r.ui.screen().nativeControls()
-           && r.ui.screen().slotEditor.nativeControls(),
-           "modal list does not revive the unrelated GPU base controls");
-    check (r.inst.bank.layout() == 0 && r.inst.header.state().layout == nativeui::fxheader::Hidden
-           && r.inst.chain.value (nativeui::fxchain::View) == 0.0f,
-           "modal list disarms native cells, header and chain without changing control ownership");
     const int cards = r.ui.numCards();
-    const auto row = r.ui.list().rowRect (0);
-    r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+    r.ui.setNativeActionPopup (r.inst, 1);
     r.refresh();
-    check (! r.ui.listOpen() && r.ui.numCards() == cards + 1 && r.ui.screen().nativeControls()
-           && r.inst.bank.layout() != 0,
-           "choosing a modal type still adds its effect and restores native bindings");
-    r.ui.setNativeControls (false);
+    check (! r.ui.listOpen() && r.ui.screen().nativeControls() && r.ui.screen().slotEditor.nativeControls(),
+           "the host Add list retains native ownership of the underlying editor");
+    r.ui.setNativeActionPopup (r.inst, -1);
     r.refresh();
-    const auto again = r.ui.screen().chainBar.plusCard.rect();
-    r.tapAt (again.x + again.w / 2, again.y + again.h / 2);
-    r.ui.setNativeControls (true);
+    check (r.ui.numCards() == cards && r.inst.bank.layout() != 0,
+           "closing Add without choosing retains the chain and cell bindings");
+    r.ui.setNativeActionPopup (r.inst, 1);
+    r.inst.writeChain (c::Menu, static_cast<float> (synthyboy::kFxTypeReverb) / c::kTypes);
+    r.ui.setNativeActionPopup (r.inst, -1);
     r.refresh();
-    const int beforeBack = r.ui.numCards();
-    r.stack.back();
-    r.refresh();
-    check (! r.ui.listOpen() && r.ui.numCards() == beforeBack && r.ui.screen().nativeControls()
-           && r.inst.bank.layout() != 0,
-           "Back cancels the modal without editing the chain and restores native bindings");
+    check (r.ui.numCards() == cards + 1 && r.ui.screen().nativeControls() && r.inst.bank.layout() != 0
+           && r.inst.param (synthyboy::fxInstanceKeys (r.ui.selectedItem().index).type) == synthyboy::kFxTypeReverb,
+           "choosing Reverb in the native Add list opens that effect with its cells bound");
 }
 
 void testDelayAndCompressor ()
@@ -306,7 +292,7 @@ void testDelayAndCompressor ()
     c.refresh();
     auto& comp = c.ui.screen().slotEditor;
     const auto band = comp.nativeBandRect();
-    check (comp.nativeBandShown() && ! comp.bandSel.enabled() && ! c.ui.covers (band.x + band.w / 2, band.y + band.h / 2)
+    check (comp.nativeBandShown() && ! c.ui.covers (band.x + band.w / 2, band.y + band.h / 2)
            && binds (c, 5, "compressor.mid.upper_threshold", nativeui::kFxBipolar),
            "the compressor yields the view-local BAND selector and the mid threshold to the native skin");
     c.inst.writeHeader (nativeui::fxheader::kBand, 1.0f);

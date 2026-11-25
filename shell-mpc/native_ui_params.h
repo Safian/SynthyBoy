@@ -127,8 +127,9 @@ constexpr int kMasterScaleInput = kMixerStereoBase + kMixerStereoFields * kMixer
 // marks that route while the host's current-choice indicator follows the edited filter.
 constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = 4;
-constexpr int kCount = kFilterChainMenu + kFilterChainRoutes;
-constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kCount; }
+constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
+constexpr int kCount = kFxEditorPower + 1;
+constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr int kMixerTabs = 6;
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }

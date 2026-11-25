@@ -893,7 +893,7 @@ void testDrawingAndCpuRendering()
     renderScene (*liveData, liveCv);
 
     const auto canvas = 0xff000000u | ui::theme::kNativeCanvas;
-    const auto composedDifferences = [canvas] (const std::vector<uint32_t>& first, const std::vector<uint32_t>& second) {
+    const auto composedDifferences = [] (const std::vector<uint32_t>& first, const std::vector<uint32_t>& second) {
         int differences = 0;
         for (size_t i = 0; i < first.size(); ++i)
         {
@@ -1307,7 +1307,7 @@ void testStandaloneModPresetAndPopupLifecycle()
     r.stack.openDetail (ModUi::kPageList);
     r.refresh();
     check (r.ui.topPage() == ModUi::kPageList, "opening list popup from detail sets topPage to kPageList");
-    check (r.inst.uiFullOpen, "ListPopup reports uiFullOpen = true");
+    check (! r.inst.uiFullOpen && r.inst.nativeModBoard.layout() == 2, "the list keeps its native picker rows visible");
     check (r.ui.covers (640, 300), "covers is true across entire tab while popup is open");
 
     // Dismiss list via back
@@ -1444,7 +1444,7 @@ void testFactoryModBackground()
     gpu::SceneBuilder sb (*scene);
     sb.begin (gpu::kKindPlay, 0, 1280, 800);
     r.ui.draw (sb);
-    check (scene->numOps == 0, "Mod native board produces zero overlay ops when host background is active");
+    check (scene->numOps == 3, "Mod native board draws only the three detector covers");
     ui::theme::setLook (2);
     check (!r.ui.hostBackground(), "Mod alternate look owns its ground");
     ui::theme::setLook (1);
@@ -1633,7 +1633,7 @@ void testStandaloneModDetailNavigationAndBindings()
     gpu::SceneBuilder sb (*scene);
     sb.begin (gpu::kKindPlay, 0, 1280, 800);
     mr.ui.draw (sb);
-    check (scene->numOps == 0, "Detail view produces EXACTLY zero overlay ops when hostBackground is active");
+    check (scene->numOps == 3, "Detail view draws only the three detector covers");
 
     // Test Matrix view produces exactly zero overlay ops when hostBackground is active:
     mr.stack.back();
@@ -1642,7 +1642,7 @@ void testStandaloneModDetailNavigationAndBindings()
     gpu::SceneBuilder msb (*matScene);
     msb.begin (gpu::kKindPlay, 0, 1280, 800);
     mr.ui.draw (msb);
-    check (matScene->numOps == 0, "Matrix view produces EXACTLY zero overlay ops when hostBackground is active");
+    check (matScene->numOps == 3, "Matrix view draws only the three detector covers");
 
     // Reopen detail for slot 9 to test Delete confirmation sequence and presentation readout:
     mr.ui.openSlotDetail (8, mr.stack);
@@ -1712,7 +1712,7 @@ void testStandaloneModDetailNavigationAndBindings()
     gpu::SceneBuilder lsb (*listScene);
     lsb.begin (gpu::kKindPlay, 0, 1280, 800);
     mr.ui.draw (lsb);
-    check (listScene->numOps == 0, "List picker is host native with zero overlay ops");
+    check (listScene->numOps == 3, "List picker draws only the three detector covers");
     mr.stack.back();
     mr.refresh();
 
@@ -1727,7 +1727,7 @@ void testStandaloneModDetailNavigationAndBindings()
     gpu::SceneBuilder tsb (*targetsScene);
     tsb.begin (gpu::kKindPlay, 0, 1280, 800);
     mr.ui.draw (tsb);
-    check (targetsScene->numOps == 0, "Targets panel produces EXACTLY zero overlay ops when hostBackground is active");
+    check (targetsScene->numOps == 3, "Targets panel draws only the three detector covers");
     mr.stack.back();
     mr.refresh();
 
@@ -1751,7 +1751,7 @@ void testStandaloneModDetailNavigationAndBindings()
     gpu::SceneBuilder bsb (*boardScene);
     bsb.begin (gpu::kKindPlay, 0, 1280, 800);
     mr.ui.draw (bsb);
-    check (boardScene->numOps == 0, "Quick-add board produces EXACTLY zero overlay ops when hostBackground is active");
+    check (boardScene->numOps == 3, "Quick-add board draws only the three detector covers");
 
     // Test tapping a source on the native board:
     mr.inst.postModBoard (nativeui::modboard::Source, 7.0f / static_cast<float> (synthyboy::modSourceCount())); // Tap LFO 1 (choice 7)
@@ -1790,7 +1790,7 @@ void testNativeListSelectionAndPaging()
     gpu::SceneBuilder sb (*scene);
     sb.begin (gpu::kKindPlay, 0, 1280, 800);
     r.ui.draw (sb);
-    check (scene->numOps == 0 && ! r.ui.covers (80, 280), "native picker draws no GPU furniture and accepts host input");
+    check (scene->numOps == 3 && ! r.ui.covers (80, 280), "native picker draws no GPU furniture and accepts host input");
     post (nb::ListRow + 2); // LFO group
     check (r.inst.nativeModBoard.at (nb::ListRow).cell().target - nb::kChoiceBias == 7, "LFO group resolves actual source ID");
     const auto stale = r.inst.nativeModBoard.at (nb::ListRow);

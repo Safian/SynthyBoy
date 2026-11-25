@@ -15,6 +15,7 @@
 #include "env_ui.h"
 #include "lfo_ui.h"
 #include "macro_names.h"
+#include "native_marker_covers.h"
 #include "osc_display.h"
 #include "osc_page.h"
 #include "osc_ui.h"
@@ -726,6 +727,11 @@ private:
         {
             expandedOsc_->draw (sb);
             return;
+        }
+        if (compact)
+        {
+            ui::Cell markers (sb, { 0, play::kTabY, play::kRegionW, play::kNativeSelectorY }, 0);
+            drawNativeMarkerCovers (sb, "play1");
         }
         if (osc_ != nullptr)
         {
