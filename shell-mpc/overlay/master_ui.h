@@ -134,7 +134,7 @@ public:
             full_.setPadPressureOn (have && on);   // PAD % applies only while PAD PRESS is on: hidden (not dimmed) otherwise
         }
         full_.portaCurve.slope = inst.param (slopeIdx_);
-        inst.setUiFullOpen (true);
+        inst.setUiFullOpen (pageTop_ != 0);
         if (nativeView() == nativeui::master::Main)
             inst.setNativeMasterOutput ({ full_.meters.peakL, full_.meters.peakR, full_.meters.holdL, full_.meters.holdR,
                                           full_.voiceMeter.activeVoices, full_.voiceMeter.polyphony, full_.clip.state.active });
@@ -152,7 +152,7 @@ public:
 
     void leftTab (IInstanceView& inst) noexcept
     {
-        inst.setNativeMasterView (nativeui::master::Hidden);
+        inst.leaveNativeMasterView (full_.side() == ui::MasterScreen::SideMain ? nativeui::master::Main : nativeui::master::Tuning);
         lastInstance_ = nullptr;
     }
 

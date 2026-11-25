@@ -633,6 +633,15 @@ struct PluginInstance
         }
         void setNativeMasterView (nativeui::master::View view) noexcept override
         {
+            publishMasterView (view, view);
+        }
+        void leaveNativeMasterView (nativeui::master::View returnPanel) noexcept override
+        {
+            // The host owns tab visibility. Keep its next panel ready while disarming hidden inputs.
+            publishMasterView (nativeui::master::Hidden, returnPanel);
+        }
+        void publishMasterView (nativeui::master::View view, nativeui::master::View skinPanel) noexcept
+        {
             const auto preset = inst.stateGeneration.load (std::memory_order_acquire);
             if (preset != inst.nativeMasterPanelPreset.load (std::memory_order_relaxed))
                 inst.nativeMasterPanel.invalidate();
@@ -646,6 +655,7 @@ struct PluginInstance
             const auto cell = masterPanelCell (view);
             inst.nativeMasterPanel.publish (view, &cell);
             inst.nativeMasterPanelPreset.store (preset, std::memory_order_release);
+            inst.nativeMasterSkinPanel.store (skinPanel, std::memory_order_relaxed);
             inst.nativeMasterView.store (view, std::memory_order_relaxed);
             if (view != nativeui::master::Main)
                 inst.nativeMasterClearPending.store (false, std::memory_order_relaxed);
@@ -1609,7 +1619,8 @@ struct PluginInstance
     float nativeUiReported[nativeui::kCount] {};   // display thread only
     nativeui::MixerPeekRequest mixerPeek;
     std::atomic<bool> hostMixerWidgetsHidden { false };
-    long long peekNamesRequestedAt = -1;   // display thread only
+    int nativeVoiceDisplayedRow = -1;   // display thread only
+    long long proxyNamesRequestedAt = -1;   // display thread only
     std::atomic<int> nativeMixerPeekView { nativeui::MixerBase };
     std::atomic<int> nativeMixerActiveTab { 0 };
     std::array<std::atomic<int>, nativeui::kMixerStrips> nativeMixerSoloVisual {};
@@ -1645,6 +1656,7 @@ struct PluginInstance
     std::array<bool, nativeui::osc::kSettingsAll> nativeOscSettingAcks {};   // display thread only
     bool nativeOscSourceLabelChanged = false;                               // display thread only
     std::atomic<int> nativeMasterView { 0 };
+    std::atomic<int> nativeMasterSkinPanel { nativeui::master::Main };
     // One atomic mailbox per instrument. A new capture replaces the previous pending root.
     enum { ScaleInputHidden = -3, ScaleInputOff = -2, ScaleInputArmed = -1 };
     std::atomic<int> scaleInput { ScaleInputHidden };
@@ -1732,15 +1744,15 @@ struct PluginInstance
         return static_cast<int> (paramMirror[cell.target].load (std::memory_order_relaxed));
     }
 
-    float nativeVoiceValue (nativeui::voice::Bank::Snapshot snapshot) const noexcept
+    float nativeVoiceValue (int field, nativeui::FxCell cell) const noexcept
     {
         namespace n = nativeui::voice;
-        const int target = snapshot.cell().target;
+        const int target = cell.target;
         if (target < 0)
             return 0.0f;
-        if (snapshot.slot == n::kValue)
+        if (field == n::kValue)
             return qReadNorm (target);
-        const int last = snapshot.slot == n::kRow ? n::kRows - 1 : n::kSteps - 1;
+        const int last = field == n::kRow ? n::kRows - 1 : n::kSteps - 1;
         return static_cast<float> (target) / last;
     }
 
@@ -2052,7 +2064,10 @@ struct PluginInstance
         if (offset >= nativeui::kOscPower)
             return nativeOsc.snapshot().powerValue (offset - nativeui::kOscPower + 1);
         if (offset >= nativeui::kVoiceSequence)
-            return nativeVoiceValue (nativeVoice.at (offset - nativeui::kVoiceSequence));
+        {
+            const int field = offset - nativeui::kVoiceSequence;
+            return nativeVoiceValue (field, nativeVoice.displayCell (field));
+        }
         if (offset >= nativeui::kModNavigation)
             return nativeModNavigationValue (offset - nativeui::kModNavigation);
         if (offset == nativeui::kPlayLfoStandard)
@@ -2071,7 +2086,7 @@ struct PluginInstance
         if (offset == nativeui::kModView)
             return static_cast<float> (nativeMod.layout()) / nativeui::mod::kLastView;
         if (offset == nativeui::kMasterView)
-            return static_cast<float> (nativeMasterView.load (std::memory_order_relaxed)) / nativeui::master::kLastFrame;
+            return static_cast<float> (nativeMasterSkinPanel.load (std::memory_order_relaxed)) / nativeui::master::kLastFrame;
         if (offset >= nativeui::kOscBase)
             return nativeOsc.snapshot().value (offset - nativeui::kOscBase);
         if (offset == nativeui::kFilterBase)
@@ -2298,7 +2313,7 @@ struct PluginInstance
             reportNativeValue (e, offset, nativeUiValue (offset));
         reportNativeValue (e, nativeui::kFilterBase, view);
         if (changed)
-            requestProxyNames (e);
+            requestProxyNames ();
     }
 
     void nativeOscPoll (AEffect* e)
@@ -2329,7 +2344,7 @@ struct PluginInstance
         namespace m = nativeui::master;
         constexpr int base = nativeui::kMasterOutput;
         const float view = nativeUiValue (nativeui::kMasterView);
-        if (view == static_cast<float> (m::Main) / m::kLastFrame)
+        if (nativeMasterView.load (std::memory_order_relaxed) == m::Main)
         {
             const int polyphony = nativeMasterPolyphony.load (std::memory_order_relaxed);
             for (int field = 0; field < m::ClearClip; ++field)
@@ -2662,20 +2677,27 @@ struct PluginInstance
 
     void nativeVoicePoll (AEffect* e)
     {
-        bool rebound = false;
-        for (int field = 0; field < nativeui::voice::kCount; ++field)
+        namespace v = nativeui::voice;
+        if (! nativeVoice.layout())
         {
-            const auto snapshot = nativeVoice.at (field);
-            const bool moved = nativeVoice.needsReport (snapshot);
-            reportNativeValue (e, nativeui::kVoiceSequence + field, nativeVoiceValue (snapshot), moved);
-            if (moved)
-            {
-                nativeVoice.report (snapshot);
-                rebound |= snapshot.cell().target >= 0;
-            }
+            nativeVoiceDisplayedRow = -1;
+            return;
         }
-        if (rebound)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+        const auto row = nativeVoice.at (v::kRow);
+        const bool entering = nativeVoiceDisplayedRow < 0;
+        for (int field = 0; field < v::kCount; ++field)
+        {
+            const auto snapshot = field == v::kRow ? row : nativeVoice.at (field);
+            if (snapshot.cell().target < 0)
+                continue;
+            // Equal normalized values can have different text (MID, 0 c, 0%).
+            const bool formatChanged = field == v::kValue && snapshot.cell().source / v::kSteps != nativeVoiceDisplayedRow;
+            reportNativeValue (e, nativeui::kVoiceSequence + field, nativeVoiceValue (field, snapshot.cell()), entering || formatChanged);
+            if (field == v::kValue)
+                nativeVoiceDisplayedRow = snapshot.cell().source / v::kSteps;
+            if (nativeVoice.needsReport (snapshot))
+                nativeVoice.report (snapshot);
+        }
     }
 
     void nativeModNavigationPoll (AEffect* e)
@@ -2792,8 +2814,8 @@ struct PluginInstance
         const VstInt32 base = qBase();
         qBank.poll ([&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
                     [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); },
-                    [&] { requestProxyNames (e); });
-        flushPeekProxyNames (e, steadyMs());
+                    [&] { requestProxyNames (); });
+        flushProxyNames (e, steadyMs());
     }
     /** The group changed: the names, units and value texts of the Q proxies are other now. The host keeps what it read for good unless it is told (measured on the Key 61, docs/MPC.md "Q proxies and the
         plugin-drawn pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
@@ -2802,28 +2824,23 @@ struct PluginInstance
         audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
-    void requestProxyNames (AEffect* e)
+    void requestProxyNames ()
     {
-        if (nativeMixerPeekView.load (std::memory_order_acquire) != nativeui::MixerPeekFilter)
-        {
-            peekNamesRequestedAt = -1;
-            qNotifyGroup (e);
-        }
-        else if (peekNamesRequestedAt < 0)
-            peekNamesRequestedAt = steadyMs();
+        if (proxyNamesRequestedAt < 0)
+            proxyNamesRequestedAt = steadyMs();
     }
 
-    void flushPeekProxyNames (AEffect* e, long long nowMs)
+    void flushProxyNames (AEffect* e, long long nowMs)
     {
-        if (peekNamesRequestedAt < 0)
+        if (proxyNamesRequestedAt < 0)
             return;
         // A full metadata refresh rebuilds the MPC menus and postpones its primary-plane redraw.
         // Publish the new skin controls first. Even an unreadable skin must eventually get the names.
         constexpr long long maxWaitMs = 1000;
         if (nativeMixerPeekView.load (std::memory_order_acquire) == nativeui::MixerPeekFilter
-            && ! hostMixerWidgetsHidden.load (std::memory_order_relaxed) && nowMs - peekNamesRequestedAt < maxWaitMs)
+            && ! hostMixerWidgetsHidden.load (std::memory_order_relaxed) && nowMs - proxyNamesRequestedAt < maxWaitMs)
             return;
-        peekNamesRequestedAt = -1;
+        proxyNamesRequestedAt = -1;
         qNotifyGroup (e);
     }
 
@@ -4193,7 +4210,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             }
             if (offset == nativeui::kMasterPanel)
             {
-                const auto view = inst->nativeMasterPanel.layout();
+                const auto view = inst->nativeMasterSkinPanel.load (std::memory_order_relaxed);
                 synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Master Panel"
                     : opcode == effGetParamDisplay && view > 0 ? (view == nativeui::master::Main ? "Main" : "Tuning & MPE") : "");
                 return 1;
@@ -4591,7 +4608,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 namespace n = nativeui::voice;
                 const int field = offset - nativeui::kVoiceSequence;
-                const auto cell = inst->nativeVoice.at (field).cell();
+                const auto cell = inst->nativeVoice.displayCell (field);
                 buf[0] = '\0';
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, n::kNames[field]);
@@ -6540,7 +6557,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                 if (offset >= nativeui::kVoiceSequence)
                 {
                     const auto cell = inst->nativeVoice.at (offset - nativeui::kVoiceSequence);
-                    if (std::fabs (parameter - inst->nativeVoiceValue (cell)) > 1.0e-6f)
+                    if (std::fabs (parameter - inst->nativeVoiceValue (cell.slot, cell.cell())) > 1.0e-6f)
                         inst->nativeVoice.post (cell, parameter);
                     return;
                 }

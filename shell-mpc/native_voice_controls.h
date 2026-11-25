@@ -38,8 +38,25 @@ struct ViewState
 class Bank : public NativeCellBank<kCount>
 {
 public:
+    Bank() noexcept
+    {
+        const auto* first = synthyboy::findParamByKey ("voicectl.s1.pan");
+        display_.store ({static_cast<int16_t> (first ? first - synthyboy::paramTable() : -1), 0, 0});
+    }
+
+    // The host can paint the new tab before the overlay recognises it. Retain
+    // the selection for readout only. Writes still need a live, reported link.
+    FxCell displayCell (int field) const noexcept
+    {
+        const auto selected = display_.load (std::memory_order_relaxed);
+        return ViewState {true, selected.row, selected.step, selected.target}.cell (field);
+    }
+
     void publish (const ViewState& next) noexcept
     {
+        if (next.active)
+            display_.store ({static_cast<int16_t> (next.target), static_cast<uint8_t> (next.row),
+                             static_cast<uint8_t> (next.step)}, std::memory_order_relaxed);
         if (next.preset != preset_)
             invalidate();
         preset_ = next.preset;
@@ -54,6 +71,9 @@ public:
     }
 
 private:
+    struct Selection { int16_t target; uint8_t row, step; };
+    static_assert (synthyboy::kMaxParams <= INT16_MAX);
+    std::atomic<Selection> display_ {};
     uint64_t preset_ = 0;  // overlay thread only
 };
 }

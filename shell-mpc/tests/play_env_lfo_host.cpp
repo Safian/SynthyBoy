@@ -24,6 +24,7 @@ int engineReports = 0;
 int standardSyncReports = 0;
 int envTargetReports = 0;
 int displayRefreshes = 0;
+std::array<int, nativeui::voice::kCount> voiceReports {};
 
 void check (bool condition, const char* message)
 {
@@ -48,6 +49,9 @@ VstIntPtr callback (AEffect* effect, VstInt32 opcode, VstInt32 index, VstIntPtr,
         return 2400;
     if (opcode == audioMasterAutomate)
     {
+        const int voiceField = index - PluginInstance::nativeUiBase() - nativeui::kVoiceSequence;
+        if (voiceField >= 0 && voiceField < nativeui::voice::kCount)
+            ++voiceReports[voiceField];
         if (index < static_cast<int> (synthyboy::paramCount()))
             ++engineReports;
         if (index == PluginInstance::nativeUiBase() + synthyboy_mpc::nativeui::kEnvFields + synthyboy_mpc::nativeui::env::Targets)
@@ -709,27 +713,58 @@ void testExpandedOscVst()
            "one native OSC CLOSE restores the selected compact oscillator and all compact Q targets");
 }
 
+void testVoiceValueReports()
+{
+    Rig r;
+    const int refreshes = displayRefreshes;
+    voiceReports.fill (0);
+    nativeui::voice::ViewState state { true, 0, 0, target ("voicectl.s1.pan"), 1 };
+    auto poll = [&] {
+        r.plugin.nativeVoice.publish (state);
+        r.plugin.nativeVoicePoll (&r.effect);
+        r.plugin.flushProxyNames (&r.effect, 0);
+    };
+    poll();
+    poll();
+    check (voiceReports == std::array<int, 3> {1, 1, 1}, "a warm Voice page does not resend its values");
+    state.row = 1;
+    state.target = target ("voicectl.s1.detune");
+    poll();
+    check (voiceReports == std::array<int, 3> {2, 1, 2}, "changing row reports the row and reformatted value");
+    state.active = false;
+    poll();
+    const int value = PluginInstance::nativeUiBase() + nativeui::kVoiceSequence + nativeui::voice::kValue;
+    char text[64] {};
+    r.effect.dispatcher (&r.effect, effGetParamDisplay, value, 0, text, 0.0f);
+    check (std::strcmp (text, "0 c") == 0, "the native host can paint the cached row's live value before Voice re-entry");
+    r.effect.setParameter (&r.effect, value, 1.0f);
+    float pending;
+    check (! r.plugin.nativeVoice.take (state, nativeui::voice::kValue, pending), "hidden Voice input stays disarmed");
+    check (voiceReports == std::array<int, 3> {2, 1, 2} && displayRefreshes == refreshes,
+           "leaving Voice sends no hidden values and sequence edits need no global metadata refresh");
+}
+
 void testMixerPeekDisplayRefresh()
 {
     Rig r;
     const int before = displayRefreshes;
     r.plugin.overlayView.setNativeMixerPeekView (nativeui::MixerPeekFilter);
-    r.plugin.requestProxyNames (&r.effect);
-    r.plugin.requestProxyNames (&r.effect);
-    const auto request = r.plugin.peekNamesRequestedAt;
-    r.plugin.flushPeekProxyNames (&r.effect, request);
+    r.plugin.requestProxyNames ();
+    r.plugin.requestProxyNames ();
+    const auto request = r.plugin.proxyNamesRequestedAt;
+    r.plugin.flushProxyNames (&r.effect, request);
     check (displayRefreshes == before, "leave the host free to draw the Filter before rebuilding proxy names");
     r.plugin.overlayView.observeHostWidgetGate (true);
-    r.plugin.flushPeekProxyNames (&r.effect, request);
-    r.plugin.flushPeekProxyNames (&r.effect, request + 20);
+    r.plugin.flushProxyNames (&r.effect, request);
+    r.plugin.flushProxyNames (&r.effect, request + 20);
     check (displayRefreshes == before + 1, "the observed modal frame releases both proxy changes once");
     r.plugin.overlayView.observeHostWidgetGate (false);
-    r.plugin.requestProxyNames (&r.effect);
-    r.plugin.flushPeekProxyNames (&r.effect, r.plugin.peekNamesRequestedAt + 2000);
+    r.plugin.requestProxyNames ();
+    r.plugin.flushProxyNames (&r.effect, r.plugin.proxyNamesRequestedAt + 2000);
     check (displayRefreshes == before + 2, "an unavailable primary frame still releases the metadata update");
-    r.plugin.requestProxyNames (&r.effect);
+    r.plugin.requestProxyNames ();
     r.plugin.overlayView.setNativeMixerPeekView (nativeui::MixerBase);
-    r.plugin.flushPeekProxyNames (&r.effect, r.plugin.peekNamesRequestedAt);
+    r.plugin.flushProxyNames (&r.effect, r.plugin.proxyNamesRequestedAt);
     check (displayRefreshes == before + 3, "leaving the Filter releases a pending refresh");
 }
 
@@ -1685,7 +1720,12 @@ void testHistoricalXlDirectHostControls()
     page (master);
     check (r.plugin.nativeMasterView.load (std::memory_order_relaxed) == nativeui::master::Main,
            "Master exposes MAIN independently of its overlapping TUNING controls");
+    check (! r.plugin.uiFullOpen.load(), "the native Master root leaves native widgets enabled for a direct switch to Voice");
     checkHostGesture (master, master.ui().screen().volume.rect(), false, "master.volume");
+    master.ui().leftTab (r.plugin.overlayView);
+    check (r.plugin.nativeMasterView.load() == nativeui::master::Hidden
+           && r.plugin.nativeUiValue (nativeui::kMasterView) == float (nativeui::master::Main) / nativeui::master::kLastFrame,
+           "leaving disarms Master input and preserves the panel for the host's next page paint");
 }
 
 #include "native_mod_targets_checks.h"
@@ -2240,6 +2280,7 @@ int main()
     testCompactExpandVst();
     testExpandedOscVst();
     testMixerPeekVst();
+    testVoiceValueReports();
     testMixerPeekDisplayRefresh();
     testMixerTabsAndRouteClosureVisuals();
     testEnvTargetCount();
