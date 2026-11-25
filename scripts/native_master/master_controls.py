@@ -593,7 +593,7 @@ def apply_master_native_controls(tui, qlinks, ctx):
     def standard_widget(kind, w, h):
         definition = f"masterNative_{kind}" if kind.startswith("dial_") else f"masterNative_{kind}_{w}x{h}"
         if definition not in added_definitions:
-            ctx.add_component_definition(definition, _definition(kind, w, h))
+            ctx.add_component_definition(definition, _definition(kind, w, h, skins_dir=ctx.skins_dir))
             added_definitions.add(definition)
         return definition
 

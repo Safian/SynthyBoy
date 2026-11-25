@@ -6,6 +6,7 @@
 import importlib.util
 import json
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from pathlib import Path
 import test_mpc_skin_extras as base
 from test_mpc_backgrounds import bg_mod
 from native_ui_params import LEGACY_EXTRAS, NATIVE_PARAMS
+from validate_synthyboy_skin import validate_package
 
 SHARED_JSON = base.ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
 OVERLAY_LAYOUT = base.ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
@@ -38,9 +40,7 @@ def is_native_component(component):
     kind = data.get("type", "")
     return (name.startswith(NATIVE_NAME_PREFIXES)
             or name.endswith((" Power", " Smooth Native"))
-            or kind.startswith(NATIVE_TYPE_PREFIXES)
-            or kind in {"knobUni", "knobBi", "toggleIcon", "faderBi", "radio3"}
-            and name.startswith(("Env 1 ", "Filter ", "LFO 1 ", "Mixer ")))
+            or kind.startswith(NATIVE_TYPE_PREFIXES))
 
 
 def png_size(path):
@@ -70,6 +70,50 @@ class NoFallbackTests(unittest.TestCase):
 
     def test_apply_ok(self):
         self.assertEqual((self.code, self.err), (0, ""))
+
+    def test_mod_source_board_keeps_its_native_targets_and_picker_title(self):
+        tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] == "Mod")
+        entries = {c["componentData"]["name"]: c for c in tab["componentDefinition"]["componentsData"]}
+        chips = [c for name, c in entries.items() if name.startswith("Mod Native Board Chip ")]
+        self.assertEqual(len(chips), 17)
+        for chip in chips:
+            self.assertEqual(chip["componentData"]["type"], "Button")
+            self.assertTrue(chip["bounds"]["additionalInvalidatingHandles"][0].startswith("NonZero/Parameter "))
+        title_type = entries["Mod Native Picker Title"]["componentData"]["type"]
+        children = self.definitions[title_type]["componentsData"]
+        self.assertEqual([child["componentData"]["type"] for child in children], ["Label"])
+
+    def test_native_package_rejects_fallbacks_in_the_finished_skin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "Safian - VST - SynthyBoy"
+            skins = package / "Plugin Skins"
+            shutil.copytree(self.skins, skins)
+            subprocess.run([sys.executable, str(base.ROOT / "scripts/gen-mpc-manifest.py"),
+                            "--plugin-dir", str(package), "--allow-no-binary"], check=True, capture_output=True)
+            validate_package(package)
+            path = skins / "TUI.json"
+            original = path.read_bytes()
+            page = json.loads(original)["pageData"]
+            ctrl = page["tabs"][0]["componentDefinition"]["componentsData"][0]["componentData"]
+            for kind, data in (("Knob", {"knobType": "GenericLegacy"}), ("missingSelector", {})):
+                with self.subTest(kind=kind):
+                    ctrl.update(type=kind, data=data)
+                    path.write_text(json.dumps({"pageData": page}))
+                    with self.assertRaisesRegex(ValueError, "custom dial|unresolved"):
+                        validate_package(package)
+            path.write_bytes(original)
+            variant = skins / "TUI - MPC Key 61.json"
+            variant.write_text("{}")
+            with self.assertRaisesRegex(ValueError, "shadows"):
+                validate_package(package)
+            variant.unlink()
+            image = skins / "overlay_bg_play.png"
+            image.write_bytes(b"broken")
+            with self.assertRaises(OSError):
+                validate_package(package)
+            image.unlink()
+            with self.assertRaises(FileNotFoundError):
+                validate_package(package)
 
     def test_each_tab_contains_its_detection_pictures_and_configured_background(self):
         tabs = self.tui["pageData"]["tabs"]

@@ -13,6 +13,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from mpc_skin_fixture import write_native_skin_stub
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = ROOT / "scripts" / "package-mpc-release.py"
 SOURCE_URL = "https://github.com/Safian/SynthyBoy"
@@ -49,6 +51,7 @@ class TestPackageMpcRelease(unittest.TestCase):
         manifest = {
             "name": "SynthyBoy",
             "manufacturer": "Safian",
+            "uid": "SfSB",
             "version": "0.1.0",
             "format": "vst2",
             "kind": "instrument",
@@ -68,8 +71,7 @@ class TestPackageMpcRelease(unittest.TestCase):
 
         skins_dir = folder / "Plugin Skins"
         skins_dir.mkdir(parents=True, exist_ok=True)
-        (skins_dir / "TUI.json").write_text("{}", encoding="utf-8")
-        (skins_dir / "Q-Links.json").write_text("{}", encoding="utf-8")
+        write_native_skin_stub(skins_dir)
 
         presets_dir = folder / "Content" / "presets"
         presets_dir.mkdir(parents=True, exist_ok=True)
@@ -419,6 +421,13 @@ class TestPackageMpcRelease(unittest.TestCase):
         proc = self._run_packager()
         self.assertEqual(proc.returncode, 1)
         self.assertIn("version.xml", proc.stderr)
+
+    def test_malformed_skin_cannot_be_released(self):
+        (self.plugin_dir / "Plugin Skins/TUI.json").write_text("{}")
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("Invalid SynthyBoy skin", proc.stderr)
+        self.assertEqual(list(self.out_dir.glob("*.zip")), [])
 
     def test_failure_missing_skin_files(self):
         (self.plugin_dir / "Plugin Skins" / "TUI.json").unlink()

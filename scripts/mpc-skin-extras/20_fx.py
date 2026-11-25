@@ -104,7 +104,7 @@ def _focus_child(w, h):
             "data": {
                 "version": 1,
                 "backgroundColour": style.argb("mod_detail.title", 25),
-                "outlineColour": style.argb("focus.field"),
+                "outlineColour": style.argb("focus.cyan"),
                 "backgroundInset": style.size("fx.focus_child.inset"),
                 "outlineThickness": style.size("fx.focus_child.outline"),
             },

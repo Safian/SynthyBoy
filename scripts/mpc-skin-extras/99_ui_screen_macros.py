@@ -21,7 +21,7 @@ def apply(tui, qlinks, ctx):
     root_gate = "RangedEnabling/0/18/33/" + instance["handle remapping"]["map"][0]["value"]
     defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
     card_defs = build_macro_card_definitions(
-        ctx.skins_dir, action_text="TARGETS", dial_template=defs["knobUni"], include_name=False
+        ctx.skins_dir, action_text="TARGETS", include_name=False
     )
     for key, val in card_defs.items():
         if key not in defs:

@@ -189,8 +189,8 @@ def apply(tui, qlinks, ctx):
     stock_menu = next(d["value"] for d in definitions if d["key"] == "menu overlay")
     selector_source = next(d for d in definitions if d["key"] == "sliderWithFocusMenu")["value"]
     unipolar = next(d["value"] for d in definitions if d["key"] == "knobUni")
-    ctx.add_component_definition("compactNativeDial", compact_dial_definition(unipolar))
-    rise_dial = compact_dial_definition(unipolar)
+    ctx.add_component_definition("compactNativeDial", compact_dial_definition(unipolar, skins_dir=ctx.skins_dir))
+    rise_dial = compact_dial_definition(unipolar, skins_dir=ctx.skins_dir)
     rise_rects = {name: tuple(rect) for name, rect in _style_size('play.rise.seed_rects').items()}
     for item in rise_dial["componentsData"]:
         name = item["componentData"]["name"]

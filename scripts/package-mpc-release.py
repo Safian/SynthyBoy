@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SynthyBoy - packages the built MPC plugin as architecture-specific archives (stdlib only).
+# SynthyBoy - packages the built MPC plugin as architecture-specific archives using the production native-skin validator.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -27,6 +27,7 @@ import json
 import os
 import stat
 import struct
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -225,6 +226,11 @@ def validate_plugin_folder(plugin_dir: Path, arch: str = ARCH_ALL) -> dict:
     qlinks = skins_dir / "Q-Links.json"
     if not qlinks.is_file():
         raise PackageError(f"skin file Q-Links.json missing from {skins_dir}")
+
+    skin_check = subprocess.run([sys.executable, str(ROOT / "scripts/validate_synthyboy_skin.py"), str(plugin_dir)],
+                                capture_output=True, text=True)
+    if skin_check.returncode:
+        raise PackageError(skin_check.stderr.strip())
 
     presets_dir = plugin_dir / "Content" / "presets"
     if not presets_dir.is_dir():

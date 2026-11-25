@@ -226,6 +226,24 @@ fi
 
 # ---- 2. the plugin folder (shared by both architectures) --------------------------------------------------------------------------------------------
 plugin_folder="$out_dir/$PLUGIN_NAME"
+if [[ -z "$plugin_dir" ]]; then
+    # The SDK first writes a stock editor. Keep its intermediate tree out of
+    # the published package even when generation or final validation fails.
+    package_stage="$(mktemp -d "$out_dir/.synthyboy-build.XXXXXX")"
+    published_folder="$plugin_folder"
+    plugin_folder="$package_stage/$PLUGIN_NAME"
+    cleanup_stage() {
+        if [[ -d "$package_stage/previous" && ! -e "$published_folder" ]]; then
+            mv "$package_stage/previous" "$published_folder" || return 1
+        fi
+        rm -rf "$package_stage"
+    }
+    trap cleanup_stage EXIT
+    trap 'exit 1' HUP INT TERM
+    if [[ -d "$published_folder" ]]; then
+        cp -Rp "$published_folder" "$plugin_folder"
+    fi
+fi
 mkdir -p "$plugin_folder"
 if [[ "$skin_only" != 1 ]]; then
     rm -rf "$plugin_folder/VST"
@@ -381,7 +399,7 @@ else
     if [[ -n "$skins_dir" ]]; then
         cp -R "$skins_dir" "$plugin_folder/Plugin Skins"
     else
-        ui_tmp="$(mktemp -d)"
+        ui_tmp="$package_stage/generated-ui"
         python3 "$repo_root/scripts/gen-mpc-ui.py" --params "$repo_root/docs/params.json" --pages "$repo_root/docs/kick-pages.json" \
             --layout "$skin_layout" --out "$ui_tmp"
         python3 "$repo_root/scripts/run-gen-ui.py" --sdk "$MPC_SDK" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
@@ -407,6 +425,7 @@ if [[ -n "$plugin_dir" ]]; then
     python3 -I "$repo_root/scripts/gen-mpc-manifest.py" --package-manifest "$P_MANIFEST" --plugin-dir "$plugin_folder" ${manifest_args[@]+"${manifest_args[@]}"}
 else
     python3 "$repo_root/scripts/gen-mpc-manifest.py" --plugin-dir "$plugin_folder" ${manifest_args[@]+"${manifest_args[@]}"}
+    python3 "$repo_root/scripts/validate_synthyboy_skin.py" "$plugin_folder"
 fi
 
 # ---- 3. the SDK's own validator on the finished folder ----------------------------------------------------------------------------------------------
@@ -441,5 +460,30 @@ if [[ "$validate" == 1 ]]; then
     fi
 fi
 
+if [[ -z "$plugin_dir" ]]; then
+    # Serialize the directory replacement when builds share one output root.
+    python3 - "$plugin_folder" "$published_folder" "$package_stage/previous" <<'PYTHON'
+import fcntl
+import os
+from pathlib import Path
+import sys
+
+staged, published, previous = map(Path, sys.argv[1:])
+directory = os.open(published.parent, os.O_RDONLY)
+try:
+    fcntl.flock(directory, fcntl.LOCK_EX)
+    if published.exists():
+        published.rename(previous)
+    try:
+        staged.rename(published)
+    except BaseException:
+        if previous.exists():
+            previous.rename(published)
+        raise
+finally:
+    os.close(directory)
+PYTHON
+    plugin_folder="$published_folder"
+fi
 echo "$me: done $plugin_folder"
 if [[ "$with_bench" == 1 ]]; then for a in "${archs[@]}"; do echo "$me: benchmarks: $out_dir/bench-$a/"; done; fi

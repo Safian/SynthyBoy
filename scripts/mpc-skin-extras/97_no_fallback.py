@@ -13,8 +13,6 @@
 #   - drops the component definitions that no remaining component uses (the Play selector's named slider definition and menu overlay are retained) and the PNG files of the skin folder that TUI.json no
 #     longer refers to (the kit film strips, the LFO pictures and cursor strip, the spectrum pictures, the Play background and panel pictures): they would be unpacked into the host's picture cache at every start.
 
-import copy
-import re
 import sys
 from pathlib import Path
 
@@ -52,6 +50,8 @@ def _keep_component(tab, component):
     name = component["componentData"]["name"]
     if name.startswith(KEEP):
         return True
+    if tab.get("tabName") == "Macros":
+        return False  # 99_ui_screen_macros installs the eight complete MacroCards.
     if tab.get("tabName") == "Env" and name.startswith("Env Native "):
         return True
     if tab.get("tabName") == "LFO" and name.startswith("LFO 1 Native "):
@@ -124,45 +124,12 @@ def _png_names(node, out):
         out.add(node)
 
 
-def _ensure_native_type_aliases(tui):
-    """Keep every retained native instance backed by an SDK local definition.
-
-    The final skin is parsed by the MPC host, not by the generator.  Several
-    native-page candidates use descriptive component type names (for example
-    ``numericField`` and ``Selector``), but those names are not MPC built-ins.
-    When 97_no_fallback retains such an instance, an unresolved type makes the
-    host reject the complete TUI.  Alias them to the closest existing, known
-    definition while preserving the instance's parameter binding and geometry.
-    """
-    defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
-    by_key = {d["key"]: d["value"] for d in defs}
-    aliases = {
-        "toggleIcon": "toggle",
-        "Selector": "sliderWithFocusMenu",
-        "Toggle": "toggle",
-        "switch": "sliderWithFocusMenu",
-        "steppedOption": "sliderWithFocusMenu",
-        "numericField": "knobUni",
-    }
-    needed = set()
-    for tab in tui["pageData"]["tabs"]:
-        for component in tab["componentDefinition"]["componentsData"]:
-            typ = component.get("componentData", {}).get("type")
-            if typ in aliases and typ not in by_key:
-                needed.add(typ)
-    for typ in sorted(needed):
-        source = aliases[typ]
-        if source not in by_key:
-            continue
-        value = copy.deepcopy(by_key[source])
-        defs.append({"key": typ, "value": value})
-        by_key[typ] = value
-
+def _normalize_local_instances(tui):
+    local_keys = {d["key"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
     # A local-component instance exposes only the generic Data handle.  Its
     # child-specific caption/buttonStyle/Value fields belong in the local
     # definition; leaving them on the instance violates SDK 4.4 and can make
     # the host reject the complete TUI.
-    local_keys = set(by_key)
     for tab in tui["pageData"]["tabs"]:
         for component in tab["componentDefinition"]["componentsData"]:
             data = component.get("componentData", {})
@@ -184,7 +151,7 @@ def apply(tui, qlinks, ctx):
         controls = [c for c in kept if not c["componentData"]["name"].startswith(KEEP)]
         items[:] = controls + sentinels
         tab["qlinkBoundsData"] = []
-    _ensure_native_type_aliases(tui)
+    _normalize_local_instances(tui)
     used = _used_definitions(tui)
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     defs[:] = [d for d in defs if d["key"] in used]

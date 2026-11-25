@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Check the native skin that the MPC looks up for the SynthyBoy instrument."""
+import argparse
+import json
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1]
+# One identifying control per physical tab. The shared OSC surface serves five tabs.
+SURFACES = {
+    "Play": "playOscSelector", "Macros": "macroCard", "Osc": "oscNativeSurface",
+    "Osc B": "oscNativeSurface", "Osc C": "oscNativeSurface", "Sub": "oscNativeSurface",
+    "Noise": "oscNativeSurface", "Env": "envNativeFullFields", "LFO": "lfoNativeFullEditor",
+    "FX": "fxNativeEditorSurface", "Mix": "mixerStripSourceFrame", "Filter": "filterNativeEditorSurface",
+    "Mod": "modNativeRowNormal", "Master": "masterNativeOutputMeters", "Voice": "voiceNativeStepLevel",
+}
+BUILTINS = {"Button", "Focus", "Image", "Knob", "Label", "MenuOverlay", "Meter", "NumericOverlay", "Slider"}
+SDK_TEMPLATES = {"knobUni", "knobBi", "knob overlay", "menu overlay", "toggle", "faderUni", "faderBi",
+                 "radio3", "radio4", "sliderWithFocus", "sliderWithFocusMenu"}
+
+
+def walk(value):
+    yield value
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk(child)
+
+
+def validate_package(package):
+    manifest = json.loads((package / "plugin.json").read_bytes())
+    if (package.name, manifest["uid"], manifest["manufacturer"], manifest["name"]) != (
+            "Safian - VST - SynthyBoy", "SfSB", "Safian", "SynthyBoy"):
+        raise ValueError("package folder, vendor, instrument name or UID does not match SynthyBoy")
+    if ET.parse(package / "version.xml").findtext("uiversion") != "0.1.0.0":
+        raise ValueError("missing or unsupported MPC scripted UI version")
+    skins = package / "Plugin Skins"
+    for variant in skins.iterdir():
+        if variant.name.casefold().startswith(("tui - ", "q-links - ")) and variant.suffix.casefold() == ".json":
+            raise ValueError(f"hardware-specific file shadows the shared native skin: {variant.name}")
+
+    page = json.loads((skins / "TUI.json").read_bytes())["pageData"]
+    qlinks = json.loads((skins / "Q-Links.json").read_bytes())
+    if (page["version"], page["componentDefinitions"]["version"], qlinks["version"],
+            qlinks["Screen Mode Q-Links"]["version"]) != (1, 2, 4, 4):
+        raise ValueError("unsupported native skin or Q-Link version")
+    if page["info"] != {"version": 1, "type": "CompleteDescription"} or qlinks["info"] != page["info"]:
+        raise ValueError("expected a complete native page description and Q-Link map")
+    definitions = page["componentDefinitions"]
+    if definitions["importFiles"]:
+        raise ValueError("native components must be self-contained")
+    keys = [item["key"] for item in definitions["localComponentDefinitions"]]
+    local = set(keys)
+    if len(local) != len(keys) or local & (SDK_TEMPLATES | BUILTINS):
+        raise ValueError("duplicate, stock or shadowed component definition")
+    tabs = page["tabs"]
+    if [tab["tabName"] for tab in tabs] != list(SURFACES):
+        raise ValueError("incorrect SynthyBoy page set or order")
+    views = json.loads((ROOT / "shell-mpc/overlay/overlay_layout.json").read_bytes())["views"]
+    layout = json.loads((ROOT / "scripts/overlay-skin/mpc-ui-pages-overlay.json").read_bytes())["pages"]
+    labels = {p["name"]: p.get("label", p["name"]) for p in layout}
+    detectors = {labels[v["tab"]]: v["name"] for v in views}
+    for tab in tabs:
+        name = tab["tabName"]
+        components = [c["componentData"] for c in tab["componentDefinition"]["componentsData"]]
+        types = {c["type"] for c in components}
+        images = {c["name"] for c in components if c["type"] == "Image" and c["data"].get("image")}
+        view = detectors[name]
+        markers = {f"Overlay Marker {view} left", f"Overlay Marker {view} right", f"Overlay Instance {view}"}
+        if SURFACES[name] not in types or not markers <= images or tab["qlinkBoundsData"] != []:
+            raise ValueError(f"{name}: missing custom surface, detector images or unexpected stock highlight")
+
+    positions = {(t["fnKeyIndex"] + 1, t["fnKeySubIndex"] + 1) for t in tabs}
+    mappings = qlinks["Screen Mode Q-Links"]["map"]
+    if len(mappings) != len(tabs) or {(m["Tab"], m["SubTab"]) for m in mappings} != positions:
+        raise ValueError("screen Q-Link mapping does not match the native tabs")
+    if any(m["Bank Direction"] != "Row" for m in mappings):
+        raise ValueError("unexpected SynthyBoy Q-Link bank layout")
+    knob_names = {f"Q-Link {i}" for i in range(1, 17)}
+    for knobs in [m["Q-Links"] for m in mappings] + [qlinks["Program Mode Q-Links"]]:
+        if set(knobs) != knob_names or not all(type(v) == int and v >= -1 for v in knobs.values()):
+            raise ValueError("invalid native Q-Link assignments")
+    assets = set()
+    for value in walk(page):
+        if isinstance(value, str) and value.lower().endswith(".png"):
+            assets.add(value)
+        if not isinstance(value, dict):
+            continue
+        if value.get("handler") == "Show Overlay" and value.get("additionalData") not in local:
+            raise ValueError(f"unresolved popup: {value.get('additionalData')}")
+        if "componentData" not in value:
+            continue
+        item = value["componentData"]
+        kind, data = item["type"], item["data"]
+        if kind not in BUILTINS and kind not in local:
+            raise ValueError(f"{item['name']}: unresolved or stock control {kind}")
+        if kind == "Knob" and (data.get("knobType") != "FilmStrip" or not data.get("filmStrip")
+                               or data["filmStrip"] in {"knob_uni.png", "knob_bi.png"}):
+            raise ValueError(f"{item['name']}: custom dial artwork required")
+        if kind == "Slider":
+            custom_track = data.get("sliderType") == "TrackAndThumb" and data.get("thumbImage")
+            custom_bar = data.get("sliderType") == "ColourBar" and all(data.get(key) for key in
+                                                                       ("backgroundColour", "outlineColour", "valueColour"))
+            if not (custom_track or custom_bar):
+                raise ValueError(f"{item['name']}: custom slider appearance required")
+        if kind == "Focus" and data.get("outlineColour") == "ffd31145":
+            raise ValueError(f"{item['name']}: SDK default focus artwork")
+        if kind == "Button" and not (data.get("onImage") and data.get("offImage")):
+            raise ValueError(f"{item['name']}: custom button artwork required")
+    for name in sorted(assets):
+        if Path(name).name != name:
+            raise ValueError(f"expected local skin artwork: {name}")
+        with Image.open(skins / name) as image:
+            if image.format != "PNG":
+                raise ValueError(f"invalid skin PNG: {name}")
+            image.verify()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("package_dir", type=Path)
+    try:
+        validate_package(parser.parse_args().package_dir)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, ET.ParseError, SyntaxError) as exc:
+        print(f"Invalid SynthyBoy skin: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

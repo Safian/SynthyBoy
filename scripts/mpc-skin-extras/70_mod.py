@@ -193,7 +193,7 @@ def apply(tui, qlinks, ctx):
             "gestureBehaviour": "Instant",
         }
         items.append(_entry(
-            f"Mod Board Chip {label}",
+            f"Mod Native Board Chip {label}",
             "Button",
             data,
             (cx, cy, 100, 56),
@@ -216,6 +216,7 @@ def apply(tui, qlinks, ctx):
                                 ("NEXT", "next", handles.MOD_LIST_NEXT)):
         add("Picker " + caption, caption, "action", _style_size("mod_picker." + key), base + field, [list_gate])
     title = _label("Value", _style_size("mod_picker.title"), just="horizontallyCentred verticallyCentred")
+    title["componentData"]["name"] = "Mod Native Picker Title"
     title["handle remapping"] = {"version": 1, "map": [{"key": "Data", "value": f"Parameter {base + handles.MOD_LIST_TITLE}"}]}
     title["bounds"]["version"] = 2
     title["bounds"]["additionalInvalidatingHandles"] = [list_gate]

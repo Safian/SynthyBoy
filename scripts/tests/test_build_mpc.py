@@ -15,6 +15,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from mpc_skin_fixture import write_native_skin_stub
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_MPC = ROOT / "scripts" / "build-mpc.sh"
 BUILD_ARMV7 = ROOT / "scripts" / "build-armv7-mpc.sh"
@@ -69,7 +71,7 @@ class BuildMpcTest(unittest.TestCase):
         (self.sdk / "tools" / "validate.py").write_text(VALIDATOR)
         self.skins = self.tmp / "skins"
         self.skins.mkdir()
-        (self.skins / "TUI.json").write_text("{}")
+        write_native_skin_stub(self.skins)
         self.log = self.tmp / "docker.log"
         self.out = self.tmp / "out"
         self.tree = self.tmp / "tree"
@@ -146,6 +148,21 @@ class BuildMpcTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         r = self.run_script(BUILD_MPC, "--out", str(self.out), "--skins", str(self.skins), "--skin-only", MPC_DOCKER=str(self.tmp / "no-docker"), FAKE_VALIDATE=missing + "ERROR  something else\nOK     x")
         self.assertEqual(r.returncode, 1)
+
+    def test_skin_only_rejects_a_raw_sdk_or_model_specific_skin_even_with_no_validate(self):
+        valid = self.build("--skin-only", "--no-validate")
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        published = self.folder() / "Plugin Skins"
+        original = (published / "TUI.json").read_bytes()
+        for name in ("TUI - MPC Key 61.json", "TUI.json"):
+            with self.subTest(name=name):
+                (self.skins / name).write_text("{}")
+                r = self.build("--skin-only", "--no-validate")
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("Invalid SynthyBoy skin", r.stderr)
+                self.assertEqual((published / "TUI.json").read_bytes(), original)
+                self.assertFalse((published / "TUI - MPC Key 61.json").exists())
+                (self.skins / name).unlink()
 
     def test_no_docker_prints_manual_commands_for_both_architectures(self):
         r = self.run_script(BUILD_MPC, "--out", str(self.out), MPC_DOCKER=str(self.tmp / "no-such-docker"))
