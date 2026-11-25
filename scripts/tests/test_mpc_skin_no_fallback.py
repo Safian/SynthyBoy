@@ -78,7 +78,7 @@ class NoFallbackTests(unittest.TestCase):
         self.assertEqual(len(chips), 17)
         for chip in chips:
             self.assertEqual(chip["componentData"]["type"], "Button")
-            self.assertTrue(chip["bounds"]["additionalInvalidatingHandles"][0].startswith("NonZero/Parameter "))
+            self.assertTrue(chip["bounds"]["additionalInvalidatingHandles"][0].startswith("IndexedEnabling/0/5/Parameter "))
         title_type = entries["Mod Native Picker Title"]["componentData"]["type"]
         children = self.definitions[title_type]["componentsData"]
         self.assertEqual([child["componentData"]["type"] for child in children], ["Label"])

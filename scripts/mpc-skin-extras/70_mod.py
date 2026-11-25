@@ -18,6 +18,7 @@ from components.style import (
     color as _style_color,
     size as _style_size,
 )
+from components.native.button.button import action_button
 from components.native.mod_row.mod_row import (
     build_cell_definition,
     build_editor_cell_definition,
@@ -87,8 +88,12 @@ def apply(tui, qlinks, ctx):
         return definition
 
     def add(name, caption, kind, rect, parameter, gates):
-        definition = cell_definition(kind, rect)
         data = f"Parameter {parameter}"
+        if kind == "action":
+            items.append(action_button(ctx, "Mod Native " + name, rect, "FromGesture/" + data,
+                                       text=caption, width=rect[2], gates=gates))
+            return
+        definition = cell_definition(kind, rect)
         items.append(_entry("Mod Native " + name, definition, {"version": 1, "handleName": "Data"}, rect,
                             [("Data", data), ("Caption", f"WithName[{caption}]/{data}")], gates, True))
         if kind == "toggle":
@@ -172,8 +177,10 @@ def apply(tui, qlinks, ctx):
     replacement.append({"key": f"Parameter {det_base + 1}", "value": ["DELETE", "CONFIRM?"]})
     replacement.append({"key": f"Parameter {det_base + 5}", "value": ["", "CONFIRM?"]})
 
-    board_gate = f"NonZero/Parameter {base + handles.MOD_BOARD_GATE}"
-    board_hide = f"IndexedEnabling/0/2/Parameter {base + handles.MOD_BOARD_GATE}"
+    # Matrix rows, quick-add board and picker all occupy the same rectangle.
+    # Gate their host cells by both the current screen and their own published state.
+    hidden_matrix = f"IndexedEnabling/0/5/Parameter {view}"
+    board_gates = [hidden_matrix, *tabs, f"IndexedEnabling/1/2/Parameter {base + handles.MOD_BOARD_GATE}"]
     board_chips = (
         ("ENV 1", 1, 160, 116), ("ENV 2", 2, 272, 116), ("ENV 3", 3, 384, 116),
         ("LFO 1", 7, 160, 200), ("LFO 2", 8, 272, 200), ("LFO 3", 9, 384, 200), ("LFO 4", 10, 496, 200),
@@ -198,28 +205,29 @@ def apply(tui, qlinks, ctx):
             data,
             (cx, cy, 100, 56),
             remap=[("Data", f"Parameter {base + handles.MOD_BOARD_SOURCE}")],
-            gates=[board_gate],
+            gates=board_gates,
             focus=True,
         ))
 
     add("Board All Sources", "ALL SOURCES", "action", _style_size("mod_picker.all_sources"),
-        base + handles.MOD_BOARD_GROUP, [board_gate])
-    list_gate = f"NonZero/Parameter {base + handles.MOD_LIST_GATE}"
+        base + handles.MOD_BOARD_GROUP, board_gates)
+    list_gates = [hidden_matrix, f"IndexedEnabling/0/4/Parameter {nav_base}",
+                  f"IndexedEnabling/1/2/Parameter {base + handles.MOD_LIST_GATE}"]
     list_row = _style_size("mod_picker.row")
     for row in range(handles.MOD_LIST_ROWS):
         rect = [list_row[0], list_row[1] + row * _style_size("mod_picker.row_step"), *list_row[2:]]
         add(f"Picker Row {row + 1}", "", "list", rect, base + handles.MOD_LIST_ROW + row,
-            [list_gate, f"NonZero/Parameter {base + handles.MOD_LIST_ROW_GATE + row}"])
+            [*list_gates, f"IndexedEnabling/1/2/Parameter {base + handles.MOD_LIST_ROW_GATE + row}"])
     for caption, key, field in (("BACK", "back", handles.MOD_LIST_BACK),
                                 ("GROUPS", "groups", handles.MOD_LIST_GROUPS),
                                 ("PREVIOUS", "prev", handles.MOD_LIST_PREV),
                                 ("NEXT", "next", handles.MOD_LIST_NEXT)):
-        add("Picker " + caption, caption, "action", _style_size("mod_picker." + key), base + field, [list_gate])
+        add("Picker " + caption, caption, "action", _style_size("mod_picker." + key), base + field, list_gates)
     title = _label("Value", _style_size("mod_picker.title"), just="horizontallyCentred verticallyCentred")
     title["componentData"]["name"] = "Mod Native Picker Title"
     title["handle remapping"] = {"version": 1, "map": [{"key": "Data", "value": f"Parameter {base + handles.MOD_LIST_TITLE}"}]}
     title["bounds"]["version"] = 2
-    title["bounds"]["additionalInvalidatingHandles"] = [list_gate]
+    title["bounds"]["additionalInvalidatingHandles"] = list_gates
     items.append(title)
 
     # Matrix, detail and quick-add share the fixed root canvas. No redundant

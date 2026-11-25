@@ -42,14 +42,8 @@ def _ensure_assets(skins_dir):
         off_art.save(skins_dir / f"mod_mode_{tag}_off.png")
 
     # 3. Action buttons (+ ADD, EDIT, BACK, DELETE)
-    add_art = in_slot(action_art(text="+ ADD", width=style.size('screen.ui_screen_mod.add_art.width')), tuple(style.size('screen.ui_screen_mod.add_art.size')))
-    add_art.save(skins_dir / "mod_action_add.png")
-
     edit_art = in_slot(action_art(text="EDIT", width=style.size('screen.ui_screen_mod.edit_art.width')), tuple(style.size('screen.ui_screen_mod.edit_art.size')))
     edit_art.save(skins_dir / "mod_action_edit.png")
-
-    back_art = in_slot(action_art(text="BACK", width=style.size('screen.ui_screen_mod.back_art.width')), tuple(style.size('screen.ui_screen_mod.back_art.size')))
-    back_art.save(skins_dir / "mod_detail_back.png")
 
     del_art = in_slot(action_art(text="DELETE", width=style.size('screen.ui_screen_mod.del_art.width')), tuple(style.size('screen.ui_screen_mod.del_art.size')))
     del_art.save(skins_dir / "mod_detail_delete.png")
@@ -87,25 +81,11 @@ def apply(tui, qlinks, ctx):
     defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
     focus_col = style.argb("mod_row.focus")
 
-    # Upgrade action button "+ ADD"
-    if "modNative_action_120x56" in defs:
-        definition = defs["modNative_action_120x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_action_add.png"}
-        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_action_add.png"}
-        definition["componentsData"] = []
-
     # Upgrade action button "EDIT" / "MORE"
     if "modNative_action_76x56" in defs:
         definition = defs["modNative_action_76x56"]
         definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_action_edit.png"}
         definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_action_edit.png"}
-        definition["componentsData"] = []
-
-    # Upgrade detail action buttons: BACK and DELETE
-    if "modNative_action_100x56" in defs:
-        definition = defs["modNative_action_100x56"]
-        definition["backgroundData"]["unfocussed"] = {"version": 1, "colour": style.argb('ink.black', 0), "image": "mod_detail_back.png"}
-        definition["backgroundData"]["focussed"] = {"version": 1, "colour": focus_col, "image": "mod_detail_back.png"}
         definition["componentsData"] = []
 
     if "modNative_delete_120x56" in defs:

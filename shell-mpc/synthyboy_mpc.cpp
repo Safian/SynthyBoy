@@ -5334,6 +5334,17 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             std::memset (props, 0, sizeof (*props));
             return 1;
         }
+        if (nativeui::isModBoardControlOffset (nativeOffset))
+        {
+            const int field = nativeOffset - nativeui::kModBoardControl;
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = field == nativeui::modboard::Source
+                ? static_cast<int> (synthyboy::paramTable()[synthyboy::modSlotParams (0).source].max) : 1;
+            props->stepInteger = 1;
+            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / props->maxInteger;
+            return 1;
+        }
         if (nativeui::isMixerControlOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));

@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 import test_mpc_skin_extras as skin
+import native_ui_params as handles
 
 
 @unittest.skipUnless((skin.SDK / "tools" / "gen_ui.py").is_file(), "MPC SDK unavailable")
@@ -24,6 +25,8 @@ class TestUiScreenMod(unittest.TestCase):
             raise AssertionError(result)
         page = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))["pageData"]
         cls.mod = next(tab for tab in page["tabs"] if tab["tabName"] == "Mod")
+        cls.items = {c["componentData"]["name"]: c for c in cls.mod["componentDefinition"]["componentsData"]}
+        cls.base = handles.mixer_peek_index(len(json.loads(skin.PARAMS_JSON.read_text())["params"]))
         cls.definitions = {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}
 
     @classmethod
@@ -38,7 +41,6 @@ class TestUiScreenMod(unittest.TestCase):
             "mod_mode_mode2_off.png": (140, 56),
             "mod_mode_mode3_on.png": (120, 56),
             "mod_mode_mode3_off.png": (120, 56),
-            "mod_action_add.png": (120, 56),
             "mod_action_edit.png": (76, 56),
             "mod_detail_delete.png": (120, 56),
             "mod_detail_confirm.png": (120, 56),
@@ -70,8 +72,11 @@ class TestUiScreenMod(unittest.TestCase):
             self.assertEqual(button["data"]["gestureBehaviour"], "Instant")
 
     def test_action_and_selector_background_assets_assigned(self):
-        self.assertEqual(self.definitions["modNative_action_120x56"]["backgroundData"]["unfocussed"]["image"],
-                         "mod_action_add.png")
+        add = self.items["Mod Native ADD"]["componentData"]
+        back = self.items["Mod Native Picker BACK"]["componentData"]
+        groups = self.items["Mod Native Picker GROUPS"]["componentData"]
+        self.assertEqual([c["type"] for c in (add, back, groups)], ["Button"] * 3)
+        self.assertEqual(len({c["data"]["onImage"] for c in (add, back, groups)}), 3)
         self.assertEqual(self.definitions["modNative_action_76x56"]["backgroundData"]["unfocussed"]["image"],
                          "mod_action_edit.png")
         self.assertEqual(self.definitions["modNative_group_260x56"]["backgroundData"]["unfocussed"]["image"],
@@ -85,9 +90,47 @@ class TestUiScreenMod(unittest.TestCase):
         items = self.mod["componentDefinition"]["componentsData"]
         # Must have Native Modulation Editor at front
         self.assertEqual(items[0]["componentData"]["name"], "Native Modulation Editor")
-        # Must end with Overlay Markers and Instance
-        self.assertTrue(all(w["componentData"]["name"].startswith("Overlay ") for w in items[-3:]))
-        self.assertEqual(len(items), 44)
+        self.assertEqual(sum(c["componentData"]["name"].startswith("Overlay Marker mod ") for c in items), 2)
+        self.assertIn("Overlay Instance mod", self.items)
+        self.assertEqual(sum(name.startswith("Mod Native Board Chip ") for name in self.items), 17)
+        self.assertEqual(sum(name.startswith("Mod Native Picker Row ") for name in self.items), handles.MOD_LIST_ROWS)
+
+    def test_matrix_board_picker_and_detail_do_not_overlap(self):
+        def visible(item, values):
+            for gate in item["bounds"]["additionalInvalidatingHandles"]:
+                parts = gate.split("/")
+                value = values.get(int(parts[-1].split()[1]) - self.base, 0)
+                if parts[0] == "IndexedEnabling":
+                    if value != int(parts[1]):
+                        return False
+                elif parts[0] == "RangedEnabling":
+                    if not int(parts[1]) <= value <= int(parts[2]):
+                        return False
+                else:
+                    self.fail(f"Unknown Mod visibility gate {gate}")
+            return True
+
+        def shown(values, prefix):
+            return {name for name, item in self.items.items() if name.startswith(prefix) and visible(item, values)}
+
+        # Force all picker and board flags high to model stale host parameters.
+        # The matrix view and navigation mode still exclude both sets of widgets.
+        stale = {handles.MOD_LIST_GATE: 1, handles.MOD_BOARD_GATE: 1, handles.MOD_LIST_ROW_GATE: 1}
+        for frame in (1, 2, 3, 4):
+            state = dict(stale)
+            state.update({handles.MOD_VIEW: frame, handles.MOD_NAVIGATION: 1 if frame < 3 else 0,
+                          handles.MOD_ROWS: 1})
+            self.assertFalse(shown(state, "Mod Native Board"))
+            self.assertFalse(shown(state, "Mod Native Picker"))
+            self.assertEqual(bool(shown(state, "Mod Native Detail Back")), frame >= 3)
+            self.assertEqual(bool(shown(state, "Mod Native ADD")), frame < 3)
+            self.assertEqual(bool(shown(state, "Mod Native Normal Row")), frame == 1)
+            self.assertEqual(bool(shown(state, "Mod Native Scroll Row")), frame == 2)
+        board = {**stale, handles.MOD_NAVIGATION: 1}
+        self.assertTrue(shown(board, "Mod Native Board"))
+        self.assertFalse(shown(board, "Mod Native Picker"))
+        self.assertFalse(shown(stale, "Mod Native Board"))
+        self.assertEqual(shown(stale, "Mod Native Picker Row"), {"Mod Native Picker Row 1"})
 
 
 if __name__ == "__main__":
