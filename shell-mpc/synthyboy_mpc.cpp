@@ -1916,6 +1916,8 @@ struct PluginInstance
 
     float nativeUiValue (int offset) const noexcept
     {
+        if (offset == nativeui::kLfoTargetsAction)
+            return 0.0f;
         if (offset == nativeui::kFxEditorPower)
             return nativeFxHeader.state().on() ? 1.0f : 0.0f;
         if (nativeui::isFilterChainMenu (offset))
@@ -4056,6 +4058,12 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             // may supply an uninitialised buffer while enumerating a saved track.
             buf[0] = '\0';
             const int offset = index - PluginInstance::nativeUiBase();
+            if (offset == nativeui::kLfoTargetsAction)
+            {
+                if (opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, "LFO Targets");
+                return 1;
+            }
             if (offset == nativeui::kFxEditorPower)
             {
                 if (opcode == effGetParamName)
@@ -5466,7 +5474,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
 #if SYNTHYBOY_MPC_OVERLAY
         const int nativeOffset = index - PluginInstance::nativeUiBase();
-        if (nativeOffset == nativeui::kFxEditorPower)
+        if (nativeOffset == nativeui::kFxEditorPower || nativeOffset == nativeui::kLfoTargetsAction)
         {
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax | kVstParameterIsSwitch;
@@ -6403,6 +6411,13 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
+                if (offset == nativeui::kLfoTargetsAction)
+                {
+                    namespace n = nativeui::lfo;
+                    if (parameter > 0.5f && parameter <= 1.0f)
+                        inst->nativeLfo.post (n::kAction, static_cast<float> (n::kTargets) / n::kActionLast);
+                    return;
+                }
                 if (offset == nativeui::kFxEditorPower)
                     return;
                 if (nativeui::isFilterChainMenu (offset))

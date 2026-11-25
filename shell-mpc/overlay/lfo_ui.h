@@ -606,6 +606,13 @@ public:
         compact_.rate.setModeCellsVisible (view.fields[n::StandardSync].target < 0);
         compactNativeKey_ = view.context.view == n::LfoKey || view.context.view == n::RndKey;
     }
+    void prepareCompactPresentation (IInstanceView& inst)
+    {
+        adoptSelection (inst);
+        const int sync = paramOf ("sync");
+        compact_.rate.setMode (ui::lfo::syncModeOf (static_cast<int> (std::lround (inst.param (sync)))));
+    }
+
     int compactNativeTarget (int field) const noexcept
     {
         if (field == nativeui::playenvlfo::StandardSync && ! random())
@@ -1807,7 +1814,7 @@ private:
 
     // ======================================================================================================================================================================
     // the shape editor
-    /** Makes the shape of the LFO a drawn one (the built-in shape is copied into points) and opens the editor. */
+    /** Opens a local editable model. The first edit commits its points to the instrument. */
     void openEditor (UiStack& stack, IInstanceView& v)
     {
         if (rnd_ != 0)
@@ -1849,11 +1856,7 @@ private:
         editor_.setActiveGroup (0);
         editor_.setStatus ("");
         setIds();
-        if (shape != ui::lfo::kShapeCustom || have == nullptr)
-        {
-            v.setLfoShape (lfoNum_, contentOf (lfoNum_, m, gx, gy));
-            uibind::writePlain (v, shapeP, ui::lfo::kShapeCustom);
-        }
+        shapeDirty_ = false;
         syncEditor (v);
         stack.openDetail (kPageEditor);
     }
@@ -1870,7 +1873,7 @@ private:
     {
         ++nativeEditorShape_;
         const synthyboy::ContentLfoShape* shape = shapeIdx_ == ui::lfo::kShapeCustom ? contentShape (lfoNum_) : nullptr;
-        const ui::lfo::ShapeModel m = shape != nullptr ? modelOf (*shape) : ui::lfo::ShapeModel::fromBuiltin (shapeIdx_);
+        const ui::lfo::ShapeModel m = shape != nullptr ? modelOf (*shape) : ui::lfo::ShapeModel::fromBuiltin (shapeIdx_ == ui::lfo::kShapeCustom ? 1 : shapeIdx_);
         editor_.model = m;
         linkedSnapshot_ = m; linkedSnapshotValid_ = true;
         editor_.undo.clear();
@@ -1898,7 +1901,7 @@ private:
         if (content_ == editorContent_ && editorShapeIdx_ == shapeIdx_ && ! editorContentExternal_)
             return;
         const synthyboy::ContentLfoShape* shape = shapeIdx_ == ui::lfo::kShapeCustom ? contentShape (lfoNum_) : nullptr;
-        const ui::lfo::ShapeModel incoming = shape != nullptr ? modelOf (*shape) : ui::lfo::ShapeModel::fromBuiltin (shapeIdx_);
+        const ui::lfo::ShapeModel incoming = shape != nullptr ? modelOf (*shape) : ui::lfo::ShapeModel::fromBuiltin (shapeIdx_ == ui::lfo::kShapeCustom ? 1 : shapeIdx_);
         if (editorSentValid_ && incoming == editorSentModel_)
         {
             // A display/content acknowledgement of our own earlier gesture may arrive after
@@ -2014,6 +2017,12 @@ private:
         if (m.linkCycleEnds) m.p[0].y = m.p[m.n - 1].y = y;
     }
     void markDirty() noexcept { applyEditorLinks(); linkedSnapshot_ = editor_.model; linkedSnapshotValid_ = true; shapeDirty_ = true; }
+    void markGridDirty() noexcept
+    {
+        // Built-ins have no stored grid. The first shape edit saves the current grid with its points.
+        if (editorShapeIdx_ == ui::lfo::kShapeCustom)
+            shapeDirty_ = true;
+    }
     /** Sends the model to the content state (the plugin applies it on its display thread). */
     void flushShape (IInstanceView& v, double nowMs)
     {
@@ -2024,6 +2033,11 @@ private:
         editorSentModel_ = editor_.model;
         editorSentValid_ = true;
         v.setLfoShape (lfoNum_, contentOf (lfoNum_, editor_.model, editor_.canvas.state.gridX, editor_.canvas.state.gridY));
+        if (editorShapeIdx_ != ui::lfo::kShapeCustom)
+        {
+            editorShapeIdx_ = ui::lfo::kShapeCustom;
+            uibind::writePlain (v, paramOf ("shape"), editorShapeIdx_);
+        }
     }
     /** The editor page from the model, the canvas state and the trigger of the LFO (the mode and the phase: the marker). */
     void syncEditor (IInstanceView& v)
@@ -2092,7 +2106,7 @@ private:
             const int g = gridOfNorm (x);
             (id == 4 ? cs.gridX : cs.gridY) = g;
             (id == 4 ? gridX_ : gridY_)[lfoNum_ - 1] = g;
-            markDirty();   // the grid is stored with the shape (state version 5)
+            markGridDirty();
             return;
         }
         if (id == 6)
@@ -2455,7 +2469,7 @@ private:
                     const int g = std::clamp (static_cast<int> (std::lround (c.value)), ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
                     (c.id == kEdGridX ? cs.gridX : cs.gridY) = g;
                     (c.id == kEdGridX ? gridX_ : gridY_)[lfoNum_ - 1] = g;
-                    markDirty();   // the grid is stored with the shape (state version 5)
+                    markGridDirty();
                 }
                 break;
             case kEdPoint:
@@ -2802,7 +2816,7 @@ private:
         cs.gridY = std::clamp (gy, ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
         gridX_[lfoNum_ - 1] = cs.gridX;
         gridY_[lfoNum_ - 1] = cs.gridY;
-        markDirty();   // the grid is stored with the shape
+        markGridDirty();
     }
     /** One action of the MORE list. Every change of the shape is ONE undo state (the state before it); the selection is cleared when the points move to other indices. */
     void runAction (Act a, IInstanceView& v)

@@ -621,18 +621,16 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertNotIn("Play Background", items, "%s: no host fallback picture" % tab_name)
             self.assertEqual({n for n in items if n.startswith(("Play Env ", "Play LFO ", "Play Lfo ")) and not n.endswith(" Select")},
                              {"Play Env Attack", "Play Env Decay", "Play Env Sustain", "Play Env Release",
-                              "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off", "Play LFO Smooth Switch"})
+                              "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off"})
 
     def test_compact_play_selectors_and_lfo_smooth_gate_matrix(self):
-        from PIL import Image
-
         first = self.play_first()
         items = {c["componentData"]["name"]: c for c in self.tab("Play")["componentDefinition"]["componentsData"]}
         defs = {d["key"]: d["value"] for d in self.o_tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         param = {p["key"]: i for i, p in enumerate(self.params)}
         osc_sources = ("sub", "osc1", "osc2", "osc3", "noise")
         osc_power = [param[prefix + ".on"] for prefix in osc_sources]
-        smooth_names = ("Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off", "Play LFO Smooth Switch")
+        smooth_names = ("Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off")
         lfo_layers = {name: items[name] for name in smooth_names}
         lfo_standard = mixer_peek_index(len(self.params)) + PLAY_LFO_STANDARD
         lfo_smooth = first + 3 + 2 * 8 + 4
@@ -651,7 +649,7 @@ class OverlaySkinTests(unittest.TestCase):
 
         osc_selector = next(c for c in defs["playOscSelector"]["componentsData"] if c["componentData"]["name"] == "Play selector frame")
         _, _, rows = decode_png(self.ovl / osc_selector["componentData"]["data"]["image"])
-        self.assertTrue(all(r == g == b for row in rows for r, g, b in row))
+        self.assertTrue(all(r == g == b for row in rows for r, g, b, *_ in row))
         self.assertEqual(items["Play Osc Select"]["bounds"]["additionalInvalidatingHandles"],
                          [f"RangedEnabling/0/18/33/Parameter {first - 1}"])
 
@@ -682,14 +680,18 @@ class OverlaySkinTests(unittest.TestCase):
             for standard in (0, 1):
                 for smooth in (0, 1):
                     state = {first - 1: frame / 32, lfo_standard: standard, lfo_smooth: smooth}
-                    want = {smooth_names[0], smooth_names[3], smooth_names[1] if smooth else smooth_names[2]} if standard and frame == 1 else set()
+                    want = {smooth_names[0], smooth_names[1] if smooth else smooth_names[2]} if standard and frame == 1 else set()
                     self.assertEqual({name for name, comp in lfo_layers.items() if visible(comp, state)}, want)
-        self.assertEqual(rect(lfo_layers["Play LFO Smooth Switch"]), (1184, 546, 76, 72))
-        self.assertEqual(rect(lfo_layers["Play LFO Smooth"]), (1064, 546, 116, 72))
-        self.assertEqual(rect(lfo_layers["Play LFO Smooth Off"]), (1064, 546, 116, 72))
-        switch = defs["compactNativeSmoothToggle"]["componentsData"][0]["componentData"]["data"]
-        self.assertEqual((switch["handleName"], switch["buttonId"], switch["numButtonsInGroup"]), ("Data", 1, 1))
-        self.assertEqual(lfo_layers["Play LFO Smooth Switch"]["handle remapping"]["map"][0]["value"], f"Parameter {lfo_smooth}")
+        self.assertNotIn("Play LFO Smooth Switch", items)
+        for name, focus in (("Play LFO Smooth", "Yes"), ("Play LFO Smooth Off", "No")):
+            layer = lfo_layers[name]
+            self.assertEqual(rect(layer), (1064, 546, 196, 72))
+            self.assertEqual(layer["bounds"]["acceptsHWFocus"], focus)
+            handles = {m["key"]: m["value"] for m in layer["handle remapping"]["map"]}
+            self.assertEqual(handles["Active"], f"Parameter {lfo_smooth}")
+            definition = defs[layer["componentData"]["type"]]
+            caption = next(c["componentData"] for c in definition["componentsData"] if c["componentData"]["name"] == "name")
+            self.assertEqual((caption["type"], caption["data"]["handleName"]), ("Button", "Active"))
 
     def test_there_is_no_page_only_the_overlay_can_reach_so_the_play_page_carries_the_full_screen_ui(self):
         # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").

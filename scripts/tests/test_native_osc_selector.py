@@ -129,9 +129,19 @@ class TestNativeOscSelector(unittest.TestCase):
         children = defs[OSC_SOURCE_OVERLAY_NAME]["componentsData"]
         by_name = {item["componentData"]["name"]: item for item in children}
         self.assertEqual(sum(item["componentData"]["type"] == "MenuOverlay" for item in children), 1)
-        self.assertFalse(any(item["componentData"]["type"] == "Button" for item in children))
+        self.assertEqual(sum(item["componentData"]["type"] == "Button" for item in children), 5)
         for i, name in enumerate(OSC_INSTANCE_NAMES):
-            self.assertEqual(by_name[f"Osc source name {i}"]["componentData"]["data"]["text"], name)
+            self.assertEqual(by_name[name]["componentData"]["data"]["text"], name)
+            hit = by_name["Choose " + name]
+            y = 110 + 80 * i
+            self.assertEqual(hit["bounds"]["bounds"], f"0 {y} 426 80")
+            data = hit["componentData"]["data"]
+            self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["handleName"]), (i, 5, "Data"))
+            for item in (by_name[name], by_name[f"Osc source power {i} ON"], by_name[f"Osc source power {i} OFF"]):
+                left, top, width, height = map(int, item["bounds"]["bounds"].split())
+                self.assertEqual((top, height), (y, 80))
+                self.assertTrue(0 <= left < left + width <= 426)
+                self.assertLess(children.index(item), children.index(hit))
             for on, status in ((0, "OFF"), (1, "ON")):
                 badge = by_name[f"Osc source power {i} {status}"]
                 direct_power = MockCtx().param_index(OSC_POWER_PARAM_KEYS[i])

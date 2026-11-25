@@ -201,7 +201,8 @@ int main (int argc, char** argv)
            && nativeBase + nativeui::kFxBandBase == 3461 && nativeBase + nativeui::kFxBandMode == 3493
            && nativeBase + nativeui::kPzAction == 3494 && nativeBase + nativeui::kPzAvailability == 3497
            && nativeBase + nativeui::kMasterScaleInput == 3679 && nativeBase + nativeui::kFilterChainMenu == 3680
-           && a->numParams == nativeBase + nativeui::kCount && a->numParams == 3683,
+           && nativeBase + nativeui::kFxEditorPower == 3683 && nativeBase + nativeui::kLfoTargetsAction == 3684
+           && a->numParams == nativeBase + nativeui::kCount && a->numParams == 3685,
            "the legacy prefix ends before Mixer PEEK action 2719, Mixer PEEK visibility is 3349 and OSC detail begins at 3350");
     {
         constexpr int view = 3312, subPower = 3313, subOctave = 3317, aType = 3323,

@@ -153,8 +153,22 @@ void testSavedDisabledNativeRoots()
         sendQ();
         require (r.save() == saved, "the previous powered Q map is rejected before the first display tick");
         gesture (TouchEvent::Up, rect);
-        require (! hasQTargets() && read (power) == 0.0f && stillOnRoot(),
-                 "recalling OFF disarms the prior editor and its Q bindings");
+        if (std::strcmp (row.tab, "filter1") == 0)
+        {
+            // The split root also owns the independent NOTE/VELO editor.
+            // With both filters off, only its POINT, X, Y and CURVE remain bound.
+            const int curveStart = QRouter::kCount - QRouter::kGroupSize;
+            for (int q = 0; q < QRouter::kCount; ++q)
+            {
+                const int expectedVirtual = q < curveStart ? -1 : q - curveStart;
+                require (r.plugin.qBank.target (q) == QRouter::kNone
+                         && r.plugin.qBank.router().virtualId (q) == expectedVirtual,
+                         "recalling both filters OFF leaves only the split curve editor's Q bindings");
+            }
+        }
+        else
+            require (! hasQTargets(), "recalling OFF disarms the prior editor's Q bindings");
+        require (read (power) == 0.0f && stillOnRoot(), "recalling OFF leaves the module disabled on its root");
         gesture (TouchEvent::Down, rect);
         gesture (TouchEvent::Move, rect, -36);
         write (dataHandle, old);   // A visible-value echo also has to be free of side effects.
@@ -181,6 +195,13 @@ void testSavedDisabledNativeRoots()
         tick();
         require (read (power) == 1.0f && read (data) == old && hasQTargets() && writes() == before + 1,
                  "the native POWER action restores the same settings and active Q bindings exactly once");
+        if (std::strcmp (row.tab, "filter1") == 0)
+        {
+            bool cutoffBound = false;
+            for (int q = 0; q < QRouter::kCount; ++q)
+                cutoffBound |= r.plugin.qBank.target (q) == data;
+            require (cutoffBound, "powering this filter back on restores its own cutoff Q binding");
+        }
         write (dataHandle, old);
         tick();
         require (writes() == before + 1, "the newly armed stock widget ignores the stored-value echo");

@@ -837,14 +837,6 @@ OSC_LEVEL_LAYER = "oscNativeLevelLayer"
 
 OSC_ROUTING_OVERLAY_BG_IMAGE = "osc_routing_overlay_bg.png"
 
-CHOICE_BUTTON_X = _style_size('selector.choice.x')
-
-CHOICE_BUTTON_W = _style_size('selector.choice.width')
-
-CHOICE_BUTTON_H = _style_size('selector.choice.height')
-
-CHOICE_BUTTON_PITCH = _style_size('selector.choice.pitch')
-
 BG_RGB = _style_rgb("menu.background")
 
 FRAME_FILL_RGB = _style_rgb("route.surface")
@@ -892,11 +884,6 @@ def _mark_native_menu(items):
     for i, x in enumerate(MODAL_MARKER_COLS, 1):
         items.append(_image(f"Osc native popup marker {i}", f"fx_editor_modal_marker_{i}.png", (x, _style_size('selector.marker.y'), _style_size('selector.marker.size'), _style_size('selector.marker.size'))))
 
-def _choice_rows(count):
-    y0 = (_style_size('selector._choice_rows.y0') - (count * CHOICE_BUTTON_PITCH - (CHOICE_BUTTON_PITCH - CHOICE_BUTTON_H))) // 2
-    for i in range(count):
-        yield CHOICE_BUTTON_X, y0 + i * CHOICE_BUTTON_PITCH, CHOICE_BUTTON_W, CHOICE_BUTTON_H
-
 def build_standalone_osc_routing_choice_overlay(
     overlay_name=OSC_ROUTING_OVERLAY_NAME,
 ):
@@ -906,45 +893,48 @@ def build_standalone_osc_routing_choice_overlay(
     _mark_native_menu(items)
     return overlay
 
-def labelled_choice_drawer(name, choices, *, columns=1):
+def labelled_choice_drawer(name, choices, *, columns=1, power_indices=None):
     """Bind each visible native row to an explicit choice of the drawer's Data handle."""
     overlay = _choice_overlay(name)
     items = overlay["componentsData"]
     x, top, width, pitch = _style_size("selector.source.drawer_row")
-    label_x, _, _, _ = _style_size("selector.source.drawer_name")
+    label_x, _, name_width, _ = _style_size("selector.source.drawer_name")
+    if power_indices is not None:
+        power_indices = tuple(power_indices)
+        if len(power_indices) != len(choices):
+            raise ValueError("Each powered choice needs a power parameter")
     rows = (len(choices) + columns - 1) // columns
     pitch = min(pitch, (800 - top) // rows)
     for index, choice in enumerate(choices):
         column, row = divmod(index, rows)
         left, y = x + column * width, top + row * pitch
-        label = _value_label(choice, (left + label_x, y, width - 2 * label_x, pitch))
+        label_width = name_width if power_indices is not None else width - 2 * label_x
+        label = _value_label(choice, (left + label_x, y, label_width, pitch))
         data = label["componentData"]["data"]
         data.update(type="Text", text=choice)
         data["textStyle"]["justification"] = "left verticallyCentred"
-        items.extend([label, button("Choose " + choice, (left, y, width, pitch),
-                                    TRANSPARENT_HIT, index=index, count=len(choices))])
+        items.append(label)
+        if power_indices is not None:
+            status_width = _style_size("selector.build_standalone_osc_source_overlay.label.offset2")
+            status_rect = (left + width - label_x - status_width, y, status_width, pitch)
+            for on, status in enumerate(("OFF", "ON")):
+                badge = _value_label(f"Osc source power {index} {status}", status_rect)
+                badge_data = badge["componentData"]["data"]
+                badge_data.update(type="Text", text=status)
+                badge_data["textStyle"]["colour"] = _style_argb("text.status." + status.lower())
+                badge["bounds"].update(version=2, showWhenDataModelInvalid="Hide",
+                                       additionalInvalidatingHandles=[f"IndexedEnabling/{on}/2/Parameter {power_indices[index]}"])
+                items.append(badge)
+        items.append(button("Choose " + choice, (left, y, width, pitch),
+                            TRANSPARENT_HIT, index=index, count=len(choices)))
     _mark_native_menu(items)
     return overlay
 
 
 def build_standalone_osc_source_overlay(power_indices):
-    """The SDK drawer owns selection; the adjacent labels report all five power states."""
-    overlay = _choice_overlay(OSC_SOURCE_OVERLAY_NAME)
-    items = overlay["componentsData"]
-    for i, (name, rect, power) in enumerate(zip(OSC_INSTANCE_NAMES, _choice_rows(len(OSC_INSTANCE_NAMES)), power_indices)):
-        x, y, w, h = rect
-        label = _value_label(f"Osc source name {i}", (x + _style_size('selector.build_standalone_osc_source_overlay.label'), y, w - _style_size('selector.build_standalone_osc_source_overlay.label.offset1'), h))
-        label["componentData"]["data"].update(type="Text", text=name)
-        items.append(label)
-        for on, status, colour in ((0, "OFF", _style_argb("text.status.off")), (_style_size('selector.build_standalone_osc_source_overlay.geometry'), "ON", _style_argb("text.status.on"))):
-            label = _value_label(f"Osc source power {i} {status}", (x + w - _style_size('selector.build_standalone_osc_source_overlay.label.offset3'), y, _style_size('selector.build_standalone_osc_source_overlay.label.offset2'), h), _style_size('selector.build_standalone_osc_source_overlay.label'))
-            label["componentData"]["data"].update(type="Text", text=status)
-            label["componentData"]["data"]["textStyle"]["colour"] = colour
-            label["bounds"].update(version=_style_size('selector.build_standalone_osc_source_overlay.update'), showWhenDataModelInvalid="Hide",
-                                   additionalInvalidatingHandles=[f"IndexedEnabling/{on}/2/Parameter {power}"])
-            items.append(label)
-    _mark_native_menu(items)
-    return overlay
+    return labelled_choice_drawer(OSC_SOURCE_OVERLAY_NAME, OSC_INSTANCE_NAMES,
+                                  power_indices=power_indices)
+
 
 def build_standalone_osc_routing_component(
     dest_param_idx,

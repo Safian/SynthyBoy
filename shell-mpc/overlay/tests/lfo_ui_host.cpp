@@ -3058,6 +3058,7 @@ void testNativeShapeEditor()
     auto& editor = r.ui.editor();
     inst.nativeEnabled = inst.nativeEditorEnabled = true;
     inst.sel[2] = 3;
+    r.key ("lfo3.shape", 0.0f);
     r.refresh();
     inst.nativeBank.post (nativeui::lfo::kAction, 1.0f);
     r.refresh();
@@ -3073,6 +3074,12 @@ void testNativeShapeEditor()
     const auto set = [&] (int field, double plain) { post (field, plain); r.refresh(); };
     const int initialShapes = inst.shapeWrites;
     const int initialWrites = inst.writes;
+    set (n::kBack, 1);
+    check (r.ui.topPage() == 0 && inst.get ("lfo3.shape") == 0.0f && inst.shapeWrites == 0,
+           "opening and closing the native graph preserves Sine and its stored content");
+    r.refresh();
+    inst.nativeBank.post (nativeui::lfo::kAction, 1.0f);
+    r.refresh();
     const auto offset = [] (ui::Rect rect, int x, int y) { return std::pair<int, int> { rect.x + x, rect.y + y }; };
     const auto [x, y] = offset (r.ui.nativeEditorRect (n::kX), 12, 11);
     const auto [gx, gy] = offset (r.ui.nativeEditorRect (n::kGridX), 12, 11);
@@ -3091,12 +3098,18 @@ void testNativeShapeEditor()
     set (n::kY, 0.18);
     check (inst.shapeWrites == initialShapes && inst.writes == initialWrites && editor.undo.depth() == 0,
            "disabled controls produce no value, content or undo writes");
+    set (n::kGridX, 12);
+    check (inst.get ("lfo3.shape") == 0.0f && inst.shapeWrites == initialShapes,
+           "reading Sine and changing its editing grid leave the audible oscillator untouched");
     set (n::kPoint, 1);
     check (editor.canvas.state.selected == 0 && ! inst.nativeEditor.allows (n::kX) && inst.nativeEditor.allows (n::kY),
            "native POINT selects the first point and its fixed X remains protected");
     set (n::kPoint, 2);
     check (editor.canvas.state.selected == 1 && inst.nativeEditor.allows (n::kX), "interior point arms native X");
     set (n::kX, 0.37);
+    check (inst.get ("lfo3.shape") == 12.0f && inst.shapeWrites == initialShapes + 1
+               && inst.contentPtr->lfoShapes.back().gridX == 12 && editor.undo.depth() == 1,
+           "the first point edit converts Sine to Custom, stores the grid and keeps the undo step");
     set (n::kY, 0.82);
     set (n::kCurve, -6);
     check (std::abs (editor.model.p[1].x - 0.37f) < 1e-6f && std::abs (editor.model.p[1].y - 0.82f) < 1e-6f

@@ -6,7 +6,7 @@ import copy
 import json
 from pathlib import Path
 
-from native_ui_params import LFO_OFFSET, mixer_peek_index
+from native_ui_params import LFO_OFFSET, LFO_TARGETS_ACTION, mixer_peek_index
 from components import style as _ui_style
 from components.native.button.button import button as native_button
 from components.native.selector.selector import labelled_choice_drawer
@@ -223,11 +223,12 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
     if field == ACTION or field == 10:
         from components.native.button.button import action_button
         if field == ACTION:
+            if action == 1:
+                handle = f"Parameter {mixer_peek_index(ctx.param_count) + LFO_TARGETS_ACTION}"
             child = action_button(ctx, PREFIX + f"Action {action}", tuple(rect),
                                   "FromGesture/" + handle,
                                   text="TARGETS" if action == 1 else None,
                                   icon="expand" if action == 2 else None, gates=gates)
-            child["componentData"]["data"].update(buttonId=action, numButtonsInGroup=3)
             items.append(child)
         else:
             for child in _sync_radio(ctx, width, height, handle):

@@ -44,6 +44,18 @@ class LfoSkinTest(unittest.TestCase):
         definitions = {d["key"]: d["value"] for d in cls.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         cls.entries = list(standalone_editor_entries(cls.tab, definitions))
 
+    def test_targets_and_expand_use_independent_instant_handles(self):
+        from native_ui_params import LFO_OFFSET, LFO_TARGETS_ACTION, mixer_peek_index
+        base = mixer_peek_index(len(self.params))
+        buttons = {c["componentData"]["name"]: c for c in self.entries}
+        for action, offset in ((1, LFO_TARGETS_ACTION), (2, LFO_OFFSET + 5)):
+            button = buttons[f"LFO 1 Native Action {action}"]
+            self.assertEqual(button["handle remapping"]["map"],
+                             [{"key": "Data", "value": f"FromGesture/Parameter {base + offset}"}])
+            data = button["componentData"]["data"]
+            self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]),
+                             (1, 1, "Instant"))
+
     def test_markers_and_sentinel_clear_the_native_widgets(self):
         from PIL import Image
 

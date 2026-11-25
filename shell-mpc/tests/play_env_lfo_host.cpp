@@ -162,6 +162,64 @@ void testEnvLfoRootMask()
     exercise (*std::make_unique<pages::LfoPage> ("lfo1", 1), LfoUi::kPageEditor);
 }
 
+void testLfoNavigationButtons()
+{
+    using namespace synthyboy_mpc::overlay;
+    namespace u = synthyboy_mpc::nativeui;
+    auto rig = std::make_unique<Rig>();
+    auto& r = *rig;
+    auto page = std::make_unique<pages::LfoPage> ("lfo1", 1);
+    pages::configureNativeTab (*page, page->name());
+    page->setHostBackground (true);
+    r.stack.openFull (page->pageElement());
+    const auto tick = [&]
+    {
+        ViewInput input;
+        input.instance = input.io = &r.plugin.overlayView;
+        input.ui = &r.stack;
+        input.nowMs = r.now += 100.0;
+        page->update (input);
+        r.plugin.nativeUiPoll (&r.effect);
+    };
+    const int targets = PluginInstance::nativeUiBase() + u::kLfoTargetsAction;
+    const int expand = PluginInstance::nativeUiBase() + u::kLfoBase + u::lfo::kAction;
+    for (int source : { 1, 11 })
+    {
+        uibind::chooseLfo (r.plugin.overlayView, source);
+        tick();
+        tick();
+        r.effect.setParameter (&r.effect, targets, 1.0f);
+        r.effect.setParameter (&r.effect, targets, 0.0f);
+        tick();
+        check (r.stack.top() == LfoUi::kPageTargets, "TARGETS opens the route list for standard and random LFOs");
+        r.stack.back();
+        tick();
+        tick();
+        r.effect.setParameter (&r.effect, expand, 1.0f);
+        tick();
+        if (source == 1)
+        {
+            check (r.stack.top() == LfoUi::kPageEditor, "graph expand opens the standard LFO editor");
+            r.stack.back();
+        }
+        else
+            check (r.stack.depth() == 1, "random LFO ignores the hidden graph expand action");
+    }
+    auto play = std::make_unique<Rig>();
+    play->legacyChoice (1);
+    play->tick();
+    play->write (u::playenvlfo::LfoExpand, 1.0f);
+    play->tick();
+    play->effect.setParameter (&play->effect, targets, 1.0f);
+    play->tick();
+    check (play->stack.top() == LfoUi::kPageTargets, "expanded Play TARGETS opens the route list");
+    play->stack.back();
+    play->tick();
+    play->effect.setParameter (&play->effect, expand, 1.0f);
+    play->tick();
+    check (play->stack.top() == LfoUi::kPageEditor, "expanded Play graph expand opens the shape editor");
+}
+
 void testEnvTargetCount ()
 {
     using namespace synthyboy_mpc::overlay;
@@ -2273,6 +2331,11 @@ void testPlayCompactSmoothNativeHost ()
 
 int main (int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp (argv[1], "--lfo-navigation") == 0)
+    {
+        testLfoNavigationButtons();
+        return failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::strcmp (argv[1], "--env-lfo-root-mask") == 0)
     {
         testEnvLfoRootMask();
@@ -2440,6 +2503,7 @@ int main (int argc, char** argv)
     testMixerPeekDisplayRefresh();
     testMixerTabsAndRouteClosureVisuals();
     testEnvTargetCount();
+    testLfoNavigationButtons();
     testEnvLfoRootMask();
     testStandaloneOscDetailVst();
     testNativeModulationsVst();

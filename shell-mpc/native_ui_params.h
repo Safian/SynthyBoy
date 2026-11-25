@@ -128,7 +128,8 @@ constexpr int kMasterScaleInput = kMixerStereoBase + kMixerStereoFields * kMixer
 constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = 4;
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
-constexpr int kCount = kFxEditorPower + 1;
+constexpr int kLfoTargetsAction = kFxEditorPower + 1;
+constexpr int kCount = kLfoTargetsAction + 1;
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr int kMixerTabs = 6;
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
