@@ -188,7 +188,7 @@ class Runner:
                 if changed != (prop == "overlay_visible"):
                     raise AssertionError(f"{prop} failed in {spec[prop]}")
         if "vst" in spec:
-            actual = self.dev.snapshot()["vst"]
+            actual = self.dev.snapshot(vst=True)["vst"]
             result["vst"] = {}
             if not spec["vst"]:
                 raise ValueError("VST expectation requires at least one index")

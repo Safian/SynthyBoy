@@ -1470,7 +1470,7 @@ struct PluginInstance
 
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
     /** The debug dump (play_log.h): the state of this instance, written when the request file exists. Display thread. The text is built in memory and written in one go (safe_file.h). */
-    void playDump()
+    void playDump (AEffect* effect, bool vst, bool display)
     {
         namespace pl = synthyboy_mpc::play;
         std::string text;
@@ -1487,12 +1487,26 @@ struct PluginInstance
             std::snprintf (line, sizeof line, "proxy %d %.9g\n", p, static_cast<double> (playProxyValue (p)));
             text += line;
         }
+        if (vst)
+            for (VstInt32 i = 0; i < effect->numParams; ++i)
+            {
+                std::snprintf (line, sizeof line, "v %d %.9g\n", static_cast<int> (i), static_cast<double> (effect->getParameter (effect, i)));
+                text += line;
+                if (display)
+                {
+                    char value[128] {};
+                    effect->dispatcher (effect, effGetParamDisplay, i, 0, value, 0.0f);
+                    std::snprintf (line, sizeof line, "display %d %s\n", static_cast<int> (i), value);
+                    text += line;
+                }
+            }
         const std::string chunk = buildStateChunk (this);
         std::snprintf (line, sizeof line, "chunk %zu\n", chunk.size());
         text += line;
         text += chunk;
         text += '\n';
-        synthyboy_mpc::safefile::writeSmall (synthyboy_mpc::PlayLog::dumpPath().c_str(), text.data(), text.size());
+        if (text.size() <= synthyboy_mpc::safefile::kMaxWriteBytes)
+            synthyboy_mpc::safefile::writeReplacing (synthyboy_mpc::PlayLog::dumpPath().c_str(), text.data(), text.size());
     }
 #endif
 
@@ -2893,8 +2907,9 @@ struct PluginInstance
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
         synthyboy_mpc::PlayLog::refresh();
         synthyboy_mpc::PlayLog::drain();   // the lines the host's threads put into the ring, written here: the only place the play log touches a file
-        if (synthyboy_mpc::PlayLog::dumpRequested())
-            playDump();
+        bool vst = false, display = false;
+        if (synthyboy_mpc::PlayLog::takeDumpRequest (overlaySlot.load (std::memory_order_relaxed), vst, display))
+            playDump (e, vst, display);
 #endif
         if (! playLastValid)
         {

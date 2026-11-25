@@ -82,8 +82,8 @@ class XL:
         self.remote(f"{self.touch} {args}")
         time.sleep(0.45)
 
-    def snapshot(self, display=False):
-        cmd = """set -eu
+    def snapshot(self, display=False, *, vst=False):
+        cmd = r"""set -eu
 cd /tmp
 lock=synthyboy-xl-ui-dump-lock
 mkdir "$lock" || exit 27
@@ -94,7 +94,7 @@ had=0
 if test -e synthyboy-play-log; then had=1; fi
 cleanup() {
  rm -f "$request"
- if test "$want_display" = 1; then rm -f "$request-display"; fi
+ rm -f "$lock/request"
  if test "$had" = 0; then rm -f synthyboy-play-log; fi
  if test -e "$lock/prior" && test ! -s "$output"; then mv "$lock/prior" "$output"; fi
  rm -f "$lock/prior"
@@ -102,21 +102,34 @@ cleanup() {
 }
 trap cleanup EXIT
 if test -e "$output"; then mv "$output" "$lock/prior"; fi
-if test "$want_display" = 1; then touch "$request-display"; fi
-touch synthyboy-play-log "$request"
+if test "$mode" = plain; then
+ : > "$lock/request"
+else
+ slot=$(sed -n 's/^instance_slot: \([0-9][0-9]*\)$/\1/p' synthyboy-overlay-status.txt)
+ test -n "$slot" || exit 30
+ printf '%s %s\n' "$mode" "$slot" > "$lock/request"
+fi
+touch synthyboy-play-log
+mv "$lock/request" "$request"
 for i in $(seq 1 35); do
  if test ! -e "$request" && test -s "$output" && grep -aq '^chunk [0-9]' "$output"; then cat "$output"; exit; fi
  sleep .2
 done
 exit 29"""
         try:
-            payload = self.remote("want_display=" + ("1" if display else "0") + "\n" + cmd)
+            mode = "display" if display else "vst" if vst else "plain"
+            payload = self.remote(f"mode={mode}\n" + cmd)
         except RuntimeError as e:
             raise Unavailable(f"engine parameter dump unavailable ({e})") from e
         if not hasattr(self, "_parameter_keys"):
             manifest = Path(__file__).resolve().parents[2] / "docs/params.json"
             self._parameter_keys = [p["key"] for p in json.loads(manifest.read_text())["params"]]
-        return parse_dump(payload, self._parameter_keys)
+        state = parse_dump(payload, self._parameter_keys)
+        if (vst or display) and len(state["vst"]) < len(state["engine"]):
+            raise Unavailable("debug plugin did not return the requested normalized VST snapshot")
+        if display and len(state.get("display", {})) != len(state["vst"]):
+            raise Unavailable("debug plugin did not return every requested VST display string")
+        return state
 
     def params(self):
         return self.snapshot()["engine"]

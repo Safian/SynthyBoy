@@ -30,6 +30,7 @@
 
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
 #include "safe_file.h"
+#include <string_view>
 #endif
 
 namespace synthyboy_mpc {
@@ -163,16 +164,23 @@ public:
         (get ? chunkGetDue() : chunkSetDue()) = true;
     }
 
-    /** The dump request: true once when "<log path>-dump" exists (the file is deleted). Display thread. */
-    static bool dumpRequested()
+    /** An empty request selects the original plain dump. A VST/display request can name the visible instance's slot. */
+    static bool takeDumpRequest (int slot, bool& vst, bool& display)
     {
         if (! enabled())
             return false;
         const std::string req = path() + "-dump";
-        if (! exists (req))
+        char line[64] {};
+        if (! safefile::readFirstLine (req.c_str(), line, sizeof line))
             return false;
-        ::unlink (req.c_str());
-        return true;
+        char mode[16] {};
+        int requested = -1;
+        const int fields = std::sscanf (line, "%15s %d", mode, &requested);
+        if (fields == 2 && requested != slot)
+            return false;
+        display = std::string_view (mode) == "display";
+        vst = display || std::string_view (mode) == "vst";
+        return ::unlink (req.c_str()) == 0;
     }
     static std::string dumpPath() { return path() + "-dump.txt"; }
 
@@ -257,7 +265,6 @@ public:
     static void note (bool, int, int, int, int) noexcept {}
     static void drain() noexcept {}
     static void offerChunk (bool, const void*, size_t) noexcept {}
-    static bool dumpRequested() noexcept { return false; }
     static std::string dumpPath() { return std::string(); }
     static std::string path() { return std::string(); }
 };

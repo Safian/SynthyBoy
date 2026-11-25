@@ -48,6 +48,14 @@ class RunnerTest(unittest.TestCase):
             with self.assertRaises(Unavailable):
                 parse_dump(bad, keys)
 
+    def test_vst_expectation_requests_extended_dump(self):
+        from unittest.mock import Mock
+        self.dev.snapshot = Mock(return_value={"vst": {2944: .5}})
+        result = {}
+        self.runner.expect({"vst": {"2944": .5}}, {}, result)
+        self.dev.snapshot.assert_called_once_with(vst=True)
+        self.assertEqual(result["vst"], {"2944": .5})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

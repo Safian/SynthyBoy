@@ -22,7 +22,7 @@ import native_ui_params as native
 
 
 def snapshot(device):
-    state = device.snapshot()
+    state = device.snapshot(vst=True)
     engine, values = state["engine"], state["vst"]
     if len(values) <= len(engine):
         raise ValueError("The installed XL test package must expose normalized native values")

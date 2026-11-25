@@ -39,6 +39,18 @@ int main()
     if (FILE* f = std::fopen (base.c_str(), "w")) std::fclose (f);
     PlayLog::refresh();
     check (PlayLog::enabled(), "the switch file turns the log on");
+    const auto request = base + "-dump";
+    bool vst = false, display = false;
+    for (const std::string mode : { "vst", "display" })
+    {
+        const auto body = mode + " 3\n";
+        synthyboy_mpc::safefile::writeSmall (request.c_str(), body.data(), body.size());
+        check (! PlayLog::takeDumpRequest (1, vst, display), "another instance cannot claim the request");
+        check (PlayLog::takeDumpRequest (3, vst, display) && vst && display == (mode == "display"),
+               "the requested instance receives the requested detail");
+    }
+    synthyboy_mpc::safefile::writeSmall (request.c_str(), "", 0);
+    check (PlayLog::takeDumpRequest (0, vst, display) && ! vst && ! display, "an empty request preserves the plain dump");
     for (int i = 0; i < 100; ++i)
         PlayLog::line ("setParameter %d (real) %.9g -> written", i, 0.25 * i);
     check (slurp (txt).empty(), "line () writes no file (the calling thread does no I/O)");

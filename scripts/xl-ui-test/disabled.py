@@ -185,7 +185,7 @@ def observe(dev, row, before, skin, record, output):
             dev.gesture(x, y)
         else:
             dev.gesture(x, y, 0, amount)
-        after = dev.snapshot()
+        after = dev.snapshot(vst=True)
         obs = {"action": action, "x": x, "y": y, "engine_changes": delta(before["engine"], after["engine"]),
                "vst_changes": delta(before["vst"], after["vst"])}
         record["observations"].append(obs)
