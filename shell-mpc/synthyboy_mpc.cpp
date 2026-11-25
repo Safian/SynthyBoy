@@ -1880,7 +1880,7 @@ struct PluginInstance
                 return nativeModBoard.layout() == 2 && nativeModBoard.at (field).cell().target >= 0 ? 1.0f : 0.0f;
             return 0.0f;
         }
-        if (nativeui::isMixerActiveTabOffset (offset))
+        if (offset == nativeui::kMixerPeek || nativeui::isMixerActiveTabOffset (offset))
             return mixerPeek.enabled()
                 ? static_cast<float> (std::clamp (nativeMixerActiveTab.load (std::memory_order_acquire), 0, nativeui::kMixerTabs - 1))
                     / nativeui::kMixerPeekTargets
@@ -2446,7 +2446,10 @@ struct PluginInstance
     void nativeMixerPoll (AEffect* e)
     {
         refreshNativeMixerVisuals();
-        reportNativeValue (e, nativeui::kMixerActiveTab, nativeUiValue (nativeui::kMixerActiveTab));
+        const float tab = nativeUiValue (nativeui::kMixerActiveTab);
+        // The host radio buttons compare against their own navigation handle before writing.
+        reportNativeValue (e, nativeui::kMixerPeek, tab);
+        reportNativeValue (e, nativeui::kMixerActiveTab, tab);
         for (int s = 0; s < nativeui::kMixerStrips; ++s)
         {
             reportNativeValue (e, nativeui::kMixerSoloVisual + s, nativeUiValue (nativeui::kMixerSoloVisual + s));

@@ -945,18 +945,25 @@ void testMixerTabsAndRouteClosureVisuals()
     r.plugin.overlayView.setTabView (IInstanceView::kTabViewFilter, 3);
     tick();
 
+    // An MPC radio group writes only when its own handle differs from the pressed step.
+    const auto pressTab = [&] (int tab)
+    {
+        const float selected = static_cast<float> (tab) / u::kMixerPeekTargets;
+        if (read (base + u::kMixerPeek) != selected)
+            write (base + u::kMixerPeek, selected);
+        tick();
+        return read (base + u::kMixerPeek) == selected && r.plugin.nativeUiReported[u::kMixerPeek] == selected;
+    };
     // Test all 36 from -> to tab transitions through the real VST MIXER_PEEK proxy
     bool all36Ok = true;
     for (int from = 0; from < 6; ++from)
     {
         for (int to = 0; to < 6; ++to)
         {
-            write (base + u::kMixerPeek, static_cast<float> (from) / 5.0f);
-            tick();
+            all36Ok &= pressTab (from);
             all36Ok &= std::fabs (read (base + u::kMixerActiveTab) - static_cast<float> (from) / 5.0f) < 1.0e-5f;
 
-            write (base + u::kMixerPeek, static_cast<float> (to) / 5.0f);
-            tick();
+            all36Ok &= pressTab (to);
             all36Ok &= std::fabs (read (base + u::kMixerActiveTab) - static_cast<float> (to) / 5.0f) < 1.0e-5f;
             if (to == 0)
                 all36Ok &= (mixer.ui().peekRoot() == nullptr && r.plugin.hostMixerWidgetsHidden.load (std::memory_order_acquire) == false);
@@ -1372,7 +1379,6 @@ void testPzCurveToolbar()
     auto rig = std::make_unique<Rig>();
     auto& r = *rig;
     pages::FilterPage page ("filter1", 1);
-    page.ui().setNativePower (true);
     r.stack.openFull (page.pageElement());
     const int base = PluginInstance::nativeUiBase();
     const int source = base + n::kPzSource, availability = base + n::kPzAvailability;
