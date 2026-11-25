@@ -586,12 +586,6 @@
       64,
       48
     ],
-    "selector.standalone_osc_selector_rect": [
-      8,
-      33,
-      200,
-      56
-    ],
     "selector._value_label.geometry": 20.0,
     "selector.pipa_icon.geometry": 20,
     "selector.pipa_icon.scale": 4,
@@ -603,7 +597,6 @@
     "selector.choice_overlay_art.geometry": 4,
     "selector.build_shape_selector.geometry": 202,
     "selector.build_shape_selector.geometry.offset1": 56,
-    "selector.png_routing_frame.mid.y": 2,
     "selector.compact_route_face.pad": 1,
     "selector.compact_route_face.caret.sz": 4,
     "selector.compact_button_face.pad": 1,
@@ -615,10 +608,7 @@
     "selector.selector_definition.left": 54,
     "selector.selector_definition.caption": 13,
     "selector.build_shape_selector.selector_definition": 19.0,
-    "selector.png_routing_frame.range": 1,
-    "selector.png_routing_frame.put": 1,
     "selector.write_routing_assets.png_solid": 16,
-    "selector.build_compact_osc_routing_definition.build_choice_definition": 16.0,
     "selector._choice_rows.y0": 800,
     "selector.compact_route_face.strip.y": 4,
     "selector.compact_route_face.strip.h": 4,
@@ -630,7 +620,6 @@
     "selector.choice_overlay_art.total.h": 8,
     "selector.choice_overlay_art.dot.cx": 24,
     "selector.choice_overlay_art.r": 5,
-    "selector.build_standalone_osc_selector_definition.kwargs": 20.0,
     "selector.macro_bank_definition.rects": 380,
     "selector.macro_bank_definition.rects.offset1": 56,
     "selector.macro_bank_definition.rects.offset2": 56,
@@ -661,8 +650,6 @@
     "selector.selector_definition.text.width.offset1": 32,
     "selector.selector_definition.value.bounds.bounds": 29,
     "selector.selector_definition.caption.offset1": 18,
-    "selector.png_routing_frame.put.offset1": 2,
-    "selector.png_routing_frame.put.offset2": 2,
     "selector.build_standalone_osc_source_overlay.geometry": 1,
     "selector.build_standalone_osc_source_overlay.label": 16,
     "selector.compact_route_face.rounded_rectangle": 1,
@@ -687,8 +674,6 @@
     "selector.selector_definition.definition.offset1": 24,
     "selector.selector_definition.value.bounds.bounds.offset1": 21,
     "selector.selector_definition.caption.offset2": 4,
-    "selector.png_routing_frame.put.offset3": 14,
-    "selector.png_routing_frame.put.offset4": 8,
     "selector.build_standalone_osc_source_overlay.label.offset1": 112,
     "selector.build_standalone_osc_source_overlay.label.offset2": 72,
     "selector.build_standalone_osc_source_overlay.update": 2,
@@ -726,7 +711,7 @@
     "selector.wave_icon.points.offset1": 8,
     "tune.standalone_osc_tune_rect": [
       10,
-      192,
+      114,
       {
         "ref": "tune.width"
       },
@@ -857,7 +842,6 @@
     "selector.hit.minimum": 56,
     "selector.marker.y": 120,
     "selector.marker.size": 6,
-    "selector.route.chevron.length": 4,
     "screen.width": 1280,
     "screen.height": 800,
     "screen.tab.height": 628,
@@ -908,9 +892,10 @@
     "font.style.semibold": "SemiBold",
     "font.style.regular": "Regular",
     "font.file.semibold": "TitilliumWeb-SemiBold.ttf",
+    "osc.source_tabs.rect": [0, 580, 1280, 48],
     "selector.standalone_compact_osc_pan_rect": [
-      708,
-      37,
+      864,
+      532,
       {
         "ref": "control.width"
       },
@@ -919,8 +904,8 @@
       }
     ],
     "selector.standalone_compact_osc_level_rect": [
-      914,
-      37,
+      1070,
+      532,
       {
         "ref": "control.width"
       },

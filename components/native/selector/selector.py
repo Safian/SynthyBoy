@@ -715,9 +715,7 @@ OSC_PAN_LAYER = "oscNativePanLayer"
 
 OSC_LEVEL_LAYER = "oscNativeLevelLayer"
 
-OSC_ROUTING_FRAME_IMAGE = "osc_routing_frame.png"
 
-OSC_COMPACT_ROUTING_FRAME_IMAGE = "osc_routing_frame_48.png"
 
 OSC_ROUTING_OVERLAY_BG_IMAGE = "osc_routing_overlay_bg.png"
 
@@ -758,61 +756,18 @@ def png_solid(width, height, rgb):
     """Creates a solid-color opaque RGB PNG."""
     return _encode_rgb_png(width, height, bytes(rgb) * (width * height))
 
-def png_routing_frame(width=_style_size('selector.route.width'), height=_style_size('height.high')):
-    """Opaque routing trigger background art matching verified non-marker MPC palette."""
-    px = bytearray(bytes(FRAME_FILL_RGB) * (width * height))
-
-    def put(x, y, col):
-        if 0 <= x < width and 0 <= y < height:
-            idx = (y * width + x) * 3
-            px[idx:idx + 3] = bytes(col)
-
-    for x in range(1, width - _style_size('selector.png_routing_frame.range')):
-        put(x, _style_size('selector.png_routing_frame.put'), FRAME_EDGE_RGB)
-        put(x, height - _style_size('selector.png_routing_frame.put.offset1'), FRAME_EDGE_RGB)
-    for y in range(1, height - _style_size('selector.png_routing_frame.range')):
-        put(_style_size('selector.png_routing_frame.put'), y, FRAME_EDGE_RGB)
-        put(width - _style_size('selector.png_routing_frame.put.offset2'), y, FRAME_EDGE_RGB)
-
-    mid_y = height // 2 - _style_size('selector.png_routing_frame.mid.y')
-    for d in range(_style_size('selector.route.chevron.length')):
-        put(width - _style_size('selector.png_routing_frame.put.offset3') + d, mid_y + d, FRAME_EDGE_RGB)
-        put(width - _style_size('selector.png_routing_frame.put.offset4') - d, mid_y + d, FRAME_EDGE_RGB)
-
-    return _encode_rgb_png(width, height, px)
-
-def png_compact_routing_frame(width=STANDALONE_COMPACT_OSC_ROUTING_RECT[2], height=STANDALONE_COMPACT_OSC_ROUTING_RECT[3]):
-    """Opaque 48 px compact routing trigger background art matching verified non-marker MPC palette."""
-    return png_routing_frame(width, height)
-
 def write_routing_assets(skins_dir):
     """Writes all PNG artwork needed by oscNativeRouting and oscNativeRoutingChoices."""
     skins = Path(skins_dir)
     skins.mkdir(parents=True, exist_ok=True)
     write_transparent_hit(skins)
     (skins / OSC_ROUTING_OVERLAY_BG_IMAGE).write_bytes(png_solid(_style_size('selector.write_routing_assets.png_solid'), _style_size('selector.write_routing_assets.png_solid'), BG_RGB))
-    (skins / OSC_ROUTING_FRAME_IMAGE).write_bytes(png_routing_frame(STANDALONE_OSC_ROUTING_RECT[2], STANDALONE_OSC_ROUTING_RECT[3]))
-    (skins / OSC_COMPACT_ROUTING_FRAME_IMAGE).write_bytes(png_compact_routing_frame(STANDALONE_COMPACT_OSC_ROUTING_RECT[2], STANDALONE_COMPACT_OSC_ROUTING_RECT[3]))
 
-def build_standalone_osc_routing_definition(
-    source_def,
-    component_name=OSC_ROUTING_COMPONENT_TYPE,
-    overlay_name=OSC_ROUTING_OVERLAY_NAME,
-    rect=STANDALONE_OSC_ROUTING_RECT,
-):
-    """Builds the local definition for standalone OSC routing triggers from sliderWithFocusMenu."""
-    frame = _image("Osc routing frame", OSC_ROUTING_FRAME_IMAGE, (0, 0, rect[2], rect[3]))
-    return build_choice_definition(source_def, overlay_name, rect, "Osc routing value", (frame,))
 
-def build_compact_osc_routing_definition(
-    source_def,
-    component_name=OSC_COMPACT_ROUTING_COMPONENT_TYPE,
-    overlay_name=OSC_ROUTING_OVERLAY_NAME,
-    rect=STANDALONE_COMPACT_OSC_ROUTING_RECT,
-):
-    """Builds the 48 px compact local definition for standalone OSC routing triggers."""
-    frame = _image("Osc compact routing frame", OSC_COMPACT_ROUTING_FRAME_IMAGE, (0, 0, rect[2], rect[3]))
-    return build_choice_definition(source_def, overlay_name, rect, "Osc routing value", (frame,), label_height=_style_size('selector.build_compact_osc_routing_definition.build_choice_definition'))
+def build_compact_osc_routing_definition(source_def, skins_dir):
+    return selector_definition(source_def, OSC_ROUTING_OVERLAY_NAME,
+                               STANDALONE_COMPACT_OSC_ROUTING_RECT[2:], skins_dir)
+
 
 def _mark_native_menu(items):
     for i, x in enumerate(MODAL_MARKER_COLS, 1):
@@ -1203,7 +1158,6 @@ def ensure_routing_replacement_strings(tui, dest_param_indices, choices=OSC_ROUT
 
 OSC_POWER_PARAM_KEYS = ("sub.on", "osc1.on", "osc2.on", "osc3.on", "noise.on")
 OSC_TAB_NAMES = OSC_INSTANCE_NAMES
-STANDALONE_OSC_SELECTOR_RECT = tuple(_style_size('selector.standalone_osc_selector_rect'))
 
 
 def passive_layer(children):
@@ -1222,88 +1176,6 @@ def passive_layer(children):
 def format_osc_choice_label(name, is_on):
     """Formats dynamic oscillator choice label indicating active/inactive state."""
     return ("%s (Active)" if is_on else "%s (Inactive)") % name
-
-
-def build_standalone_osc_selector_definition(
-    source_def,
-    component_name="oscNativeSelector",
-    overlay_name="menu overlay",
-    skins_dir=None,
-    neighbors=None,
-):
-    if skins_dir is not None:
-        kwargs = {
-            "title": "Data",
-            "neutral": True,
-            "arrows": True,
-            "frame_name": "Osc selector frame",
-            "filename": "osc_instance_selector_frame.png",
-            "label_height": _style_size('selector.build_standalone_osc_selector_definition.kwargs'),
-            "justification": "horizontallyCentred verticallyCentred",
-        }
-        if neighbors is not None:
-            kwargs["neighbors"] = neighbors
-        return selector_definition(
-            source_def,
-            overlay_name,
-            (STANDALONE_OSC_SELECTOR_RECT[2], STANDALONE_OSC_SELECTOR_RECT[3]),
-            skins_dir,
-            **kwargs,
-        )
-    return build_choice_definition(source_def, overlay_name, STANDALONE_OSC_SELECTOR_RECT, "Osc instance value")
-
-
-def build_standalone_osc_selector(clone, template, tab_name, parameter_index, rect=STANDALONE_OSC_SELECTOR_RECT, overlay_param=-1, last_visible_frame=18, name=None):
-    """Builds a named native selector control for a standalone oscillator tab.
-
-    Ensures:
-    1. Correct per-instance named component:
-       - Name: e.g. 'Osc Native Instance Select', 'Osc A Select', etc.
-       - Bound to the oscillator selection parameter index.
-    2. OFF navigation remains operable:
-       - Strips self-disabling Enable mappings.
-       - showWhenDataModelInvalid='Show', whenVisible='Always'.
-    3. Overlay precedence:
-       - Optional RangedEnabling handle when overlay_param is supplied.
-    """
-    if name is None:
-        name = "%s Select" % tab_name
-    if clone is None:
-        entry = copy.deepcopy(template)
-        entry["componentData"]["name"] = name
-        entry["bounds"]["bounds"] = " ".join(map(str, rect))
-        remaps = entry.setdefault("handle remapping", {"version": 1, "map": []})["map"]
-        if not any(item.get("key", item.get("from")) in ("Value", "Data") for item in remaps):
-            remaps.append({"key": "Data", "value": f"Parameter {parameter_index}"})
-    else:
-        entry = clone(template, name, parameter_index, rect)
-
-    if "handle remapping" in entry:
-        entry["handle remapping"]["map"] = [
-            m for m in entry["handle remapping"].get("map", [])
-            if m.get("from") != "Enable" and m.get("key") != "Enable"
-        ]
-        val_map = next((m for m in entry["handle remapping"]["map"] if m.get("key") in ("Value", "Data") or m.get("from") in ("Value", "Data")), None)
-        if val_map:
-            val_map["value"] = "Parameter %d" % parameter_index
-
-    bounds = entry.setdefault("bounds", {})
-    bounds["acceptsHWFocus"] = template.get("bounds", {}).get("acceptsHWFocus", "Yes")
-    bounds["showWhenDataModelInvalid"] = "Show"
-    bounds["whenVisible"] = "Always"
-
-    handles = list(bounds.get("additionalInvalidatingHandles", []))
-    handles = [h for h in handles if not h.endswith("Parameter %d" % parameter_index)]
-
-    if overlay_param >= 0:
-        overlay_handle = "RangedEnabling/0/%d/33/Parameter %d" % (last_visible_frame, overlay_param)
-        if overlay_handle not in handles:
-            handles.append(overlay_handle)
-
-    if handles:
-        bounds["version"] = 2
-    bounds["additionalInvalidatingHandles"] = handles
-    return entry
 
 
 def sanitize_osc_tab_navigation(tab, osc_power_params):

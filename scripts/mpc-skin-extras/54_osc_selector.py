@@ -1,5 +1,4 @@
 # Host-native instance selector for standalone oscillator tabs.
-import copy
 from pathlib import Path
 
 import sys
@@ -11,12 +10,12 @@ _SCRIPTS = _REPO_ROOT / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from components.native.tab_bar.tab_bar import tab_bar
+from components.style import size
 from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
     OSC_POWER_PARAM_KEYS,
     OSC_SOURCE_OVERLAY_NAME,
-    STANDALONE_OSC_SELECTOR_RECT,
-    build_standalone_osc_selector_definition,
     build_standalone_osc_source_overlay,
     sanitize_osc_tab_navigation,
 )
@@ -33,22 +32,6 @@ def apply(tui, qlinks, ctx):
     selector_idx = base + OSC_SOURCE
     state_idx = base + OSC_VISIBILITY
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
-    source_def = next((d["value"] for d in defs if d["key"] == "sliderWithFocusMenu"), None)
-    source = next((c for t in tui["pageData"]["tabs"] for c in t["componentDefinition"]["componentsData"]
-                   if c["componentData"]["type"] == "sliderWithFocusMenu"), None)
-    if source_def is None:
-        raise ValueError("no sliderWithFocusMenu template for standalone OSC selector")
-    key = "oscNativeSelector"
-    if not any(d["key"] == key for d in defs):
-        defs.append({
-            "key": key,
-            "value": build_standalone_osc_selector_definition(
-                source_def,
-                component_name=key,
-                overlay_name=OSC_SOURCE_OVERLAY_NAME,
-                skins_dir=getattr(ctx, "skins_dir", None),
-            ),
-        })
     power_params = {k: ctx.param_index(k) for k in OSC_POWER_PARAM_KEYS}
     if not any(d["key"] == OSC_SOURCE_OVERLAY_NAME for d in defs):
         defs.append({"key": OSC_SOURCE_OVERLAY_NAME, "value": build_standalone_osc_source_overlay(power_params.values())})
@@ -63,23 +46,7 @@ def apply(tui, qlinks, ctx):
 
     for tab in tabs:
         items = tab["componentDefinition"]["componentsData"]
-        if not any(c["componentData"]["name"] == "Osc Native Instance Select" for c in items):
-            if source is not None:
-                c = copy.deepcopy(source)
-            else:
-                c = {
-                    "version": 2,
-                    "componentData": {"version": 1, "name": "Osc Native Instance Select", "type": key, "data": {"version": 1, "handleName": "Data"}},
-                    "handle remapping": {"version": 1, "map": []},
-                    "bounds": {"version": 1, "acceptsHWFocus": "Yes", "showWhenDataModelInvalid": "Show", "whenVisible": "Always", "boundsType": "Absolute", "bounds": "8 33 200 56", "additionalInvalidatingHandles": []}
-                }
-            c["componentData"]["name"] = "Osc Native Instance Select"
-            c["componentData"]["type"] = key
-            c["handle remapping"]["map"] = [{"key": "Data", "value": pkey}]
-            c["bounds"]["bounds"] = "%d %d %d %d" % STANDALONE_OSC_SELECTOR_RECT
-            c["bounds"]["version"] = 2
-            c["bounds"]["showWhenDataModelInvalid"] = "Hide"
-            c["bounds"]["whenVisible"] = "Always"
-            c["bounds"]["additionalInvalidatingHandles"] = [f"NonZero/Parameter {state_idx}"]
-            items.append(c)
+        items.extend(tab_bar("Osc Native Source", ("SUB", "A", "B", "C", "NOISE"),
+                             size("osc.source_tabs.rect"), pkey, pkey, getattr(ctx, "skins_dir", None),
+                             gates=(f"NonZero/Parameter {state_idx}",)))
         sanitize_osc_tab_navigation(tab, power_params)

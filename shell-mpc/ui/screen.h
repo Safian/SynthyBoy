@@ -357,11 +357,11 @@ public:
     bool hasNativeRouting() const noexcept { return nativeRouting_; }
     bool isNativeRoutingActive() const noexcept { return nativeRouting_ && ! inactive(); }
     bool hasNativeTune() const noexcept { return nativeRouting_ && inst_ != OscInstance::Sub && inst_ != OscInstance::Noise; }
-    static constexpr Rect tuneAreaAt (int x, int y) noexcept { return { x + 10, y + 192, 278, 154 }; }
+    static constexpr Rect tuneAreaAt (int x, int y) noexcept { return { x + 10, y + 114, 278, 154 }; }
     Rect tuneArea() const noexcept { return tuneAreaAt (rect_.x, rect_.y); }
     Rect routingArea() const noexcept { return routingArea_; }
-    Rect panArea() const noexcept { return { routingArea_.x - 414, routingArea_.y, 202, 48 }; }
-    Rect levelArea() const noexcept { return { routingArea_.x - 208, routingArea_.y, 202, 48 }; }
+    Rect panArea() const noexcept { return { rect_.right() - 416, rect_.bottom() - 96, 202, 48 }; }
+    Rect levelArea() const noexcept { return { rect_.right() - 210, rect_.bottom() - 96, 202, 48 }; }
     bool isNativeRouting (int x, int y) const noexcept
     {
         return isNativeRoutingActive() && (panArea().contains (x, y) || levelArea().contains (x, y) || routingArea_.contains (x, y));
@@ -467,10 +467,9 @@ protected:
         const int fixed[4] = { nativeSelector_ ? kNativeSelectorW : 84, 64, 0, 150 }, weight[4] = { 0, 0, 1, 0 };
         layoutRow (topR, fixed, weight, 4, kGap, r);
         selectorArea_ = { r[0].x, topR.y + (topH - 56) / 2, r[0].w, 56 };
+        if (nativeSelector_)
+            selectorArea_ = { rect_.x, rect_.bottom() - 48, W, 48 };
         close.place (selectorArea_);
-        // The native mix controls occupy the first row. Keep Basic at full width below them.
-        if (nativeRouting_)
-            r[2].y += topH;
         top.place (r[2]);
         top.setCardOctave (hasNativeTune());
         panel.setShown (PanelSlot::Fin, ! hasNativeTune());
@@ -479,7 +478,7 @@ protected:
         mix.place ({ r[3].x, topR.y + 7, r[3].w, topH - 14 });
         show (mix, ! nativeRouting_);
         const int gap = kGap + 4;
-        const int panelY = rect_.bottom() - (isTab ? 0 : m) - bottomH;
+        const int panelY = rect_.bottom() - (nativeSelector_ ? 96 : isTab ? 0 : m) - bottomH;
         const int midY = top.rect().bottom() + gap;
         display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
         if (hasNativeTune())

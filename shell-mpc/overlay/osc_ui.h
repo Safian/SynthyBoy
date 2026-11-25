@@ -456,7 +456,7 @@ public:
         full_.setNativeInstanceSelector (shown);
     }
     bool hasNativeInstanceSelector() const noexcept { return nativeSelector_; }
-    ui::Rect selectorArea() const noexcept { return nativeSelector_ ? ui::Rect { 8, kTabY + 33, 200, 56 } : ui::Rect {}; }
+    ui::Rect selectorArea() const noexcept { return nativeSelector_ ? full_.selectorArea() : ui::Rect {}; }
     /** Standalone oscillator tabs expose the destination routing choice to the host while ON; modals and OFF state close this aperture. */
     void setNativeRouting (bool shown) noexcept
     {

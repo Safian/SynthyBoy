@@ -20,13 +20,11 @@ import native_route_selector as nrs
 from components.native.selector.selector import (
     COMPACT_OSC_ROUTING_HEIGHT,
     OSC_COMPACT_ROUTING_COMPONENT_TYPE,
-    OSC_COMPACT_ROUTING_FRAME_IMAGE,
     OSC_ROUTING_CHOICES,
     OSC_ROUTING_OVERLAY_NAME,
     STANDALONE_COMPACT_OSC_ROUTING_RECT,
     build_compact_osc_routing_component,
     build_compact_osc_routing_definition,
-    png_compact_routing_frame,
     write_routing_assets,
 )
 
@@ -39,7 +37,6 @@ class TestCompactRouteSelector(unittest.TestCase):
         self.assertEqual(STANDALONE_COMPACT_OSC_ROUTING_RECT, (1122, 37, 150, 48))
         self.assertEqual(nrs.BUTTON_COMPACT_RECT, (282, 86, 64, 48))
         self.assertEqual(OSC_COMPACT_ROUTING_COMPONENT_TYPE, "oscNativeCompactRouting")
-        self.assertEqual(OSC_COMPACT_ROUTING_FRAME_IMAGE, "osc_routing_frame_48.png")
 
     def test_factory_destination_choices(self):
         self.assertEqual(len(OSC_ROUTING_CHOICES), 7)
@@ -84,7 +81,8 @@ class TestCompactRouteSelector(unittest.TestCase):
                 {"componentData": {"type": "Focus"}, "bounds": {"bounds": "0 0 200 56"}},
             ],
         }
-        res = build_compact_osc_routing_definition(source_def)
+        with tempfile.TemporaryDirectory() as skins:
+            res = build_compact_osc_routing_definition(source_def, skins)
         # Actions must trigger Show Overlay pointing to OSC_ROUTING_OVERLAY_NAME
         show_actions = [a for a in res["actions"] if a.get("handler") == "Show Overlay"]
         self.assertEqual(len(show_actions), 2)
@@ -129,10 +127,7 @@ class TestCompactRouteSelector(unittest.TestCase):
             tmp_path = Path(tmp)
             write_routing_assets(tmp_path)
 
-            frame48 = tmp_path / OSC_COMPACT_ROUTING_FRAME_IMAGE
-            self.assertTrue(frame48.exists())
-            with Image.open(frame48) as im:
-                self.assertEqual(im.size, (150, 48))
+            self.assertEqual(list(tmp_path.glob("osc_routing_frame*.png")), [])
 
             bg = tmp_path / "osc_routing_overlay_bg.png"
             self.assertTrue(bg.exists())

@@ -31,14 +31,12 @@ from components.native.selector.selector import (
     build_compact_osc_routing_component,
     OSC_INSTANCE_NAMES,
     OSC_ROUTING_CHOICES,
-    OSC_ROUTING_COMPONENT_TYPE,
     OSC_ROUTING_CONTROL_NAME,
     OSC_ROUTING_OVERLAY_NAME,
     OSC_ROUTING_TAB_SPECS,
     build_compact_osc_routing_definition,
     build_standalone_osc_routing_choice_overlay,
     _entry,
-    build_standalone_osc_routing_definition,
     ensure_routing_replacement_strings,
     passive_layer,
     write_routing_assets,
@@ -72,15 +70,10 @@ def apply(tui, qlinks, ctx):
         None,
     )
 
-    if not any(d["key"] == OSC_ROUTING_COMPONENT_TYPE for d in defs):
-        defs.append({
-            "key": OSC_ROUTING_COMPONENT_TYPE,
-            "value": build_standalone_osc_routing_definition(source_def),
-        })
     if not any(d["key"] == OSC_COMPACT_ROUTING_COMPONENT_TYPE for d in defs):
         defs.append({
             "key": OSC_COMPACT_ROUTING_COMPONENT_TYPE,
-            "value": build_compact_osc_routing_definition(source_def),
+            "value": build_compact_osc_routing_definition(source_def, ctx.skins_dir),
         })
     if not any(d["key"] == OSC_COMPACT_PAN_COMPONENT_TYPE for d in defs):
         defs.append({

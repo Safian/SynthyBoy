@@ -1455,7 +1455,7 @@ void testStandaloneNativeRouting()
 
     const ui::Rect sel = r.ui.selectorArea();
     const ui::Rect route = r.ui.routingArea();
-    check (sel == ui::Rect ({ 8, 143, 200, 56 }) && route == ui::Rect ({ 1122, 147, 150, 48 }),
+    check (sel == ui::Rect ({ 0, 690, 1280, 48 }) && route == ui::Rect ({ 1122, 147, 150, 48 }),
            "standalone OscUi exposes selector and routing apertures");
     check (! r.ui.covers (sel.x + 10, sel.y + 10) && ! r.ui.covers (route.x + 10, route.y + 10),
            "standalone OscUi leaves selector and ON routing apertures uncovered on base page");

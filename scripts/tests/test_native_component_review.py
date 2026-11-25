@@ -130,16 +130,10 @@ class NativeComponentReviewTest(unittest.TestCase):
             "bounds": {"version": 1, "bounds": "0 0 56 56"},
         }
         level = load("level")
-        selector = load("selector")
-        entries = [
-            level.build_standalone_smooth(template, "LFO 2", 10, (0, 0, 56, 56), overlay_param=20),
-            selector.build_standalone_osc_selector(None, template, "Osc A", 10, overlay_param=20),
-        ]
-        for entry in entries:
-            self.assertEqual(entry["bounds"]["version"], 2)
-            self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"],
-                             ["RangedEnabling/0/18/33/Parameter 20"])
-        self.assertEqual(entries[0]["componentData"]["name"], "LFO 2 Smooth Native")
+        entry = level.build_standalone_smooth(template, "LFO 2", 10, (0, 0, 56, 56), overlay_param=20)
+        self.assertEqual(entry["bounds"]["version"], 2)
+        self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], ["RangedEnabling/0/18/33/Parameter 20"])
+        self.assertEqual(entry["componentData"]["name"], "LFO 2 Smooth Native")
         self.assertEqual(template["bounds"]["version"], 1)
 
 

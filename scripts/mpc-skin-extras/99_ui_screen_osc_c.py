@@ -9,9 +9,9 @@ Verifies and guarantees that:
    - Settings layer: Parameter remap slots bound to 'osc3.*' engine parameters
    - Detail layer: Bound to the C instance detail/spec pages and content loader
 2. The approved native component layout is preserved:
-   - Native instance selector at (8, 33, 200, 56)
-   - Native power button at (300, 194, 64, 56)
-   - Native routing destination menu at (1122, 33, 150, 56)
+   - Native source tabs at (0, 580, 1280, 48)
+   - Native power button at (300, 116, 64, 56)
+   - Native routing destination menu at (1122, 37, 150, 48)
    - Settings surface and detail surface at (0, 0, 1280, 628)
 3. No visible Q-Link frames/numbers on screen:
    - qlinkBoundsData is strictly empty ([]).
@@ -62,7 +62,7 @@ def apply(tui, qlinks, ctx):
     # 3. Ensure native controls exist on the Osc C tab without duplication.
     components = tab.get("componentDefinition", {}).get("componentsData", [])
     has_surface = any(c.get("componentData", {}).get("name") == "Osc Native Surface" for c in components)
-    has_individual = any(c.get("componentData", {}).get("name") == "Osc Native Instance Select" for c in components)
+    has_individual = any(c.get("componentData", {}).get("name") == "Osc Native Source Tabs" for c in components)
 
     defs = {d["key"]: d["value"] for d in tui.get("pageData", {}).get("componentDefinitions", {}).get("localComponentDefinitions", [])}
 

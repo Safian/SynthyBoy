@@ -34,7 +34,7 @@ def apply(tui: dict, qlinks: dict, ctx) -> None:
         # If running in a pipeline where oscNativeSurface has not wrapped the components,
         # ensure individual native controls are present.
         expected_controls = (
-            "Osc Native Instance Select",
+            "Osc Native Source Tabs",
             "Osc Native Power",
             "Osc Native Routing",
             "Osc Native Settings",
@@ -52,7 +52,6 @@ def apply(tui: dict, qlinks: dict, ctx) -> None:
         "oscNativeSurface",
         "nativeModulationEditor",
         "Image",
-        "oscNativeSelector",
         "oscNativeRouting",
         "oscNativePowerLayer",
         "oscNativeSettingsLayer",

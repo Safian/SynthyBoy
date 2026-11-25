@@ -182,7 +182,8 @@ class OscSkinSketch(NativeTabSketch):
 
     def _passes_gates(self, gates: list[str], remaps: dict[str, str]) -> bool:
         for gate in gates:
-            parts = gate.split("/")
+            _, resolved = self._resolve_handle(gate, remaps)
+            parts = (resolved or gate).split("/")
             if parts[0] == "NonZero" and len(parts) == 2:
                 _, h = self._resolve_handle(parts[1], remaps)
                 if self._norm_for_handle(h) <= 1e-5:
@@ -316,6 +317,12 @@ class OscSkinSketch(NativeTabSketch):
         if ctype == "Image":
             im = self._open_image(data.get("image", ""))
             if im is not None:
+                if data.get("imageType") == "FilmStrip":
+                    count = int(data["numFrames"])
+                    _, handle = self._resolve_handle(data.get("handleName"), merged)
+                    index = min(count - 1, max(0, round(self._norm_for_handle(handle) * (count - 1))))
+                    height = im.height // count
+                    im = im.crop((0, index * height, im.width, (index + 1) * height))
                 canvas.alpha_composite(im.resize((w, h), Image.Resampling.LANCZOS), (x, y))
             return
 
@@ -411,22 +418,6 @@ def compose_full_mpc_screen(tab_img: Image.Image, overlay_tab_img: Image.Image, 
     draw.text((1260, 26), label, fill=style.color("text.muted"), font=font_sub, anchor="rm")
     draw.text((20, 74), "OFFLINE COMPOSITE: GENERATED SKIN TUI + C++ OscPageUi / scene_cpu.h (NOT A DEVICE CAPTURE)",
               fill=style.color("text.caption"), font=font_sub, anchor="lm")
-
-    # Bottom MPC tab navigation band (738..800), no fake badges or Q-Link numbering
-    draw.rectangle((0, 738, 1280, 800), fill=style.color("surface.panel"))
-    draw.line((0, 738, 1280, 738), fill=style.color("field.border"), width=1)
-    tabs = ("Play", "Osc", "Filter", "Env", "LFO", "Mod", "Mixer", "FX")
-    tab_w = 1280 // len(tabs)
-    for idx, tname in enumerate(tabs):
-        tx0 = idx * tab_w + 6
-        tx1 = (idx + 1) * tab_w - 6
-        active = tname == "Osc"
-        fill = style.color("field.focus") if active else style.color("button.surface")
-        outline = style.color("accent.cyan") if active else style.color("field.border")
-        draw.rounded_rectangle((tx0, 748, tx1, 792), radius=style.size("radius.field"), fill=fill, outline=outline, width=1)
-        draw.text(((tx0 + tx1) // 2, 770), tname,
-                  fill=style.color("text.white") if active else style.color("text.caption"),
-                  font=font_title, anchor="mm")
 
     # Exact 1280x628 composite: host tab underneath, C++ transparent-aperture overlay on top
     tab_comp = Image.alpha_composite(tab_img.convert("RGBA"), overlay_tab_img.convert("RGBA"))

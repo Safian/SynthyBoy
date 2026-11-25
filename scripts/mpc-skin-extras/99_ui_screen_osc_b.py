@@ -44,7 +44,6 @@ from components.native.selector.selector import (
     OSC_ROUTING_OVERLAY_NAME,
     OSC_TAB_NAMES,
     STANDALONE_OSC_ROUTING_RECT,
-    STANDALONE_OSC_SELECTOR_RECT,
 )
 
 OSC_B_TAB_NAME = "Osc B"
@@ -119,7 +118,7 @@ def verify_osc_b_screen(tui, qlinks, ctx):
         return False, "oscNativeSurface definition not found"
     surface_children = {c.get("componentData", {}).get("name") for c in surface.get("componentsData", [])}
     expected_surface_children = {
-        "Osc Native Instance Select",
+        "Osc Native Source Tabs",
         "Osc Native Pan",
         "Osc Native Level",
         "Osc Native Routing",

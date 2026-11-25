@@ -611,9 +611,9 @@ int main()
         s.setNativeInstanceSelector (true);
         check (s.hasNativeInstanceSelector(), "setNativeInstanceSelector(true) enables native selector");
         const Rect apt = s.selectorArea();
-        check (apt.w == OscillatorFullScreen::kNativeSelectorW && apt.h == 56,
-               "selectorArea width is kNativeSelectorW (200) and height 56");
-        check (apt.x == 8 && apt.y == 143, "selectorArea placed at (8, 143)");
+        check (apt.w == 1280 && apt.h == 48,
+               "source tabs span the full width and are 48 px tall");
+        check (apt.x == 0 && apt.y == 690, "source tabs placed at (0, 690)");
         check (s.isNativeSelector (apt.x + 10, apt.y + 10), "point in selectorArea recognized as native selector");
         check (! s.isNativeSelector (s.top.rect().x + 10, s.top.rect().y + 10), "point in top row is not native selector");
 

@@ -82,9 +82,9 @@ class TestNativeOscTune(unittest.TestCase):
         self.assertFalse(defn.get("ignoreMousePresses"), "Panel must be touch interactive")
         self.assertFalse(defn.get("disableCoarseDataWheel"), "Hardware data wheel must be active")
 
-        # Background color #121930
+        # The tuning fields share the oscillator canvas.
         bg = defn.get("backgroundData", {}).get("unfocussed", {})
-        self.assertEqual(bg.get("colour"), "ff121930", "Panel background must be #121930")
+        self.assertEqual(bg.get("colour"), "00000000")
 
         kids = defn.get("componentsData", [])
         self.assertEqual(len(kids), 7, "Must contain: Header + 4 name-value child entries + 2 buttons")
@@ -260,7 +260,7 @@ class TestNativeOscTune(unittest.TestCase):
             with self.subTest(tab=tab_name):
                 entry = notune.build_standalone_osc_tune(tab_name, base=self.base)
                 self.assertEqual(entry["componentData"]["type"], "oscNativeTune")
-                self.assertEqual(entry["bounds"]["bounds"], "10 192 278 154", "Instance rect must default to 278 x 154 px")
+                self.assertEqual(entry["bounds"]["bounds"], "10 114 278 154", "Instance rect must default to 278 x 154 px")
 
                 remap = {m["key"]: m["value"] for m in entry["handle remapping"]["map"]}
 
@@ -405,7 +405,7 @@ class TestNativeOscTune(unittest.TestCase):
                 )
 
     def test_name_outside_number_inside_frame(self):
-        """Verify pixels: Label area has panel background #121930; number box has #12182d and border #1c2651."""
+        """Verify that labels share the page canvas and values retain their own field surface."""
         for fh, fg, expected_h in [(32, 4, 154), (40, 4, 170), (48, 6, 190)]:
             with self.subTest(field_h=fh):
                 card = notune.render_tune_card(
@@ -419,10 +419,7 @@ class TestNativeOscTune(unittest.TestCase):
 
                 # Sample point in label area outside letter glyphs (x=20, y=32):
                 px_label_bg = arr[32, 20]
-                self.assertEqual(px_label_bg[3], 255)
-                self.assertTrue(15 <= px_label_bg[0] <= 21, f"R should match #121930, got {px_label_bg[0]}")
-                self.assertTrue(22 <= px_label_bg[1] <= 28, f"G should match #121930, got {px_label_bg[1]}")
-                self.assertTrue(44 <= px_label_bg[2] <= 52, f"B should match #121930, got {px_label_bg[2]}")
+                self.assertEqual(px_label_bg[3], 0)
 
                 # Sample point inside number box interior (x=80, y=32):
                 px_box_interior = arr[32, 80]
@@ -486,7 +483,7 @@ class TestNativeOscTune(unittest.TestCase):
                     c = item_by_name[comp_name]
 
                     # Verify bounds
-                    self.assertEqual(c["bounds"]["bounds"], "10 192 278 154")
+                    self.assertEqual(c["bounds"]["bounds"], "10 114 278 154")
                     self.assertEqual(c["bounds"].get("showWhenDataModelInvalid"), "Hide")
                     expected_gates = [
                         f"IndexedEnabling/{src_idx}/5/Parameter {self.base + OSC_SOURCE}",

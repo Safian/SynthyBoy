@@ -70,7 +70,7 @@ class OscCScreenTests(unittest.TestCase):
         # No old fallback controls should remain
         for name in comp_names:
             self.assertTrue(
-                name.startswith(("Osc Native", "Overlay Marker", "Overlay Instance", "Native Modulation", "Host Background")),
+                name.startswith(("Osc Native", "Overlay Marker", "Overlay Background Sentinel", "Overlay Instance", "Native Modulation", "Host Background")),
                 f"Unexpected fallback component on Osc C tab: {name}",
             )
 
@@ -82,20 +82,20 @@ class OscCScreenTests(unittest.TestCase):
         kids = surface["componentsData"]
         kid_names = {c["componentData"]["name"]: c for c in kids}
 
-        self.assertIn("Osc Native Instance Select", kid_names)
-        self.assertEqual(kid_names["Osc Native Instance Select"]["bounds"]["bounds"], "8 33 200 56")
+        self.assertIn("Osc Native Source Tabs", kid_names)
+        self.assertEqual(kid_names["Osc Native Source Tabs"]["bounds"]["bounds"], "0 580 1280 48")
 
         self.assertIn("Osc Native Pan", kid_names)
-        self.assertEqual(kid_names["Osc Native Pan"]["bounds"]["bounds"], "708 37 202 48")
+        self.assertEqual(kid_names["Osc Native Pan"]["bounds"]["bounds"], "864 532 202 48")
 
         self.assertIn("Osc Native Level", kid_names)
-        self.assertEqual(kid_names["Osc Native Level"]["bounds"]["bounds"], "914 37 202 48")
+        self.assertEqual(kid_names["Osc Native Level"]["bounds"]["bounds"], "1070 532 202 48")
 
         self.assertIn("Osc Native Routing", kid_names)
         self.assertEqual(kid_names["Osc Native Routing"]["bounds"]["bounds"], "1122 37 150 48")
 
         self.assertIn("Osc Native Power", kid_names)
-        self.assertEqual(kid_names["Osc Native Power"]["bounds"]["bounds"], "12 194 352 56")
+        self.assertEqual(kid_names["Osc Native Power"]["bounds"]["bounds"], "12 116 352 56")
 
         self.assertIn("Osc Native Settings", kid_names)
         self.assertEqual(kid_names["Osc Native Settings"]["bounds"]["bounds"], "0 0 1280 628")
@@ -181,10 +181,10 @@ class OscCScreenTests(unittest.TestCase):
             b = [int(v) for v in c["bounds"]["bounds"].split()]
             w, h = b[2], b[3]
             name = c["componentData"]["name"]
-            if name in ("Osc Native Instance Select", "Osc Native Power"):
+            if name == "Osc Native Power":
                 self.assertGreaterEqual(w, 56, f"{name} width {w} < 56 px")
                 self.assertGreaterEqual(h, 56, f"{name} height {h} < 56 px")
-            elif name in ("Osc Native Routing", "Osc Native Pan", "Osc Native Level"):
+            elif name.startswith("Osc Native Source ") or name in ("Osc Native Routing", "Osc Native Pan", "Osc Native Level"):
                 self.assertGreaterEqual(w, 56, f"{name} width {w} < 56 px")
                 self.assertGreaterEqual(h, 48, f"{name} height {h} < 48 px")
 

@@ -16,7 +16,7 @@ from native_icon_button import icon_button
 from native_ui_params import OSC_POWER, OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
 
 # OscillatorFullScreen::layout, tab-local coordinates.
-POWER_RECT = (12, 194, 352, 56)
+POWER_RECT = (12, 116, 352, 56)
 POWER_ON, POWER_OFF = "osc_native_power_on.png", "osc_native_power_off.png"
 
 

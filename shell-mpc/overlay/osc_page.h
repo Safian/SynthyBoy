@@ -30,7 +30,7 @@ class OscPageUi
 {
 public:
     static constexpr int kElementPage = OscUi::kElementOsc;
-    static constexpr ui::Rect expandedCloseRect() noexcept { return { 1148, page::kTabY + 194, 120, 56 }; }
+    static constexpr ui::Rect expandedCloseRect() noexcept { return { 1148, page::kTabY + 116, 120, 56 }; }
 
     OscPageUi() : ownedOsc_ (std::make_unique<OscUi>()), ownedDisplay_ (std::make_unique<OscDisplay>()),
                   osc_ (*ownedOsc_), display_ (*ownedDisplay_) {}

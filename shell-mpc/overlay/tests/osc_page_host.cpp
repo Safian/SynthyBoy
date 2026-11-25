@@ -304,6 +304,13 @@ void testNativeSettings()
             r.refresh();
             matched &= r.inst.writes == writes + 1 && r.inst.lastWritten == target
                 && std::fabs (r.inst.param (target) - (requested > 0.5f ? pi.max : pi.min)) < 0.001;
+            if (c.source == 1 && item->type == OscUi::T::Toggle)
+            {
+                r.inst.postSetting (slot, synthyboy::toNormalised (pi, current));
+                r.refresh();
+                matched &= r.inst.writes == writes + 2 && r.inst.lastWritten == target
+                    && r.inst.param (target) == current;
+            }
         }
         check (seen == c.fields && matched, "all " + std::to_string (c.fields) + " native UI fields own their rendered cells and exact targets in layout "
                + std::to_string (c.layout));
@@ -312,8 +319,8 @@ void testNativeSettings()
         r.inst.postSetting (c.source == 1 ? 2 : 9, 0.53f);
         r.inst.set (c.power, 0.0f);
         r.refresh();
-        check (r.inst.settings.layout() == n::SettingsHidden && r.page.covers (cell.x + 2, cell.y + 4) && r.inst.writes == writes,
-               "OFF hides settings, restores the grey overlay cells and rejects their queued edit");
+        check (r.inst.settings.layout() == c.layout && ! r.page.covers (cell.x + 2, cell.y + 4) && r.inst.writes == writes,
+               "OFF keeps native settings visible and rejects their queued edit");
     }
 
     Rig noise (5);
@@ -478,8 +485,8 @@ void testNativeAbcSettings()
            "a late Osc A TYPE callback cannot write to Osc B’s current field");
     r.inst.set ("osc2.on", 0);
     r.refresh();
-    check (r.inst.settings.layout() == n::SettingsHidden && ! r.page.covers (100, 171),
-           "the switched-off ABC root hides all settings while its source selector remains operable");
+    check (r.inst.settings.layout() != n::SettingsHidden && ! r.page.covers (100, r.page.selectorArea().y + 12),
+           "the switched-off ABC root retains settings and source navigation");
 }
 
 void testSourceOwnedRouting()
@@ -1001,6 +1008,7 @@ static void printNativeDetailContract()
 {
     namespace n = nativeui::oscdetail;
     Rig r (2);
+    r.page.setHostBackground (true);
     r.inst.useNativeDetail = true;
     r.refresh();
     auto printRect = [] (const Rig& rig, int field, const char* key)
@@ -1010,9 +1018,13 @@ static void printNativeDetailContract()
     };
     std::printf ("{\n");
     printRect (r, n::kMore, "more");
-    const Rig sub (1);
+    Rig sub (1);
+    sub.page.setHostBackground (true);
+    sub.refresh();
     printRect (sub, 0, "sub_blend");
     Rig noise (5);
+    noise.page.setHostBackground (true);
+    noise.refresh();
     printRect (noise, 0, "noise_blend");
     noise.inst.set ("noise.type", 1.0f);
     noise.refresh();
@@ -1411,8 +1423,8 @@ int main (int argc, char** argv)
 
             const ui::Rect apt = r.page.selectorArea();
             check (! apt.empty(), "selectorArea is non-empty");
-            check (apt.x == 8 && apt.y == 143 && apt.w == 200 && apt.h == 56,
-                   "selectorArea matches aperture geometry (8, 143, 200, 56)");
+            check (apt.x == 0 && apt.y == 690 && apt.w == 1280 && apt.h == 48,
+                   "selectorArea matches aperture geometry (0, 690, 1280, 48)");
 
             // Hit-testing and covers(): touch inside aperture must not be covered by overlay
             const int cx = apt.x + apt.w / 2, cy = apt.y + apt.h / 2;
@@ -1472,8 +1484,8 @@ int main (int argc, char** argv)
                 r.page.setHostBackground (true);
                 r.refresh();
                 const ui::Rect tApt = OscPageUi::tuneArea();
-                check (tApt.x == 10 && tApt.y == 302 && tApt.w == 278 && tApt.h == 154,
-                       "tuneArea matches approved 278x154 card geometry at (10, 302)");
+                check (tApt.x == 10 && tApt.y == 224 && tApt.w == 278 && tApt.h == 154,
+                       "tuneArea matches approved 278x154 card geometry at (10, 224)");
                 check (r.page.isNativeTuneActive(), "native tune is active on Osc A while ON");
                 const int tcx = tApt.x + tApt.w / 2, tcy = tApt.y + tApt.h / 2;
                 check (! r.page.covers (tcx, tcy), "centre of tuneArea is not covered by overlay while ON");
@@ -1486,8 +1498,8 @@ int main (int argc, char** argv)
                 // When oscillator is turned OFF
                 r.inst.set ("osc1.on", 0.0f);
                 r.refresh();
-                check (! r.page.isNativeTuneActive(), "native tune is inactive when oscillator is OFF");
-                check (r.page.covers (tcx, tcy), "tuneArea is covered by overlay when oscillator is OFF (shielded)");
+                check (r.page.isNativeTuneActive(), "native tune receives its inactive presentation when the oscillator is OFF");
+                check (! r.page.covers (tcx, tcy), "inactive native TUNE remains visible when OFF");
 
                 // Restore Osc A ON
                 r.inst.set ("osc1.on", 1.0f);
@@ -1551,7 +1563,7 @@ int main (int argc, char** argv)
                 check (r.inst.writes == before + 1 && r.inst.lastWritten == Inst::idx (keys[source - 1])
                        && r.inst.get (keys[other - 1]) == unchanged && r.inst.native.snapshot().powerValue (source) == 0.0f
                        && r.page.ui().full().inactive() && ! r.page.covers (x, y)
-                       && ! r.page.covers (100, y) && ! r.page.isNativeRoutingActive(),
+                       && ! r.page.covers (100, r.page.selectorArea().y + 12) && ! r.page.isNativeRoutingActive(),
                        std::string (keys[source - 1]) + " turns OFF once and keeps only POWER and selector native");
                 r.inst.native.post (n::kRouting, 0.5f);
                 r.inst.native.postPower (source, 0.0f);   // host echo
@@ -1664,7 +1676,7 @@ int main (int argc, char** argv)
             const ui::Rect sApt = r.page.selectorArea();
             const ui::Rect pApt = r.page.powerArea();
             const ui::Rect rApt = r.page.routingArea();
-            check (sApt.x == 8 && sApt.y == 143 && sApt.w == 200 && sApt.h == 56, "selector aperture stays (8, 143, 200, 56)");
+            check (sApt.x == 0 && sApt.y == 690 && sApt.w == 1280 && sApt.h == 48, "selector aperture stays (0, 690, 1280, 48)");
             check (rApt.x == 1122 && rApt.y == 147 && rApt.w == 150 && rApt.h == 48, "routing aperture placed at (1122, 147, 150, 48)");
             check (! sApt.overlaps (rApt), "selector and routing apertures do not overlap");
 
@@ -1715,7 +1727,7 @@ int main (int argc, char** argv)
             alphaRange (cv, pApt, minA, maxA);
             check (maxA == 0u, "POWER aperture remains transparent on the fallback OFF root");
             alphaRange (cv, rApt, minA, maxA);
-            check (minA == 255u, "routing aperture is opaquely filled when OFF (ground + dimmed read-only mix)");
+            check (maxA == 0u, "routing aperture shows the inactive native readout when OFF");
 
             // Sub and Noise OFF routing closure check too
             for (const std::pair<int, const char*> offCase : { std::make_pair (1, "sub.on"), std::make_pair (5, "noise.on") })
@@ -1761,7 +1773,12 @@ int main (int argc, char** argv)
 
                 // Dismiss via actual modal controls (including BACK overlapping selectorArea_ or backdrop inside routingArea_)
                 if (modalId == OscUi::kPageRoute)
-                    r.tap (rcx, rcy);
+                {
+                    r.inst.useNativeDetail = true;
+                    r.refresh();
+                    r.inst.postDetail (nativeui::oscdetail::kBack);
+                    r.refresh();
+                }
                 else
                 {
                     const ui::Rect backRect = modalId == OscUi::kPageMods ? r.page.ui().modsPage().back.rect()

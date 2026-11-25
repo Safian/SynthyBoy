@@ -9,7 +9,7 @@ Autoloaded by scripts/apply-mpc-skin-extras.py in name order (runs after
 Responsibilities:
 1. Verifies that the Osc A screen integrates ready, verified native components:
    - Top row:
-     * Instance Selector (202x48 / 200x56 px, popup choice overlay)
+     * Instance Selector (1280x48 px, popup choice overlay)
      * Host-native POWER button (48x48 icon button, on #5cff9d, off #ff4f4f)
      * Type selector menu (5 oscillator types, 48 px face)
      * SOURCE / Table stepper (< Table > stepper arrows + menu)
@@ -44,17 +44,17 @@ SCREEN_TITLE = "Osc A"
 REBUILT_NATIVE_COMPONENTS = (
     {
         "id": "osc_instance_select",
-        "name": "Osc Native Instance Select",
-        "kind": "oscNativeSelector",
-        "rect": (8, 33, 200, 56),
-        "role": "Oszcillátor példány választó (Sub, Osc A, Osc B, Osc C, Noise) popup overlay-jel",
-        "status": "MEGÉPÍTETT (202x48 / 200x56 px)",
+        "name": "Osc Native Source Tabs",
+        "kind": "tab_bar",
+        "rect": (0, 580, 1280, 48),
+        "role": "Oszcillátor példány választó (Sub, Osc A, Osc B, Osc C, Noise)",
+        "status": "MEGÉPÍTETT (1280x48 px)",
     },
     {
         "id": "osc_power",
         "name": "Osc Native Power",
         "kind": "oscNativePowerLayer",
-        "rect": (12, 194, 352, 56),
+        "rect": (12, 116, 352, 56),
         "role": "Oszcillátor modul POWER ikongomb (#5cff9d aktív, #ff4f4f inaktív)",
         "status": "MEGÉPÍTETT (48x48 px)",
     },
@@ -94,8 +94,8 @@ REBUILT_NATIVE_COMPONENTS = (
         "id": "osc_routing",
         "name": "Osc Native Routing",
         "kind": "oscNativeRoutingLayer",
-        "rect": (1122, 33, 150, 56),
-        "role": "Kimeneti útválasztó (F1, F2, F1+2, FX, Direct, Blend, None) választó popup overlay-jel",
+        "rect": (1122, 37, 150, 48),
+        "role": "Kimeneti útválasztó (F1, F2, F1+2, FX, Direct, Blend, None) választó",
         "status": "MEGÉPÍTETT (150x56 px, popup overlay)",
     },
     {
