@@ -53,14 +53,14 @@
     {
       "name": "env",
       "title": "Env",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 df88108d52d1",
       "migration_current_source": "docs/ui-map/env-screen-preview.png",
       "migration_current_source_commit": "5d96c5ae"
     },
     {
       "name": "lfo",
       "title": "LFO",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 c7663816b7ad",
+      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 df88108d52d1",
       "migration_current_source": "docs/ui-map/lfo-screen-preview.png",
       "migration_current_source_commit": "f0d4b8aa"
     },

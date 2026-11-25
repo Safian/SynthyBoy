@@ -132,6 +132,36 @@ int target (const char* key)
     return info == nullptr ? -1 : synthyboy::findParamIndex (info->id);
 }
 
+void testEnvLfoRootMask()
+{
+    using namespace synthyboy_mpc::overlay;
+    auto rig = std::make_unique<Rig>();
+    const auto exercise = [&] (IView& page, int detail)
+    {
+        auto& r = *rig;
+        r.stack.closeAll();
+        r.stack.openFull (page.pageElement());
+        pages::configureNativeTab (page, page.name());
+        page.setHostBackground (true);
+        const auto update = [&]
+        {
+            ViewInput input;
+            input.instance = input.io = &r.plugin.overlayView;
+            input.ui = &r.stack;
+            input.nowMs = r.now += 100.0;
+            page.update (input);
+            return r.plugin.uiFullOpen.load();
+        };
+        check (! update(), "the standalone ENV or LFO root leaves the instance marker visible");
+        r.stack.openDetail (detail);
+        check (update(), "opening the ENV or LFO detail masks compact Play controls");
+        r.stack.back();
+        check (! update(), "returning to the native ENV or LFO root clears the mask");
+    };
+    exercise (*std::make_unique<pages::EnvPage> ("env1", 1), EnvUi::kPageTargets);
+    exercise (*std::make_unique<pages::LfoPage> ("lfo1", 1), LfoUi::kPageEditor);
+}
+
 void testEnvTargetCount ()
 {
     using namespace synthyboy_mpc::overlay;
@@ -2243,6 +2273,12 @@ void testPlayCompactSmoothNativeHost ()
 
 int main (int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp (argv[1], "--env-lfo-root-mask") == 0)
+    {
+        testEnvLfoRootMask();
+        testCompactExpandVst();
+        return failures != 0;
+    }
     if (argc == 2 && std::strcmp (argv[1], "--fx-card-switch") == 0)
     {
         testFxCardSwitch();
@@ -2404,6 +2440,7 @@ int main (int argc, char** argv)
     testMixerPeekDisplayRefresh();
     testMixerTabsAndRouteClosureVisuals();
     testEnvTargetCount();
+    testEnvLfoRootMask();
     testStandaloneOscDetailVst();
     testNativeModulationsVst();
     testMasterPanelNavigation();

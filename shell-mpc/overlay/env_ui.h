@@ -193,7 +193,7 @@ public:
         pull (inst, items_);
         pullGraph (inst, live);
         if (open)
-            inst.setUiFullOpen (true);
+            inst.setUiFullOpen (! page_ || stack.depth() > 1);
         else if (stack.isMain())
             inst.setUiFullOpen (false);
         publishQGroup (inst);

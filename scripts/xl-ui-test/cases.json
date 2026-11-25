@@ -383,7 +383,7 @@
     "view": "lfo1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-6.5.1/TARGETS"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Action 1"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "41"}},
       {"op": "tap", "control": "lfo1/Native Modulation Editor/BACK"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "0"}},
