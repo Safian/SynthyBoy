@@ -712,8 +712,8 @@
     "selector.selector_definition._image_component.offset3": 24,
     "selector.wave_icon.points.offset1": 8,
     "tune.standalone_osc_tune_rect": [
-      10,
-      114,
+      994,
+      202,
       {
         "ref": "tune.width"
       },

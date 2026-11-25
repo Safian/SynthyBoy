@@ -427,7 +427,7 @@ class TestNativeOscRouting(unittest.TestCase):
             self.assertIn("oscNativeRoutingLayer", widgets[OSC_ROUTING_CONTROL_NAME]["componentData"]["type"])
             self.assertEqual(widgets[OSC_ROUTING_CONTROL_NAME]["bounds"]["bounds"], "%d %d %d %d" % STANDALONE_COMPACT_OSC_ROUTING_RECT)
             self.assertEqual(widgets["Osc Native Power"]["componentData"]["type"], "oscNativePowerLayer")
-            self.assertEqual(widgets["Osc Native Power"]["bounds"]["bounds"], "12 36 352 136")
+            self.assertEqual(widgets["Osc Native Power"]["bounds"]["bounds"], "12 8 106 164")
             self.assertEqual(widgets["Osc Native Power"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2886"])
             self.assertEqual(widgets["Osc Native Settings"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2986"])
 
@@ -510,7 +510,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 data = power["componentData"]["data"]
                 self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]), (1, 1, "Instant"))
                 self.assertEqual(power["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {2972 + i}"}])
-                self.assertEqual(power["bounds"]["bounds"], ("288 0 64 56" if i in (1, 2, 3) else "0 80 64 56"))
+                self.assertEqual(power["bounds"]["bounds"], ("42 0 64 56" if i in (1, 2, 3) else "0 108 64 56"))
                 self.assertEqual(power["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{i}/5/Parameter 2884"])
                 with Image.open(skins / data["onImage"]) as on, Image.open(skins / data["offImage"]) as off:
                     self.assertEqual((on.size, off.size), ((64, 56), (64, 56)))
@@ -577,10 +577,10 @@ class TestNativeOscRouting(unittest.TestCase):
                             with Image.open(skins / artwork[attr]) as image:
                                 reference = render_active_text_art(field["label"], state, *image.size)
                                 self.assertEqual(image.convert("RGBA").tobytes(), reference.tobytes())
-                    elif field["label"] == "BROWSE":
+                    elif field["label"] in ("BROWSE", "MAP"):
                         button, = definition["componentsData"]
                         self.assertEqual(button["componentData"]["type"], "Button")
-                        self.assertEqual(button["componentData"]["name"], "BROWSE")
+                        self.assertEqual(button["componentData"]["name"], field["label"])
                     elif field["kind"] in ("source", "action"):
                         self.assertEqual({a["handler"] for a in definition["actions"]}, {"Toggle Switch"})
                     elif field["kind"] == "table":
@@ -593,6 +593,8 @@ class TestNativeOscRouting(unittest.TestCase):
                         self.assertEqual(knob_data["knobType"], "FilmStrip")
                         family = "pan" if "bi" in field["kind"] else "level"
                         side = _rect_tuple(definition["componentsData"][0]["bounds"]["bounds"])[2]
+                        if "warp" in variant:
+                            self.assertEqual(side, 40, "OSC A/B/C use the compact catalog dial")
                         expected = f"play_sub_{family}_{side}.png"
                         self.assertEqual(knob_data["filmStrip"], expected)
 

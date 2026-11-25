@@ -139,6 +139,8 @@ public:
     TypeSelector selector;
     Stepper kind, sound;
     SourcePicker source;
+    Knob startPhase { "PHASE" }, randomPhase { "RAND" };
+    MenuButton waveMap { "MAP", MenuButton::Icon::None };
     NumberField oct { "OCT", NumberField::Format::IntSigned };
     Knob pos { "POS" }, crs { "CRS" }, phase { "PHASE" }, filter { "FILTER" }, stereo { "STEREO" };
     QGroup group;
@@ -152,6 +154,7 @@ public:
         kind.setCaption ("KIND");
         sound.setCaption ("SOUND");
         addKid (selector); addKid (kind, false); addKid (sound, false); addKid (source); addKid (oct); addKid (pos); addKid (crs, false); addKid (phase, false); addKid (filter, false); addKid (stereo, false);
+        addKid (startPhase, false); addKid (randomPhase, false); addKid (waveMap, false);
         configure (OscInstance::A, OscKind::Wavetable, false);
     }
     /** The members for an instance, the type of A, B, C and (Noise) the mode: the pictograms, the visible parts, the Q group. */
@@ -221,18 +224,23 @@ protected:
     {
         if (n_row_ == 0)
             return;
+        const bool waveTools = nativeColumn_ && kind_ == OscKind::Wavetable;
+        show (startPhase, waveTools); show (randomPhase, waveTools); show (waveMap, waveTools);
         if (nativeColumn_)
         {
-            selector.place ({ rect_.x, rect_.y - 4, rect_.w, 56 });
-            source.place ({ rect_.x, rect_.y + 54, rect_.w, 56 });
+            const int x = rect_.x, y = rect_.y, right = rect_.right() - 286;
+            selector.place ({ x + 122, y + 4, 256, 56 });
+            source.place ({ x + 386, y + 4, right - x - 394, 56 });
             if (! source.compact())
             {
-                const int browseWidth = 104;
-                source.stepper.place ({ source.rect().x, source.rect().y, rect_.w - browseWidth - kGap, source.rect().h });
-                source.dropdown.place ({ source.rect().right() - browseWidth, source.rect().y, browseWidth, source.rect().h });
+                source.stepper.place ({ source.rect().x, source.rect().y, source.rect().w - 116, 56 });
+                source.dropdown.place ({ source.rect().right() - 112, source.rect().y, 112, 56 });
             }
-            pos.place ({ rect_.x, rect_.y + 264, rect_.w, 48 });
-            oct.place ({ rect_.x, rect_.y + 110, 64, 48 });
+            pos.place ({ right, y + 92, waveTools ? 146 : 278, 48 });
+            waveMap.place ({ right + 150, y + 92, 128, 48 });
+            startPhase.place ({ right, y + 146, 136, 48 });
+            randomPhase.place ({ right + 140, y + 146, 138, 48 });
+            oct.place ({ right, y + 204, 64, 48 });
             return;
         }
         int fixed[4] = {}, weight[4] = {};
@@ -373,7 +381,7 @@ public:
     bool hasNativeRouting() const noexcept { return nativeRouting_; }
     bool isNativeRoutingActive() const noexcept { return nativeRouting_ && ! inactive(); }
     bool hasNativeTune() const noexcept { return nativeRouting_ && inst_ != OscInstance::Sub && inst_ != OscInstance::Noise; }
-    static constexpr Rect tuneAreaAt (int x, int y) noexcept { return { x + 10, y + 114, 278, 154 }; }
+    static constexpr Rect tuneAreaAt (int x, int y) noexcept { return { x + 994, y + 202, 278, 154 }; }
     Rect tuneArea() const noexcept { return tuneAreaAt (rect_.x, rect_.y); }
     Rect routingArea() const noexcept { return routingArea_; }
     Rect panArea() const noexcept { return { rect_.right() - 416, rect_.bottom() - 96, 202, 48 }; }
@@ -476,7 +484,7 @@ protected:
         const bool oneRow = inst_ == OscInstance::Sub || inst_ == OscInstance::Noise;
         const bool isTab = H <= 650;
         const int topH = isTab ? 78 : 88;   // 78: the dial of the position knob is as big as the dial of the warp slots (70 px, one size on the page)
-        const int bottomH = oneRow ? KnobPanel::kBlockTitleH + KnobPanel::kOneRowH + KnobPanel::kBlockPad : (isTab ? 216 : kBottomH);   // the one-row blocks are at their maximum height; the room that frees goes to the display
+        const int bottomH = oneRow ? KnobPanel::kBlockTitleH + KnobPanel::kOneRowH + KnobPanel::kBlockPad : (nativeSelector_ && hasNativeTune() ? 176 : isTab ? 216 : kBottomH);   // the one-row blocks are at their maximum height; the room that frees goes to the display
         const int lane = isTab ? 22 : (m + kQLane + 2);
         const Rect topR { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
         Rect r[4];
@@ -488,7 +496,7 @@ protected:
         close.place (selectorArea_);
         const bool column = nativeSelector_ && hasNativeTune();
         top.setNativeColumn (column);
-        top.place (column ? Rect { tuneArea().x, rect_.y + 4, tuneArea().w, 314 } : r[2]);
+        top.place (column ? Rect { rect_.x, rect_.y, W, 194 } : r[2]);
         top.setCardOctave (hasNativeTune());
         panel.setShown (PanelSlot::Fin, ! hasNativeTune());
         const int routeH = nativeRouting_ ? 48 : 56;
@@ -497,15 +505,13 @@ protected:
         show (mix, ! nativeRouting_);
         const int gap = kGap + 4;
         const int panelY = rect_.bottom() - (nativeSelector_ ? 96 : isTab ? 0 : m) - bottomH;
-        const int midY = column ? rect_.y + 28 : top.rect().bottom() + gap;
+        const int midY = column ? rect_.y + 64 : top.rect().bottom() + gap;
         display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
         if (hasNativeTune())
         {
-            const int left = tuneArea().right() + m;
-            display_.w -= left - display_.x;
-            display_.x = left;
+            display_.w = tuneArea().x - m - display_.x;
         }
-        power.place (playrows::powerRect (display_));
+        power.place (playrows::powerRect (column ? Rect { rect_.x + 50, rect_.y, display_.w, 64 } : display_));
         panel.place ({ rect_.x + m, panelY, W - 2 * m - (inst_ == OscInstance::Noise ? 0 : kMoreW + m), bottomH });
         const Rect card = tuneArea();
         more.place (hasNativeTune() ? Rect { card.x + 143, card.y + 98, 125, 48 }

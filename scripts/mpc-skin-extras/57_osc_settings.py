@@ -84,11 +84,11 @@ def _definition(children, handler=None, popup=""):
             "ignoreMousePresses": False, "disableCoarseDataWheel": False, "componentsData": children}
 
 
-def _fit_catalog_dial(kind, size, skins_dir):
+def _fit_catalog_dial(kind, size, skins_dir, compact=False):
     width, height = size
     # Use the two catalog sizes. Keep every filmstrip frame square, including in the
     # narrow OSC detail grid. Only the name and value fields use the remaining width.
-    compact = width < DEFAULT_DIAL_RECTS["knob"][2] + style.size("height.high") or height < DEFAULT_DIAL_RECTS["focus"][3]
+    compact = compact or width < DEFAULT_DIAL_RECTS["knob"][2] + style.size("height.high") or height < DEFAULT_DIAL_RECTS["focus"][3]
     if compact:
         build = compact_pan_definition if kind == "dial_bi" else compact_level_definition
         rects = COMPACT_48_RECTS
@@ -112,12 +112,12 @@ def _fit_catalog_dial(kind, size, skins_dir):
     return result
 
 
-def _control(kind, side, skins_dir=None, size=None, caption=""):
+def _control(kind, side, skins_dir=None, size=None, caption="", compact_dial=False):
     # The base names are also embedded in the OSC detail tiles. Their narrowest
     # catalog-sized variant fits the small detail cell without clipping text or art.
     width, height = size or (style.size("name_value.width"), style.size("height.high"))
     if kind.startswith("dial_"):
-        return _fit_catalog_dial(kind, (width, height), skins_dir)
+        return _fit_catalog_dial(kind, (width, height), skins_dir, compact=compact_dial)
     if kind == "number":
         definition = build_name_value_definition(rect=(0,0,width,DEFAULT_HEIGHT), skins_dir=skins_dir,
                                                  box_width=min(DEFAULT_BOX_WIDTH,width//2), popup=NUMBER_MENU)
@@ -149,7 +149,7 @@ def _control(kind, side, skins_dir=None, size=None, caption=""):
 
     if kind == "table":
         return command_stepper_definition(skins_dir, (width, height), caption)
-    if kind == "action" and caption == "BROWSE":
+    if kind == "action" and caption in ("BROWSE", "MAP"):
         return _definition([action_button(skins_dir, caption, (0, 0, width, height), "Data", text=caption)])
     if kind == "action":
         return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=_ui_style.size('screen.osc_settings.control.height.3'))], "Toggle Switch")
@@ -206,15 +206,15 @@ def apply(tui, qlinks, ctx):
         elif kind == "menu" and 2 <= len(choices) <= 9:
             definition += "_" + field["label"]
             drawer = definition + "Choices"
-        if kind == "action" and field["label"] == "BROWSE":
-            definition += "_browse"
+        if kind == "action" and field["label"] in ("BROWSE", "MAP"):
+            definition += "_" + field["label"].lower()
         if kind not in ("table", "action"):
             if kind == "toggle":
                 definition += "_" + field["label"]
             definition += f"_{rect[2]}x{rect[3]}"
         definition_off = f"{definition}Off"
         if definition not in definitions:
-            ctrl_def = _control(kind, side, skins_dir, tuple(rect[2:]), field["label"])
+            ctrl_def = _control(kind, side, skins_dir, tuple(rect[2:]), field["label"], compact_dial=abc)
             if drawer:
                 if drawer not in drawers:
                     overlay = native_warp_picker.warp_picker(choices, skins_dir) if warp else labelled_choice_drawer(drawer, choices)

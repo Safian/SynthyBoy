@@ -1484,8 +1484,8 @@ int main (int argc, char** argv)
                 r.page.setHostBackground (true);
                 r.refresh();
                 const ui::Rect tApt = OscPageUi::tuneArea();
-                check (tApt.x == 10 && tApt.y == 224 && tApt.w == 278 && tApt.h == 154,
-                       "tuneArea matches approved 278x154 card geometry at (10, 224)");
+                check (tApt.x == 994 && tApt.y == 312 && tApt.w == 278 && tApt.h == 154,
+                       "tuneArea matches approved 278x154 card geometry at (994, 312)");
                 check (r.page.isNativeTuneActive(), "native tune is active on Osc A while ON");
                 const int tcx = tApt.x + tApt.w / 2, tcy = tApt.y + tApt.h / 2;
                 check (! r.page.covers (tcx, tcy), "centre of tuneArea is not covered by overlay while ON");
@@ -1552,7 +1552,9 @@ int main (int argc, char** argv)
                 const int before = r.inst.writes;
                 const auto power = r.page.powerArea();
                 const int x = power.x + power.w / 2, y = power.y + power.h / 2;
-                check (power == ui::playrows::powerRect (r.page.ui().full().displayRect()) && ! r.page.covers (x, y)
+                const auto expectedPower = source >= 2 && source <= 4 ? ui::Rect {54, page::kTabY + 8, 64, 56}
+                    : ui::playrows::powerRect (r.page.ui().full().displayRect());
+                check (power == expectedPower && ! r.page.covers (x, y)
                        && ! hasLeaf (r.page.ui().full(), &r.page.ui().full().power) && r.inst.native.snapshot().powerValue (source) == 1.0f,
                        std::string (keys[source - 1]) + " starts in the exclusive host POWER aperture");
                 check (! r.page.touch (ev (TouchEvent::Down, x, y), r.stack, r.inst, r.now)

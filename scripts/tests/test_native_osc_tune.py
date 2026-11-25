@@ -260,7 +260,7 @@ class TestNativeOscTune(unittest.TestCase):
             with self.subTest(tab=tab_name):
                 entry = notune.build_standalone_osc_tune(tab_name, base=self.base)
                 self.assertEqual(entry["componentData"]["type"], "oscNativeTune")
-                self.assertEqual(entry["bounds"]["bounds"], "10 114 278 154", "Instance rect must default to 278 x 154 px")
+                self.assertEqual(entry["bounds"]["bounds"], "994 202 278 154", "Instance rect must default to 278 x 154 px")
 
                 remap = {m["key"]: m["value"] for m in entry["handle remapping"]["map"]}
 
@@ -483,7 +483,7 @@ class TestNativeOscTune(unittest.TestCase):
                     c = item_by_name[comp_name]
 
                     # Verify bounds
-                    self.assertEqual(c["bounds"]["bounds"], "10 114 278 154")
+                    self.assertEqual(c["bounds"]["bounds"], "994 202 278 154")
                     self.assertEqual(c["bounds"].get("showWhenDataModelInvalid"), "Hide")
                     expected_gates = [
                         f"IndexedEnabling/{src_idx}/5/Parameter {self.base + OSC_SOURCE}",

@@ -130,7 +130,7 @@ class TestUiScreenOscB(unittest.TestCase):
         self.assertEqual(child_by_name["Osc Native Pan"]["bounds"]["bounds"], "864 532 202 48")
         self.assertEqual(child_by_name["Osc Native Level"]["bounds"]["bounds"], "1070 532 202 48")
         self.assertEqual(child_by_name["Osc Native Routing"]["bounds"]["bounds"], "1122 37 150 48")
-        self.assertEqual(child_by_name["Osc Native Power"]["bounds"]["bounds"], "12 36 352 136")
+        self.assertEqual(child_by_name["Osc Native Power"]["bounds"]["bounds"], "12 8 106 164")
 
     def test_osc_b_bindings_isolation(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}

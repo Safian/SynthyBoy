@@ -59,7 +59,7 @@ public:
     {
         kClose = 1, kPower, kRoute, kFullButton, kInstances,
         kBasic = 100,                       // the first Q group's parts: selector, source stepper, dropdown, OCT (Sub), FILTER, SOUND of the noise, PAN, LEVEL (compact view) = 100 .. 107
-        kTuneOct = 110, kTuneFin = 112, kTuneCrs = 113, kTuneMore = 115,   // OCT (A, B, C), FIN, the PITCH of the noise, the MORE button of the full screen
+        kTuneOct = 110, kTuneFin = 112, kTuneCrs = 113, kTuneMore = 115, kWavePhase, kWaveRandom, kWaveMap,   // OCT (A, B, C), FIN, the PITCH of the noise, the MORE button of the full screen
         kSpecLoad = 790, kSpec = 800,       // the LOAD button of an empty sample type; 800 + i: the controls of a detail page of osc_spec_page.h
         kPanel = 200,                       // 200 + PanelSlot: the parts of the full screen's bottom band (and the position knob, the Sub's CRS and PHASE, the noise's KIND and STEREO of its top row)
         kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,   // (the Var ids are free: the warp PHASE knobs are on MORE now)
@@ -231,6 +231,12 @@ public:
     {
         if (stackDepth_ == 0)
             return compact_.plotRect();
+        if (pageTop_ == 0 && full_.hasNativeTune() && full_.hasNativePower())
+        {
+            const auto r = full_.displayRect();
+            return { r.x + ui::playrows::kPlotPadX, r.y + ui::playrows::kPlotPadTop,
+                     r.w - 2 * ui::playrows::kPlotPadX, r.h - ui::playrows::kPlotPadTop - ui::playrows::kPlotPadBottom };
+        }
         return pageTop_ == 0 && full_.hasNativePower() ? ui::playrows::plotRect (full_.displayRect()) : ui::Rect {};
     }
     bool isMain() const noexcept { return stackDepth_ == 0; }
@@ -1087,7 +1093,7 @@ public:
     {
         switch (item.type)
         {
-            case T::Knob: return static_cast<const ui::Knob*> (item.c)->state.label;
+            case T::Knob: return item.id == kPanel + static_cast<int> (ui::PanelSlot::WtPos) ? "FRAME" : static_cast<const ui::Knob*> (item.c)->state.label;
             case T::Number: case T::NumberOct: return static_cast<const ui::NumberField*> (item.c)->state.label;
             case T::Toggle: return static_cast<const ui::ToggleIcon*> (item.c)->state.label;
             case T::Stepper:
@@ -1098,7 +1104,7 @@ public:
             case T::Picto: return "TYPE";
             case T::Source: case T::Table: return "SOURCE";
             case T::UpDown: return "VOICES";
-            case T::Inert: return item.id == kUnisonGear ? "DETAIL" : item.id == kBasic + 2 ? "BROWSE" : "WARP";
+            case T::Inert: return item.id == kWaveMap ? "MAP" : item.id == kUnisonGear ? "DETAIL" : item.id == kBasic + 2 ? "BROWSE" : "WARP";
             default: return "";
         }
     }
@@ -1123,6 +1129,10 @@ public:
             return n::AbcPosition;
         switch (item.id)
         {
+            // These three granular slots are available on the wavetable layout.
+            case kWavePhase: return n::AbcDensity;
+            case kWaveRandom: return n::AbcLength;
+            case kWaveMap: return n::AbcOffset;
             case kBasic: return n::AbcType;
             case kBasic + 1: return n::AbcSource;
             case kBasic + 2: return n::AbcBrowse;
@@ -1414,6 +1424,12 @@ private:
         if (abc)
         {
             bindSource (&t.source, kind);
+            if (kind == ui::OscKind::Wavetable)
+            {
+                bind (main_, kWavePhase, &t.startPhase, T::Knob, "phase");
+                bind (main_, kWaveRandom, &t.randomPhase, T::Knob, "random_phase");
+                bind (main_, kWaveMap, &t.waveMap, T::Inert, "");
+            }
             const PanelSlot ps = kind == ui::OscKind::Wavetable ? PanelSlot::WtPos : kind == ui::OscKind::Multisample ? PanelSlot::Timbre : kind == ui::OscKind::Sample ? PanelSlot::SampleScan : kind == ui::OscKind::Spectral ? PanelSlot::SpecPos : PanelSlot::Scan;
             bind (main_, kPanel + static_cast<int> (ps), &t.pos, T::Knob, slotKey (ps));
             bind (main_, kTuneOct, &t.oct, T::NumberOct, "transpose");
@@ -2237,6 +2253,7 @@ private:
                     }
                     return;
                 case kClose: case kDetailBack: stack.back(); return;
+                case kWaveMap: stack.openDetail (oscspec::kWtMap); return;
                 case kTuneMore:
                     if (sel_ != playosc::kSub && sel_ != playosc::kNoise)
                         stack.openDetail (oscspec::kMore);
