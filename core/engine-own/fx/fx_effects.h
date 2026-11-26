@@ -690,6 +690,12 @@ public:
         const bool spread = std::fabs (p.depth2) > 1.0e-4f;
         float* io[2] = { l, r };
         float hc1[2] = {}, hc2[2] = {}, hS[2][kStages] = {};
+        // the 24 stage states are guarded against the decay into denormals once per call (a control period) instead of every stage and sample (CPU review item 8, 2026-11-26): the
+        // output differs from the per sample guard only by what a state below 1e-18 contributes in the rest of its call (3.1e-17 absolute at most, measured, docs/MPC.md); the filters of the feedback
+        // path keep their guard
+        for (int c = 0; c < 2; ++c)
+            for (int s = 0; s < kStages; ++s)
+                z[c][s] = flushDenormal (z[c][s]);
         for (int i = 0; i < n; ++i)
         {
             phase += inc;
@@ -754,7 +760,7 @@ public:
                 {
                     const float vv = (x - z[c][s]) * aS[s];
                     const float lp = vv + z[c][s];
-                    z[c][s] = flushDenormal (lp + vv);
+                    z[c][s] = lp + vv;
                     x = x - 2.0f * lp;
                     if (s == 3) tap[0] = x;
                     if (s == 7) tap[1] = x;
