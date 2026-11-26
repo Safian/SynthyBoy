@@ -204,6 +204,9 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     }
     spectralScratch = std::make_unique<spectral::Scratch>();
     publishContent (ContentSet::build (StateContent {}, nullptr));
+    contentHeld = contentCurrent.load();   // the first set is pinned from the start: the audio thread always has a valid set to fall back to
+    contentHeldSlot = 0;
+    contentHold[0].store (contentHeld);
 }
 
 OwnEngine::~OwnEngine()
@@ -257,18 +260,61 @@ void OwnEngine::publishContent (std::shared_ptr<const ContentSet> set)
     std::lock_guard<std::mutex> lock (contentMutex);
     const ContentSet* raw = set.get();
     contentOwned.push_back (std::move (set));
-    contentCurrent.store (raw); // seq_cst: the audio thread re-validates the pointer it announced in contentInUse
-    const ContentSet* inUse = contentInUse.load();
+    contentCurrent.store (raw); // seq_cst: the audio thread re-validates the pointer it pinned in contentHold after reading it (announceContent)
+    const ContentSet* const pinned0 = contentHold[0].load(); // seq_cst, after the store above: a set the audio thread validated against the previous current is seen here
+    const ContentSet* const pinned1 = contentHold[1].load();
     for (size_t i = 0; i < contentOwned.size();)
     {
         const ContentSet* p = contentOwned[i].get();
-        if (p != raw && p != inUse)
+        if (p != raw && p != pinned0 && p != pinned1)
             contentOwned.erase (contentOwned.begin() + static_cast<std::ptrdiff_t> (i));
         else
             ++i;
     }
     for (auto& k : switchKeyAtomic)
         k.store (-1, std::memory_order_relaxed);
+}
+
+/** The audio thread's hand over (a fixed number of operations, no loop that a publisher can keep running, no free): pins the newest set and returns the set this block reads.
+    The set read last stays pinned in contentHold[contentHeldSlot]; an attempt reads current, pins it in the other slot and reads current again (the publisher stores current and then reads both slots,
+    so a set that is still current after it was pinned cannot be freed). An attempt that finds current changed again is repeated, at most kContentAnnounceTries times; if all of them lose, the
+    block keeps the set it already pinned, which no publication can free (it is a valid, if one publication old, state: the next block tries again). */
+const ContentSet* OwnEngine::announceContent() noexcept
+{
+    uint32_t tries = 0;
+    bool stored = false, settled = false;
+    void (*const hook) (void*) = announceHook.load (std::memory_order_acquire);
+    for (int attempt = 0; attempt < kContentAnnounceTries && ! settled; ++attempt)
+    {
+        ++tries;
+        const ContentSet* const cand = contentCurrent.load();
+        if (cand == contentHeld)
+        {
+            settled = true;                          // the pinned set is the current one
+            break;
+        }
+        contentHold[contentHeldSlot ^ 1].store (cand);
+        stored = true;
+        if (hook != nullptr)
+            hook (announceHookArg.load (std::memory_order_relaxed));   // tests only
+        if (cand == contentCurrent.load())
+        {
+            contentHeld = cand;
+            contentHeldSlot ^= 1;
+            statContentAdoptions.store (statContentAdoptions.load (std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
+            settled = true;
+        }
+    }
+    if (! settled)
+    {
+        // every attempt lost against a publication: keep the set that is pinned, and do not leave the last candidate pinned
+        if (stored)
+            contentHold[contentHeldSlot ^ 1].store (nullptr);
+        statContentFallbacks.store (statContentFallbacks.load (std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
+    }
+    if (tries > statContentMaxTries.load (std::memory_order_relaxed))
+        statContentMaxTries.store (tries, std::memory_order_relaxed);
+    return contentHeld;
 }
 
 std::shared_ptr<const ContentSet> OwnEngine::preparedOscContent()
@@ -1661,16 +1707,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mu = std::min (mu, lowCap);
         globals.maxUnison = mu;
     }
-    // announce the content set this block reads (hazard pointer: the message thread frees a set only when it is neither current nor announced)
-    {
-        const ContentSet* cs;
-        do
-        {
-            cs = contentCurrent.load();
-            contentInUse.store (cs);
-        } while (cs != contentCurrent.load());
-        globals.content = cs;
-    }
+    // pin the content set this block reads (hazard slots: the message thread frees a set only when it is neither current nor pinned; a fixed number of steps, see announceContent)
+    globals.content = announceContent();
     for (int o = 0; o < 3; ++o)
         switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
     globals.switchKey = switchKeySnap;
@@ -1729,6 +1767,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             spectralScratch->startCache = spectralStartCacheOn.load (std::memory_order_relaxed);
             spectralScratch->start.beginTick();
             controlTick();
+            // the voices rebound to the set of this block in the tick: the set pinned before it is no longer referenced (it stayed pinned for the voices that were bound to it until now)
+            contentHold[contentHeldSlot ^ 1].store (nullptr, std::memory_order_release);
             // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period
             const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);
             // the FX budget: admitted again only when the snapshot of the parameters (the effect configuration), the mask or the budget changed; the chains see a changed result like a changed parameter

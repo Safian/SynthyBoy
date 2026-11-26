@@ -47,6 +47,21 @@ test checks both the live LFO source and the modulated cutoff against the same s
 Restoring a process-static generation cache in the instrumented binary caused a TSan
 data race between the instances' audio callbacks.
 
+### Decoded content hand over to the audio thread
+
+`OwnEngine::announceContent` (`core/engine-own/own_engine.cpp`) pins the newest `ContentSet` for a block. It is wait free: at most `kContentAnnounceTries` (3) attempts of
+read `current`, pin it in the hazard slot the audio thread does not use, read `current` again; the set read last stays pinned in the other slot, so a block whose every attempt lost against
+a publication keeps a valid set (one publication old) and tries again at the next block. The publisher (`publishContent`) stores `current`, then reads both slots and frees every set that is
+neither current nor pinned; the audio thread frees nothing. The slot of the older set is cleared after the period start tick, when every voice has rebound to the new set (before that
+the voices that are still bound to it keep it alive). The previous single announce slot looped `do { read; announce } while (changed)` without an upper bound (lock free, not wait free).
+Test: `core/tests/test_own_content_announce.cpp` (`own_content_announce_*`). A hook between the pin and the check lets the test make a publication win every attempt (the publisher thread
+completes two publications inside the window): the block makes 3 attempts and keeps its set, the set the engine holds is never marked freed, the audio thread makes no allocation
+and no free, and after the publisher stops one more publication leaves only the pinned and the current set alive. Mutations that the test fails: the publisher ignoring the two
+slots (`violations`, `live`), the attempt count raised to a million (the lose-every-attempt case no longer ends). Quick run 0.2 to 0.3 s per case, `SB_TEST_FULL=1` 3 to 5 s per case.
+A freed set is only marked and kept in a ring of 256 so that the check reads valid memory (the ring also keeps an address from being reused). measured: the same binary built with `-fsanitize=thread` (GCC 13.3, x86-64 Linux, `-O1`), quick and `SB_TEST_FULL=1` runs: 0 ThreadSanitizer reports, 0 failed cases (2026-11-26); the free running full run needed at most 2 attempts in a block.
+The reclaim of the voice rebind (a voice bound to a set that was replaced twice inside one control period, possible with host blocks below 32 frames) is the open hazard H6a of
+`docs/release/CPU-REVIEW-MEMORY.md`, not changed here.
+
 ## Test suite timing
 
 Measured on 2026-11-26, x86-64 Linux VM (4 vCPU Xeon 2.1 GHz, GCC 13.3, Release, `-DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF`, 172 tests), other

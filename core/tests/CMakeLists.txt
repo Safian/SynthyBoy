@@ -56,6 +56,9 @@ target_include_directories(synthyboy_test_own_engine PRIVATE "${PROJECT_SOURCE_D
 synthyboy_add_test(synthyboy_test_own_param_snapshot test_own_param_snapshot.cpp)   # the block snapshot follows only the changed parameters: bit identical to the full rebuild
 synthyboy_add_full_run(synthyboy_test_own_param_snapshot)
 target_include_directories(synthyboy_test_own_param_snapshot PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_content_announce test_own_content_announce.cpp)   # the hand over of the content set to the audio thread: bounded, wait free, never freed under the reader (replaces global operator new/delete)
+synthyboy_add_full_run(synthyboy_test_own_content_announce)
+target_include_directories(synthyboy_test_own_content_announce PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_voice test_own_voice.cpp)
 target_include_directories(synthyboy_test_own_voice PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_fx test_own_fx.cpp)

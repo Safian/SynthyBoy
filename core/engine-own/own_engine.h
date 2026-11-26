@@ -64,6 +64,22 @@ public:
         return { statSnapshots.load (std::memory_order_relaxed), statMatrixCompiles.load (std::memory_order_relaxed), statTuningComputes.load (std::memory_order_relaxed),
                  statVoiceEpochs.load (std::memory_order_relaxed) };
     }
+    /** Tests: the hand over of the decoded content to the audio thread (see announceContent). maxTries: the most attempts one block needed (never above kContentAnnounceTries), fallbacks: the blocks
+        that kept the set they already had because a publication won every attempt, adoptions: the blocks that took a newer set. Any thread, lock free. */
+    struct ContentStats { uint32_t maxTries, fallbacks, adoptions; };
+    ContentStats contentStats() const noexcept
+    {
+        return { statContentMaxTries.load (std::memory_order_relaxed), statContentFallbacks.load (std::memory_order_relaxed), statContentAdoptions.load (std::memory_order_relaxed) };
+    }
+    static constexpr int contentAnnounceTries() noexcept { return kContentAnnounceTries; }
+    /** Tests: `hook (arg)` runs on the audio thread between the pin and the check of every attempt of announceContent (where a publication can win), so that a test can publish exactly there. nullptr removes it. */
+    void setContentAnnounceHookForTest (void (*hook) (void*), void* arg) noexcept
+    {
+        announceHookArg.store (arg, std::memory_order_relaxed);
+        announceHook.store (hook, std::memory_order_release);
+    }
+    /** Tests: the set the audio thread reads now; call it only from the thread that calls process (). */
+    const void* heldContentForTest() const noexcept { return contentHeld; }
     void reset() override;
     void setPresetParams (const ParamValues& values) noexcept override;
     void setParam (uint32_t id, float plain) noexcept override;
@@ -190,7 +206,18 @@ private:
     const IContentStore* contentStore = nullptr;
     std::mutex contentMutex; // serializes access to the prepared asset snapshots
     std::vector<std::shared_ptr<const ContentSet>> contentOwned;
-    std::atomic<const ContentSet*> contentCurrent { nullptr }, contentInUse { nullptr };
+    // The hand over to the audio thread is wait free. The audio thread pins what it reads in one of two hazard slots (`contentHold`) and always keeps the set it read last pinned; it never frees a set.
+    // A block makes at most kContentAnnounceTries attempts to pin the newest set (read current, pin it in the other slot, read current again); when every attempt lost against a publication it
+    // keeps the set it already pinned (valid by construction). The publisher frees a set only when it is neither the current one nor in either slot.
+    static constexpr int kContentAnnounceTries = 3;
+    std::atomic<const ContentSet*> contentCurrent { nullptr };
+    std::atomic<const ContentSet*> contentHold[2] = { { nullptr }, { nullptr } };
+    const ContentSet* contentHeld = nullptr; // audio thread only: the set this engine reads (pinned in contentHold[contentHeldSlot])
+    int contentHeldSlot = 0;                 // audio thread only
+    std::atomic<void (*) (void*)> announceHook { nullptr };
+    std::atomic<void*> announceHookArg { nullptr };
+    std::atomic<uint32_t> statContentMaxTries { 0 }, statContentFallbacks { 0 }, statContentAdoptions { 0 };
+    const ContentSet* announceContent() noexcept;
     std::atomic<int> switchKeyAtomic[3];
     int switchKeySnap[3] = { -1, -1, -1 };
     uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};
