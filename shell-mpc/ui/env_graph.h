@@ -143,8 +143,9 @@ public:
         const bool c = compactChrome();
         return { rect_.x + (c ? 18 : 24), rect_.y + (c ? 30 : 38), std::max (0, rect_.w - (c ? 36 : 48)), std::max (0, rect_.h - (c ? 30 : 38) - (c ? 22 : 40)) };
     }
-    /** The LOCK button (the full chrome only: the compact graph is always locked) and the zoom band under the plot (the ruler's row: a horizontal drag there zooms while unlocked). */
-    Rect lockRect() const noexcept { return compactChrome() ? Rect {} : Rect { rect_.x + 6, rect_.y + 2, 76, 34 }; }
+    /** The LOCK button (the full chrome only: the compact graph is always locked) and the zoom band under the plot (the ruler's row: a horizontal drag there zooms while unlocked). The button sits in the top right
+        corner of the frame, in the margin above the plot: the first handle of the envelope (the attack's peak) is at the top left, the button must not touch it. */
+    Rect lockRect() const noexcept { return compactChrome() ? Rect {} : Rect { rect_.right() - 6 - 76, rect_.y + 2, 76, 34 }; }
     Rect zoomRect() const noexcept { const Rect p = plot(); return compactChrome() || state.locked ? Rect {} : Rect { p.x, p.bottom() + 2, p.w, std::max (0, rect_.bottom() - p.bottom() - 2) }; }
     const Edit& edit() const noexcept { return edit_; }
     bool dragging() const noexcept { return drag_ != envgraph::None; }

@@ -11,7 +11,7 @@ Az **ActiveText** ([components/native/active_text/active_text.py](../../componen
 - **Változatlan felirat**: a szöveg tartalma nem változik az állapotváltás során.
 - **Szín jelzi az állapotot**:
   - **ON (aktív)**: közös aktív állapotszín (`active_text.on`, `#2ee6f0`).
-  - **OFF (inaktív)**: inaktív szürke (`active_text.off`, `#384252`).
+  - **OFF (inaktív)**: inaktív, de olvasható (`active_text.off`, `#aab2d8` = `text.caption`; a letiltott modul a vezérlő 40 %-os áttetszőségével marad megkülönböztethető).
 - **Egyetlen stílusforrás**: `components/colors.json`, `components/sizes.json` és `components/style.py`. Nincsenek beégetett hexadecimális kódok vagy képpontméretek.
 - **Izoláció**: más natív komponensből nem importál; önálló csomagként terjeszthető és a család szintű stílusbetöltővel fut.
 

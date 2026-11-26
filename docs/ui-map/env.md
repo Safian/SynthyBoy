@@ -32,7 +32,7 @@ The overlay operates on a 1280 x 800 display, occupying the primary tab area fro
 +----------------------------------------------------------------------------------------------------+ y=110
 | ENV n   Destination tags                                                     [TARGETS 2] | Top bar (page mode; CLOSE only in the full screen over the Play page)
 +----------------------------------------------------------------------------------------------------+ y=182
-| [LOCKED]                                                                                           |
+|                                                                                           [LOCKED] |
 |                                                                                                    |
 |                                    DAHDSR ENVELOPE GRAPH                                           | Graph
 |                                 (interactive curve & handles)                                      |
@@ -53,7 +53,7 @@ The overlay operates on a 1280 x 800 display, occupying the primary tab area fro
 ### 2. Middle Section: Envelope Graph (y = 182 to 608, h = 426; `shell-mpc/ui/env_screen.h:290-292`, `shell-mpc/ui/env_graph.h:107-523`)
 - Bounded at x = 8, y = 190, w = 1264, h = 418.
 - Plot area: x = 32, y = 228, w = 1216, h = 340 (`shell-mpc/ui/env_graph.h:144`).
-- Top-Left: `LOCK` button (x = 14, y = 192, w = 76, h = 34; `shell-mpc/ui/env_graph.h:147, 435-441`). Toggles between `LOCKED` (envelope continuously auto-fits available width) and `FREE` (unlocked zoom).
+- Top-Right: `LOCK` button (the right edge of the frame minus 6 px, 76 x 34, in the margin above the plot; it sat at the top left until 2026-11-26, where it touched the first handle of the envelope; `lockRect` in `shell-mpc/ui/env_graph.h`). Toggles between `LOCKED` (envelope continuously auto-fits available width) and `FREE` (unlocked zoom).
 - Canvas elements:
   * Horizontal grid lines at 0%, 50%, and 100% sustain levels (`shell-mpc/ui/env_graph.h:400-405`).
   * Time ruler along the bottom with tick marks and round labels in milliseconds/seconds or beats (`shell-mpc/ui/env_graph.h:408-431`). In `FREE` mode, dragging along this ruler zooms the time scale (`shell-mpc/ui/env_graph.h:562-577`).

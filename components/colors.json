@@ -92,7 +92,7 @@
     "inactive.preview.dark": "#101010",
     "inactive.preview.light": "#ababab",
     "active_text.on": "#2ee6f0",
-    "active_text.off": "#384252",
+    "active_text.off": "#aab2d8",
     "mod_matrix.surface": "#121930",
     "mod_matrix.border": "#1c2651",
     "mod_matrix.divider": "#1a253a",

@@ -171,10 +171,10 @@ class TestPlayNativeSmoothActiveText(unittest.TestCase):
         has_cyan = any(p[0] == 46 and p[1] == 230 and p[2] == 240 and p[3] > 200 for p in on_pixels)
         self.assertTrue(has_cyan, "active_text_on.png must contain #2ee6f0 active cyan pixels")
 
-        # OFF text contains token active_text.off (#384252 -> RGB 56, 66, 82)
+        # OFF text contains token active_text.off (#aab2d8 -> RGB 170, 178, 216: the caption colour, readable on the canvas)
         off_pixels = list(im_off.getdata())
-        has_gray = any(p[0] == 56 and p[1] == 66 and p[2] == 82 and p[3] > 200 for p in off_pixels)
-        self.assertTrue(has_gray, "active_text_off.png must contain #384252 inactive gray pixels")
+        has_gray = any(p[0] == 170 and p[1] == 178 and p[2] == 216 and p[3] > 200 for p in off_pixels)
+        self.assertTrue(has_gray, "active_text_off.png must contain #aab2d8 inactive pixels")
 
     def test_smooth_state_transitions_and_lfo_switching_simulation(self):
         """Verify parameter writing and state visibility across ON->OFF->ON and Standard/RND LFO switches."""
