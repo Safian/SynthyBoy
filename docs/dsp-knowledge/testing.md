@@ -118,6 +118,9 @@ Tests of 2 s or more (seconds; "alone, full" is the time of the coverage as it w
 - `synthyboy_test_fxopt_reverb_vintage` fails 3 of 3 runs alone on this VM: `vintage cpu ratio live / reference 0.875 .. 0.880 (model 0.65 ARM, 0.72 x86; limit 0.85)`.
   It is not a flaky test on this machine but a ratio the Xeon does not reach; the limit was not touched. It passed in the owner's runs on other x86 machines.
 
+- `synthyboy_test_own_filter_response` is borderline on this machine even alone: `worstMs < 5.0` (thread CPU time, best of 5) measured worst 4.79, 5.34 and 4.71 ms in three runs in a row,
+  and failed once in the third `ctest -j2` of the full set (the quick set passed 3 of 3). It has `RUN_SERIAL`, so load from other ctest jobs is not the cause; the limit was not touched.
+
 ### Where the time of the heavy binaries goes (seconds per case, alone, `SB_TEST_FULL=1`)
 
 | binary | case | s |
@@ -216,3 +219,13 @@ ctest --preset full                                        # or: ctest --test-di
   ```
   Run it on the changed area (`-R`), not on the whole set, while developing; the `_full` entries of the split binaries are the ones to run there before a release (they carry the label slow).
   TSan: the same with `-fsanitize=thread`, `-R 'threads|own_fx_worker_race|own_helper_thread'`. On a Linux host with a high ASLR entropy the runtime needs `sudo sysctl vm.mmap_rnd_bits=28`.
+
+### Result after the split (2026-11-26, same VM, `ctest -j2`)
+
+- Quick set (`ctest -j2 -LE slow`, 153 tests): 85.4, 86.0 and 84.2 s wall, all 153 pass; the sum of the test times is 165 s. The same selection of tests before the split (166 tests,
+  the 6 that carried the label then left out) added up to 967 s (under -j2, so about 480 s wall at the best).
+- Full set (`ctest -j2`, 179 tests, the 7 `_full` entries included): 1160 s wall against 1171 s before the split; the full set does the same work as before plus the quick entries of the
+  seven binaries (about 70 s of test time), so it is not shorter; what changed is that most of it no longer has to run in the development loop. 174 of 179 pass; the 5 failures are the known
+  machine reasons above (`fxopt_reverb_vintage`, `own_filter_response` once, `param_audit_scan`, `factory_content_reproducible`, `release_scripts`), `ref_compare_metrics` is skipped.
+  The `_full` entries print exactly the check counts of before the split (2820, 3337, 9263, 4389, 361827, 81, 5359).
+- `ctest -LE audit` (what the CI build matrix runs) leaves out the 9 minute `param_audit_scan` and the audit tests.
