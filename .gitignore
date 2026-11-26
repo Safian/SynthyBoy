@@ -25,3 +25,6 @@ build-mpc*.log
 
 # Worker reports are written here by convention and stay untracked
 /REPORT.md
+
+# Claude Code agent worktrees
+.claude/worktrees/
