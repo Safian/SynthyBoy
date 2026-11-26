@@ -499,7 +499,7 @@ void testEnvLfo()
             mapped += f.groups[ids[g]].block() >= 1;
         check (mapped == std::min (n - 1, 3), "LFO page: the groups after the active one have their blocks (" + std::to_string (mapped) + ")");
     }
-    // the Env sub-tabs (Env 1 .. Env 6: the view's instance number) and the ONE LFO tab (the Q-Links follow the selected item: Play LFO / mpcTabView.rnd, view state only)
+    // the Env sub-tabs (Env 1 .. Env 6: the view's instance number) and the LFO sub-tabs (LFO 1 .. 10, RND 1 .. 4: the Q-Links follow the LFO of the sub-tab)
     for (int e : { 4, 6, 1 })
     {
         demo::Rig<EnvUi> r (e);
@@ -511,24 +511,22 @@ void testEnvLfo()
                "Env sub-tab " + std::to_string (e) + ": Q 1 .. 4 ADSR, Q 5 SHAPE, Q 9 TIME of " + pre);
     }
     {
-        demo::Rig<LfoUi> r;
-        r.refresh();
         for (int l : { 3, 10, 1 })
         {
-            r.inst.playSel[2] = l;
+            demo::Rig<LfoUi> r (l);   // the sub-tab LFO l (the view's instance number): no selector, no Play selection
             r.refresh();
             r.ui.full().setActiveGroup (0);
             r.refresh();
             const std::string pre = "lfo" + std::to_string (l) + ".";
             check (r.inst.q[0] == demo::Inst::idx (pre + "shape") && r.inst.q[1] == demo::Inst::idx (pre + "rate") && r.inst.q[2] == demo::Inst::idx (pre + "fade_in") && r.inst.q[3] == demo::Inst::idx (pre + "smooth_time"),
-                   "LFO tab: LFO " + std::to_string (l) + " selected: Q 1 .. 4 are the RATE group of " + pre);
+                   "LFO sub-tab " + std::to_string (l) + ": Q 1 .. 4 are the RATE group of " + pre);
         }
-        r.inst.tabViewV[0] = 3;   // RND 3
+        demo::Rig<LfoUi> r (13);   // the sub-tab RND 3
         r.refresh();
         r.ui.full().setActiveGroup (0);
         r.refresh();
         check (r.ui.random() && r.inst.q[0] == demo::Inst::idx ("rlfo3.style") && r.inst.q[1] == demo::Inst::idx ("rlfo3.rate") && r.inst.q[2] == demo::Inst::idx ("rlfo3.sync") && r.inst.q[3] == demo::Inst::idx ("rlfo3.stereo"),
-               "LFO tab: RND 3 selected: Q 1 .. 4 are the RANDOM group of rlfo3");
+               "LFO sub-tab RND 3: Q 1 .. 4 are the RANDOM group of rlfo3");
     }
     // the shape editor: EDIT (virtual 0 .. 3), GRID (virtual 4 .. 6), TRIGGER (MODE and PHASE of the table, virtual 7)
     {

@@ -894,7 +894,6 @@ static void testLfoNativeDrawers (bool wide)
     }
     show (lfo, false);
     const auto standaloneGraph = page->ui().full().displayRect();
-    runDrawer (lfo, page->ui().nativeRect (standalone::kSelection), -1, standaloneGraph, "standalone LFO/RND drawer");
     runDrawer (lfo, page->ui().nativeRect (standalone::kShape), -1, standaloneGraph, "standalone waveform drawer");
     show (play, false);
     const auto compactGraph = playView->lfoUi()->compact().displayRect();

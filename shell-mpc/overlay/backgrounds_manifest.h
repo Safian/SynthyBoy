@@ -37,6 +37,19 @@ inline constexpr BackgroundTab kBackgroundTabs[] = {
     { "oscnoise", "Noise", "overlay_canvas.png", 900, 8, 0x0f253fu },
     { "mod", "Mod", "overlay_canvas.png", 900, 20, 0x0b1022u },
     { "lfo1", "LFO", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo2", "LFO 2", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo3", "LFO 3", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo4", "LFO 4", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo5", "LFO 5", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo6", "LFO 6", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo7", "LFO 7", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo8", "LFO 8", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo9", "LFO 9", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "lfo10", "LFO 10", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "rnd1", "RND 1", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "rnd2", "RND 2", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "rnd3", "RND 3", "overlay_canvas.png", 900, 2, 0x0b1029u },
+    { "rnd4", "RND 4", "overlay_canvas.png", 900, 2, 0x0b1029u },
     { "env1", "Env", "overlay_canvas.png", 900, 2, 0x0b1023u },
     { "env2", "Env 2", "overlay_canvas.png", 900, 2, 0x0b1023u },
     { "env3", "Env 3", "overlay_canvas.png", 900, 2, 0x0b1023u },
@@ -46,7 +59,7 @@ inline constexpr BackgroundTab kBackgroundTabs[] = {
     { nullptr, nullptr, nullptr, 0, 0, 0u },
 };
 
-inline constexpr int kNumBackgroundTabs = 24;
+inline constexpr int kNumBackgroundTabs = 37;
 
 inline const BackgroundTab* backgroundOf (const char* viewName) noexcept
 {

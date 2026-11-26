@@ -214,12 +214,12 @@ class OverlayLayoutFileTests(unittest.TestCase):
     def test_overlay_layout_file(self):
         ovl = json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
         self.assertEqual(ovl["variant"], "overlay")
-        self.assertNotIn("tabLimit", ovl, "the overlay layout stays within the 32 tabs of the host")
-        self.assertEqual(len(ovl["pages"]), 24, "one tab page = one screen: the six envelopes are the six sub-tabs of the Env key; LFO and Filter are ONE tab each")
-        self.assertEqual([p["name"] for p in ovl["pages"]], ["Play", "Macros", "Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6", "LFO", "FX", "Mixer", "Filter", "Filter 2", "Note", "Velo", "Mod", "Master", "Tuning", "Voice"])
-        self.assertEqual({p["name"]: p["fn"] for p in ovl["pages"] if p["name"] in ("Env", "LFO", "Filter")}, {"Env": "Env", "LFO": "LFO", "Filter": "Filter"}, "one tab under each of the three function keys")
-        self.assertFalse([p for p in ovl["pages"] if p["name"] in ("Env", "LFO", "Filter") and "label" in p], "the key text is the tab name: no label")
-        self.assertLessEqual(len(ovl["pages"]), 32)
+        self.assertEqual(ovl["tabLimit"], 37, "37 tabs: above the SDK's 32, below the 39 tabs the Key 61 and the XL loaded (docs/MPC.md)")
+        self.assertEqual(len(ovl["pages"]), 37, "one tab page = one screen: the six envelopes, the four Filter states and the fourteen LFO / RND sources are sub-tabs")
+        self.assertEqual([p["name"] for p in ovl["pages"]], ["Play", "Macros", "Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6", "LFO", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4", "FX", "Mixer", "Filter", "Filter 2", "Note", "Velo", "Mod", "Master", "Tuning", "Voice"])
+        self.assertEqual({p["name"]: p["fn"] for p in ovl["pages"] if p["name"] in ("Env", "LFO", "LFO 8", "LFO 9", "RND 4", "Filter")}, {"Env": "Env", "LFO": "LFO", "LFO 8": "LFO", "LFO 9": "LFO 9", "RND 4": "LFO 9", "Filter": "Filter"}, "the 14 LFO sources are the sub-tabs of two function keys (at most 8 sub-tabs a key)")
+        self.assertFalse([p for p in ovl["pages"] if p["name"] in ("Env", "LFO", "LFO 9", "Filter") and "label" in p], "the key text is the tab name: no label")
+        self.assertLessEqual(len(ovl["pages"]), ovl["tabLimit"])
         play = ovl["pages"][:1]
         self.assertEqual([(p["name"], p["fn"], p["kick"], p.get("custom")) for p in play], [(n, "Play", [], True) for n in ("Play",)])
         osc_pages = {"Osc A": "osc1_main", "Osc B": "osc2_main", "Osc C": "osc3_main", "Sub": "sub_main", "Noise": "noise"}
@@ -238,7 +238,12 @@ class OverlayLayoutFileTests(unittest.TestCase):
         self.assertEqual([m["rgb"] for m in by["env1"]["markers"]], ["4f3a2c", "3a4f64"])
         self.assertEqual([by["env%d" % n]["tab"] for n in range(2, 7)], ["Env %d" % n for n in range(2, 7)])
         self.assertEqual([by["env%d" % n]["index"] for n in range(2, 7)], [2, 3, 4, 5, 6], "the view index is the envelope the sub-tab shows")
-        self.assertFalse({"lfo2", "lfo3", "lfo4"} & set(by))
+        lfo_tabs = ["LFO"] + ["LFO %d" % n for n in range(2, 11)] + ["RND %d" % m for m in range(1, 5)]
+        lfo_views = ["lfo%d" % n for n in range(1, 11)] + ["rnd%d" % m for m in range(1, 5)]
+        self.assertEqual([by[v]["tab"] for v in lfo_views], lfo_tabs)
+        self.assertEqual([by[v]["index"] for v in lfo_views], list(range(1, 15)), "the view index is the LFO (1 .. 10) or RND (11 .. 14) the sub-tab shows")
+        self.assertEqual({by[v]["kind"] for v in lfo_views}, {"lfoui"})
+        self.assertEqual([by["lfo%d" % n]["markers"][0]["rgb"] for n in (1, 2, 10)], ["1e3a2c", "4f5a2c", "875a2c"], "lfo1 keeps its colours, the 13 new views take the second bank")
         removed = {"563a2c", "3a5664", "5d3a2c", "3a5d64", "643a2c", "3a6464", "253a2c", "3a2564", "2c3a2c", "3a2c64", "333a2c", "3a3364"}
         self.assertEqual(removed & {m["rgb"] for v in layout["views"] for m in v["markers"]}, set(), "the markers of the removed views are gone")
         self.assertEqual([m["rgb"] for m in by["lfo1"]["markers"]], ["1e3a2c", "3a1e64"])
@@ -334,22 +339,22 @@ class OverlaySkinTests(unittest.TestCase):
     # ---- the overlay skin ----
     def test_24_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
         tabs = self.o_tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 24)
-        self.assertLessEqual(len(tabs), 32, "the host's limit")
+        self.assertEqual(len(tabs), 37)
+        self.assertLessEqual(len(tabs), 39, "the most the devices loaded (docs/MPC.md); the SDK's own limit is 32")
         keys = {}
         for t in sorted(tabs, key=lambda t: (t["fnKeyIndex"], t["fnKeySubIndex"])):
             keys.setdefault(t["fnKeyIndex"], []).append(t["tabName"])
-        self.assertEqual([len(v) for _, v in sorted(keys.items())], [2, 5, 6, 1, 1, 1, 4, 1, 3], "9 function keys: Play 2, Osc 5, Env 6, LFO 1, FX 1, Mix 1, Filter 4 (Filter, Filter 2, Note, Velo), Mod 1, Master 3 (Master, Tuning, Voice)")
-        self.assertEqual([keys[i][0] for i in (2, 3, 6)], ["Env", "LFO", "Filter"], "Env, LFO and Filter: the key text is the tab name of the first sub-tab")
-        for gone in ("Env 1", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "Filter 1"):
+        self.assertEqual([len(v) for _, v in sorted(keys.items())], [2, 5, 6, 8, 6, 1, 1, 4, 1, 3], "10 function keys: Play 2, Osc 5, Env 6, LFO 8, LFO 9 6, FX 1, Mix 1, Filter 4 (Filter, Filter 2, Note, Velo), Mod 1, Master 3 (Master, Tuning, Voice)")
+        self.assertEqual([keys[i][0] for i in (2, 3, 4, 7)], ["Env", "LFO", "LFO 9", "Filter"], "Env, LFO, LFO 9 and Filter: the key text is the tab name of the first sub-tab")
+        for gone in ("Env 1", "LFO 1", "Filter 1", "RND"):
             self.assertFalse([t for t in tabs if t["tabName"] == gone], gone)
         f = self.tab("Filter")
-        self.assertEqual((f["fnKeyIndex"], f["fnKeySubIndex"]), (6, 0))   # the Play key is the first one
-        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 24)
+        self.assertEqual((f["fnKeyIndex"], f["fnKeySubIndex"]), (7, 0))   # the Play key is the first one
+        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 37)
         for gone in ("F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level", "Osc 1", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Sub/Nois"):
             self.assertFalse([t for t in tabs if t["tabName"] == gone], gone)
 
-    PAGE_TABS = ("Macros", "Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6", "LFO", "FX", "Mixer", "Filter", "Filter 2", "Note", "Velo", "Mod", "Master", "Tuning", "Voice")
+    PAGE_TABS = ("Macros", "Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6", "LFO", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4", "FX", "Mixer", "Filter", "Filter 2", "Note", "Velo", "Mod", "Master", "Tuning", "Voice")
 
     def test_the_page_tabs_are_the_views_of_the_layout(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -501,15 +506,15 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertEqual([(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs[:2]], [(0, 0), (0, 1)])
         self.assertEqual(tabs[2]["tabName"], "Osc")   # Osc is the second function key
         self.assertEqual(tabs[2]["fnKeyIndex"], 1)
-        self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 9, "nine function keys")
+        self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 10, "ten function keys")
 
     def test_function_key_labels_are_the_short_names_and_the_other_sub_tabs_keep_theirs(self):
         # the host draws the tabName of the current sub-tab on the function key: the first sub-tab of every key carries the short label
         tabs = self.o_tui["pageData"]["tabs"]
         first = [t["tabName"] for t in tabs if t["fnKeySubIndex"] == 0]
-        self.assertEqual(first, ["Play", "Osc", "Env", "LFO", "FX", "Mix", "Filter", "Mod", "Master"])
+        self.assertEqual(first, ["Play", "Osc", "Env", "LFO", "LFO 9", "FX", "Mix", "Filter", "Mod", "Master"])
         later = [t["tabName"] for t in tabs if t["fnKeySubIndex"] > 0]
-        self.assertEqual(later, ["Macros", "Osc B", "Osc C", "Sub", "Noise", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6", "Filter 2", "Note", "Velo", "Tuning", "Voice"])
+        self.assertEqual(later, ["Macros", "Osc B", "Osc C", "Sub", "Noise", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4", "Filter 2", "Note", "Velo", "Tuning", "Voice"])
         names = [t["tabName"] for t in tabs]
         self.assertEqual(len(names), len(set(names)), "the tab names of the finished skin are unique")
         self.assertTrue(all(1 <= len(n) <= 8 for n in names))
@@ -696,7 +701,7 @@ class OverlaySkinTests(unittest.TestCase):
         # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").
         names = [t["tabName"] for t in self.o_tui["pageData"]["tabs"]]
         self.assertFalse([n for n in names if "Full" in n], "no blank page of its own: the full-screen page is drawn over the Play page")
-        self.assertEqual(len(names), 24, "the tab count of the overlay skin")
+        self.assertEqual(len(names), 37, "the tab count of the overlay skin")
 
     def test_play_views_markers_and_no_fallback_picture(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -714,7 +719,7 @@ class OverlaySkinTests(unittest.TestCase):
     def test_validate_py(self):
         res = subprocess.run([sys.executable, "-I", str(SDK / "tools" / "validate.py"), str(self.ovl.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
-        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "37 tabs; at most 32" not in l]   # the one accepted finding: the SDK limit of 32 tabs (the devices loaded 39)
         self.assertEqual(errors, [], report)
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
         names = ["overlay_instance_6x6.png"] + ["overlay_marker_%s_%s.png" % (v["name"], s) for v in layout["views"] for s in ("left", "right")]

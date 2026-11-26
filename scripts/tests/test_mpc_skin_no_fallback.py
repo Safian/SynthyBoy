@@ -131,7 +131,7 @@ class NoFallbackTests(unittest.TestCase):
 
     def test_each_tab_contains_its_detection_pictures_and_configured_background(self):
         tabs = self.tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 24)
+        self.assertEqual(len(tabs), 37)
         views = {v["tab"]: v for v in self.layout["views"]}
         labels = {p["name"]: p.get("label", p["name"]) for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"]}
         for name, view in views.items():
@@ -237,9 +237,9 @@ class NoFallbackTests(unittest.TestCase):
         for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
             check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2832",))
 
-    def test_the_q_proxies_are_on_all_24_tabs(self):
+    def test_the_q_proxies_are_on_all_37_tabs(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
-        self.assertEqual(len(self.qlinks), 24)
+        self.assertEqual(len(self.qlinks), 37)
         for entry in self.qlinks:
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(16)], entry)
             self.assertEqual(entry["Bank Direction"], "Row")
@@ -538,7 +538,7 @@ class NoFallbackTests(unittest.TestCase):
     def test_validate_py_has_no_error(self):
         res = subprocess.run([sys.executable, "-I", str(base.SDK / "tools" / "validate.py"), str(self.skins.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
-        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "34 tabs; at most 32" not in l]
+        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "37 tabs; at most 32" not in l]
         self.assertEqual(errors, [], report)
 
     def test_the_step_is_inactive_without_the_overlay_variant(self):

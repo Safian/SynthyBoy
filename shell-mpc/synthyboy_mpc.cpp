@@ -5025,15 +5025,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     synthyboy_mpc::putBounded (buf, kCap, synthyboy::unitLabel (info->unit));
                 else if (opcode == effGetParamDisplay)
                 {
-                    if (field == n::kSelection)
-                    {
-                        const int choice = static_cast<int> (std::lround (value * (n::kInstances - 1)));
-                        if (choice < n::kStandard)
-                            std::snprintf (buf, kCap, "LFO %d", choice + 1);
-                        else
-                            std::snprintf (buf, kCap, "RND %d", choice - n::kStandard + 1);
-                    }
-                    else if (info != nullptr)
+                    if (info != nullptr)
                     {
                         const float plain = synthyboy::fromNormalised (*info, value);
                         if (info->choices != nullptr && info->numChoices > 0)
@@ -6059,7 +6051,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 fillParameterProperties (*info, props);
             else
                 std::memset (props, 0, sizeof (*props));
-            const int last = field == n::kSelection ? n::kInstances - 1 : field == n::kAction ? n::kActionLast
+            const int last = field == n::kAction ? n::kActionLast
                            : field == n::kLayout ? n::kLayoutLast : -1;
             if (last > 0 || field == n::kTranspose || field == n::kTune)
             {

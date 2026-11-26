@@ -11,7 +11,7 @@ import test_mpc_skin_extras as base
 
 
 CONTRACT = base.REAL_EXTRAS / "mod-targets-native-contract.json"
-OWNERS = {"Macros": 1, "Env": 2, "Env 2": 2, "Env 3": 2, "Env 4": 2, "Env 5": 2, "Env 6": 2, "LFO": 3, "Filter": 4, "Filter 2": 4, "Note": 4, "Velo": 4, "Mod": 5, "Play": 6,
+OWNERS = {"Macros": 1, "Env": 2, "Env 2": 2, "Env 3": 2, "Env 4": 2, "Env 5": 2, "Env 6": 2, **{n: 3 for n in ("LFO", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4")}, "Filter": 4, "Filter 2": 4, "Note": 4, "Velo": 4, "Mod": 5, "Play": 6,
           "Osc": 7, "Osc A": 7, "Osc B": 7, "Osc C": 7, "Sub": 7, "Noise": 7}
 
 
@@ -62,7 +62,7 @@ class NativeModTargetsTest(unittest.TestCase):
                              [f"IndexedEnabling/{frame}/8/Parameter 3527"])
             self.assertGreater(32, max(rect(c)[1] + rect(c)[3] for c in components
                                        if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))))
-        self.assertEqual(active, 19)
+        self.assertEqual(active, 32)
 
     def test_six_rows_bind_exact_hitboxes_and_do_not_overlap(self):
         manifest = json.loads(CONTRACT.read_text())

@@ -199,26 +199,25 @@ void testLfoNavigationButtons()
 {
     using namespace synthyboy_mpc::overlay;
     namespace u = synthyboy_mpc::nativeui;
-    auto rig = std::make_unique<Rig>();
-    auto& r = *rig;
-    auto page = std::make_unique<pages::LfoPage> ("lfo1", 1);
-    pages::configureNativeTab (*page, page->name());
-    page->setHostBackground (true);
-    r.stack.openFull (page->pageElement());
-    const auto tick = [&]
-    {
-        ViewInput input;
-        input.instance = input.io = &r.plugin.overlayView;
-        input.ui = &r.stack;
-        input.nowMs = r.now += 100.0;
-        page->update (input);
-        r.plugin.nativeUiPoll (&r.effect);
-    };
     const int targets = PluginInstance::nativeUiBase() + u::kLfoTargetsAction;
     const int expand = PluginInstance::nativeUiBase() + u::kLfoBase + u::lfo::kAction;
-    for (int source : { 1, 11 })
+    for (int source : { 1, 11 })   // the sub-tabs LFO and RND 1: each page shows its own source, nothing is chosen
     {
-        uibind::chooseLfo (r.plugin.overlayView, source);
+        auto rig = std::make_unique<Rig>();
+        auto& r = *rig;
+        auto page = std::make_unique<pages::LfoPage> (source == 1 ? "lfo1" : "rnd1", source);
+        pages::configureNativeTab (*page, page->name());
+        page->setHostBackground (true);
+        r.stack.openFull (page->pageElement());
+        const auto tick = [&]
+        {
+            ViewInput input;
+            input.instance = input.io = &r.plugin.overlayView;
+            input.ui = &r.stack;
+            input.nowMs = r.now += 100.0;
+            page->update (input);
+            r.plugin.nativeUiPoll (&r.effect);
+        };
         tick();
         tick();
         r.effect.setParameter (&r.effect, targets, 1.0f);
@@ -1019,16 +1018,16 @@ void testNativeRootPaintBeforeMetadata()
     u::lfo::ViewState lfo;
     lfo.selection = 1;
     lfo.layout = 1;
-    lfo.fields = u::lfo::bit (u::lfo::kSelection);
-    lfo.values[u::lfo::kSelection] = 0.0f;
+    lfo.fields = u::lfo::bit (u::lfo::kShape);
+    lfo.values[u::lfo::kShape] = 0.0f;
     lfo.values[u::lfo::kLayout] = 1.0f / u::lfo::kLayoutLast;
     r.plugin.requestProxyNames();
     r.plugin.overlayView.setNativeLfoState (lfo);
     r.plugin.nativeLfoPoll (&r.effect);
     const auto paint = r.plugin.nativePagePaintUntil;
     check (paint >= 0 && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kLayout] == lfo.values[u::lfo::kLayout]
-               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kSelection] == lfo.values[u::lfo::kSelection],
-           "the first standalone LFO frame publishes its layout and selector together");
+               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kShape] == lfo.values[u::lfo::kShape],
+           "the first standalone LFO frame publishes its layout and waveform together");
     r.plugin.flushProxyNames (&r.effect, paint - 1);
     check (displayRefreshes == before + 1, "a pending Q name refresh waits for the fresh LFO controls to paint");
     r.plugin.flushProxyNames (&r.effect, paint);
@@ -1037,14 +1036,14 @@ void testNativeRootPaintBeforeMetadata()
     std::this_thread::sleep_for (std::chrono::milliseconds (2));
     lfo.selection = 11;
     lfo.layout = 4;
-    lfo.values[u::lfo::kSelection] = 10.0f / (u::lfo::kInstances - 1);
+    lfo.values[u::lfo::kShape] = 10.0f / (u::lfo::kInstances - 1);
     lfo.values[u::lfo::kLayout] = 4.0f / u::lfo::kLayoutLast;
     r.plugin.requestProxyNames();
     r.plugin.overlayView.setNativeLfoState (lfo);
     r.plugin.nativeLfoPoll (&r.effect);
     const auto rndPaint = r.plugin.nativePagePaintUntil;
     check (rndPaint > paint && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kLayout] == lfo.values[u::lfo::kLayout]
-               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kSelection] == lfo.values[u::lfo::kSelection],
+               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kShape] == lfo.values[u::lfo::kShape],
            "switching directly from LFO 1 to RND 1 opens a new paint window and publishes both controls");
     std::this_thread::sleep_for (std::chrono::milliseconds (2));
     r.plugin.overlayView.setNativeLfoState (lfo);

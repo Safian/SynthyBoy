@@ -2,6 +2,7 @@
   "format": "synthyboy-mpc-ui-pages",
   "version": 2,
   "variant": "overlay",
+  "tabLimit": 37,
   "pages": [
     {
       "name": "Play",
@@ -101,6 +102,84 @@
       "kick": [
         "lfo1"
       ]
+    },
+    {
+      "name": "LFO 2",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 3",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 4",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 5",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 6",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 7",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 8",
+      "fn": "LFO",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 9",
+      "fn": "LFO 9",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "LFO 10",
+      "fn": "LFO 9",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "RND 1",
+      "fn": "LFO 9",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "RND 2",
+      "fn": "LFO 9",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "RND 3",
+      "fn": "LFO 9",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "RND 4",
+      "fn": "LFO 9",
+      "kick": [],
+      "custom": true
     },
     {
       "name": "FX",

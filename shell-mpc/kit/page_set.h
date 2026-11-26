@@ -56,7 +56,7 @@ constexpr int kScreenW = 1280, kScreenH = 800, kTabOriginY = 110, kTabH = 628;
 constexpr int kMaxInstances = 16;
 constexpr int kInstanceSteps = 32;    // the display parameter "Overlay Instance" has this many steps: frame f is the value f / kInstanceSteps (exact in a float)
 constexpr int kInstanceFrames = 33;   // frames of the film strip: 0 blank, 1 .. 16 slot 0 .. 15, 17 none, the rest blank
-constexpr int kMaxPages = 24;         // the page detector's limit (Detection::kMaxViews)
+constexpr int kMaxPages = 40;         // the page detector's limit (Detection::kMaxViews)
 constexpr uint32_t kBackgroundRgb = 0x1e1d1e;   // the colour of the dark picture of an opaque page (the host's own background)
 
 /** A page the plugin draws entirely (its own touch handling, the host widgets hidden under it): the Play kind or a kind from kFirstPageKind. */
@@ -126,7 +126,7 @@ inline bool validatePages (const IPageSet& set, std::string& why)
     const int n = set.numPages();
     if (n < 1 || n > kMaxPages)
     {
-        why = "a plugin has 1 .. 24 pages (the page detector holds 24 views)";
+        why = "a plugin has 1 .. 40 pages (the page detector holds 40 views)";
         return false;
     }
     std::vector<uint32_t> marker, under;   // `under`: the background of an opaque picture and what lies under every marker

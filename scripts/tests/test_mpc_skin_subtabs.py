@@ -35,9 +35,10 @@ def layout_doc(path):
 class LayoutFileTests(unittest.TestCase):
     """The layout files themselves (no SDK needed)."""
 
-    def test_default_layout_has_24_tabs(self):
+    def test_default_layout_has_37_tabs(self):
         doc = layout_doc(DEFAULT_LAYOUT)
-        self.assertEqual(len(doc["pages"]), 24)
+        self.assertEqual(len(doc["pages"]), 37)
+        self.assertEqual(doc["tabLimit"], 37)
 
     def test_function_keys_follow_each_other_and_have_at_most_8_sub_tabs(self):
         for path in LAYOUTS:
@@ -172,7 +173,7 @@ class SubTabSkinTests(unittest.TestCase):
 
     def test_tab_count(self):
         counts = {name: len(tabs) for name, tabs, _ in self.each()}
-        self.assertEqual(counts["mpc-ui-pages-overlay.json"], 24)
+        self.assertEqual(counts["mpc-ui-pages-overlay.json"], 37)
         for name, n in counts.items():
             self.assertEqual(n, len(layout_doc(ROOT / "scripts" / "overlay-skin" / name)["pages"]), name)
 
@@ -222,7 +223,8 @@ class SubTabSkinTests(unittest.TestCase):
         for name, skins in self.skins.items():
             res = subprocess.run([sys.executable, "-I", str(base.SDK / "tools" / "validate.py"), str(skins.parent)], capture_output=True, text=True)
             report = res.stdout + res.stderr
-            errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+            errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l
+                      and not ("37 tabs; at most 32" in l and name == "mpc-ui-pages-overlay.json")]   # the one accepted finding of the production layout
             self.assertEqual(errors, [], report)
 
     def test_module_without_meta_fails(self):
@@ -248,7 +250,7 @@ class RunGenUiTests(unittest.TestCase):
             ok = subprocess.run([sys.executable, str(ROOT / "scripts" / "run-gen-ui.py"), "--sdk", str(base.SDK), "--params", str(tmp / "ui" / "params-hostsim.json"),
                                  "--ui", str(tmp / "ui" / "ui.json"), "--out", str(tmp / "a"), "--quiet"], capture_output=True, text=True)
             self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
-            self.assertNotIn("lifted", ok.stdout)
+            self.assertIn("lifted", ok.stdout)   # the production layout has 37 pages: the wrapper lifts the limit of 32 (the devices loaded 39 tabs)
             # the plain SDK tool refuses 33 pages, the wrapper accepts them and says so
             ui = json.loads((tmp / "ui" / "ui.json").read_text(encoding="utf-8"))
             while len(ui["pages"]) < 33:

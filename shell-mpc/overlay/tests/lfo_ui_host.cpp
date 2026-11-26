@@ -546,18 +546,21 @@ void testFullScreen()
     check (! r.ui.random() && r.ui.selection() == 6 && r.inst.tv[0] == 0, "back to LFO 6");
 }
 
-// ---- the ONE LFO tab (step 3 of docs/ui-map/env-filter-lfo-plan.md): the page, the recount of its controls, the selector, the Q-Links that follow it, what hides
+// ---- the pages of the LFO sub-tabs (one tab page = one screen: the page of the sub-tab n shows LFO n, 1 .. 10, or RND n - 10, 11 .. 14; no selector): the recount of its controls, the Q-Links, what hides
 struct PageRig
 {
-    std::unique_ptr<PageView<LfoUi>> editorPage = std::make_unique<PageView<LfoUi>> ("lfo1", 1);
-    PageView<LfoUi>& page = *editorPage;
-    LfoUi& ui = page.ui();
+    std::unique_ptr<PageView<LfoUi>> editorPage;
+    PageView<LfoUi>& page;
+    LfoUi& ui;
     Inst inst;
     UiStack stack;
     double now = 1000.0;
     const synthyboy::LiveValues* live = nullptr;
     int panelEdge = page::kW;
-    PageRig() { inst.nativeEditorEnabled = inst.nativeDetailEnabled = true; stack.openFull (page.pageElement()); refresh(); }
+    explicit PageRig (int instance = 1) : editorPage (std::make_unique<PageView<LfoUi>> (instance <= 10 ? "lfo1" : "lfo1", instance)), page (*editorPage), ui (page.ui())
+    {
+        inst.nativeEditorEnabled = inst.nativeDetailEnabled = true; stack.openFull (page.pageElement()); refresh();
+    }
     bool refresh()
     {
         ViewInput in;
@@ -597,31 +600,6 @@ struct PageRig
         inst.set (std::string (k) + "amount", 30.0f);
         refresh();
     }
-    bool tapCell (const char* label)
-    {
-        const ui::Rect c = ui.full().instance.rect();
-        tap (c.x + c.w / 2, c.y + c.h / 2);   // the standalone tab's dropdown
-        std::string wanted = label;
-        if (wanted == "+") {}
-        else if (wanted.size() > 1 && wanted[0] == 'R') wanted = "RND " + wanted.substr (1);
-        else if (wanted.find ("LFO ") != 0) wanted = "LFO " + wanted;
-        for (int i = 0; i < ui.list().state.count; ++i)
-            if (std::string (ui.list().state.items[i]) == wanted)
-            {
-                for (int guard = 0; guard < 16 && (i < ui.list().firstRow() || i >= ui.list().firstRow() + ui.list().visibleRows()); ++guard)
-                {
-                    const ui::Rect z = ui.list().zoneRect();
-                    tap (z.x + z.w / 2, i < ui.list().firstRow() ? z.y + 2 : z.bottom() - 2);
-                }
-                const int visible = i - ui.list().firstRow();
-                if (visible < 0 || visible >= ui.list().visibleRows())
-                    continue;
-                const ui::Rect row = ui.list().rowRect (i);
-                tap (row.x + row.w / 2, row.y + row.h / 2);
-                return true;
-            }
-        return false;
-    }
     /** The controls the page shows now: the leaves of the full screen (the SMOOTH knob counts twice: its time and the LED of its switch), no CLOSE (page mode). */
     int controls (std::string* names = nullptr)
     {
@@ -629,7 +607,7 @@ struct PageRig
         const int nl = ui.full().collectLeaves (leaves, 0, 160);
         int n = 0;
         struct N { const ui::Component* c; const char* name; };
-        const N all[] = { { &ui.full().selector, "selector" }, { &ui.full().instance, "instance" }, { &ui.full().namedPicker, "named waveform/style" }, { &ui.full().picker, "picker/styles" }, { &ui.full().edit, "EDIT" }, { &ui.full().targets, "TARGETS" }, { &ui.full().rate.rate, "RATE" }, { &ui.full().rate.division, "DIVISION" },
+        const N all[] = { { &ui.full().selector, "selector" }, { &ui.full().namedPicker, "named waveform/style" }, { &ui.full().picker, "picker/styles" }, { &ui.full().edit, "EDIT" }, { &ui.full().targets, "TARGETS" }, { &ui.full().rate.rate, "RATE" }, { &ui.full().rate.division, "DIVISION" },
                           { &ui.full().rate.trip, "TRIP" }, { &ui.full().rate.dot, "DOT" }, { &ui.full().rise, "RISE" }, { &ui.full().smoothTime, "SMOOTH" }, { &ui.full().syncSwitch.mode, "HZ/BPM/KEY" }, { &ui.full().phase, "PHASE" },
                           { &ui.full().delay, "DELAY" }, { &ui.full().mode, "MODE" }, { &ui.full().modeList, "MODE (list)" }, { &ui.full().hostPick, "HOST" }, { &ui.full().direction, "DIRECTION" }, { &ui.full().swing, "SWING" },
                           { &ui.full().stereo, "STEREO" }, { &ui.full().monoQ, "MONO" }, { &ui.full().stereoToggle, "STEREO (toggle)" }, { &ui.full().keyTranspose, "KEY TRANSPOSE" }, { &ui.full().keyTune, "KEY TUNE" } };
@@ -653,64 +631,6 @@ struct PageRig
     }
 };
 
-void testStandaloneLfoSelectorQ()
-{
-    for (bool wide : { false, true })
-    {
-        ui::QGroup::setWideDevice (wide);
-        PageRig r;
-        r.route (1, uibind::lfoSource (6), "master.volume");
-        r.route (2, uibind::rndSource (2), "filter1.cutoff");
-        auto slot = [&] ()
-        {
-            int result = -1;
-            for (int q = 0; q < QRouter::kCount; ++q)
-                if (r.inst.router.virtualId (q) == LfoUi::kVirtualSelector)
-                {
-                    check (result < 0, "only one Q proxy owns the LFO selector");
-                    result = q;
-                }
-            return result;
-        };
-        check (slot() == (wide ? 15 : 7), "LFO selector occupies a spare slot without moving TIMING");
-        check (r.inst.hostQ (slot(), 0.25f) == QRouter::Write::written, "the host can write the LFO virtual dial");
-        r.refresh();
-        check (! r.ui.random() && r.ui.selection() == 6 && r.inst.router.target (0) == paramIdx ("lfo6.shape"),
-               "the Q dial selects the second shown LFO and publishes its own Q targets");
-        check (r.inst.hostQ (slot(), 1.0f / 3.0f) == QRouter::Write::written, "the same dial can select a shown random LFO after the unused LFO 1 cell disappears");
-        r.refresh();
-        check (r.ui.random() && r.ui.selection() == 2 && r.inst.sel[2] == 6 && r.inst.router.target (0) == paramIdx ("rlfo2.style"),
-               "random selection keeps the last standard LFO and remaps the RANDOM controls");
-        check (r.inst.hostQ (slot(), 1.0f) == QRouter::Write::written, "the high end of the LFO dial includes the free random choice");
-        r.refresh();
-        check (r.ui.random() && r.ui.selection() == 1, "the '+' random Q stop selects the lowest free RND");
-        check (r.inst.hostQ (slot(), 0.75f) == QRouter::Write::written, "the other '+' Q stop offers a free standard LFO");
-        r.refresh();
-        check (! r.ui.random() && r.ui.selection() == 1 && r.inst.writes == 0,
-               "the free normal LFO is reachable from the same dial without editing the patch");
-
-        r.key ("lfo1.sync", 4.0f);
-        r.ui.full().setActiveGroup (2);
-        r.refresh();
-        const int q = slot();
-        const int keySlot = wide ? 5 : 0;
-        check (q == (wide ? 15 : 13) && r.inst.router.target (keySlot) == paramIdx ("lfo1.keytrack_transpose")
-               && r.inst.router.target (keySlot + 1) == paramIdx ("lfo1.keytrack_tune"),
-               "the selector remains reachable with the KEY block active without replacing TRANSPOSE or TUNE");
-        check (r.inst.hostQ (q, 1.0f) == QRouter::Write::written, "queue a selection just before a detail opens");
-        r.tapC (r.ui.full().targets);
-        check (r.ui.topPage() == LfoUi::kPageTargets && slot() < 0 && r.ui.selection() == 1,
-               "opening Targets drops the root selector's pending write");
-        r.tapC (r.ui.targetsPage().back);
-        check (slot() >= 0 && r.ui.selection() == 1, "closing Targets restores the virtual selector without a stale jump");
-        check (r.inst.hostQ (slot(), 1.0f) == QRouter::Write::written, "queue an LFO selection just before a preset load");
-        ++r.inst.generation;
-        r.refresh();
-        check (r.ui.selection() == 1 && ! r.ui.random(), "the preset's selected LFO wins over the previous preset's queued write");
-    }
-    ui::QGroup::setWideDevice (false);
-}
-
 __attribute__((noinline)) void testLfoTab()
 {
     // the recount (written in docs/ui-map/env-filter-lfo-plan.md): the controls of the tab in every mode
@@ -721,87 +641,71 @@ __attribute__((noinline)) void testLfoTab()
         std::string nm;
         const int hz = r.controls (&nm);
         std::printf ("INFO LFO standard, Hz, built-in shape: %d controls: %s\n", hz, nm.c_str());
-        check (hz == 17 && r.ui.full().editShown() && r.ui.full().edit.rect().w >= 56 && r.ui.full().edit.state.icon == ui::MenuButton::Icon::Expand,
-               "standard LFO (Hz, standalone): 17 controls (instance, named waveform, TARGETS, Expand, RATE, RISE, SMOOTH + switch, HZ/BPM/KEY, PHASE, DELAY, MODE, HOST, DIRECTION, SWING, STEREO, MONO)");
+        check (hz == 16 && r.ui.full().editShown() && r.ui.full().edit.rect().w >= 56 && r.ui.full().edit.state.icon == ui::MenuButton::Icon::Expand,
+               "standard LFO (Hz, standalone): 16 controls (named waveform, TARGETS, Expand, RATE, RISE, SMOOTH + switch, HZ/BPM/KEY, PHASE, DELAY, MODE, HOST, DIRECTION, SWING, STEREO, MONO)");
         check (r.ui.full().hostPick.rect().h >= 56 && r.ui.full().block (1).contains (r.ui.full().hostPick.rect().x, r.ui.full().hostPick.rect().y) && r.ui.full().block (1).contains (r.ui.full().hostPick.rect().right() - 1, r.ui.full().hostPick.rect().bottom() - 1),
               "U14: HOST sits inside the TIMING block (touch only)");
         r.key ("lfo1.shape", 12.0f);
         std::string n2;
         const int drawn = r.controls (&n2);
-        check (drawn == 17 && r.ui.full().editShown() && r.ui.full().edit.rect().w >= 56, "shape = DRAWN: Expand remains shown (17 controls)");
+        check (drawn == 16 && r.ui.full().editShown() && r.ui.full().edit.rect().w >= 56, "shape = DRAWN: Expand remains shown (16 controls)");
         r.key ("lfo1.shape", 3.0f);
         check (r.ui.full().editShown() && r.ui.full().edit.state.icon == ui::MenuButton::Icon::Expand, "built-in shape in standalone: Expand button stays consistent");
         r.key ("lfo1.sync", 1.0f);
         std::string n3;
         const int bpm = r.controls (&n3);
         std::printf ("INFO LFO standard, BPM: %d controls: %s\n", bpm, n3.c_str());
-        check (bpm == 19 && r.ui.full().rate.trip.rect().h >= 56 && r.ui.full().rate.dot.rect().h >= 56 && ! r.ui.full().keyTranspose.rect().w, "BPM: DIVISION replaces RATE and TRIP, DOT appear (19 controls)");
+        check (bpm == 18 && r.ui.full().rate.trip.rect().h >= 56 && r.ui.full().rate.dot.rect().h >= 56 && ! r.ui.full().keyTranspose.rect().w, "BPM: DIVISION replaces RATE and TRIP, DOT appear (18 controls)");
         r.key ("lfo1.sync", 4.0f);
         std::string n4;
         const int key = r.controls (&n4);
         std::printf ("INFO LFO standard, KEY: %d controls: %s\n", key, n4.c_str());
-        check (key == 18 && r.ui.full().keyTranspose.enabled() && r.ui.full().keyTune.enabled() && ! r.ui.full().rate.trip.rect().w, "KEY: TRANSPOSE and TUNE replace RATE (18 controls), no TRIP / DOT");
+        check (key == 17 && r.ui.full().keyTranspose.enabled() && r.ui.full().keyTune.enabled() && ! r.ui.full().rate.trip.rect().w, "KEY: TRANSPOSE and TUNE replace RATE (17 controls), no TRIP / DOT");
         r.key ("lfo1.sync", 0.0f);
         r.key ("lfo1.shape", 12.0f);
         r.key ("lfo1.sync", 1.0f);
         std::string n5;
         const int most = r.controls (&n5);
         std::printf ("INFO LFO standard, drawn + BPM (the most): %d controls\n", most);
-        check (most == 19, "the most a standard LFO shows: drawn shape + BPM = 19 controls");
+        check (most == 18, "the most a standard LFO shows: drawn shape + BPM = 18 controls");
     }
     {
-        PageRig r;
-        r.inst.tv[0] = 1;   // RND 1
+        PageRig r (11);   // the sub-tab RND 1
         r.refresh();
         std::string nm;
         const int rnd = r.controls (&nm);
         std::printf ("INFO random LFO, Hz: %d controls: %s\n", rnd, nm.c_str());
-        check (r.ui.random() && rnd == 7 && nm.find ("HOST") == std::string::npos && nm.find ("RISE") == std::string::npos && nm.find ("PHASE") == std::string::npos && nm.find ("DIRECTION") == std::string::npos && nm.find ("EDIT") == std::string::npos && nm.find ("SWING") == std::string::npos && nm.find ("MONO") == std::string::npos,
-               "random LFO (Hz): 7 controls (selector, style grid, RATE, HZ/BPM/KEY, STEREO toggle, trigger list, TARGETS); HOST, RISE, SMOOTH, PHASE, DELAY, DIRECTION, SWING, STEREO knob, MONO, MODE stepper, EDIT are hidden, not dimmed");
+        check (r.ui.random() && rnd == 6 && nm.find ("HOST") == std::string::npos && nm.find ("RISE") == std::string::npos && nm.find ("PHASE") == std::string::npos && nm.find ("DIRECTION") == std::string::npos && nm.find ("EDIT") == std::string::npos && nm.find ("SWING") == std::string::npos && nm.find ("MONO") == std::string::npos,
+               "random LFO (Hz): 6 controls (style grid, RATE, HZ/BPM/KEY, STEREO toggle, trigger list, TARGETS); HOST, RISE, SMOOTH, PHASE, DELAY, DIRECTION, SWING, STEREO knob, MONO, MODE stepper, EDIT are hidden, not dimmed");
         r.key ("rlfo1.sync", 1.0f);
         std::string n2;
         const int b = r.controls (&n2);
-        check (b == 9, "random LFO, BPM: 9 controls (DIVISION replaces RATE, TRIP and DOT appear): " + std::to_string (b));
+        check (b == 8, "random LFO, BPM: 8 controls (DIVISION replaces RATE, TRIP and DOT appear): " + std::to_string (b));
         r.key ("rlfo1.sync", 4.0f);
         std::string n3;
         const int k = r.controls (&n3);
         std::printf ("INFO random LFO, KEY: %d controls: %s\n", k, n3.c_str());
-        check (k == 8, "random LFO, KEY: 8 controls (TRANSPOSE and TUNE replace RATE): " + std::to_string (k));
+        check (k == 7, "random LFO, KEY: 7 controls (TRANSPOSE and TUNE replace RATE): " + std::to_string (k));
     }
-    // the selector for an empty, a partly used and an all used preset
+    // the page has no selector: the namedPicker is accessible and the hardware sub-tab names the LFO
     {
         PageRig r;
-        check (cellsText (r.ui.selector()) == "[1] +" && r.ui.selector().state.selected == 1, "empty preset: [1] +  (" + cellsText (r.ui.selector()) + ")");
-        const ui::Rect instance = r.ui.full().instance.rect();
-        check (instance.h >= 56 && instance.w >= 200 && r.ui.full().instance.enabled() && ! r.ui.full().instance.inactive(), "the standalone selector dropdown is accessible (>= 200 x 56) and active");
         check (r.ui.full().picker.rect().empty() && r.ui.full().namedPicker.rect().w >= 240 && r.ui.full().namedPicker.rect().h >= 56,
                "standalone LFO replaces the shape grid with an accessible named waveform dropdown");
+        check (r.ui.full().selector.rect().empty() && r.ui.full().namedPicker.rect().x <= 16 && ! r.ui.full().namedPicker.rect().overlaps (r.ui.full().targets.rect()),
+               "the page has no selector: the waveform dropdown takes the room of the old instance cell");
+        PageRig a (7);
+        check (! a.ui.random() && a.ui.selection() == 7 && a.inst.sel[2] == 1 && a.inst.tv[0] == 0, "the sub-tab LFO 7 shows LFO 7 and shares nothing with the Play selection");
+        PageRig b (12);
+        check (b.ui.random() && b.ui.selection() == 2 && b.inst.sel[2] == 1 && b.inst.tv[0] == 0, "the sub-tab RND 2 shows RND 2 and writes no view state");
     }
+    // the Q-Links follow the LFO of the sub-tab (LFO 6 and RND 2); a hidden LFO keeps what it has
     {
-        PageRig r;
-        r.route (1, 8, "master.volume");   // LFO 2 (source 8)
-        r.route (2, 15, "master.volume");   // RND 1 (source 15)
-        r.route (3, 39 - 6, "master.volume");   // 33 = LFO 9
-        r.inst.set ("lfo5.rate", 9.0f);   // edited, no routing: counts as used
+        PageRig r (6);
+        r.inst.set ("lfo7.phase", 90.0f);   // an LFO that is not shown keeps what it has: nothing writes it
         r.refresh();
-        check (cellsText (r.ui.selector()) == "[1] [2] [5] [9] [R1] +", "partly used (LFO 2, 9 routed, LFO 5 edited, RND 1 routed): [1] [2] [5] [9] [R1] +  (" + cellsText (r.ui.selector()) + ")");
-        // the all used preset: 10 LFOs + 4 random: 14 cells, no '+', and the cells fit the top bar
-        PageRig a;
-        int slot = 1;
-        for (int n = 1; n <= 10; ++n)
-            a.route (slot++, uibind::lfoSource (n), "master.volume");
-        for (int m = 1; m <= 4; ++m)
-            a.route (slot++, uibind::rndSource (m), "master.volume");
-        const ui::Rect sr = a.ui.full().instance.rect();
-        check (a.ui.selector().numCells() == 14 && ! a.ui.selector().hasPlus() && sr.w >= 200 && ! sr.overlaps (a.ui.full().targets.rect()), "all used: 14 entries remain available through the standalone dropdown (" + std::to_string (sr.w) + " px)");
-    }
-    // LFO 7 appears after 6 is assigned; selecting away keeps a hidden LFO's parameters; the Q-Links follow the selected LFO
-    {
-        PageRig r;
-        r.route (1, uibind::lfoSource (6), "master.volume");
-        check (cellsText (r.ui.selector()) == "[1] [6] +", "LFO 6 assigned: [1] [6] +");
-        check (r.tapCell ("6") && r.ui.selection() == 6 && r.inst.q[0] == paramIdx ("lfo6.shape") && r.inst.q[1] == paramIdx ("lfo6.rate") && r.inst.q[2] == paramIdx ("lfo6.fade_in") && r.inst.q[3] == paramIdx ("lfo6.smooth_time"),
-              "Q-Links follow the selected LFO: the RATE group is shape, rate, rise, smooth of lfo6");
+        check (r.ui.selection() == 6 && r.inst.q[0] == paramIdx ("lfo6.shape") && r.inst.q[1] == paramIdx ("lfo6.rate") && r.inst.q[2] == paramIdx ("lfo6.fade_in") && r.inst.q[3] == paramIdx ("lfo6.smooth_time"),
+              "Q-Links follow the LFO of the sub-tab: the RATE group is shape, rate, rise, smooth of lfo6");
         int timingGrp = -1;
         for (int g = 0; g < r.ui.full().numGroups(); ++g)
             if (std::strcmp (r.ui.full().groupName (g), "Timing") == 0)
@@ -810,31 +714,21 @@ __attribute__((noinline)) void testLfoTab()
         r.ui.full().setActiveGroup (timingGrp);
         r.refresh();
         check (r.inst.q[0] == paramIdx ("lfo6.sync") && r.inst.q[1] == paramIdx ("lfo6.phase") && r.inst.q[2] == paramIdx ("lfo6.delay") && r.inst.q[3] == paramIdx ("lfo6.sync_type"), "the TIMING group of lfo6");
-        r.inst.set ("lfo7.phase", 90.0f);   // an LFO that is not shown keeps what it has: nothing writes it
-        r.refresh();
-        const int w0 = r.inst.writes;
-        const ui::Rect instR = r.ui.full().instance.rect();
-        r.tap (instR.right() - 10, instR.y + instR.h / 2);   // step past LFO 7
-        r.tap (instR.right() - 10, instR.y + instR.h / 2);   // step carousel onto `+` (LFO 2 and RND 1 free): Plus list opens
-        check (r.stack.depth() == 2 && r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 2 && r.inst.writes == w0,
-               "'+' opens the two-row Plus list and writes nothing");
-        r.stack.back();
-        r.refresh();
-        const float ph = r.inst.get ("lfo7.phase");
-        r.tapCell ("1");
-        check (r.inst.get ("lfo7.phase") == ph && r.inst.writes == w0, "hidden LFOs keep their parameters (selection writes none)");
-        r.inst.set ("rlfo2.sync", 1.0f);
-        r.inst.tv[0] = 2;
-        r.refresh();
-        check (r.ui.random() && r.ui.selection() == 2 && r.inst.q[0] == paramIdx ("rlfo2.style") && (r.inst.q[1] == paramIdx ("rlfo2.division") || r.inst.q[1] == paramIdx ("rlfo2.rate")), "Q-Links follow the random LFO (rlfo2: style, then rate or division): " + std::to_string (r.ui.random()) + " " + std::to_string (r.ui.selection()) + " " + std::to_string (r.inst.q[0]) + " " + std::to_string (r.inst.q[1]));
+        check (r.inst.get ("lfo7.phase") == 90.0f && r.inst.writes == 0, "the page writes nothing: no selector, no virtual Q dial");
+        for (int q = 0; q < QRouter::kCount; ++q)
+            check (r.inst.router.virtualId (q) < 0, "no virtual Q target on the page of a sub-tab (the selector Q is gone)");
+        PageRig rnd (12);
+        rnd.inst.set ("rlfo2.sync", 1.0f);
+        rnd.refresh();
+        check (rnd.ui.random() && rnd.ui.selection() == 2 && rnd.inst.q[0] == paramIdx ("rlfo2.style") && (rnd.inst.q[1] == paramIdx ("rlfo2.division") || rnd.inst.q[1] == paramIdx ("rlfo2.rate")),
+               "Q-Links follow the random LFO of the sub-tab (rlfo2: style, then rate or division)");
     }
-    // the targets and the display edit the selected LFO
+    // the targets and the display edit the LFO of the sub-tab
     {
-        PageRig r;
+        PageRig r (3);
         r.route (1, uibind::lfoSource (3), "master.volume");
-        r.tapCell ("3");
         r.tapC (r.ui.full().targets);
-        check (r.ui.topPage() == LfoUi::kPageTargets && r.ui.source() == uibind::lfoSource (3), "TARGETS: the targets of the selected LFO (LFO 3)");
+        check (r.ui.topPage() == LfoUi::kPageTargets && r.ui.source() == uibind::lfoSource (3), "TARGETS: the targets of the LFO of the sub-tab (LFO 3)");
     }
 }
 
@@ -883,37 +777,17 @@ __attribute__((noinline)) void testStandaloneLfoPage()
     r.tapC (r.ui.editor().back);
     check (r.ui.topPage() == 0, "back from editor returns to standalone LFO page");
 
-    // LFO/RND selector distinguishes selected vs assigned sources and navigates across unused/unrouted slots without writes
+    // the page has no selector: an unused / unrouted LFO or RND of a sub-tab opens its TARGETS without writing anything
     r.route (1, uibind::lfoSource (4), "master.volume");
     r.route (2, uibind::rndSource (2), "master.volume");
-    r.tapC (r.ui.full().instance);
-    const unsigned expectedDots = (1u << 3) | (1u << 11);   // LFO 4 (idx 3) and RND 2 (idx 11) assigned; selected LFO 1 (idx 0) is NOT assigned
-    check (r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 14 && r.ui.list().state.current == 0 && r.ui.list().state.dotMask == expectedDots,
-           "PageInstance list marks assigned sources with dots separately from selected row");
     const int wNav0 = r.inst.writes;
-    const ui::Rect r7 = r.ui.list().rowRect (6);
-    r.tap (r7.x + r7.w / 2, r7.y + r7.h / 2);   // switch to unused LFO 7
-    check (r.ui.topPage() == 0 && ! r.ui.random() && r.ui.selection() == 7 && r.inst.writes == wNav0,
-           "selecting an unrouted LFO switches view without writing parameters");
-    check (! r.ui.full().instance.inactive() && ! r.ui.full().targets.inactive(),
-           "navigation controls stay live when an unrouted/inactive LFO is selected");
-    r.tapC (r.ui.full().instance);
-    for (int g = 0; g < 12 && (10 < r.ui.list().firstRow() || 10 >= r.ui.list().firstRow() + r.ui.list().visibleRows()); ++g)
-    {
-        const ui::Rect z = r.ui.list().zoneRect();
-        r.tap (z.x + z.w / 2, z.bottom() - 2);
-    }
-    const ui::Rect rr1 = r.ui.list().rowRect (10);
-    r.tap (rr1.x + rr1.w / 2, rr1.y + rr1.h / 2);   // switch from unused LFO 7 to unused RND 1
-    check (r.ui.topPage() == 0 && r.ui.random() && r.ui.selection() == 1 && r.inst.writes == wNav0,
-           "navigation from unused LFO to unused RND works and writes no sound/routing parameters");
-    check (std::string (r.ui.full().namedPicker.state.text) == "Perlin", "Random mode namedPicker displays readable style name");
-    check (r.tapCell ("R2") && r.ui.random() && r.ui.selection() == 2
-           && r.ui.topPage() == 0 && r.ui.list().state.count == 0 && r.inst.writes == wNav0,
-           "standalone RND2 selection closes and clears the instance list without writing parameters");
-    r.tapCell ("R1");
-    r.tapC (r.ui.full().targets);
-    check (r.ui.topPage() == LfoUi::kPageTargets && r.ui.source() == uibind::rndSource (1) && r.inst.writes == wNav0,
+    check (! r.ui.full().targets.inactive(), "navigation controls stay live when an unrouted/inactive LFO is shown");
+    PageRig rnd (11);
+    check (rnd.ui.random() && rnd.ui.selection() == 1, "the sub-tab RND 1 shows RND 1");
+    check (std::string (rnd.ui.full().namedPicker.state.text) == "Perlin", "Random mode namedPicker displays readable style name");
+    const int wRnd = rnd.inst.writes;
+    rnd.tapC (rnd.ui.full().targets);
+    check (rnd.ui.topPage() == LfoUi::kPageTargets && rnd.ui.source() == uibind::rndSource (1) && rnd.inst.writes == wRnd && r.inst.writes == wNav0,
            "TARGETS opens from an unused/inactive RND without writing parameters");
 }
 
@@ -1987,8 +1861,7 @@ void testDisplay()
 
 void testRandomTraceSettles()
 {
-    PageRig r;
-    r.inst.tv[0] = 1;
+    PageRig r (11);
     synthyboy::LiveValues live;
     live.numLfoVoices = 1;
     live.source[14] = 0.5f;
@@ -2051,12 +1924,6 @@ void testRandomTraceSettles()
     r.refresh();
     check (end[-1] > 0.85f, "the new preset accepts a new live trace");
     r.live = nullptr;
-    r.inst.tv[0] = 2;
-    r.refresh();
-    check (r.ui.selection() == 2 && clear(), "selecting RND 2 does not carry the RND 1 history");
-    r.inst.tv[0] = 1;
-    r.refresh();
-    check (r.ui.selection() == 1 && clear(), "returning to RND 1 starts with a fresh history");
 }
 
 void testTouchAndDraw()
@@ -2451,8 +2318,9 @@ void testReducedEndpoints()
     ui::theme::setDetail (originalDetail);
 }
 
-/** The Play page's LFO carousel and the LFO tab show the SAME list (used + selected + one "+"): two UIs on one instance, for an empty, a partly used and an all used preset; leaving the tab with an unused random LFO selected falls back. */
-void testPlayCarouselIsTheTabSelector()
+/** The Play page's LFO carousel keeps its list (used + selected + one "+") and its own selection (Play LFO + mpcTabView.rnd); the page of an LFO sub-tab shares nothing with it: no selector, no fallback of an unused pick, the
+    Play selection never moves the page and the page never writes the Play selection. */
+void testPlayCarouselSharesNothingWithTheTab()
 {
     struct Both
     {
@@ -2460,8 +2328,9 @@ void testPlayCarouselIsTheTabSelector()
         Inst inst;
         UiStack tabStack, playStack;
         double now = 1000.0;
+        int instance = 1;   // the page of the sub-tab
         Both() { tabStack.openFull (LfoUi::kElementPage); refresh(); }
-        void refresh() { now += 150.0; page::Input in; tab.update (inst, tabStack, now, in); play.update (inst, 3, playStack, now, nullptr); }
+        void refresh() { now += 150.0; page::Input in; in.instance = instance; tab.update (inst, tabStack, now, in); play.update (inst, 3, playStack, now, nullptr); }
         void route (int slot, int source, const char* dest)
         {
             char k[32];
@@ -2479,69 +2348,41 @@ void testPlayCarouselIsTheTabSelector()
                 t += std::string (k ? " " : "") + c.names[k];
             return t;
         }
-        bool sameAsTab() const
-        {
-            int cs[ui::UsedSelector::kMaxCells];
-            const ui::UsedSelector& sel = tab.selector();
-            const int n = sel.cells (cs, ui::UsedSelector::kMaxCells);
-            const uibind::SelectorCells& c = play.playCells();
-            if (n != c.n)
-                return false;
-            for (int k = 0; k < n; ++k)
-                if (c.id[k] != (cs[k] == ui::UsedSelector::kPlus ? uibind::SelectorCells::kPlusCell : sel.state.items[cs[k]].id))
-                    return false;
-            return c.selectedPos >= 0 && c.selectedPos < c.n;
-        }
     };
     {
         Both b;
-        check (b.sameAsTab() && b.playText() == "LFO 1 +" && b.play.compact().instance.state.count == 2, "empty preset: the Play carousel and the tab show LFO 1, + (" + b.playText() + ")");
+        check (b.playText() == "LFO 1 +" && b.play.compact().instance.state.count == 2, "empty preset: the Play carousel shows LFO 1, + (" + b.playText() + ")");
+        check (b.tab.selector().numCells() == 0, "the page of a tab has no selector cells");
     }
     {
         Both b;
         b.route (1, 9, "master.volume");   // LFO 3
         b.inst.set ("rlfo2.rate", 5.0f);
         b.refresh();
-        check (b.sameAsTab() && b.playText() == "LFO 1 LFO 3 RND 2 +", "partly used (LFO 3 routed, RND 2 edited): the Play carousel and the tab show LFO 1 (selected), LFO 3, RND 2, + (" + b.playText() + ")");
-        b.tab.select (11, b.inst);   // RND 2 on the tab: the Play page shows it too
+        check (b.playText() == "LFO 1 LFO 3 RND 2 +", "partly used (LFO 3 routed, RND 2 edited): the Play carousel shows LFO 1 (selected), LFO 3, RND 2, + (" + b.playText() + ")");
+        check (b.tab.selector().numCells() == 0 && ! b.tab.random() && b.tab.selection() == 1, "the page of the sub-tab LFO shows LFO 1 whatever the Play page lists");
+        b.play.select (11, b.inst);   // RND 2 on the Play page
         b.refresh();
-        check (b.sameAsTab() && b.play.random() && b.play.playCells().selectedPos == 1 && b.playText() == "LFO 3 RND 2 +", "RND 2 selected on the tab: the Play page follows (" + b.playText() + ")");
-    }
-    {
-        Both b;
-        for (int n = 1; n <= 10; ++n)
-            b.route (n, 6 + (n <= 8 ? n : (n == 9 ? 27 : 28)), "master.volume");
-        for (int m = 1; m <= 4; ++m)
-            b.inst.set ("rlfo" + std::to_string (m) + ".rate", 3.0f + static_cast<float> (m));
+        check (b.play.random() && b.play.selection() == 2 && b.inst.tv[0] == 2 && ! b.tab.random() && b.tab.selection() == 1,
+               "RND 2 chosen on the Play page: the page of the sub-tab LFO does not follow (" + b.playText() + ")");
+        b.instance = 12;   // the sub-tab RND 2
         b.refresh();
-        check (b.sameAsTab() && b.play.playCells().n == 14 && b.playText().find ('+') == std::string::npos && b.play.compact().instance.state.count == 14, "all fourteen used: fourteen entries, no + on both (" + b.playText() + ")");
+        check (b.tab.random() && b.tab.selection() == 2 && b.play.random() && b.play.selection() == 2, "the sub-tab RND 2 shows RND 2");
+        b.play.select (2, b.inst);   // LFO 3 on the Play page
+        b.refresh();
+        check (! b.play.random() && b.play.selection() == 3 && b.tab.random() && b.tab.selection() == 2 && b.inst.tv[0] == 0 && b.inst.sel[2] == 3,
+               "LFO 3 chosen on the Play page: the page of the sub-tab RND 2 does not follow");
     }
-    // a random LFO chosen as the free one and not edited: leaving the tab falls back to the last used item (decision 2026-11-21, no parameter is written)
+    // a random LFO the Play page picked and did not edit still falls back when the Play page is left; leaving the page of a tab changes no selection
     {
         Both b;
         b.route (1, 8, "master.volume");   // LFO 2 used
-        b.tab.select (10, b.inst);          // RND 1: a pick of "+", not edited
+        b.play.select (10, b.inst);        // RND 1 on the Play page: a pick of "+", not edited
         b.refresh();
-        check (b.tab.random() && b.sameAsTab(), "RND 1 picked (unused, unedited): shown while selected");
-        const int w0 = b.inst.writes;
+        const int w0 = b.inst.writes, sel = b.inst.sel[2], rnd = b.inst.tv[0];
         b.tab.leftTab (b.inst);
         b.refresh();
-        check (! b.tab.random() && b.tab.selection() == 2 && b.inst.tv[0] == 0 && b.inst.sel[2] == 2 && b.inst.writes == w0, "leaving the tab: back to LFO 2, the last used one; no parameter is written");
-        b.inst.set ("rlfo3.rate", 9.0f);
-        b.tab.select (12, b.inst);
-        b.refresh();
-        b.tab.leftTab (b.inst);
-        check (b.tab.random() && b.tab.selection() == 3, "an edited random LFO stays selected when the tab is left");
-        b.tab.select (1, b.inst);   // LFO 2, used
-        b.refresh();
-        b.tab.leftTab (b.inst);
-        check (! b.tab.random() && b.tab.selection() == 2, "a used LFO stays selected when the tab is left");
-        Both e;   // nothing used at all: the first candidate
-        e.tab.select (12, e.inst);
-        e.refresh();
-        e.tab.leftTab (e.inst);
-        e.refresh();
-        check (! e.tab.random() && e.tab.selection() == 1, "nothing used: an unused pick falls back to LFO 1");
+        check (b.inst.sel[2] == sel && b.inst.tv[0] == rnd && b.inst.writes == w0, "leaving the page of a tab does not touch the Play selection, no parameter is written");
     }
 }
 
@@ -2641,12 +2482,13 @@ __attribute__((noinline)) void testStandaloneLfoNativeSmooth()
     check (clearSmooth, "the complete native Smooth interior is transparent in the standalone LFO overlay");
 
     // Random LFO: verify native Smooth is inactive (only applicable to standard LFOs)
-    r.inst.tv[0] = 1; // RND 1
-    r.refresh();
-    check (r.ui.random(), "LfoUi is in Random mode");
-    check (! r.ui.full().nativeSmooth(), "native Smooth is false on Random LFO (inapplicable)");
-    check (! r.ui.nativeSmooth(), "LfoUi nativeSmooth is false on Random LFO");
-    check (r.ui.full().smoothArea().empty(), "Random LFO has empty smoothArea");
+    PageRig rnd (11);   // the sub-tab RND 1
+    rnd.inst.nativeEnabled = true;
+    rnd.refresh();
+    check (rnd.ui.random(), "LfoUi is in Random mode");
+    check (! rnd.ui.full().nativeSmooth(), "native Smooth is false on Random LFO (inapplicable)");
+    check (! rnd.ui.nativeSmooth(), "LfoUi nativeSmooth is false on Random LFO");
+    check (rnd.ui.full().smoothArea().empty(), "Random LFO has empty smoothArea");
 
     // Compact Play protection: compact view does not hand off smooth
     Inst pinst;
@@ -2669,25 +2511,29 @@ void testStandaloneLfoNativeGround()
     check (asset != nullptr && view != std::end (layout::kViews), "LFO/RND has a registered host background and detector geometry");
     if (asset == nullptr || view == std::end (layout::kViews))
         return;
-    auto rig = std::make_unique<PageRig>();
-    auto& r = *rig;
-    r.inst.nativeEnabled = true;
+    std::unique_ptr<PageRig> rigs[2] = { std::make_unique<PageRig> (1), std::make_unique<PageRig> (11) };   // the sub-tabs LFO and RND 1
     const int sx = asset->sentinelX, sy = page::kTabY + asset->sentinelY;
-    r.page.setSentinel ({ sx, sy, 5, 5 }, asset->sentinelRgb);
+    for (auto& rig : rigs)
+    {
+        rig->inst.nativeEnabled = true;
+        rig->page.setSentinel ({ sx, sy, 5, 5 }, asset->sentinelRgb);
+    }
     uit::Scene groundScene (page::kW, page::kH, 0);
     page::ground (groundScene.builder());
     const auto base = uit::render (groundScene);
+    PageRig* current = rigs[0].get();
     auto render = [&]
     {
         uit::Image image { page::kW, page::kH, std::vector<uint32_t> (page::kW * page::kH) };
-        r.page.render (image.px.data(), image.w, image.h);
+        current->page.render (image.px.data(), image.w, image.h);
         return image;
     };
 
     for (int family = 0; family < 2; ++family)
         for (const int sync : { 0, 1, 4 })
         {
-            r.inst.tv[0] = family;
+            PageRig& r = *rigs[family];
+            current = &r;
             r.key (family ? "rlfo1.sync" : "lfo1.sync", static_cast<float> (sync));
             const std::string label = (family ? "RND " : "LFO ") + std::to_string (sync);
             const auto state = r.inst.native;
@@ -2697,9 +2543,6 @@ void testStandaloneLfoNativeGround()
             r.page.setHostBackground (true);
             check (r.ui.hostBackground(), label + " uses the host floor after sentinel confirmation");
             const auto foreground = render();
-            const auto r0 = r.ui.nativeRect (n::kSelection);
-            check (foreground.at (r0.x + 10, r0.y + 10) == 0 && fallback.at (r0.x + 10, r0.y + 10) == 0,
-                   label + " leaves its host selector transparent in both paths");
             bool allHoles = true;
             for (int field = 0; field < n::kCount; ++field)
                 if ((state.fields & n::bit (field)) != 0)
@@ -2759,7 +2602,8 @@ void testStandaloneLfoNativeGround()
             check (render().px == fallback.px, label + " lost sentinel restores the same fallback on the next render");
         }
 
-    r.inst.tv[0] = 0;
+    PageRig& r = *rigs[0];
+    current = &r;
     r.refresh();
     r.page.setHostBackground (true);
     r.inst.nativeBank.post (n::kAction, 1.0f);
@@ -2775,7 +2619,7 @@ void testStandaloneLfoNativeGround()
 void testStandaloneNativeLfoControls()
 {
     namespace n = nativeui::lfo;
-    auto rig = std::make_unique<PageRig>();
+    auto rig = std::make_unique<PageRig> (3);   // the sub-tab LFO 3
     auto& r = *rig;
     auto& inst = r.inst;
     inst.nativeEnabled = true;
@@ -2788,11 +2632,14 @@ void testStandaloneNativeLfoControls()
     const int before = inst.writes;
     for (int i = 0; i < n::kInstances; ++i)
     {
-        post (n::kSelection, static_cast<float> (i) / (n::kInstances - 1));
-        check (inst.native.selection == i + 1 && inst.writes == before,
-               "native selector chooses source " + std::to_string (i + 1) + " without a sound write");
+        PageRig other (i + 1);
+        other.inst.nativeEnabled = true;
+        other.refresh();
+        check (other.inst.native.selection == i + 1 && (other.inst.native.fields & n::bit (n::kSelection)) == 0 && other.inst.writes == 0,
+               "the sub-tab " + std::to_string (i + 1) + " publishes its own source, without a selector cell and without a write");
     }
-    post (n::kSelection, 2.0f / (n::kInstances - 1));
+    post (n::kSelection, 0.5f);
+    check (inst.writes == before && inst.native.selection == 3, "a write to the reserved selector handle is dropped");
     r.key ("lfo1.smooth", 0.0f);
     r.key ("lfo3.smooth", 0.0f);
     const float oldTime = inst.get ("lfo3.smooth_time");
@@ -2850,22 +2697,29 @@ void testStandaloneNativeLfoControls()
 
     const int writes = inst.writes;
     inst.nativeBank.post (n::kShape, 0.5f);
-    inst.sel[2] = 5;
+    inst.sel[2] = 5;   // the Play selection: nothing to do with the page of a sub-tab
     ++inst.generation;
     r.refresh();
-    check (inst.native.selection == 5 && inst.writes == writes, "preset generation invalidates a queued waveform edit");
+    check (inst.native.selection == 3 && inst.writes == writes, "preset generation invalidates a queued waveform edit; the Play selection does not move the page");
     inst.nativeBank.post (n::kShape, 0.75f);
     r.ui.leftTab (inst);
     r.refresh();
     check (inst.writes == writes, "a queued edit cannot survive leaving the tab");
-    post (n::kSelection, 11.0f / (n::kInstances - 1));
-    check (r.ui.random() && r.ui.selection() == 2 && inst.native.layout >= 4, "native selection shows RND 2");
-    post (n::kStyle, 0.75f);
-    check (inst.lastWritten == paramIdx ("rlfo2.style"), "RND style writes the actual selected random source");
-    const int randomWrites = inst.writes;
-    post (n::kSmooth, 1.0f);
-    post (n::kAction, 1.0f);
-    check (inst.writes == randomWrites && r.ui.topPage() == 0, "RND has no Smooth or Expand edit");
+    PageRig rr (12);   // the sub-tab RND 2
+    rr.inst.nativeEnabled = true;
+    rr.refresh();
+    const auto postRnd = [&](int field, float value)
+    {
+        rr.inst.nativeBank.post (field, value);
+        rr.refresh();
+    };
+    check (rr.ui.random() && rr.ui.selection() == 2 && rr.inst.native.layout >= 4, "the sub-tab RND 2 shows RND 2");
+    postRnd (n::kStyle, 0.75f);
+    check (rr.inst.lastWritten == paramIdx ("rlfo2.style"), "RND style writes the actual random source of the sub-tab");
+    const int randomWrites = rr.inst.writes;
+    postRnd (n::kSmooth, 1.0f);
+    postRnd (n::kAction, 1.0f);
+    check (rr.inst.writes == randomWrites && rr.ui.topPage() == 0, "RND has no Smooth or Expand edit");
 }
 
 void testExpandPixelsWithLiveData()
@@ -2942,9 +2796,10 @@ void testExpandPixelsWithLiveData()
                 for (int x = standalone->panelEdge; x < 1280; ++x)
                     panelClear &= clipped[static_cast<size_t> (y * 1280 + x)] == 0u;
             check (panelClear, "the Expand aperture respects the real PageView Q-Link panel clip");
-            standalone->inst.tv[0] = 1;
-            refresh();
-            check (view.random() && view.full().edit.rect().empty(), "RND has no Expand aperture");
+            PageRig rndRig (11);
+            rndRig.inst.nativeEnabled = true;
+            rndRig.refresh();
+            check (rndRig.ui.random() && rndRig.ui.full().edit.rect().empty(), "RND has no Expand aperture");
         }
         else
         {
@@ -3052,12 +2907,11 @@ void testNativeEditorOwnership()
 void testNativeShapeEditor()
 {
     namespace n = nativeui::lfoeditor;
-    auto rig = std::make_unique<PageRig>();
+    auto rig = std::make_unique<PageRig> (3);   // the sub-tab LFO 3
     auto& r = *rig;
     auto& inst = r.inst;
     auto& editor = r.ui.editor();
     inst.nativeEnabled = inst.nativeEditorEnabled = true;
-    inst.sel[2] = 3;
     r.key ("lfo3.shape", 0.0f);
     r.refresh();
     inst.nativeBank.post (nativeui::lfo::kAction, 1.0f);
@@ -3545,13 +3399,13 @@ void nativeShapeEditorContract()
 void nativeContract ()
 {
     namespace n = nativeui::lfo;
-    auto rig = std::make_unique<PageRig>();
-    rig->inst.nativeEnabled = true;
+    std::unique_ptr<PageRig> rigs[2] = { std::make_unique<PageRig> (1), std::make_unique<PageRig> (11) };
     bool first = true;
     std::printf ("[");
     for (int family = 0; family < 2; ++family)
     {
-        rig->inst.tv[0] = family;
+        auto* rig = rigs[family].get();
+        rig->inst.nativeEnabled = true;
         for (int sync : { 0, 1, 4 })
         {
             rig->inst.set (family == 0 ? "lfo1.sync" : "rlfo1.sync", static_cast<float> (sync));
@@ -3650,7 +3504,6 @@ int main (int argc, char** argv)
     ui::QGroup::setWideDevice (false);
     testFullScreen();
     testLfoTab();
-    testStandaloneLfoSelectorQ();
     testStandaloneLfoPage();
     testStandaloneLfoNativeSmooth();
     testStandaloneNativeLfoControls();
@@ -3661,7 +3514,7 @@ int main (int argc, char** argv)
     testExpandPixelsWithLiveData();
     testPointModSelectionGuards();
     testStandaloneLfoNativeGround();
-    testPlayCarouselIsTheTabSelector();
+    testPlayCarouselSharesNothingWithTheTab();
     testPlayRandomRiseRoute();
     testEditor();
     testEditorPresetContentReload();

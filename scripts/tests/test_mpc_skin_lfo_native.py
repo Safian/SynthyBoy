@@ -337,7 +337,7 @@ class LfoSkinTest(unittest.TestCase):
         page = self.tui["pageData"]
         definitions = {entry["key"]: entry["value"] for entry in page["componentDefinitions"]["localComponentDefinitions"]}
         replacements = {entry["key"]: entry["value"] for entry in page["replacementStrings"]}
-        for field in (0, 1, 2, 8, 11, 12, 16):
+        for field in (1, 2, 8, 11, 12, 16):   # field 0 (the source selector) is reserved: the 14 sub-tabs name the LFO
             names = replacements[f"Parameter {2826 + field}"]
             children = definitions[f"lfoNativeChoiceDrawer{field}"]["componentsData"]
             captions = [child["componentData"]["data"]["text"] for child in children
@@ -358,8 +358,7 @@ class LfoSkinTest(unittest.TestCase):
     def test_host_menus_and_physical_q_proxies(self):
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         params = {p["key"]: p for p in self.params}
-        self.assertEqual(replacements["Parameter 2826"],
-                         [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)])
+        self.assertNotIn("Parameter 2826", replacements, "the reserved selector handle has no choice list")
         self.assertEqual(replacements["Parameter 2827"], params["lfo1.shape"]["choices"][:-1] + ["Drawn"])
         self.assertEqual(replacements["Parameter 2828"], params["rlfo1.style"]["choices"])
         self.assertEqual(replacements["Parameter 2836"], params["lfo1.sync"]["choices"])
@@ -369,7 +368,7 @@ class LfoSkinTest(unittest.TestCase):
         self.assertEqual(self.tab["qlinkBoundsData"], [])
 
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        for name, overlay in (("Choice", "lfoNativeChoiceDrawer0"), ("Number", "fx editor number menu")):
+        for name, overlay in (("Choice", "lfoNativeChoiceDrawer1"), ("Number", "fx editor number menu")):
             field = 0 if name == "Choice" else 21
             entry = next(e for e in self.entries if e["componentData"]["name"].startswith("LFO 1 Native ")
                          and e["componentData"]["name"].split()[3].split(".")[1:3] == [str(field), "0"])

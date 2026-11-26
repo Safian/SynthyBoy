@@ -362,8 +362,8 @@ inline void run()
     a = {}; b = {};
     a.set ("rlfo1.style", 0);
     b.set ("rlfo1.style", 3);
-    roundTrip ("RND standalone at rest", "lfo1", a, b, root,
-               [&] (Page& p) { return lfo (p).full().displayRect().inset (6); }, 1, 11);
+    roundTrip ("RND standalone at rest", "rnd1", a, b, root,   // the sub-tab RND 1: the page shows RND 1 whatever the Play selection is
+               [&] (Page& p) { return lfo (p).full().displayRect().inset (6); });
     roundTrip ("Play RND expanded at rest", "play1", a, b,
                [] (Page& p) { p.tap (p.as<PlayView>().lfoUi()->compact().full.rect()); },
                [] (Page& p) { return p.as<PlayView>().lfoUi()->full().displayRect().inset (6); }, 1, 11);

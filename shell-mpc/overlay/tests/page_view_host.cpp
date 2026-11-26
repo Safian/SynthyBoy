@@ -334,7 +334,7 @@ int main (int argc, char** argv)
         }
         check (all && pageKinds && wholeTab, "the layout has the 14 page views of the tabs the plugin draws entirely (whole tab, opaque; ONE Filter tab, no filter2)");
         check (layout::isPageKind (layout::kKindPlay) && layout::isPageKind (layout::kKindOscUi) && ! layout::isPageKind (layout::kKindFilter), "a page kind is the Play page and the pages of the elements (the oscillators of the OSC tab included): no tab of the layout is a host page any more");
-        check (layout::kNumViews <= 24, "the layout has " + std::to_string (layout::kNumViews) + " views (the detector holds 24)");
+        check (layout::kNumViews <= 40, "the layout has " + std::to_string (layout::kNumViews) + " views (the detector holds 40)");
     }
     // ---- the host background switch: only the views of the build-time manifest (backgrounds_manifest.h, generated from the skin generator's BACKGROUND_TABS) get it; the others draw everything
     {

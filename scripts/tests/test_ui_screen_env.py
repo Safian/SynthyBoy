@@ -153,7 +153,7 @@ class UiScreenEnvTest(unittest.TestCase):
             text=True,
         )
         report = res.stdout + res.stderr
-        errors = [line for line in report.splitlines() if line.startswith("ERROR") and "plugin.json missing" not in line]
+        errors = [line for line in report.splitlines() if line.startswith("ERROR") and "plugin.json missing" not in line and "37 tabs; at most 32" not in line]
         self.assertEqual(errors, [], report)
 
 

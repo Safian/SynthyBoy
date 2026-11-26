@@ -77,13 +77,12 @@ public:
     enum Page { kPageEditor = 40, kPageTargets = 41, kPageList = 42, kPageMods = 43, kPagePointMod = 44, kPageKeyboard = 45 };
     /** The virtual Q targets of the router (QRouter::kNumVirtual = 10) this page uses: 0 .. 7 are the editor's (POINT, X, Y, CURVE, GRID X, GRID Y, SNAP, BEND ALL), 8 and 9 belong to the page of the point modulation (MODULATE, AMOUNT). */
     static constexpr int kVirtEditorCount = 8, kVirtPmTarget = 8, kVirtPmAmount = 9;
-    static constexpr int kVirtualSelector = 0;   // separate from the editor: the standalone page root only
     static_assert (kVirtPmAmount < QRouter::kNumVirtual, "the router must have a virtual target for every Q knob of the page");
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
     {
-        kClose = 1, kFullButton, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit, kPageInstance,   // kInstance: compact carousel; kPageInstance: standalone tab dropdown; kSelector: Play full-screen cells
+        kClose = 1, kFullButton, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact carousel; kSelector: Play full-screen cells
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
         kMpBack = 230, kMpTarget, kMpAmount, kMpRemove, kMpBoard, kKbOk = 250, kKbCancel,
@@ -141,8 +140,7 @@ public:
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
         highlight_ = highlight;
-        readSelectorQ (inst, stack);
-        adoptSelection (inst);   // ONE selection for the LFO tab and the Play page (Play LFO + mpcTabView.rnd, chunk saved)
+        adoptSelection (inst);   // the page of a tab: the LFO of its hardware sub-tab; the Play page's expansion: the Play selection (Play LFO + mpcTabView.rnd, chunk saved)
         const bool open = stack.depth() > 0 && stack.element() == kElementLfo;
         if (open && stack.top() == kPageMods)
         {
@@ -171,15 +169,16 @@ public:
             modsAtMs_ = nowMs;
             modsDirty_ = false;
         }
-        uibind::fillSelector (uibind::SelKind::Lfo, scan_, inst, full_.selector);
-        full_.syncSelectorLayout();
-        uibind::cellsFromSelector (uibind::SelKind::Lfo, full_.selector, playCells_);   // the Play page's carousel: the SAME cells as the tab's selector
-        if (page_ && stackDepth_ == 1 && pageTop_ == 0)
-            reportSelectorQ (inst);
-        playDots_ = 0;
-        for (int k = 0; k < playCells_.n && k < 32; ++k)
-            if (isSourceAssigned (playCells_.id[k]))
-                playDots_ |= (1u << k);
+        if (! page_)   // the page of a tab has no selector: the hardware sub-tab names the LFO
+        {
+            uibind::fillSelector (uibind::SelKind::Lfo, scan_, inst, full_.selector);
+            full_.syncSelectorLayout();
+            uibind::cellsFromSelector (uibind::SelKind::Lfo, full_.selector, playCells_);   // the Play page's carousel: the SAME cells as its full-screen selector
+            playDots_ = 0;
+            for (int k = 0; k < playCells_.n && k < 32; ++k)
+                if (isSourceAssigned (playCells_.id[k]))
+                    playDots_ |= (1u << k);
+        }
         pull (inst);
         updateDisplay (inst, live, nowMs);
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
@@ -200,7 +199,8 @@ public:
         publishQGroup (inst);
     }
 
-    /** The page of the LFO tab (page_view.h): the full screen of the selected LFO or random LFO (shared with the Play page), nothing to close; the selector ("used + one free") chooses another one. */
+    /** The page of an LFO tab (page_view.h): the full screen of the LFO or random LFO the hardware sub-tab names (LFO 1 .. LFO 10, RND 1 .. RND 4: the view's own instance number 1 .. 14, no selector on the screen,
+        nothing shared with the Play page), nothing to close. */
     void update (IInstanceView& inst, UiStack& stack, double nowMs, const page::Input& in)
     {
         if (! page_)
@@ -209,6 +209,7 @@ public:
             full_.setPageMode (true);
             configured_ = false;
         }
+        pageSlot_ = std::clamp (in.instance, 1, kInstances) - 1;
         updateHostedEditor (inst, stack, 3, nowMs, in.live, true);
     }
 
@@ -265,7 +266,6 @@ public:
         namespace n = nativeui::lfo;
         switch (field)
         {
-            case n::kSelection: return full_.instance.rect();
             case n::kShape: case n::kStyle: return full_.namedPicker.rect();
             case n::kAction: return action == n::kExpand ? full_.edit.rect() : full_.targets.rect();
             case n::kSmooth: case n::kSmoothTime:
@@ -912,9 +912,8 @@ private:
         const auto sync = ui::lfo::syncModeOf (syncTarget >= 0 ? static_cast<int> (std::lround (inst.param (syncTarget))) : 0);
         const bool key = sync == ui::lfo::SyncMode::Key, beats = sync == ui::lfo::SyncMode::Bpm;
         state.layout = (random() ? 3 : 0) + (key ? 3 : beats ? 2 : 1);
-        state.values[n::kSelection] = static_cast<float> (slot()) / (n::kInstances - 1);
         state.values[n::kLayout] = static_cast<float> (state.layout) / n::kLayoutLast;
-        state.fields = n::bit (n::kSelection) | n::bit (n::kAction);
+        state.fields = n::bit (n::kAction);
         for (int field = 0; field < n::kCount; ++field)
         {
             const int target = nativeTargets_[field];
@@ -947,13 +946,7 @@ private:
     {
         namespace n = nativeui::lfo;
         if (field == n::kSelection)
-        {
-            const int selected = static_cast<int> (std::lround (value * (n::kInstances - 1)));
-            if (selected == slot())
-                return false;
-            uibind::chooseLfo (inst, selected + 1);
-            return true;
-        }
+            return false;   // reserved: the page has no selector (the hardware sub-tab names the LFO)
         if (field == n::kAction)
         {
             const int action = static_cast<int> (std::lround (value * n::kActionLast));
@@ -1014,7 +1007,6 @@ private:
         // ---- the full screen
         bind (kClose, &full_.close, T::Inert, "");
         bind (kSelector, &full_.selector, T::Inert, "");
-        bind (kPageInstance, &full_.instance, T::Inert, "");
         bind (kSyncMode, &full_.syncSwitch.mode, T::Inert, "");
         bind (kSyncTrip, &full_.rate.trip, T::Inert, "");
         bind (kSyncDot, &full_.rate.dot, T::Inert, "");
@@ -1183,7 +1175,7 @@ private:
     }
 
     // ---- the list popup: the instances, the choices of a parameter, the groups of the destinations and the parameters of a group
-    enum class ListKind : uint8_t { None, Instance, PageInstance, Param, Dest, Editor, Plus };
+    enum class ListKind : uint8_t { None, Instance, Param, Dest, Editor, Plus };
     using DestIndex = uibind::DestIndex;
     ListKind listKind_ = ListKind::None;
     int listParam_ = -1, listGroup_ = -1, underList_ = 0;
@@ -1242,17 +1234,6 @@ private:
             list_.state.current = playCells_.selectedPos;
             list_.state.dotMask = playDots_;
         }
-        else if (listKind_ == ListKind::PageInstance)
-        {
-            for (int i = 0; i < kInstances; ++i)
-            {
-                listNames_.push_back (instanceName (i));
-                const int id = i < kLfos ? i + 1 : uibind::kRndBase + (i - kLfos + 1);
-                if (isSourceAssigned (id))
-                    list_.state.dotMask |= (1u << i);
-            }
-            list_.state.current = slot();
-        }
         else if (listKind_ == ListKind::Plus)
         {
             int ch[ui::UsedSelector::kMaxChoices];
@@ -1300,13 +1281,6 @@ private:
         stack.openDetail (kPageList);
         fillList (nullptr);
     }
-    void openPageInstanceList (UiStack& stack, IInstanceView& v)
-    {
-        listKind_ = ListKind::PageInstance;
-        placePageList();
-        stack.openDetail (kPageList);
-        fillList (&v);
-    }
     static const char* const* instanceNames() noexcept
     {
         static const char* const n[kInstances] = { "LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4" };
@@ -1315,11 +1289,21 @@ private:
     static const char* instanceName (int i) noexcept { return instanceNames()[std::clamp (i, 0, kInstances - 1)]; }
     /** The instance as one number 0 .. 13: LFO 1 .. 10, then RND 1 .. 4. */
     int slot() const noexcept { return rnd_ != 0 ? kLfos + rnd_ - 1 : lfoNum_ - 1; }
-    /** The shown LFO from the shared view state (Play LFO and mpcTabView.rnd): a change of either reconfigures the page. */
+    /** The shown LFO: on the page of a tab the one of its sub-tab; on the Play page's expansion the shared view state (Play LFO and mpcTabView.rnd): a change reconfigures the page. */
     void adoptSelection (IInstanceView& v)
     {
-        const int id = uibind::selectedLfo (v);   // 1 .. 10, or kRndBase + m
-        const int num = std::clamp (v.playSelection (2), 1, kLfos), r = id > uibind::kRndBase ? id - uibind::kRndBase : 0;
+        int num, r;
+        if (page_ && pageSlot_ >= 0)   // the hardware sub-tab names the LFO: nothing is read from the Play selection or the chunk view state
+        {
+            num = pageSlot_ < kLfos ? pageSlot_ + 1 : 1;
+            r = pageSlot_ < kLfos ? 0 : pageSlot_ - kLfos + 1;
+        }
+        else
+        {
+            const int id = uibind::selectedLfo (v);   // 1 .. 10, or kRndBase + m
+            num = std::clamp (v.playSelection (2), 1, kLfos);
+            r = id > uibind::kRndBase ? id - uibind::kRndBase : 0;
+        }
         if (! configured_ || num != lfoNum_ || r != rnd_)
         {
             lfoNum_ = num;
@@ -1345,76 +1329,8 @@ private:
             uibind::chooseLfo (v, id);
         adoptSelection (v);
     }
-    /** The knob steps through the shown candidates, followed by the existing
-        '+' choices. When both families are free they each get a knob position. */
-    int selectorQChoices (int* choices) const noexcept
-    {
-        int count = 0;
-        for (int i = 0; i < playCells_.n; ++i)
-            if (playCells_.id[i] > 0)
-                choices[count++] = playCells_.id[i];
-        int free[ui::UsedSelector::kMaxChoices];
-        const int n = full_.selector.plusChoices (free, ui::UsedSelector::kMaxChoices);
-        for (int i = 0; i < n; ++i)
-            choices[count++] = full_.selector.state.items[free[i]].id;
-        return count;
-    }
-    void readSelectorQ (IInstanceView& v, const UiStack& stack) noexcept
-    {
-        if (! page_)
-            return;
-        const bool visible = stack.depth() == 1 && stack.element() == kElementLfo;
-        const bool owned = selectorQOwner_ == &v;
-        const bool same = owned && selectorQGeneration_ == v.stateGeneration();
-        float value;
-        if ((visible || owned) && v.takeQVirtual (kVirtualSelector, value) && visible && same)
-        {
-            int choices[kInstances];
-            const int count = selectorQChoices (choices);
-            if (count > 0)
-            {
-                selectorQValue_ = std::clamp (value, 0.0f, 1.0f);
-                const int pos = static_cast<int> (std::lround (selectorQValue_ * (count - 1)));
-                if (choices[pos] != uibind::selectedLfo (v))
-                    uibind::chooseLfo (v, choices[pos]);
-            }
-        }
-        if (! visible || ! same)
-        {
-            selectorQOwner_ = nullptr;
-            selectorQValue_ = -1.0f;
-            if (visible)
-                modsDirty_ = true;
-        }
-    }
-    void reportSelectorQ (IInstanceView& v) noexcept
-    {
-        int choices[kInstances];
-        const int count = selectorQChoices (choices);
-        const int* selected = std::find (choices, choices + count, uibind::selectedLfo (v));
-        const int pos = selected < choices + count ? static_cast<int> (selected - choices) : 0;
-        const int last = std::max (0, count - 1);
-        if (selectorQValue_ < 0.0f || std::lround (selectorQValue_ * last) != pos)
-            selectorQValue_ = last > 0 ? static_cast<float> (pos) / last : 0.0f;
-        v.setQVirtual (kVirtualSelector, selectorQValue_);
-        selectorQOwner_ = &v;
-        selectorQGeneration_ = v.stateGeneration();
-    }
-    void addSelectorQ (int* targets, int capacity) const noexcept
-    {
-        if (! page_)
-            return;
-        for (int i = capacity - 1; i >= 0; --i)
-            if (targets[i] < 0)
-            {
-                targets[i] = QRouter::encode (kVirtualSelector, QRouter::kVirtual);
-                break;
-            }
-    }
     bool plusPending_ = false;   // a tap on the `+` cell of the compact view with two free kinds: the list opens at the end of the handler
-    const IInstanceView* selectorQOwner_ = nullptr;
-    uint64_t selectorQGeneration_ = 0;
-    float selectorQValue_ = -1.0f;
+    int pageSlot_ = -1;   // the page of a tab: the LFO of its sub-tab (0 .. 13: LFO 1 .. 10, RND 1 .. 4); -1 in the Play page's expansion
     uibind::SelectorCells playCells_;
     unsigned playDots_ = 0;
 public:
@@ -1431,14 +1347,8 @@ public:
             v.setNativeLfoState ({});
             nativePublished_ = false;
         }
-        if (selectorQOwner_ == &v)
-        {
-            float pending;
-            v.takeQVirtual (kVirtualSelector, pending);
-            selectorQOwner_ = nullptr;
-            selectorQValue_ = -1.0f;
-        }
-        uibind::leaveSelector (uibind::SelKind::Lfo, v);
+        if (! page_)   // the sub-tab's LFO is its own: no shared selection to fall back
+            uibind::leaveSelector (uibind::SelKind::Lfo, v);
     }
 private:
 
@@ -1591,16 +1501,8 @@ private:
                     st->state.dotMask = playDots_; st->state.dotColours = nullptr;
                     st->setItem (playCells_.n > 0 ? playCells_.names[playCells_.selectedPos] : instanceName (slot()));
                 }
-                if (it.id == kPageInstance)
-                {
-                    auto* st = static_cast<ui::Carousel*> (it.c);
-                    st->state.count = playCells_.n; st->state.index = playCells_.selectedPos; st->state.wrap = true;
-                    st->state.names = playCells_.names;
-                    st->state.dotMask = playDots_; st->state.dotColours = nullptr;
-                    st->setItem (playCells_.n > 0 ? playCells_.names[playCells_.selectedPos] : instanceName (slot()));
-                }
                 it.c->setEnabled (true);
-                if (it.id == kInstance || it.id == kSelector || it.id == kPageInstance || it.id == kTargets || it.id == kClose)
+                if (it.id == kInstance || it.id == kSelector || it.id == kTargets || it.id == kClose)
                     it.c->setInactive (false);   // navigation stays live across an unused/off instance
                 continue;
             }
@@ -3325,7 +3227,6 @@ private:
                 case kKbCancel: if (pageTop_ == kPageKeyboard) stack.back(); return;
                 case kEdit: openEditor (stack, v); return;
                 case kInstance: openInstanceList (v); return;
-                case kPageInstance: openPageInstanceList (stack, v); return;
                 case kPagePicker: openParamList (find (id), stack, v); return;
                 case kSelector: openPlusList (stack); return;
                 case kShape: case kStyle: case kSync: case kMode: case kDirection: case kDivision:
@@ -3388,16 +3289,6 @@ private:
             {
                 plusPending_ = false;
                 openInstanceList (v, ListKind::Plus);
-            }
-            return;
-        }
-        if (id == kPageInstance && c.kind == K::Index)
-        {
-            selectSlot (c.index, v);
-            if (plusPending_)
-            {
-                plusPending_ = false;
-                openPlusList (stack);
             }
             return;
         }
@@ -3486,15 +3377,6 @@ private:
             stack.back();
             if (plus)
                 openPlusList (stack);
-        }
-        else if (listKind_ == ListKind::PageInstance)
-        {
-            if (index >= 0 && index < kInstances)
-            {
-                uibind::chooseLfo (v, index < kLfos ? index + 1 : uibind::kRndBase + index - kLfos + 1);
-                adoptSelection (v);
-            }
-            stack.back();
         }
         else if (listKind_ == ListKind::Plus)
         {
@@ -3726,20 +3608,13 @@ private:
                         }
                     first = next;
                 }
-                addSelectorQ (targets, QRouter::kCount);
                 qSlots_.publishRaw (v, targets);
             }
             else
             {
                 int targets[QRouter::kCount];
                 const int capacity = QRouter::mapGroups (used, pos, [&] (int k, int* t) { members (full_.groups[ids[k]], t); }, targets);
-                // Prefer the spare slot in Smooth (standard) or Trigger
-                // (random). A Key 61 bank can page Smooth out in KEY mode.
-                const int block = QRouter::blockOfGroup (used, pos, random() ? used - 1 : 1);
-                if (block >= 0)
-                    addSelectorQ (targets + block * QRouter::kGroupSize, QRouter::kGroupSize);
-                else
-                    addSelectorQ (targets, capacity);
+                (void) capacity;
                 qSlots_.publishRaw (v, targets);
                 setBlocks (full_.groups, ui::LfoFullScreen::kMaxGroups, ids, used, pos);
             }

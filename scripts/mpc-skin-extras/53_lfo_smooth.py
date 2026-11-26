@@ -14,7 +14,7 @@ from components.native.selector.selector import labelled_choice_drawer
 CONTRACT = Path(__file__).with_name("lfo-native-contract.json")
 PREFIX = "LFO 1 Native "
 DEFINITION = "lfoNative"
-SELECT, SHAPE, STYLE, SMOOTH, SMOOTH_TIME, ACTION, LAYOUT = range(7)
+SELECT, SHAPE, STYLE, SMOOTH, SMOOTH_TIME, ACTION, LAYOUT = range(7)   # SELECT: RESERVED (the page has no selector: the 14 hardware sub-tabs name the LFO)
 CHOICE_FIELDS = {
     SHAPE: "lfo1.shape", STYLE: "rlfo1.style", 8: "lfo1.division", 10: "lfo1.sync",
     11: "lfo1.sync_type", 12: "rlfo1.sync_type", 16: "lfo1.direction",
@@ -172,7 +172,6 @@ def apply(tui, qlinks, ctx):
     base = native_base_index(ctx.param_count) + LFO_OFFSET
     params = {p["key"]: p for p in ctx.params}
     choices = {field: list(params[key]["choices"]) for field, key in CHOICE_FIELDS.items()}
-    choices[SELECT] = [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)]
     choices[SHAPE][-1] = "Drawn"
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     for field, names in choices.items():

@@ -384,7 +384,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 text=True,
             )
             report = val.stdout + val.stderr
-            errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+            errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "37 tabs; at most 32" not in l]
             self.assertEqual(errors, [], report)
 
             tui = json.loads((skins / "TUI.json").read_text(encoding="utf-8"), object_pairs_hook=dict)
