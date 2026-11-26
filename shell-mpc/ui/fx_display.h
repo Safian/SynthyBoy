@@ -470,15 +470,28 @@ private:
         }
         p.textLeft ({ plot.x + 6, plot.y + 2, 60, 16 }, "OUT", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
         p.textRight ({ plot.right() - 66, plot.bottom() - 18, 60, 16 }, "IN", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
-        p.line (xOf (-1.0f), yOf (-1.0f), xOf (1.0f), yOf (1.0f), 1.0f, p.c (T.textFaint, 120));   // the identity
-        float rows[kPoints];
+        // the identity (output = input) as a dashed, faint reference
+        {
+            const float x0 = xOf (-1.0f), y0 = yOf (-1.0f), x1 = xOf (1.0f), y1 = yOf (1.0f);
+            const float len = std::sqrt ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+            const float dash = 10.0f, gap = 8.0f;
+            for (float at = 0.0f; at < len; at += dash + gap)
+            {
+                const float a = at / len, b = std::min (at + dash, len) / len;
+                p.line (x0 + (x1 - x0) * a, y0 + (y1 - y0) * a, x0 + (x1 - x0) * b, y0 + (y1 - y0) * b, 1.0f, p.c (T.textFaint, 170));
+            }
+        }
+        float rows[kPoints], diagonal[kPoints];
         for (int i = 0; i < kPoints; ++i)
         {
             const float x = -1.0f + 2.0f * static_cast<float> (i) / static_cast<float> (kPoints - 1);
             rows[i] = yOf (distortionOutput (x));
+            diagonal[i] = yOf (x);
         }
+        // the area between the curve and the identity: the difference shows even where the curve is nearly straight
+        sb.band (diagonal, rows, kPoints, plot.x, plot.w, p.c (T.flow[0], 46));
         sb.curve (rows, kPoints, plot.x, plot.w);
-        sb.stroke (0.8f, p.c (T.flow[0], 255));
+        sb.stroke (1.6f, p.c (T.flow[0], 255));
     }
 };
 

@@ -693,6 +693,16 @@ def _add_native_header(tui, tab, ctx, headers, band, base, panels, gallery):
         replacements.append({"key": f"Parameter {parameter+1}", "value": list(RACK_NAMES if item < 13 else RACK_NAMES[:3])})
 
 
+# DISPLAY LEFT, CONTROLS RIGHT (shell-mpc/native_fx_cells.h kFxSide*): two cells to a line at x 644, 72 px a line, a 16 px Q lane above every row.
+FX_SIDE_X, FX_SIDE_STRIDE, FX_SIDE_LANE, FX_SIDE_LINE, FX_SIDE_CELL_W = 644, 318, 16, 72, 310
+
+
+def _side_cell_rect(top, side, row, col):
+    lines = side[1:5]
+    y = top + sum(FX_SIDE_LANE + FX_SIDE_LINE * lines[r] for r in range(row)) + FX_SIDE_LANE
+    return (FX_SIDE_X + FX_SIDE_STRIDE * (col % 2), y + FX_SIDE_LINE * (col // 2), FX_SIDE_CELL_W, FX_SIDE_LINE)
+
+
 def _apply_native_editor(tui, tab, ctx):
     # Regenerate from the repository root with:
     # fx_native_ui_host --skin-contract > scripts/mpc-skin-extras/fx-native-contract.json
@@ -722,12 +732,12 @@ def _apply_native_editor(tui, tab, ctx):
     for layout, slot, kind in manifest["widgets"]:
         if not 1 <= layout <= len(layouts) or not 1 <= kind < reserves:
             raise ValueError(f"unknown FX layout or cell kind: {layout}, {kind}")
-        top, rows = layouts[layout - 1]
+        top, rows, *side = layouts[layout - 1]
         row, col = divmod(slot, 4)
         if not 0 <= slot < min(FX_CELL_COUNT, rows * 4):
             raise ValueError(f"FX cell {slot} is outside layout {layout}")
         row_h = (style.size("fx.apply_native_editor.row_h.620") - top) // rows
-        rect = (style.size("fx.apply_native_editor.rect.8") + style.size("fx.apply_native_editor.rect.318") * col, top + style.size("fx.apply_native_editor.rect.16") + row_h * row, style.size("fx.apply_native_editor.rect.310"), max(style.size("fx.apply_native_editor.rect.72"), row_h - style.size("fx.apply_native_editor.rect.16")))
+        rect = _side_cell_rect(top, side, row, col) if side and side[0] else (style.size("fx.apply_native_editor.rect.8") + style.size("fx.apply_native_editor.rect.318") * col, top + style.size("fx.apply_native_editor.rect.16") + row_h * row, style.size("fx.apply_native_editor.rect.310"), max(style.size("fx.apply_native_editor.rect.72"), row_h - style.size("fx.apply_native_editor.rect.16")))
         target = base + FX_VALUE_OFFSET + slot
         focus = True
         if kind in scalars:
@@ -798,8 +808,12 @@ def _apply_native_editor(tui, tab, ctx):
         dock_children = _copy.deepcopy(definition["componentsData"])
         dock_cell_rects = {}
         for layout_id, slot, cell_kind in manifest["widgets"]:
-            top, rows = layouts[layout_id - 1]
+            top, rows, *side = layouts[layout_id - 1]
             row, col = divmod(slot, 4)
+            if side and side[0]:
+                # A side layout is a full-height page: the docked Mixer peek uses the stacked layout, so none of its cells is placed there.
+                dock_cell_rects[f"FX Cell {layout_id}.{slot + 1}.{cell_kind}"] = _side_cell_rect(top, side, row, col)
+                continue
             dock_top = top - style.size("fx.apply_native_editor.dock_top.64") if top >= style.size("fx.apply_native_editor.dock_top.344") else top
             row_h = (docked_bottom - dock_top) // rows
             cell_top = dock_top + style.size("fx.apply_native_editor.cell_top.16") + row_h * row

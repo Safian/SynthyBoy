@@ -1,6 +1,6 @@
 {
   "kind_last": 51,
-  "layouts": [[208, 2], [208, 4], [404, 2], [360, 2], [344, 2], [344, 3], [390, 1], [424, 2], [208, 3], [272, 2], [272, 3], [408, 2], [424, 3], [272, 1]],
+  "layouts": [[208, 2], [208, 4], [404, 2], [360, 2], [344, 2], [344, 3], [390, 1], [424, 2], [208, 3], [272, 2], [272, 3], [408, 2], [424, 3], [272, 1], [208, 3, 1, 2, 2, 1, 0]],
   "domains": [
     ["Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF", "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream", "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF", "Normal", "Multi Morph", "Flanges", "Misc", "New"],
     ["Free (Hz)", "Tempo", "Tempo dotted", "Tempo triplet"],
@@ -200,7 +200,16 @@
     [12, 5, 51],
     [12, 6, 1],
     [12, 6, 51],
-    [12, 7, 1]
+    [12, 7, 1],
+    [15, 0, 10],
+    [15, 1, 51],
+    [15, 2, 1],
+    [15, 3, 51],
+    [15, 4, 11],
+    [15, 5, 1],
+    [15, 6, 1],
+    [15, 8, 1],
+    [15, 9, 51]
   ],
   "editor_headers": [
     { "power": [8, 144, 56, 56], "rack": [906, 144, 230, 56], "remove": [1142, 144, 130, 56] },

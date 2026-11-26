@@ -26,6 +26,7 @@ STATES = {
     "reverb-main": (9, 0, 0), "reverb-tone": (9, 1, 0), "reverb-mod": (9, 2, 0),
     "compressor-main": (2, 0, 0), "compressor-bands": (2, 1, 0), "compressor-upward": (2, 2, 0),
     "compressor-limit": (2, 0, 1),
+    "distortion": (4, 0, 0), "distortion-drive": (4, 0, 12),   # the third value is the drive in dB, with the filter on
 }
 
 

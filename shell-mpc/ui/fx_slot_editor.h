@@ -187,7 +187,8 @@ public:
             return 0;
         const int top = knobArea_.y - 110 + displayShrink();
         for (int i = 0; i < nativeui::kFxLayoutLast; ++i)
-            if (nativeui::kFxLayouts[i].top == top && nativeui::kFxLayouts[i].rows == rowsPerPage())
+            if (nativeui::kFxLayouts[i].top == top && nativeui::kFxLayouts[i].rows == rowsPerPage()
+                && (nativeui::kFxLayouts[i].side != 0) == sideMode())
                 return i + 1;
         return 0;
     }
@@ -205,8 +206,42 @@ public:
         }
     }
 
+    /** DISPLAY LEFT, CONTROLS RIGHT (the table's `side` flag): not while a Mixer peek shrinks the page, and only where the display is shown. */
+    bool sideMode() const noexcept
+    {
+        return lay_->side && sideAllowed_ && peekInset_ == 0 && lay_->displayH > 0 && display.kind != FxDisplay::Kind::None && displayShown();
+    }
+    /** The skin contract exporter asks for the stacked variant of a side page too (the docked Mixer peek shows it). */
+    void setSideAllowed (bool on)
+    {
+        if (on != sideAllowed_)
+        {
+            sideAllowed_ = on;
+            if (rect_.w > 0)
+                layout();
+        }
+    }
+    /** The lines of a row of a side page: two cells to a line, by the cells of its table row (stable while controls hide). */
+    int sideLines (int visRow) const noexcept
+    {
+        if (visRow < 0 || visRow >= numVis_)
+            return 1;
+        int n = 0;
+        for (const fxl::Cell& c : lay_->row[vis_[visRow]].cell)
+            n += c.alt[0].key != nullptr ? 1 : 0;
+        return std::max (1, (n + 1) / 2);
+    }
     Rect cellRect (int row, int col) const noexcept
     {
+        if (sideMode())
+        {
+            const int first = firstRowOfPage();
+            int y = knobArea_.y;
+            for (int r = 0; r < row; ++r)
+                y += kQLane + nativeui::kFxSideLine * sideLines (first + r);
+            return { knobArea_.x + (col % 2) * nativeui::kFxSideStride, y + kQLane + (col / 2) * nativeui::kFxSideLine,
+                     nativeui::kFxSideCellW, nativeui::kFxSideLine };
+        }
         const int gapX = 8, cellW = (knobArea_.w - 3 * gapX) / 4;
         const int rowH = knobArea_.h / std::max (1, rowsPerPage());
         const int x = knobArea_.x + col * (cellW + gapX);
@@ -490,6 +525,15 @@ protected:
             y += 64;
         }
         show (display, display.kind != FxDisplay::Kind::None && displayShown());
+        if (sideMode())
+        {
+            // the display at the left over the whole height, the cells at the right (cellRect)
+            const int bottom = rect_.bottom() - m;
+            display.place ({ rect_.x + m, y, nativeui::kFxSideX - 2 * m,std::max (0, bottom - y) });
+            knobArea_ = { rect_.x + nativeui::kFxSideX, y, rect_.right() - m - (rect_.x + nativeui::kFxSideX), std::max (0, bottom - y) };
+            layoutCells();
+            return;
+        }
         const int displayH = lay_->displayH > 0 ? std::max (0, lay_->displayH - chainInset_ - displayShrink()) : 0;
         if (displayH > 0 && display.kind != FxDisplay::Kind::None && displayShown())
         {
@@ -502,6 +546,12 @@ protected:
             y += displayH + m;
         }
         knobArea_ = { rect_.x + m, y, rect_.w - 2 * m, std::max (0, rect_.bottom() - m - y) };
+        layoutCells();
+    }
+
+    /** The cells of the page in their rectangles (cellRect), the unused controls hidden. */
+    void layoutCells()
+    {
         const int rows = rowsPerPage(), first = firstRowOfPage();
         for (int p = 0; p < kMaxParams; ++p)
         {
@@ -768,6 +818,7 @@ private:
     int chainInset_ = 0;
     int peekInset_ = 0;
     int styleModel_ = 0;
+    bool sideAllowed_ = true;
 };
 
 }} // namespace synthyboy_mpc::ui

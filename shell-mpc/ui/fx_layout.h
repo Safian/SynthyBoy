@@ -90,6 +90,9 @@ struct Layout
     int numRows = 0;
     int defaultRows = 0;      // historical table metadata; panelsOf() owns current row-to-panel assignment
     Row row[kMaxRows];
+    /** DISPLAY LEFT, CONTROLS RIGHT: the display takes the left half of the page over its whole height and the controls stand in two columns (cells of two per line) at the right (a Q group of four is a block of two
+        lines). Used when the page has no Mixer-peek inset; otherwise the standard stacked layout applies. */
+    bool side = false;
 };
 
 /** View-local functional panels. Rows still own the Q groups; panel selection
@@ -183,7 +186,7 @@ inline const Layout& layoutOf (int kind) noexcept
             row ("DISTORTION", c ("distortion.type"), c ("distortion.drive"), c ("distortion.mix"), c ("distortion.level")),
             row ("FILTER", c ("distortion.filter_order"), when ("distortion.filter_cutoff", "distortion.filter_order", (1u << 1) | (1u << 2)),
                  when ("distortion.filter_resonance", "distortion.filter_order", (1u << 1) | (1u << 2))),
-            row ("FILTER SHAPE", when ("distortion.filter_blend", "distortion.filter_order", (1u << 1) | (1u << 2)), when ("distortion.filter_keytrack", "distortion.filter_order", (1u << 1) | (1u << 2))) } },
+            row ("FILTER SHAPE", when ("distortion.filter_blend", "distortion.filter_order", (1u << 1) | (1u << 2)), when ("distortion.filter_keytrack", "distortion.filter_order", (1u << 1) | (1u << 2))) }, true },
         Layout { synthyboy::kFxTypeEq, "EQ", 3, 160, 5, 2, {
             row ("LOW AND MID BANDS", c ("eq.low.cutoff"), c ("eq.low.gain"), c ("eq.mid.cutoff"), c ("eq.mid.gain")),
             row ("HIGH BAND AND OUTPUT", c ("eq.high.cutoff"), c ("eq.high.gain"), c ("eq.level")),

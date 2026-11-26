@@ -15,11 +15,25 @@ namespace synthyboy_mpc::nativeui
 struct FxLayout
 {
     int top, rows;   // 1280 x 628 tab coordinates, before the Q-Link lane
+    // side = 1: DISPLAY LEFT, CONTROLS RIGHT. The cells stand in two columns at x = kFxSideX, two per line; a row of `lines[row]`
+    // lines has the Q lane above it (kFxSideLane) and `kFxSideLine` px per line, the rows follow each other from `top`.
+    int side = 0;
+    int lines[4] = {};
 };
+constexpr int kFxSideX = 644, kFxSideStride = 318, kFxSideLane = 16, kFxSideLine = 72, kFxSideCellW = 310;
+/** Tab y of the first cell line of `row` of a side layout. */
+constexpr int fxSideRowY (const FxLayout& g, int row) noexcept
+{
+    int y = g.top;
+    for (int r = 0; r < row; ++r)
+        y += kFxSideLane + kFxSideLine * g.lines[r];
+    return y + kFxSideLane;
+}
 constexpr FxLayout kFxLayouts[] = {
     { 208, 2 }, { 208, 4 }, { 404, 2 }, { 360, 2 },
     { 344, 2 }, { 344, 3 }, { 390, 1 }, { 424, 2 },
     { 208, 3 }, { 272, 2 }, { 272, 3 }, { 408, 2 }, { 424, 3 }, { 272, 1 },
+    { 208, 3, 1, { 2, 2, 1, 0 } },   // Distortion: the waveshaper at the left, TYPE / DRIVE / MIX / LEVEL, FILTER ORDER / CUTOFF / RESONANCE, BLEND / KEYTRACK at the right
 };
 static_assert (sizeof kFxLayouts / sizeof *kFxLayouts == kFxLayoutLast);
 

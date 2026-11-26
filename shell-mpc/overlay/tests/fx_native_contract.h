@@ -67,9 +67,15 @@ inline auto widgets (bool& consistent)
     screen.setNativeControls (true);
     auto& ed = screen.slotEditor;
     Widgets out;
-    for (int kind = 1; kind < ui::fxl::kNumKinds; ++kind)
+    // pass 0: the full page; pass 1: the stacked layout of the pages that have a side layout (the docked Mixer peek shows them stacked)
+    for (int kindPass = 0; kindPass < 2 * (ui::fxl::kNumKinds - 1); ++kindPass)
     {
+        const int kind = 1 + kindPass % (ui::fxl::kNumKinds - 1);
+        const bool stacked = kindPass >= ui::fxl::kNumKinds - 1;
         const auto& table = ui::fxl::layoutOf (kind);
+        if (stacked && ! table.side)
+            continue;
+        ed.setSideAllowed (! stacked);
         std::map<std::string, int> values;
         auto add = [&] (const char* key)
         {
@@ -121,7 +127,15 @@ inline auto widgets (bool& consistent)
                             const auto& g = nativeui::kFxLayouts[layout - 1];
                             const auto rect = ed.cellRect (row, col);
                             const int rowH = (620 - g.top) / g.rows;
-                            if (rect.x != 8 + 318 * col || rect.w != 310
+                            if (g.side != 0)
+                            {
+                                if (! ed.sideMode() || ed.sideLines (ed.firstRowOfPage() + row) != g.lines[row]
+                                    || rect.x != nativeui::kFxSideX + nativeui::kFxSideStride * (col % 2) || rect.w != nativeui::kFxSideCellW
+                                    || rect.y != 110 + nativeui::fxSideRowY (g, row) + nativeui::kFxSideLine * (col / 2) || rect.h != nativeui::kFxSideLine
+                                    || rect.bottom() > 110 + 620)
+                                    consistent = false;
+                            }
+                            else if (rect.x != 8 + 318 * col || rect.w != 310
                                 || rect.y != 110 + g.top + 16 + row * rowH || rect.h != std::max (72, rowH - 16))
                                 consistent = false;
                             if (! nativeui::fxCellProxy (widget))
@@ -159,6 +173,7 @@ inline auto widgets (bool& consistent)
         };
         visit (visit, values.begin());
     }
+    ed.setSideAllowed (true);
     return out;
 }
 
@@ -216,7 +231,13 @@ inline bool exportManifest ()
         return false;
     std::printf ("{\n  \"kind_last\": %d,\n  \"layouts\": [", nativeui::kFxKindLast);
     for (int i = 0; i < nativeui::kFxLayoutLast; ++i)
-        std::printf ("%s[%d, %d]", i == 0 ? "" : ", ", nativeui::kFxLayouts[i].top, nativeui::kFxLayouts[i].rows);
+    {
+        const auto& g = nativeui::kFxLayouts[i];
+        std::printf ("%s[%d, %d", i == 0 ? "" : ", ", g.top, g.rows);
+        if (g.side != 0)   // a side layout adds its flag and the lines of its rows
+            std::printf (", %d, %d, %d, %d, %d", g.side, g.lines[0], g.lines[1], g.lines[2], g.lines[3]);
+        std::printf ("]");
+    }
     std::printf ("],\n  \"domains\": [\n");
     for (size_t i = 0; i < choices.size(); ++i)
     {

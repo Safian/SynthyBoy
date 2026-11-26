@@ -71,6 +71,10 @@ int main (int argc, char** argv)
         set ("compressor.mid.upper_threshold", -20); set ("compressor.mid.upper_ratio", 50);
         set ("compressor.mid.lower_ratio", 25);
     }
+    if (kind == synthyboy::kFxTypeDistortion && limit != 0)   // the third argument is the drive in dB; with it the filter is on, to show its controls
+    {
+        set ("distortion.drive", static_cast<float> (limit)); set ("distortion.mix", 100); set ("distortion.filter_order", 2);
+    }
     r.refresh (2);
     r.ui.screen().slotEditor.setPage (panel);
     r.refresh (2);
