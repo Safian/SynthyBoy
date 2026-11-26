@@ -1500,25 +1500,42 @@ TEST (matrix_zero_skip_gives_the_same_deltas_for_every_special_value)
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // V5: the zero test of a parameter delta on its bits is the float compare d == 0.0f, for all 2^32 bit patterns
 
+namespace
+{
+/** Calls fn (pattern) for the bit patterns of the 2^32 sweeps: every pattern with stride 1 (SB_TEST_FULL=1); in the quick run every stride-th pattern and, as no stride may skip
+    the places where an off by one decides, also the 128 patterns around every binade boundary (exponent field e, both signs: 0x00800000, 0x3f800000, 0x4a800000 = 2^22 among
+    them). A pattern is visited once (the neighbourhood skips the ones the stride has). */
+template <class Fn>
+void forEachSweepPattern (uint64_t stride, Fn fn)
+{
+    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
+        fn (static_cast<uint32_t> (i));
+    if (stride > 1)
+        for (const uint32_t sign : { 0u, 0x80000000u })
+            for (uint32_t e = 0; e < 256u; ++e)
+                for (uint32_t d = 0; d < 128u; ++d)
+                {
+                    const uint32_t u = ((e << 23) | sign) + d - 64u;
+                    if (u % stride != 0)
+                        fn (u);
+                }
+}
+} // namespace
+
 TEST (voice_param_read_zero_test_on_the_bits_is_the_float_compare_for_every_pattern)
 {
     uint64_t mismatches = 0, zeros = 0;
-    // quick run: every 257th pattern (0x80000000, the negative zero, is added by hand: 257 does not divide it); SB_TEST_FULL=1: all 2^32 patterns
+    // quick run: every 257th pattern and the neighbourhood of every binade boundary (the negative zero is one of them); SB_TEST_FULL=1: all 2^32 patterns
     const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("voice_opt 2^32 pattern sweep of the zero test (stride)", 1, 257));
-    auto visit = [&] (uint64_t i)
+    forEachSweepPattern (stride, [&] (uint32_t u)
     {
-        const uint32_t u = static_cast<uint32_t> (i);
         float f;
         std::memcpy (&f, &u, 4);
         volatile float vf = f;   // (a real float compare, not folded into the integer test)
         const bool byFloat = vf == 0.0f, byBits = (u << 1) == 0u;
         mismatches += byFloat != byBits ? 1 : 0;
         zeros += byBits ? 1 : 0;
-    };
-    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
-        visit (i);
-    if (stride > 1)
-        visit (0x80000000ull);
+    });
     CHECK_EQ (zeros, uint64_t (2));
     CHECK_EQ (mismatches, uint64_t (0));
 }
@@ -1566,15 +1583,14 @@ TEST (ffloor_on_the_bits_is_the_form_before_for_every_pattern_with_flush_to_zero
     FlushToZero ftz;
     uint64_t differBefore = 0;
     const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("voice_opt 2^32 pattern sweep of ffloor with flush-to-zero (stride)", 1, 257));
-    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
+    forEachSweepPattern (stride, [&] (uint32_t u)
     {
-        const uint32_t u = static_cast<uint32_t> (i);
         float x;
         std::memcpy (&x, &u, 4);
         volatile float vx = x;
         const float a = ffloorBits (vx), c = ffloorBefore (vx), d = ffloor (vx);
         differBefore += std::memcmp (&a, &c, 4) != 0 || std::memcmp (&d, &c, 4) != 0 ? 1 : 0;
-    }
+    });
     CHECK_EQ (differBefore, uint64_t (0));
 }
 
@@ -1582,9 +1598,8 @@ TEST (ffloor_on_the_bits_is_std_floor_for_every_pattern)
 {
     uint64_t differFloor = 0, differBefore = 0, nans = 0;
     const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("voice_opt 2^32 pattern sweep of ffloor against std::floor (stride)", 1, 257));
-    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
+    forEachSweepPattern (stride, [&] (uint32_t u)
     {
-        const uint32_t u = static_cast<uint32_t> (i);
         float x;
         std::memcpy (&x, &u, 4);
         volatile float vx = x;
@@ -1596,7 +1611,7 @@ TEST (ffloor_on_the_bits_is_std_floor_for_every_pattern)
         nans += x != x ? 1 : 0;
         differFloor += ua != ub ? 1 : 0;
         differBefore += ua != uc || std::memcmp (&d, &c, 4) != 0 ? 1 : 0;
-    }
+    });
     std::printf ("ffloor: 2^32 patterns (%llu NaN), %llu differ from std::floor, %llu from the form before\n", static_cast<unsigned long long> (nans),
                  static_cast<unsigned long long> (differFloor), static_cast<unsigned long long> (differBefore));
     CHECK_EQ (differFloor, uint64_t (0));
