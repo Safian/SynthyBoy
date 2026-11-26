@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 #include "own_engine.h"
 #include "synthyboy/state.h"
 #include "osc/lib_osc.h"
@@ -112,10 +113,9 @@ bool hasPrefix (const char* key, const char* prefix) noexcept
     return std::strncmp (key, prefix, std::strlen (prefix)) == 0;
 }
 
-/** Keys that only the effect racks read (fx/fx_chain.cpp, fx_modules.cpp, fx_budget.cpp) and never a voice: the effect instances, the modules and the order of the racks. Everything else
-    (the oscillators, filters, envelopes, LFOs, matrix, master, buses, quality ...) is voice visible. Pinned by the bit identity test (test_own_param_snapshot.cpp), which moves every
-    parameter against the full rebuild. */
-bool isEffectOnlyKey (const char* key) noexcept
+/** The prefixes of the keys that the effect racks own (fx/fx_chain.cpp, fx_modules.cpp, fx_budget.cpp, the same groups as the effect chain of own_support.cpp): the effect instances, the modules and
+    the order of the racks. A key with such a prefix is effect only unless a voice reads it (voiceReadSet). */
+bool hasEffectPrefix (const char* key) noexcept
 {
     static const char* const prefixes[] = { "fxi", "fx.", "fxfilter.", "compressor.", "reverb.", "eq.", "delay.", "bode.", "convolve.", "chorus.", "phaser.", "utility.", "distortion.",
                                             "hyperdim.", "flanger.", "splitter_lmh.", "splitter_lh.", "splitter_ms." };
@@ -125,13 +125,50 @@ bool isEffectOnlyKey (const char* key) noexcept
     return false;
 }
 
+/** Table positions a voice (or the voice side of the engine) can read, taken from the tables the voices read them through, not from a list of names: every position of ParamIndex (the table of every key the
+    voice code, the matrix and the engine resolve by name once; all its fields are ints, the positions or -1), the keys of the library oscillators (libKeys) and the noise filter. A key that a voice reads
+    through one of these is voice visible whatever its name says, so a later voice parameter with an effect looking prefix cannot be classified effect only. A key that a voice reads by a lookup outside
+    these tables is covered by the source scan of test_own_param_snapshot.cpp. */
+const std::vector<bool>& voiceReadSet()
+{
+    static const std::vector<bool> set = []
+    {
+        static_assert (std::is_standard_layout<ParamIndex>::value && sizeof (ParamIndex) % sizeof (int) == 0, "ParamIndex is read as an array of table positions");
+        static_assert (std::is_standard_layout<ModSlotParams>::value && sizeof (ModSlotParams) % sizeof (int) == 0, "ModSlotParams is read as an array of table positions");
+        std::vector<bool> v (paramCount(), false);
+        auto add = [&v] (int idx)
+        {
+            if (idx >= 0 && static_cast<size_t> (idx) < v.size())
+                v[static_cast<size_t> (idx)] = true;
+        };
+        const ParamIndex& pi = paramIndex();
+        int fields[sizeof (ParamIndex) / sizeof (int)];
+        std::memcpy (fields, &pi, sizeof fields);
+        for (const int f : fields)
+            add (f);
+        for (int o = 0; o < 3; ++o)
+            for (const int idx : libKeys (o).idx)
+                add (idx);
+        add (findParamIndex (hashKey ("noise.filter")));
+        return v;
+    }();
+    return set;
+}
+
+/** Keys that only the effect racks read and never a voice. Everything else (the oscillators, filters, envelopes, LFOs, matrix, master, buses, quality ...) is voice visible. Pinned by the bit identity
+    test (test_own_param_snapshot.cpp), which moves the parameters against the full rebuild. */
+bool isEffectOnlyIndex (size_t index) noexcept
+{
+    return index < paramCount() && hasEffectPrefix (paramTable()[index].key) && !voiceReadSet()[index];
+}
+
 void classifyParams (std::vector<uint8_t>& out)
 {
     const size_t n = paramCount();
     out.assign (n, static_cast<uint8_t> (0));
     const ParamInfo* table = paramTable();
     for (size_t i = 0; i < n; ++i)
-        if (! isEffectOnlyKey (table[i].key))
+        if (! isEffectOnlyIndex (i))
             out[i] |= kParamVoice;
     const ParamIndex& pi = paramIndex();
     auto mark = [&] (int idx, uint8_t bit)
@@ -148,6 +185,16 @@ void classifyParams (std::vector<uint8_t>& out)
     mark (pi.master.tuningMts, kParamTuning);
 }
 } // namespace
+
+bool paramIsEffectOnly (size_t index) noexcept
+{
+    return isEffectOnlyIndex (index);
+}
+
+bool paramHasEffectPrefix (size_t index) noexcept
+{
+    return index < paramCount() && hasEffectPrefix (paramTable()[index].key);
+}
 
 OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing"))), convolveOnIndex (findParamIndex (hashKey ("convolve.on")))
 {

@@ -73,6 +73,19 @@ period, as before) over a patch with a limiter in Main, an oversampled distortio
 changes: every block and every `latencySamples ()` is bit identical; 0 derivations in 200 steady blocks against 800 (a derivation per control period); a latency that moves without a
 parameter (`setRackLatencyOffsetForTest`) is picked up in one derivation and reported. Mutation: the settled path ignoring the comparison fails `own_latency_plan_a_latency_that_moves_without_a_parameter_is_picked_up`.
 
+### Voice or effect class of a parameter (block snapshot)
+
+`OwnEngine::process` hands the voices a new epoch (they drop what they derived from the parameters) only when a changed key can be read by a voice. A key is effect only
+(`paramIsEffectOnly`, `core/engine-own/own_engine.cpp`) when its name has an effect prefix (the groups of the effect chain of `own_support.cpp`) **and** no voice read table
+names its table position: every field of `ParamIndex` (the positions of every key the voice code, the matrix and the engine resolve once), the library oscillator keys (`libKeys`) and the
+noise filter key. A later voice parameter that is added to `ParamIndex` or `libKeys` with an effect looking name is therefore voice visible without touching a list. A key a voice reads by a
+lookup outside these tables is caught by the source scan: `own_param_snapshot_a_key_a_voice_reads_is_never_effect_only` takes every string literal of `core/engine-own/{voice,osc,matrix,env_lfo,dsp}`
+that is a parameter key (86 literals in 39 files) and requires it not to be effect only. Behaviour: `own_param_snapshot_effect_only_keys_*` moves each of the 691 effect only keys alone (a random and an
+extreme value) under two voice heavy patches (three unison oscillators with warps, sub, noise, two filters in series, free running / keyed / mono LFOs, eight slots, effects in all racks; and a mono legato
+portamento patch) at the three tiers, with notes started and stopped in between, and requires the engine that rebuilds the whole snapshot (`kOwnSavingParamDiff`) and the one that follows the changed keys
+to be bit identical (quick: every 8th key, `SB_TEST_FULL=1`: every key). Mutations (2026-11-26): `osc3.warp.` added to the effect prefixes and the voice read exemption removed: the heavy poly patch
+mismatches at `osc3.warp.type` and the source scan names the four `osc3.warp.*` keys; with the exemption kept the same prefix change passes (the voice read tables protect it).
+
 ## Test suite timing
 
 Measured on 2026-11-26, x86-64 Linux VM (4 vCPU Xeon 2.1 GHz, GCC 13.3, Release, `-DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF`, 172 tests), other

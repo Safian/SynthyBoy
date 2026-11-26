@@ -38,6 +38,11 @@ constexpr float kDefaultLowTierKillSeconds = 0.003f;
 /** The default of OwnEngine::setLowTierMorphSpread: keep the morph spread across the unison voices at tier low (two morph cycles instead of one shared one). */
 constexpr bool kDefaultLowTierMorphSpread = true;
 
+/** The classification of the block snapshot (OwnEngine::process, "block snapshot"): true for a table position that only the effect racks read, so that a changed value does not make the voices drop what they
+    derived. A position that has an effect prefix but is read by a voice is not effect only (paramHasEffectPrefix tells the prefix alone). For the tests. */
+bool paramIsEffectOnly (size_t index) noexcept;
+bool paramHasEffectPrefix (size_t index) noexcept;
+
 class OwnEngine final : public IEngine
 {
 public:
