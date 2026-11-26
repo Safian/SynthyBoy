@@ -161,6 +161,15 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_link_libraries(synthyboy_test_own_wt_osc_opt PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_wt_osc_opt COMMAND synthyboy_test_own_wt_osc_opt)
 endif()
+# The shared decimation of the oversampled oscillator path against the decimator per unison voice (bounded float difference); portable, links only the morph and wavetable sources.
+add_executable(synthyboy_test_own_wt_osc_shared_decim test_own_wt_osc_shared_decim.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
+    "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+target_include_directories(synthyboy_test_own_wt_osc_shared_decim PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+    "${PROJECT_SOURCE_DIR}/core/src")
+target_compile_features(synthyboy_test_own_wt_osc_shared_decim PRIVATE cxx_std_17)
+target_compile_options(synthyboy_test_own_wt_osc_shared_decim PRIVATE $<IF:$<BOOL:${MSVC}>,/W4,-Wall -Wextra -Wpedantic -ffp-contract=off>)
+target_link_libraries(synthyboy_test_own_wt_osc_shared_decim PRIVATE Threads::Threads)
+add_test(NAME synthyboy_test_own_wt_osc_shared_decim COMMAND synthyboy_test_own_wt_osc_shared_decim)
 # A legato note takes the envelope scaling of its voice control step also while nothing of the voice is modulated (docs/release/CPU-REVIEW-VOICE-MOD.md V1 side note).
 synthyboy_add_test(synthyboy_test_own_voice_legato_env test_own_voice_legato_env.cpp)
 target_include_directories(synthyboy_test_own_voice_legato_env PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
