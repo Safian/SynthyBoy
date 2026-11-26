@@ -144,6 +144,29 @@ Tests of 2 s or more (seconds; "alone, full" is the time of the coverage as it w
 Check counts of these binaries before the split (the printed `N check(s)`): own_voice_opt 2820, own_engine 3337, own_fx 9263, own_osc_types 4389, own_filter_savings 361827,
 own_param_snapshot 81, own_filter_response_rates 5359. With `SB_TEST_FULL=1` they print the same numbers after the split (see "Quick set and full set" below).
 
+## `fxopt_vintage_speed` on x86-64 (2026-11-26, same VM): not a regression of the live reverb
+
+The test (`core/tests/test_fxopt_reverb_vintage.cpp`) asks for a CPU time ratio of the live vintage reverb (type 3) against the frozen reference (`core/tests/ref/reverb_reference.h`, the code before the
+per chunk hoist R1) of at most 0.85; its comment gives a model of 0.65 ARM / 0.72 x86. On this VM it reads 0.83 to 0.89 and the limit is not met. What the numbers say:
+
+- `measured:` instructions, valgrind callgrind, the test's program (2 s at 44.1 kHz, set D, type 3, chunks of 32), one render, `-O3` as the tests are built, GCC 13.3 / glibc 2.39. The harness alone
+  (program generation) is 15.5 M. Reference 469.7 M, live 387.7 M (381.2 M with the all-pass taps below); net of the harness 454.1 M / 372.2 M (365.6 M): **0.820 (0.805) of the reference instructions**.
+  The live code before the CPU review commit `b32098e` (the last change to `fx_reverb.h`) was 389.7 M, so that commit did not make type 3 dearer (it saved 2 M); the file has no other change on this branch.
+- What R1 removed is exactly the hoisted libm: the reference spends 47.8 M instructions in `expf` (the 16 loop gains `gainFor` and the 7 kHz coefficient, per sample), the live code 1.3 M. That is
+  10 % of the reference (the plan also counts 36 divisions per sample, not isolated here); the live code has the 16 `sinf` of the comb modulation (47.7 M, 12 %) and the delay line code (the 26 cubic reads
+  and pushes of a sample, about 190 M, half of the run) in common with the reference. 5,148 executed instructions per sample in the reference, 4,220 in the live code.
+- `measured:` CPU time with the test's own method (alternating, best of 12 pairs, thread CPU time), four runs of the live code before the all-pass change 0.877, 0.894, 0.880, 0.858, after it 0.860, 0.872, 0.856, 0.854
+  (the VM is shared with other sessions; the earlier TODO range was 0.83 to 0.88). The time ratio is above the instruction ratio. HYPOTHESIS: the removed work is the high IPC part (libm, divisions), the
+  rest is load / dependency bound; not measured (no PMU on the VM).
+- The 0.72 is the cycle weight model of `docs/plans/reverb-convolve.md` (x86: libm 25, division 11, `readCubic` 18 cycles; ARM libm 60), a HYPOTHESIS that was never measured on x86. It counts 2,938 cycles per
+  sample for the reference where 5,148 instructions run, so it undercounts the shared part (the reads and the sines) and the removed share is 18 % of the instructions, not 28 %. The ARM figure (0.65) is
+  not checked here.
+- One bit identical change was made in `fx_reverb.h`: the input all-pass and the four all-passes in the row read at fixed delays, so the whole and the fractional part of the position are made once per call
+  (`DelayLine::cubicTap` / `readCubicAt`, as the flanger does) instead of on each of the 10 reads of a sample: -1.7 % instructions. Proof: `fxopt_vintage_bit_identical` (types 0 to 5, sets D / S / P, both rates,
+  both chunkings, byte compare with the reference, 121 checks) passes. It does not bring the ratio reliably under 0.85.
+- The limit is not loosened. The x86 truth (0.80 by instructions, 0.85 to 0.89 by time on a loaded VM) sits on the limit, so the test fails or passes by noise here; whether the limit becomes per platform or the
+  speed check counts instructions instead of time is an owner decision (TODO.md).
+
 ## Build time (report, 2026-11-26, same VM, 4 jobs)
 
 - **Full build** of everything `-DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF` (560 steps, Ninja `-j4`): 142 s. The compile steps add up to 552 s of CPU, the

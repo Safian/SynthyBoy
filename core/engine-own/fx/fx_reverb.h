@@ -50,6 +50,15 @@ struct AllPassLine
         line.push (flushDenormal (v));
         return z + c * v;
     }
+    /** process () for a delay that stays the same over a call: `tap` is DelayLine::cubicTap (std::max (delay - 1.0f, 1.0f)), the split process () makes on every sample (the same values and
+        arithmetic: bit identical). */
+    float processTap (float x, const DelayLine::CubicTap& tap, float c) noexcept
+    {
+        const float z = line.readCubicAt (tap);
+        const float v = x - c * z;
+        line.push (flushDenormal (v));
+        return z + c * v;
+    }
 };
 
 /** The damping stage of the cores of 9.4: a zero delay one pole low pass of the stage input gives the high shelf `lp + A_h (x - lp)`, then the low shelf
@@ -434,6 +443,7 @@ private:
         float apIn = 0.5f, apLine = 0.3f, depth = 0.0f;
         // type 3 (vintage): everything that depends only on the parameters and the sample rate, once per call of process ()
         float vRatio = 1.0f, vInDelay = 0.0f, vInC = 0.3f, vApC = 0.3f, vLpCoef = 0.0f, vApDelay[4] = {}, vLen[2][8] = {}, vGain[2][8] = {};
+        DelayLine::CubicTap vInTap, vApTap[4]; // the cubic read positions of the input all-pass and of the four in the row (made from vInDelay and vApDelay)
     };
     static constexpr int kC[8] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 }; // the comb lengths of the vintage type (samples at 44.1 kHz)
     static constexpr int kAp[4] = { 556, 441, 341, 225 };                             // its all-pass lengths
@@ -487,7 +497,11 @@ private:
             c.vApC = 0.3f + 0.4f * p.diffB;
             c.vLpCoef = OnePole::coefficient (7000.0f, sampleRate);
             for (int k = 0; k < 4; ++k)
+            {
                 c.vApDelay[k] = static_cast<float> (kAp[k]) * c.vRatio;
+                c.vApTap[k] = DelayLine::cubicTap (std::max (c.vApDelay[k] - 1.0f, 1.0f));
+            }
+            c.vInTap = DelayLine::cubicTap (std::max (c.vInDelay - 1.0f, 1.0f));
             for (int ch = 0; ch < 2; ++ch)
                 for (int k = 0; k < 8; ++k)
                 {
@@ -645,7 +659,7 @@ private:
         float out[2];
         for (int c = 0; c < 2; ++c)
         {
-            float x = vInAp[c].process (mono, cfg.vInDelay, cfg.vInC);
+            float x = vInAp[c].processTap (mono, cfg.vInTap, cfg.vInC);
             float sum = 0.0f;
             for (int k = 0; k < 8; ++k)
             {
@@ -657,7 +671,7 @@ private:
                 sum += rd;
             }
             for (int k = 0; k < 4; ++k)
-                sum = vAp[c][k].process (sum, cfg.vApDelay[k], cfg.vApC);
+                sum = vAp[c][k].processTap (sum, cfg.vApTap[k], cfg.vApC);
             vLp[c] += cfg.vLpCoef * (sum - vLp[c]);
             vLp[c] = flushDenormal (vLp[c]);
             out[c] = vLp[c] * 0.14f * kOutVintage;
