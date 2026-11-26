@@ -115,8 +115,14 @@ public:
     void setOverBudget (uint32_t modules, uint32_t slots) noexcept { overModules = modules; overSlots = slots; }
     uint32_t overBudgetModules() const noexcept { return overModules; }
     uint32_t overBudgetSlots() const noexcept { return overSlots; }
-    /** True if the last update () did the work (it did not return early): latency and plan may have changed. */
+    /** True if the last update () did the work (it did not return early): latency and plan may have changed. A settled update (nothing in the derivation moved) reports true only when the latency of this
+        chain's own rack, as the modules report it now (both `reported` forms of rackLatency), differs from the one of the update before: a module can change its latency with the content or the
+        quality without a parameter changing, and the engine redoes the latency plan only for a chain that says so. */
     bool configuredNow() const noexcept { return configured; }
+    /** Tests only: added to what rackLatency () says of this chain's own rack, as if a module changed its latency without a parameter changing. */
+    void setLatencyOffsetForTest (int samples) noexcept { latencyOffsetForTest = samples; }
+    /** Measurements and the bit identity test: false makes a settled update report true every period (the engine then derives the latency plan every period, as it did before the latencies were compared). */
+    void setLatencyKey (bool on) noexcept { latencyKeyOn = on; }
     /** The latency of rack `rack` (0 .. 9) in samples of the chain rate: the sum of the modules that are on in it, in series; a splitter adds the slowest of its bands
         (document 06, 11). `reported` leaves out what the host is not told about (a limiter with limit_latency_comp off). */
     int rackLatency (int rack, bool reported) const noexcept;
@@ -148,6 +154,11 @@ private:
     double sr = 48000.0;
     bool active = false;
     bool configured = true;
+    bool latencyKeyOn = true;
+    bool latencyKeyValid = false;
+    int latencyOffsetForTest = 0;
+    int latencyKey[2] = {};         // rackLatency (rackId, false / true) at the end of the last update that ran
+    bool refreshLatencyKey() noexcept;   // stores the latencies of the rack; true when they differ from the stored ones (or none were stored)
     bool lowCost = false;
     bool busDeferred = false;
     int quietRun = 0, holdSamples = 0;   // samples of silence in and out so far, and how many are needed

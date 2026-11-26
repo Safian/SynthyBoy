@@ -69,3 +69,18 @@ Measured on an x86-64 Linux VM (not a device; the Cortex-A17 / A76 numbers are n
 | 1 matrix slot parameter (`mod01.amount`) | 4.3 us (4.3-5.4) | 4.3 us (4.3-5.5) |
 
 The gain is 3 us for an effect parameter and 1.3 us for a voice parameter; a slot parameter still compiles the matrix (no change by design). What remains of the 1.8 us for an effect parameter is the 2,637 comparisons, the FX budget evaluation and the effect and master updates, which run on every changed block. Across-process A/B/A runs of the old and the new binary on a 40 us block were dominated by VM noise (steady blocks differed by 10 us) and decide nothing. Bit identity against the old binary: 62 presets x tiers low / medium / high with 1-3 random parameters changed per block and a content reset every 97 blocks, identical hashes; `scripts/compare-renders.sh` on the 34 renders of the Bass presets at tier low: identical.
+
+## The idle engine, the idle global LFOs and silent racks (x86-64 Linux VM, 2026-11-26)
+
+measured: GCC 13.3 Release, 4 vCPU Xeon 2.1 GHz shared with other builds, `OwnEngine::process`, 48 kHz, 128 frame blocks, tier medium, no note, CPU time of the thread, minimum of 15 runs of 4000 blocks
+(a scratch program, not in the repo; every number has tens of percent of noise).
+
+- An engine with the default patch costs 2.0 to 2.1 us per block (four control periods). With the ten global LFOs and the four random LFOs of `OwnEngine::controlTick` not stepped (a temporary
+  `getenv` switch, then removed) it costs 1.9 us: stepping the idle global LFOs is about 0.15 us per block, 0.005 % of the 2.9 ms of a 128 frame block at 44.1 kHz. A skip would have to keep what the
+  stepping makes visible later: the free running phase that a voice reads at its start and a global slot reads while no voice sounds (`globals.lfoPhase`), the state of the mono LFO cores, and the
+  random LFOs (`RandomLfo::advance` draws from a generator and integrates the Lorenz and Rossler styles step by step; there is no closed form). A closed form of the phase alone
+  (`phase + n * rate * dt`) is not bit identical: the engine adds one float increment and wraps every period, and the rate follows the tempo and the last note of every period. It is not done.
+- The same engine with oscillator 1 on, a Reverb in the Bus 1 rack and a Delay in the Bus 2 rack and no note (silent inputs) costs 49.8 us per block: the racks run on zeros at tier medium and high
+  (at tier low `FxChain::process` skips a rack whose input was exactly zero and whose output stayed below -120 dBFS, which is not bit identical and is the accepted low tier rule). A skip that is bit
+  identical needs a proof that the state of every module of the rack is exactly zero and stays so (a reverb or delay tail only decays towards zero, and the latency delays `IntDelay` still hold their
+  last input): not available, see TODO.md.

@@ -27,12 +27,21 @@ namespace synthyboy
 {
 namespace own
 {
+/** A bit of IEngine::setSavingsOff for the own engine that engine.h does not list yet (it moves into OwnSaving there): the racks report a settled period as one that may have changed the latency, so
+    that the engine derives the latency plan every period, as it did before the latencies of the racks were compared (the bit identity test of test_own_latency_plan.cpp). */
+constexpr uint32_t kOwnSavingLatencyKey = 1u << 30;
+
 /** The default of OwnEngine::setLowTierUnisonCap: the one place of the number. */
 constexpr int kDefaultLowTierUnisonCap = 3;
 /** The default of OwnEngine::setLowTierKillFade: a stolen voice (Kill mode) fades out in 3 ms at tier low instead of 50 ms, so it stops costing a full voice after a few control periods. */
 constexpr float kDefaultLowTierKillSeconds = 0.003f;
 /** The default of OwnEngine::setLowTierMorphSpread: keep the morph spread across the unison voices at tier low (two morph cycles instead of one shared one). */
 constexpr bool kDefaultLowTierMorphSpread = true;
+
+/** The classification of the block snapshot (OwnEngine::process, "block snapshot"): true for a table position that only the effect racks read, so that a changed value does not make the voices drop what they
+    derived. A position that has an effect prefix but is read by a voice is not effect only (paramHasEffectPrefix tells the prefix alone). For the tests. */
+bool paramIsEffectOnly (size_t index) noexcept;
+bool paramHasEffectPrefix (size_t index) noexcept;
 
 class OwnEngine final : public IEngine
 {
@@ -64,6 +73,26 @@ public:
         return { statSnapshots.load (std::memory_order_relaxed), statMatrixCompiles.load (std::memory_order_relaxed), statTuningComputes.load (std::memory_order_relaxed),
                  statVoiceEpochs.load (std::memory_order_relaxed) };
     }
+    /** Tests: the hand over of the decoded content to the audio thread (see announceContent). maxTries: the most attempts one block needed (never above kContentAnnounceTries), fallbacks: the blocks
+        that kept the set they already had because a publication won every attempt, adoptions: the blocks that took a newer set. Any thread, lock free. */
+    struct ContentStats { uint32_t maxTries, fallbacks, adoptions; };
+    ContentStats contentStats() const noexcept
+    {
+        return { statContentMaxTries.load (std::memory_order_relaxed), statContentFallbacks.load (std::memory_order_relaxed), statContentAdoptions.load (std::memory_order_relaxed) };
+    }
+    /** Tests and measurements: how often the engine derived the latency plan of the racks (the delays that line the paths up) since it was made. Any thread, lock free. */
+    uint32_t latencyPlanComputes() const noexcept { return statLatencyPlans.load (std::memory_order_relaxed); }
+    /** Tests only: rack (0 Main, 1 Bus 1, 2 Bus 2) reports `samples` more latency, as if one of its modules changed it without a parameter changing. */
+    void setRackLatencyOffsetForTest (int rack, int samples) noexcept { if (rack >= 0 && rack < 3) fx[rack].setLatencyOffsetForTest (samples); }
+    static constexpr int contentAnnounceTries() noexcept { return kContentAnnounceTries; }
+    /** Tests: `hook (arg)` runs on the audio thread between the pin and the check of every attempt of announceContent (where a publication can win), so that a test can publish exactly there. nullptr removes it. */
+    void setContentAnnounceHookForTest (void (*hook) (void*), void* arg) noexcept
+    {
+        announceHookArg.store (arg, std::memory_order_relaxed);
+        announceHook.store (hook, std::memory_order_release);
+    }
+    /** Tests: the set the audio thread reads now; call it only from the thread that calls process (). */
+    const void* heldContentForTest() const noexcept { return contentHeld; }
     void reset() override;
     void setPresetParams (const ParamValues& values) noexcept override;
     void setParam (uint32_t id, float plain) noexcept override;
@@ -190,7 +219,19 @@ private:
     const IContentStore* contentStore = nullptr;
     std::mutex contentMutex; // serializes access to the prepared asset snapshots
     std::vector<std::shared_ptr<const ContentSet>> contentOwned;
-    std::atomic<const ContentSet*> contentCurrent { nullptr }, contentInUse { nullptr };
+    // The hand over to the audio thread is wait free. The audio thread pins what it reads in one of two hazard slots (`contentHold`) and always keeps the set it read last pinned; it never frees a set.
+    // A block makes at most kContentAnnounceTries attempts to pin the newest set (read current, pin it in the other slot, read current again); when every attempt lost against a publication it
+    // keeps the set it already pinned (valid by construction). The publisher frees a set only when it is neither the current one nor in either slot.
+    static constexpr int kContentAnnounceTries = 3;
+    std::atomic<const ContentSet*> contentCurrent { nullptr };
+    std::atomic<const ContentSet*> contentHold[2] = { { nullptr }, { nullptr } };
+    const ContentSet* contentHeld = nullptr; // audio thread only: the set this engine reads (pinned in contentHold[contentHeldSlot])
+    int contentHeldSlot = 0;                 // audio thread only
+    std::atomic<void (*) (void*)> announceHook { nullptr };
+    std::atomic<void*> announceHookArg { nullptr };
+    std::atomic<uint32_t> statLatencyPlans { 0 };
+    std::atomic<uint32_t> statContentMaxTries { 0 }, statContentFallbacks { 0 }, statContentAdoptions { 0 };
+    const ContentSet* announceContent() noexcept;
     std::atomic<int> switchKeyAtomic[3];
     int switchKeySnap[3] = { -1, -1, -1 };
     uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};

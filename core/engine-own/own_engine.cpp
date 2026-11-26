@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 #include "own_engine.h"
 #include "synthyboy/state.h"
 #include "osc/lib_osc.h"
@@ -112,10 +113,9 @@ bool hasPrefix (const char* key, const char* prefix) noexcept
     return std::strncmp (key, prefix, std::strlen (prefix)) == 0;
 }
 
-/** Keys that only the effect racks read (fx/fx_chain.cpp, fx_modules.cpp, fx_budget.cpp) and never a voice: the effect instances, the modules and the order of the racks. Everything else
-    (the oscillators, filters, envelopes, LFOs, matrix, master, buses, quality ...) is voice visible. Pinned by the bit identity test (test_own_param_snapshot.cpp), which moves every
-    parameter against the full rebuild. */
-bool isEffectOnlyKey (const char* key) noexcept
+/** The prefixes of the keys that the effect racks own (fx/fx_chain.cpp, fx_modules.cpp, fx_budget.cpp, the same groups as the effect chain of own_support.cpp): the effect instances, the modules and
+    the order of the racks. A key with such a prefix is effect only unless a voice reads it (voiceReadSet). */
+bool hasEffectPrefix (const char* key) noexcept
 {
     static const char* const prefixes[] = { "fxi", "fx.", "fxfilter.", "compressor.", "reverb.", "eq.", "delay.", "bode.", "convolve.", "chorus.", "phaser.", "utility.", "distortion.",
                                             "hyperdim.", "flanger.", "splitter_lmh.", "splitter_lh.", "splitter_ms." };
@@ -125,13 +125,50 @@ bool isEffectOnlyKey (const char* key) noexcept
     return false;
 }
 
+/** Table positions a voice (or the voice side of the engine) can read, taken from the tables the voices read them through, not from a list of names: every position of ParamIndex (the table of every key the
+    voice code, the matrix and the engine resolve by name once; all its fields are ints, the positions or -1), the keys of the library oscillators (libKeys) and the noise filter. A key that a voice reads
+    through one of these is voice visible whatever its name says, so a later voice parameter with an effect looking prefix cannot be classified effect only. A key that a voice reads by a lookup outside
+    these tables is covered by the source scan of test_own_param_snapshot.cpp. */
+const std::vector<bool>& voiceReadSet()
+{
+    static const std::vector<bool> set = []
+    {
+        static_assert (std::is_standard_layout<ParamIndex>::value && sizeof (ParamIndex) % sizeof (int) == 0, "ParamIndex is read as an array of table positions");
+        static_assert (std::is_standard_layout<ModSlotParams>::value && sizeof (ModSlotParams) % sizeof (int) == 0, "ModSlotParams is read as an array of table positions");
+        std::vector<bool> v (paramCount(), false);
+        auto add = [&v] (int idx)
+        {
+            if (idx >= 0 && static_cast<size_t> (idx) < v.size())
+                v[static_cast<size_t> (idx)] = true;
+        };
+        const ParamIndex& pi = paramIndex();
+        int fields[sizeof (ParamIndex) / sizeof (int)];
+        std::memcpy (fields, &pi, sizeof fields);
+        for (const int f : fields)
+            add (f);
+        for (int o = 0; o < 3; ++o)
+            for (const int idx : libKeys (o).idx)
+                add (idx);
+        add (findParamIndex (hashKey ("noise.filter")));
+        return v;
+    }();
+    return set;
+}
+
+/** Keys that only the effect racks read and never a voice. Everything else (the oscillators, filters, envelopes, LFOs, matrix, master, buses, quality ...) is voice visible. Pinned by the bit identity
+    test (test_own_param_snapshot.cpp), which moves the parameters against the full rebuild. */
+bool isEffectOnlyIndex (size_t index) noexcept
+{
+    return index < paramCount() && hasEffectPrefix (paramTable()[index].key) && !voiceReadSet()[index];
+}
+
 void classifyParams (std::vector<uint8_t>& out)
 {
     const size_t n = paramCount();
     out.assign (n, static_cast<uint8_t> (0));
     const ParamInfo* table = paramTable();
     for (size_t i = 0; i < n; ++i)
-        if (! isEffectOnlyKey (table[i].key))
+        if (! isEffectOnlyIndex (i))
             out[i] |= kParamVoice;
     const ParamIndex& pi = paramIndex();
     auto mark = [&] (int idx, uint8_t bit)
@@ -148,6 +185,16 @@ void classifyParams (std::vector<uint8_t>& out)
     mark (pi.master.tuningMts, kParamTuning);
 }
 } // namespace
+
+bool paramIsEffectOnly (size_t index) noexcept
+{
+    return isEffectOnlyIndex (index);
+}
+
+bool paramHasEffectPrefix (size_t index) noexcept
+{
+    return index < paramCount() && hasEffectPrefix (paramTable()[index].key);
+}
 
 OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing"))), convolveOnIndex (findParamIndex (hashKey ("convolve.on")))
 {
@@ -204,6 +251,9 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     }
     spectralScratch = std::make_unique<spectral::Scratch>();
     publishContent (ContentSet::build (StateContent {}, nullptr));
+    contentHeld = contentCurrent.load();   // the first set is pinned from the start: the audio thread always has a valid set to fall back to
+    contentHeldSlot = 0;
+    contentHold[0].store (contentHeld);
 }
 
 OwnEngine::~OwnEngine()
@@ -257,18 +307,61 @@ void OwnEngine::publishContent (std::shared_ptr<const ContentSet> set)
     std::lock_guard<std::mutex> lock (contentMutex);
     const ContentSet* raw = set.get();
     contentOwned.push_back (std::move (set));
-    contentCurrent.store (raw); // seq_cst: the audio thread re-validates the pointer it announced in contentInUse
-    const ContentSet* inUse = contentInUse.load();
+    contentCurrent.store (raw); // seq_cst: the audio thread re-validates the pointer it pinned in contentHold after reading it (announceContent)
+    const ContentSet* const pinned0 = contentHold[0].load(); // seq_cst, after the store above: a set the audio thread validated against the previous current is seen here
+    const ContentSet* const pinned1 = contentHold[1].load();
     for (size_t i = 0; i < contentOwned.size();)
     {
         const ContentSet* p = contentOwned[i].get();
-        if (p != raw && p != inUse)
+        if (p != raw && p != pinned0 && p != pinned1)
             contentOwned.erase (contentOwned.begin() + static_cast<std::ptrdiff_t> (i));
         else
             ++i;
     }
     for (auto& k : switchKeyAtomic)
         k.store (-1, std::memory_order_relaxed);
+}
+
+/** The audio thread's hand over (a fixed number of operations, no loop that a publisher can keep running, no free): pins the newest set and returns the set this block reads.
+    The set read last stays pinned in contentHold[contentHeldSlot]; an attempt reads current, pins it in the other slot and reads current again (the publisher stores current and then reads both slots,
+    so a set that is still current after it was pinned cannot be freed). An attempt that finds current changed again is repeated, at most kContentAnnounceTries times; if all of them lose, the
+    block keeps the set it already pinned, which no publication can free (it is a valid, if one publication old, state: the next block tries again). */
+const ContentSet* OwnEngine::announceContent() noexcept
+{
+    uint32_t tries = 0;
+    bool stored = false, settled = false;
+    void (*const hook) (void*) = announceHook.load (std::memory_order_acquire);
+    for (int attempt = 0; attempt < kContentAnnounceTries && ! settled; ++attempt)
+    {
+        ++tries;
+        const ContentSet* const cand = contentCurrent.load();
+        if (cand == contentHeld)
+        {
+            settled = true;                          // the pinned set is the current one
+            break;
+        }
+        contentHold[contentHeldSlot ^ 1].store (cand);
+        stored = true;
+        if (hook != nullptr)
+            hook (announceHookArg.load (std::memory_order_relaxed));   // tests only
+        if (cand == contentCurrent.load())
+        {
+            contentHeld = cand;
+            contentHeldSlot ^= 1;
+            statContentAdoptions.store (statContentAdoptions.load (std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
+            settled = true;
+        }
+    }
+    if (! settled)
+    {
+        // every attempt lost against a publication: keep the set that is pinned, and do not leave the last candidate pinned
+        if (stored)
+            contentHold[contentHeldSlot ^ 1].store (nullptr);
+        statContentFallbacks.store (statContentFallbacks.load (std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
+    }
+    if (tries > statContentMaxTries.load (std::memory_order_relaxed))
+        statContentMaxTries.store (tries, std::memory_order_relaxed);
+    return contentHeld;
 }
 
 std::shared_ptr<const ContentSet> OwnEngine::preparedOscContent()
@@ -1524,13 +1617,14 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     SB_SECTION (sections::engineRest);
     if (left == nullptr || numFrames <= 0)
         return;
-    std::fill (left, left + numFrames, 0.0f);
     if (!prepared)
     {
+        std::fill (left, left + numFrames, 0.0f);
         if (right != nullptr)
             std::fill (right, right + numFrames, 0.0f);
         return;
     }
+    // (left is not cleared here: every 32 frame chunk below copies the Main mix over its frames, so a cleared output would be overwritten before anything reads it)
     // right may be null (mono output): every 32 frame chunk below renders its right channel into a small stack buffer and folds it into left (no allocation, any block size). A given right is written chunk by chunk.
     std::fill (std::begin (stripBlockPeak), std::end (stripBlockPeak), 0.0f);   // the meters of this block start from nothing
     masterBlockPeakL = masterBlockPeakR = 0.0f;
@@ -1661,16 +1755,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mu = std::min (mu, lowCap);
         globals.maxUnison = mu;
     }
-    // announce the content set this block reads (hazard pointer: the message thread frees a set only when it is neither current nor announced)
-    {
-        const ContentSet* cs;
-        do
-        {
-            cs = contentCurrent.load();
-            contentInUse.store (cs);
-        } while (cs != contentCurrent.load());
-        globals.content = cs;
-    }
+    // pin the content set this block reads (hazard slots: the message thread frees a set only when it is neither current nor pinned; a fixed number of steps, see announceContent)
+    globals.content = announceContent();
     for (int o = 0; o < 3; ++o)
         switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
     globals.switchKey = switchKeySnap;
@@ -1729,6 +1815,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             spectralScratch->startCache = spectralStartCacheOn.load (std::memory_order_relaxed);
             spectralScratch->start.beginTick();
             controlTick();
+            // the voices rebound to the set of this block in the tick: the set pinned before it is no longer referenced (it stayed pinned for the voices that were bound to it until now)
+            contentHold[contentHeldSlot ^ 1].store (nullptr, std::memory_order_release);
             // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period
             const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);
             // the FX budget: admitted again only when the snapshot of the parameters (the effect configuration), the mask or the budget changed; the chains see a changed result like a changed parameter
@@ -1790,8 +1878,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.distOs2 = (globals.economy & kEconomyWarp) == 0;
             frame.scalarLoops = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;
             frame.muteSkip = (globals.economy & kEconomyControl) != 0 && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingFxMute) == 0;
+            const bool latencyKey = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingLatencyKey) == 0;
             for (auto& f : fx)
             {
+                f.setLatencyKey (latencyKey);
                 f.setLowCost ((globals.economy & kEconomyControl) != 0);
                 f.update (base.data(), gdelta.data(), frame, mask, inputsSame);
             }
@@ -1826,10 +1916,11 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 mixCached = gnumTouched == 0;
             }
-            // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11): it changes only with the mixer settings or a chain
-            // that was configured in this period
+            // the latency of the racks and the delays that line the paths up (document 06, 11): it changes only with the mixer settings, a chain that was configured in this period, or a latency
+            // that the modules of a settled chain report differently (FxChain::configuredNow compares the reported latencies of the rack)
             if (!(mixSame && latCached && !fx[0].configuredNow() && !fx[1].configuredNow() && !fx[2].configuredNow()))
             {
+                statLatencyPlans.store (statLatencyPlans.load (std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
                 const int dest[2] = { busDest[0], busDest[0] == 2 && busDest[1] == 2 ? 0 : busDest[1] };
                 const int lat[2] = { busBypass[0] ? 0 : fx[1].rackLatency (1, false), busBypass[1] ? 0 : fx[2].rackLatency (2, false) };
                 const int lat0 = mainBypass ? 0 : fx[0].rackLatency (0, false);

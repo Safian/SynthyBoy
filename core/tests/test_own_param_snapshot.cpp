@@ -5,14 +5,22 @@
 // Two engines get the same events and the same parameter changes; one of them rebuilds the whole snapshot (matrix, tuning table, voice caches) on every change
 // (kOwnSavingParamDiff: what the engine did before the snapshot followed the changed parameters), the other rebuilds only what the changed parameters can reach.
 // Every block of both must have the same bits. The counters of the engine show that the second one really skips the work.
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "own_engine.h"
+#include "osc/lib_osc.h"
+#include "voice/param_index.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
@@ -376,4 +384,267 @@ TEST (own_param_snapshot_a_write_of_the_held_value_derives_nothing_again)
         renderBlock (p, {});
     }
     CHECK_EQ (p.mismatches, 0);
+}
+
+// ---- the effect only classification (isEffectOnlyIndex in own_engine.cpp): a key that a voice reads must never be classed effect only ---------------------------------------------------------------
+
+namespace
+{
+/** `key` set to the fraction `f` (0 .. 1) of its range, on both engines; a key that does not exist is recorded (a patch that silently misses a key proves nothing). */
+void setFrac (Pair& p, const char* key, float f, std::vector<std::string>& missing)
+{
+    const ParamInfo* info = findParamByKey (key);
+    if (info == nullptr)
+    {
+        missing.push_back (key);
+        return;
+    }
+    setBothAt (p, *info, info->min + f * (info->max - info->min));
+}
+
+void setChoice (Pair& p, const char* key, int v, std::vector<std::string>& missing)
+{
+    const ParamInfo* info = findParamByKey (key);
+    if (info == nullptr)
+    {
+        missing.push_back (key);
+        return;
+    }
+    setBothAt (p, *info, static_cast<float> (v));
+}
+
+void slot (Pair& p, int n, const char* src, const char* dst, float amount, std::vector<std::string>& missing)
+{
+    char key[40];
+    std::snprintf (key, sizeof key, "mod%02d.source", n);
+    setChoice (p, key, static_cast<int> (srcChoice (src)), missing);
+    std::snprintf (key, sizeof key, "mod%02d.destination", n);
+    setChoice (p, key, static_cast<int> (dstChoice (dst)), missing);
+    std::snprintf (key, sizeof key, "mod%02d.amount", n);
+    setFrac (p, key, 0.5f + 0.5f * amount, missing);
+}
+
+/** Patch 2: every voice feature that a sweep of one patch can leave unused: three oscillators with unison and warps, the sub and the noise, two filters in series, free running, keyed and mono LFOs,
+    eight slots on voice and global destinations, sends to both buses, effects in all racks. */
+void patchHeavyPoly (Pair& p, std::vector<std::string>& missing)
+{
+    for (int o = 1; o <= 3; ++o)
+    {
+        char key[48];
+        std::snprintf (key, sizeof key, "osc%d.on", o);
+        setChoice (p, key, 1, missing);
+        std::snprintf (key, sizeof key, "osc%d.unison.voices", o);
+        setChoice (p, key, 2 + o, missing);
+        std::snprintf (key, sizeof key, "osc%d.unison.detune", o);
+        setFrac (p, key, 0.3f, missing);
+        std::snprintf (key, sizeof key, "osc%d.warp.type", o);
+        setChoice (p, key, o, missing);
+        std::snprintf (key, sizeof key, "osc%d.warp.amount", o);
+        setFrac (p, key, 0.55f, missing);
+        std::snprintf (key, sizeof key, "osc%d.bus%d_send", o, o == 3 ? 2 : 1);
+        setFrac (p, key, 0.4f, missing);
+        std::snprintf (key, sizeof key, "osc%d.pan", o);
+        setFrac (p, key, 0.3f + 0.2f * static_cast<float> (o), missing);
+    }
+    setChoice (p, "sub.on", 1, missing);
+    setChoice (p, "noise.on", 1, missing);
+    setFrac (p, "noise.level", 0.3f, missing);
+    setChoice (p, "filter1.on", 1, missing);
+    setChoice (p, "filter2.on", 1, missing);
+    setChoice (p, "filter.routing", 1, missing);
+    setFrac (p, "filter1.cutoff", 0.55f, missing);
+    setFrac (p, "filter2.cutoff", 0.7f, missing);
+    setFrac (p, "filter1.resonance", 0.3f, missing);
+    for (int l = 1; l <= 4; ++l)
+    {
+        char key[48];
+        std::snprintf (key, sizeof key, "lfo%d.rate", l);
+        setFrac (p, key, 0.2f + 0.1f * static_cast<float> (l), missing);
+        std::snprintf (key, sizeof key, "lfo%d.sync_type", l);
+        setChoice (p, key, l % 3 == 0 ? 4 : 1, missing);
+        std::snprintf (key, sizeof key, "lfo%d.sync", l);
+        setChoice (p, key, l == 2 ? 4 : 0, missing);
+        std::snprintf (key, sizeof key, "lfo%d.mono", l);
+        setChoice (p, key, l == 4 ? 1 : 0, missing);
+    }
+    slot (p, 1, "lfo1", "filter1.cutoff", 0.5f, missing);
+    slot (p, 2, "env2", "osc1.level", -0.4f, missing);
+    slot (p, 3, "lfo2", "osc2.warp.amount", 0.6f, missing);
+    slot (p, 4, "velocity", "filter2.cutoff", 0.5f, missing);
+    slot (p, 5, "lfo3", "osc3.pan", 0.5f, missing);
+    slot (p, 6, "macro1", "mod01.amount", 0.6f, missing);
+    slot (p, 7, "lfo4", "master.volume", 0.2f, missing);
+    slot (p, 8, "env3", "osc1.unison.detune", 0.5f, missing);
+    setFrac (p, "macro.1", 0.5f, missing);
+    for (const char* on : { "reverb.on", "delay.on", "eq.on", "compressor.on", "chorus.on", "distortion.on", "phaser.on", "flanger.on" })
+        setChoice (p, on, 1, missing);
+    setChoice (p, "reverb.rack", 1, missing);
+    setChoice (p, "delay.rack", 2, missing);
+    setFrac (p, "voicectl.length", 0.5f, missing);
+}
+
+/** Patch 3: monophonic, legato, portamento, key follow LFO, sub, a tuning scale. */
+void patchMonoLegato (Pair& p, std::vector<std::string>& missing)
+{
+    setChoice (p, "master.polyphony", 1, missing);
+    setChoice (p, "master.legato", 1, missing);
+    setFrac (p, "master.portamento.time", 0.35f, missing);
+    setChoice (p, "osc1.on", 1, missing);
+    setChoice (p, "osc2.on", 1, missing);
+    setFrac (p, "osc2.tune", 0.55f, missing);
+    setChoice (p, "sub.on", 1, missing);
+    setChoice (p, "filter1.on", 1, missing);
+    setFrac (p, "filter1.cutoff", 0.4f, missing);
+    setFrac (p, "filter1.keytrack", 0.5f, missing);
+    setChoice (p, "lfo1.sync", 4, missing);
+    setChoice (p, "lfo1.sync_type", 1, missing);
+    setChoice (p, "master.tuning.scale", 3, missing);
+    slot (p, 1, "lfo1", "osc1.tune", 0.3f, missing);
+    slot (p, 2, "note", "filter1.cutoff", 0.5f, missing);
+    slot (p, 3, "env2", "osc2.level", 0.5f, missing);
+    for (const char* on : { "reverb.on", "delay.on", "eq.on" })
+        setChoice (p, on, 1, missing);
+}
+
+void sweepEffectOnlyKeys (Tier tier, int which)
+{
+    Pair p = makePair (tier);
+    std::vector<std::string> missing;
+    if (which == 0)
+        patchHeavyPoly (p, missing);
+    else
+        patchMonoLegato (p, missing);
+    for (const std::string& k : missing)
+        std::printf ("the patch misses the key %s\n", k.c_str());
+    CHECK (missing.empty());
+    chord (p, true);
+    for (int i = 0; i < 12; ++i)
+        renderBlock (p, {});
+    float level = 0.0f;
+    for (float v : p.li)
+        level = std::max (level, std::fabs (v));
+    CHECK (level > 1.0e-4f);   // the patch makes sound
+    uint64_t rng = 4242 + static_cast<uint64_t> (which);
+    const size_t stride = static_cast<size_t> (sbtest::quickScaled ("own_param_snapshot effect only keys under the voice heavy patches, every Nth key", 1, 8, 0));
+    size_t moved = 0, effectOnly = 0;
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        const ParamInfo& info = paramTable()[i];
+        const float random = nextValue (info, rng);
+        if (!own::paramIsEffectOnly (i))
+            continue;
+        ++effectOnly;
+        if ((effectOnly - 1) % stride != 0)
+            continue;
+        ++moved;
+        for (const float v : { random, (effectOnly % 2 == 0) ? info.max : info.min })
+        {
+            setBothAt (p, info, v);
+            renderBlock (p, {});
+            renderBlock (p, {});
+        }
+        if (p.mismatches != 0)
+        {
+            std::printf ("first mismatch after the change of the effect only key %s\n", info.key);
+            break;
+        }
+        if (moved % 40 == 0)
+            chord (p, (moved / 40) % 2 == 0);   // notes start and stop in the middle of the sweep
+    }
+    std::printf ("    %zu effect only keys, %zu moved\n", effectOnly, moved);
+    CHECK (effectOnly > 100);
+    CHECK_EQ (p.mismatches, 0);
+}
+} // namespace
+
+TEST (own_param_snapshot_effect_only_keys_under_the_heavy_poly_patch)
+{
+    for (const Tier tier : { Tier::low, Tier::medium, Tier::high })
+        sweepEffectOnlyKeys (tier, 0);
+}
+
+TEST (own_param_snapshot_effect_only_keys_under_the_mono_legato_patch)
+{
+    for (const Tier tier : { Tier::low, Tier::medium, Tier::high })
+        sweepEffectOnlyKeys (tier, 1);
+}
+
+TEST (own_param_snapshot_a_key_a_voice_reads_is_never_effect_only)
+{
+    // (1) the tables the voices read their keys through: every position of ParamIndex and the library oscillator keys are voice visible, whatever their names look like
+    size_t withPrefix = 0, effectOnly = 0;
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        withPrefix += own::paramHasEffectPrefix (i) ? 1 : 0;
+        effectOnly += own::paramIsEffectOnly (i) ? 1 : 0;
+    }
+    std::printf ("    %zu keys with an effect prefix, %zu of them effect only\n", withPrefix, effectOnly);
+    CHECK (effectOnly > 0 && effectOnly <= withPrefix);
+    {
+        std::vector<int> positions (sizeof (own::ParamIndex) / sizeof (int));
+        std::memcpy (positions.data(), &own::paramIndex(), positions.size() * sizeof (int));
+        for (int o = 0; o < 3; ++o)
+            for (const int idx : own::libKeys (o).idx)
+                positions.push_back (idx);
+        positions.push_back (findParamIndex (hashKey ("noise.filter")));
+        size_t checked = 0;
+        for (const int idx : positions)
+        {
+            if (idx < 0 || static_cast<size_t> (idx) >= paramCount())
+                continue;
+            ++checked;
+            if (own::paramIsEffectOnly (static_cast<size_t> (idx)))
+                std::printf ("voice read key %s is classed effect only\n", paramTable()[idx].key);
+            CHECK (! own::paramIsEffectOnly (static_cast<size_t> (idx)));
+        }
+        CHECK (checked > 500);
+    }
+#ifdef SYNTHYBOY_TEST_SOURCE_DIR
+    // (2) a key written out as a string in the voice side sources (a lookup by name that the tables above do not see) is voice visible
+    namespace fs = std::filesystem;
+    std::set<std::string> literals;
+    size_t files = 0;
+    for (const char* dir : { "voice", "osc", "matrix", "env_lfo", "dsp" })
+    {
+        const fs::path d = fs::path (SYNTHYBOY_TEST_SOURCE_DIR) / "core" / "engine-own" / dir;
+        if (!fs::exists (d))
+            continue;
+        for (const auto& entry : fs::directory_iterator (d))
+        {
+            const std::string ext = entry.path().extension().string();
+            if (ext != ".cpp" && ext != ".h")
+                continue;
+            ++files;
+            std::ifstream in (entry.path());
+            std::stringstream buffer;
+            buffer << in.rdbuf();
+            const std::string text = buffer.str();
+            for (size_t at = text.find ('"'); at != std::string::npos; at = text.find ('"', at + 1))
+            {
+                const size_t end = text.find ('"', at + 1);
+                if (end == std::string::npos)
+                    break;
+                const std::string lit = text.substr (at + 1, end - at - 1);
+                at = end;
+                if (!lit.empty() && lit.size() < 64 && lit.find (' ') == std::string::npos && lit.find ('.') != std::string::npos)
+                    literals.insert (lit);
+            }
+        }
+    }
+    CHECK (files > 10);
+    size_t keys = 0;
+    for (const std::string& lit : literals)
+    {
+        const ParamInfo* info = findParamByKey (lit.c_str());
+        if (info == nullptr)
+            continue;
+        ++keys;
+        const int idx = findParamIndex (info->id);
+        if (idx >= 0 && own::paramIsEffectOnly (static_cast<size_t> (idx)))
+            std::printf ("the voice side sources name the key %s, which is classed effect only\n", lit.c_str());
+        CHECK (idx < 0 || ! own::paramIsEffectOnly (static_cast<size_t> (idx)));
+    }
+    std::printf ("    %zu voice side sources, %zu key literals\n", files, keys);
+    CHECK (keys > 0);
+#endif
 }

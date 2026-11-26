@@ -47,6 +47,45 @@ test checks both the live LFO source and the modulated cutoff against the same s
 Restoring a process-static generation cache in the instrumented binary caused a TSan
 data race between the instances' audio callbacks.
 
+### Decoded content hand over to the audio thread
+
+`OwnEngine::announceContent` (`core/engine-own/own_engine.cpp`) pins the newest `ContentSet` for a block. It is wait free: at most `kContentAnnounceTries` (3) attempts of
+read `current`, pin it in the hazard slot the audio thread does not use, read `current` again; the set read last stays pinned in the other slot, so a block whose every attempt lost against
+a publication keeps a valid set (one publication old) and tries again at the next block. The publisher (`publishContent`) stores `current`, then reads both slots and frees every set that is
+neither current nor pinned; the audio thread frees nothing. The slot of the older set is cleared after the period start tick, when every voice has rebound to the new set (before that
+the voices that are still bound to it keep it alive). The previous single announce slot looped `do { read; announce } while (changed)` without an upper bound (lock free, not wait free).
+Test: `core/tests/test_own_content_announce.cpp` (`own_content_announce_*`). A hook between the pin and the check lets the test make a publication win every attempt (the publisher thread
+completes two publications inside the window): the block makes 3 attempts and keeps its set, the set the engine holds is never marked freed, the audio thread makes no allocation
+and no free, and after the publisher stops one more publication leaves only the pinned and the current set alive. Mutations that the test fails: the publisher ignoring the two
+slots (`violations`, `live`), the attempt count raised to a million (the lose-every-attempt case no longer ends). Quick run 0.2 to 0.3 s per case, `SB_TEST_FULL=1` 3 to 5 s per case.
+A freed set is only marked and kept in a ring of 256 so that the check reads valid memory (the ring also keeps an address from being reused). measured: the same binary built with `-fsanitize=thread` (GCC 13.3, x86-64 Linux, `-O1`), quick and `SB_TEST_FULL=1` runs: 0 ThreadSanitizer reports, 0 failed cases (2026-11-26); the free running full run needed at most 2 attempts in a block.
+The reclaim of the voice rebind (a voice bound to a set that was replaced twice inside one control period, possible with host blocks below 32 frames) is the open hazard H6a of
+`docs/release/CPU-REVIEW-MEMORY.md`, not changed here.
+
+### Latency plan of the racks
+
+`FxChain::update` reports `configuredNow ()` true in its derivation path and, in its settled path (nothing in the derivation moved), only when the latency of the chain's own rack
+(`rackLatency (rackId, false)` and `(rackId, true)`, read after the modules' own `update`) differs from the one stored by the update before. `OwnEngine::process` derives the latency
+plan, the five compensation delays and the reported latency only when the mixer settings changed or a chain says so. A module latency can change with the content or the quality without a
+parameter changing; the modules that exist today (limiter look-ahead, the 2x oversampled distortion) change theirs only with a parameter or the oversampling key of the derivation, which the full
+pass sees, so the settled comparison is a guard that a future module cannot skip. Test: `core/tests/test_own_latency_plan.cpp`: two engines (`own::kOwnSavingLatencyKey` off derives the plan every
+period, as before) over a patch with a limiter in Main, an oversampled distortion in Bus 1 and a delay in Bus 2, at the three tiers, through parameter, quality, content, mixer, rack and preset
+changes: every block and every `latencySamples ()` is bit identical; 0 derivations in 200 steady blocks against 800 (a derivation per control period); a latency that moves without a
+parameter (`setRackLatencyOffsetForTest`) is picked up in one derivation and reported. Mutation: the settled path ignoring the comparison fails `own_latency_plan_a_latency_that_moves_without_a_parameter_is_picked_up`.
+
+### Voice or effect class of a parameter (block snapshot)
+
+`OwnEngine::process` hands the voices a new epoch (they drop what they derived from the parameters) only when a changed key can be read by a voice. A key is effect only
+(`paramIsEffectOnly`, `core/engine-own/own_engine.cpp`) when its name has an effect prefix (the groups of the effect chain of `own_support.cpp`) **and** no voice read table
+names its table position: every field of `ParamIndex` (the positions of every key the voice code, the matrix and the engine resolve once), the library oscillator keys (`libKeys`) and the
+noise filter key. A later voice parameter that is added to `ParamIndex` or `libKeys` with an effect looking name is therefore voice visible without touching a list. A key a voice reads by a
+lookup outside these tables is caught by the source scan: `own_param_snapshot_a_key_a_voice_reads_is_never_effect_only` takes every string literal of `core/engine-own/{voice,osc,matrix,env_lfo,dsp}`
+that is a parameter key (86 literals in 39 files) and requires it not to be effect only. Behaviour: `own_param_snapshot_effect_only_keys_*` moves each of the 691 effect only keys alone (a random and an
+extreme value) under two voice heavy patches (three unison oscillators with warps, sub, noise, two filters in series, free running / keyed / mono LFOs, eight slots, effects in all racks; and a mono legato
+portamento patch) at the three tiers, with notes started and stopped in between, and requires the engine that rebuilds the whole snapshot (`kOwnSavingParamDiff`) and the one that follows the changed keys
+to be bit identical (quick: every 8th key, `SB_TEST_FULL=1`: every key). Mutations (2026-11-26): `osc3.warp.` added to the effect prefixes and the voice read exemption removed: the heavy poly patch
+mismatches at `osc3.warp.type` and the source scan names the four `osc3.warp.*` keys; with the exemption kept the same prefix change passes (the voice read tables protect it).
+
 ## Test suite timing
 
 Measured on 2026-11-26, x86-64 Linux VM (4 vCPU Xeon 2.1 GHz, GCC 13.3, Release, `-DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF`, 172 tests), other
