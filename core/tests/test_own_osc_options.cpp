@@ -178,7 +178,19 @@ Out scenarioRanges()
 // kGoldenTwo re-recorded 2026-11-21 (was 0x157d6ab4245a5ea7): scenarioTwoOscillators uses osc1.warp.type=1 (Sync), which the PolyBLEP/PolyBLAMP at the master wrap (plan
 // distortion-antialiasing.md O3/O4, owner decisions D1-D5) changes on purpose. Proof: with aa::kBlep | aa::kBlamp switched off the render gives the old 0x157d6ab4245a5ea7 bit for
 // bit (kBlep alone gives 0x0d4ab882f367e1d7, since the Sync event also carries the slope jump); the other four goldens are unchanged either way.
+// The checksums are those of the reference toolchain (Apple arm64, clang, -ffp-contract=on: fused multiply-add where the compiler finds one). A float render is bit-exact only on the arithmetic it was
+// recorded with: the same source gives other bits when the compiler contracts a * b + c into an FMA or when libm's sinf / expf / powf round differently. On x86-64 (GCC 13.3, glibc 2.39, no FMA, 2026-11-26)
+// the render of this tree is deterministic (the same five checksums in three runs, and under valgrind memcheck with no error) and different from the reference, so x86-64 has its own set; to check this
+// against the old engine, run it on the reference toolchain. An x86-64 build with FMA contraction (-march with FMA and -ffp-contract=fast) is neither of the two: the test then says so and skips the
+// comparison instead of passing or failing on a value nobody recorded. The other tests of this file compare renders with each other and do not depend on the platform.
+#if defined(__x86_64__) || defined(_M_X64)
+#if defined(__FMA__)
+#define SB_OSC_OPTIONS_NO_GOLDEN 1
+#endif
+constexpr uint64_t kGoldenSaw = 0x0ef8e4c4abd1df0bull, kGoldenPolyLegato = 0x42bca28d2de3e5fbull, kGoldenUntracked = 0xcf4d399a74337f13ull, kGoldenTwo = 0xb878e42115566fd3ull, kGoldenRanges = 0x5bb77b9be7cdb843ull;
+#else
 constexpr uint64_t kGoldenSaw = 0x32f5d84863c090dcull, kGoldenPolyLegato = 0x37cc04676d2854b7ull, kGoldenUntracked = 0x5af5f9de70207243ull, kGoldenTwo = 0x8c227dcce42cab3full, kGoldenRanges = 0xe8bcee2fbc6c19ffull;
+#endif
 } // namespace
 
 TEST (own_osc_options_defaults_keep_the_render_bit_identical)
@@ -193,6 +205,10 @@ TEST (own_osc_options_defaults_keep_the_render_bit_identical)
         std::printf ("golden saw %016llx polylegato %016llx untracked %016llx two %016llx ranges %016llx\n", static_cast<unsigned long long> (fnv (scenarioSaw())),
                  static_cast<unsigned long long> (fnv (scenarioPolyLegato())), static_cast<unsigned long long> (fnv (scenarioUntracked())),
                  static_cast<unsigned long long> (fnv (scenarioTwoOscillators())), static_cast<unsigned long long> (fnv (scenarioRanges())));
+#ifdef SB_OSC_OPTIONS_NO_GOLDEN
+    std::printf ("SKIP: x86-64 build with FMA contraction: no recorded checksum for this arithmetic (see kGoldenSaw)\n");
+    return;
+#endif
     CHECK (fnv (scenarioSaw()) == kGoldenSaw);
     CHECK (fnv (scenarioPolyLegato()) == kGoldenPolyLegato);
     CHECK (fnv (scenarioUntracked()) == kGoldenUntracked);
