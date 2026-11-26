@@ -92,8 +92,18 @@ public:
         const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
-    /** Catmull-Rom (cubic) interpolation, `d` samples back from the newest sample (d >= 1 for the full four points). */
-    float readCubic (float d) const noexcept { return readCubicAt (cubicTap (d)); }
+    /** Catmull-Rom (cubic) interpolation, `d` samples back from the newest sample (d >= 1 for the full four points). (One body as it always was, not a call of readCubicAt (cubicTap (d)): the
+        reverb's loops call this thousands of times a block and a nested call chain is no guarantee of the same inlining.) */
+    float readCubic (float d) const noexcept
+    {
+        const float dd = std::max (d, 1.0f);
+        const int i = static_cast<int> (dd);
+        const float t = dd - static_cast<float> (i);
+        const float y0 = ptr[static_cast<size_t> ((pos - i + 1) & mask)], y1 = ptr[static_cast<size_t> ((pos - i) & mask)];
+        const float y2 = ptr[static_cast<size_t> ((pos - i - 1) & mask)], y3 = ptr[static_cast<size_t> ((pos - i - 2) & mask)];
+        const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        return ((c3 * t + c2) * t + c1) * t + y1;
+    }
     /** 4 point (cubic) Lagrange interpolation, `d` samples back from the newest sample (d >= 1). */
     float readLagrange4 (float d) const noexcept
     {
