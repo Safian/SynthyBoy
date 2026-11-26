@@ -167,7 +167,7 @@ class MpcBackgroundsTests(unittest.TestCase):
                         self.assertEqual(marker.getcolors(), [(25, tuple(bytes.fromhex(rgb)))])
 
     def test_the_known_backgrounds(self):
-        self.assertEqual(sorted(bg_mod.KNOWN), ["env1", "env2", "env3", "env4", "env5", "env6", "filter1", "fx", "lfo1", "macros", "master", "mixer", "mod", "osca", "oscb", "oscc", "oscnoise", "oscsub", "play1", "voice"])
+        self.assertEqual(sorted(bg_mod.KNOWN), ["env1", "env2", "env3", "env4", "env5", "env6", "filter1", "fx", "lfo1", "macros", "master", "mixer", "mod", "osca", "oscb", "oscc", "oscnoise", "oscsub", "play1", "tuning", "voice"])
 
         with self.assertRaises(ValueError):
             bg_mod.load_manifest(ROOT / "shell-mpc" / "overlay" / "tests" / "fixtures" / "backgrounds_manifest_macros.h")   # not JSON

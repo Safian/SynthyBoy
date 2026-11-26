@@ -131,7 +131,7 @@ class NoFallbackTests(unittest.TestCase):
 
     def test_each_tab_contains_its_detection_pictures_and_configured_background(self):
         tabs = self.tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 20)
+        self.assertEqual(len(tabs), 21)
         views = {v["tab"]: v for v in self.layout["views"]}
         labels = {p["name"]: p.get("label", p["name"]) for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"]}
         for name, view in views.items():
@@ -235,9 +235,9 @@ class NoFallbackTests(unittest.TestCase):
         for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
             check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2833",))
 
-    def test_the_q_proxies_are_on_all_20_tabs(self):
+    def test_the_q_proxies_are_on_all_21_tabs(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
-        self.assertEqual(len(self.qlinks), 20)
+        self.assertEqual(len(self.qlinks), 21)
         for entry in self.qlinks:
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(16)], entry)
             self.assertEqual(entry["Bank Direction"], "Row")

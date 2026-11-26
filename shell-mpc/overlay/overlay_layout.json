@@ -747,6 +747,43 @@
       }
     },
     {
+      "name": "tuning",
+      "kind": "master",
+      "index": 2,
+      "tab": "Tuning",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "335a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a3364",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
       "name": "voice",
       "kind": "voice",
       "index": 1,

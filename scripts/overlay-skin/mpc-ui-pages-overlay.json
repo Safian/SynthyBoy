@@ -143,6 +143,14 @@
       ]
     },
     {
+      "name": "Tuning",
+      "fn": "Master",
+      "kick": [
+        "master_scale_tuning",
+        "master_expression"
+      ]
+    },
+    {
       "name": "Voice",
       "fn": "Master",
       "kick": [

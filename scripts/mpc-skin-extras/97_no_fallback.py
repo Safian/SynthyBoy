@@ -54,7 +54,7 @@ def _keep_component(tab, component):
         return True
     if tab.get("tabName") == "Mix" and name.startswith("Mixer Native "):
         return True
-    if tab.get("tabName") == "Master":
+    if tab.get("tabName") in ("Master", "Tuning"):
         return name in MASTER_CONTROL_NAMES
     if tab.get("tabName") == "Mod":
         return name.startswith("Mod Native ") or name in ("Mod Matrix Background", "Mod Detail Background")

@@ -410,5 +410,19 @@
       "size": 26,
       "colour": "text.value"
     }
+  ],
+  "tuning": [],
+  "tuning_header": [
+    {
+      "text": "TUNING & MPE",
+      "rect": [
+        64,
+        4,
+        260,
+        56
+      ],
+      "size": 26,
+      "colour": "text.value"
+    }
   ]
 }

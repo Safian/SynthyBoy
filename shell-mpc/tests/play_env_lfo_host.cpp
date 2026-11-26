@@ -259,7 +259,8 @@ void testEnvTargetCount ()
     namespace native = synthyboy_mpc::nativeui;
     auto rig = std::make_unique<Rig>();
     auto& r = *rig;
-    pages::EnvPage page ("env1", 1);
+    pages::EnvPage page ("env1", 1), page2 ("env2", 2);   // the hardware sub-tabs Env and Env 2: each page shows its own envelope
+    pages::EnvPage* shownPage = &page;
     UiStack stack;
     stack.openFull (page.pageElement());
     const int button = PluginInstance::nativeUiBase() + native::kEnvFields + native::env::Targets;
@@ -269,7 +270,7 @@ void testEnvTargetCount ()
         input.instance = input.io = &r.plugin.overlayView;
         input.ui = &stack;
         input.nowMs = r.now += 150.0;
-        page.update (input);
+        shownPage->update (input);
         r.plugin.nativeUiPoll (&r.effect);
     };
     const auto shown = [&]
@@ -295,9 +296,10 @@ void testEnvTargetCount ()
     tick();
     check (shown() == "2" && r.effect.getParameter (&r.effect, button) == 0.0f,
            "ENV TARGETS displays the selected envelope's count while its action stays unlatched");
-    r.plugin.overlayView.setPlaySelection (1, 2);
+    page.onHidden();
+    shownPage = &page2;   // the player steps to the sub-tab Env 2 (the Play selection is not read by the page)
     tick();
-    check (shown() == "1", "changing the selected envelope changes the native TARGETS count");
+    check (shown() == "1", "the Env 2 sub-tab changes the native TARGETS count to its own envelope's");
     envTargetReports = 0;
     set (synthyboy::modSlotParams (2).source, 0.0f);
     tick();
@@ -1639,98 +1641,85 @@ void testSavedDisabledEditors()
 
 void testMasterPanelNavigation()
 {
+    // the Master key has the sub-tabs Master (view index 1: the MAIN side) and Tuning (index 2: the TUNING & MPE side); there are no side buttons, the parameter "Master Panel" is a reserved, unused slot
     using namespace synthyboy_mpc::overlay;
     namespace n = synthyboy_mpc::nativeui;
     auto rig = std::make_unique<Rig>();
     auto& r = *rig;
-    pages::MasterPage page ("master", 0);
+    pages::MasterPage page ("master", 1), tuning ("tuning", 2);
     pages::configureNativeTab (page, page.name());
+    pages::configureNativeTab (tuning, tuning.name());
     r.stack.openFull (page.pageElement());
     const int base = PluginInstance::nativeUiBase();
     const int panel = base + n::kMasterPanel;
-    const auto tick = [&]
+    const auto tick = [&] (pages::MasterPage& p)
     {
         ViewInput in;
         in.instance = in.io = &r.plugin.overlayView;
         in.ui = &r.stack;
         in.nowMs = r.now += 50.0;
-        page.update (in);
+        p.update (in);
         r.plugin.nativeUiPoll (&r.effect);
     };
     const auto post = [&] (float value) { r.effect.setParameter (&r.effect, panel, value); };
     const auto read = [&] (int index) { return r.effect.getParameter (&r.effect, index); };
-    tick();
+    tick (page);
     const auto saved = r.save();
-    const auto aperture = [&] (synthyboy_mpc::ui::Rect rect)
+    const auto aperture = [&] (pages::MasterPage& p, synthyboy_mpc::ui::Rect rect)
     {
         const int x = rect.x + rect.w / 2, y = rect.y + rect.h / 2;
         std::vector<uint32_t> pixels (1280 * 800);
-        page.render (pixels.data(), 1280, 800);
-        const bool down = page.onTouch ({TouchEvent::Down, x, y}, r.stack, r.plugin.overlayView, r.now);
-        const bool up = page.onTouch ({TouchEvent::Up, x, y}, r.stack, r.plugin.overlayView, r.now + 30.0);
+        p.render (pixels.data(), 1280, 800);
+        const bool down = p.onTouch ({TouchEvent::Down, x, y}, r.stack, r.plugin.overlayView, r.now);
+        const bool up = p.onTouch ({TouchEvent::Up, x, y}, r.stack, r.plugin.overlayView, r.now + 30.0);
         return pixels[y * 1280 + x] == 0 && ! down && ! up;
     };
     page.setHostBackground (true);
-    tick();
-    VstParameterProperties props {};
-    char label[synthyboy_mpc::kParamStrBytes] {};
-    const auto display = [&] {
-        r.effect.dispatcher (&r.effect, effGetParamDisplay, panel, 0, label, 0);
-        return std::string (label);
-    };
-    check (r.effect.dispatcher (&r.effect, effGetParameterProperties, panel, 0, &props, 0) == 1
-           && props.minInteger == 0 && props.maxInteger == 1 && props.stepInteger == 1
-           && display() == "Main" && read (base + n::kMasterView) == 0.5f
-           && r.plugin.nativeUiReported[n::kMasterPanel] == 0.0f,
-           "Master navigation has two choices independent of the three-frame visibility gate");
-    check (panel == 3460 && read (panel) == 0.0f && aperture (page.ui().screen().sideTuning.rect()),
-           "the Master MAIN surface yields its TUNING navigation button to the actual host handle");
+    tuning.setHostBackground (true);
+    tick (page);
+    check (panel == 3460 && read (panel) == 0.0f && read (base + n::kMasterView) == 0.5f && page.ui().qTargets()[0] == target ("master.volume"),
+           "the Master sub-tab is the MAIN side: MAIN view published, the reserved Master Panel slot stays 0, the OUTPUT group is on Q 1");
     post (1.0f);
-    tick();
-    check (read (panel) == 1.0f && display() == "Tuning & MPE" && read (base + n::kMasterView) == 1.0f
-           && r.plugin.nativeUiReported[n::kMasterPanel] == 1.0f
-           && page.ui().qTargets()[0] == target ("master.scale.type") && aperture (page.ui().screen().sideMain.rect()) && r.save() == saved,
-           "native TUNING replaces the Q group and the new MAIN button has a transparent aperture");
+    tick (page);
+    check (read (base + n::kMasterView) == 0.5f && page.ui().qTargets()[0] == target ("master.volume") && r.save() == saved,
+           "a value posted to the reserved Master Panel slot changes nothing (no side buttons)");
+    page.onHidden();
+    tick (tuning);
+    check (read (base + n::kMasterView) == 1.0f && tuning.ui().qTargets()[0] == target ("master.scale.type") && r.save() == saved,
+           "the Tuning sub-tab is the TUNING & MPE side: TUNING view published, the SCALE group is on Q 1");
     const int scaleInput = base + n::kMasterScaleInput;
     r.effect.setParameter (&r.effect, scaleInput, 1.0f);
-    tick();
+    tick (tuning);
     check (read (scaleInput) == 1.0f && r.plugin.overlayView.masterScaleInputActive(),
-           "the native KEY toggle arms scale input on the Tuning panel");
+           "the native KEY toggle arms scale input on the Tuning sub-tab");
     r.effect.setParameter (&r.effect, scaleInput, 0.0f);
-    tick();
+    tick (tuning);
     check (read (scaleInput) == 0.0f && ! r.plugin.overlayView.masterScaleInputActive(),
            "the native KEY toggle returns to playing");
     r.effect.setParameter (&r.effect, base + n::kMasterView, 0.5f);
-    tick();
-    check (read (panel) == 1.0f, "the existing Master view remains display-only");
-    post (0.5f);
-    tick();
-    check (read (panel) == 1.0f, "a stale three-frame value cannot select a panel");
-    post (0.0f);
-    tick();
-    check (read (panel) == 0.0f && r.plugin.nativeUiReported[n::kMasterPanel] == 0.0f
-           && page.ui().qTargets()[0] == target ("master.volume"),
-           "native MAIN restores its own Q group");
-    post (1.0f);
-    check (r.restore (saved), "the actual Master navigation fixture restores the original chunk");
+    tick (tuning);
+    check (read (base + n::kMasterView) == 1.0f, "the existing Master view remains display-only");
+    tuning.onHidden();
+    tick (page);
+    check (read (base + n::kMasterView) == 0.5f && page.ui().qTargets()[0] == target ("master.volume"),
+           "back on the Master sub-tab: its MAIN view and its own Q group");
+    check (r.restore (saved), "the actual Master fixture restores the original chunk");
     r.expireRestoreWindow();
-    tick();
-    check (read (panel) == 0.0f && r.save() == saved, "preset recall invalidates an outstanding Master panel choice");
+    tick (page);
+    check (r.save() == saved, "preset recall keeps the Master sub-tab on its MAIN side");
     page.onHidden();
-    post (1.0f);
-    tick();
-    check (read (panel) == 0.0f && r.save() == saved, "a late navigation callback after leaving Master cannot change the panel");
+    tick (page);
     const int link = target ("master.bend_down_link");
     r.effect.setParameter (&r.effect, link, 1.0f);
-    tick();
+    tick (page);
     const auto wide = page.ui().screen().bendUp.rect();
-    check (wide.x == 994 && wide.w == 272 && page.ui().screen().bendDown.rect().empty() && aperture (wide),
+    check (wide.x == 994 && wide.w == 272 && page.ui().screen().bendDown.rect().empty() && aperture (page, wide),
            "linked BEND exposes one wide native aperture");
     r.effect.setParameter (&r.effect, link, 0.0f);
-    tick();
+    tick (page);
     const auto up = page.ui().screen().bendUp.rect();
     const auto down = page.ui().screen().bendDown.rect();
-    check (up.w == 134 && down.x == 1132 && ! up.overlaps (down) && aperture (up) && aperture (down),
+    check (up.w == 134 && down.x == 1132 && ! up.overlaps (down) && aperture (page, up) && aperture (page, down),
            "independent BEND UP and DOWN return to separate native cells");
 }
 

@@ -238,6 +238,7 @@ void testMaster()
     check (m.groups[3].numMembers() == 0 && m.groups[3].block() == -1, "Master: VOICE OPTS has no Q members and no block of knobs");
     checkPage ("Master (main side)", r, 4, [&] (int g) { m.setActiveGroup (kMain[g]); r.refresh(); });
     m.setSide (ui::MasterScreen::SideTuning);
+    r.in.instance = 2;   // the hardware sub-tab Tuning
     m.setActiveGroup (5);
     r.refresh();
     std::vector<std::vector<int>> ref;

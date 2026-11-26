@@ -115,9 +115,9 @@ class MasterNativeControlsTests(unittest.TestCase):
         }
         ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         created = apply_master_native_controls(tui, {}, ctx)
-        self.assertEqual(created, 47, "All standard native controls, output widgets, the QUALITY caption and panel buttons created")
+        self.assertEqual(created, 45, "All standard native controls, output widgets, the QUALITY caption and the scale input created (no side buttons)")
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
-        self.assertEqual(len(tab_components), 55, "Seven block panels, the marker, native editor, output and navigation widgets")
+        self.assertEqual(len(tab_components), 53, "Seven block panels, the marker, native editor and output widgets (both sides on one tab: no Tuning tab in this fixture; no side buttons)")
         self.assertEqual([c["componentData"]["name"] for c in tab_components[:7]], [f"Master Block {b['title']}" for b in MASTER_BLOCKS],
                          "the block panels are listed first: every control and marker lies above them")
 
@@ -186,9 +186,9 @@ class MasterNativeControlsTests(unittest.TestCase):
         }
         ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         created = apply_master_native_controls(tui, {}, ctx)
-        self.assertEqual(created, 47, "All standard native controls, output widgets, the QUALITY caption and panel buttons created after purge")
+        self.assertEqual(created, 45, "All standard native controls, output widgets, the QUALITY caption and the scale input created after purge (no side buttons)")
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
-        self.assertEqual(len(tab_components), 55, "Seven block panels, the marker, native editor, output and navigation widgets")
+        self.assertEqual(len(tab_components), 53, "Seven block panels, the marker, native editor and output widgets (both sides on one tab: no Tuning tab in this fixture; no side buttons)")
 
         # Verify Master Transpose now has the layout geometry (904 98 116 152 in tab space), not legacy 23 45 278 107
         transpose = next(c for c in tab_components if c["componentData"]["name"] == "Master Transpose")
@@ -344,14 +344,16 @@ class MasterNativeControlsTests(unittest.TestCase):
                             (38, 129, 64, 151), (68, 129, 94, 151)):
                     self.assertGreater(len(plate.crop(box).getcolors()), 1)
         master = next(tab for tab in tui["pageData"]["tabs"] if tab["tabName"] == "Master")
-        widgets = master["componentDefinition"]["componentsData"]
+        widgets = master["componentDefinition"]["componentsData"]   # the MAIN side; the TUNING & MPE side is on the Tuning tab
+        tuning_tab = next(tab for tab in tui["pageData"]["tabs"] if tab["tabName"] == "Tuning")
+        tuning_widgets = tuning_tab["componentDefinition"]["componentsData"]
         definitions = {entry["key"]: entry["value"] for entry in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         indices = {param["key"]: i for i, param in enumerate(self.params_doc["params"])}
         indices.update({"shell.pad_pressure": 2673, "shell.pad_pressure_amount": 2674})
         frames = {"main": 1, "tuning": 2}
         for spec in (*MASTER_SPECS, MASTER_LINKED_BEND):
             with self.subTest(control=spec["name"]):
-                matches = [w for w in widgets if w["componentData"]["name"] == spec["name"]]
+                matches = [w for w in (widgets if spec["side"] == "main" else tuning_widgets) if w["componentData"]["name"] == spec["name"]]
                 self.assertEqual(len(matches), 1)
                 widget = matches[0]
                 gates = widget["bounds"]["additionalInvalidatingHandles"]
@@ -404,15 +406,11 @@ class MasterNativeControlsTests(unittest.TestCase):
                     self.assertIn(popup, definitions)
 
         by_name = {widget["componentData"]["name"]: widget for widget in widgets}
-        for i, (name, rect) in enumerate((("MAIN", "300 4 160 56"), ("TUNING & MPE", "468 4 220 56"))):
-            button = by_name[f"Master Panel {name}"]
-            self.assertEqual(button["bounds"]["bounds"], rect)
-            self.assertEqual(button["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2887"])
-            self.assertEqual(button["componentData"]["type"], "Button")
-            data = button["componentData"]["data"]
-            self.assertEqual((data["buttonId"], data["numButtonsInGroup"]), (i, 2))
-            self.assertEqual(button["handle remapping"]["map"],
-                             [{"key": "Data", "value": "Parameter 3460"}])
+        # one tab page = one screen: no side buttons on either tab, the sub-tab names the side
+        self.assertFalse([name for name in by_name if name.startswith("Master Panel ")])
+        self.assertFalse([w for w in tuning_widgets if w["componentData"]["name"].startswith("Master Panel ")])
+        self.assertIn("Master Scale Input", {w["componentData"]["name"] for w in tuning_widgets})
+        self.assertNotIn("Master Scale Input", by_name)
         main_gate = "IndexedEnabling/1/3/Parameter 2887"
 
         def output(name, rect, links, gates=(), focus=False):

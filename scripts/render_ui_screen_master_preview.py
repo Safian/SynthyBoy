@@ -51,7 +51,6 @@ def virtual_state(param_count, side):
     base = n.mixer_peek_index(param_count)
     rows = {
         base + n.MASTER_VIEW: ((side + 1) / 2, "MAIN" if side == 0 else "TUNING"),
-        base + n.MASTER_PANEL: (float(side), ""),
         base + n.MASTER_PEAK_L: (0.78, ""), base + n.MASTER_PEAK_R: (0.70, ""),
         base + n.MASTER_HOLD_L: (0.86, ""), base + n.MASTER_HOLD_R: (0.80, ""),
         base + n.MASTER_VOICE_RATIO: (4 / 16, ""), base + n.MASTER_VOICE_COUNT: (4 / 32, "4 / 16 VOICES"),
@@ -86,7 +85,7 @@ def render_all(out, work, states=STATES):
         state = json.loads(state_file.read_text())
         state.update(virtual=virtual_state(state["param_count"], side), base=n.mixer_peek_index(state["param_count"]),
                      settings_view=0)
-        host = MasterSkinSketch(skins, state).render_tab("Master").convert("RGBA")
+        host = MasterSkinSketch(skins, state).render_tab("Master" if side == 0 else "Tuning").convert("RGBA")
         overlay = Image.frombytes("RGBA", (1280, 628), raw.read_bytes())
         Image.alpha_composite(host, overlay).convert("RGB").save(out / f"{name}.png", optimize=True)
         if name == CANONICAL:

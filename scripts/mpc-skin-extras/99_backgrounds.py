@@ -38,6 +38,7 @@ KNOWN = {
     # Master: in the title strip of a block panel right of its title, on both sides (the colour is close to the panel fill); Voice: in the gutter between RANDOM and SCALING
     # (close to the canvas). No control lies there (master_layout.json, voice_layout.json).
     "master": ("Master", CANVAS_ASSET, 600, 74, "141a38"),
+    "tuning": ("Tuning", CANVAS_ASSET, 600, 74, "141a38"),   # the TUNING & MPE side: the title strip of its SCALE card is wide, the sentinel lies in it like on the Master side
     "voice": ("Voice", CANVAS_ASSET, 509, 500, "0c1023"),
     "mixer": ("Mix", CANVAS_ASSET, 900, 18, "141a35"),
     "fx": ("FX", CANVAS_ASSET, 900, 2, "0c1032"),
@@ -110,6 +111,8 @@ def apply(tui, qlinks, ctx):
         if view != "lfo1":
             from native_static_captions import caption_entries
             gates = ()
+            if view == "tuning":
+                children.extend(caption_entries("tuning_header", prefix="Native Caption tuning header"))
             if view == "master":
                 import native_ui_params
                 master_view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW

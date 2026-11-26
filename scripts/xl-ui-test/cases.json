@@ -139,18 +139,15 @@
   },
   {
     "id": "master.mpe.power",
-    "view": "master",
+    "view": "tuning",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
-      {"op": "expect", "vst": {"2887": 1}},
-      {"op": "tap", "control": "master/Master MPE On"},
+      {"op": "tap", "control": "tuning/Master MPE On"},
       {"op": "expect", "target": "master.mpe.on", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "master/Master MPE On", "if_changed": {"from": "baseline", "target": "master.mpe.on"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "tap", "control": "tuning/Master MPE On", "if_changed": {"from": "baseline", "target": "master.mpe.on"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
@@ -659,195 +656,169 @@
     "id": "master.switch.quality.no_smoothing",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master No Smoothing"},
       {"op": "expect", "target": "quality.no_smoothing", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master No Smoothing", "if_changed": {"from": "baseline", "target": "quality.no_smoothing"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.quality.oversample_4x",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master Oversample 4X"},
       {"op": "expect", "target": "quality.oversample_4x", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master Oversample 4X", "if_changed": {"from": "baseline", "target": "quality.oversample_4x"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.bend_down_link",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master Bend Link"},
       {"op": "expect", "target": "master.bend_down_link", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master Bend Link", "if_changed": {"from": "baseline", "target": "master.bend_down_link"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.legato",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master Legato"},
       {"op": "expect", "target": "master.legato", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master Legato", "if_changed": {"from": "baseline", "target": "master.legato"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.poly_legato",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master Poly Legato"},
       {"op": "expect", "target": "master.poly_legato", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master Poly Legato", "if_changed": {"from": "baseline", "target": "master.poly_legato"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.voice.phase_legato",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Voice Phase Legato"},
       {"op": "expect", "target": "voice.phase_legato", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Voice Phase Legato", "if_changed": {"from": "baseline", "target": "voice.phase_legato"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.portamento.always",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master Glide Always"},
       {"op": "expect", "target": "master.portamento.always", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master Glide Always", "if_changed": {"from": "baseline", "target": "master.portamento.always"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.portamento.scaled",
     "view": "master",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel MAIN"},
       {"op": "snapshot", "name": "baseline"},
       {"op": "tap", "control": "master/Master Glide Scaled"},
       {"op": "expect", "target": "master.portamento.scaled", "change": "only", "from": "baseline"}
     ],
     "restore": [
       {"op": "tap", "control": "master/Master Glide Scaled", "if_changed": {"from": "baseline", "target": "master.portamento.scaled"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.tuning.mts_esp",
-    "view": "master",
+    "view": "tuning",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "master/Master MTS-ESP"},
+      {"op": "tap", "control": "tuning/Master MTS-ESP"},
       {"op": "expect", "target": "master.tuning.mts_esp", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "master/Master MTS-ESP", "if_changed": {"from": "baseline", "target": "master.tuning.mts_esp"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "tap", "control": "tuning/Master MTS-ESP", "if_changed": {"from": "baseline", "target": "master.tuning.mts_esp"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.tuning.mts_note_on_only",
-    "view": "master",
+    "view": "tuning",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "master/Master MTS Note-On"},
+      {"op": "tap", "control": "tuning/Master MTS Note-On"},
       {"op": "expect", "target": "master.tuning.mts_note_on_only", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "master/Master MTS Note-On", "if_changed": {"from": "baseline", "target": "master.tuning.mts_note_on_only"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "tap", "control": "tuning/Master MTS Note-On", "if_changed": {"from": "baseline", "target": "master.tuning.mts_note_on_only"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.mpe.y_modwheel",
-    "view": "master",
+    "view": "tuning",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "master/Master MPE Y Modwheel"},
+      {"op": "tap", "control": "tuning/Master MPE Y Modwheel"},
       {"op": "expect", "target": "master.mpe.y_modwheel", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "master/Master MPE Y Modwheel", "if_changed": {"from": "baseline", "target": "master.mpe.y_modwheel"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "tap", "control": "tuning/Master MPE Y Modwheel", "if_changed": {"from": "baseline", "target": "master.mpe.y_modwheel"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.mpe.bend_to_x",
-    "view": "master",
+    "view": "tuning",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "master/Master MPE Bend to X"},
+      {"op": "tap", "control": "tuning/Master MPE Bend to X"},
       {"op": "expect", "target": "master.mpe.bend_to_x", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "master/Master MPE Bend to X", "if_changed": {"from": "baseline", "target": "master.mpe.bend_to_x"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "tap", "control": "tuning/Master MPE Bend to X", "if_changed": {"from": "baseline", "target": "master.mpe.bend_to_x"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {
     "id": "master.switch.master.mpe.y_bipolar",
-    "view": "master",
+    "view": "tuning",
     "steps": [
-      {"op": "tap", "control": "master/Master Panel TUNING & MPE"},
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "master/Master MPE Y Bipolar"},
+      {"op": "tap", "control": "tuning/Master MPE Y Bipolar"},
       {"op": "expect", "target": "master.mpe.y_bipolar", "change": "only", "from": "baseline"}
     ],
     "restore": [
-      {"op": "tap", "control": "master/Master MPE Y Bipolar", "if_changed": {"from": "baseline", "target": "master.mpe.y_bipolar"}},
-      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"},
-      {"op": "tap", "control": "master/Master Panel MAIN"}
+      {"op": "tap", "control": "tuning/Master MPE Y Bipolar", "if_changed": {"from": "baseline", "target": "master.mpe.y_bipolar"}},
+      {"op": "expect", "target": "*", "change": "restored", "from": "baseline"}
     ]
   },
   {

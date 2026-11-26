@@ -1270,12 +1270,12 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
         }
         case layout::kKindMaster:
             sub ("main", [&] { Rig<MasterUi> r (base, v.index); r.ui.screen().setSide (ui::MasterScreen::SideMain); r.refresh(); lintRig (run, r, pg, "main", { &r.ui.screen() }); });
-            sub ("tuning", [&] { Rig<MasterUi> r (base, v.index); r.ui.screen().setSide (ui::MasterScreen::SideTuning); r.refresh(); lintRig (run, r, pg, "tuning", { &r.ui.screen() }); });
+            sub ("tuning", [&] { Rig<MasterUi> r (base, 2); r.ui.screen().setSide (ui::MasterScreen::SideTuning); r.refresh(); lintRig (run, r, pg, "tuning", { &r.ui.screen() }); });
             // the conditional views of the bold cut: LINK off shows BEND DOWN, MPE on shows MPE BEND and BEND TO X (the presets have both in one state only)
             sub ("link_off", [&] { Rig<MasterUi> r (base, v.index); r.inst.set ("master.bend_down_link", 0.0f); r.ui.screen().setSide (ui::MasterScreen::SideMain); r.refresh(); lintRig (run, r, pg, "link_off", { &r.ui.screen() }); });
             sub ("link_on", [&] { Rig<MasterUi> r (base, v.index); r.inst.set ("master.bend_down_link", 1.0f); r.ui.screen().setSide (ui::MasterScreen::SideMain); r.refresh(); lintRig (run, r, pg, "link_on", { &r.ui.screen() }); });
-            sub ("mpe_on", [&] { Rig<MasterUi> r (base, v.index); r.inst.set ("master.mpe.on", 1.0f); r.ui.screen().setSide (ui::MasterScreen::SideTuning); r.refresh(); lintRig (run, r, pg, "mpe_on", { &r.ui.screen() }); });
-            sub ("mpe_off", [&] { Rig<MasterUi> r (base, v.index); r.inst.set ("master.mpe.on", 0.0f); r.ui.screen().setSide (ui::MasterScreen::SideTuning); r.refresh(); lintRig (run, r, pg, "mpe_off", { &r.ui.screen() }); });
+            sub ("mpe_on", [&] { Rig<MasterUi> r (base, 2); r.inst.set ("master.mpe.on", 1.0f); r.ui.screen().setSide (ui::MasterScreen::SideTuning); r.refresh(); lintRig (run, r, pg, "mpe_on", { &r.ui.screen() }); });
+            sub ("mpe_off", [&] { Rig<MasterUi> r (base, 2); r.inst.set ("master.mpe.on", 0.0f); r.ui.screen().setSide (ui::MasterScreen::SideTuning); r.refresh(); lintRig (run, r, pg, "mpe_off", { &r.ui.screen() }); });
             break;
         case layout::kKindVoice:
             sub ("main", [&] { Rig<VoiceUi> r (base, v.index); r.refresh(); lintRig (run, r, pg, "main", { &r.ui.screen() }); });

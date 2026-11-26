@@ -603,14 +603,6 @@ void testMasterNativePageView()
         nativeui::master::OutputReadout output {};
         int reports = 0;
         bool clear = false;
-        float pendingPanel = -1.0f;
-        bool takeNativeMasterPanel (nativeui::master::View, float& value) noexcept override
-        {
-            if (pendingPanel < 0.0f) return false;
-            value = pendingPanel;
-            pendingPanel = -1.0f;
-            return true;
-        }
         void setNativeMasterView (nativeui::master::View next) noexcept override { view = next; }
         void setNativeMasterOutput (const nativeui::master::OutputReadout& value) noexcept override { output = value; ++reports; }
         bool takeNativeMasterClipClear() noexcept override { const bool pending = clear; clear = false; return pending; }
@@ -682,25 +674,49 @@ void testMasterNativePageView()
     check (! tap (x, y) && inst.q[0] == demo::Inst::idx ("master.volume"),
            "touching the native Volume cell selects the four-knob OUTPUT group");
     ui::QGroup::setWideDevice (wide);
-    check (! centreTap (screen.sideTuning), "TUNING selector belongs to the native host");
-    inst.pendingPanel = 1.0f;
-    render();
-    check (inst.view == Tuning, "native TUNING callback replaces the MAIN frame");
+    // the sub-tab Tuning is its own page (view index 2): there are no side buttons, the Master page is left and the Tuning page publishes TUNING
+    view.onHidden();
+    check (inst.view == Hidden, "leaving the Master sub-tab hides its native targets");
+    PageView<MasterUi> tuning ("tuning", 2);
+    UiStack tstack;
+    tstack.openFull (MasterUi::kElementPage);
+    ViewInput tin;
+    tin.io = &inst;
+    tin.ui = &tstack;
+    tin.panelEdgeX = 1280;
+    tin.live = &live;
+    auto trender = [&]
+    {
+        tuning.update (tin);
+        tuning.render (pixels.data(), 1280, 800);
+    };
+    auto ttap = [&] (int tx, int ty)
+    {
+        TouchEvent ev;
+        ev.x = tx;
+        ev.y = ty;
+        ev.kind = TouchEvent::Down;
+        const bool down = tuning.onTouch (ev, tstack, inst, 10.0);
+        ev.kind = TouchEvent::Up;
+        return tuning.onTouch (ev, tstack, inst, 50.0) && down;
+    };
+    trender();
+    check (inst.view == Tuning, "the Tuning sub-tab publishes TUNING and replaces the MAIN frame");
+    check (tuning.ui().screen().side() == ui::MasterScreen::SideTuning && view.ui().screen().side() == ui::MasterScreen::SideMain, "the side is the page's own: no side button, no shared state");
     const int outputReports = inst.reports;
-    render();
+    trender();
     check (inst.reports == outputReports, "TUNING pauses Master output reports");
-    check (pixels[y * 1280 + x] == 0u && ! tap (x, y)
+    check (pixels[y * 1280 + x] == 0u && ! ttap (x, y)
            && inst.q[0] == demo::Inst::idx ("master.scale.type"),
            "TUNING Scale Type uses the same host aperture with the Scale Type target");
 
-    const auto bounds = screen.scaleType.rect();
+    const auto bounds = tuning.ui().screen().scaleType.rect();
     check (pixels[(bounds.y + 3) * 1280 + bounds.right() + 1] == 0u,
            "the gap beside the tuning selector leaves the native canvas visible");
+    tuning.onHidden();
+    check (inst.view == Hidden, "leaving the Tuning sub-tab hides its native targets");
     render();
-    inst.pendingPanel = 0.0f;
-    render();
-    check (inst.view == Main && ! centreTap (screen.sideMain),
-           "native MAIN callback restores its frame without an overlay selector");
+    check (inst.view == Main, "the Master sub-tab publishes its MAIN frame again");
     view.onHidden();
     check (inst.view == Hidden, "leaving the real Master PageView hides its native targets");
 
@@ -764,8 +780,6 @@ void testStandaloneMasterNativeControls()
     check (m.clip.rect().w >= 56,
            "CLIP, stereo peaks and voice meter are native");
     check (m.portaCurve.enabled(), "dynamic glide curve display remains enabled");
-    check (m.sideMain.enabled(), "sideMain navigation button remains enabled");
-    check (m.sideTuning.enabled(), "sideTuning navigation button remains enabled");
     check (! inLeaves (r.ui, m.outputLimiter), "the native LIMIT switch disables its overlay counterpart");
     check (! inLeaves (r.ui, m.padPressure), "the native pad pressure switch disables its overlay counterpart");
 
@@ -822,12 +836,7 @@ void testStandaloneMasterNativeControls()
     const ui::Rect pcr = m.portaCurve.rect();
     check (r.ui.covers (pcr.x + pcr.w / 2, pcr.y + pcr.h / 2), "glide curve is covered by overlay");
 
-    const ui::Rect stR = m.sideTuning.rect();
-    const ui::Rect smR = m.sideMain.rect();
-    check (! r.ui.covers (stR.x + stR.w / 2, stR.y + stR.h / 2)
-           && ! r.ui.covers (smR.x + smR.w / 2, smR.y + smR.h / 2),
-           "both native side selectors are transparent input apertures");
-    m.setSide (ui::MasterScreen::SideMain);
+    check (m.side() == ui::MasterScreen::SideMain, "the Master page is the MAIN side (no side selectors on the page)");
 
     const ui::Rect limR = m.outputLimiter.rect();
     check (! r.ui.covers (limR.x + limR.w / 2, limR.y + limR.h / 2),
@@ -876,7 +885,7 @@ void testStandaloneMasterNativeControls()
     check (m.clip.state.active, "the overlay touch cannot clear the native warning");
 
     // 5. SideTuning controls & keyboard
-    m.setSide (ui::MasterScreen::SideTuning);
+    m.setSide (ui::MasterScreen::SideTuning);   r.in.instance = 2;   // the hardware sub-tab Tuning
     r.refresh();
 
     const ui::Rect sr = m.scaleType.rect();
@@ -905,7 +914,7 @@ void testStandaloneMasterNativeControls()
     check (! r.ui.covers (mpeBendR.x + mpeBendR.w / 2, mpeBendR.y + mpeBendR.h / 2), "mpeBend area is passthrough when mpe is on");
 
     // 6. Q-Link routing remains active and published
-    m.setSide (ui::MasterScreen::SideMain);
+    m.setSide (ui::MasterScreen::SideMain);   r.in.instance = 1;
     m.setActiveGroup (0);
     r.refresh();
     check (r.inst.q[0] == demo::Inst::idx ("master.volume"), "OUTPUT group publishes master.volume");
@@ -933,7 +942,7 @@ void testStandaloneMasterNativeControls()
     check (r.inst.q[2] == demo::Inst::idx ("master.portamento.always"), "GLIDE group publishes master.portamento.always");
     check (r.inst.q[3] == demo::Inst::idx ("master.portamento.scaled"), "GLIDE group publishes master.portamento.scaled");
 
-    m.setSide (ui::MasterScreen::SideTuning);
+    m.setSide (ui::MasterScreen::SideTuning);   r.in.instance = 2;   // the hardware sub-tab Tuning
     m.setActiveGroup (5);
     r.refresh();
     check (r.inst.q[0] == demo::Inst::idx ("master.scale.type"), "SCALE group publishes master.scale.type");
@@ -948,7 +957,7 @@ void testStandaloneMasterNativeControls()
     check (r.inst.q[3] == demo::Inst::idx ("master.tuning.mts_note_on_only"), "TUNING group publishes master.tuning.mts_note_on_only");
 
     // Touch on block header activates that Q group in native mode
-    m.setSide (ui::MasterScreen::SideMain);
+    m.setSide (ui::MasterScreen::SideMain);   r.in.instance = 1;
     const ui::Rect pitchBlock = m.blockRect (1);
     r.tapAt (pitchBlock.x + pitchBlock.w / 2, pitchBlock.y + 10);
     check (m.activeGroup() == 1, "tapping PITCH block header activates PITCH Q group in native mode");
@@ -962,7 +971,7 @@ void testStandaloneMasterNativeControls()
     check (r.inst.q[0] == demo::Inst::idx ("master.portamento.time"), "GLIDE group published on Q1");
 
     // 8. Drawing scene transparency
-    m.setSide (ui::MasterScreen::SideMain);
+    m.setSide (ui::MasterScreen::SideMain);   r.in.instance = 1;
     r.refresh();
     auto scene = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*scene);
@@ -978,15 +987,7 @@ void testStandaloneMasterNativeControls()
     const uint32_t tunePx = pixels[(tr.y + tr.h / 2) * 1280 + (tr.x + tr.w / 2)];
     check (tunePx == 0u, "tune dial interior on overlay plane is transparent (0u)");
 
-    // Retained navigation buttons and displays are painted opaque on overlay plane
-    const ui::Rect smR2 = m.sideMain.rect();
-    const uint32_t smPx = pixels[(smR2.y + smR2.h / 2) * 1280 + (smR2.x + smR2.w / 2)];
-    check (smPx == 0u, "native MAIN selector has no overlay drawing");
-
-    const ui::Rect stR2 = m.sideTuning.rect();
-    const uint32_t stPx = pixels[(stR2.y + stR2.h / 2) * 1280 + (stR2.x + stR2.w / 2)];
-    check (stPx == 0u, "native TUNING selector has no overlay drawing");
-
+    // Displays that stay with the overlay are painted opaque on the overlay plane
     const ui::Rect cr2 = m.clip.rect();
     const uint32_t crPx = pixels[(cr2.y + cr2.h / 2) * 1280 + (cr2.x + cr2.w / 2)];
     check (crPx == 0u, "active native CLIP stays transparent on the overlay plane");

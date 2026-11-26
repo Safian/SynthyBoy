@@ -16,7 +16,7 @@ SURFACES = {
     "Osc B": "oscNativeSurface", "Osc C": "oscNativeSurface", "Sub": "oscNativeSurface",
     "Noise": "oscNativeSurface", **dict.fromkeys(("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6"), "envNativeFullFields"), "LFO": "lfoNativeFullEditor",
     "FX": "fxNativeEditorSurface", "Mix": "mixerStripSourceFrame", "Filter": "filterNativeEditorSurface",
-    "Mod": "modNativeRowNormal", "Master": "masterNativeOutputMeters", "Voice": "voiceNativeStepLevel",
+    "Mod": "modNativeRowNormal", "Master": "masterNativeOutputMeters", "Tuning": "masterNativeBlock_scale", "Voice": "voiceNativeStepLevel",
 }
 BUILTINS = {"Button", "Focus", "Image", "Knob", "Label", "MenuOverlay", "Meter", "NumericOverlay", "Slider"}
 SDK_TEMPLATES = {"knobUni", "knobBi", "knob overlay", "menu overlay", "toggle", "faderUni", "faderBi",

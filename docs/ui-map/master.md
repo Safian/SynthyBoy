@@ -1,6 +1,8 @@
 # Master UI Map
 Refreshed 2026-11-26 (value entry and choice lists)
 
+> **Update 2026-11-26 (one tab page = one screen).** The two sides are the hardware sub-tabs `Master` (view `master`, index 1: the MAIN side) and `Tuning` (view `tuning`, index 2: the TUNING & MPE side) of the function key Master (with `Voice`); there are NO side buttons any more: `MasterUi::update` takes the side from `page::Input::instance`, the skin puts the MAIN controls on the Master tab and the TUNING & MPE controls (and the scale input button) on the Tuning tab (`scripts/native_master/master_controls.py`), the header strip where the buttons stood shows the page title (MASTER / TUNING & MPE). The parameter slot `Master Panel` (`MASTER_PANEL`, `kMasterPanel`) is reserved and unused so that no later index moves. The passages below that speak of switchable sides or of `sideMain` / `sideTuning` describe the old single-tab page.
+
 The mapping below was checked against `MasterScreen::buildGroups` in `shell-mpc/ui/voice_master.h`. GLIDE occupies the fourth bank on MAIN. VEL TRACK, SAME NOTE and STEAL are touch-only. Physical OLED labels and encoder response remain part of the final XL check.
 
 ## Purpose
@@ -23,10 +25,7 @@ The page structure consists of a top header bar and two switchable side views co
 
 1. **Header Area** (y = 114 to y = 170, height 56 px, header lane 64 px):
    - The shared native label displays MASTER to the right of the host detection markers.
-   - Side Switcher Buttons:
-     - `sideMain`: "MAIN" at `(rect.x + 300, rect.y + 4, 160, 56)` (`shell-mpc/ui/voice_master.h:437,695`).
-     - `sideTuning`: "TUNING & MPE" at `(rect.x + 468, rect.y + 4, 220, 56)` (`shell-mpc/ui/voice_master.h:438,696`).
-     - The shared segmented radio buttons highlight the selected side. They switch the view and its Q-Links without editing the preset.
+   - No side buttons (removed 2026-11-26): the hardware sub-tab Master or Tuning chooses the side and its Q-Links; the Tuning tab's title is TUNING & MPE.
 
 2. **Side 0: MAIN** (`shell-mpc/ui/voice_master.h:698-755`; the block rectangles are `blockRect`, `shell-mpc/ui/voice_master.h:660-674`):
    Divided into a 2x2 asymmetric block grid:
@@ -246,7 +245,7 @@ All standard synthesis parameters on the Master tab are converted to native MPC 
 - **Subpage Exclusivity**:
   - While on `SideMain`: only active `SideMain` native controls yield `isNativeControl(x, y) == true` and pass touches through to the host. Any touch on `SideTuning` coordinates is absorbed by the overlay (`covers() == true`), preventing unintended interactions with inactive subpage controls underneath.
   - While on `SideTuning`: only active `SideTuning` native controls yield `isNativeControl(x, y) == true` and pass touches through. Any touch on `SideMain` coordinates is absorbed by the overlay (`covers() == true`).
-  - Both navigation buttons (`sideMain` and `sideTuning`) are retained overlay controls; they remain visible, highlighted, and interactive on both sides.
+  - There are no navigation buttons (removed 2026-11-26): each side is its own hardware sub-tab.
 - **Touch Target Identity**:
   - `isNativeControl(x, y)` checks exact component rectangles of live controls rather than broad block areas. Gaps between controls, block padding, and conditional disabled controls (`bendDown` when `bendLinked_`, `mpeBend`/`mpeBendToX` when `!mpeOn_`) are absorbed by the overlay.
 - **Caption Separation**:

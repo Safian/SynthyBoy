@@ -29,7 +29,6 @@ from native_master.master_controls import (
     MASTER_INTEGER_FIELDS,
     MASTER_LINKED_BEND,
     MASTER_OUTPUT_WIDGETS,
-    MASTER_PANELS,
     MASTER_SPECS,
     UNCONVERTED_CONTROLS,
     get_master_control_specs,
@@ -85,9 +84,10 @@ class MasterScreenVerificationTests(unittest.TestCase):
             components = master_tab["componentDefinition"]["componentsData"]
             comp_names = {c["componentData"]["name"] for c in components}
 
-            # All 37 standard controls present
+            # Every control of the MAIN side is on the Master tab (the TUNING & MPE side is on the Tuning tab, checked below)
             for spec in MASTER_SPECS:
-                self.assertIn(spec["name"], comp_names, f"Missing native control: {spec['name']}")
+                if spec["side"] == "main":
+                    self.assertIn(spec["name"], comp_names, f"Missing native control: {spec['name']}")
 
             # Linked bend present
             self.assertIn(MASTER_LINKED_BEND["name"], comp_names)
@@ -98,16 +98,16 @@ class MasterScreenVerificationTests(unittest.TestCase):
 
             self.assertNotIn("Master Scale Keyboard", comp_names)
 
-            # Panels present
-            self.assertIn("Master Panel MAIN", comp_names)
-            self.assertIn("Master Panel TUNING & MPE", comp_names)
-
-            for control in components:
-                if control["componentData"]["name"].startswith("Master Panel "):
-                    for key in ("onImage", "offImage"):
-                        image = control["componentData"]["data"][key]
-                        self.assertTrue(image.startswith("choice_segmented_"))
-                        self.assertTrue((skins / image).is_file())
+            # No side buttons: the hardware sub-tabs Master and Tuning name the side
+            self.assertFalse([name for name in comp_names if name.startswith("Master Panel ")])
+            tuning_tab = next((t for t in tui["pageData"]["tabs"] if t.get("tabName") == "Tuning"), None)
+            self.assertIsNotNone(tuning_tab, "Tuning tab must be present in generated TUI.json")
+            tuning_names = {c["componentData"]["name"] for c in tuning_tab["componentDefinition"]["componentsData"]}
+            self.assertFalse([name for name in tuning_names if name.startswith("Master Panel ")])
+            self.assertIn("Master Scale Input", tuning_names)
+            for spec in MASTER_SPECS:
+                self.assertEqual(spec["name"] in tuning_names, spec["side"] == "tuning", spec["name"])
+                self.assertEqual(spec["name"] in comp_names, spec["side"] == "main", spec["name"])
 
             # No visible Q-Link numbers/chips: qlinkBoundsData must be empty in release overlay
             self.assertEqual(

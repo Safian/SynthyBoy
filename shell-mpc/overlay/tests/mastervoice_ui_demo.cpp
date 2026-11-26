@@ -39,7 +39,7 @@ void renderAll (const std::string& dir)
         r.stack.back();
         r.refresh();
         r.inst.set ("master.scale.type", 1.0f); r.inst.set ("master.scale.key", 2.0f); r.inst.set ("master.tuning.a4", 442.0f); r.inst.set ("master.mpe.on", 1.0f); r.inst.set ("master.mpe.bend_range", 24.0f);
-        r.tap (r.ui.screen().sideTuning);
+        r.in.instance = 2;   // the hardware sub-tab Tuning (view index 2) is the TUNING & MPE side
         r.refresh (2);
         r.picture (dir, "master_tuning_mpe.png");
         r.inst.set ("master.scale.type", 10.0f);

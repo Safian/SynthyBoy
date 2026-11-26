@@ -41,6 +41,7 @@ int main (int argc, char** argv)
     r.inst.liveValues.masterPeakL = 0.78f;
     r.inst.liveValues.masterPeakR = 0.70f;
     r.ui.screen().setSide (side == 1 ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain);
+    r.in.instance = side == 1 ? 2 : 1;   // the hardware sub-tab Tuning (view index 2) is the TUNING & MPE side
     r.refresh (2);
     auto scene = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*scene);

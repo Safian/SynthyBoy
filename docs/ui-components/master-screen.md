@@ -16,7 +16,7 @@ Geometry: [`scripts/native_master/master_layout.json`](../../scripts/native_mast
 `shell-mpc/ui/voice_master.h`: `MasterScreen : Composite`, `MasterScreen::Side { SideMain = 0, SideTuning = 1 }`; displays in [voice-displays.md](voice-displays.md).
 
 ## State
-Members: `sideMain`, `sideTuning` (`MenuButton`); OUTPUT: `clip` (`ClipReadout`), `volume`, `spread`, `stereoRouting` (`Knob`), `meters`, `voiceOverride` (`LedList`), `outputLimiter`, `noSmoothing`, `oversample4x` (`LedToggle`); PITCH: `tune` (`Knob`), `transpose`, `bendUp`, `bendDown` (`NumberField`), `bendLink`; VOICES: `polyphony`, `velocityTrack`, `padAmount` (`NumberField`), `legato`, `polyLegato`, `phaseLegato`, `padPressure` (`LedToggle`), `sameNote`, `stealPriority` (`LedList`), `voiceMeter`; GLIDE: `portaTime`, `portaSlope` (`Knob`), `portaAlways`, `portaScaled`, `portaCurve`; SCALE: `scaleType`, `scaleKey` (`Stepper`: 20 scales, 12 keys), `scaleMode` (`LedList`), the KEY input activation button; TUNING: `tuningA4` (`NumberField`), `tuningScale` (`LedList`), `mtsEsp`, `mtsNoteOn`; MPE: `mpeOn`, `mpeYModwheel`, `mpeBendToX`, `mpeYBipolar`, `mpeBend`, `mpeMacro`; `groups[kMaxGroups = 9]`.
+Members: (no side buttons since 2026-11-26: the page's side is its hardware sub-tab, `setSide` is called by `MasterUi::update` from the view's instance number); OUTPUT: `clip` (`ClipReadout`), `volume`, `spread`, `stereoRouting` (`Knob`), `meters`, `voiceOverride` (`LedList`), `outputLimiter`, `noSmoothing`, `oversample4x` (`LedToggle`); PITCH: `tune` (`Knob`), `transpose`, `bendUp`, `bendDown` (`NumberField`), `bendLink`; VOICES: `polyphony`, `velocityTrack`, `padAmount` (`NumberField`), `legato`, `polyLegato`, `phaseLegato`, `padPressure` (`LedToggle`), `sameNote`, `stealPriority` (`LedList`), `voiceMeter`; GLIDE: `portaTime`, `portaSlope` (`Knob`), `portaAlways`, `portaScaled`, `portaCurve`; SCALE: `scaleType`, `scaleKey` (`Stepper`: 20 scales, 12 keys), `scaleMode` (`LedList`), the KEY input activation button; TUNING: `tuningA4` (`NumberField`), `tuningScale` (`LedList`), `mtsEsp`, `mtsNoteOn`; MPE: `mpeOn`, `mpeYModwheel`, `mpeBendToX`, `mpeYBipolar`, `mpeBend`, `mpeMacro`; `groups[kMaxGroups = 9]`.
 API: `side()`, `setSide (s)`, static `sideOfGroup (g)`, `numGroups()`, `activeGroup()`, `setActiveGroup (g)`, static `groupName (g)` (OUTPUT, PITCH, VOICES, VOICE OPTS, GLIDE, SCALE, TUNING, MPE, MPE Y), `setBendLinked (bool)` (LINK on: BEND DOWN hidden, BEND UP reads BEND), `setMpeOn (bool)` (MPE off: MPE BEND and BEND TO X hidden), constant `kFirstTuningGroup` 5, static `blockName (b)`, `blockRect (b)` (the panel of `masterlayout::kBlock`), `at (r)`, `turnQ`. Constants `kBlocks` 7, `kBlockTitleH` 32.
 
 ## Size
@@ -46,7 +46,7 @@ master.meters.peakL = master.meters.peakR = peak;      // live
 master.meters.updateHold (dt);
 master.setSide (MasterScreen::SideMain);
 Change c = master.touchDown (x, y, nowMs);
-c = master.touchUp (x, y);                             // tapping sideTuning calls setSide (SideTuning)
+c = master.touchUp (x, y);                             // the Tuning sub-tab's page calls setSide (SideTuning)
 if (c.kind == ChangeKind::Value && c.id == 700) volNorm = c.value;
 ```
 

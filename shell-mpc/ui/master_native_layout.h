@@ -47,8 +47,6 @@ constexpr Rect kOutputClip { 20, 98, 100, 56 };
 constexpr Rect kOutputMeters { 20, 158, 100, 154 };
 constexpr Rect kOutputLimiter { 132, 256, 140, 56 };
 constexpr Rect kOutputVoiceMeter { 388, 550, 364, 44 };
-constexpr Rect kSideMain { 300, 4, 160, 56 };
-constexpr Rect kSideTuning { 468, 4, 220, 56 };
 constexpr Rect kCaptionQuality { 284, 256, 90, 56 };
 constexpr int kBlocks = 7;
 /** The titled block panels in reading order: OUTPUT, PITCH, VOICES, GLIDE, SCALE, TUNING, MPE. */

@@ -38,8 +38,6 @@ def render(layout):
     lines.append(f"constexpr Rect kScaleInput {rect(layout['scale_input'])[5:]};")
     for name, value in layout["output"].items():
         lines.append(f"constexpr Rect kOutput{camel(name)} {rect(value)[5:]};")
-    for name, value in layout["side_buttons"].items():
-        lines.append(f"constexpr Rect kSide{camel(name.split()[0].lower())} {rect(value)[5:]};")
     for caption in layout["captions"]:
         lines.append(f"constexpr Rect kCaption{camel(caption['text'].lower())} {rect(caption['rect'])[5:]};")
     panels = layout["panels"]

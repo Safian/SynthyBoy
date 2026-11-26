@@ -1284,7 +1284,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rMasterMain.picture (outDir + "/" + state + "_master_main.png");
         rMasterMain.picture (outDir + "/" + state + "_master.png");
 
-        GalleryRig<MasterUi> rMasterTuning (baseInst, 1);
+        GalleryRig<MasterUi> rMasterTuning (baseInst, 2);   // the sub-tab Tuning
         rMasterTuning.ui.screen().setSide (ui::MasterScreen::SideTuning);
         rMasterTuning.refresh (2);
         rMasterTuning.picture (outDir + "/" + state + "_master_tuning_mpe.png");

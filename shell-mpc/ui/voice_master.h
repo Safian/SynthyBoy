@@ -110,7 +110,7 @@ struct VoiceMeterReadout : NativeReadoutArea
 };
 
 // ===============================================================================================================================
-/** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER, and the two sides MAIN and TUNING & MPE) and the titled block panels of the side that is on, each ONE Q group (VOICES and the last
+/** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER on the sub-tab Master, TUNING & MPE on the sub-tab Tuning: the hardware sub-tab names the side, there are no side buttons) and the titled block panels of the side of the page, each ONE Q group (VOICES and the last
     block of the second side two):  side MAIN: OUTPUT, PITCH (top row), VOICES, GLIDE (bottom row), so the Q-Links 1 .. 16 run in reading order;  side TUNING & MPE: the rows SCALE, TUNING, MPE (MPE and MPE Y).
     Every rectangle comes from scripts/native_master/master_layout.json through the generated master_native_layout.h, the data the skin places the native controls and panels with (redesign 2026-11-26,
     docs/review/MASTER-VOICE-UI-REDESIGN-2026-11-26.md). The skin draws the panels, their titles, the controls and the meters; the overlay draws the glide curve and the Q frames.
@@ -124,9 +124,6 @@ class MasterScreen : public Composite
 public:
     static constexpr int kMaxGroups = 9, kBlocks = masterlayout::kBlocks, kBlockTitleH = 32;   // the title strip of a block panel; a touch there selects the block's group
     enum Side : int { SideMain = 0, SideTuning = 1 };
-
-    MenuButton sideMain { "MAIN", MenuButton::Icon::None };
-    MenuButton sideTuning { "TUNING & MPE", MenuButton::Icon::None };
 
     // OUTPUT
     Knob volume { "VOLUME" };
@@ -224,8 +221,6 @@ public:
     void setEnabled (bool on) override
     {
         Composite::setEnabled (on);
-        sideMain.setEnabled (on);
-        sideTuning.setEnabled (on);
         for (Component* c : sideMainComponents()) c->setEnabled (on);
         for (Component* c : sideTuningComponents()) c->setEnabled (on);
         applyConditions();
@@ -233,8 +228,6 @@ public:
     void setInactive (bool inactive) override
     {
         Composite::setInactive (inactive);
-        sideMain.setInactive (inactive);
-        sideTuning.setInactive (inactive);
         for (Component* c : sideMainComponents()) c->setInactive (inactive);
         for (Component* c : sideTuningComponents()) c->setInactive (inactive);
     }
@@ -364,9 +357,9 @@ public:
         return false;
     }
 
-    std::array<Rect, 30> nativeApertures() const noexcept
+    std::array<Rect, 28> nativeApertures() const noexcept
     {
-        std::array<Rect, 30> areas {};
+        std::array<Rect, 28> areas {};
         if (side_ == SideMain)
         {
             areas = { volume.rect(), spread.rect(), stereoRouting.rect(), voiceOverride.rect(),
@@ -382,8 +375,6 @@ public:
                       mtsEsp.rect(), mtsNoteOn.rect(), mpeOn.rect(), mpeMacro.rect(), mpeYModwheel.rect(),
                       mpeYBipolar.rect(), mpeOn_ ? mpeBend.rect() : Rect {}, mpeOn_ ? mpeBendToX.rect() : Rect {} };
         }
-        areas[28] = sideMain.rect();
-        areas[29] = sideTuning.rect();
         return areas;
     }
 
@@ -429,8 +420,6 @@ protected:
     void layout() override
     {
         namespace L = masterlayout;
-        sideMain.place (at (L::kSideMain));
-        sideTuning.place (at (L::kSideTuning));
         // ---- side MAIN. OUTPUT: CLIP over the meters at the left, the Q group VOLUME, SPREAD, STEREO, VOICE OVERRIDE in one row, under it the touch-only strip LIMIT, QUALITY: NO SMOOTHING, OVERSAMPLE 4X
         clip.place (at (L::kOutputClip));
         meters.place (at (L::kOutputMeters));

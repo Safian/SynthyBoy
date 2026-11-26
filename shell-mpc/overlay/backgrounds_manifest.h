@@ -24,6 +24,7 @@ inline constexpr BackgroundTab kBackgroundTabs[] = {
     { "mixer", "Mix", "overlay_canvas.png", 900, 18, 0x141a35u },
     { "fx", "FX", "overlay_canvas.png", 900, 2, 0x0c1032u },
     { "master", "Master", "overlay_canvas.png", 600, 74, 0x141a38u },
+    { "tuning", "Tuning", "overlay_canvas.png", 600, 74, 0x141a38u },
     { "voice", "Voice", "overlay_canvas.png", 509, 500, 0x0c1023u },
     { "filter1", "Filter", "overlay_canvas.png", 900, 95, 0x171c35u },
     { "osca", "Osc", "overlay_canvas.png", 900, 8, 0x0f253fu },
@@ -42,7 +43,7 @@ inline constexpr BackgroundTab kBackgroundTabs[] = {
     { nullptr, nullptr, nullptr, 0, 0, 0u },
 };
 
-inline constexpr int kNumBackgroundTabs = 20;
+inline constexpr int kNumBackgroundTabs = 21;
 
 inline const BackgroundTab* backgroundOf (const char* viewName) noexcept
 {

@@ -26,7 +26,6 @@ from components.native.meter.meter import labelled_horizontal_meter, write_peak_
 from components.native.meter_block.meter_block import build_meter_block_definition
 from components.native.name_value.name_value import _label_component, build_name_value_definition
 from components.native.panel.panel import panel_definitions, panel_entry
-from components.native.radio_button.radio_button import segmented_radio_entry
 from components.native.selector.selector import bind_list_choices, build_titled_selector
 
 LAYOUT = json.loads(_TokenPath(__file__).with_name("master_layout.json").read_text())
@@ -365,7 +364,6 @@ MASTER_OUTPUT_WIDGETS = {
     "Master Clip On": _rect(LAYOUT["output"]["clip"]),
     "Master Output Limiter": _rect(LAYOUT["output"]["limiter"]),
 }
-MASTER_PANELS = tuple((name, _rect(rect)) for name, rect in LAYOUT["side_buttons"].items())
 MASTER_BLOCKS = tuple(dict(panel, rect=_rect(panel["rect"])) for panel in LAYOUT["panels"])
 MASTER_LINKED_BEND = {
     "key": "master.bend_range",
@@ -380,7 +378,6 @@ MASTER_BLOCK_NAMES = frozenset(f"Master Block {panel['title']}" for panel in MAS
 MASTER_CAPTION_NAMES = frozenset(f"Master Caption {row['text']}" for row in LAYOUT["captions"])
 MASTER_CONTROL_NAMES = (frozenset(spec["name"] for spec in MASTER_SPECS)
                         | MASTER_OUTPUT_WIDGETS.keys() | {MASTER_LINKED_BEND["name"], "Master Scale Input"}
-                        | {f"Master Panel {name}" for name, _ in MASTER_PANELS}
                         | MASTER_BLOCK_NAMES | MASTER_CAPTION_NAMES)
 MASTER_INTEGER_FIELDS = {
     "master.transpose", "master.bend_range", "master.bend_down_range", "master.polyphony", "master.mpe.bend_range",
@@ -452,16 +449,17 @@ def _output_widgets(ctx, view):
 
 
 def _blocks(ctx, view, frames):
-    """The titled cards of both sides. They are listed FIRST: every control, marker and caption lies above them."""
+    """The titled cards of both sides as (side, entry). They are listed FIRST: every control, marker and caption lies above them."""
     kinds = [(f"masterNativeBlock_{panel['name']}", panel["rect"][2:], panel["title"], None) for panel in MASTER_BLOCKS]
     for kind, definition in panel_definitions(kinds, keyline="masterNativeBlockKeyline").items():
         ctx.add_component_definition(kind, definition)
     for panel, (kind, *_unused) in zip(MASTER_BLOCKS, kinds):
-        yield panel_entry(f"Master Block {panel['title']}", kind, panel["rect"],
-                          gates=(f"IndexedEnabling/{frames[panel['side']]}/3/Parameter {view}",))
+        yield panel["side"], panel_entry(f"Master Block {panel['title']}", kind, panel["rect"],
+                                         gates=(f"IndexedEnabling/{frames[panel['side']]}/3/Parameter {view}",))
 
 
 def _captions(view, frames):
+    """The captions of both sides as (side, entry)."""
     for row in LAYOUT["captions"]:
         label = _label_component(f"Master Caption {row['text']}", "Text", "Data", _rect(row["rect"]),
                                  _ui_style.size("font.caption"), _ui_style.argb("text.caption"),
@@ -470,15 +468,17 @@ def _captions(view, frames):
         label["handle remapping"]["map"] = [{"key": "Data", "value": "Parameter 0"}]   # the Key 61 needs a valid model for constant text
         label["bounds"].update(version=2, showWhenDataModelInvalid="Hide",
                                additionalInvalidatingHandles=[f"IndexedEnabling/{frames[row['side']]}/3/Parameter {view}"])
-        yield label
+        yield row["side"], label
 
 
 def apply_master_native_controls(tui, qlinks, ctx):
-    """Applies host-native MPC controls migration to the Master tab in TUI.json.
+    """Applies host-native MPC controls migration to the Master and Tuning tabs in TUI.json.
 
     Builds the titled block panels, the dials, toggles, number boxes and selectors of both
     sides with their parameter indices, geometry (master_layout.json), replacementStrings,
-    and conditional visibility / touch focus.
+    and conditional visibility / touch focus. The hardware sub-tab names the side (one tab page = one screen):
+    the sub-tab Master carries the MAIN side, the sub-tab Tuning the TUNING & MPE side; there are no side buttons.
+    A layout without the Tuning tab keeps both sides on the Master tab.
     """
     try:
         tab = ctx.tab("Master")
@@ -492,10 +492,11 @@ def apply_master_native_controls(tui, qlinks, ctx):
         return 0
 
     # Purge legacy fallback controls so no ghost fallbacks remain
-    retained = [
-        c for c in components
-        if c.get("componentData", {}).get("name", "").startswith(("Overlay Marker", "Overlay Instance"))
-    ]
+    def markers_of(items):
+        return [c for c in items if c.get("componentData", {}).get("name", "").startswith(("Overlay Marker", "Overlay Instance"))]
+
+    retained = markers_of(components)
+    tuning_tab = next((t for t in tui["pageData"]["tabs"] if t.get("tabName") == "Tuning"), None)
 
     added_definitions = set()
     number = LAYOUT["number"]
@@ -527,7 +528,7 @@ def apply_master_native_controls(tui, qlinks, ctx):
 
     view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
     frames = {"main": 1, "tuning": 2}
-    native = []
+    by_side = {"main": [], "tuning": []}
 
     for spec in (*MASTER_SPECS, MASTER_LINKED_BEND):
         param_idx = _param_index(ctx, spec["key"])
@@ -562,19 +563,24 @@ def apply_master_native_controls(tui, qlinks, ctx):
                 tui["pageData"]["componentDefinitions"]["localComponentDefinitions"],
                 active_focus="Yes")
             component["bounds"]["acceptsHWFocus"] = "Children"
-        native.append(component)
+        by_side[spec["side"]].append(component)
 
     base = native_ui_params.mixer_peek_index(ctx.param_count)
     control = base + native_ui_params.MASTER_SCALE_INPUT
-    native.append(mode_button(ctx, "Master Scale Input", _rect(LAYOUT["scale_input"]),
-                              f"Parameter {control}", on_text="KEY MODE  •  SELECT ROOT  •  TAP TO PLAY",
-                              off_text="ACTIVATE SCALE INPUT", gates=(f"IndexedEnabling/2/3/Parameter {view}",)))
-    native.extend(_output_widgets(ctx, view))
-    native.extend(_captions(view, frames))
-    panel = base + native_ui_params.MASTER_PANEL
-    for i, (name, rect) in enumerate(MASTER_PANELS):
-        native.append(segmented_radio_entry(f"Master Panel {name}", name, rect, i, len(MASTER_PANELS),
-                      f"Parameter {panel}", ctx.skins_dir,
-                      gates=(f"NonZero/Parameter {view}",)))
-    components[:] = [*_blocks(ctx, view, frames), *retained, *native]
-    return len(native)
+    by_side["tuning"].append(mode_button(ctx, "Master Scale Input", _rect(LAYOUT["scale_input"]),
+                                         f"Parameter {control}", on_text="KEY MODE  •  SELECT ROOT  •  TAP TO PLAY",
+                                         off_text="ACTIVATE SCALE INPUT", gates=(f"IndexedEnabling/2/3/Parameter {view}",)))
+    by_side["main"].extend(_output_widgets(ctx, view))
+    cards = {"main": [], "tuning": []}
+    for side, card in _blocks(ctx, view, frames):
+        cards[side].append(card)
+    for side, caption in _captions(view, frames):
+        by_side[side].append(caption)
+    if tuning_tab is None:
+        components[:] = [*cards["main"], *cards["tuning"], *retained, *by_side["main"], *by_side["tuning"]]
+    else:
+        tuning_components = tuning_tab["componentDefinition"]["componentsData"]
+        tuning_markers = markers_of(tuning_components)
+        components[:] = [*cards["main"], *retained, *by_side["main"]]
+        tuning_components[:] = [*cards["tuning"], *tuning_markers, *by_side["tuning"]]
+    return len(by_side["main"]) + len(by_side["tuning"])

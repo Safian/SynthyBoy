@@ -86,13 +86,14 @@ public:
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
-        float panel;
-        const auto view = nativeView();
-        if (view != nativeui::master::Hidden && inst.takeNativeMasterPanel (view, panel))
+        // the side is the page's: the hardware sub-tab Master (view index 1) is the MAIN side, the sub-tab Tuning (index 2) the TUNING & MPE side; there are no side buttons
+        const int side = in.instance >= 2 ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain;
+        if (full_.side() != side)
         {
-            full_.setSide (panel >= 0.5f ? ui::MasterScreen::SideTuning : ui::MasterScreen::SideMain);
+            full_.setSide (side);
             qSlots_.forget();
         }
+        const auto view = nativeView();
         if (nativeView() == nativeui::master::Tuning && inst.masterScaleInputActive())
         {
             const int root = inst.takeMasterScaleRoot();
