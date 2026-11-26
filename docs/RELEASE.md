@@ -131,7 +131,7 @@ python3 tools/release.py --so build/synthyboy-arm64.so --skin "build/Safian - VS
 
 ### Packaging with package-mpc-release.py
 
-The standalone Akai MPC plugin folder built by `scripts/build-mpc.sh` (`build-mpc/Safian - VST - SynthyBoy/`) is packaged for release with `scripts/package-mpc-release.py`:
+The standalone Akai MPC plugin folder built by `scripts/build-mpc.sh` (`build-mpc/Safian - VST - SynthyBoy/`) is packaged for release with `scripts/package-mpc-release.py` (`build-mpc.sh` builds the overlay and its GPU helper by default; the installer refuses a package without the helper):
 
 ```bash
 # Package both architecture archives (default):
