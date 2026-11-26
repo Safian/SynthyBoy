@@ -787,7 +787,7 @@ public:
     bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
     struct Params { int type = 0; float driveDb = 0.0f, mix = 1.0f, cutoff = 4000.0f, resonance = 0.5f, blend = 0.0f; int order = 0; bool os2 = false; };
     int latencySamples() const noexcept { return p.os2 ? kLatency : 0; }
-    void prepare (double sr) { sampleRate = sr; reset(); }
+    void prepare (double sr) { sampleRate = sr; dcValid = false; reset(); }
     void reset() noexcept
     {
         for (auto& s : svf) s.reset();
@@ -832,12 +832,56 @@ public:
     void process (float* l, float* r, int n, int t0 = 0, int period = 0) noexcept
     {
         aaOn = (synthyboy::aa::off() & synthyboy::aa::kDistortion) == 0; // the test and benchmark switch, read once per call
-        const float cg = Svf::coefficient (p.cutoff, sampleRate);
+        // what a call needs that does not change from sample to sample: the filter coefficients (the cutoff's tan and the reciprocal of the section, only when the filter is in the chain), the
+        // blend, the ramp, the DC blocker coefficient (only the types that have one)
         const float k = 2.0f - 1.9f * clamp01 (p.resonance);
+        Svf::Coef co = { 0.0f, 0.0f, 0.0f };
+        if (p.order != 0)
+            co = Svf::coefficients (Svf::coefficient (p.cutoff, sampleRate), k);
+        const float blend = std::clamp (p.blend, 0.0f, 2.0f);
         const bool ramp = period > 0 && (prevLaw.g != curLaw.g || prevLaw.u != curLaw.u || prevLaw.d != curLaw.d); // a still drive: the same values as without the ramp, bit for bit
         const float invP = 1.0f / static_cast<float> (std::max (period, 1));
-        const float dcA = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
+        const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
+        float dcA = 0.0f;
+        if (asym)
+        {
+            if (!dcValid || dcFast != fast || makeup::legacyCaches())
+            {
+                dcCoef = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
+                dcFast = fast;
+                dcValid = true;
+            }
+            dcA = dcCoef;
+        }
         float* io[2] = { l, r };
+        // the type is a template argument: its law is compiled into the loop (no switch per sample inside the shaper, the ADAA step and the antiderivative)
+        switch (p.type)
+        {
+            case 0: run<0> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 1: run<1> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 2: run<2> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 3: run<3> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 4: run<4> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 5: run<5> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 6: run<6> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 7: run<7> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 8: run<8> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 9: run<9> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 10: run<10> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 11: run<11> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 12: run<12> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            case 13: run<13> (io, n, t0, co, k, blend, dcA, ramp, invP); break;
+            default: run<-1> (io, n, t0, co, k, blend, dcA, ramp, invP); break; // a type outside 0 .. 13 (the clamp of the drive), as it was
+        }
+    }
+
+private:
+    /** The body of process () for the law T (T < 0: the type of the parameters, looked at per sample). */
+    template <int T>
+    void run (float* const* io, int n, int t0, const Svf::Coef& co, float k, float blend, float dcA, bool ramp, float invP) noexcept
+    {
+        const int order = p.order;
+        const float mixV = p.mix, dryV = 1.0f - p.mix; // (members: copied, the stores to the output may alias them as far as the compiler knows)
         if (!p.os2)
         {
             for (int c = 0; c < 2; ++c)
@@ -853,21 +897,22 @@ public:
                         u = prevLaw.u + (curLaw.u - prevLaw.u) * t;
                         d = prevLaw.d + (curLaw.d - prevLaw.d) * t;
                     }
-                    if (p.order == 1) x = filt (c, x, cg, k);
-                    x = applyDc (c, shape (c, x, g, u, d), dcA);
-                    if (p.order == 2) x = filt (c, x, cg, k);
-                    io[c][i] = dry * (1.0f - p.mix) + x * p.mix;
+                    if (order == 1) x = filt (c, x, co, k, blend);
+                    x = applyDc<T> (c, shape<T> (c, x, g, u, d), dcA);
+                    if (order == 2) x = filt (c, x, co, k, blend);
+                    io[c][i] = dry * dryV + x * mixV;
                 }
             return;
         }
-        const bool lofi = p.type == 4 || p.type == 5; // Bit Crush and Down Sample are lo-fi effects on purpose and are delayed without oversampling
+        const int type = T >= 0 ? T : p.type;
+        const bool lofi = type == 4 || type == 5; // Bit Crush and Down Sample are lo-fi effects on purpose and are delayed without oversampling
         for (int c = 0; c < 2; ++c)
             for (int i = 0; i < n; ++i)
             {
                 const float dry = io[c][i];
                 const float dryDelayed = dryDelay[c].pushPop (dry);
                 float x = dry;
-                if (p.order == 1) x = filt (c, x, cg, k);
+                if (order == 1) x = filt (c, x, co, k, blend);
                 if (lofi)
                 {
                     float g = curLaw.g, u = curLaw.u, d = curLaw.d;
@@ -878,7 +923,7 @@ public:
                         u = prevLaw.u + (curLaw.u - prevLaw.u) * t;
                         d = prevLaw.d + (curLaw.d - prevLaw.d) * t;
                     }
-                    x = lofiDelay[c].pushPop (shape (c, x, g, u, d));
+                    x = lofiDelay[c].pushPop (shape<T> (c, x, g, u, d));
                 }
                 else
                 {
@@ -896,16 +941,15 @@ public:
                         u1 = prevLaw.u + (curLaw.u - prevLaw.u) * t1;
                         d1 = prevLaw.d + (curLaw.d - prevLaw.d) * t1;
                     }
-                    const float y0 = shape (c, up2[0], g0, u0, d0);
-                    const float y1 = shape (c, up2[1], g1, u1, d1);
-                    x = applyDc (c, oversampler[c].down (y0, y1), dcA);
+                    const float y0 = shape<T> (c, up2[0], g0, u0, d0);
+                    const float y1 = shape<T> (c, up2[1], g1, u1, d1);
+                    x = applyDc<T> (c, oversampler[c].down (y0, y1), dcA);
                 }
-                if (p.order == 2) x = filt (c, x, cg, k);
-                io[c][i] = dryDelayed * (1.0f - p.mix) + x * p.mix;
+                if (order == 2) x = filt (c, x, co, k, blend);
+                io[c][i] = dryDelayed * dryV + x * mixV;
             }
     }
 
-private:
     struct Delay15
     {
         std::array<float, 16> buf {};
@@ -930,24 +974,26 @@ private:
         w.d = fast ? fastmath::pow10 (dExp) : std::pow (10.0f, dExp);
         return w;
     }
-    float filt (int c, float x, float g, float k) noexcept
+    /** The state variable filter of the effect, with the coefficients of the call (Svf::step is Svf::process with them made once: the same arithmetic). */
+    float filt (int c, float x, const Svf::Coef& co, float k, float b) noexcept
     {
-        svf[c].process (x, g, k);
-        // blend 0 .. 2 : low pass, band pass, high pass
-        const float b = std::clamp (p.blend, 0.0f, 2.0f);
+        svf[c].step (x, co, k);
+        // blend 0 .. 2 : low pass, band pass, high pass (b is the clamped blend)
         return b < 1.0f ? lerp (svf[c].lp, svf[c].bp * k, b) : lerp (svf[c].bp * k, svf[c].hp, b - 1.0f);
     }
+    template <int T>
     float shape (int c, float x, float g, float u, float d) noexcept
     {
         // v = x * drive; the laws of docs/engine-spec/06-effects.md section 4
+        const int type = T >= 0 ? T : p.type;
         const float v = x * g;
         auto th = [this] (float a) { return fast ? fastmath::tanh (a) : std::tanh (a); };
         auto ex = [this] (float a) { return fast ? fastmath::exp (a) : std::exp (a); };
         float y = std::clamp (v, -1.0f, 1.0f);
-        if (aaOn && p.type >= 0 && p.type < 32 && ((adaa::kConverted >> p.type) & 1u) != 0u)
-            y = adaa::step (p.type, adaaState[c], x, g, fast); // first-order ADAA (fx_adaa.h)
+        if (aaOn && type >= 0 && type < 32 && ((adaa::kConverted >> type) & 1u) != 0u)
+            y = adaa::step (type, adaaState[c], x, g, fast); // first-order ADAA (fx_adaa.h)
         else
-        switch (p.type)
+        switch (type)
         {
             case 0: y = th (v); break;
             case 1: y = std::clamp (v, -1.0f, 1.0f); break;
@@ -977,14 +1023,16 @@ private:
             case 11: y = std::fabs (std::clamp (v, -1.0f, 1.0f)); break;
             case 12:
             case 13:
-                y = aaOn ? adaa::stepShaper (p.type, adaaState[c], x, u, shaperA, shaperIntA, shaperB, shaperIntB) : std::clamp (v, -1.0f, 1.0f);
+                y = aaOn ? adaa::stepShaper (type, adaaState[c], x, u, shaperA, shaperIntA, shaperB, shaperIntB) : std::clamp (v, -1.0f, 1.0f);
                 break;
         }
         return y;
     }
+    template <int T>
     float applyDc (int c, float y, float dcA) noexcept
     {
-        const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
+        const int type = T >= 0 ? T : p.type;
+        const bool asym = type == 6 || type == 7 || type == 10 || type == 11 || type == 13;
         if (asym) // 10 Hz DC blocker
         {
             dc[c] += dcA * (y - dc[c]);
@@ -1008,6 +1056,8 @@ private:
     const float* shaperB = nullptr;
     const float* shaperIntB = nullptr;
     bool aaOn = true;
+    float dcCoef = 0.0f;   // the DC blocker coefficient of the asymmetric laws for the rate and the math form it was made for
+    bool dcValid = false, dcFast = false;
     unsigned counter = 0;
 };
 
