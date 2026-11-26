@@ -827,3 +827,105 @@ TEST (own_filter_savings_svf_pair_loop_equals_the_single_channel_loop)
                 }
             }
 }
+
+// ---- Item 5: the Serum filters' tangents and powers shared between the two sides of a stereo pair ----
+
+/** Filter::processBoth (the right side reads and writes the left side's cache of tangents and powers) against two plain process () calls, every type of the collection, equal and
+    different cutoffs on the two sides, coefficient hold 1 and 4, moving parameters, noise with the specials of a recursion. */
+TEST (own_filter_savings_serum_process_both_matches_two_process_calls)
+{
+    using synthyboy::filters::Filter;
+    using synthyboy::filters::FilterParams;
+    long compared = 0;
+    for (int type = 0; type < synthyboy::filters::kFilterTypeCount; ++type)
+        for (int pan = 0; pan < 2; ++pan)
+            for (int hold : { 1, 4 })
+            {
+                Filter a, b, c, d;
+                for (Filter* f : { &a, &b, &c, &d })
+                {
+                    f->prepare (44100.0);
+                    f->setType (type);
+                }
+                sbtest::Rng rng (0x5e70b0ull + static_cast<uint64_t> (type * 7 + pan * 3 + hold));
+                for (int block = 0; block < 24; ++block)
+                {
+                    FilterParams p;
+                    p.cutoff = 40.0f * std::pow (400.0f, static_cast<float> (rng.uniform()));
+                    p.resonance = static_cast<float> (rng.uniform());
+                    p.drive = static_cast<float> (rng.uniform());
+                    p.var = static_cast<float> (rng.uniform());
+                    p.blend = static_cast<float> (rng.uniform());
+                    p.mix = block % 5 == 0 ? 0.6f : 1.0f;
+                    p.coefHold = hold;
+                    FilterParams q = p;
+                    if (pan != 0)
+                        q.cutoff = std::min (p.cutoff * 1.3f, 19000.0f);
+                    a.setParams (p);
+                    c.setParams (p);
+                    b.setParams (q);
+                    d.setParams (q);
+                    std::vector<float> inL (32), inR (32), o1 (32), o2 (32), o3 (32), o4 (32);
+                    fillInput (rng, inL, 0.5f, block % 7 == 0);
+                    fillInput (rng, inR, 0.5f, block % 7 == 0);
+                    Filter::processBoth (a, b, inL.data(), o1.data(), inR.data(), o2.data(), 32);
+                    c.process (inL.data(), o3.data(), 32);
+                    d.process (inR.data(), o4.data(), 32);
+                    CHECK (sameBits (o1, o3));
+                    CHECK (sameBits (o2, o4));
+                    compared += 64;
+                }
+            }
+    std::printf ("SAVINGS-SERUM-BOTH compared %ld samples\n", compared);
+}
+
+/** The pair kernel (its reference lanes, which run on every platform) takes lane 0's tangents for lane 1 when the arguments are bit-equal: against two plain process () calls, equal
+    sides (pan 0), different cutoffs, and equal cutoffs with different var (the powers differ, the tangents of the cutoff do not). */
+TEST (own_filter_savings_serum_pair_kernel_shared_tangents_match_two_process_calls)
+{
+    using synthyboy::filters::Filter;
+    using synthyboy::filters::FilterParams;
+    using synthyboy::filters::FilterType;
+    const FilterType types[] = { FilterType::ScreamLP, FilterType::ScreamBP, FilterType::EMSLadder, FilterType::MGLadder, FilterType::LH, FilterType::LN, FilterType::PP, FilterType::NN,
+                                 FilterType::CmbL, FilterType::FlgH, FilterType::PhsHL, FilterType::CmbHL, FilterType::RingMod, FilterType::RingModX2 };
+    for (FilterType type : types)
+        for (int mode = 0; mode < 3; ++mode)
+            for (int hold : { 1, 4 })
+            {
+                Filter a, b, c, d;
+                for (Filter* f : { &a, &b, &c, &d })
+                {
+                    f->prepare (44100.0);
+                    f->setType (static_cast<int> (type));
+                }
+                sbtest::Rng rng (0x9a17ull + static_cast<uint64_t> (static_cast<int> (type) * 11 + mode * 3 + hold));
+                for (int block = 0; block < 40; ++block)
+                {
+                    FilterParams p;
+                    p.cutoff = 40.0f * std::pow (400.0f, static_cast<float> (rng.uniform()));
+                    p.resonance = static_cast<float> (rng.uniform());
+                    p.drive = static_cast<float> (rng.uniform());
+                    p.var = static_cast<float> (rng.uniform());
+                    p.blend = static_cast<float> (rng.uniform());
+                    p.coefHold = hold;
+                    FilterParams q = p;
+                    if (mode == 1)
+                        q.cutoff = std::min (p.cutoff * 1.3f, 19000.0f);
+                    if (mode == 2)
+                        q.var = 1.0f - p.var;
+                    a.setParams (p);
+                    c.setParams (p);
+                    b.setParams (q);
+                    d.setParams (q);
+                    std::vector<float> inL (32), inR (32), o1 (32), o2 (32), o3 (32), o4 (32);
+                    fillInput (rng, inL, 0.5f, block % 7 == 0);
+                    fillInput (rng, inR, 0.5f, block % 7 == 0);
+                    const bool did = Filter::processPairReference (a, b, inL.data(), o1.data(), inR.data(), o2.data(), 32);
+                    c.process (inL.data(), o3.data(), 32);
+                    d.process (inR.data(), o4.data(), 32);
+                    CHECK (did);
+                    CHECK (sameBits (o1, o3));
+                    CHECK (sameBits (o2, o4));
+                }
+            }
+}

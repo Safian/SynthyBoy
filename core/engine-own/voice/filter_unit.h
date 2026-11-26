@@ -226,8 +226,13 @@ public:
                 }
                 if (scalarOnly || !filters::Filter::processPair (left, right, tmpL, outL, tmpR, outR, n))
                 {
-                    left.process (tmpL, outL, n);
-                    right.process (tmpR, outR, n);
+                    if (scalarOnly)
+                    {
+                        left.process (tmpL, outL, n);
+                        right.process (tmpR, outR, n);
+                    }
+                    else
+                        filters::Filter::processBoth (left, right, tmpL, outL, tmpR, outR, n); // the right side finds the left one's tangents in the shared cache
                 }
                 for (int k = 0; k < n; ++k)
                 {
@@ -241,8 +246,13 @@ public:
                 // the two sides in one pass where the collection has a pair kernel for the type (the same samples), else one after the other
                 if (scalarOnly || !filters::Filter::processPair (left, right, inL, outL, inR, outR, n))
                 {
-                    left.process (inL, outL, n);
-                    right.process (inR, outR, n);
+                    if (scalarOnly)
+                    {
+                        left.process (inL, outL, n);
+                        right.process (inR, outR, n);
+                    }
+                    else
+                        filters::Filter::processBoth (left, right, inL, outL, inR, outR, n);
                 }
             }
         }

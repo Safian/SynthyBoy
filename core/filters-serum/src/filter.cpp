@@ -305,6 +305,48 @@ public:
         }
     }
 
+    /** The values lane 0 of the pair kernel computed at the numbered sites of the code (`have` bit set), for lane 1 to take when it asks for the same argument. */
+    struct LaneShare
+    {
+        float x[10] = {}, y[10] = {};
+        unsigned have = 0;
+    };
+    static bool sameBitsF (float a, float b) noexcept
+    {
+        uint32_t ua, ub;
+        std::memcpy (&ua, &a, 4);
+        std::memcpy (&ub, &b, 4);
+        return ua == ub;
+    }
+    /** tanM of lane l at a site of the pair kernel: lane 1 takes lane 0's value when lane 0 computed this site with the same argument bit for bit (then tan is the same, a pure function of its
+        argument), else it asks its own memo as before. */
+    static float tanLanes (LaneShare& sh, FilterImpl* const* f, int l, int site, float x) noexcept
+    {
+        if (l == 1 && (sh.have >> site & 1u) != 0u && sameBitsF (sh.x[site], x))
+            return sh.y[site];
+        const float y = f[l]->tanM (x);
+        if (l == 0)
+        {
+            sh.x[site] = x;
+            sh.y[site] = y;
+            sh.have |= 1u << site;
+        }
+        return y;
+    }
+    static float pow2Lanes (LaneShare& sh, FilterImpl* const* f, int l, int site, float x) noexcept
+    {
+        if (l == 1 && (sh.have >> site & 1u) != 0u && sameBitsF (sh.x[site], x))
+            return sh.y[site];
+        const float y = f[l]->pow2M (x);
+        if (l == 0)
+        {
+            sh.x[site] = x;
+            sh.y[site] = y;
+            sh.have |= 1u << site;
+        }
+        return y;
+    }
+
     /** The two filters of a pair in one pass (Filter::processPair). V is a lane type of filter_lanes.h. Everything that processBlock () and processInternal () compute
         per sample from values that do not change within the call is computed once, with the same expressions; the coefficients that follow the (held) cutoff are
         redone when it changes, through the same memos; the rest runs in the two lanes. */
@@ -370,12 +412,16 @@ public:
         const V vMix = V::set (mix[0], mix[1]), vOneMinusMix = V::set (1.0f - mix[0], 1.0f - mix[1]);
         const V vOne = V::all (1.0f);
 
-        // Scream: the factor of the second cutoff and the gain of the loop (functions of var and drive)
+        // The two lanes ask the transcendental memos for the same argument whenever the two sides have the same parameters (the pan of the filter is 0, the usual case): lane 1 then takes
+        // what lane 0 just computed instead of asking its own memo (a miss costs the tan / pow; the value for the same argument is the same bit for bit). `site` names the place in the
+        // code: lane 1 only takes a value lane 0 computed at the same place with the same argument (bits compared).
+        LaneShare share;
         float screamFactor[2] = { 1.0f, 1.0f }, screamGain[2] = { 1.0f, 1.0f }, screamG[2] = { 0.0f, 0.0f };
+        // Scream: the factor of the second cutoff and the gain of the loop (functions of var and drive)
         if (scream)
             for (int l = 0; l < 2; ++l)
             {
-                screamFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 4.0f);
+                screamFactor[l] = pow2Lanes (share, f, l, 0, (var[l] - 0.5f) * 4.0f);
                 if (drive[l] > 0.5f)
                     screamGain[l] += 12.0f * (drive[l] - 0.5f) * (drive[l] - 0.5f);
             }
@@ -395,7 +441,7 @@ public:
         float multiFactor[2] = { 1.0f, 1.0f };
         if (multi)
             for (int l = 0; l < 2; ++l)
-                multiFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 8.0f);
+                multiFactor[l] = pow2Lanes (share, f, l, 1, (var[l] - 0.5f) * 8.0f);
         const V vBlendOut2 = V::set (1.0f - 0.5f * blend[0], 1.0f - 0.5f * blend[1]), vBlendOut1 = V::set (0.5f * blend[0], 0.5f * blend[1]);
         // stage 1: 0 low pass (LH LB LP LN), 1 high pass (HB HP HN), 2 band pass (BP BN), 3 peak (PP PN), 4 notch (NN)
         const int sel1 = (type == FilterType::HB || type == FilterType::HP || type == FilterType::HN) ? 1
@@ -414,12 +460,12 @@ public:
                 if (fbLow)
                 {
                     const float fLP = 50.0f + 18000.0f * var[l];
-                    onePoleCoef (f[l]->combFeedbackLP_[0], f[l]->tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat));
+                    onePoleCoef (f[l]->combFeedbackLP_[0], tanLanes (share, f, l, 2, kPi * std::min (fLP, srFloat * 0.49f) / srFloat));
                 }
                 else if (fbHigh)
                 {
                     const float fHP = 20.0f + 12000.0f * var[l];
-                    onePoleCoef (f[l]->combFeedbackHP_, f[l]->tanM (kPi * std::min (fHP, srFloat * 0.49f) / srFloat));
+                    onePoleCoef (f[l]->combFeedbackHP_, tanLanes (share, f, l, 3, kPi * std::min (fHP, srFloat * 0.49f) / srFloat));
                 }
             }
         if (fbLow)
@@ -431,7 +477,7 @@ public:
         float ringFactor[2] = { 1.0f, 1.0f };
         if (ring2)
             for (int l = 0; l < 2; ++l)
-                ringFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 4.0f);
+                ringFactor[l] = pow2Lanes (share, f, l, 4, (var[l] - 0.5f) * 4.0f);
         const float twoPi = 2.0f * kPi;
         V ringPhase1 = V::set (fa.ringModPhase1_, fb.ringModPhase1_), ringPhase2 = V::set (fa.ringModPhase2_, fb.ringModPhase2_);
         float ringInc1[2] = { 0.0f, 0.0f }, ringInc2[2] = { 0.0f, 0.0f };
@@ -481,6 +527,7 @@ public:
             const V in = V::sanitized (V::set (inA[i], inB[i]));
 
             bool cutoffChanged = false;
+            share.have = 0; // (the values of the sites of the cutoff block below are those of this sample only)
             for (int l = 0; l < 2 && newHold; ++l)
             {
                 const float c = cutoff.get (l);
@@ -492,18 +539,18 @@ public:
                 // g of processInternal (); the all-pass chains, the combs, the flangers and the ring modulators do not use it (processInternal () computes it for them through the
                 // memo, which changes nothing but the memo)
                 if (!chain && !comb && !ring)
-                    g[l] = f[l]->tanM (kPi * c / srFloat);
+                    g[l] = tanLanes (share, f, l, 5, kPi * c / srFloat);
                 if (scream)
                 {
                     const float screamFreq = std::max (20.0f, std::min (c * screamFactor[l], srFloat * 0.49f));
-                    screamG[l] = f[l]->tanM (kPi * screamFreq / srFloat);
+                    screamG[l] = tanLanes (share, f, l, 6, kPi * screamFreq / srFloat);
                     onePoleCoef (f[l]->onePole1_, screamG[l]);
                     haveR[l] = false; // the division of the state variable filter depends on g as well
                 }
                 else if (multi)
                 {
                     const float fc2 = std::max (20.0f, std::min (c * multiFactor[l], srFloat * 0.49f));
-                    g2[l] = f[l]->tanM (kPi * fc2 / srFloat);
+                    g2[l] = tanLanes (share, f, l, 7, kPi * fc2 / srFloat);
                     haveR[l] = false; // the divisions of both state variable filters depend on their g as well
                 }
                 else if (ladder)
@@ -558,8 +605,8 @@ public:
                     {
                         const float fLP = std::min (c * (1.0f + bwFactor[l]), srFloat * 0.49f);
                         const float fHP = std::max (20.0f, c / (1.0f + bwFactor[l]));
-                        const float gLP = f[l]->tanM (kPi * fLP / srFloat);
-                        const float gHP = f[l]->tanM (kPi * fHP / srFloat);
+                        const float gLP = tanLanes (share, f, l, 8, kPi * fLP / srFloat);
+                        const float gHP = tanLanes (share, f, l, 9, kPi * fHP / srFloat);
                         onePoleCoef (f[l]->combFeedbackLP_[0], gLP);
                         onePoleCoef (f[l]->combFeedbackHP_, gHP);
                     }
@@ -878,7 +925,15 @@ private:
 #endif
     struct MemoEntry { float x = 0.0f, y = 0.0f; bool valid = false; };
     static constexpr int kMemo = 16;
-    MemoEntry tanMemo_[kMemo], pow2Memo_[kMemo], pow10Memo_[kMemo];
+    struct MemoSet { MemoEntry tan[kMemo], pow2[kMemo], pow10[kMemo]; };
+    MemoSet ownMemo_;
+    MemoSet* memo_ = &ownMemo_; // the memo this filter reads and writes: its own, or for the length of a Filter::processBoth () call the one of the other side of the pair
+public:
+    /** The other side of a stereo pair, run right after this one with the same coefficients (pan 0): it asks the same tangents and powers, so it reads and writes this filter's memo for
+        the call (a value is only a cached function of its argument: the samples do not change). */
+    void borrowMemoOf (FilterImpl& owner) noexcept { memo_ = owner.memo_; }
+    void returnMemo() noexcept { memo_ = &ownMemo_; }
+private:
     static int memoSlot (float x) noexcept
     {
         uint32_t u;
@@ -887,7 +942,7 @@ private:
     }
     SYNTHYBOY_FILTER_INLINE float tanM (float x) noexcept
     {
-        MemoEntry& e = tanMemo_[memoSlot (x)];
+        MemoEntry& e = memo_->tan[memoSlot (x)];
         if (!(e.valid && e.x == x))
         {
             e.x = x;
@@ -898,7 +953,7 @@ private:
     }
     SYNTHYBOY_FILTER_INLINE float pow2M (float x) noexcept
     {
-        MemoEntry& e = pow2Memo_[memoSlot (x)];
+        MemoEntry& e = memo_->pow2[memoSlot (x)];
         if (!(e.valid && e.x == x))
         {
             e.x = x;
@@ -909,7 +964,7 @@ private:
     }
     SYNTHYBOY_FILTER_INLINE float pow10M (float x) noexcept
     {
-        MemoEntry& e = pow10Memo_[memoSlot (x)];
+        MemoEntry& e = memo_->pow10[memoSlot (x)];
         if (!(e.valid && e.x == x))
         {
             e.x = x;
@@ -1851,6 +1906,14 @@ void Filter::process (const float* in, float* out, int numSamples,
                       const float* cutoffMod, const float* resMod) noexcept
 {
     impl_->processBlock (in, out, numSamples, cutoffMod, resMod);
+}
+
+void Filter::processBoth (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept
+{
+    a.impl_->processBlock (inA, outA, numSamples, nullptr, nullptr);
+    b.impl_->borrowMemoOf (*a.impl_);
+    b.impl_->processBlock (inB, outB, numSamples, nullptr, nullptr);
+    b.impl_->returnMemo();
 }
 
 bool Filter::processPair (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept
