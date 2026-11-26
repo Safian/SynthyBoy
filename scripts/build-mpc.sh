@@ -4,7 +4,10 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-mpc.sh [--plugin DIR] [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--release] [--no-overlay] [--skin-only] [--no-validate] [--xpl-presets xl|k61|both|off] [--dump-tool PATH] [--dump-plugin PATH] [--chunks DIR]
+# The plugin is ALWAYS built with the overlay (SYNTHYBOY_MPC_OVERLAY=ON and, for ARM, the GPU helper next to it): the overlay-only skin has no host widgets, the native pages are the base
+# and the helper only adds the live curves. There is no switch to turn it off.
+#
+# Usage: scripts/build-mpc.sh [--plugin DIR] [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--release] [--skin-only] [--no-validate] [--xpl-presets xl|k61|both|off] [--dump-tool PATH] [--dump-plugin PATH] [--chunks DIR]
 #
 #   --plugin DIR     build ANOTHER plugin made with the kit instead of SynthyBoy (migration step 12 of docs/ui-components/TEMPLATE.md), e.g. --plugin template-mpc: DIR (relative to the repository or
 #                    absolute) holds mpc-plugin.conf, which says what to build (the CMake source folder, the target, the module, the helper, the binary names, the package manifest and the script that
@@ -25,9 +28,6 @@
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
 #   --release        the public release: -DSYNTHYBOY_MPC_DEV_LOG=OFF (no developer log, no diagnostic files in /tmp; the plugin binary holds no log tag: `strings synthyboy-*.so | grep -c "mpckit\|startup"`
 #                    style checks are in docs/ui-components/LOGGING.md). Without it the build is what it always was (log and files on).
-#   --no-overlay     build the plugin WITHOUT the overlay (SYNTHYBOY_MPC_OVERLAY=OFF: no GPU helper, no live curves). The default is overlay ON (the plugin and, for ARM, the GPU helper of
-#                    each architecture in VST/), the build the production overlay-only skin needs. The generated overlay skin has no host widgets (scripts/mpc-skin-extras/97_no_fallback.py),
-#                    so with it the combination is refused (exit 2); it is allowed with --skins DIR or another --skin-layout (a skin that has its own widgets). Not for --plugin.
 #   --skin-only      run only skin generation (gen-mpc-ui.py, run-gen-ui.py, apply-mpc-skin-extras.py), artwork and SDK validation into <out>/ without C++ cross-compilation
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
 #   --xpl-presets P  preset browser (.xpl) generation: xl, k61, both, or off (default: xl)
@@ -59,7 +59,6 @@ skin_layout="$repo_root/scripts/overlay-skin/mpc-ui-pages-overlay.json"
 skin_only=0
 with_bench=0
 release=0
-overlay=ON
 xpl_presets="xl"
 dump_tool=""
 dump_plugin=""
@@ -103,14 +102,13 @@ while [[ $# -gt 0 ]]; do
                     esac
                     case "$2" in
                         -DSYNTHYBOY_MPC_OVERLAY|-DSYNTHYBOY_MPC_OVERLAY=*|-USYNTHYBOY_MPC_OVERLAY)
-                            echo "$me: --cmake-arg: the overlay is chosen by the default (ON) or --no-overlay, not by $2" >&2; exit 2 ;;
+                            echo "$me: --cmake-arg: the plugin is always built with the overlay (SYNTHYBOY_MPC_OVERLAY=ON), $2 is refused" >&2; exit 2 ;;
                     esac
                     cmake_args+=("$2") ;;
             esac
             shift 2 ;;
         --bench) with_bench=1; shift ;;
         --release) release=1; shift ;;
-        --no-overlay) overlay=OFF; shift ;;
         --skin-only) skin_only=1; shift ;;
         --no-validate) validate=0; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -121,15 +119,6 @@ done
 native_skin=OFF
 if [[ -z "$plugin_dir" && -z "$skins_dir" && "$skin_layout" -ef "$repo_root/scripts/overlay-skin/mpc-ui-pages-overlay.json" ]]; then
     native_skin=ON
-fi
-
-if [[ "$overlay" == OFF && -n "$plugin_dir" ]]; then
-    echo "$me: --no-overlay is for SynthyBoy only (another plugin names its own options in mpc-plugin.conf)" >&2; exit 2
-fi
-if [[ "$overlay" == OFF && "$native_skin" == ON && "$skin_only" != 1 ]]; then
-    echo "$me: --no-overlay cannot be combined with the generated overlay-only skin: it has no host widgets (97_no_fallback.py), the native pages would stay empty without the helper's build." >&2
-    echo "$me: build with the overlay (the default), or give --skins DIR / --skin-layout FILE for a skin that has its own widgets." >&2
-    exit 2
 fi
 
 if [[ "$release" == 1 ]]; then
@@ -242,7 +231,7 @@ if [[ "$skin_only" != 1 ]]; then
         echo "$me: === building $a ==="
         "$docker_cmd" run --rm \
             -v "$repo_root":/src:ro -v "$build_dir/$a":/build -v "$build_dir/$a-bench":/build-bench -v "$out_dir":/out -v "$MPC_SDK":/mpc-sdk:ro \
-            -e ARCH="$a" -e JOBS="$jobs" -e NATIVE_SKIN="$native_skin" -e OVERLAY="$overlay" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
+            -e ARCH="$a" -e JOBS="$jobs" -e NATIVE_SKIN="$native_skin" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
             ${plugin_env[@]+"${plugin_env[@]}"} "$image" bash /src/scripts/mpc-container-build.sh
     done
 fi
@@ -275,8 +264,8 @@ if [[ "$skin_only" != 1 ]]; then
         cp "$build_dir/$a/${P_MODULE%.so}.stripped.so" "$plugin_folder/VST/$P_BINARY_BASE-$a.so"
     done
 
-    # The GPU helper of the overlay (built with the default SYNTHYBOY_MPC_OVERLAY=ON on ARM, not with --no-overlay; scripts/mpc-container-build.sh): VST/synthyboy-overlay-gpu-<arch>, next to the plugin binary
-    # (the plugin looks for it there). A --no-overlay package has no such target, so its VST/ folder holds the plugin binaries only.
+    # The GPU helper of the overlay (always built, SYNTHYBOY_MPC_OVERLAY=ON, on ARM; scripts/mpc-container-build.sh): VST/synthyboy-overlay-gpu-<arch>, next to the plugin binary
+    # (the plugin looks for it there). Another plugin (--plugin) may have no such target.
     for a in "${archs[@]}"; do
         helper="$build_dir/$a/$P_HELPER.stripped"
         if [[ -f "$helper" ]]; then

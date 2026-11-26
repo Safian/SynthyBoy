@@ -328,20 +328,6 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("WITH_BENCH=1", self.runs()[0])
         self.assertIn(str(self.tree / "arm64-bench") + ":/build-bench", self.runs()[0])
 
-    def test_overlay_is_on_by_default_and_no_overlay_turns_it_off(self):
-        self.assertEqual(self.build("--arch", "arm32", "--no-validate").returncode, 0)
-        self.assertIn("OVERLAY=ON", self.runs()[0])
-        self.log.unlink()
-        self.assertEqual(self.build("--arch", "arm32", "--no-validate", "--no-overlay").returncode, 0)
-        self.assertIn("OVERLAY=OFF", self.runs()[0])
-        self.assertIn("--no-overlay", self.run_script(BUILD_MPC, "--help").stdout)
-
-    def test_no_overlay_is_refused_with_the_generated_overlay_skin(self):
-        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--build-dir", str(self.tree), "--arch", "arm32", "--no-overlay")
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("--no-overlay", r.stderr)
-        self.assertEqual(self.runs(), [])
-
     def test_the_overlay_option_is_not_a_cmake_arg(self):
         r = self.build("--no-validate", "--cmake-arg", "-DSYNTHYBOY_MPC_OVERLAY=OFF")
         self.assertEqual(r.returncode, 2)
