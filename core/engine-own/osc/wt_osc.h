@@ -128,6 +128,8 @@ public:
     static constexpr int kMaxVoices = 16;
     /** Tests only: run the code as it was before the optimisations of docs/release/CPU-REVIEW-OSC.md (the same output, slower). */
     void setReference (bool on) noexcept { reference_ = on; }
+    /** Tests and measurements: off = tier low reads both morph cycles also where the weight of the new one is exactly 1 (the bit identical form; on, the default, is within 3 * 2^-24 of the sample, see render ()). */
+    void setLowMorphSingleCycle (bool on) noexcept { lowMorphSingle_ = on; }
     /** Tests only: off = every unison voice of the oversampled (warped) path runs its own decimator, the code before the shared decimation (docs/dsp-knowledge/antialiasing.md). */
     void setSharedDecimator (bool on) noexcept { sharedDecimator_ = on; }
     /** The shared decimation of a warped render call pays from this many voices with a constant gain (two decimations replace one per voice). */
@@ -816,6 +818,13 @@ public:
                     const float len = static_cast<float> (kMorphRebuild);
                     wB0 = std::min (1.0f, (static_cast<float> (morphAge) + tStart * kControlPeriod) / len);
                     wB1 = std::min (1.0f, (static_cast<float> (morphAge) + tEnd * kControlPeriod) / len);
+                    // Tier low, second half of the 512 sample rebuild period: the weight of the new cycle is exactly 1 for the whole chunk, so only that cycle is read. NOT bit identical:
+                    // yA + (yB - yA) * 1 differs from yB by the rounding of the sum, at most 3 * 2^-24 of the larger sample (about 1.8e-7 relative; docs/MPC.md "Sound differences at tier low").
+                    if (lowMorphSingle_ && !reference_ && tick.lowMorph && wB0 == 1.0f && wB1 == 1.0f)
+                    {
+                        cA = cB;
+                        cB = nullptr;
+                    }
                 }
                 N = Wavetable::kCycle;
             }
@@ -1539,6 +1548,7 @@ private:
     std::unique_ptr<MorphScratch> ownedMorphScratch;
     int historyVoices = 0;
     bool sharedDecimator_ = true;                // setSharedDecimator (): tests only
+    bool lowMorphSingle_ = true;                 // setLowMorphSingleCycle (): tier low reads one cycle where the weight of the new one is 1
     int morphAge = 0, morphGroups = 1;
     uint32_t morphStagger = 0;                   // setMorphStagger ()
     bool morphActive = false;

@@ -226,6 +226,7 @@ struct Run
     Run()
     {
         ref.setReference (true);
+        opt.setLowMorphSingleCycle (false); // the one saving that is not bit identical (tier low, a single cycle read where the weight is 1): its bound is tested in test_own_wt_osc_savings.cpp
         ref.prepareMorph();
         opt.prepareMorph();
         cacheRef.prepare();
@@ -529,6 +530,7 @@ TEST (own_wt_osc_silent_oscillator_early_out_is_bit_identical_when_the_level_ris
             {
                 WtOsc ref, opt;
                 ref.setReference (true);
+                opt.setLowMorphSingleCycle (false); // bit identical comparison of the other savings (the single cycle read has its bound test in test_own_wt_osc_savings.cpp)
                 ref.prepareMorph();
                 opt.prepareMorph();
                 MorphCache cr, co;

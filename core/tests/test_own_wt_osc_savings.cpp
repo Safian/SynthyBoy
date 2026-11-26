@@ -28,6 +28,18 @@ struct WtOscSavingsTest
         WtOsc::renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, pg, cgl, pgr, cgr, pinc, cinc, invP, invN, steadyAllowed);
     }
     static bool held (const WtOsc& o, int g) { return o.morphHeld[g]; }
+    /** sum over the voices of the larger gain of the period, and the largest sample of the cycle buffers (both of each group): the scale of the error bound of the single cycle read. */
+    static void scale (WtOsc& o, float& gainSum, float& cyclePeak)
+    {
+        gainSum = 0.0f;
+        for (int v = 0; v < std::max (o.curCount, o.prevCount); ++v)
+            gainSum += std::max (std::max (std::fabs (o.curGainL[v]), std::fabs (o.prevGainL[v])), std::max (std::fabs (o.curGainR[v]), std::fabs (o.prevGainR[v])));
+        cyclePeak = 0.0f;
+        for (int g = 0; g < o.morphGroups; ++g)
+            for (const float* c : { o.morphOld (g), o.morphNew (g) })
+                for (int i = -1; i < WtOsc::kMorphStride - 1; ++i)
+                    cyclePeak = std::max (cyclePeak, std::fabs (c[i]));
+    }
     static int groups (const WtOsc& o) { return o.morphGroups; }
     static void plainReference (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
                                 float pgr, float cgr, float pinc, float cinc, float invP)
@@ -185,6 +197,7 @@ HeldRun runHeld (const std::vector<std::unique_ptr<Wavetable>>& tables, int morp
     TestRng r (static_cast<uint64_t> (seed));
     WtOsc ref, opt;
     ref.setReference (true);
+    opt.setLowMorphSingleCycle (false); // the bit identical savings only (the single cycle read of tier low has its own bound test)
     ref.prepareMorph();
     opt.prepareMorph();
     MorphCache cacheRef, cacheOpt;
@@ -330,4 +343,93 @@ TEST (the_morph_cache_key_carries_the_phase_increment_only_for_vocode)
     std::printf ("    phaseInc 0 finds the stored cycle for %d of 10 non Vocode types (%d hits), for Vocode %d hits\n", builtOther, hitsOther, hitsVocode);
     CHECK_EQ (builtOther, 10);
     CHECK_EQ (hitsVocode, 0);
+}
+
+TEST (tier_low_reads_one_morph_cycle_where_the_weight_is_one_within_3_ulp_of_the_samples)
+{
+    // Not bit identical: yA + (yB - yA) * 1 = yB up to the rounding of the difference and of the sum, |error| <= 2^-24 (|yB - yA| + |yB|) <= 3 * 2^-24 max (|yA|, |yB|) per voice sample. The
+    // Hermite read of a cycle can overshoot its largest sample, so the bound is taken with a factor 1.5 on the largest cycle sample, and summed over the voices at their gains.
+    TestRng r (41);
+    const auto tables = makeTables (r);
+    const float unit = 1.0f / 16777216.0f; // 2^-24
+    double worst = 0.0;
+    long long chunks = 0, differing = 0, over = 0;
+    for (int cfg = 0; cfg < 48; ++cfg)
+    {
+        WtOsc on, off;
+        on.prepareMorph();
+        off.prepareMorph();
+        off.setLowMorphSingleCycle (false);
+        MorphCache cOn, cOff;
+        cOn.prepare();
+        cOff.prepare();
+        Rng rOn, rOff;
+        OscTick t;
+        t.active = true;
+        t.wt = tables[static_cast<size_t> (1 + cfg % 2)].get();
+        t.semis = 40.0f + static_cast<float> ((cfg * 7) % 50);
+        t.frame = 0.2f + 0.01f * static_cast<float> (cfg % 10);
+        t.level = 0.8f;
+        t.voices = cfg % 3 == 0 ? 1 : (cfg % 3 == 1 ? 4 : 8);
+        t.detuneSemis = 0.2f;
+        t.spread = 0.5f;
+        t.morphType = 1 + cfg % 11;
+        t.lowMorph = true;
+        t.lowWarp = true;
+        t.fastMath = true;
+        t.shareMorph = cfg % 4 < 2;
+        t.morphSpread = cfg % 4 == 3 ? 0.4f : 0.0f;
+        if (cfg % 6 == 5)
+        {
+            t.warp[0] = kWarpFmA; // a warped path (cB == nullptr then also reaches the oversampled readers)
+            t.warpAmount[0] = 0.3f;
+        }
+        else if (cfg % 6 == 4)
+        {
+            t.warp[0] = kWarpSync;
+            t.warpAmount[0] = 0.3f;
+        }
+        on.start (0.0f, 0.5f, rOn);
+        off.start (0.0f, 0.5f, rOff);
+        bool first = true;
+        for (int per = 0; per < 200; ++per)
+        {
+            t.morphAmount = 0.1f + 0.004f * static_cast<float> (per % 200); // moves every period: a real build every 16 periods, no held stretch
+            on.update (t, 44100.0, rOn);
+            on.updateMorph (44100.0, first, &cOn);
+            off.update (t, 44100.0, rOff);
+            off.updateMorph (44100.0, first, &cOff);
+            first = false;
+            float cross[6][kControlPeriod];
+            for (auto& c : cross)
+                for (float& x : c)
+                    x = r.bi();
+            const float* cr[6] = { cross[0], cross[1], cross[2], cross[3], cross[4], cross[5] };
+            float gainSum, peak;
+            WtOscSavingsTest::scale (on, gainSum, peak);
+            const double bound = 3.0 * unit * 1.5 * peak * gainSum;
+            for (int t0 = 0; t0 < kControlPeriod; t0 += 8)
+            {
+                float Lo[8], Ro[8], Lf[8], Rf[8];
+                on.render (t0, 8, Lo, Ro, cr, 44100.0);
+                off.render (t0, 8, Lf, Rf, cr, 44100.0);
+                ++chunks;
+                bool diff = false;
+                for (int i = 0; i < 8; ++i)
+                {
+                    const double dl = std::fabs (static_cast<double> (Lo[i]) - Lf[i]), dr = std::fabs (static_cast<double> (Ro[i]) - Rf[i]);
+                    diff = diff || dl > 0.0 || dr > 0.0;
+                    if (bound > 0.0)
+                        worst = std::max (worst, std::max (dl, dr) / bound);
+                    if (std::max (dl, dr) > bound)
+                        ++over;
+                }
+                differing += diff ? 1 : 0;
+            }
+        }
+    }
+    std::printf ("    %lld chunks of 8 samples, %lld differ from the two cycle read; the largest error is %.3f of the bound 3 * 2^-24 * 1.5 * (cycle peak) * (sum of the voice gains); %lld samples over it\n", chunks, differing, worst,
+                 over);
+    CHECK (differing > chunks / 10); // the single cycle read does happen
+    CHECK_EQ (over, 0);
 }
