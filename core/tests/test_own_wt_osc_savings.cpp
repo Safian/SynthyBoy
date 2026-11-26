@@ -27,6 +27,8 @@ struct WtOscSavingsTest
     {
         WtOsc::renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, pg, cgl, pgr, cgr, pinc, cinc, invP, invN, steadyAllowed);
     }
+    static bool held (const WtOsc& o, int g) { return o.morphHeld[g]; }
+    static int groups (const WtOsc& o) { return o.morphGroups; }
     static void plainReference (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
                                 float pgr, float cgr, float pinc, float cinc, float invP)
     {
@@ -53,6 +55,29 @@ struct TestRng
 
 bool sameBits (float a, float b) { return std::memcmp (&a, &b, 4) == 0; }
 bool sameBitsArr (const float* a, const float* b, int n) { return std::memcmp (a, b, static_cast<size_t> (n) * 4) == 0; }
+
+std::vector<std::unique_ptr<Wavetable>> makeTables (TestRng& r)
+{
+    std::vector<std::unique_ptr<Wavetable>> v;
+    for (int t = 0; t < 3; ++t)
+    {
+        const int frames = t == 0 ? 1 : r.range (2, 6);
+        std::vector<std::vector<float>> cc (static_cast<size_t> (frames), std::vector<float> (Wavetable::kCycle / 2 + 1, 0.0f)), ss = cc;
+        for (int f = 0; f < frames; ++f)
+        {
+            const int top = r.range (3, 1023);
+            for (int h = 1; h <= top; ++h)
+            {
+                const float a = (r.chance (30) ? 0.0f : 1.0f) / static_cast<float> (h);
+                cc[static_cast<size_t> (f)][static_cast<size_t> (h)] = a * r.bi();
+                ss[static_cast<size_t> (f)][static_cast<size_t> (h)] = a * r.bi();
+            }
+        }
+        v.push_back (std::make_unique<Wavetable>());
+        v.back()->build (cc, ss, true);
+    }
+    return v;
+}
 } // namespace
 
 TEST (the_steady_plain_table_read_equals_the_general_form_and_the_reference)
@@ -115,4 +140,194 @@ TEST (the_steady_plain_table_read_equals_the_general_form_and_the_reference)
     CHECK_EQ (bad, 0);
     CHECK_EQ (badPhase, 0);
     CHECK_EQ (badRef, 0);
+}
+
+TEST (the_cross_fade_of_two_equal_values_is_that_value_for_the_formula_of_the_engine)
+{
+    // lerp (a, b, t) = a + (b - a) * t: for a == b the difference is +0 and a + 0 * t = a, so the cross-fade of two equal cycles is that cycle (only the sign of a zero can change: -0 + 0 = +0).
+    // The other form, (1 - w) * a + w * a, is not used by WtOsc and rounds: counted below to document why the formula matters.
+    TestRng r (5);
+    long long lerpBad = 0, lerpSignOnly = 0, otherBad = 0;
+    const long long total = 20000000;
+    for (long long i = 0; i < total; ++i)
+    {
+        volatile float a = r.chance (5) ? 0.0f : (r.chance (5) ? -0.0f : r.bi() * (r.chance (10) ? 1.0e-30f : 8.0f));
+        volatile float w = r.chance (10) ? 1.0f : (r.chance (10) ? 0.0f : r.uni());
+        const float av = a, wv = w;
+        const float y = lerp (av, av, wv);
+        if (!sameBits (y, av))
+        {
+            if (y == av)
+                ++lerpSignOnly;
+            else
+                ++lerpBad;
+        }
+        volatile float o = (1.0f - wv) * av + wv * av;
+        if (static_cast<float> (o) != av)
+            ++otherBad;
+    }
+    std::printf ("    %lld values: lerp (a, a, w) != a in %lld (sign of a zero only: %lld); the form (1 - w) a + w a differs from a in %lld\n", total, lerpBad, lerpSignOnly, otherBad);
+    CHECK_EQ (lerpBad, 0);
+    CHECK (otherBad > 0); // the form that is not used: it would not be exact (a -0 input giving +0 is the only difference of the form that is used, counted above and output neutral: see the held morph test)
+}
+
+namespace
+{
+struct HeldRun
+{
+    long long chunks = 0, mismatches = 0, heldPeriods = 0, loud = 0;
+};
+
+/** One oscillator pair (reference, optimised) on a mostly static patch: `holdPeriods` periods of the same tick, then a change of the morph amount, a held stretch again, a pitch change and a new note. */
+HeldRun runHeld (const std::vector<std::unique_ptr<Wavetable>>& tables, int morphType, bool low, int voices, bool share, float spread, int warp, int tableIdx, double rate, int seed)
+{
+    HeldRun out;
+    TestRng r (static_cast<uint64_t> (seed));
+    WtOsc ref, opt;
+    ref.setReference (true);
+    ref.prepareMorph();
+    opt.prepareMorph();
+    MorphCache cacheRef, cacheOpt;
+    cacheRef.prepare();
+    cacheOpt.prepare();
+    Rng rngRef, rngOpt;
+    OscTick t;
+    t.active = true;
+    t.wt = tables[static_cast<size_t> (tableIdx)].get();
+    t.semis = 52.0f + static_cast<float> (seed % 24);
+    t.frame = 0.4f;
+    t.level = 0.7f;
+    t.voices = voices;
+    t.detuneSemis = 0.3f;
+    t.spread = 0.6f;
+    t.morphType = morphType;
+    t.morphAmount = 0.35f;
+    t.morphSpread = spread;
+    t.lowMorph = low;
+    t.shareMorph = share;
+    t.lowWarp = low;
+    t.fastMath = low;
+    t.warp[0] = warp;
+    t.warpAmount[0] = 0.4f;
+    ref.start (0.0f, 0.5f, rngRef);
+    opt.start (0.0f, 0.5f, rngOpt);
+    bool first = true;
+    for (int per = 0; per < 400; ++per)
+    {
+        if (per == 140)
+            t.morphAmount = 0.6f;     // the morph moves: a real build, then held again
+        if (per == 260)
+            t.semis += 7.0f;           // the band limit (and Vocode's increment) changes
+        if (per == 330)
+        {
+            ref.start (0.0f, 0.5f, rngRef); // a new note on the same oscillator
+            opt.start (0.0f, 0.5f, rngOpt);
+            first = true;
+        }
+        ref.update (t, rate, rngRef);
+        ref.updateMorph (rate, first, &cacheRef);
+        opt.update (t, rate, rngOpt);
+        opt.updateMorph (rate, first, &cacheOpt);
+        first = false;
+        for (int g = 0; g < WtOscSavingsTest::groups (opt); ++g)
+            out.heldPeriods += WtOscSavingsTest::held (opt, g) ? 1 : 0;
+        float cross[6][kControlPeriod];
+        for (auto& c : cross)
+            for (float& x : c)
+                x = r.bi();
+        const float* cr[6] = { cross[0], cross[1], cross[2], cross[3], cross[4], cross[5] };
+        float Lr[kControlPeriod], Rr[kControlPeriod], Lo[kControlPeriod], Ro[kControlPeriod];
+        ref.render (0, kControlPeriod, Lr, Rr, cr, rate);
+        opt.render (0, kControlPeriod, Lo, Ro, cr, rate);
+        ++out.chunks;
+        if (!sameBitsArr (Lr, Lo, kControlPeriod) || !sameBitsArr (Rr, Ro, kControlPeriod))
+            ++out.mismatches;
+        for (int i = 0; i < kControlPeriod; ++i)
+            if (Lr[i] != 0.0f)
+            {
+                ++out.loud;
+                break;
+            }
+    }
+    return out;
+}
+} // namespace
+
+TEST (a_held_morph_is_not_rebuilt_and_gives_the_bits_of_the_rebuilding_reference)
+{
+    TestRng r (21);
+    const auto tables = makeTables (r);
+    long long chunks = 0, bad = 0, held = 0, loud = 0;
+    int configs = 0;
+    const int warps[] = { 0, kWarpSync, kWarpFmA, kWarpDistTube, kWarpQuantize };
+    for (int type = 1; type <= 11; ++type)
+        for (int low = 0; low < 2; ++low)
+            for (int vc = 0; vc < 3; ++vc)
+            {
+                const int voices = vc == 0 ? 1 : (vc == 1 ? 5 : 16);
+                const float spread = vc == 2 ? 0.5f : 0.0f;
+                const int warp = warps[(type + low + vc) % 5];
+                const HeldRun h = runHeld (tables, type, low != 0, voices, low != 0 && vc == 1, spread, warp, type % 3, low != 0 ? 44100.0 : 48000.0, type * 7 + vc + low * 3);
+                chunks += h.chunks;
+                bad += h.mismatches;
+                held += h.heldPeriods;
+                loud += h.loud;
+                ++configs;
+            }
+    std::printf ("    %d configurations, %lld periods (%lld loud), %lld held group periods (no rebuild), %lld periods with output bits that differ from the rebuilding reference\n", configs, chunks, loud, held, bad);
+    CHECK (held > 5000);
+    CHECK (loud > chunks / 2);
+    CHECK_EQ (bad, 0);
+}
+
+TEST (the_morph_cache_key_carries_the_phase_increment_only_for_vocode)
+{
+    // buildMorphCycle () reads phaseInc only in Vocode (morph.cpp), so the other types store their cycle with phaseInc 0 and a note of another pitch with the same band limit hits it.
+    TestRng r (31);
+    const auto tables = makeTables (r);
+    int hitsOther = 0, hitsVocode = 0, builtOther = 0;
+    for (int type = 1; type <= 11; ++type)
+    {
+        WtOsc osc;
+        osc.prepareMorph();
+        MorphCache cache;
+        cache.prepare();
+        Rng rng;
+        OscTick t;
+        t.active = true;
+        t.wt = tables[1].get();
+        t.semis = 60.0f;
+        t.frame = 0.3f;
+        t.level = 0.7f;
+        t.morphType = type;
+        t.morphAmount = 0.45f;
+        osc.start (0.0f, 0.0f, rng);
+        osc.update (t, 44100.0, rng);
+        osc.updateMorph (44100.0, true, &cache);
+        std::vector<float> buf (MorphCache::kStride);
+        int hits = 0;
+        for (int K = 1; K < Wavetable::kHarmonics; ++K)
+        {
+            MorphCache::Key key;
+            key.wt = t.wt;
+            key.framePos = t.frame * static_cast<float> (t.wt->numFrames() - 1);
+            key.m = t.morphAmount;
+            key.phaseInc = 0.0f;
+            key.type = type;
+            key.maxHarmonic = K;
+            key.hostRate = 44100.0;
+            key.fast = false;
+            hits += cache.fetch (key, buf.data()) ? 1 : 0;
+        }
+        if (type == kMorphVocode)
+            hitsVocode += hits;
+        else
+        {
+            hitsOther += hits;
+            builtOther += hits == 1 ? 1 : 0;
+        }
+    }
+    std::printf ("    phaseInc 0 finds the stored cycle for %d of 10 non Vocode types (%d hits), for Vocode %d hits\n", builtOther, hitsOther, hitsVocode);
+    CHECK_EQ (builtOther, 10);
+    CHECK_EQ (hitsVocode, 0);
 }

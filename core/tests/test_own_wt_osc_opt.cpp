@@ -60,7 +60,17 @@ struct WtOscOptTest
             {
                 WtOsc& x = const_cast<WtOsc&> (a);
                 WtOsc& y = const_cast<WtOsc&> (b);
-                if (!eq (x.morphOld (g) - 1, y.morphOld (g) - 1, kMorphStride * sizeof (float)) || !eq (x.morphNew (g) - 1, y.morphNew (g) - 1, kMorphStride * sizeof (float))) return 19;
+                // a held morph (CPU-REVIEW-OSC.md, second round): the optimised oscillator leaves its old buffer stale and reads the new one alone, while the reference holds the same
+                // cycle in both: the new cycle of the held one must equal both cycles of the other
+                const bool xh = x.morphHeld[g], yh = y.morphHeld[g];
+                if (xh || yh)
+                {
+                    WtOsc& h = xh ? x : y;
+                    WtOsc& o = xh ? y : x;
+                    if (!eq (h.morphNew (g) - 1, o.morphNew (g) - 1, kMorphStride * sizeof (float)) || (!(xh && yh) && !eq (h.morphNew (g) - 1, o.morphOld (g) - 1, kMorphStride * sizeof (float)))) return 19;
+                }
+                else if (!eq (x.morphOld (g) - 1, y.morphOld (g) - 1, kMorphStride * sizeof (float)) || !eq (x.morphNew (g) - 1, y.morphNew (g) - 1, kMorphStride * sizeof (float)))
+                    return 19;
             }
         return 0;
     }

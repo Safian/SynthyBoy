@@ -203,6 +203,8 @@ public:
         morphAge = kMorphRebuild;
         for (auto& k : morphKeyOk)
             k = false;
+        for (auto& k : morphLastKeyOk)
+            k = false;
         for (auto& f : frameIdx)
             f = -1;
         for (auto& fs : filterState)
@@ -516,6 +518,11 @@ public:
     /** Back to the state of a new oscillator (the morph buffers stay allocated). */
     void clearState() noexcept
     {
+        // A held morph (updateMorph ()) leaves the old buffer stale: make it the new cycle again, the buffers are kept and the reset state reads both.
+        if (!morphBuf.empty())
+            for (int g = 0; g < kMorphGroups; ++g)
+                if (morphHeld[g])
+                    std::copy (morphNew (g) - 1, morphNew (g) - 1 + kMorphStride, morphOld (g) - 1);
         // In place: the same state as `*this = WtOsc()`, without building a 9 KB temporary and copying it over the object.
         auto mb = std::move (morphBuf);
         auto* const msPtr = morphScratchPtr;
@@ -619,6 +626,25 @@ public:
             const int K = std::min (Wavetable::kHarmonics - 1, static_cast<int> (nyq / fmax));
             for (int g = 0; g < groups; ++g)
             {
+                const float spreadShift = groups > 1 ? tick.morphSpread * 2.0f * static_cast<float> (g) / static_cast<float> (groups - 1) : 0.0f;
+                const float framePos = tick.frame * static_cast<float> (std::max (wt.numFrames() - 1, 0));
+                MorphCache::Key key;
+                key.wt = &wt;
+                key.framePos = framePos;
+                key.m = clamp01 (tick.morphAmount + spreadShift);
+                key.phaseInc = tick.morphType == kMorphVocode ? incMax : 0.0f; // only Vocode reads the phase increment (buildMorphCycle): the other types share their cycles across pitches of the same band limit
+                key.type = tick.morphType;
+                key.maxHarmonic = K;
+                key.hostRate = sampleRate;
+                key.fast = tick.lowMorph;
+                // A held morph (this group's last cycle was built from the very same arguments, and nothing has written its buffer since): buildMorphCycle () is a function of its arguments
+                // alone, so the rebuild would give the cycle that is already in the new buffer, and the old buffer (the previous new one) would hold the same samples. Then the cross-fade
+                // is lerp (y, y, w) = y + (y - y) * w = y exactly, so nothing is rebuilt and render () reads the one cycle (morphHeld).
+                if (!reference_ && !firstOfNote && morphLastKeyOk[g] && sameMorphKey (morphLastKey[g], key))
+                {
+                    morphHeld[g] = true;
+                    continue;
+                }
                 if (!firstOfNote)
                 {
                     if (reference_)
@@ -628,8 +654,6 @@ public:
                 }
                 float* a = morphOld (g);
                 float* b = morphNew (g);
-                const float spreadShift = groups > 1 ? tick.morphSpread * 2.0f * static_cast<float> (g) / static_cast<float> (groups - 1) : 0.0f;
-                const float framePos = tick.frame * static_cast<float> (std::max (wt.numFrames() - 1, 0));
                 if (g > 0 && spreadShift == 0.0f)
                 {
                     // no morph spread: every group asks for the same cycle, so the first one is copied (the same samples, built once)
@@ -638,15 +662,6 @@ public:
                 }
                 else
                 {
-                    MorphCache::Key key;
-                    key.wt = &wt;
-                    key.framePos = framePos;
-                    key.m = clamp01 (tick.morphAmount + spreadShift);
-                    key.phaseInc = incMax;
-                    key.type = tick.morphType;
-                    key.maxHarmonic = K;
-                    key.hostRate = sampleRate;
-                    key.fast = tick.lowMorph;
                     // a morph that moves (this build asks for another frame or amount than the last one of this oscillator) never asks for the same cycle again: only a cycle of a
                     // held morph is stored for the other voices of a chord (the cache only saves time: a hit has the samples of a build)
                     const bool moving = morphKeyOk[g] && (!sameBits (morphKeyFrame[g], framePos) || !sameBits (morphKeyM[g], key.m));
@@ -662,8 +677,17 @@ public:
                             cache->store (key, b - 1);
                     }
                 }
-                if (firstOfNote)
-                    std::copy (b - 1, b - 1 + kMorphStride, a - 1);
+                if (reference_)
+                {
+                    if (firstOfNote)
+                        std::copy (b - 1, b - 1 + kMorphStride, a - 1);
+                }
+                else
+                {
+                    morphLastKey[g] = key;
+                    morphLastKeyOk[g] = true;
+                    morphHeld[g] = firstOfNote; // a new note: after the first build the old and the new cycle are the same, so the old one is not written and the new one is read alone
+                }
             }
             // after the build of the first period the old and the new cycle are the same (the weight of the cross-fade does not matter): the age starts at the voice's slot, so its next build
             // comes that many periods earlier, and the builds of a chord's voices fall in different periods
@@ -780,11 +804,19 @@ public:
             if (morphing)
             {
                 const int g = std::min (morphGroups - 1, (v / 2) * morphGroups / morphPairs);
-                cA = morphOld (g);
-                cB = morphNew (g);
-                const float len = static_cast<float> (kMorphRebuild);
-                wB0 = std::min (1.0f, (static_cast<float> (morphAge) + tStart * kControlPeriod) / len);
-                wB1 = std::min (1.0f, (static_cast<float> (morphAge) + tEnd * kControlPeriod) / len);
+                if (!reference_ && morphHeld[g])
+                {
+                    cA = morphNew (g); // held: the old cycle is the new one, the cross-fade of two equal cycles is that cycle (see updateMorph ())
+                    cB = nullptr;
+                }
+                else
+                {
+                    cA = morphOld (g);
+                    cB = morphNew (g);
+                    const float len = static_cast<float> (kMorphRebuild);
+                    wB0 = std::min (1.0f, (static_cast<float> (morphAge) + tStart * kControlPeriod) / len);
+                    wB1 = std::min (1.0f, (static_cast<float> (morphAge) + tEnd * kControlPeriod) / len);
+                }
                 N = Wavetable::kCycle;
             }
             else
@@ -1493,6 +1525,13 @@ private:
     std::vector<float> morphBuf;                 // [group][two buffers][kMorphStride]: the old and the new cycle of a group, by morphNewSlot (the roles swap at a rebuild)
     int morphNewSlot[kMorphGroups] = { 1, 1 };
     bool morphKeyOk[kMorphGroups] = { false, false };
+    MorphCache::Key morphLastKey[kMorphGroups] = {};  // the arguments the new cycle of each group was built from (valid: morphLastKeyOk), for the held morph skip of updateMorph ()
+    bool morphLastKeyOk[kMorphGroups] = { false, false };
+    bool morphHeld[kMorphGroups] = { false, false };  // the old and the new cycle of the group are the same samples: the old buffer is stale and render () reads the new one alone
+    static bool sameMorphKey (const MorphCache::Key& a, const MorphCache::Key& b) noexcept
+    {
+        return a.wt == b.wt && sameBits (a.framePos, b.framePos) && sameBits (a.m, b.m) && sameBits (a.phaseInc, b.phaseInc) && a.type == b.type && a.maxHarmonic == b.maxHarmonic && a.hostRate == b.hostRate && a.fast == b.fast;
+    }
     float morphKeyFrame[kMorphGroups] = {}, morphKeyM[kMorphGroups] = {};
     float* morphOld (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g] ^ 1)) * kMorphStride + 1; }
     float* morphNew (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g])) * kMorphStride + 1; }
