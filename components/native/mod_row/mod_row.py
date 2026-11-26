@@ -22,6 +22,8 @@ from components.style import (
     color as _style_color,
     size as _style_size,
 )
+from components.native.level.level import synthyboy_dial_data as level_dial_data
+from components.native.pan.pan import synthyboy_dial_data as pan_dial_data
 from components.native.selector.selector import dropdown_definition, render_dropdown_face, save_png_filter0
 from components.native.button.button import action_art, button as native_button, entry as _entry, in_slot
 
@@ -578,16 +580,9 @@ def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice me
         dial_x = (w - dial_size) // 2
         name_h, val_h = _style_size("mod_row.build_editor_cell_definition.label_height"), _style_size("mod_row.build_editor_cell_definition.label_height")
         knob_y = name_h + max(0, (h - name_h - val_h - dial_size) // 2)
-        strip = "mod_dial_90_bi.png" if kind == "dial_bi" else "mod_dial_90_uni.png"
-        knob_data = {
-            "version": 3,
-            "knobType": "FilmStrip",
-            "filmStrip": strip,
-            "numFrames": 127,
-            "invert": False,
-            "dragOrientation": "Vertical",
-            "handleName": "Data",
-        }
+        dial_data = pan_dial_data if kind == "dial_bi" else level_dial_data
+        knob_data = dial_data(skins_dir, frame_size=dial_size)
+        knob_data.update(dragOrientation="Vertical", handleName="Data")
         control = _entry("knob", "Knob", knob_data, (dial_x, knob_y, dial_size, dial_size), focus="Yes")
         name_lbl = editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), name_h), just="horizontallyCentred verticallyCentred")
         val_lbl = editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.padding"), knob_y + dial_size + _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), val_h), just="horizontallyCentred verticallyCentred")

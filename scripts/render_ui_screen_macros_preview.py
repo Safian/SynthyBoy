@@ -5,7 +5,7 @@
 
 Composites the actual generated native host skin layer with the authentic C++ overlay:
 1. Native Host Skin Layer (1280 x 628 px):
-   - Genuine tab background (overlay_bg_macros.png) with static pass
+   - Genuine tab background (overlay_canvas.png) with static pass
    - 8 compact native rotary dials and readouts / MacroCard components in one bottom row
    - 8 standalone action buttons ("TARGETS")
    - Overlay sentinel / instance markers
@@ -42,7 +42,7 @@ SITE_PACKAGES = Path("/Users/szabi/Library/Python/3.9/lib/python/site-packages")
 if SITE_PACKAGES.is_dir() and str(SITE_PACKAGES) not in sys.path:
     sys.path.insert(0, str(SITE_PACKAGES))
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 DEFAULT_OUTPUT = screen_path('macros')
 CANONICAL_MIRRORS = []  # One canonical screenshot; no mirrored copies.
@@ -119,6 +119,7 @@ def compute_overlay_tool_hash() -> str:
         "shell-mpc/ui/base.h",
         "shell-mpc/ui/core.h",
         "shell-mpc/ui/theme.h",
+        "shell-mpc/ui/theme_tokens.h",
         "shell-mpc/ui/qgroup.h",
     ]:
         p = ROOT / rel
@@ -265,15 +266,6 @@ def make_macros_sketch_class(sketch_mod, fixture_data=None):
                 im = self.image(data.get("offImage"))
                 if im is not None:
                     img.alpha_composite(im, (x0, y0))
-            elif typ == "Slider":
-                d = ImageDraw.Draw(img)
-                d.rounded_rectangle([x0, y0, x0 + w, y0 + h], 5, outline=(106, 106, 108, 255), fill=(38, 37, 40, 255))
-                name = (param_name or "").upper()
-                d.text((x0 + 8, y0 + 4), name, font=sketch_mod.font("Bold", 22), fill=(180, 180, 184, 255))
-            elif typ in ("Envelope",):
-                d = ImageDraw.Draw(img)
-                d.rectangle([x0, y0, x0 + w, y0 + h], outline=(211, 17, 69, 255))
-                d.text((x0 + 8, y0 + 4), "ENVELOPE", font=sketch_mod.font("Bold", 20), fill=(211, 17, 69, 255))
 
     return MacrosSketch
 
@@ -297,9 +289,6 @@ def render_overlay_layer(
         "--out", str(out_overlay_path),
         "--bank", str(bank),
         "--device", str(device),
-        "--mode", "live",
-        "--native-controls", "1",
-        "--native-targets", "1",
         "--fixture", str(fixture),
     ]
     if custom_names:
@@ -352,9 +341,9 @@ def render_macros_preview(
         MacrosSketch = make_macros_sketch_class(sketch_mod, fixture_data)
         sketch = MacrosSketch(skins_path, params_list)
 
-        bg_path = skins_path / "overlay_bg_macros.png"
+        bg_path = skins_path / "overlay_canvas.png"
         if not bg_path.is_file():
-            bg_path = SCRIPTS_DIR / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_bg_macros.png"
+            bg_path = SCRIPTS_DIR / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_canvas.png"
         canvas = Image.open(bg_path).convert("RGBA")
 
         tab = next((t for t in sketch.tui["pageData"]["tabs"] if t["tabName"] == "Macros"), None)
@@ -386,7 +375,7 @@ def render_macros_preview(
             cache_dir=tmp_dir / "tool",
         )
 
-        final_canvas = Image.alpha_composite(skin_canvas, overlay_image)
+        final_canvas = Image.alpha_composite(skin_canvas, overlay_image).convert("RGB")
 
     out_file = Path(out_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)

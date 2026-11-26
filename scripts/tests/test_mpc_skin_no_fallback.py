@@ -121,7 +121,7 @@ class NoFallbackTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "shadows"):
                 validate_package(package)
             variant.unlink()
-            image = skins / "overlay_bg_play.png"
+            image = skins / "overlay_canvas.png"
             image.write_bytes(b"broken")
             with self.assertRaises(OSError):
                 validate_package(package)
@@ -331,10 +331,10 @@ class NoFallbackTests(unittest.TestCase):
 
         strips = (("SUB", "sub"), ("A", "osc1"), ("B", "osc2"), ("C", "osc3"), ("NOISE", "noise"),
                   ("F1", "filter1"), ("F2", "filter2"), ("BUS 1", "bus1"), ("BUS 2", "bus2"), ("MAIN", "main"))
+        strip_kinds = ["mixerStripSource"] * 5 + ["mixerStripFilter"] * 2 + ["mixerStripBus"] * 2 + ["mixerStripMaster"]
         for i, (caption, source) in enumerate(strips):
             c = native[f"{caption} Strip"]
-            expected_kind = "mixerStripMaster" if i == 9 else "mixerStripBus" if i >= 7 else "mixerStripSource"
-            self.assertEqual(c["componentData"]["type"], expected_kind + "Frame")
+            self.assertEqual(c["componentData"]["type"], strip_kinds[i] + "Frame")
             self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], [modal, f"IndexedEnabling/0/6/Parameter {native_base + 856}"])
             self.assertEqual(c["bounds"]["showWhenDataModelInvalid"], "Hide")
             self.assertEqual(tuple(map(int, c["bounds"]["bounds"].split())), (10 + 127 * i, 10, 115, 550))
@@ -357,6 +357,20 @@ class NoFallbackTests(unittest.TestCase):
                 self.assertEqual(rm["FxEnable"], handles["main.fx_bypass"])
                 self.assertEqual(rm["FxVisual"], f"Parameter {native_base + 866}")
             self.assertEqual(rm["MuteVisual"], f"Parameter {native_base + 867 + i}")
+            pairs = (("FX Enable", "FxVisual", "FxEnable"), ("Master Mute", "MuteVisual", "Mute")) if i == 9 else (
+                ("Solo", "SoloVisual", "Solo"), ("Mute", "MuteVisual", "Mute"))
+            for title, state_key, action_key in pairs:
+                face = native[f"{caption} Strip {title} Visual"]
+                action = native[f"{caption} Strip {title} Button"]
+                self.assertEqual(face["componentData"]["type"], "Knob")
+                film = face["componentData"]["data"]
+                self.assertEqual((film["knobType"], film["dragOrientation"], film["numFrames"]), ("FilmStrip", "None", 5))
+                self.assertEqual(face["bounds"]["acceptsHWFocus"], "No")
+                self.assertEqual(remap(face)[film["handleName"]], rm[state_key])
+                self.assertEqual(action["componentData"]["type"], "Button")
+                self.assertEqual(remap(action)["Data"], rm[action_key])
+                self.assertEqual(face["bounds"]["bounds"], action["bounds"]["bounds"])
+
 
         # Persistent 6-tab bar (MIXER, FLT 1, FLT 2, MAIN FX, BUS 1, BUS 2) gated together during full-screen dialogs
         all_tabs = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")

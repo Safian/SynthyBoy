@@ -100,7 +100,7 @@ class MpcBackgroundsTests(unittest.TestCase):
         self.assertEqual([t[0] for t in MACROS_ON], ["macros"])
 
     def test_committed_asset_exists_and_is_valid_format(self):
-        asset = ASSETS_DIR / "overlay_bg_macros.png"
+        asset = ASSETS_DIR / "overlay_canvas.png"
         self.assertTrue(asset.is_file(), f"Missing committed asset: {asset}")
         with Image.open(asset) as im:
             self.assertEqual(im.size, (1280, 628), "Tab background must be 1280x628")
@@ -110,7 +110,7 @@ class MpcBackgroundsTests(unittest.TestCase):
     def test_backgrounds_are_fixed_plain_canvas(self):
         from components import style
         expected = tuple(bytes.fromhex(style.color("surface.canvas").lstrip("#")))
-        for asset in ASSETS_DIR.glob("overlay_bg_*.png"):
+        for asset in {ASSETS_DIR / filename for _, _, filename in bg_mod.BACKGROUND_TABS}:
             with Image.open(asset) as image:
                 self.assertEqual((image.size, image.mode), ((1280, 628), "RGB"))
                 self.assertEqual(image.getcolors(), [(1280 * 628, expected)])
@@ -157,10 +157,10 @@ class MpcBackgroundsTests(unittest.TestCase):
                 bg_mod.apply(tui, qlinks, ctx)
                 self.assertEqual([c for c in mac["componentsData"] if not c["componentData"]["name"].startswith("Overlay Background Sentinel ")], [c for c in markers if not c["componentData"]["name"].startswith("Overlay Background Sentinel ")])
                 for state in ("focussed", "unfocussed"):
-                    self.assertEqual(mac["backgroundData"][state], dict(fallback[state], image="overlay_bg_macros.png"))
+                    self.assertEqual(mac["backgroundData"][state], dict(fallback[state], image="overlay_canvas.png"))
                 self.assertEqual(other, before_other)
                 self.assertEqual(qlinks, before_qlinks)
-                with Image.open(Path(tmp) / "overlay_bg_macros.png") as installed, Image.open(ASSETS_DIR / "overlay_bg_macros.png") as original:
+                with Image.open(Path(tmp) / "overlay_canvas.png") as installed, Image.open(ASSETS_DIR / "overlay_canvas.png") as original:
                     x, y, rgb = bg_mod.SENTINELS["macros"]
                     self.assertIsNone(ImageChops.difference(installed, original).getbbox())
                     with Image.open(Path(tmp) / "sentinel_macros.png") as marker:
@@ -195,19 +195,18 @@ class MpcBackgroundsTests(unittest.TestCase):
             bg_mod.apply({}, {}, ctx)
             assets = {}
             for view, _, asset in bg_mod.BACKGROUND_TABS:
-                if asset not in assets:
-                    with Image.open(Path(tmp) / asset) as im:
-                        assets[asset] = im.convert("RGB")
-                    with Image.open(Path(tmp) / ("sentinel_" + view + ".png")) as marker:
-                        assets[asset].paste(marker, bg_mod.SENTINELS[view][:2])
+                with Image.open(Path(tmp) / asset) as im:
+                    assets[view] = im.convert("RGB")
+                with Image.open(Path(tmp) / ("sentinel_" + view + ".png")) as marker:
+                    assets[view].paste(marker, bg_mod.SENTINELS[view][:2])
         for view_name, tab_name, asset_name in bg_mod.BACKGROUND_TABS:
             view = next(v for v in layout["views"] if v["name"] == view_name)
             x, y, rgb = bg_mod.SENTINELS[view_name]
             want = tuple(int(rgb[i:i + 2], 16) for i in (0, 2, 4))
-            seen = {assets[asset_name].getpixel((x + dx, y + dy)) for dx in range(5) for dy in range(5)}
+            seen = {assets[view_name].getpixel((x + dx, y + dy)) for dx in range(5) for dy in range(5)}
             samples = ((1, 1), (3, 1), (1, 3), (3, 3), (2, 2))
             for other, image in assets.items():
-                if other == asset_name:
+                if bg_mod.SENTINELS[other] == bg_mod.SENTINELS[view_name]:
                     continue
                 matches = all(max(abs(a - b) for a, b in zip(image.getpixel((x + dx, y + dy)), want)) <= 2 for dx, dy in samples)
                 self.assertFalse(matches, f"{view_name} accepted stale image {other}")
@@ -224,19 +223,18 @@ class MpcBackgroundsTests(unittest.TestCase):
         views = {"osca", "oscb", "oscc", "oscsub", "oscnoise"}
         entries = [(view, asset) for view, _, asset in bg_mod.BACKGROUND_TABS if view in views]
         self.assertEqual({view for view, _ in entries}, views)
-        self.assertEqual({asset for _, asset in entries}, {"overlay_bg_osc.png"})
+        self.assertEqual({asset for _, asset in entries}, {"overlay_canvas.png"})
         x, y, rgb = bg_mod.OSC_SENTINEL
         expect = tuple(bytes.fromhex(rgb))
-        for _, _, asset in bg_mod.BACKGROUND_TABS:
-            if asset == bg_mod.OSC_ASSET:
-                continue
-            with Image.open(ASSETS_DIR / asset) as image:
-                self.assertGreater(max(abs(a - b) for a, b in zip(expect, image.getpixel((x + 2, y + 2)))), 2, asset)
+        self.assertEqual({asset for _, _, asset in bg_mod.BACKGROUND_TABS}, {bg_mod.CANVAS_ASSET})
+        with Image.open(ASSETS_DIR / bg_mod.CANVAS_ASSET) as image:
+            self.assertGreater(max(abs(a-b) for a, b in zip(expect, image.getpixel((x+2, y+2)))), 2)
+
 
     def test_mod_static_title_leaves_all_marker_covers_free(self):
         layout = json.loads((ROOT / "shell-mpc/overlay/overlay_layout.json").read_text())
         mod = next(view for view in layout["views"] if view["name"] == "mod")
-        with Image.open(ASSETS_DIR / "overlay_bg_mod.png") as image:
+        with Image.open(ASSETS_DIR / "overlay_canvas.png") as image:
             for spot in (*mod["markers"], mod["instance"]):
                 for y in range(spot["y"] - 1, spot["y"] + spot["h"] + 1):
                     x = spot["x"] - 1
@@ -250,7 +248,7 @@ class MpcBackgroundsTests(unittest.TestCase):
             self.assertIn(f'"{asset_name}", {x}, {y}, 0x{rgb}u', text)
 
     def test_marker_spots_are_flat_ground_colour(self):
-        asset = ASSETS_DIR / "overlay_bg_macros.png"
+        asset = ASSETS_DIR / "overlay_canvas.png"
         self.assertTrue(asset.is_file())
         layout_json = ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
         layout = json.loads(layout_json.read_text(encoding="utf-8"))

@@ -924,6 +924,66 @@ void testPlayMetadataRefresh()
 
 }
 
+void testHiddenNativePolling()
+{
+    namespace u = synthyboy_mpc::nativeui;
+    auto rig = std::make_unique<Rig>();
+    auto& r = *rig;
+    const int peak = u::kMixerPeakBase + 2, right = u::kMixerStereoBase + u::kMixerStrips + 2;
+    r.plugin.overlayView.setNativeMixerPeekEnabled (true);
+    r.plugin.overlayView.setNativeMixerMeter (2, 0.6f, 0.75f);
+    float stereo[u::kMixerStereoFields] { 0.6f, 0.8f, 0.75f, 0.9f, 0, 1 };
+    r.plugin.overlayView.setNativeMixerStereoMeter (2, stereo);
+    std::array<u::FxCell, u::modboard::kHandles> cells {};
+    cells[u::modboard::ListRow] = { 0, 1, u::kFxToggle };
+    cells[u::modboard::ListRowGate] = cells[u::modboard::ListRow];
+    r.plugin.overlayView.setNativeModBoard (2, cells.data());
+    r.plugin.nativeUiPoll (&r.effect);
+    const auto visible = [&](int offset) { return r.plugin.nativeUiReported[offset]; };
+    check (visible (peak) == u::meterValue (0.6f) && visible (right) == u::meterValue (0.8f),
+           "the mixed peak and independent stereo channels reach the host");
+    check (visible (u::kModBoardControl + u::modboard::ListGate) == 1.0f
+               && visible (u::kModBoardControl + u::modboard::ListRowGate) == 1.0f,
+           "the modulation list and its first row publish their gates");
+    const int row = PluginInstance::nativeUiBase() + u::kModBoardControl + u::modboard::ListRow;
+    r.effect.setParameter (&r.effect, row, 1.0f);
+    r.plugin.overlayView.setNativeMixerPeekEnabled (false);
+    r.plugin.overlayView.setNativeModBoard (0, nullptr);
+    r.plugin.nativeUiPoll (&r.effect);
+    std::fill (std::begin (stereo), std::end (stereo), 0.0f);
+    r.plugin.overlayView.setNativeMixerMeter (2, 0, 0);
+    r.plugin.overlayView.setNativeMixerStereoMeter (2, stereo);
+    r.plugin.nativeUiPoll (&r.effect);
+    check (visible (peak) == 0 && visible (right) == 0 && visible (u::kModBoardControl + u::modboard::ListGate) == 0
+               && visible (u::kModBoardControl + u::modboard::ListRowGate) == 0,
+           "the board releases its gates and final meter zeroes arrive even after the mixer is hidden");
+    r.plugin.overlayView.setNativeModBoard (2, cells.data());
+    r.plugin.nativeUiPoll (&r.effect);
+    float gesture = 0;
+    check (! r.plugin.overlayView.takeNativeModBoard (u::modboard::ListRow, cells[u::modboard::ListRow], gesture),
+           "a queued gesture from the closed board cannot act on the reopened row");
+    r.effect.setParameter (&r.effect, row, 1.0f);
+    check (r.plugin.overlayView.takeNativeModBoard (u::modboard::ListRow, cells[u::modboard::ListRow], gesture) && gesture == 1.0f,
+           "a new gesture on the republished row is accepted");
+    check (visible (u::kModBoardControl + u::modboard::ListRowGate) == 1.0f, "reopening the same board republishes its row");
+}
+
+void benchmarkIdleNativePoll()
+{
+    auto rig = std::make_unique<Rig>();
+    for (int i = 0; i < 100; ++i)
+        rig->plugin.nativeUiPoll (&rig->effect);
+    for (int run = 0; run < 5; ++run)
+    {
+        const auto start = std::chrono::steady_clock::now();
+        constexpr int polls = 100000;
+        for (int i = 0; i < polls; ++i)
+            rig->plugin.nativeUiPoll (&rig->effect);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        std::printf ("idle nativeUiPoll %.2f ns/poll\n", std::chrono::duration<double, std::nano> (elapsed).count() / polls);
+    }
+}
+
 void testNativeRootPaintBeforeMetadata()
 {
     namespace u = synthyboy_mpc::nativeui;
@@ -940,6 +1000,11 @@ void testNativeRootPaintBeforeMetadata()
     check (r.plugin.nativeUiReported[u::kEnvView] == 1.0f
                && std::fabs (r.plugin.nativeUiReported[u::kEnvFields + u::env::Attack] - 0.43f) < 1e-4f,
            "the ENV layout and current attack reach the host on the first poll");
+    // A chunk may restore both names in the same tick as the native controls.
+    r.plugin.macroNamesDue.store (true);
+    r.plugin.programNameRefreshDue.store (true);
+    r.plugin.macroNamePoll();
+    r.plugin.qPoll (&r.effect);
     r.plugin.flushProxyNames (&r.effect, request);
     check (request >= 0 && displayRefreshes == before, "ENV leaves the first paint free of metadata refreshes");
     r.plugin.requestNativeControlNames();
@@ -2457,6 +2522,16 @@ void testPlayCompactSmoothNativeHost ()
 
 int main (int argc, char** argv)
 {
+    if (argc == 2 && std::strcmp (argv[1], "--bench-idle-native-poll") == 0)
+    {
+        benchmarkIdleNativePoll();
+        return failures != 0;
+    }
+    if (argc == 2 && std::strcmp (argv[1], "--hidden-native-poll") == 0)
+    {
+        testHiddenNativePolling();
+        return failures != 0;
+    }
     if (argc == 2 && std::strcmp (argv[1], "--native-root-paint") == 0)
     {
         testNativeRootPaintBeforeMetadata();
@@ -2637,6 +2712,7 @@ int main (int argc, char** argv)
     testMixerPeekVst();
     testVoiceValueReports();
     testNativeRootPaintBeforeMetadata();
+    testHiddenNativePolling();
     testPlayMetadataRefresh();
     testMixerPeekDisplayRefresh();
     testMixerTabsAndRouteClosureVisuals();

@@ -232,7 +232,6 @@ class TestNativeModRow(unittest.TestCase):
     def test_detail_screen_components_and_assets(self):
         """Detail screen: 90px dial filmstrips, 3-column furniture, Back/Delete assets, contract rects."""
         import json
-        from components.native.level.level import write_strip
 
         # 1. Dial diameter must be 90px
         self.assertEqual(style.size("dial.diameter"), 90)
@@ -249,17 +248,14 @@ class TestNativeModRow(unittest.TestCase):
         self.assertEqual(det_nav["back"], [66, 4, 100, 56])
         self.assertEqual(det_nav["delete"], [1120, 4, 120, 56])
 
-        # 3. Dial filmstrip generation
-        uni_strip = self.skins_dir / "mod_dial_90_uni.png"
-        bi_strip = self.skins_dir / "mod_dial_90_bi.png"
-        write_strip(uni_strip, frame_size=90, bipolar=False, active=True)
-        write_strip(bi_strip, frame_size=90, bipolar=True, active=True)
-        self.assertTrue(uni_strip.is_file())
-        self.assertTrue(bi_strip.is_file())
-        with Image.open(uni_strip) as u_im:
-            self.assertEqual(u_im.size, (90, 90 * 127))
-        with Image.open(bi_strip) as b_im:
-            self.assertEqual(b_im.size, (90, 90 * 127))
+        # The actual MOD controls must reuse the artwork installed for the shared dials.
+        for kind, filename in (("dial_uni", "play_sub_level_90.png"), ("dial_bi", "play_sub_pan_90.png")):
+            definition = nmr.build_editor_cell_definition(kind, 140, 160, skins_dir=self.skins_dir)
+            knob = next(child["componentData"]["data"] for child in definition["componentsData"]
+                        if child["componentData"]["type"] == "Knob")
+            self.assertEqual(knob["filmStrip"], filename)
+            with Image.open(self.skins_dir / filename) as image:
+                self.assertEqual(image.size, (90, 90 * knob["numFrames"]))
 
         # 4. Mod detail handles and confirm presentation handle
         import native_ui_params as handles

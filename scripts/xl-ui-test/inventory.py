@@ -2,6 +2,8 @@
 import json
 import re
 from collections import Counter
+from functools import lru_cache
+from itertools import product
 from pathlib import Path
 
 
@@ -12,7 +14,15 @@ PASSIVE = {"Label", "Image", "Meter", "Indicator", "Focus"}
 ACTUATORS = {"Button", "Knob", "Slider", "MenuOverlay", "KnobOverlay", "NumericOverlay"}
 
 
-def resolve(value, mapping):
+INCREMENT = re.compile(r"\{Increment:Base=(-?\d+)(?:,Step=(-?\d+))?(?:,Offset=(-?\d+))?\}")
+
+
+def resolve(value, mapping, copy_index=None):
+    if copy_index is not None and "{Increment:" in value:
+        def increment(match):
+            base, step, offset = match.groups()
+            return str(max(0, int(base) + copy_index * int(step or 1) + int(offset or 0)))
+        value = INCREMENT.sub(increment, value)
     # A composed SDK handle applies its adapters from left to right to the final data handle.
     head, sep, tail = value.rpartition("/")
     return head + sep + mapping.get(tail, tail)
@@ -41,23 +51,35 @@ def absolute_rect(bounds, parent):
     return tuple(round(v) for v in (px + x, py + y, w, h))
 
 
-def inventory(tui_path):
+def inventory(tui_path, *, visual_leaves=False, skin_dir=None, popup=None):
     page = json.loads(Path(tui_path).read_text())["pageData"]
     defs = {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}
     tabs, controls = {}, []
+    art_path = Path(skin_dir) if skin_dir is not None else Path(tui_path).parent
 
-    def visit(defn, view, path, parent, mapping, gates, ancestors, disabled=False):
+    @lru_cache(maxsize=None)
+    def draws_pixels(filename):
+        from PIL import Image
+        if not (art_path / filename).is_file():
+            return None
+        with Image.open(art_path / filename) as image:
+            return image.convert("RGBA").getchannel("A").getextrema()[1] != 0
+
+    def visit(defn, view, path, parent, mapping, gates, ancestors, owner, disabled=False):
         counts = Counter()
-        for item in defn.get("componentsData", []):
+        for copy_index, (slot, item) in product(range(defn.get("repeats", 1)), enumerate(defn.get("componentsData", []))):
             obj, bounds = item["componentData"], item["bounds"]
             name, kind = obj["name"], obj["type"]
             counts[name] += 1
             suffix = f" [{counts[name]}]" if counts[name] > 1 else ""
             identity = path + "/" + name + suffix
             box = absolute_rect(bounds, parent)
-            own = {e["key"]: resolve(e["value"], mapping) for e in item.get("handle remapping", {}).get("map", [])}
+            if copy_index:
+                x, y, w, h = box
+                box = (x + copy_index * w, y, w, h)
+            own = {e["key"]: resolve(e["value"], mapping, copy_index) for e in item.get("handle remapping", {}).get("map", [])}
             local = dict(mapping, **own)
-            enabled = gates + [resolve(g, local) for g in bounds.get("additionalInvalidatingHandles", [])]
+            enabled = gates + [resolve(g, local, copy_index) for g in bounds.get("additionalInvalidatingHandles", [])]
             data = obj.get("data", {})
             sub = defs.get(kind)
             actions = (sub or data).get("actions", [])
@@ -65,22 +87,42 @@ def inventory(tui_path):
             disabled_variant = re.search(r"(Off|Inactive|Disabled)(?:$|[0-9_ ])|(?:^|[ _])(off|disabled|inactive)(?:$|[ _])", kind+" "+name)
             if sub and disabled_variant and sub.get("ignoreMousePresses") and sub.get("disableCoarseDataWheel") and not actions:
                 inert = True
-            if actions or (sub is None and kind not in PASSIVE):
-                handles = {k: resolve(v, local) for k, v in data.items()
+            if actions or (sub is None and (kind not in PASSIVE or visual_leaves)):
+                handles = {k: resolve(v, local, copy_index) for k, v in data.items()
                            if isinstance(v, str) and (k == "handleName" or k.endswith("Handle"))}
                 controls.append({"id": identity, "view": view, "type": kind, "rect": box, "gates": enabled,
                                  "handles": handles, "maps": own, "actions": actions,
                                  "data": {k: data[k] for k in ("buttonId", "numButtonsInGroup", "gestureBehaviour") if k in data},
                                  "passive": inert, "known_type": kind in ACTUATORS or bool(actions)})
+                if visual_leaves:
+                    controls[-1]["definition"] = owner
+                    controls[-1]["local_leaf"] = (slot, name)
+                    controls[-1]["visual_leaf"] = sub is None and kind in {"Button", "Knob", "Slider", "Label", "Meter", "Image", "Indicator"}
+                    if data.get("knobType") == "FilmStrip" and not data.get("invert"):
+                        controls[-1]["filmstrip"] = data["filmStrip"], data["numFrames"]
+                    elif data.get("imageType") == "FilmStrip":
+                        controls[-1]["filmstrip"] = data["image"], data["numFrames"]
+                    if kind == "Button":
+                        if data.get("offImage") and data.get("onImage"):
+                            controls[-1]["button_art"] = data["offImage"], data["onImage"]
+                        assets = {data[key] for key in ("onImage", "offImage") if data.get(key)}
+                        visibility = [draws_pixels(name) for name in assets]
+                        controls[-1]["visual_leaf"] = True in visibility
+                        if None in visibility and True not in visibility:
+                            controls[-1]["unknown_art"] = True
             if sub is not None:
                 if kind in ancestors:
                     raise ValueError("recursive component: " + identity)
-                visit(sub, view, identity, box, local, enabled, ancestors | {kind}, inert)
+                visit(sub, view, identity, box, local, enabled, ancestors | {kind}, kind, inert)
 
     for tab in page["tabs"]:
         view = VIEW_IDS[tab["tabName"]]
         tabs[view] = {"name": tab["tabName"], "group": tab["fnKeyIndex"], "sub": tab["fnKeySubIndex"]}
-        visit(tab["componentDefinition"], view, view, (0, 110, 1280, 628), {}, [], set())
+        if popup is None:
+            visit(tab["componentDefinition"], view, view, (0, 110, 1280, 628), {}, [], set(), f"tab:{view}")
+        elif view == popup[0]:
+            name = popup[1]
+            visit(defs[name], view, f"{view}/Popup/{name}", (0, 0, 1280, 800), {}, [], {name}, name)
     if set(tabs) != set(VIEW_IDS.values()):
         raise ValueError(f"unexpected tab set: {sorted(tabs)}")
     return tabs, controls

@@ -214,7 +214,7 @@ class TestNativeMixerComponents(unittest.TestCase):
             self.assertNotIn("Button", child_types, f"{strip_key} must not contain legacy direct Button")
             self.assertNotIn("Meter", child_types, f"{strip_key} must not contain legacy plain Meter")
 
-        # SoloMutePair definitions must expose FilmStrip multi-state Images + 56x56 Button hitboxes
+        # SoloMutePair definitions must expose read-only five-frame state faces and independent Button hitboxes
         for sm_key, visual_handle in (
             (TYPE_SOLO_MUTE_SOURCE, "SoloVisual"),
             (TYPE_SOLO_MUTE_BUS, "SoloVisual"),
@@ -222,8 +222,7 @@ class TestNativeMixerComponents(unittest.TestCase):
         ):
             sm_children = defs[sm_key]["componentsData"]
             types = [c["componentData"]["type"] for c in sm_children]
-            self.assertIn("Image", types, f"{sm_key} must have FilmStrip Image visual layer")
-            self.assertIn("Button", types, f"{sm_key} must preserve 56x56 Button hitboxes")
+            self.assertEqual(types, ["Knob", "Knob", "Button", "Button"])
             remaps = {m["value"] for c in sm_children for m in c["handle remapping"]["map"]}
             self.assertIn(visual_handle, remaps, f"{sm_key} must bind {visual_handle}")
             self.assertIn("MuteVisual", remaps, f"{sm_key} must bind MuteVisual")

@@ -17,7 +17,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components import style
-from components.native.selector.selector import OSC_TAB_NAMES, passive_layer, write_source_navigation_assets
+from components.native.selector.selector import (OSC_TAB_NAMES, command_stepper_definition, passive_layer,
+                                                  write_source_navigation_assets)
 from native_warp_picker import CONTROL as WARP_CONTROL
 from native_ui_params import (OSC_ABC_SETTINGS, OSC_DETAIL, OSC_DETAIL_CELLS, OSC_ROOT_LOAD,
                               OSC_ROOT_LOAD_VIEW, OSC_SETTINGS_VIEW, OSC_SETTINGS_LAYOUTS, mixer_peek_index)
@@ -126,6 +127,49 @@ def apply(tui, qlinks, ctx):
         ctx.add_component_definition(name, definition)
         gate = f"IndexedEnabling/3/6/{view}" if frame == "Plain" else f"RangedEnabling/4/5/6/{view}"
         page.append(custom(frame, name, (x, y, 8 * w, h + (rows - 1) * step), (("Data", view),), gate))
+    # Unison is the only graph page with the unison.stack domain in column 1.
+    # Mount its controls at the same depth as BACK. On Key 61 the dynamic grid
+    # stayed blank even with seven live value/kind bindings in the VST.
+    graph = page[-1]
+    x, y, w, h, step, rows = contract["graph"]
+    stack_index = contract["menus"].index("unison.stack")
+    stack_kind = 7 + stack_index
+    stack_slot = f"Parameter {base + 1 + 2 * count + 4}"
+    graph_gate, = graph["bounds"]["additionalInvalidatingHandles"]
+    stack_gate = f"IndexedEnabling/{stack_kind}/{visual_steps}/{stack_slot}"
+    graph["bounds"]["additionalInvalidatingHandles"].append(
+        f"RangedEnabling/0/{stack_kind - 1}/{visual_steps}/{stack_slot}")
+    # Higher domains occur in MORE (Plain) or a later Spectral cell, never in this graph slot.
+
+    mode = command_stepper_definition(ctx.skins_dir, (w, h), "MODE")
+    mode["componentsData"] = [c for c in mode["componentsData"] if c["componentData"]["name"] != "Open"]
+    for child in mode["componentsData"]:
+        if child["componentData"]["type"] == "Button":
+            child["componentData"]["data"]["handleName"] = "Step"
+    ctx.add_component_definition("oscDetailUnisonMode", mode)
+
+    def unison_control(column, kind, bindings, focus, dial_kind=None):
+        rect = (x + column * w, y, w, h)
+        control = custom(f"Unison {column} {kind}", kind, rect, bindings, graph_gate, focus)
+        gates = control["bounds"]["additionalInvalidatingHandles"]
+        gates.append(stack_gate)
+        if dial_kind is not None:
+            slot_kind = base + 1 + 2 * count + column * 4
+            gates.append(f"IndexedEnabling/{dial_kind}/{visual_steps}/Parameter {slot_kind}")
+        return control
+
+    unison = [unison_control(0, "oscDetailUnisonMode", (("Data", f"Parameter {base + 1}"),
+                             ("Step", f"FromGesture/Parameter {base + 1 + count}")), "Children"),
+              unison_control(1, "oscNativeSetting_menu", (("Data", f"Parameter {base + 4 + 3 * count + stack_index}"),
+                             ("Caption", f"WithName[STACK]/Parameter {base + 5}")), "Yes")]
+    # All sources share WIDTH and RANGE. Granular has two unipolar spread
+    # controls, multisample two bipolar ones and wavetable three bipolar ones.
+    for column, polarities in ((2, (1,)), (3, (1,)), (4, (1, 2)), (5, (1, 2)), (6, (2,))):
+        value = f"Parameter {base + 1 + column * 4}"
+        for polarity in polarities:
+            control = "oscNativeSetting_dial_uni" if polarity == 1 else "oscNativeSetting_dial_bi"
+            unison.append(unison_control(column, control, (("Data", value), ("Caption", value)), "Yes", polarity))
+
     # Sub and Noise expose BLEND at the root; neither has a MORE sheet.
     settings_view = f"Parameter {native_base + OSC_SETTINGS_VIEW}"
     for name, layout in (("sub_blend", 1), ("noise_blend", 2), ("noise_sample_blend", 3)):
@@ -144,6 +188,7 @@ def apply(tui, qlinks, ctx):
         page.append(custom(f"LOAD {source}", "oscNativeSetting_action", contract["root_load"],
                            (("Data", "FromGesture/" + data), ("Caption", data)),
                            f"IndexedEnabling/{i + 1}/4/Parameter {load_view}", "Yes"))
+    page.extend(unison)
     ctx.add_component_definition("oscNativeDetail", passive_layer(page))
     for tab in tabs:
         tab["componentDefinition"]["componentsData"].append(

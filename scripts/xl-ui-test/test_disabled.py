@@ -24,7 +24,7 @@ class DisabledTest(unittest.TestCase):
         self.gestures = []
         self.gesture = lambda *coords: self.gestures.append(coords)
         self.image = lambda: self.screen.copy()
-        self.snapshot = lambda: self.before
+        self.snapshot = lambda *, vst: self.before
 
     def exercise(self):
         record = {}
@@ -48,7 +48,7 @@ class DisabledTest(unittest.TestCase):
             self.exercise()
 
     def test_changed_host_or_engine_fails(self):
-        self.snapshot = lambda: {"engine": {"gain":55}, "vst":{1: .6}}
+        self.snapshot = lambda *, vst: {"engine": {"gain":55}, "vst":{1: .6}}
         with self.assertRaisesRegex(AssertionError, "changed plugin state"):
             self.exercise()
 

@@ -198,7 +198,7 @@ void OwnEngine::stopFxWorker() noexcept
     fxWorker.join();
 }
 
-void OwnEngine::publishContent (std::unique_ptr<ContentSet> set)
+void OwnEngine::publishContent (std::shared_ptr<const ContentSet> set)
 {
     std::lock_guard<std::mutex> lock (contentMutex);
     const ContentSet* raw = set.get();
@@ -235,6 +235,15 @@ void OwnEngine::setContent (const StateContent& content)
     ownContent.publish (content);
     contentState = content;
     rebuildContent();
+}
+
+void OwnEngine::setPreparedContent (const StateContent& state, std::shared_ptr<const ContentSet> decoded)
+{
+    std::lock_guard<std::mutex> lock (contentWriterMutex);
+    noteTuning.setContent (state.tuning);
+    ownContent.publish (state);
+    contentState = state;
+    publishContent (std::move (decoded));
 }
 
 void OwnEngine::setContentStore (const IContentStore* store)

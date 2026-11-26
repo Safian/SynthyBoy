@@ -158,8 +158,8 @@ class TestRenderUiScreenMacrosPreview(unittest.TestCase):
         with Image.open(preview_path) as im:
             # Check right marker spot at (1241, 24)
             right_px = im.getpixel((1241, 24))
-            # Ground color #0b1025 is (11, 16, 37)
-            self.assertEqual(right_px, (11, 16, 37), "Right sentinel marker must be covered by #0b1025 ground")
+            # Ground color #090d19 is (9, 13, 25)
+            self.assertEqual(right_px, (9, 13, 25), "Right sentinel marker must be covered by #090d19 ground")
             # Sentinel color 0x3a6b64 is (58, 107, 100)
             self.assertNotEqual(right_px, (58, 107, 100), "Raw sentinel right marker pixel must not remain")
 
@@ -200,10 +200,10 @@ class TestRenderUiScreenMacrosPreview(unittest.TestCase):
                                      f"{fixture} card {i} must have ZERO overlapping text pixels in vertical gap y={vy+vh+2}..{ny-2}")
 
     def test_static_background_png_integrity_and_size(self):
-        """Verifies overlay_bg_macros.png is lossless compressed RGB 1280x628 with intact top 0..110 band."""
-        bg_path = ROOT / "scripts" / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_bg_macros.png"
+        """Verifies overlay_canvas.png is lossless compressed RGB 1280x628 with intact top 0..110 band."""
+        bg_path = ROOT / "scripts" / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_canvas.png"
         self.assertTrue(bg_path.is_file())
-        self.assertLess(bg_path.stat().st_size, 200 * 1024, "overlay_bg_macros.png must be losslessly compressed (<200 KB)")
+        self.assertLess(bg_path.stat().st_size, 200 * 1024, "overlay_canvas.png must be losslessly compressed (<200 KB)")
         with Image.open(bg_path) as im:
             self.assertEqual(im.mode, "RGB")
             self.assertEqual(im.size, (1280, 628))
@@ -268,7 +268,7 @@ class TestRenderUiScreenMacrosPreview(unittest.TestCase):
             # Sentinel markers at (33, 24), (45, 24), (1241, 24) must be cleanly covered in both
             for im in (im_b1, im_b2):
                 right_px = im.getpixel((1241, 24))
-                self.assertEqual(right_px, (11, 16, 37), "Marker must be covered by ground #0b1025")
+                self.assertEqual(right_px, (9, 13, 25), "Marker must be covered by ground #090d19")
                 self.assertNotEqual(right_px, (58, 107, 100), "Raw right sentinel marker pixel must not remain")
                 for x, y in ((33, 24), (45, 24)):
                     self.assertNotEqual(im.getpixel((x, y)), (107, 58, 44),

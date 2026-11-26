@@ -113,6 +113,7 @@ public:
     float voiceCountGain() const noexcept { return lastVoiceCountGain.load (std::memory_order_relaxed); }
     std::shared_ptr<const ContentSet> preparedOscContent() override;
     void setContent (const StateContent& content) override;
+    void setPreparedContent (const StateContent& content, std::shared_ptr<const ContentSet> decoded) override;
     void setContentStore (const IContentStore* store) override;
     /** Tests only: the ledger that spreads the note starts of the Spectral oscillators over the blocks (core/spectral start_ledger.h). */
     const spectral::StartLedger& startLedgerForTest() const noexcept { return spectralScratch->start; }
@@ -147,7 +148,7 @@ private:
     bool memValid[3] = {};
     float readParam (uint32_t id) const noexcept;
     void rebuildContent(); // called under contentWriterMutex
-    void publishContent (std::unique_ptr<ContentSet> set);
+    void publishContent (std::shared_ptr<const ContentSet> set);
 
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };

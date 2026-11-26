@@ -442,7 +442,8 @@ class TestNativeOscRouting(unittest.TestCase):
                 grid = defs[grids["componentData"]["type"]]
                 self.assertEqual((grid["version"], grid["repeats"], len(grid["componentsData"])), (3, 8, rows))
                 self.assertEqual(_rect_tuple(grids["bounds"]["bounds"]), (x, y, 8 * w, (rows - 1) * stride + h))
-                self.assertEqual(grids["bounds"]["additionalInvalidatingHandles"], [gate])
+                self.assertEqual(grids["bounds"]["additionalInvalidatingHandles"], [gate] if frame == "plain" else
+                                 [gate, "RangedEnabling/0/13/17/Parameter 3419"])
                 self.assertLessEqual(x + 8 * w, 1280)
                 self.assertLessEqual(y + stride * (rows - 1) + h, 628)
                 for row, child in enumerate(grid["componentsData"]):
@@ -459,7 +460,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 self.assertEqual(_rect_tuple(control["bounds"]["bounds"]), tuple(detail[name]))
             for i, name in enumerate(("back", "load"), 5):
                 self.assertEqual(_rect_tuple(viewport[i]["bounds"]["bounds"]), tuple(detail[name]))
-            for i, button in enumerate(viewport[7:]):
+            for i, button in enumerate(viewport[7:10]):
                 with self.subTest(root_load=i):
                     self.assertEqual(button["componentData"]["type"], "oscNativeSetting_action")
                     self.assertEqual(_rect_tuple(button["bounds"]["bounds"]), tuple(detail["root_load"]))
@@ -470,7 +471,32 @@ class TestNativeOscRouting(unittest.TestCase):
                     self.assertEqual(button["handle remapping"]["map"],
                                      [{"key": "Data", "value": f"FromGesture/Parameter {index}"},
                                       {"key": "Caption", "value": f"Parameter {index}"}])
-            self.assertEqual(len(viewport), 10)
+            unison = viewport[10:]
+            self.assertEqual(len(unison), 9)
+            for control in unison:
+                self.assertEqual(control["bounds"]["additionalInvalidatingHandles"][:2], [
+                    "RangedEnabling/4/5/6/Parameter 3350", "IndexedEnabling/14/17/Parameter 3419"])
+            mode, stack, *dials = unison
+            self.assertEqual(mode["handle remapping"]["map"], [
+                {"key": "Data", "value": "Parameter 3351"}, {"key": "Step", "value": "FromGesture/Parameter 3383"}])
+            buttons = [c["componentData"]["data"] for c in defs[mode["componentData"]["type"]]["componentsData"]
+                       if c["componentData"]["type"] == "Button"]
+            self.assertEqual([(b["buttonId"], b["handleName"]) for b in buttons], [(1, "Step"), (3, "Step")])
+            self.assertEqual(stack["componentData"]["type"], "oscNativeSetting_menu")
+            self.assertEqual(stack["handle remapping"]["map"][0], {"key": "Data", "value": "Parameter 3457"})
+            for kinds in ((1, 1, 2, 2, 2), (1, 1, 2, 2, 0), (1, 1, 1, 1, 0)):
+                visible = []
+                for control in dials:
+                    cx, cy, cw, ch = _rect_tuple(control["bounds"]["bounds"])
+                    column = (cx - x) // w
+                    self.assertEqual((cx, cy, cw, ch), (x + column * w, y, w, h))
+                    gate = control["bounds"]["additionalInvalidatingHandles"][2]
+                    polarity = 2 if control["componentData"]["type"].endswith("_bi") else 1
+                    self.assertEqual(gate, f"IndexedEnabling/{polarity}/17/Parameter {3415 + column * 4}")
+                    self.assertEqual(control["handle remapping"]["map"][0]["value"], f"Parameter {3351 + column * 4}")
+                    if polarity == kinds[column - 2]:
+                        visible.append(column)
+                self.assertEqual(visible, [i for i, k in enumerate(kinds, 2) if k])
             tile = defs["oscDetailTile"]["componentsData"]
             shared = tile[6]
             self.assertEqual(shared["bounds"]["additionalInvalidatingHandles"], ["RangedEnabling/7/16/17/Kind"])

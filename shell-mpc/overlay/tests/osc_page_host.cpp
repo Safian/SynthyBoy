@@ -717,6 +717,13 @@ static void testNativeDetail()
     {
         const auto& osc = r.page.ui();
         const int rows = r.inst.detail.layout() >= n::Graph ? n::kRows - 1 : n::kRows;
+        if (r.inst.detail.layout() >= n::Graph)
+        {
+            const int kind = r.inst.detail.at (n::kRows).cell().kind;
+            const int stack = n::kFirstMenuKind + static_cast<int> (std::find (std::begin (n::kMenuSuffixes), std::end (n::kMenuSuffixes), "unison.stack") - std::begin (n::kMenuSuffixes));
+            if (kind > stack || (kind == stack) != (r.page.topPage() == OscUi::kPageUnison))
+                return false;
+        }
         const ui::Rect tab {0, OscUi::kTabY, 1280, 628};
         for (const auto& item : osc.pageItems())
         {

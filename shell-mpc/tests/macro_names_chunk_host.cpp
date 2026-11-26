@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "mpc_vst2_abi.h"
 #include "macro_names.h"
+#include "native_ui_params.h"
 #include "q_router.h"
 #include "synthyboy/state.h"
 
@@ -121,7 +122,7 @@ int main (int argc, char** argv)
     if (! a) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
 
     // ---- the parameter list is the one of before: names are state, not parameters
-    check (a->numParams == 3541 && synthyboy::paramCount() == 2637 && text (a, effGetParamName, macroIdx[0]) == "Macro 1"
+    check (a->numParams == 2719 + synthyboy_mpc::nativeui::kCount && synthyboy::paramCount() == 2637 && text (a, effGetParamName, macroIdx[0]) == "Macro 1"
            && text (a, effGetParamName, 2718) == "Q 16" && text (a, effGetParamName, 2719) == "Mixer Peek",
            "macro names keep their engine indices and Q 16 still ends the legacy prefix");
 

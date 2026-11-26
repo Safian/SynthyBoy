@@ -1,5 +1,7 @@
 # MPC display path
 
+The [Key 61 native control arrival study](key61-native-control-arrival.md) tracks the cold project open, first visits, revisits, graphics resources and individual visible controls.
+
 ## Facts (XL, 2026-11-20/21)
 
 - The host commits frames from **one thread** (its main thread), with atomic commits:

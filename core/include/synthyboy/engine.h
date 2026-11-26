@@ -119,6 +119,8 @@ public:
         call it from the message thread (it may allocate), it is handed to the audio thread at the start of its next block without a lock.
         It is kept across prepare() and reset(); an engine ignores the parts it has no capability for (capabilities ()). */
     virtual void setContent (const StateContent&) {}
+    /** Publish a content section already decoded off-thread by the MPC content loader. */
+    virtual void setPreparedContent (const StateContent& state, std::shared_ptr<const own::ContentSet>) { setContent (state); }
 
     /** The store that turns the references of `content` (wavetables, samples, impulse responses) into bytes (content_store.h). NOT real-time,
         message thread; the store must outlive the engine or be replaced by nullptr first. Setting it (or a new `content` by setContent ())

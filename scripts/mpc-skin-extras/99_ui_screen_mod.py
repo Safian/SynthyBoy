@@ -14,7 +14,6 @@ for p in (str(REPO_ROOT), str(SCRIPTS)):
         sys.path.insert(0, p)
 
 from components import style
-from components.native.level.level import write_strip
 from components.native.radio_button.radio_button import render_segmented_button_art
 from components.native.button.button import action_art, in_slot
 from components.native.button.button import button as native_button
@@ -46,10 +45,6 @@ def _ensure_assets(skins_dir):
     delete_rect = json.loads((SCRIPTS / "mpc-skin-extras" / "mod-native-contract.json").read_text())["detail_navigation"]["delete"]
     confirm_art = in_slot(action_art(text="CONFIRM?", width=delete_rect[2]), tuple(delete_rect[2:]))
     confirm_art.save(skins_dir / "mod_detail_confirm.png")
-
-    # 5. Dial filmstrips for Detail (90px)
-    write_strip(skins_dir / "mod_dial_90_uni.png", frame_size=style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=False, active=True)
-    write_strip(skins_dir / "mod_dial_90_bi.png", frame_size=style.size('screen.ui_screen_mod.ensure_assets.frame_size'), bipolar=True, active=True)
 
 
 def apply(tui, qlinks, ctx):
@@ -91,6 +86,6 @@ def apply(tui, qlinks, ctx):
     if mod_tab is not None:
         mod_tab["qlinkBoundsData"] = []
         bg = mod_tab["componentDefinition"].setdefault("backgroundData", {})
-        bg["focussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": "overlay_bg_mod.png"}
-        bg["unfocussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": "overlay_bg_mod.png"}
+        bg["focussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": "overlay_canvas.png"}
+        bg["unfocussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": "overlay_canvas.png"}
 

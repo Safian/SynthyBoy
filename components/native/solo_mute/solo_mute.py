@@ -202,12 +202,13 @@ def _filmstrip_entry(name: str, rect: Tuple[int, int, int, int], film_asset: str
         "componentData": {
             "version": 1,
             "name": name,
-            "type": "Image",
+            "type": "Knob",
             "data": {
-                "version": 2,
-                "imageType": "FilmStrip",
-                "colour": "0",
-                "image": film_asset,
+                "version": 3,
+                "knobType": "FilmStrip",
+                "filmStrip": film_asset,
+                "invert": False,
+                "dragOrientation": "None",
                 "numFrames": NUM_VISUAL_FRAMES,
                 "handleName": "Data",
             },

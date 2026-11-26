@@ -15,6 +15,7 @@
 #include <cstring>
 #include <dlfcn.h>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -22,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "../core/engine-own/osc/content_set.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/events.h"
@@ -442,6 +444,7 @@ struct PluginInstance
             {
                 inst.nativeUiValues[nativeui::kMixerPeakBase + strip].store (nativeui::meterValue (peak), std::memory_order_relaxed);
                 inst.nativeUiValues[nativeui::kMixerHoldBase + strip].store (nativeui::meterValue (hold), std::memory_order_relaxed);
+                inst.nativeMetersDue.store (true, std::memory_order_release);
             }
         }
         void setNativeMixerStereoMeter (int strip, const float* fields) noexcept override
@@ -450,6 +453,7 @@ struct PluginInstance
             for (int field = 0; field < nativeui::kMixerStereoFields; ++field)
                 inst.nativeStereoMeters[field * nativeui::kMixerStrips + strip].store (
                     nativeui::meterValue (fields[field]), std::memory_order_relaxed);
+            inst.nativeMetersDue.store (true, std::memory_order_release);
         }
         void setNativeMixerPeekEnabled (bool enabled) noexcept override
         {
@@ -803,10 +807,15 @@ struct PluginInstance
         }
         void setNativeModBoard (int gate, const nativeui::FxCell* fields) noexcept override
         {
-            if (inst.nativeModBoardPreset.load (std::memory_order_relaxed) != stateGeneration())
+            const auto preset = stateGeneration();
+            const bool newPreset = inst.nativeModBoardPreset.load (std::memory_order_relaxed) != preset;
+            if (gate == 0 && inst.nativeModBoard.layout() == 0 && ! newPreset)
+                return;
+            if (newPreset)
                 inst.nativeModBoard.invalidate();
             inst.nativeModBoard.publish (gate, fields);
-            inst.nativeModBoardPreset.store (stateGeneration(), std::memory_order_release);
+            inst.nativeModBoardPreset.store (preset, std::memory_order_release);
+            inst.nativeModBoardDue.store (true, std::memory_order_release);
         }
         bool takeNativeModBoard (int field, const nativeui::FxCell& expected, float& value) noexcept override
         {
@@ -975,22 +984,34 @@ struct PluginInstance
         }
     }
 
-    // ---- the content the plugin-drawn pages load (the sample / instrument browser of the oscillator UI, overlay/content_browser.h): the overlay thread posts a request, the display thread loads it (reads the
-    // file, decodes the header, puts it into the content store, sets the engine's content). `contentMutex` serialises every change of `content` (the host thread's setChunk, this load) and the chunk's copy of it.
+    // Manual OSC loads prepare a new immutable asset set outside the display and audio threads.
     std::mutex contentMutex;
     mutable std::mutex contentReqMutex;
-    bool contentReqPending = false;
-    int contentReqOsc = 0, contentReqKind = 0;
-    std::string contentReqPath, contentLoadMessage, contentDirPath;
+    struct ContentRequest
+    {
+        int osc = 0, kind = 0;   // 0 wavetable, 1 sample, 2 instrument
+        uint64_t serial = 0, generation = 0;
+        std::string path;
+        synthyboy::ContentFileRef ref;
+    };
+    struct ContentResult
+    {
+        synthyboy::StateContent next;
+        std::shared_ptr<const synthyboy::own::ContentSet> decoded;
+        std::vector<std::string> roots;
+        std::vector<std::pair<int, float>> writes;   // normalized parameter edits for the display thread
+        std::string error;
+    };
+    uint64_t contentSerial = 0;
+    std::array<ContentRequest, 3> queuedContent {};
+    std::array<uint64_t, 3> latestContent {};
+    ContentRequest activeContent;
+    std::shared_ptr<const synthyboy_mpc::overlay::OscContentSnapshot> contentBaseline;
+    std::future<ContentResult> contentJob;   // display thread only; drained before the instance can be reaped
+    std::string contentLoadMessage, contentDirPath;
     std::atomic<int> contentLoadStatus { 0 };                 // 0 none, 1 loading, 2 done, 3 failed
-    std::atomic<long long> contentLoadFailedMs { 0 };         // when the last load failed (the failure is shown for a few seconds)
-    std::set<std::string> contentPackRoots;                    // the directories added as pack roots (once each)
-
-    // ---- the wavetable browser (overlay/wavetable_browser.h, docs/MPC.md "Wavetable browser"): the overlay thread posts the wavetable FILE to load (the latest request wins), the display thread reads, checks and hashes it (off the audio
-    // thread), puts the reference into the content, gives the content to the engine (the new table is built there; the old one plays until it is swapped in) and only then sets oscN.wavetable to "Preset table".
-    bool wtReqPending = false;                                 // under contentReqMutex
-    int wtReqOsc = 0;
-    synthyboy::ContentFileRef wtReqRef;
+    std::atomic<long long> contentLoadFailedMs { 0 };
+    std::set<std::string> contentPackRoots;
     std::atomic<bool> wtLoading { false };                     // a wavetable file is waiting to be loaded or is being loaded: the amber bar of the pages
     std::atomic<int> wtStepMail[3] {};                         // the Q knob of an oscillator whose table is a file: steps (-1 / +1, summed) the overlay turns into "the previous / next file of the category"
     std::atomic<bool> wtFileLoaded[3] {};                      // the content has a wavetable file for oscillator 1 .. 3 (set by publishOverlayContent)
@@ -1043,11 +1064,19 @@ struct PluginInstance
     }
     void requestContentLoad (int osc, int kind, const std::string& path)
     {
+        queueContent ({ osc, kind, 0, 0, path, {} });
+    }
+    void queueContent (ContentRequest request)
+    {
         std::lock_guard<std::mutex> g (contentReqMutex);
-        contentReqPending = true;
-        contentReqOsc = osc;
-        contentReqKind = kind;
-        contentReqPath = path;
+        if (request.osc < 1 || request.osc > 3)
+            return;
+        request.serial = ++contentSerial;
+        request.generation = stateGeneration.load (std::memory_order_acquire);
+        latestContent[request.osc - 1] = request.serial;
+        if (request.kind == 0)
+            wtLoading.store (true, std::memory_order_relaxed);
+        queuedContent[request.osc - 1] = std::move (request);
         contentLoadStatus.store (1, std::memory_order_relaxed);
     }
     /** Where the wavetable catalogue looks: the installed packs (Content/packs) and the roots that may hold SynthyBoy/Wavetables (the SD card, the USB drives, the plugin's Content folder). */
@@ -1063,12 +1092,7 @@ struct PluginInstance
     }
     void requestWavetableLoad (int osc, const synthyboy::ContentFileRef& ref)
     {
-        std::lock_guard<std::mutex> g (contentReqMutex);
-        wtReqPending = true;
-        wtReqOsc = osc;
-        wtReqRef = ref;
-        wtLoading.store (true, std::memory_order_relaxed);
-        contentLoadStatus.store (1, std::memory_order_relaxed);
+        queueContent ({ osc, 0, 0, 0, {}, ref });
     }
     /** The drives (and the SD card) are pack roots of the content store for the files of SynthyBoy/Wavetables: a reference "SynthyBoy/Wavetables" + "Bass/x.wav" is read from whichever root has it. Added once each, under
         contentMutex (the store is read under it). The plugin's own Content folder is the store's first root already. */
@@ -1275,7 +1299,7 @@ struct PluginInstance
         macroNameQueue.post (m - 1, sp == std::string::npos ? std::string() : line.substr (sp + 1),
                              stateGeneration.load (std::memory_order_acquire));
     }
-    void macroNamePoll (AEffect* e)
+    void macroNamePoll()
     {
         macroNameFakeFile();
         std::string names[synthyboy::kNumMacros];
@@ -1303,79 +1327,135 @@ struct PluginInstance
                 macroNamesDue.store (true, std::memory_order_release);
             }
         }
-        if (macroNamesDue.exchange (false, std::memory_order_acq_rel) && audioMaster)
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the host reads the names of the Q proxies again
+        if (macroNamesDue.exchange (false, std::memory_order_acq_rel))
+            requestProxyNames();
     }
-    /** The display thread, every tick: a posted request is loaded now. */
     void contentPoll()
     {
-        int osc = 0, kind = 0;
-        std::string path;
-        synthyboy::ContentFileRef wtRef;
-        bool wavetable = false;
+        if (contentJob.valid() && contentJob.wait_for (std::chrono::seconds (0)) != std::future_status::ready)
+            return;
+        std::lock_guard<std::mutex> requests (contentReqMutex);
+        if (! contentJob.valid() && std::none_of (queuedContent.begin(), queuedContent.end(), [] (const auto& q) { return q.serial != 0; }))
+            return;
+        std::unique_lock<std::mutex> state (contentMutex, std::try_to_lock);
+        if (! state.owns_lock())
+            return;
+        const auto generation = stateGeneration.load (std::memory_order_acquire);
+        const auto baseline = std::atomic_load (&overlayContent);
+        int status = 0;
+        if (contentJob.valid())
         {
-            std::lock_guard<std::mutex> g (contentReqMutex);
-            if (wtReqPending)
+            ContentResult result;
+            try { result = contentJob.get(); }
+            catch (...) { result.error = "could not prepare content"; }
+            const int slot = activeContent.osc - 1;
+            if (activeContent.generation == generation && activeContent.serial == latestContent[slot] && ! closing.load())
             {
-                wtReqPending = false;
-                wavetable = true;
-                osc = wtReqOsc;
-                wtRef = wtReqRef;
+                if (contentBaseline != baseline)
+                    queuedContent[slot] = activeContent;   // an independent content edit landed while the file was decoding
+                else if (result.decoded)
+                {
+                    for (const auto& root : result.roots)
+                        if (contentPackRoots.insert (root).second)
+                            contentStore->addPackRoot (root);
+                    content = std::move (result.next);
+                    engine->setPreparedContent (content, std::move (result.decoded));
+                    publishOverlayContent();
+                    for (const auto& write : result.writes)
+                        uiWrite (write.first, write.second);
+                    status = 2;
+                }
+                else
+                {
+                    contentLoadMessage = std::move (result.error);
+                    contentLoadFailedMs.store (steadyMs(), std::memory_order_relaxed);
+                    status = 3;
+                }
             }
-            else if (! contentReqPending)
-                return;
-            else
+            activeContent = {};
+            contentBaseline.reset();
+        }
+        ContentRequest* oldest = nullptr;
+        for (auto& q : queuedContent)
+        {
+            if (q.generation != generation || closing.load())
+                q = {};
+            if (q.serial && (! oldest || q.serial < oldest->serial))
+                oldest = &q;
+        }
+        if (oldest)
+        {
+            activeContent = std::move (*oldest);
+            *oldest = {};
+            contentBaseline = std::atomic_load (&overlayContent);
+            try
             {
-                contentReqPending = false;
-                osc = contentReqOsc;
-                kind = contentReqKind;
-                path = contentReqPath;
+                if (! contentStore || ! engine)
+                    throw std::runtime_error ("no content store");
+                contentJob = std::async (std::launch::async, [this, request = activeContent, store = *contentStore, next = content] () mutable
+                {
+                    synthyboy_mpc::useNormalScheduling (0, "sb-content");
+                    ContentResult result;
+                    result.next = std::move (next);
+                    const bool ok = request.kind == 0 ? prepareWavetable (request, store, result) : prepareSample (request, store, result);
+                    if (ok && ! closing.load())
+                    {
+                        auto decoded = synthyboy::own::ContentSet::build (result.next, &store);
+                        const int slot = request.osc - 1;
+                        const bool valid = decoded && (request.kind == 0 ? decoded->userTable[slot] != nullptr :
+                            request.kind == 1 ? decoded->sample[slot].valid : decoded->instrument[slot] != nullptr);
+                        if (valid)
+                            result.decoded = std::move (decoded);
+                        else
+                            result.error = "could not decode the selected file";
+                    }
+                    return result;
+                });
+                status = 1;
+            }
+            catch (...)
+            {
+                activeContent = {};
+                contentBaseline.reset();
+                contentLoadMessage = "could not start content loading";
+                contentLoadFailedMs.store (steadyMs(), std::memory_order_relaxed);
+                status = 3;
             }
         }
-        std::string why;
-        bool ok = false;
-        try { ok = wavetable ? loadWavetableFile (osc, wtRef, why) : loadContentFile (osc, kind, path, why); }
-        catch (...) { why = wavetable ? "not a wavetable file: unexpected error" : "unexpected error"; }
-        std::lock_guard<std::mutex> g (contentReqMutex);
-        contentLoadMessage = why;
-        contentLoadFailedMs.store (steadyMs(), std::memory_order_relaxed);
-        if (! wtReqPending)
-            wtLoading.store (false, std::memory_order_relaxed);
-        if ((! contentReqPending && ! wtReqPending) || ! ok)   // a newer request is already waiting: its own state (loading) stays
-            contentLoadStatus.store (ok ? 2 : 3, std::memory_order_relaxed);
+        const auto waitingTable = [] (const auto& q) { return q.serial && q.kind == 0; };
+        wtLoading.store (waitingTable (activeContent) || std::any_of (queuedContent.begin(), queuedContent.end(), waitingTable), std::memory_order_relaxed);
+        contentLoadStatus.store (status, std::memory_order_relaxed);
     }
-    /** A wavetable file the browser chose (the pack's file, or a file of a user folder): read bounded, parsed by the rules of wavetable_file.h, its SHA-256 computed now, the reference put into the content of the oscillator,
-        the engine given the content (the table is built there while the oscillator keeps playing the one it had), and only then oscN.wavetable = "Preset table". A refused file leaves everything as it was and says why. */
-    bool loadWavetableFile (int osc, synthyboy::ContentFileRef ref, std::string& why)
+    bool prepareWavetable (const ContentRequest& request, synthyboy::UserContentStore& store, ContentResult& result)
     {
-        if (osc < 1 || osc > synthyboy::kMaxContentWavetables || ! contentStore || ! engine)
-        {
-            why = "no content store";
-            return false;
-        }
-        ensureUserWavetableRoots();   // takes contentMutex itself: before the lock below
-        std::lock_guard<std::mutex> g (contentMutex);   // the store's roots change under this mutex: the file is read (bounded, parsed, hashed) under it too
+        auto ref = request.ref;
+        auto& why = result.error;
+        std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot> roots;
+        contentRootsOf (roots);
+        for (const auto& root : roots)
+            if (root.path != contentDirPath)
+            {
+                store.addPackRoot (root.path);
+                result.roots.push_back (root.path);
+            }
         int frames = 0;
         std::string reason;
-        if (! synthyboy::prepareWavetableRef (*contentStore, ref, frames, reason))
+        if (! synthyboy::prepareWavetableRef (store, ref, frames, reason))
         {
             why = synthyboy::wavetableRefusalText (reason);
             return false;
         }
-        synthyboy::StateContent next = content;
-        synthyboy::attachWavetable (next, osc, ref, std::string(), frames);
+        auto& next = result.next;
+        synthyboy::attachWavetable (next, request.osc, ref, std::string(), frames);
         if (! synthyboy::validateContent (next))
         {
             why = synthyboy::wavetableRefusalText ("the name cannot be kept in the state");
             return false;
         }
-        content = std::move (next);
-        engine->setContent (content);
-        publishOverlayContent();
-        if (wtParam[osc - 1] >= 0)
+        if (wtParam[request.osc - 1] >= 0)
         {
-            const synthyboy::ParamInfo& p = synthyboy::paramTable()[wtParam[osc - 1]];
-            uiWrite (wtParam[osc - 1], synthyboy::toNormalised (p, synthyboy::constrainValue (p, static_cast<float> (synthyboy::kWavetablePresetTable))));
+            const synthyboy::ParamInfo& p = synthyboy::paramTable()[wtParam[request.osc - 1]];
+            result.writes.emplace_back (wtParam[request.osc - 1], synthyboy::toNormalised (p, synthyboy::constrainValue (p, static_cast<float> (synthyboy::kWavetablePresetTable))));
         }
         return true;
     }
@@ -1388,11 +1468,14 @@ struct PluginInstance
     static std::string dirName (const std::string& path) { const size_t s = path.rfind ('/'); return s == std::string::npos ? std::string() : path.substr (0, s); }
     /** kind 1: a WAV file becomes the content sample of oscillator `osc` (copied into the content store, the root note from its name). kind 2: an SFZ file is referenced where it lies (its folder is a pack
         of the store: the samples it names are read from there); a WAV file becomes an instrument of one zone over the keyboard (stored with its own SFZ). The engine gets the new content; the chunk keeps the reference. */
-    bool loadContentFile (int osc, int kind, const std::string& path, std::string& why)
+    bool prepareSample (const ContentRequest& request, synthyboy::UserContentStore& store, ContentResult& result)
     {
-        if (osc < 1 || osc > synthyboy::kMaxContentSamples - 1 || (kind != 1 && kind != 2) || ! contentStore || ! engine)
+        const auto& path = request.path;
+        const int osc = request.osc, kind = request.kind;
+        auto& why = result.error;
+        if (kind != 1 && kind != 2)
         {
-            why = "no content store";
+            why = "unknown content type";
             return false;
         }
         const std::string name = baseName (path);
@@ -1406,8 +1489,7 @@ struct PluginInstance
             why = "cannot read the file";
             return false;
         }
-        std::lock_guard<std::mutex> g (contentMutex);
-        synthyboy::StateContent next = content;
+        auto& next = result.next;
         synthyboy::ContentFileRef ref;
         int rootNote = -1;
         synthyboy::SampleLoopSettings loop;
@@ -1419,8 +1501,8 @@ struct PluginInstance
                 why = "the SFZ file must lie in a folder of its own";
                 return false;
             }
-            if (contentPackRoots.insert (root).second)
-                contentStore->addPackRoot (root);
+            store.addPackRoot (root);
+            result.roots.push_back (root);
             ref.pack = pack;
             ref.file = name;
             ref.name = synthyboy::fileStemOf (name);
@@ -1442,7 +1524,7 @@ struct PluginInstance
             loop = synthyboy::sampleLoopSettings (facts);
             if (kind == 1)
             {
-                if (! contentStore->addFile (synthyboy::ContentKind::sample, name, bytes, ref))
+                if (! store.addFile (synthyboy::ContentKind::sample, name, bytes, ref))
                 {
                     why = "could not store the sample";
                     return false;
@@ -1454,7 +1536,7 @@ struct PluginInstance
                 const int key = rootNote >= 0 ? rootNote : 60;
                 const std::string stem = synthyboy::sanitizeFileStem (synthyboy::fileStemOf (name));
                 const std::string text = "<region> sample=" + stem + ".wav lokey=0 hikey=127 pitch_keycenter=" + std::to_string (key) + " loop_mode=no_loop\n";
-                if (! contentStore->addInstrument (stem, text, { { stem + ".wav", bytes } }, ref))
+                if (! store.addInstrument (stem, text, { { stem + ".wav", bytes } }, ref))
                 {
                     why = "could not store the instrument";
                     return false;
@@ -1462,12 +1544,9 @@ struct PluginInstance
                 synthyboy::attachInstrument (next, osc, ref, 1);
             }
         }
-        content = std::move (next);
-        engine->setContent (content);
-        publishOverlayContent();
         if (rootNote >= 0 && kind == 1)
             if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (("osc" + std::to_string (osc) + ".sample.root").c_str()))
-                uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (rootNote))));
+                result.writes.emplace_back (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (rootNote))));
         if (loop.valid && kind == 1)
         {
             // the loop of the WAV 'smpl' chunk becomes the oscillator's loop settings, once, at load time (the same path as the root note)
@@ -1475,7 +1554,7 @@ struct PluginInstance
             const std::pair<const char*, float> writes[3] = { { ".sample.loop_mode", static_cast<float> (loop.mode) }, { ".sample.loop_start", loop.startPercent }, { ".sample.loop_end", loop.endPercent } };
             for (const auto& w : writes)
                 if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey ((o + w.first).c_str()))
-                    uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, w.second)));
+                    result.writes.emplace_back (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, w.second)));
         }
         return true;
     }
@@ -1658,6 +1737,9 @@ struct PluginInstance
     std::atomic<float> nativeUiValues[nativeui::kEnvSelectorBase] {};
     std::atomic<float> nativeStereoMeters[nativeui::kMixerStereoFields * nativeui::kMixerStrips] {};
     std::atomic<uint32_t> nativeEnvSelector { 0 };
+    std::atomic<bool> nativeMetersDue { false }, nativeModBoardDue { false };
+    uint32_t reportedEnvFrames = 0;  // display thread
+    bool mixerVisualsReported = false;
     float nativeUiReported[nativeui::kCount] {};   // display thread only
     nativeui::MixerPeekRequest mixerPeek;
     std::atomic<bool> hostMixerWidgetsHidden { false };
@@ -2575,15 +2657,28 @@ struct PluginInstance
 
     void nativeMixerPoll (AEffect* e)
     {
-        refreshNativeMixerVisuals();
-        const float tab = nativeUiValue (nativeui::kMixerActiveTab);
+        if (nativeMetersDue.load (std::memory_order_acquire) && nativeMetersDue.exchange (false, std::memory_order_acq_rel))
+        {
+            // Leaving the mixer also writes a final zero, after its input gate is disabled.
+            for (int offset = nativeui::kMixerPeakBase; offset < nativeui::kEnvSelectorBase; ++offset)
+                reportNativeValue (e, offset, nativeUiValues[offset].load (std::memory_order_relaxed));
+            for (int i = 0; i < nativeui::kMixerStereoFields * nativeui::kMixerStrips; ++i)
+                reportNativeValue (e, nativeui::kMixerStereoBase + i, nativeStereoMeters[i].load (std::memory_order_relaxed));
+        }
+        const bool enabled = mixerPeek.enabled();
+        if (! enabled && ! mixerVisualsReported)
+            return;
+        mixerVisualsReported = enabled;
+        if (enabled)
+            refreshNativeMixerVisuals();
+        const float tab = enabled ? nativeUiValue (nativeui::kMixerActiveTab) : 0.0f;
         // The host radio buttons compare against their own navigation handle before writing.
         reportNativeValue (e, nativeui::kMixerPeek, tab);
         reportNativeValue (e, nativeui::kMixerActiveTab, tab);
         for (int s = 0; s < nativeui::kMixerStrips; ++s)
         {
-            reportNativeValue (e, nativeui::kMixerSoloVisual + s, nativeUiValue (nativeui::kMixerSoloVisual + s));
-            reportNativeValue (e, nativeui::kMixerMuteVisual + s, nativeUiValue (nativeui::kMixerMuteVisual + s));
+            reportNativeValue (e, nativeui::kMixerSoloVisual + s, enabled ? nativeUiValue (nativeui::kMixerSoloVisual + s) : 0.0f);
+            reportNativeValue (e, nativeui::kMixerMuteVisual + s, enabled ? nativeUiValue (nativeui::kMixerMuteVisual + s) : 0.0f);
         }
     }
 
@@ -2597,11 +2692,11 @@ struct PluginInstance
         if (lastPeek != 0.0f && lastPeek != peek)
             reportNativeValue (e, nativeui::kMixerPeekView, 0.0f);
         const auto envFrames = nativeEnvSelector.load (std::memory_order_relaxed);
-        for (int offset = nativeui::kMixerPeakBase; offset < nativeui::kFxValueBase; ++offset)
+        if (envFrames != reportedEnvFrames)
         {
-            const float value = offset >= nativeui::kEnvSelectorBase ? envSelectorValue (envFrames, offset - nativeui::kEnvSelectorBase)
-                                                                   : nativeUiValues[offset].load (std::memory_order_relaxed);
-            reportNativeValue (e, offset, value);
+            for (int i = 0; i < nativeui::kEnvSelectorCells; ++i)
+                reportNativeValue (e, nativeui::kEnvSelectorBase + i, envSelectorValue (envFrames, i));
+            reportedEnvFrames = envFrames;
         }
         const float previousFxSource = nativeUiReported[nativeui::kFxHeader];
         bool fxLabelsChanged = nativeFxHeaderPoll (e);
@@ -2619,8 +2714,6 @@ struct PluginInstance
         nativeOscDetailPoll (e);
         nativeMasterPoll (e);
         nativeMixerPoll (e);
-        for (int offset = nativeui::kMixerStereoBase; offset < nativeui::kMasterScaleInput; ++offset)
-            reportNativeValue (e, offset, nativeUiValue (offset));
         if (nativeMacroTargets.layout() || nativeMacroTargetAck >= 0)
         {
             for (int i = 0; i < nativeui::kMacroTargetCount; ++i)
@@ -2648,6 +2741,7 @@ struct PluginInstance
                 nativeModDetailNavigation.report (link);
             }
         }
+        if (nativeModBoardDue.load (std::memory_order_acquire) && nativeModBoardDue.exchange (false, std::memory_order_acq_rel))
         {
             for (int i = 0; i < nativeui::modboard::kHandles; ++i)
             {
@@ -2916,7 +3010,7 @@ struct PluginInstance
         if (! audioMaster)
             return;
         if (programNameRefreshDue.exchange (false, std::memory_order_acq_rel))
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the host reads the program name again (and drops its own mark)
+            requestProxyNames();   // the same notification refreshes the restored program name and Q labels
         const VstInt32 base = qBase();
         const bool switchedFxCard = std::exchange (fxCardChangedThisPoll, false);
         if (! switchedFxCard && std::exchange (fxQNamesDue, false))
@@ -3348,13 +3442,13 @@ struct PluginInstance
         display.add ("overlay report", [&] { injectFault ("overlay"); overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
         display.add ("Play proxies", [&] { injectFault ("play"); playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
         display.add ("Native UI", [&] { nativeUiPoll (e); });
+        display.add ("macro name", [&] { injectFault ("macro"); macroNamePoll(); });
         display.add ("Q proxies", [&] { injectFault ("q"); qPoll (e); });                                                          // the Q proxies after them
         display.add ("page writes", [&] { injectFault ("ui"); uiPoll (e); });                                                      // what the plugin-drawn pages wrote
         display.add ("content loading", [&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
         display.add ("LFO shape", [&] { injectFault ("shape"); lfoShapePoll(); });                                                 // a drawn LFO shape the LFO page wrote
         display.add ("Scalar curve", [&] { scalarCurvePoll(); });                                                                  // a NOTE / VELO curve the curve editor wrote
         display.add ("PZ filter curve", [&] { filterCurvePoll(); });
-        display.add ("macro name", [&] { injectFault ("macro"); macroNamePoll (e); });                                             // a name the Macros page gave a macro
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
         display.add ("program select", [&] { injectFault ("program_select"); remoteProgramSelectPoll (e); });                       // remote program (preset) select hook
 #endif
@@ -3450,6 +3544,9 @@ struct PluginInstance
         {
             try { liveLoop (e); }
             catch (...) { synthyboy_mpc::PollStatus::report ("display thread", this, 1, true, "an exception reached the top of the thread"); }
+#if SYNTHYBOY_MPC_OVERLAY
+            if (contentJob.valid()) contentJob.wait();
+#endif
             {
                 std::lock_guard<std::mutex> g (sync->m);
                 sync->done = true;
@@ -3687,6 +3784,9 @@ struct PluginInstance
     ~PluginInstance()
     {
         (void) shutdown();
+#if SYNTHYBOY_MPC_OVERLAY
+        if (contentJob.valid()) contentJob.wait();
+#endif
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         callbackStats.stop(); // writes the file one last time
 #endif
@@ -3782,6 +3882,10 @@ static std::string buildStateChunk (PluginInstance* inst)
 
 static void applyState (PluginInstance* inst, const synthyboy::ParamValues& values, synthyboy::StateContent&& content)
 {
+#if SYNTHYBOY_MPC_OVERLAY
+    inst->ensureUserWavetableRootsFor (content);   // a file of the user wavetable folders: the drives are pack roots before the engine reads the reference (the lock below is not held yet)
+    std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
+#endif
     const size_t count = synthyboy::paramCount();
     if (inst->engine)
         inst->engine->readyContentFor (values.plain, count);   // not the audio thread: the tables the state names are built BEFORE its parameters are set, so index and table take effect together
@@ -3794,10 +3898,6 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
     }
     if (inst->engine)
         inst->engine->setPresetParams (values);
-#if SYNTHYBOY_MPC_OVERLAY
-    inst->ensureUserWavetableRootsFor (content);   // a file of the user wavetable folders: the drives are pack roots before the engine reads the reference (the lock below is not held yet)
-    std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
-#endif
 #if SYNTHYBOY_MPC_OVERLAY
     bool namesChanged = false;
     for (int m = 0; m < synthyboy::kNumMacros; ++m)
@@ -6410,9 +6510,7 @@ void PluginInstance::remoteProgramSelectPoll (AEffect* e)
     // Target program is valid. Select through effSetProgram
     if (e->dispatcher != nullptr)
         e->dispatcher (e, effSetProgram, 0, targetProg, nullptr, 0.0f);
-    programNameRefreshDue.store (true, std::memory_order_release);
-    if (audioMaster)
-        audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+    // effSetProgram has already notified the host of the selected preset.
 
     const int currentProg = currentProgram.load (std::memory_order_relaxed);
     char nameBuf[kVstMaxProgNameLen + 1] = {};

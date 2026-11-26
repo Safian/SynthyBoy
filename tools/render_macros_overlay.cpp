@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -157,9 +156,6 @@ int main (int argc, char** argv)
     std::string outPath = "macros_overlay.png";
     int bank = 0;
     std::string device = "xl"; // "xl" (16 Q-Links, no bank frame) or "key61" (4 Q-Links with bank frame)
-    std::string mode = "live"; // "live" (overlay pass), "all" (complete screen), "static" (background only)
-    bool nativeControls = true;
-    bool nativeTargets = true;
     std::string fixture = "default"; // "default", "named", "zero"
     std::string customNamesStr;
     std::string customValuesStr;
@@ -175,12 +171,6 @@ int main (int argc, char** argv)
             bank = std::atoi (argv[++i]);
         else if (arg == "--device" && i + 1 < argc)
             device = argv[++i];
-        else if (arg == "--mode" && i + 1 < argc)
-            mode = argv[++i];
-        else if (arg == "--native-controls" && i + 1 < argc)
-            nativeControls = (std::atoi (argv[++i]) != 0);
-        else if (arg == "--native-targets" && i + 1 < argc)
-            nativeTargets = (std::atoi (argv[++i]) != 0);
         else if (arg == "--fixture" && i + 1 < argc)
             fixture = argv[++i];
         else if (arg == "--macro-names" && i + 1 < argc)
@@ -193,24 +183,24 @@ int main (int argc, char** argv)
             std::printf ("  --out FILE            Output RGBA PNG path (default: macros_overlay.png)\n");
             std::printf ("  --bank 0|1            Active Q-Link bank (0: Bank 1, 1: Bank 2)\n");
             std::printf ("  --device xl|key61     Hardware device model (xl: wide 16 knobs; key61: 4 knobs)\n");
-            std::printf ("  --mode live|all|static Pass to render (default: live)\n");
-            std::printf ("  --native-controls 0|1 Native host dial mode (default: 1)\n");
-            std::printf ("  --native-targets 0|1  Native standalone target button mode (default: 1)\n");
             std::printf ("  --fixture NAME        Fixture state preset: default|named|zero (default: default)\n");
             std::printf ("  --macro-names CSV     Comma-separated custom macro names\n");
             std::printf ("  --macro-values CSV    Comma-separated custom macro values (0.0..1.0 or 0..100)\n");
             return 0;
+        }
+        else
+        {
+            std::fprintf (stderr, "Unknown or incomplete option: %s\n", arg.c_str());
+            return 2;
         }
     }
 
     using namespace synthyboy_mpc;
 
     ui::MacroView view;
-    view.setNativeControls (nativeControls);
-    view.setNativeTargetButtons (nativeTargets);
     view.setBank (bank);
-    const int canvasH = (mode == "static") ? overlay::page::kH : h;
-    const int originY = (mode == "static") ? overlay::page::kTabY : 0;
+    constexpr int canvasH = overlay::page::kH;
+    constexpr int originY = overlay::page::kTabY;
     view.place ({ 0, originY, w, h });
 
     // Explicit synthetic spectrum fixture representing typical synthesizer output
@@ -320,53 +310,11 @@ int main (int argc, char** argv)
     overlay::gpu::SceneBuilder sb (*scene);
     sb.begin (overlay::gpu::kKindPlay, 0, w, canvasH);
 
-    if (mode == "live")
     {
-        // Live dynamic overlay pass:
-        // 1. Cover native marker pixels using layoutView coordinates adjusted to tab-relative space (y - bounds.y)
-        const overlay::layout::View* layoutView = nullptr;
-        for (const auto& candidate : overlay::layout::kViews)
-        {
-            if (std::strcmp (candidate.name, "macros") == 0)
-            {
-                layoutView = &candidate;
-                break;
-            }
-        }
-        if (layoutView != nullptr)
-        {
-            const int offsetY = layoutView->region.y; // 110 (kTabOriginY)
-            const overlay::layout::Rect spots[3] = {
-                layoutView->markers[0].rect,
-                layoutView->instance,
-                layoutView->markers[1].rect
-            };
-            const auto coverCol = overlay::gpu::rgba8FromRgb (0x0b1025, 255);
-            ui::Cell cell (sb, { 0, 0, w, ui::MacroView::kBarH }, 0);
-            for (const auto& r : spots)
-            {
-                const float left = static_cast<float> (r.x - 1);
-                const float right = static_cast<float> (r.x + r.w + 1);
-                const float top = static_cast<float> (r.y - offsetY - 1);
-                const float bottom = static_cast<float> (r.y - offsetY + r.h + 1);
-                sb.rect (left, top, right, bottom, coverCol);
-            }
-        }
-        // 2. Draw live components: "MACROS" header title, active bank highlight/text,
-        //    macro names live, spectrum strip live curve and shaded fill,
-        //    and Q-Link bank frame (only on Key 61; suppressed on XL)
-        view.drawLive (sb);
+        ui::Cell cell (sb, { 0, originY, w, ui::MacroView::kBarH }, 0);
+        overlay::drawNativeMarkerCovers (sb, "macros");
     }
-    else if (mode == "static")
-    {
-        overlay::page::ground (sb);
-        view.drawStatic (sb, false);
-    }
-    else // "all"
-    {
-        overlay::page::ground (sb);
-        view.draw (sb);
-    }
+    view.draw (sb);
 
     std::vector<uint32_t> renderedPixels;
     overlay::renderScene (*scene, renderedPixels);

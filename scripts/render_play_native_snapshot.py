@@ -456,8 +456,8 @@ class PlaySketch(BaseSketch):
 
     def render(self, tab_name="Play"):
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] == tab_name)
-        # Background: overlay_bg_play.png if present, else dark solid
-        bg_file = self.skins / "overlay_bg_play.png"
+        # Background: overlay_canvas.png if present, else dark solid
+        bg_file = self.skins / "overlay_canvas.png"
         if bg_file.is_file():
             img = Image.open(bg_file).convert("RGBA")
         else:

@@ -35,24 +35,3 @@ def apply(tui, qlinks, ctx):
     target_dir = ctx.skins_dir / "browser_images"
     target_dir.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, target_dir / TILE_NAME)
-
-    # Ensure required toggle assets referenced by native switch components exist in Plugin Skins
-    import os
-    for toggle_name in ("toggle_on.png", "toggle_off.png"):
-        dst = ctx.skins_dir / toggle_name
-        if not dst.is_file():
-            sdk = os.environ.get("MPC_SDK")
-            candidates = [
-                Path(sdk) / "ui-kit/mpc-red" / toggle_name if sdk else None,
-                Path("/Users/szabi/.local/share/local-worker/ext/mpc-sdk/ui-kit/mpc-red") / toggle_name,
-                Path("/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge/docs-official/mpc-sdk/ui-kit/mpc-red") / toggle_name,
-            ]
-            copied = False
-            for c in candidates:
-                if c and c.is_file():
-                    shutil.copyfile(c, dst)
-                    copied = True
-                    break
-            if not copied:
-                from components.native.button.button import write_switch_asset
-                write_switch_asset(dst, active="on" in toggle_name)

@@ -14,11 +14,11 @@ from components import style as _ui_style
 
 
 import copy
-import tempfile
 from pathlib import Path
 
 from components.native.button.button import TRANSPARENT_HIT, button as native_button, write_transparent_hit
 
+from components.native.pan.pan import synthyboy_dial_data as pan_dial_data
 from components.native.level.level import compact_dial_definition, synthyboy_dial_data, level_definition
 from components.native.active_text.active_text import (
     active_text_definition,
@@ -84,20 +84,6 @@ def _entry(name, kind, parameter, caption, rect, gate_list):
         "handle remapping": {"version": 1, "map": remap},
         "bounds": bounds,
     }
-
-
-def _build_bipolar_filmstrip(skins_dir):
-    """Generate bipolar FilmStrip art in a temp dir, then copy to a unique final name.
-
-    The Level factory returns the same filename for unipolar and bipolar at one
-    frame_size. We prevent collision by writing bipolar art to a unique filename.
-    """
-    with tempfile.TemporaryDirectory(prefix="env-curve-") as folder:
-        data = synthyboy_dial_data(folder, frame_size=_ui_style.size('screen.env_native.data.frame_size'), bipolar=True)
-        filename = "env_curve_level_76.png"
-        (Path(skins_dir) / filename).write_bytes((Path(folder) / data["filmStrip"]).read_bytes())
-    data["filmStrip"] = filename
-    return data
 
 
 def _selector_assets(directory):
@@ -295,7 +281,7 @@ def apply(tui, qlinks, ctx):
     ))
 
     # 3. Dial definitions (ADSR+Delay+Hold unipolar, curves bipolar)
-    bipolar_data = _build_bipolar_filmstrip(ctx.skins_dir)
+    bipolar_data = pan_dial_data(ctx.skins_dir, frame_size=_ui_style.size('screen.env_native.data.frame_size'))
     _build_dial_definitions(ctx, definitions, bipolar_data)
 
     # 4. Switch definitions (BEATS/RETRIG via ActiveText)

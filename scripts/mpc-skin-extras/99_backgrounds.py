@@ -17,25 +17,25 @@ ASSETS_DIR = HERE / "overlay-backgrounds"
 # host's own picture of the tab (its native widgets on the host's tab colour 1e1d1e, or the tab before the switch) does not have, outside the three marker spots, the host's left-edge handle tab (x 0 .. 9) and the host's
 # Q-Link panel (x >= 1020). The plugin reads it from the host's primary framebuffer (shell-mpc/overlay/page_detector.h) and keeps its own plane OPAQUE until it matches (shell-mpc/overlay/host_background.h).
 # The detector colour lives in a separate fixed native Image widget; background PNGs are plain canvas.
-OSC_ASSET = "overlay_bg_osc.png"
+CANVAS_ASSET = "overlay_canvas.png"
 OSC_SENTINEL = (900, 8, "0f253f")
 
 KNOWN = {
-    "osca": ("Osc", OSC_ASSET, *OSC_SENTINEL),
-    "oscb": ("Osc B", OSC_ASSET, *OSC_SENTINEL),
-    "oscc": ("Osc C", OSC_ASSET, *OSC_SENTINEL),
-    "oscsub": ("Sub", OSC_ASSET, *OSC_SENTINEL),
-    "oscnoise": ("Noise", OSC_ASSET, *OSC_SENTINEL),
-    "env1": ("Env", "overlay_bg_env.png", 900, 2, "0b1023"),
-    "lfo1": ("LFO", "overlay_bg_lfo.png", 900, 2, "0b1029"),
-    "mod": ("Mod", "overlay_bg_mod.png", 900, 20, "0b1022"),
-    "filter1": ("Filter", "overlay_bg_filter.png", 900, 95, "171c35"),
-    "master": ("Master", "overlay_bg_master.png", 960, 386, "141a38"),
-    "voice": ("Voice", "overlay_bg_voice.png", 792, 574, "0c1023"),
-    "mixer": ("Mix", "overlay_bg_mixer.png", 900, 18, "141a35"),
-    "fx": ("FX", "overlay_bg_fx.png", 900, 2, "0c1032"),
-    "macros": ("Macros", "overlay_bg_macros.png", 900, 20, "0b1028"),
-    "play1": ("Play", "overlay_bg_play.png", 900, 20, "141a3b"),
+    "osca": ("Osc", CANVAS_ASSET, *OSC_SENTINEL),
+    "oscb": ("Osc B", CANVAS_ASSET, *OSC_SENTINEL),
+    "oscc": ("Osc C", CANVAS_ASSET, *OSC_SENTINEL),
+    "oscsub": ("Sub", CANVAS_ASSET, *OSC_SENTINEL),
+    "oscnoise": ("Noise", CANVAS_ASSET, *OSC_SENTINEL),
+    "env1": ("Env", CANVAS_ASSET, 900, 2, "0b1023"),
+    "lfo1": ("LFO", CANVAS_ASSET, 900, 2, "0b1029"),
+    "mod": ("Mod", CANVAS_ASSET, 900, 20, "0b1022"),
+    "filter1": ("Filter", CANVAS_ASSET, 900, 95, "171c35"),
+    "master": ("Master", CANVAS_ASSET, 960, 386, "141a38"),
+    "voice": ("Voice", CANVAS_ASSET, 792, 574, "0c1023"),
+    "mixer": ("Mix", CANVAS_ASSET, 900, 18, "141a35"),
+    "fx": ("FX", CANVAS_ASSET, 900, 2, "0c1032"),
+    "macros": ("Macros", CANVAS_ASSET, 900, 20, "0b1028"),
+    "play1": ("Play", CANVAS_ASSET, 900, 20, "141a3b"),
 }
 SENTINELS = {view: (v[2], v[3], v[4]) for view, v in KNOWN.items()}
 

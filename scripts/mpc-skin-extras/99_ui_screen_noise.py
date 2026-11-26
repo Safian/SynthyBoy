@@ -10,7 +10,7 @@ Verifies, validates, and guarantees host-native MPC control integration on the N
 - Noise Generated layout (Layout 2: KIND, SOUND, FILTER, STEREO, PITCH, FINE, KEY TRACK, ENV 1)
 - Noise Sample layout (Layout 3: KIND, FILTER, STEREO, PITCH, FINE, KEY TRACK, ENV 1, START, RANDOM, LOOP, BOUNCE)
 - Native Detail and MORE navigation with BACK button
-- Static background overlay_bg_osc.png
+- Static background overlay_canvas.png
 - Zero visible Q-Link frame/badge clutter (clean hardware Q-Link mapping preserved)
 
 Maintains idempotency and does not duplicate any components already consolidated

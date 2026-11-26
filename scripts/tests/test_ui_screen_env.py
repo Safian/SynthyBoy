@@ -62,11 +62,11 @@ class UiScreenEnvTest(unittest.TestCase):
         self.assertEqual(tab.get("qlinkBoundsData"), [], "qlinkBoundsData must be [] on Env screen")
 
     def test_env_background_is_static_overlay_bg(self):
-        """The tab background must use the pre-rendered overlay_bg_env.png."""
+        """The tab background must use the pre-rendered overlay_canvas.png."""
         tab = self.tab()
         bg = tab["componentDefinition"]["backgroundData"]
-        self.assertEqual(bg["focussed"].get("image"), "overlay_bg_env.png")
-        self.assertEqual(bg["unfocussed"].get("image"), "overlay_bg_env.png")
+        self.assertEqual(bg["focussed"].get("image"), "overlay_canvas.png")
+        self.assertEqual(bg["unfocussed"].get("image"), "overlay_canvas.png")
 
     def test_selector_strip_and_cells(self):
         """Selector must provide 6 instances with >= 56px touch targets."""

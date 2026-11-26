@@ -62,28 +62,32 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
     def test_marker_and_instance_rects_are_clear_in_all_skin_states(self):
         self.assertEqual(self.result, (0, ""))
         markers = [c for c in self.items if c["componentData"]["name"].startswith("Overlay ")]
-        self.assertEqual(len(markers), 3)
+        sentinel, = [c for c in markers if c["componentData"]["name"] == "Overlay Background Sentinel filter1"]
+        self.assertEqual(len(markers), 4)
+        self.assertIs(sentinel, self.items[-1])
+        self.assertEqual(sentinel["bounds"]["acceptsHWFocus"], "No")
         self.assertTrue(self.native)
         self.assertEqual(len(self.split_left_surfaces), 2)
         self.assertEqual(len(self.split_right_surfaces), 2)
         mod_editors = [c for c in self.items if c["componentData"]["type"] == "nativeModulationEditor"]
         self.assertEqual(len(self.items), len(markers) + len(self.surfaces) + len(self.top_native) + len(self.toolbar) + len(mod_editors))
         all_leaf_controls = self.native + self.split_left_controls + self.split_right_controls + self.tools
-        for mark in markers:
+        for mark in (c for c in markers if c is not sentinel):
             self.assertFalse(any(overlaps(rect(mark), rect(c)) for c in all_leaf_controls), mark["componentData"]["name"])
         for side, colour in (("left", (16, 58, 44)), ("right", (58, 16, 100))):
             with Image.open(self.skin / f"overlay_marker_filter1_{side}.png") as im:
                 self.assertEqual(im.size, (6, 6))
                 self.assertEqual(set(im.convert("RGB").getdata()), {colour})
         for state in ("focussed", "unfocussed"):
-            self.assertEqual(self.tab["componentDefinition"]["backgroundData"][state]["image"], "overlay_bg_filter.png")
-        with Image.open(self.skin / "overlay_bg_filter.png") as im:
-            self.assertEqual(set(im.crop((900, 95, 905, 100)).getdata()), {(23, 28, 53)})
-            # The compositor patches these exact factory-background colours.
-            for x in (33, 45, 1241):
-                self.assertEqual(set(im.crop((x - 1, 3, x + 7, 11)).getdata()), {(11, 16, 38)})
-            self.assertEqual([im.getpixel((899, y)) for y in range(95, 100)],
-                             [(10, 15, 35), *([(10, 15, 34)] * 4)])
+            self.assertEqual(self.tab["componentDefinition"]["backgroundData"][state]["image"], "overlay_canvas.png")
+        self.assertEqual(rect(sentinel), (900, 95, 5, 5))
+        with Image.open(self.skin / sentinel["componentData"]["data"]["image"]) as im:
+            self.assertEqual(im.size, (5, 5))
+            self.assertEqual(set(im.convert("RGB").getdata()), {(23, 28, 53)})
+        with Image.open(self.skin / "overlay_canvas.png") as im:
+            for mark in markers:
+                x, y, w, h = rect(mark)
+                self.assertEqual(set(im.crop((x, y, x + w, y + h)).getdata()), {(9, 13, 25)})
 
     def test_off_navigation_and_model_permissions_are_explicit(self):
         state = len(self.params) + 213
@@ -232,15 +236,23 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(sum(c["componentData"]["data"]["type"] == "Value" for c in definition["componentsData"]), 5)
                 bg = definition["backgroundData"]
                 self.assertEqual(bg["focussed"], bg["unfocussed"])
-                with Image.open(self.skin / bg["focussed"]["image"]) as plate:
-                    _, _, w, h = rect(out)
-                    self.assertEqual(plate.size, (w, h))
-                    for row, value in enumerate(definition["componentsData"]):
-                        x, y, width, height = rect(value)
-                        self.assertGreater(len(plate.crop((0, y, x, y + height)).getcolors()), 1)
-                        self.assertEqual(len(plate.crop((x, y, x + width, y + height)).getcolors()), 1)
-                        unit = plate.crop((x + width, y, w, y + height))
-                        self.assertEqual(len(unit.getcolors()), 1, "host Value owns the units; no duplicate static unit caption")
+                self.assertFalse(bg["focussed"].get("image"))
+                children = definition["componentsData"]
+                self.assertEqual(len(children), 10)
+                previous_bottom = 0
+                for i, name in enumerate(("DEST", "BUS 1", "BUS 2", "LEVEL", "PAN")):
+                    label, value = children[2 * i:2 * i + 2]
+                    caption, readout = (c["componentData"]["data"] for c in (label, value))
+                    self.assertEqual((caption["type"], caption["text"]), ("Text", name))
+                    self.assertEqual((readout["type"], readout["handleName"]), ("Value", f"Readout{i}"))
+                    x, y, w, h = rect(label)
+                    vx, vy, vw, vh = rect(value)
+                    self.assertEqual((y, h), (vy, vh))
+                    self.assertGreaterEqual(y, previous_bottom)
+                    self.assertLessEqual(x + w, vx)
+                    self.assertLessEqual(vx + vw, rect(out)[2])
+                    previous_bottom = y + h
+                self.assertLessEqual(previous_bottom, rect(out)[3])
         for frame, source in ((3, "note"), (4, "velocity")):
             glide = items[f"Glide {source}"]
             self.assertEqual(rect(glide), tuple(manifest["glide"]))
@@ -252,15 +264,19 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
 
         for name, source in (("Snap", manifest["curve"][6]), ("Legato", manifest["curve"][7])):
             toggle = items["Curve " + name]
-            self.assertEqual(rect(toggle), tuple(source)[:2] + (min(source[2], 120), min(source[3], 52)) if False else toggle["bounds"]["bounds"] and rect(toggle))
+            x, y, w, h = source
+            tw, th = rect(toggle)[2:]
+            self.assertLessEqual(tw, w)
+            self.assertLessEqual(th, h)
+            self.assertEqual(rect(toggle)[:2], (x + (w - tw) // 2, y + (h - th) // 2))
             self.assertEqual(toggle["componentData"]["type"], "Button")
             self.assertNotIn("Curve " + name + " label", items)
-        for name in ("Point", "X", "Y", "Curve", "Grid X", "Grid Y"):
+        for index, name in enumerate(("Point", "X", "Y", "Curve", "Grid X", "Grid Y")):
             nv = items[f"Curve {name}"]
             nv_def = definitions[nv["componentData"]["type"]]
             value_child = next(c for c in nv_def["componentsData"] if c["componentData"]["name"] == "value")
             self.assertEqual(value_child["componentData"]["data"]["type"], "Value")
-            self.assertEqual(handle(nv), int(nv["handle remapping"]["map"][0]["value"].split()[-1]))
+            self.assertEqual(handle(nv), state + 20 + index)
             self.assertEqual(nv["bounds"]["acceptsHWFocus"], "Yes")
 
     def test_pz_launcher_uses_the_shared_graph_corner_icon_and_named_focus(self):
@@ -336,7 +352,10 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             self.assertTrue(definition["ignoreMousePresses"])
             self.assertTrue(definition["disableCoarseDataWheel"])
             self.assertFalse(definition["actions"])
-            self.assertFalse(any(c["componentData"]["type"] == "Knob" for c in definition["componentsData"]))
+            knob, = [c["componentData"]["data"] for c in definition["componentsData"] if c["componentData"]["type"] == "Knob"]
+            self.assertEqual(knob["dragOrientation"], "None")
+            self.assertTrue(knob["filmStrip"].endswith("_disabled.png"))
+            self.assertEqual(knob["handleName"], "Data")
             self.assertEqual(off["handle remapping"]["map"][0]["value"], f"Parameter {ids[f'filter{f}.cutoff']}")
             self.assertEqual(off["bounds"]["acceptsHWFocus"], "No")
 
@@ -351,17 +370,23 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         visited = set()
 
-        def check_children(entries, minimum):
+        def check_children(entries, minimum, size):
             for entry in entries:
                 kind = entry["componentData"]["type"]
+                w, h = map(float, entry["bounds"]["bounds"].split()[2:])
+                if entry["bounds"]["boundsType"] == "Proportional":
+                    w, h = w * size[0], h * size[1]
                 if kind in ("Knob", "Button", "NumberField", "ActiveText"):
-                    self.assertGreaterEqual(min(rect(entry)[2:]), minimum, entry["componentData"]["name"])
-                if kind in definitions and kind not in visited:
-                    visited.add(kind)
-                    check_children(definitions[kind].get("componentsData", []), minimum)
+                    self.assertGreaterEqual(min(w, h), minimum, entry["componentData"]["name"])
+                key = (kind, w, h, minimum)
+                if kind in definitions and key not in visited:
+                    visited.add(key)
+                    check_children(definitions[kind].get("componentsData", []), minimum, (w, h))
 
-        check_children(self.controls + self.curve_controls, 56)
-        check_children(self.split_left_controls + self.split_right_controls, 48)
+        for group, parent, minimum in ((self.controls, self.surface, 56), (self.curve_controls, self.curve_surface, 56),
+                                       (self.split_left_controls, self.split_left_surfaces[0], 48),
+                                       (self.split_right_controls, self.split_right_surfaces[0], 48)):
+            check_children(group, minimum, rect(parent)[2:])
 
     def test_compact_filter_chain_shares_native_menu_and_actual_power(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}

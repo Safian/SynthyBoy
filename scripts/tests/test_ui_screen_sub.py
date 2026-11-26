@@ -140,8 +140,8 @@ class TestSubScreenNativeIntegration(unittest.TestCase):
 
                 # Verify background image
                 bg = sub_tab["componentDefinition"]["backgroundData"]
-                self.assertEqual(bg["focussed"]["image"], "overlay_bg_osc.png")
-                self.assertEqual(bg["unfocussed"]["image"], "overlay_bg_osc.png")
+                self.assertEqual(bg["focussed"]["image"], "overlay_canvas.png")
+                self.assertEqual(bg["unfocussed"]["image"], "overlay_canvas.png")
         finally:
             if old_sdk is not None:
                 os.environ["MPC_SDK"] = old_sdk

@@ -398,7 +398,7 @@
     "view": "lfo1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.5.2/expand"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Action 2"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "40"}},
       {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Editor SHAPES/SHAPES"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "42"}},
@@ -413,7 +413,7 @@
     "view": "lfo1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.5.2/expand"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Action 2"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "40"}},
       {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Editor MORE/MORE"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "42"}},
@@ -428,7 +428,7 @@
     "view": "lfo1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native 1-3.5.2/expand"},
+      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Action 2"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "40"}},
       {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Editor BACK/BACK"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "0"}},

@@ -56,9 +56,9 @@ class TestNativeMacros(unittest.TestCase):
                     # 5. Verify background state
                     bg_data = tab["componentDefinition"]["backgroundData"]
                     for focus in ("focussed", "unfocussed"):
-                        expected_img = "overlay_bg_macros.png" if expect_bg else ""
+                        expected_img = "overlay_canvas.png" if expect_bg else ""
                         self.assertEqual(bg_data[focus]["image"], expected_img)
 
                     if expect_bg:
-                        bg_file = skins_dir / "overlay_bg_macros.png"
-                        self.assertTrue(bg_file.is_file(), "overlay_bg_macros.png copied to skin folder")
+                        bg_file = skins_dir / "overlay_canvas.png"
+                        self.assertTrue(bg_file.is_file(), "overlay_canvas.png copied to skin folder")

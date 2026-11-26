@@ -8,7 +8,6 @@
 
 import copy
 import json
-import tempfile
 import sys
 from pathlib import Path
 
@@ -19,6 +18,7 @@ if str(_REPO_ROOT) not in sys.path:
 from components import style
 from components.native.name_value.name_value import _label_component, build_name_value_definition
 from components.native.selector.selector import dropdown_definition, labelled_choice_drawer, write_routing_assets
+from components.native.pan.pan import synthyboy_dial_data as pan_dial_data
 from components.native.level.level import compact_dial_definition, default_level_template, synthyboy_dial_data
 from components.native.active_text.active_text import write_active_text_assets, active_text_child
 from components.native.radio_button.radio_button import create_segmented_radio_button_group, render_segmented_button_art
@@ -316,16 +316,8 @@ def _native_dial(ctx, bipolar=False):
     rects = {"focus": (0, 0, style.size("fx.native_dial.width"), style.size("fx.native_dial.height")), "knob": (style.size("fx.native_dial.knob_x"), style.size("fx.native_dial.knob_y"), style.size("fx.native_dial.knob_size"), style.size("fx.native_dial.knob_size")),
              "name": (style.size("fx.native_dial.label_x"), 0, style.size("fx.native_dial.label_width"), style.size("fx.native_dial.caption_height")), "value": (style.size("fx.native_dial.label_x"), style.size("fx.native_dial.caption_height"), style.size("fx.native_dial.label_width"), style.size("fx.native_dial.value_height"))}
     definition = compact_dial_definition(default_level_template(), rects=rects)
-    if bipolar:
-        # The Level API uses one filename per size: isolate and rename bipolar
-        # output so it cannot replace the unipolar filmstrip in the same skin.
-        with tempfile.TemporaryDirectory() as folder:
-            data = synthyboy_dial_data(folder, frame_size=style.size("fx.native_dial.knob_size"), bipolar=True)
-            filename = "fx_level_bipolar_64.png"
-            (ctx.skins_dir / filename).write_bytes((Path(folder) / data["filmStrip"]).read_bytes())
-            data["filmStrip"] = filename
-    else:
-        data = synthyboy_dial_data(ctx.skins_dir, frame_size=style.size("fx.native_dial.knob_size"))
+    dial_data = pan_dial_data if bipolar else synthyboy_dial_data
+    data = dial_data(ctx.skins_dir, frame_size=style.size("fx.native_dial.knob_size"))
     for child in definition["componentsData"]:
         model = child["componentData"]
         if model["name"] == "knob":
