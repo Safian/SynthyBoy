@@ -306,7 +306,10 @@ public:
 #if SB_NEON
         if (model == 3 && !A.scalarLoops)
         {
-            svfPairLoopDigitalNeon (A, B, za, zb, inA, outA, inB, outB, n);
+            if (A.fastMath && B.fastMath)
+                svfPairLoopDigitalNeon<true> (A, B, za, zb, inA, outA, inB, outB, n);
+            else
+                svfPairLoopDigitalNeon<false> (A, B, za, zb, inA, outA, inB, outB, n);
             return;
         }
 #endif
@@ -315,7 +318,10 @@ public:
 #if SB_NEON
     /** The Digital model (3) of svfPairLoopScalar () with the two channels in the two lanes of a NEON register: the operations of tpt () and of the loop one by one
         (separate multiply and add, the true division: one instruction on AArch64, two scalar divisions on 32 bit ARM), flushDenormal () as a select, and the limiter
-        hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. */
+        hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. With `Recip` (tier low,
+        both channels) the two divisions per sample are multiplications by the reciprocals of the denominators, made once per call by the same scalar expressions as in
+        svfPairLoopScalar () and svfRun (): the same samples as those loops, within the bound of tpt () of the exact division. */
+    template <bool Recip>
     static void svfPairLoopDigitalNeon (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
     {
         // the lanes are written as the S halves of the D register (GCC's vector subscript; a float t[2] went through the stack on 32 bit ARM), and the compares are
@@ -350,6 +356,10 @@ public:
         // the denominators of tpt (): 1 + g Rloop + g g, with Rloop = R1 in the first section and R in the last (the same expression, once instead of per sample)
         const float32x2_t den1 = pair (1.0f + za.g * za.R1 + za.g * za.g, 1.0f + zb.g * zb.R1 + zb.g * zb.g);
         const float32x2_t den2 = pair (1.0f + za.g * za.R + za.g * za.g, 1.0f + zb.g * zb.R + zb.g * zb.g);
+        // tier low: the reciprocals, by the scalar divisions of svfPairLoopScalar () (one per denominator and call), not a vector estimate: the same values
+        const float32x2_t inv1 = Recip && two ? pair (1.0f / (1.0f + za.g * za.R1 + za.g * za.g), 1.0f / (1.0f + zb.g * zb.R1 + zb.g * zb.g)) : vdup_n_f32 (1.0f);
+        const float32x2_t inv2 = Recip ? pair (1.0f / (1.0f + za.g * za.R + za.g * za.g), 1.0f / (1.0f + zb.g * zb.R + zb.g * zb.g)) : vdup_n_f32 (1.0f);
+        auto quotient = [&divide] (float32x2_t num, float32x2_t den, float32x2_t inv) noexcept { return Recip ? vmul_f32 (num, inv) : divide (num, den); };
         const float32x2_t twoV = vdup_n_f32 (2.0f);
         const int k2 = two ? 3 : 0;
         float32x2_t a1 = pair (A.s[0], B.s[0]), a2 = pair (A.s[1], B.s[1]);       // the states of the first section (the only one when !two)
@@ -361,7 +371,7 @@ public:
             {
                 // tpt (0, u, g, R1, R, ...): the loop runs with R1, the high pass output with the true R
                 const float32x2_t v3 = vsub_f32 (u, a2);
-                const float32x2_t v1 = divide (vadd_f32 (a1, vmul_f32 (g, v3)), den1);
+                const float32x2_t v1 = quotient (vadd_f32 (a1, vmul_f32 (g, v3)), den1, inv1);
                 const float32x2_t v2 = vadd_f32 (a2, vmul_f32 (g, v1));
                 a1 = flush (vsub_f32 (vmul_f32 (twoV, v1), a1));
                 a2 = flush (vsub_f32 (vmul_f32 (twoV, v2), a2));
@@ -372,7 +382,7 @@ public:
             float32x2_t& c1 = two ? b1 : a1;
             float32x2_t& c2 = two ? b2 : a2;
             const float32x2_t v3 = vsub_f32 (u, c2);
-            const float32x2_t v1 = divide (vadd_f32 (c1, vmul_f32 (g, v3)), den2);
+            const float32x2_t v1 = quotient (vadd_f32 (c1, vmul_f32 (g, v3)), den2, inv2);
             const float32x2_t v2 = vadd_f32 (c2, vmul_f32 (g, v1));
             c1 = flush (vsub_f32 (vmul_f32 (twoV, v1), c1));
             c2 = flush (vsub_f32 (vmul_f32 (twoV, v2), c2));
@@ -402,13 +412,8 @@ public:
         const bool linearHard = model == 3;
         const bool two = za.two;
         const bool sat = A.satLoop;
-        // tier low: the reciprocals of the denominators of tpt () once for the call, as in svfRun (). Not for the Digital model where its NEON loop (true division) exists: the
-        // scalar loop is that loop's reference (scalarLoops, the tests), and the NEON loop has to give the same samples; it takes the reciprocals once it has been verified on ARM.
-#if SB_NEON
-        const bool recip = A.fastMath && B.fastMath && model != 3;
-#else
+        // tier low: the reciprocals of the denominators of tpt () once for the call, as in svfRun () and the NEON Digital loop (svfPairLoopDigitalNeon: the same values)
         const bool recip = A.fastMath && B.fastMath;
-#endif
         const float inva1 = recip && two ? 1.0f / (1.0f + za.g * za.R1 + za.g * za.g) : 1.0f, invb1 = recip && two ? 1.0f / (1.0f + zb.g * zb.R1 + zb.g * zb.g) : 1.0f;
         const float inva2 = recip ? 1.0f / (1.0f + za.g * za.R + za.g * za.g) : 1.0f, invb2 = recip ? 1.0f / (1.0f + zb.g * zb.R + zb.g * zb.g) : 1.0f;
         for (int i = 0; i < n; ++i)

@@ -795,18 +795,14 @@ TEST (own_filter_savings_svf_reciprocal_stays_within_the_stated_bound)
     CHECK (worstAbs < 1.0e-6);
 }
 
-/** The pair loop and the single channel loop of the state variable models give the same samples at both tiers (on x86 and wherever the pair loop is the scalar one; the NEON Digital loop
-    keeps the true division at tier low until it is verified on ARM, so that case is left out of an SB_NEON build). */
+/** The pair loop and the single channel loop of the state variable models give the same samples at both tiers (on x86 and in an SB_NEON build, where the Digital model
+    runs the NEON loop: it multiplies by the same reciprocals as the scalar loops at tier low). */
 TEST (own_filter_savings_svf_pair_loop_equals_the_single_channel_loop)
 {
     for (int model : { 0, 1, 3 })
         for (int style = 0; style < 5; ++style)
             for (int fastI = 0; fastI < 2; ++fastI)
             {
-#if SB_NEON
-                if (model == 3 && fastI != 0)
-                    continue;
-#endif
                 ClassicFilter pa, pb, sa, sb;
                 for (ClassicFilter* f : { &pa, &pb, &sa, &sb })
                     f->prepare (44100.0);
