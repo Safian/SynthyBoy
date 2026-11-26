@@ -929,3 +929,145 @@ TEST (own_filter_savings_serum_pair_kernel_shared_tangents_match_two_process_cal
                 }
             }
 }
+
+// ---- Item 2: the Diode ramp at tier low (not bit identical: the 0.5 dB criterion of docs/plans/diode-ladder.md) ----
+
+namespace
+{
+struct DiodeCase
+{
+    const char* name;
+    float cutoffHz, res, driveDb;
+};
+// the two shipped Diode presets (Diode Saturated Bass, Diode Bite Lead)
+const DiodeCase kDiodePresets[2] = { { "Diode Saturated Bass (420 Hz, res 20, drive 20)", 420.0f, 0.20f, 20.0f }, { "Diode Bite Lead (3100 Hz, res 45, drive 20)", 3100.0f, 0.45f, 20.0f } };
+
+/** The magnitude of the response of `ir` on a 20 Hz grid from 50 Hz to 0.45 sr, in dB re the DC sum (the measure of test_own_diode_probe). */
+std::vector<double> responseDb (const std::vector<float>& ir, double sr)
+{
+    std::vector<double> db;
+    double dc = 0.0;
+    for (float v : ir)
+        dc += v;
+    const double dcAbs = std::max (std::fabs (dc), 1.0e-30);
+    for (double hz = 50.0; hz <= 0.45 * sr; hz += 20.0)
+    {
+        double re = 0.0, im = 0.0;
+        const double omega = 2.0 * 3.14159265358979323846 * hz / sr;
+        for (size_t i = 0; i < ir.size(); ++i)
+        {
+            re += ir[i] * std::cos (omega * static_cast<double> (i));
+            im -= ir[i] * std::sin (omega * static_cast<double> (i));
+        }
+        db.push_back (20.0 * std::log10 (std::max (std::sqrt (re * re + im * im), 1.0e-30) / dcAbs));
+    }
+    return db;
+}
+
+struct RampResult
+{
+    double peakDiffDb = 0.0;  // |peak (ramp) - peak (exact)|
+    double bandDiffDb = 0.0;  // largest |ramp - exact| of the response over the bins within 30 dB of the exact peak
+    double rmsDb = 0.0;       // RMS of the sample difference re the RMS of the exact response
+};
+
+/** The impulse response (1e-3 impulse at the start, /1e-3) of the Diode while the parameters move by `step` per 32 sample period (a triangle of 8 periods up, 8 down): the exact
+    generic piece loop (every 8 sample piece its own setup, as before) against the ramp (the setup at the two ends of the period, interpolated). `what`: 0 cutoff in semitones, 1
+    cutoff in semitones and the resonance +-0.02 per period, 2 the drive +-0.5 dB per period, 3 style 1 with the blend moving +-0.04 (of 0 .. 2) per period. */
+RampResult rampAgainstExact (const DiodeCase& c, int style, float step, int what)
+{
+    ClassicFilter exact, ramp;
+    exact.prepare (44100.0);
+    ramp.prepare (44100.0);
+    const int periods = 128;
+    std::vector<float> irExact, irRamp;
+    auto paramsAt = [&] (int m)
+    {
+        const int phase = m % 16;
+        const float tri = static_cast<float> (phase < 8 ? phase : 16 - phase) - 4.0f; // -4 .. +4 steps around the base
+        ClassicParams p = makeParams (4, style, true, c.cutoffHz, c.res, c.driveDb, 0.0f);
+        if (what == 0 || what == 1)
+            p.cutoffHz = c.cutoffHz * std::pow (2.0f, step * tri / 12.0f);
+        if (what == 1)
+            p.res = clamp01 (c.res + 0.02f * tri);
+        if (what == 2)
+            p.driveDb = c.driveDb + 0.5f * tri;
+        if (what == 3)
+        {
+            p.cutoffHz = c.cutoffHz * std::pow (2.0f, step * tri / 12.0f);
+            p.blendRaw = 0.8f + 0.04f * tri;
+        }
+        return p;
+    };
+    for (int m = 0; m < periods; ++m)
+    {
+        const ClassicParams a = paramsAt (m - 1), b = paramsAt (m);
+        std::vector<float> in (32, 0.0f), oE (32), oR (32);
+        if (m == 0)
+            in[0] = 1.0e-3f;
+        for (int i = 0; i < 32; i += 8)
+        {
+            const float t = static_cast<float> (i + 8) / static_cast<float> (kControlPeriod);
+            exact.block (in.data() + i, oE.data() + i, 8, ClassicFilter::pieceParams (a, b, t));
+        }
+        ramp.process (in.data(), oR.data(), 32, a, b, 0);
+        for (float v : oE)
+            irExact.push_back (v / 1.0e-3f);
+        for (float v : oR)
+            irRamp.push_back (v / 1.0e-3f);
+    }
+    RampResult r;
+    double errSq = 0.0, refSq = 0.0;
+    for (size_t i = 0; i < irExact.size(); ++i)
+    {
+        const double d = static_cast<double> (irRamp[i]) - static_cast<double> (irExact[i]);
+        errSq += d * d;
+        refSq += static_cast<double> (irExact[i]) * static_cast<double> (irExact[i]);
+    }
+    r.rmsDb = 10.0 * std::log10 (std::max (errSq, 1.0e-300) / std::max (refSq, 1.0e-300));
+    const std::vector<double> dbE = responseDb (irExact, 44100.0), dbR = responseDb (irRamp, 44100.0);
+    double peakE = -1000.0, peakR = -1000.0;
+    for (size_t i = 0; i < dbE.size(); ++i)
+    {
+        peakE = std::max (peakE, dbE[i]);
+        peakR = std::max (peakR, dbR[i]);
+    }
+    r.peakDiffDb = std::fabs (peakR - peakE);
+    for (size_t i = 0; i < dbE.size(); ++i)
+        if (dbE[i] > peakE - 30.0)
+            r.bandDiffDb = std::max (r.bandDiffDb, std::fabs (dbR[i] - dbE[i]));
+    return r;
+}
+} // namespace
+
+/** The two shipped Diode presets at tier low with the parameters moving every control period: the ramp (setup at the two ends of the period, interpolated per 8 sample piece) against
+    the generic piece loop it replaced. The criterion is that of docs/plans/diode-ladder.md: the peak of the response within 0.5 dB (and, stricter, every bin within 30 dB of the peak). Asserted up to 4 semitones of cutoff per control period; the table also lists 8 and 12. */
+TEST (own_filter_savings_diode_ramp_stays_within_half_a_db_of_the_piece_loop)
+{
+    const float steps[] = { 0.5f, 2.0f, 4.0f, 8.0f, 12.0f };
+    double worstPeak = 0.0, worstBand = 0.0, worstRms = -1000.0;
+    for (const DiodeCase& c : kDiodePresets)
+        for (int style = 0; style < 2; ++style)
+            for (int what = 0; what < 4; ++what)
+            {
+                if (what == 3 && style == 0)
+                    continue;
+                for (float step : steps)
+                {
+                    if ((what == 2) && step != steps[0])
+                        continue; // (the drive moves by a fixed 0.5 dB per period: one line)
+                    const RampResult r = rampAgainstExact (c, style, step, what);
+                    std::printf ("SAVINGS-DIODE-RAMP %s style %d %s %.1f st/period: peak %.3f dB, band %.3f dB, rms %.1f dB\n", c.name, style,
+                                 what == 0 ? "cutoff" : (what == 1 ? "cutoff+res" : (what == 2 ? "drive" : "cutoff+blend")), static_cast<double> (step), r.peakDiffDb, r.bandDiffDb, r.rmsDb);
+                    if (step <= 4.0f)
+                    {
+                        worstPeak = std::max (worstPeak, r.peakDiffDb);
+                        worstBand = std::max (worstBand, r.bandDiffDb);
+                        worstRms = std::max (worstRms, r.rmsDb);
+                    }
+                }
+            }
+    std::printf ("SAVINGS-DIODE-RAMP up to 4 semitones per period: worst peak difference %.3f dB, worst band difference %.3f dB, worst RMS %.1f dB\n", worstPeak, worstBand, worstRms);
+    CHECK (worstPeak < 0.5);
+    CHECK (worstBand < 0.5);
+}

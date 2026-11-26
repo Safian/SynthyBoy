@@ -66,6 +66,12 @@ public:
     {
         float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, invDen = 1.0f, c[5] = {};
     };
+    /** Everything the Diode loop derives from its parameters: the base values (k, dIn, post, g, amount, gh, gf, gp, hfA) and what follows from g and gh (the tridiagonal elimination
+        bb, cp, invD, invBb and the high pass coefficient hpA). */
+    struct DiodeSetup
+    {
+        float k = 0.0f, dIn = 0.0f, post = 1.0f, g = 0.0f, amount = 0.0f, gh = 0.0f, gf = 0.0f, gp = 0.0f, bb = 1.0f, cp[4] = {}, invBb = 1.0f, hpA = 0.0f, hfA = 0.0f, invD[4] = {};
+    };
     void prepare (double sampleRate)
     {
         sr = sampleRate;
@@ -74,6 +80,8 @@ public:
         svfRampValid = false;
         rampKey = false;
         svfKey = false;
+        dioRampValid = false;
+        dioKey = false;
         comb.prepare (static_cast<int> (sampleRate * 0.1));
         reset();
     }
@@ -117,6 +125,11 @@ public:
                 svfRamp (in, out, n, a, b, t0);
                 return;
             }
+            if (b.model == 4)
+            {
+                diodeRamp (in, out, n, a, b, t0);
+                return;
+            }
         }
         for (int i = 0; i < n;)
         {
@@ -135,6 +148,7 @@ public:
     {
         rampA = o.rampA; rampB = o.rampB; rampP = o.rampP; rampPa = o.rampPa; rampPb = o.rampPb; rampValid = o.rampValid; rampKey = o.rampKey;
         svfRampA = o.svfRampA; svfRampB = o.svfRampB; svfRampP = o.svfRampP; svfRampPa = o.svfRampPa; svfRampPb = o.svfRampPb; svfRampValid = o.svfRampValid; svfKey = o.svfKey;
+        dioRampA = o.dioRampA; dioRampB = o.dioRampB; dioRampP = o.dioRampP; dioRampPa = o.dioRampPa; dioRampPb = o.dioRampPb; dioRampValid = o.dioRampValid; dioKey = o.dioKey;
     }
     /** The memo of another channel with the same parameters (what remember (), ensureSvf (), the Ladder, Diode and Formant setups derived from them): the right channel of a
         filter whose two cutoffs are equal finds the setup the left one just computed instead of computing the same values again. States are not touched. */
@@ -168,6 +182,24 @@ public:
             A.process (inA, outA, n, a, b, t0);
             B.adoptRamp (A);
             B.process (inB, outB, n, a, b, t0);
+            return;
+        }
+        if (b.fast && a.fast && a.model == b.model && a.style == b.style && b.model == 4)
+        {
+            // the Diode ramp: the setup of the two ends once for the two channels, and the interpolated setup of every piece once as well
+            A.ensureDiodeRamp (a, b);
+            B.adoptRamp (A);
+            B.fastMath = true;
+            for (int i = 0; i < n;)
+            {
+                const int pos = t0 + i;
+                const int m = std::min (8 - (pos % 8), n - i);
+                const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+                const DiodeSetup z = diodeRampAt (A.dioRampA, A.dioRampB, t);
+                A.diodeRun (z, inA + i, outA + i, m);
+                B.diodeRun (z, inB + i, outB + i, m);
+                i += m;
+            }
             return;
         }
         for (int i = 0; i < n;)
@@ -848,51 +880,148 @@ private:
         fourth stage through a fixed 20 Hz high pass, the input stage tanh (0.5 (d' hp - k s4)). The stage dynamics are solved with the trapezoidal rule as a tridiagonal
         system (zero delay feedback inside the ladder); the saturators act on the old states. The corner is on the scale of the measured responses (kDiodeCorner). */
     static constexpr float kDiodeCorner = SB_DIODE_CORNER, kDiodeGain = SB_DIODE_GAIN, kDiodePre = 100.0f, kDiodeFb = SB_DIODE_FB, kDiodeW = 1.0f;
+    /** The base values of the Diode setup for a cutoff f, resonance r, drive gain d (what remember () derived from the parameters p): a square root, tangents, an exp2. */
+    DiodeSetup diodeBase (float f, float r, float d, const ClassicParams& p) const noexcept
+    {
+        DiodeSetup z;
+        z.k = 0.7f + 16.3f * r * r * r;
+        z.dIn = (0.5f * z.k + 1.0f) * d;
+        z.post = 1.0f / std::sqrt (d);
+        diodeCutoffTerms (z, f, p);
+        z.amount = diodeAmount (p);
+        z.gf = std::tan (kPif * 20.0f / static_cast<float> (sr));
+        z.hfA = z.gf / (1.0f + z.gf);
+        return z;
+    }
+    /** The high pass in front: 24 dB style: the corner moves from cutoff 2^-9 to 2^-1 with the blend; 12 dB style: fixed 2^-1, the amount is blend^2 / 4. */
+    static float diodeAmount (const ClassicParams& p) noexcept
+    {
+        const float brawS = clamp01 (p.blendRaw * 0.5f); // 0 .. 1
+        return p.style == 0 ? brawS * brawS * 0.25f : 1.0f;
+    }
+    /** What the cutoff f sets in the Diode setup: the ladder's g and the corner of the high pass in front (gh); gp, the optional extra pole, only if it is switched on (kDiodePre < 50). */
+    void diodeCutoffTerms (DiodeSetup& z, float f, const ClassicParams& p) const noexcept
+    {
+        const float fc = std::clamp (f * kDiodeCorner, 5.0f, static_cast<float> (sr) * 0.45f);
+        z.g = std::tan (kPif * std::min (fc / static_cast<float> (sr), 0.499f));
+        const float brawS = clamp01 (p.blendRaw * 0.5f); // 0 .. 1
+        const bool style12S = p.style == 0;
+        const float hpHz = f * std::exp2 (style12S ? -1.0f : -9.0f + 8.0f * brawS);
+        z.gh = std::tan (kPif * std::clamp (hpHz, 1.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+        if (kDiodePre < 50.0f)
+            z.gp = std::tan (kPif * std::clamp (f * kDiodePre, 5.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+    }
+    /** What follows from g and gh: the tridiagonal elimination (stage i takes w/2 of each neighbour and (1 - w) of the previous stage; w = 1 averages the neighbours) and the
+        coefficient of the input high pass. With `reciprocal` (the interpolated setups of a ramp, tier low) cp is made from the reciprocals invD instead of by divisions: four divisions
+        in place of seven (a few units in the last place against the divided form); the setup of a parameter set that stays put keeps the divisions. */
+    static void diodeDerive (DiodeSetup& z, bool reciprocal) noexcept
+    {
+        const float wS = kDiodeW, upS = 0.5f * wS, loS = 1.0f - 0.5f * wS;
+        z.bb = 1.0f + z.g;
+        z.invBb = 1.0f / z.bb;
+        z.hpA = z.gh / (1.0f + z.gh);
+        z.invD[0] = 0.0f;
+        if (reciprocal)
+        {
+            z.cp[0] = -z.g * upS * z.invBb;
+            for (int j = 1; j < 4; ++j)
+            {
+                z.invD[j] = 1.0f / (z.bb + z.g * loS * z.cp[j - 1]);
+                z.cp[j] = (j < 3 ? -z.g * upS : 0.0f) * z.invD[j];
+            }
+            return;
+        }
+        z.cp[0] = -z.g * upS / z.bb;
+        for (int j = 1; j < 4; ++j)
+            z.cp[j] = (j < 3 ? -z.g * upS : 0.0f) / (z.bb + z.g * loS * z.cp[j - 1]);
+        // tier low: the divisions by constants of the block become multiplications by their reciprocals (a few units in the last place)
+        for (int j = 1; j < 4; ++j)
+            z.invD[j] = 1.0f / (z.bb + z.g * loS * z.cp[j - 1]);
+    }
     void diode (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
     {
         // Everything below up to the sample loop is a function of the parameters alone (a square root, four tangents, an exp2, a dozen divisions): it is kept while
         // they stay the same (remember ()), as the setups of the other models are. The same expressions, so the same values.
         if (!dioValid)
         {
-            DiodeSetup& z = dio;
-            z.k = 0.7f + 16.3f * r * r * r;
-            z.dIn = (0.5f * z.k + 1.0f) * d;
-            z.post = 1.0f / std::sqrt (d);
-            const float fc = std::clamp (f * kDiodeCorner, 5.0f, static_cast<float> (sr) * 0.45f);
-            z.g = std::tan (kPif * std::min (fc / static_cast<float> (sr), 0.499f));
-            const float brawS = clamp01 (p.blendRaw * 0.5f); // 0 .. 1
-            // the high pass in front: 24 dB style: the corner moves from cutoff 2^-9 to 2^-1 with the blend; 12 dB style: fixed 2^-1, the amount is blend^2 / 4
-            const bool style12S = p.style == 0;
-            const float hpHz = f * std::exp2 (style12S ? -1.0f : -9.0f + 8.0f * brawS);
-            z.amount = style12S ? brawS * brawS * 0.25f : 1.0f;
-            z.gh = std::tan (kPif * std::clamp (hpHz, 1.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
-            z.gf = std::tan (kPif * 20.0f / static_cast<float> (sr));
-            z.gp = std::tan (kPif * std::clamp (f * kDiodePre, 5.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
-            // tridiagonal matrix (constant per block): stage i takes w/2 of each neighbour and (1 - w) of the previous stage; w = 1 averages the neighbours
-            const float wS = kDiodeW, upS = 0.5f * wS, loS = 1.0f - 0.5f * wS;
-            z.bb = 1.0f + z.g;
-            z.cp[0] = -z.g * upS / z.bb;
-            for (int j = 1; j < 4; ++j)
-                z.cp[j] = (j < 3 ? -z.g * upS : 0.0f) / (z.bb + z.g * loS * z.cp[j - 1]);
-            // tier low: the divisions by constants of the block become multiplications by their reciprocals (a few units in the last place)
-            z.invBb = 1.0f / z.bb;
-            z.hpA = z.gh / (1.0f + z.gh);
-            z.hfA = z.gf / (1.0f + z.gf);
-            z.invD[0] = 0.0f;
-            for (int j = 1; j < 4; ++j)
-                z.invD[j] = 1.0f / (z.bb + z.g * loS * z.cp[j - 1]);
+            dio = diodeBase (f, r, d, p);
+            diodeDerive (dio, false);
             dioValid = true;
         }
-        const float k = dio.k, dIn = dio.dIn, post = dio.post, g = dio.g, amount = dio.amount, gh = dio.gh, gf = dio.gf, gp = dio.gp, bb = dio.bb;
+        diodeRun (dio, in, out, n);
+    }
+    /** Tier low, Diode with moving parameters: the base setup (square root, tangents, exp2) is computed at the two ends of the 32 sample control period (the end of one period is the
+        start of the next: one setup per voice and period), and g, gh, k, dIn, post and amount are interpolated linearly over the four pieces of 8 samples, from which bb, cp, invD
+        and hpA are derived (four divisions and the high pass one) instead of the whole setup, the cutoff power and a pow of the drive for every piece. NOT bit identical to the
+        generic piece loop (the cutoff moved by a power and every value derived from it): the bound is stated in docs/MPC.md and tested in test_own_filter_savings.cpp. */
+    void ensureDiodeRamp (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        fastMath = true;
+        if (!(dioKey && sameParams (dioRampPa, a) && sameParams (dioRampPb, b)))
+        {
+            // the setup of the end of the last period is the start of this one (if the parameters are continuous), else it is made
+            DiodeSetup startSetup;
+            if (dioRampValid && sameParams (dioRampP, a))
+                startSetup = dioRampB;
+            else
+                startSetup = diodeBase (std::clamp (a.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f), clamp01 (a.res), std::pow (10.0f, a.driveDb * 0.05f), a);
+            dioRampA = startSetup;
+            const float fb = std::clamp (b.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+            if (onlyCutoffDiffers (a, b))
+            {
+                dioRampB = startSetup; // only the cutoff moved: g and the corner of the input high pass are what follows from it
+                diodeCutoffTerms (dioRampB, fb, b);
+            }
+            else
+                dioRampB = diodeBase (fb, clamp01 (b.res), std::pow (10.0f, b.driveDb * 0.05f), b);
+            dioRampP = b;
+            dioRampValid = true;
+            dioRampPa = a;
+            dioRampPb = b;
+            dioKey = true;
+        }
+    }
+    static DiodeSetup diodeRampAt (const DiodeSetup& A, const DiodeSetup& B, float t) noexcept
+    {
+        DiodeSetup z = B; // gf, hfA (constants of the sample rate) and gp are those of the end
+        z.k = lerp (A.k, B.k, t);
+        z.dIn = lerp (A.dIn, B.dIn, t);
+        z.post = lerp (A.post, B.post, t);
+        z.g = lerp (A.g, B.g, t);
+        z.amount = lerp (A.amount, B.amount, t);
+        z.gh = lerp (A.gh, B.gh, t);
+        diodeDerive (z, true);
+        return z;
+    }
+    void diodeRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        ensureDiodeRamp (a, b);
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            const DiodeSetup z = diodeRampAt (dioRampA, dioRampB, t);
+            diodeRun (z, in + i, out + i, m);
+            i += m;
+        }
+    }
+    DiodeSetup dioRampA, dioRampB;
+    ClassicParams dioRampP, dioRampPa, dioRampPb;
+    bool dioRampValid = false, dioKey = false;
+    /** The sample loop of the Diode for a setup z (tier low when fastMath is set: the divisions by the constants of the setup are multiplications by their reciprocals). */
+    void diodeRun (const DiodeSetup& z, const float* in, float* out, int n) noexcept
+    {
+        const float k = z.k, dIn = z.dIn, post = z.post, g = z.g, amount = z.amount, gh = z.gh, gf = z.gf, gp = z.gp, bb = z.bb;
         // w = kDiodeW = 1: every stage averages its two neighbours (up = lo = 1/2) and nothing of the stage itself is added back, so the terms (1 - w) * x of the right hand side
         // below are +-0 and the neighbour of stage 4 above it is 0: they are not computed. The result differs from the form with the zero terms only in the sign of an exact
         // zero (x + (+-0) = x for every other finite x) and where a state is not finite (0 * inf = NaN there); test_own_filter_savings.cpp (diode_dead_terms).
         static_assert (kDiodeW == 1.0f, "the right hand side below is written for w = 1");
         constexpr float up = 0.5f, lo = 0.5f;
-        const float* const cp = dio.cp;
-        const float* const invD = dio.invD;
+        const float* const cp = z.cp;
+        const float* const invD = z.invD;
         const bool quick = fastMath;
-        const float invBb = dio.invBb, hpA = dio.hpA, hfA = dio.hfA;
+        const float invBb = z.invBb, hpA = z.hpA, hfA = z.hfA;
         for (int i = 0; i < n; ++i)
         {
             const float x = in[i];
@@ -937,7 +1066,6 @@ private:
         }
     }
     float dv[4] = {}, dHp[2] = {}, dFb = 0.0f, dU = 0.0f, dPre = 0.0f, tilt = 0.0f;
-    struct DiodeSetup { float k = 0.0f, dIn = 0.0f, post = 1.0f, g = 0.0f, amount = 0.0f, gh = 0.0f, gf = 0.0f, gp = 0.0f, bb = 1.0f, cp[4] = {}, invBb = 1.0f, hpA = 0.0f, hfA = 0.0f, invD[4] = {}; };
     DiodeSetup dio;      // the setup of the diode model for the parameters last passed to remember ()
     bool dioValid = false;
     struct FormantSetup { float gain[4] = {}, kq[4] = {}, bpGain[4] = {}; };
