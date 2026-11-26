@@ -276,7 +276,7 @@ public:
             coefSr = sr;
             coefValid = true;
         }
-        const LoopBand& coef = coefBand;
+        const LoopBand coef = coefBand; // (a local copy: the coefficients stay in registers across the stores to the output)
         // what does not change from sample to sample is computed once: the spread of the voices over the unison (a division each) and the phase offset of every tap
         float tOf[kMaxPairs], phOff[kMaxPairs], baseOf[2];
         for (int i = 0; i < V; ++i)
