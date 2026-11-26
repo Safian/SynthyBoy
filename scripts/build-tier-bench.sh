@@ -16,7 +16,7 @@
 #   --dynamic    also build the variant linked like the plugin: dynamic glibc (the libm of the device through the PLT), static libstdc++ / libgcc
 #                (-DSYNTHYBOY_TIER_BENCH_STATIC=OFF -DSYNTHYBOY_TIER_BENCH_STATIC_LIBCXX=ON) into <out>/tier-bench-<arch>-dyn/. Checked: it needs libm.so.6,
 #                not libstdc++, and no GLIBC symbol newer than 2.39 (the device's glibc).
-#   --cxx-flags  extra C++ flags appended to CMAKE_CXX_FLAGS_RELEASE (default "-O3 -DNDEBUG" + FLAGS), e.g. "-mtune=cortex-a17" or "-flto" for a flag A/B/A (docs/perf/compiler-flags-ab.md); the
+#   --cxx-flags  extra C++ flags appended to CMAKE_CXX_FLAGS_RELEASE (default "-O3 -DNDEBUG" + FLAGS), e.g. "-mtune=cortex-a17" or "-flto" for a flag A/B/A (docs/perf/device-measurement-plan.md section 3); the
 #                architecture flags of the toolchain file stay. Use a separate --out and --build-dir per variant so no tree or binary is reused
 #   --dry-run    print one DRY-RUN line per architecture and variant and exit (no Docker, no directory is made)
 # Every output directory also holds synthyboy_libm_probe and synthyboy_pmu_probe when the tree has these targets.
@@ -71,7 +71,7 @@ if [[ "$dry_run" == 1 ]]; then
             v_static=ON; v_libcxx=OFF; v_sections=OFF
             [[ "$variant" == "-sections" ]] && v_sections=ON
             [[ "$variant" == "-dyn" ]] && { v_static=OFF; v_libcxx=ON; }
-            echo "DRY-RUN arch=$a variant=$variant static=$v_static libcxx_static=$v_libcxx section_timing=$v_sections cxx_flags_extra="$cxx_flags" targets=synthyboy_tier_bench,synthyboy_libm_probe,synthyboy_pmu_probe out=$out_dir/tier-bench-$a$variant"
+            echo "DRY-RUN arch=$a variant=$variant static=$v_static libcxx_static=$v_libcxx section_timing=$v_sections cxx_flags_extra=[$cxx_flags] targets=synthyboy_tier_bench,synthyboy_libm_probe,synthyboy_pmu_probe out=$out_dir/tier-bench-$a$variant"
         done
     done
     exit 0

@@ -1786,7 +1786,19 @@ int main (int argc, char** argv)
                 for (size_t li = 0; li < loads.size(); ++li)
                     if (loads[li].kind == Load::preset && ! cells[c][li].max.empty())
                         longestAll = std::max (longestAll, *std::max_element (cells[c][li].max.begin(), cells[c][li].max.end()));
-                std::printf (" | %s", bestP99 <= o.budget && longestAll <= 100.0 ? "inside" : (bestP99 <= o.budget ? "OVER (a block longer than its real time)" : "OVER"));
+                // a preset with a rejected pass was measured on fewer passes (or not at all): "inside" cannot be claimed while the dearest preset may be among them
+                size_t incomplete = 0;
+                for (size_t li = 0; li < loads.size(); ++li)
+                    if (loads[li].kind == Load::preset && cells[c][li].p99.size() < static_cast<size_t> (o.repeat))
+                        ++incomplete;
+                if (bestP99 > o.budget)
+                    std::printf (" | OVER");
+                else if (longestAll > 100.0)
+                    std::printf (" | OVER (a block longer than its real time)");
+                else if (incomplete != 0)
+                    std::printf (" | INCOMPLETE (%zu preset%s with rejected passes)", incomplete, incomplete == 1 ? "" : "s");
+                else
+                    std::printf (" | inside");
             }
             std::printf ("\n");
         }
