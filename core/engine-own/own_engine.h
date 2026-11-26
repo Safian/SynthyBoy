@@ -126,7 +126,7 @@ public:
     const spectral::StartLedger& startLedgerForTest() const noexcept { return spectralScratch->start; }
 
 private:
-    void storeParamAt (int i, float plain) noexcept;
+    bool storeParamAt (int i, float plain) noexcept;   // true when the stored bit pattern changed
     static constexpr int numChannels = 16;
     static constexpr int kSpareVoices = 4; // the spare voices of the Kill mode (document 01, 3.1)
 

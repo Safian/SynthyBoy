@@ -318,8 +318,11 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
     const int i = findParamIndex (id);
     if (i < 0 || std::isnan (plain))
         return;
-    storeParamAt (i, plain);
-    paramGen.fetch_add (1u, std::memory_order_release);
+    const bool changed = storeParamAt (i, plain);
+    // a write of the value the parameter already holds (the host and the display repeat values) needs no new snapshot: the generation moves only for a changed bit pattern
+    // (kOwnSavingParamDiff off: as before, every write moves it)
+    if (changed || (savingsOff.load (std::memory_order_relaxed) & kOwnSavingParamDiff) != 0)
+        paramGen.fetch_add (1u, std::memory_order_release);
 }
 
 void OwnEngine::setPresetParams (const ParamValues& values) noexcept
@@ -331,9 +334,14 @@ void OwnEngine::setPresetParams (const ParamValues& values) noexcept
     paramGen.fetch_add (1u, std::memory_order_release);
 }
 
-void OwnEngine::storeParamAt (int i, float plain) noexcept
+bool OwnEngine::storeParamAt (int i, float plain) noexcept
 {
     const float v = constrainValue (paramTable()[i], plain);
+    const float held = params[static_cast<size_t> (i)].load (std::memory_order_relaxed);
+    uint32_t newBits, heldBits;
+    std::memcpy (&newBits, &v, sizeof newBits);
+    std::memcpy (&heldBits, &held, sizeof heldBits);
+    const bool changed = newBits != heldBits; // the bit pattern, as the snapshot compares: -0 and +0 are different values
     params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
     for (int k = 0; k < 6; ++k)
         if (wtParamIdx[k] == i)
@@ -361,6 +369,7 @@ void OwnEngine::storeParamAt (int i, float plain) noexcept
             }
             break;
         }
+    return changed;
 }
 
 float OwnEngine::getParam (uint32_t id) const noexcept
@@ -1533,7 +1542,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     // What the changed parameters can reach (kParamSlot / kParamTuning / kParamVoice, see classifyParams): the matrix is compiled again only when a slot parameter or the content changed,
     // the tuning table only when a tuning parameter or the content changed, the voices drop what they derived from the parameters only when a parameter they can read changed.
     // kOwnSavingParamDiff off (measurements, the bit identity test): everything is rebuilt on every change, as it was before.
-    bool matrixDirty = true, tuningDirty = true, voicesDirty = true;
+    bool matrixDirty = true, tuningDirty = true, voicesDirty = true, noopGeneration = false;
     if (blockDirty)
     {
         const bool full = !snapValid || (savingsOff.load (std::memory_order_relaxed) & kOwnSavingParamDiff) != 0 || paramClass.size() != base.size();
@@ -1545,6 +1554,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         else
         {
             uint8_t changed = 0;
+            bool anyChanged = false;
             for (size_t i = 0; i < base.size(); ++i)
             {
                 const float v = params[i].load (std::memory_order_relaxed);
@@ -1555,30 +1565,43 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 {
                     base[i] = v;
                     changed |= paramClass[i];
+                    anyChanged = true;
                 }
             }
             matrixDirty = contentChanged || content.content != snapContentPtr || (changed & kParamSlot) != 0;
             tuningDirty = contentChanged || (changed & kParamTuning) != 0;
             voicesDirty = contentChanged || (changed & kParamVoice) != 0;
+            // a generation that moved without a value or the content changing (a write of the value a parameter already had, a tuning source that was set again): the snapshot is the one
+            // of the block before, so nothing it feeds is derived again (the FX budget, the idle effect racks, the master gains and the latency plan keep their inputs)
+            noopGeneration = !anyChanged && !contentChanged && content.content == snapContentPtr;
         }
-        matrix.setContent (content.content);
-        statSnapshots.fetch_add (1u, std::memory_order_relaxed);
-        if (matrixDirty)
+        if (noopGeneration)
         {
-            matrix.compile (base.data());
-            statMatrixCompiles.fetch_add (1u, std::memory_order_relaxed);
+            snapGen = gen;
+            blockDirty = false;
+            matrixDirty = tuningDirty = voicesDirty = false;
         }
-        if (contentChanged)
-            morphCache.clear(); // setContent can also replace the user wavetables
-        snapContentPtr = content.content;
-        snapGen = gen;
-        snapContentGen = content.generation;
-        snapValid = true;
-        ++snapEpoch;
-        if (voicesDirty)
+        else
         {
-            ++baseEpoch;
-            statVoiceEpochs.fetch_add (1u, std::memory_order_relaxed);
+            matrix.setContent (content.content);
+            statSnapshots.fetch_add (1u, std::memory_order_relaxed);
+            if (matrixDirty)
+            {
+                matrix.compile (base.data());
+                statMatrixCompiles.fetch_add (1u, std::memory_order_relaxed);
+            }
+            if (contentChanged)
+                morphCache.clear(); // setContent can also replace the user wavetables
+            snapContentPtr = content.content;
+            snapGen = gen;
+            snapContentGen = content.generation;
+            snapValid = true;
+            ++snapEpoch;
+            if (voicesDirty)
+            {
+                ++baseEpoch;
+                statVoiceEpochs.fetch_add (1u, std::memory_order_relaxed);
+            }
         }
     }
     const ParamIndex& pi = paramIndex();
