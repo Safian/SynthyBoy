@@ -132,7 +132,7 @@ class TestSubScreenNativeIntegration(unittest.TestCase):
                 # Verify oscNativeSurface children
                 surface = defs["oscNativeSurface"]
                 surface_names = {c["componentData"]["name"] for c in surface["componentsData"]}
-                self.assertIn("Osc Native Source Tabs", surface_names)
+                self.assertNotIn("Osc Native Source Tabs", surface_names)
                 self.assertIn("Osc Native Power", surface_names)
                 self.assertIn("Osc Native Routing", surface_names)
                 self.assertIn("Osc Native Settings", surface_names)

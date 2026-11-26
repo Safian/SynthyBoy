@@ -118,7 +118,6 @@ def verify_osc_b_screen(tui, qlinks, ctx):
         return False, "oscNativeSurface definition not found"
     surface_children = {c.get("componentData", {}).get("name") for c in surface.get("componentsData", [])}
     expected_surface_children = {
-        "Osc Native Source Tabs",
         "Osc Native Pan",
         "Osc Native Level",
         "Osc Native Routing",

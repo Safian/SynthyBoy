@@ -52,10 +52,10 @@ class TestOscAScreen(unittest.TestCase):
     def test_screen_contract_metadata(self):
         """Verify rebuilt components and missing compact variants are properly enumerated."""
         contract_rebuilt = self.osc_a_mod.REBUILT_NATIVE_COMPONENTS
-        self.assertGreaterEqual(len(contract_rebuilt), 10, "Must list all 10 rebuilt native components")
+        self.assertGreaterEqual(len(contract_rebuilt), 9, "Must list all 9 rebuilt native components")
 
         rebuilt_ids = {c["id"] for c in contract_rebuilt}
-        self.assertIn("osc_instance_select", rebuilt_ids)
+        self.assertNotIn("osc_instance_select", rebuilt_ids)
         self.assertIn("osc_power", rebuilt_ids)
         self.assertIn("osc_type", rebuilt_ids)
         self.assertIn("osc_source_table", rebuilt_ids)

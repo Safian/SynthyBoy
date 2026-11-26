@@ -153,17 +153,8 @@ class TestNativeOscSelector(unittest.TestCase):
         # Check components created on tabs
         for tab in tui["pageData"]["tabs"]:
             items = tab["componentDefinition"]["componentsData"]
-            select = next(c for c in items if c["componentData"]["name"] == "Osc Native Source Tabs")
-            self.assertEqual(select["componentData"]["type"], "Image")
-            buttons = [c for c in items if c["componentData"]["name"].startswith("Osc Native Source ") and c["componentData"]["type"] == "Button"]
-            self.assertEqual([c["componentData"]["data"]["buttonId"] for c in buttons], list(range(5)))
-            for button in buttons:
-                self.assertEqual(button["handle remapping"]["map"], select["handle remapping"]["map"])
-            self.assertEqual(select["bounds"]["bounds"], "0 580 1280 48")
-            self.assertEqual(select["bounds"]["showWhenDataModelInvalid"], "Hide")
-            self.assertEqual(select["bounds"]["additionalInvalidatingHandles"], [f"NonZero/Parameter {visibility_idx}"])
-            self.assertEqual(select["bounds"]["whenVisible"], "Always")
-            self.assertEqual(select["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {source_idx}"}])
+            # One tab page = one screen: the hardware sub-tab is the only source selector, no in-screen strip.
+            self.assertEqual([c for c in items if c["componentData"]["name"].startswith("Osc Native Source ")], [])
 
             # Inactive navigation: check that tab power handles were sanitized
             self.assertEqual(tab["additionalInvalidatingHandles"], [])

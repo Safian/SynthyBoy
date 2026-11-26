@@ -892,10 +892,9 @@
     "font.style.regular": "Regular",
     "font.file.semibold": "TitilliumWeb-SemiBold.ttf",
     "font.host.height.per.em": 1.521,
-    "osc.source_tabs.rect": [0, 580, 1280, 48],
     "selector.standalone_compact_osc_pan_rect": [
       864,
-      532,
+      580,
       {
         "ref": "control.width"
       },
@@ -905,7 +904,7 @@
     ],
     "selector.standalone_compact_osc_level_rect": [
       1070,
-      532,
+      580,
       {
         "ref": "control.width"
       },

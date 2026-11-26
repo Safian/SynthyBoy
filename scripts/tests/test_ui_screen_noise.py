@@ -119,8 +119,6 @@ class TestUiScreenNoise(unittest.TestCase):
             self.assertEqual(
                 sub_names,
                 [
-                    "Osc Native Source Tabs",
-                    *(f"Osc Native Source {label} Peek" for label in ("SUB", "A", "B", "C", "NOISE")),
                     "Osc Native Pan",
                     "Osc Native Level",
                     "Osc Native Routing",

@@ -82,14 +82,13 @@ class OscCScreenTests(unittest.TestCase):
         kids = surface["componentsData"]
         kid_names = {c["componentData"]["name"]: c for c in kids}
 
-        self.assertIn("Osc Native Source Tabs", kid_names)
-        self.assertEqual(kid_names["Osc Native Source Tabs"]["bounds"]["bounds"], "0 580 1280 48")
+        self.assertNotIn("Osc Native Source Tabs", kid_names)
 
         self.assertIn("Osc Native Pan", kid_names)
-        self.assertEqual(kid_names["Osc Native Pan"]["bounds"]["bounds"], "864 532 202 48")
+        self.assertEqual(kid_names["Osc Native Pan"]["bounds"]["bounds"], "864 580 202 48")
 
         self.assertIn("Osc Native Level", kid_names)
-        self.assertEqual(kid_names["Osc Native Level"]["bounds"]["bounds"], "1070 532 202 48")
+        self.assertEqual(kid_names["Osc Native Level"]["bounds"]["bounds"], "1070 580 202 48")
 
         self.assertIn("Osc Native Routing", kid_names)
         self.assertEqual(kid_names["Osc Native Routing"]["bounds"]["bounds"], "1122 37 150 48")

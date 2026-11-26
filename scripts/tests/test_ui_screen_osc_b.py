@@ -110,8 +110,6 @@ class TestUiScreenOscB(unittest.TestCase):
 
         names = [c["componentData"]["name"] for c in surface["componentsData"]]
         expected = [
-            "Osc Native Source Tabs",
-            *(f"Osc Native Source {label} Peek" for label in ("SUB", "A", "B", "C", "NOISE")),
             "Osc Native Pan",
             "Osc Native Level",
             "Osc Native Routing",
@@ -126,9 +124,9 @@ class TestUiScreenOscB(unittest.TestCase):
 
         # Verify touch rectangles
         child_by_name = {c["componentData"]["name"]: c for c in surface["componentsData"]}
-        self.assertEqual(child_by_name["Osc Native Source Tabs"]["bounds"]["bounds"], "0 580 1280 48")
-        self.assertEqual(child_by_name["Osc Native Pan"]["bounds"]["bounds"], "864 532 202 48")
-        self.assertEqual(child_by_name["Osc Native Level"]["bounds"]["bounds"], "1070 532 202 48")
+        self.assertNotIn("Osc Native Source Tabs", child_by_name)
+        self.assertEqual(child_by_name["Osc Native Pan"]["bounds"]["bounds"], "864 580 202 48")
+        self.assertEqual(child_by_name["Osc Native Level"]["bounds"]["bounds"], "1070 580 202 48")
         self.assertEqual(child_by_name["Osc Native Routing"]["bounds"]["bounds"], "1122 37 150 48")
         self.assertEqual(child_by_name["Osc Native Power"]["bounds"]["bounds"], "12 8 106 164")
 

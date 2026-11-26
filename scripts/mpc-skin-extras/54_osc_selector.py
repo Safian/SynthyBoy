@@ -1,4 +1,4 @@
-# Host-native instance selector for standalone oscillator tabs.
+# Host-native oscillator source choices for the standalone oscillator tabs. The hardware sub-tab is the only source selector: there is no in-screen tab strip.
 from pathlib import Path
 
 import sys
@@ -10,8 +10,6 @@ _SCRIPTS = _REPO_ROOT / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from components.native.tab_bar.tab_bar import tab_bar
-from components.style import size
 from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
     OSC_POWER_PARAM_KEYS,
@@ -19,7 +17,7 @@ from components.native.selector.selector import (
     build_standalone_osc_source_overlay,
     sanitize_osc_tab_navigation,
 )
-from native_ui_params import OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
+from native_ui_params import OSC_SOURCE, mixer_peek_index
 
 
 def apply(tui, qlinks, ctx):
@@ -30,7 +28,6 @@ def apply(tui, qlinks, ctx):
         return
     base = mixer_peek_index(ctx.param_count)
     selector_idx = base + OSC_SOURCE
-    state_idx = base + OSC_VISIBILITY
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     power_params = {k: ctx.param_index(k) for k in OSC_POWER_PARAM_KEYS}
     if not any(d["key"] == OSC_SOURCE_OVERLAY_NAME for d in defs):
@@ -45,8 +42,4 @@ def apply(tui, qlinks, ctx):
         entry["value"] = choices
 
     for tab in tabs:
-        items = tab["componentDefinition"]["componentsData"]
-        items.extend(tab_bar("Osc Native Source", ("SUB", "A", "B", "C", "NOISE"),
-                             size("osc.source_tabs.rect"), pkey, pkey, getattr(ctx, "skins_dir", None),
-                             gates=(f"NonZero/Parameter {state_idx}",)))
         sanitize_osc_tab_navigation(tab, power_params)

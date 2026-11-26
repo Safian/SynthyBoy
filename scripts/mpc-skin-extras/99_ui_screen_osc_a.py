@@ -9,7 +9,6 @@ Autoloaded by scripts/apply-mpc-skin-extras.py in name order (runs after
 Responsibilities:
 1. Verifies that the Osc A screen integrates ready, verified native components:
    - Top row:
-     * Instance Selector (1280x48 px, popup choice overlay)
      * Host-native POWER button (48x48 icon button, on #5cff9d, off #ff4f4f)
      * Type selector menu (5 oscillator types, 48 px face)
      * SOURCE / Table stepper (< Table > stepper arrows + menu)
@@ -42,14 +41,6 @@ SCREEN_TITLE = "Osc A"
 
 # Inventory of built / integrated native components on Osc A:
 REBUILT_NATIVE_COMPONENTS = (
-    {
-        "id": "osc_instance_select",
-        "name": "Osc Native Source Tabs",
-        "kind": "tab_bar",
-        "rect": (0, 580, 1280, 48),
-        "role": "Oszcillátor példány választó (Sub, Osc A, Osc B, Osc C, Noise)",
-        "status": "MEGÉPÍTETT (1280x48 px)",
-    },
     {
         "id": "osc_power",
         "name": "Osc Native Power",

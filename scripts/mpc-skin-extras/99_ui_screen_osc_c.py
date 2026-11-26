@@ -62,7 +62,7 @@ def apply(tui, qlinks, ctx):
     # 3. Ensure native controls exist on the Osc C tab without duplication.
     components = tab.get("componentDefinition", {}).get("componentsData", [])
     has_surface = any(c.get("componentData", {}).get("name") == "Osc Native Surface" for c in components)
-    has_individual = any(c.get("componentData", {}).get("name") == "Osc Native Source Tabs" for c in components)
+    has_individual = any(c.get("componentData", {}).get("name") == "Osc Native Routing" for c in components)
 
     defs = {d["key"]: d["value"] for d in tui.get("pageData", {}).get("componentDefinitions", {}).get("localComponentDefinitions", [])}
 

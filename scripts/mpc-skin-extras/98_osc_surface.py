@@ -11,8 +11,6 @@ if str(_REPO_ROOT) not in sys.path:
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
 
 CONTROL_NAMES = (
-    "Osc Native Source Tabs",
-    *(f"Osc Native Source {label} Peek" for label in ("SUB", "A", "B", "C", "NOISE")),
     "Osc Native Pan",
     "Osc Native Level",
     "Osc Native Routing",

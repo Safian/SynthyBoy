@@ -65,7 +65,6 @@ def apply(tui, qlinks, ctx):
         surface_defs = defs["oscNativeSurface"].get("componentsData", [])
         existing_names = {c.get("componentData", {}).get("name") for c in surface_defs}
         expected_names = {
-            "Osc Native Source Tabs",
             "Osc Native Routing",
             "Osc Native Power",
             "Osc Native Settings",
