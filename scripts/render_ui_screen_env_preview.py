@@ -57,7 +57,7 @@ def render_states(out,work):
             raw,state=work/(name+'.rgba'),out/(name+'.json')
             subprocess.run([str(binary),str(beats),str(raw),str(state)],check=True)
             sketch=EnvSkinSketch(skins,json.loads(state.read_text()))
-            host=sketch.render_tab('Env').convert('RGBA')
+            host=sketch.render_tab('Env 1').convert('RGBA')
             if sketch.unsupported:raise ValueError('Unsupported native widgets: '+repr(sketch.unsupported))
             overlay=Image.frombytes('RGBA',(1280,628),raw.read_bytes())
             Image.alpha_composite(host,overlay).convert('RGB').save(out/(name+'.png'),optimize=True)

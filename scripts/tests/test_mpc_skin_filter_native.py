@@ -41,7 +41,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         cls.params = NoFallbackTests.params
         cls.tui = NoFallbackTests.tui
         tabs = {t["tabName"]: t for t in NoFallbackTests.tui["pageData"]["tabs"]}
-        cls.tab = tabs["Filter"]
+        cls.tab = tabs["Filter 1"]
         cls.items = cls.tab["componentDefinition"]["componentsData"]
         cls.filter2_items = tabs["Filter 2"]["componentDefinition"]["componentsData"]
         cls.note_items = tabs["Note"]["componentDefinition"]["componentsData"]

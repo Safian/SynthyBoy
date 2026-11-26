@@ -353,7 +353,7 @@ class LfoSkinSketch(NativeTabSketch):
             return
         raise ValueError(f"Unresolved native LFO primitive or definition: {ctype}")
 
-    def render_tab(self, tab_name: str = "LFO") -> Image.Image:
+    def render_tab(self, tab_name: str = "LFO 1") -> Image.Image:
         return super().render_tab(tab_name)
 
 
@@ -413,7 +413,7 @@ def render_state(state_name: str, out_path: Path, *, skins_dir: Path, fixture_bi
 
     state_data = json.loads(state_json.read_text(encoding="utf-8"))
     sketch = LfoSkinSketch(skins_dir, state_data)
-    host_tab = sketch.render_tab("LFO")
+    host_tab = sketch.render_tab("LFO 1")
     with Image.open(overlay_png) as ov_in:
         overlay_tab = ov_in.convert("RGBA")
 

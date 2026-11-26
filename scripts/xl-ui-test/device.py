@@ -199,9 +199,9 @@ def recognise(image, mode=11, alphabet=None):
     return list(csv.DictReader(io.StringIO(result.stdout.decode()), delimiter="\t"))
 
 
-ALIASES = [{"PLAY", "MACROS"}, {"OSC", "OSCA", "OSCB", "OSCC", "SUB", "NOISE"}, {"ENV", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6"},
-           {"LFO", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8"}, {"LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4"},
-           {"FX"}, {"MIX", "MIXER"}, {"FILTER", "FILTER 2", "NOTE", "VELO"}, {"MOD"}, {"MASTER", "TUNING", "VOICE"}]
+ALIASES = [{"PLAY", "MACROS"}, {"OSC", "OSC A", "OSCA", "OSC B", "OSC C", "OSCB", "OSCC", "SUB", "NOISE"}, {"ENV", "ENV 1", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6"},
+           {"LFO", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8"}, {"LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4"},
+           {"FX"}, {"MIX", "MIXER"}, {"FILTER", "FILTER 1", "FILTER 2", "NOTE", "VELO"}, {"MOD"}, {"MASTER", "TUNING", "VOICE"}]
 
 
 def footer_labels(image):

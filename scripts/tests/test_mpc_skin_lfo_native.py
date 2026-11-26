@@ -40,7 +40,7 @@ class LfoSkinTest(unittest.TestCase):
         cls.params = NoFallbackTests.params
         cls.qlinks = NoFallbackTests.qlinks
         cls.applied = (NoFallbackTests.code, NoFallbackTests.err)
-        cls.tab = next(t for t in cls.tui["pageData"]["tabs"] if t["tabName"] == "LFO")
+        cls.tab = next(t for t in cls.tui["pageData"]["tabs"] if t["tabName"] == "LFO 1")
         definitions = {d["key"]: d["value"] for d in cls.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         cls.entries = list(standalone_editor_entries(cls.tab, definitions))
 

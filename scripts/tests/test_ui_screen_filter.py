@@ -21,7 +21,7 @@ class TestFilterScreenNative(unittest.TestCase):
         NoFallbackTests.setUpClass()
         cls.addClassCleanup(NoFallbackTests.tearDownClass)
         cls.tui = NoFallbackTests.tui
-        cls.tab = next((t for t in cls.tui["pageData"]["tabs"] if t["tabName"] == "Filter"), None)
+        cls.tab = next((t for t in cls.tui["pageData"]["tabs"] if t["tabName"] == "Filter 1"), None)
         assert cls.tab is not None, "Filter tab not found in TUI"
         cls.items = cls.tab["componentDefinition"]["componentsData"]
         cls.defs = {d["key"]: d["value"] for d in cls.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}

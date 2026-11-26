@@ -11,8 +11,8 @@ import test_mpc_skin_extras as base
 
 
 CONTRACT = base.REAL_EXTRAS / "mod-targets-native-contract.json"
-OWNERS = {"Macros": 1, "Env": 2, "Env 2": 2, "Env 3": 2, "Env 4": 2, "Env 5": 2, "Env 6": 2, **{n: 3 for n in ("LFO", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4")}, "Filter": 4, "Filter 2": 4, "Note": 4, "Velo": 4, "Mod": 5, "Play": 6,
-          "Osc": 7, "Osc A": 7, "Osc B": 7, "Osc C": 7, "Sub": 7, "Noise": 7}
+OWNERS = {"Macros": 1, "Env 1": 2, "Env 2": 2, "Env 3": 2, "Env 4": 2, "Env 5": 2, "Env 6": 2, **{n: 3 for n in ("LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4")}, "Filter 1": 4, "Filter 2": 4, "Note": 4, "Velo": 4, "Mod": 5, "Play": 6,
+          "Osc A": 7, "Osc B": 7, "Osc C": 7, "Sub": 7, "Noise": 7}
 
 
 def rect(item):

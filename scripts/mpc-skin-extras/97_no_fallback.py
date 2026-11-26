@@ -27,7 +27,7 @@ KEEP = ("Overlay Marker", "Overlay Instance")   # the components the plugin find
 # second input/drawing owner behind the overlay.
 NATIVE = {
     "Filter": {"Filter 1 Power", "Filter 2 Power"},
-    "Mix": {"Mixer F1 Dest", "Mixer F2 Dest", "Mixer Bus 1 Bypass", "Mixer Bus 1 Bypass name",
+    "Mixer": {"Mixer F1 Dest", "Mixer F2 Dest", "Mixer Bus 1 Bypass", "Mixer Bus 1 Bypass name",
             "Mixer Bus 1 Dest", "Mixer Bus 1 Level", "Mixer Bus 1 Level name", "Mixer Bus 2 Bypass",
             "Mixer Bus 2 Bypass name", "Mixer Bus 2 Dest", "Mixer Bus 2 Level", "Mixer Bus 2 Level name",
             "Mixer Main Bypass", "Mixer Main Bypass name"},
@@ -52,7 +52,7 @@ def _keep_component(tab, component):
         return True
     if tab.get("tabName") == "LFO" and name.startswith("LFO 1 Native "):
         return True
-    if tab.get("tabName") == "Mix" and name.startswith("Mixer Native "):
+    if tab.get("tabName") == "Mixer" and name.startswith("Mixer Native "):
         return True
     if tab.get("tabName") in ("Master", "Tuning"):
         return name in MASTER_CONTROL_NAMES

@@ -21,7 +21,7 @@ struct BackgroundTab
 inline constexpr BackgroundTab kBackgroundTabs[] = {
     { "macros", "Macros", "overlay_canvas.png", 900, 20, 0x0b1028u },
     { "play1", "Play", "overlay_canvas.png", 900, 20, 0x141a3bu },
-    { "mixer", "Mix", "overlay_canvas.png", 900, 18, 0x141a35u },
+    { "mixer", "Mixer", "overlay_canvas.png", 900, 18, 0x141a35u },
     { "fx", "FX", "overlay_canvas.png", 900, 2, 0x0c1032u },
     { "master", "Master", "overlay_canvas.png", 600, 74, 0x141a38u },
     { "tuning", "Tuning", "overlay_canvas.png", 600, 74, 0x141a38u },
@@ -30,7 +30,7 @@ inline constexpr BackgroundTab kBackgroundTabs[] = {
     { "filter2", "Filter 2", "overlay_canvas.png", 900, 95, 0x171c35u },
     { "filternote", "Note", "overlay_canvas.png", 900, 95, 0x171c35u },
     { "filtervelo", "Velo", "overlay_canvas.png", 900, 95, 0x171c35u },
-    { "osca", "Osc", "overlay_canvas.png", 900, 8, 0x0f253fu },
+    { "osca", "Osc A", "overlay_canvas.png", 900, 8, 0x0f253fu },
     { "oscb", "Osc B", "overlay_canvas.png", 900, 8, 0x0f253fu },
     { "oscc", "Osc C", "overlay_canvas.png", 900, 8, 0x0f253fu },
     { "oscsub", "Sub", "overlay_canvas.png", 900, 8, 0x0f253fu },

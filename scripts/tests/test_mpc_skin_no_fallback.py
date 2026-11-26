@@ -383,10 +383,10 @@ class NoFallbackTests(unittest.TestCase):
         tabs = {t["tabName"]: t["componentDefinition"]["componentsData"] for t in self.tui["pageData"]["tabs"]}
         play = {entry["componentData"]["name"]: entry for entry in tabs["Play"]}
         groups = (
-            ("Oscillator Controls", "Osc", "oscNativeSurface", "0 0 1280 628", "RangedEnabling/1/2"),
-            ("Envelope Controls", "Env", "envNativeFullFields", "0 0 1280 628", "IndexedEnabling/3"),
-            ("Envelope Selector", "Env", "envNativeSelectorStrip", "164 12 528 56", "IndexedEnabling/3"),
-            ("LFO Controls", "LFO", "lfoNativeFullEditor", "0 0 1280 628", "RangedEnabling/5/6"),
+            ("Oscillator Controls", "Osc A", "oscNativeSurface", "0 0 1280 628", "RangedEnabling/1/2"),
+            ("Envelope Controls", "Env 1", "envNativeFullFields", "0 0 1280 628", "IndexedEnabling/3"),
+            ("Envelope Selector", "Env 1", "envNativeSelectorStrip", "164 12 528 56", "IndexedEnabling/3"),
+            ("LFO Controls", "LFO 1", "lfoNativeFullEditor", "0 0 1280 628", "RangedEnabling/5/6"),
         )
         first_marker = next(i for i, name in enumerate(play) if name.startswith("Overlay Marker"))
         for label, tab, kind, rect, gate in groups:
@@ -411,7 +411,7 @@ class NoFallbackTests(unittest.TestCase):
                              {"Data": f"FromGesture/Parameter {action}", "Caption": f"Parameter {action}"})
 
     def test_env_native_scalar_cells_and_targets_use_their_exclusive_page_handles(self):
-        env = next(tab for tab in self.tui["pageData"]["tabs"] if tab["tabName"] == "Env")
+        env = next(tab for tab in self.tui["pageData"]["tabs"] if tab["tabName"] == "Env 1")
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         components = base.standalone_editor_entries(env, definitions)
         scalars = {c["componentData"]["name"].removeprefix("Env Native "): c for c in components
@@ -456,7 +456,7 @@ class NoFallbackTests(unittest.TestCase):
                 for tab in self.tui["pageData"]["tabs"]}
         definitions = {d["key"]: d["value"]
                        for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        self.assertEqual([c for name in ("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6") for c in tabs[name] if c["componentData"]["type"] == "envNativeSelectorCell"], [],
+        self.assertEqual([c for name in ("Env 1", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6") for c in tabs[name] if c["componentData"]["type"] == "envNativeSelectorCell"], [],
                          "the Env sub-tabs have no selector cells: the hardware sub-tab names the envelope")
         # the cells live in the strip of the Play page's expanded envelope editor (origin 68, 12)
         cells = definitions["envNativeSelectorStrip"]["componentsData"]

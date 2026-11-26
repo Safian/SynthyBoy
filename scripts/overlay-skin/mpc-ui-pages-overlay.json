@@ -23,8 +23,7 @@
       "fn": "Osc",
       "kick": [
         "osc1_main"
-      ],
-      "label": "Osc"
+      ]
     },
     {
       "name": "Osc B",
@@ -59,7 +58,8 @@
       "fn": "Env",
       "kick": [
         "env1"
-      ]
+      ],
+      "label": "Env 1"
     },
     {
       "name": "Env 2",
@@ -101,7 +101,8 @@
       "fn": "LFO",
       "kick": [
         "lfo1"
-      ]
+      ],
+      "label": "LFO 1"
     },
     {
       "name": "LFO 2",
@@ -203,7 +204,8 @@
       "fn": "Filter",
       "kick": [
         "filter1_main"
-      ]
+      ],
+      "label": "Filter 1"
     },
     {
       "name": "Filter 2",

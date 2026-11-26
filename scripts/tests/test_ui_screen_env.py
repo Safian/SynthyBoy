@@ -45,7 +45,7 @@ class UiScreenEnvTest(unittest.TestCase):
 
     def tab(self):
         tabs = self.tui["pageData"]["tabs"]
-        found = [t for t in tabs if t.get("tabName") == "Env"]
+        found = [t for t in tabs if t.get("tabName") == "Env 1"]
         self.assertEqual(len(found), 1, "Env tab must exist exactly once")
         return found[0]
 
@@ -71,7 +71,7 @@ class UiScreenEnvTest(unittest.TestCase):
     def test_selector_strip_and_cells(self):
         """The Env tabs have no selector (the hardware sub-tab names the envelope); the Play page's expanded editor keeps its 6 cells with >= 56px touch targets."""
         defs = self.local_defs()
-        for name in ("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6"):
+        for name in ("Env 1", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6"):
             tab = next(t for t in self.tui["pageData"]["tabs"] if t.get("tabName") == name)
             self.assertFalse([c for c in tab["componentDefinition"]["componentsData"] if "Selector" in c["componentData"]["name"]], name)
         play = next(t for t in self.tui["pageData"]["tabs"] if t.get("tabName") == "Play")

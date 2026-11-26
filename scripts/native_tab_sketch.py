@@ -50,8 +50,12 @@ class NativeTabSketch:
 
     def render_tab(self, tab_name: str) -> Image.Image:
         tabs_by_name = {t.get("tabName"): t for t in self._sketch.tui["pageData"]["tabs"]}
-        if tab_name == "Osc A" and tab_name not in tabs_by_name:
-            tab_name = "Osc"
+        # the finished skin names the first sub-tab of a key by its label (99_zzz_labels.py): Osc A, Env 1, LFO 1, Filter 1; the older short names still find it
+        for short, label in (("Osc", "Osc A"), ("Env", "Env 1"), ("LFO", "LFO 1"), ("Filter", "Filter 1")):
+            if tab_name == short and short not in tabs_by_name and label in tabs_by_name:
+                tab_name = label
+            elif tab_name == label and label not in tabs_by_name and short in tabs_by_name:
+                tab_name = short
         if tab_name not in tabs_by_name:
             raise KeyError(f"Tab '{tab_name}' not found in TUI tabs: {list(tabs_by_name.keys())}")
         tab = tabs_by_name[tab_name]["componentDefinition"]

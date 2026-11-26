@@ -21,7 +21,7 @@ CANVAS_ASSET = "overlay_canvas.png"
 OSC_SENTINEL = (900, 8, "0f253f")
 
 KNOWN = {
-    "osca": ("Osc", CANVAS_ASSET, *OSC_SENTINEL),
+    "osca": ("Osc A", CANVAS_ASSET, *OSC_SENTINEL),
     "oscb": ("Osc B", CANVAS_ASSET, *OSC_SENTINEL),
     "oscc": ("Osc C", CANVAS_ASSET, *OSC_SENTINEL),
     "oscsub": ("Sub", CANVAS_ASSET, *OSC_SENTINEL),
@@ -56,7 +56,7 @@ KNOWN = {
     "master": ("Master", CANVAS_ASSET, 600, 74, "141a38"),
     "tuning": ("Tuning", CANVAS_ASSET, 600, 74, "141a38"),   # the TUNING & MPE side: the title strip of its SCALE card is wide, the sentinel lies in it like on the Master side
     "voice": ("Voice", CANVAS_ASSET, 509, 500, "0c1023"),
-    "mixer": ("Mix", CANVAS_ASSET, 900, 18, "141a35"),
+    "mixer": ("Mixer", CANVAS_ASSET, 900, 18, "141a35"),
     "fx": ("FX", CANVAS_ASSET, 900, 2, "0c1032"),
     "macros": ("Macros", CANVAS_ASSET, 900, 20, "0b1028"),
     "play1": ("Play", CANVAS_ASSET, 900, 20, "141a3b"),
