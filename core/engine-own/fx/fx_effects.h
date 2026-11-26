@@ -21,6 +21,7 @@
 #include "fx_adaa.h"
 #include "fx_oversampler.h"
 #include "fx_eq.h"
+#include "fx_makeup.h"
 #include "fx_reverb.h"
 
 namespace synthyboy
@@ -74,6 +75,7 @@ public:
             d.prepare (static_cast<int> (sr * 4.2));
         for (auto& k : tapCache)
             k.valid = false;
+        glideValid = bandValid = false;
         reset();
     }
     void reset() noexcept
@@ -101,16 +103,31 @@ public:
             fLast[1] = fTarget[1];
             primed = true;
         }
-        const float glide = 1.0f - std::pow (0.5f, 1.0f / (0.02f * sr)); // half life of 20 ms: a change of the time bends the echoes like a tape
-        band[0].set (p.cutoff, p.spread, sampleRate); // both sides have the same filter coefficients: designed once
-        band[1].copyCoefficients (band[0]);
+        // what depends on the sample rate and the filter settings only is made again when they changed (the exact bits): the glide (a power) and the coefficients of the two loop filters (4 exp2
+        // and 4 exp; both sides have the same coefficients: designed once)
+        if (!glideValid || !sameBits (sr, glideSr) || makeup::legacyCaches())
+        {
+            glide = 1.0f - std::pow (0.5f, 1.0f / (0.02f * sr)); // half life of 20 ms: a change of the time bends the echoes like a tape
+            glideSr = sr;
+            glideValid = true;
+        }
+        if (!bandValid || !sameBits (p.cutoff, bandCutoff) || !sameBits (p.spread, bandSpread) || !sameBits (sr, bandSr) || makeup::legacyCaches())
+        {
+            band[0].set (p.cutoff, p.spread, sampleRate);
+            band[1].copyCoefficients (band[0]);
+            bandCutoff = p.cutoff;
+            bandSpread = p.spread;
+            bandSr = sr;
+            bandValid = true;
+        }
         const float fb = std::clamp (p.feedback, -1.0f, 1.0f);
+        const float glideNow = glide; // (a member: copied, the stores to l and r may alias it as far as the compiler knows)
         for (int i = 0; i < n; ++i)
         {
             float rd[2];
             for (int c = 0; c < 2; ++c)
             {
-                fLast[c] += (fTarget[c] - fLast[c]) * glide;
+                fLast[c] += (fTarget[c] - fLast[c]) * glideNow;
                 // the read position, its split and the Lagrange weights are functions of fLast alone: once the glide has settled (the float no longer changes) they are the same as the
                 // sample before, so they are kept (the quotient sr / fLast, the clamp, the truncation and the weights are not redone)
                 TapCache& k = tapCache[c];
@@ -194,6 +211,9 @@ private:
     float fLast[2] = {}, fbRead[2] = {};
     bool primed = false;
     TapCache tapCache[2];
+    float glide = 0.0f, glideSr = 0.0f, bandCutoff = 0.0f, bandSpread = 0.0f, bandSr = 0.0f;
+    bool glideValid = false, bandValid = false;
+    static bool sameBits (float a, float b) noexcept { return std::memcmp (&a, &b, 4) == 0; }
 
 public:
     /** Tests only: the 8 point Lagrange weights in the division form of the first version (bit identical to it), not the products (rounding level, CPU review item 3). */
@@ -216,6 +236,7 @@ public:
         lineSize = size;
         lineMask = size - 1;
         store.assign (static_cast<size_t> (kMaxPairs * 4) * static_cast<size_t> (size), 0.0f);
+        coefValid = false;
         reset();
     }
     void reset() noexcept
@@ -247,9 +268,15 @@ public:
         const float fb = std::clamp (p.feedback, -0.95f, 0.95f);
         const float avg = 0.5f * (p.delay1 + p.delay2);
         // the band filter of every tap has the same coefficients (they come from the same parameters): computed once
-        LoopBand coef;
-        coef.set (p.cutoff, p.spread, sampleRate);
-        coefBand = coef;
+        if (!coefValid || !sameBits (p.cutoff, coefCutoff) || !sameBits (p.spread, coefSpread) || !sameBits (sr, coefSr) || makeup::legacyCaches())
+        {
+            coefBand.set (p.cutoff, p.spread, sampleRate); // (4 exp2 / exp: made again only when the settings or the rate changed, the exact bits)
+            coefCutoff = p.cutoff;
+            coefSpread = p.spread;
+            coefSr = sr;
+            coefValid = true;
+        }
+        const LoopBand& coef = coefBand;
         // what does not change from sample to sample is computed once: the spread of the voices over the unison (a division each) and the phase offset of every tap
         float tOf[kMaxPairs], phOff[kMaxPairs], baseOf[2];
         for (int i = 0; i < V; ++i)
@@ -552,6 +579,9 @@ private:
     double sampleRate = 48000.0;
     std::vector<float> store;         // the delay lines of the 16 taps, one after the other (all with the same length and the same write position)
     LoopBand coefBand;                // the coefficients of the band filters of this block
+    float coefCutoff = 0.0f, coefSpread = 0.0f, coefSr = 0.0f;
+    bool coefValid = false;
+    static bool sameBits (float a, float b) noexcept { return std::memcmp (&a, &b, 4) == 0; }
     int lineSize = 16, lineMask = 15, linePos = 0;
     float hiY[kMaxPairs * 4] = {}, loY[kMaxPairs * 4] = {}; // the state of the band filters
     float phase = 0.0f;
@@ -588,8 +618,15 @@ public:
         const float inc = p.rate / sr;
         const float f = std::clamp (p.feedback, -1.0f, 1.0f);
         const float dc = 1.0f / std::clamp (p.centerHz, 20.0f, 16000.0f);
-        const float m = 0.5f * clamp01 (p.mix); // the mix knob runs over half of the equal power law
-        const float wetG = std::sin (m * kPif * 0.5f), dryG = std::cos (m * kPif * 0.5f);
+        if (!mixValid || std::memcmp (&p.mix, &mixKey, 4) != 0 || makeup::legacyCaches())
+        {
+            const float m = 0.5f * clamp01 (p.mix); // the mix knob runs over half of the equal power law
+            wetGain = std::sin (m * kPif * 0.5f);
+            dryGain = std::cos (m * kPif * 0.5f);
+            mixKey = p.mix;
+            mixValid = true;
+        }
+        const float wetG = wetGain, dryG = dryGain;
         float* io[2] = { l, r };
         for (int i = 0; i < n; ++i)
         {
@@ -616,6 +653,8 @@ private:
     double sampleRate = 48000.0;
     std::array<DelayLine, 2> line;
     float phase = 0.0f;
+    float mixKey = 0.0f, wetGain = 0.0f, dryGain = 1.0f; // sin and cos of the mix law for the mix they were made for (the exact bits)
+    bool mixValid = false;
 };
 
 class Phaser
@@ -624,7 +663,7 @@ public:
     bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
     static constexpr int kStages = 12;
     struct Params { float mix = 0.5f, feedback = 0.5f, rate = 0.12f, depthSemis = 24.0f, centerHz = 2000.0f, blend = 0.5f, phaseOffset = 120.0f / 360.0f, depth2 = 0.0f; };
-    void prepare (double sr) { sampleRate = sr; reset(); }
+    void prepare (double sr) { sampleRate = sr; refresh[0].valid = refresh[1].valid = false; reset(); }
     void reset() noexcept { for (auto& c : z) for (auto& x : c) x = 0.0f; phase = 0.0f; fb[0] = fb[1] = 0.0f; for (auto& x : bpA) x = 0.0f; for (auto& x : bpB) x = 0.0f; }
     /** The LFO runs on while the module is skipped on silence (FxChain, tier low): the same per sample steps as process (). */
     void idle (int n) noexcept
@@ -666,24 +705,44 @@ public:
                     const float v = 2.0f * std::fabs (2.0f * x01 - 1.0f) - 1.0f; // triangle -1 .. 1
                     const float e2 = (centreNote + p.depthSemis * v) * (1.0f / 12.0f);
                     const float hz = std::clamp (8.1757989f * (fast ? fastmath::exp2 (e2) : std::exp2 (e2)), 20.0f, 0.45f * sr);
-                    hc1[c] = OnePole::coefficient (hz / 20.0f, sampleRate);
-                    hc2[c] = OnePole::coefficient (hz * 20.0f, sampleRate);
-                    if (spread)
+                    // the coefficients are a function of the cutoff, the depth 2 and the rate alone: the ones of the last refresh of this channel are kept while those are the same (the exact
+                    // bits: a static LFO, a cutoff at a clamp, and the refresh that every call starts with)
+                    Refresh& rc = refresh[c];
+                    if (rc.valid && rc.hz == hz && std::memcmp (&rc.depth2, &p.depth2, 4) == 0 && !makeup::legacyCaches())
                     {
-                        // depth 2: the stage cutoffs spread linearly in semitones over [-depth2 / 2, +depth2 / 2] around the centre (stage 0 lowest for a positive value)
+                        hc1[c] = rc.hc1;
+                        hc2[c] = rc.hc2;
                         for (int s = 0; s < kStages; ++s)
-                        {
-                            const float hs = std::max (hz * std::exp2 (p.depth2 * (static_cast<float> (s) / 11.0f - 0.5f) * (1.0f / 12.0f)), 5.0f);
-                            const float g = phaserStageG (hs, sampleRate);
-                            hS[c][s] = g / (1.0f + g);
-                        }
+                            hS[c][s] = rc.stage[s];
                     }
                     else
                     {
-                        const float g = phaserStageG (hz, sampleRate);
-                        const float a0 = g / (1.0f + g);
+                        hc1[c] = OnePole::coefficient (hz / 20.0f, sampleRate);
+                        hc2[c] = OnePole::coefficient (hz * 20.0f, sampleRate);
+                        if (spread)
+                        {
+                            // depth 2: the stage cutoffs spread linearly in semitones over [-depth2 / 2, +depth2 / 2] around the centre (stage 0 lowest for a positive value)
+                            for (int s = 0; s < kStages; ++s)
+                            {
+                                const float hs = std::max (hz * std::exp2 (p.depth2 * (static_cast<float> (s) / 11.0f - 0.5f) * (1.0f / 12.0f)), 5.0f);
+                                const float g = phaserStageG (hs, sampleRate);
+                                hS[c][s] = g / (1.0f + g);
+                            }
+                        }
+                        else
+                        {
+                            const float g = phaserStageG (hz, sampleRate);
+                            const float a0 = g / (1.0f + g);
+                            for (int s = 0; s < kStages; ++s)
+                                hS[c][s] = a0;
+                        }
+                        rc.valid = !std::isnan (hz); // (a NaN cutoff never compares equal: nothing to keep)
+                        rc.hz = hz;
+                        rc.depth2 = p.depth2;
+                        rc.hc1 = hc1[c];
+                        rc.hc2 = hc2[c];
                         for (int s = 0; s < kStages; ++s)
-                            hS[c][s] = a0;
+                            rc.stage[s] = hS[c][s];
                     }
                 }
                 const float c1 = hc1[c], c2 = hc2[c];
@@ -712,10 +771,13 @@ public:
     }
 
 private:
+    /** The coefficients of the last refresh of one channel and what they were made for. */
+    struct Refresh { bool valid = false; float hz = 0.0f, depth2 = 0.0f, hc1 = 0.0f, hc2 = 0.0f, stage[kStages] = {}; };
     Params p;
     double sampleRate = 48000.0;
     float z[2][kStages] = {};
     float phase = 0.0f, fb[2] = {}, bpA[2] = {}, bpB[2] = {};
+    Refresh refresh[2];
 };
 
 class Distortion
