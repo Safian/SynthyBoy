@@ -1,6 +1,7 @@
-// SynthyBoy - own engine tests: the Compressor's look-ahead limiter without the `% cap` library calls and with the NEON minimum (CPU review item M1,
-// docs/release/CPU-REVIEW-MEMORY.md) gives the very bits of the code it replaced. The old process () stays selectable (Limiter::reference / setReferenceLimiter); the two run in step on
-// random and special inputs, every look-ahead and capacity, block splits and parameter changes; outputs and the whole state are compared with memcmp.
+// SynthyBoy - own engine tests: the Compressor's look-ahead limiter. CPU review item M1 (docs/release/CPU-REVIEW-MEMORY.md): no `% cap` library calls; CPU review item 1 (2026-11-26): the
+// minimum over the look-ahead is a monotone deque and the box filter a running sum in double. The old process () stays selectable (Limiter::reference / setReferenceLimiter); the two run in
+// step on random and special inputs, every look-ahead and capacity, block splits and parameter changes. The state of the min filter and the release (the required gain ring, the released gain
+// ring, the held input) is compared with memcmp (bit identical); the box filter gain, and with it the output, within 2e-6 relative (measured worst case printed; the sum is not bit identical).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <chrono>
@@ -75,6 +76,42 @@ float sampleOf (std::mt19937& rng, int specialRate, float amp)
 }
 
 bool sameBits (const float* a, const float* b, size_t n) { return std::memcmp (a, b, n * sizeof (float)) == 0; }
+
+/** The bound of the running sum against the serial float sum of the reference, relative: the error of the serial sum grows with the window (3e-6 up to the 72 samples of 48 kHz: 1.4e-6 measured on a stack of the factory
+    range, 2.3e-6 in the harshest scenario below; 6e-8 per window sample beyond), the double sum is the accurate one. */
+float gainBound (int la) { return std::max (3.0e-6f, 6.0e-8f * static_cast<float> (la + 1)); }
+double gWorstGainRel = 0.0;
+
+bool closeVal (float a, float b, float rel, float absTol, double* worst = nullptr)
+{
+    if (std::isnan (a) || std::isnan (b))
+        return std::isnan (a) && std::isnan (b);
+    if (a == b)
+        return true;
+    if (std::isinf (a) || std::isinf (b))
+        return false;
+    const double d = std::fabs (static_cast<double> (a) - static_cast<double> (b)), m = std::max (std::fabs (static_cast<double> (a)), std::fabs (static_cast<double> (b)));
+    if (worst != nullptr && d > absTol)
+        *worst = std::max (*worst, d / m);
+    return d <= static_cast<double> (rel) * m + static_cast<double> (absTol);
+}
+
+/** One limiter step of the reference and the new code: the gains and the outputs agree within the bound. */
+bool sameOut (const CompressorOptTest::Limiter& a, const CompressorOptTest::Limiter& b, const float* ao, const float* bo, int la)
+{
+    const float tol = gainBound (la);
+    return closeVal (a.lastGain, b.lastGain, tol, 1.0e-30f, &gWorstGainRel) && closeVal (ao[0], bo[0], tol, 1.0e-30f) && closeVal (ao[1], bo[1], tol, 1.0e-30f);
+}
+
+/** Two blocks of the whole compressor: every sample within the bound of the limiter's gain (the dry delay is exact, the mix and the makeup are products). */
+bool closeBlock (const float* a, const float* b, size_t n, float peakIn, int la)
+{
+    const float tol = 2.0f * gainBound (la);
+    for (size_t i = 0; i < n; ++i)
+        if (!closeVal (a[i], b[i], tol, 1.0e-5f * std::max (1.0f, std::isfinite (peakIn) ? peakIn : 1.0f)))
+            return false;
+    return true;
+}
 } // namespace
 
 // The limiter alone: every look-ahead length and every capacity from the look-ahead + 1 on (non power of two included), random and special input, a ceiling and a release that change between
@@ -110,9 +147,9 @@ TEST (limiter_matches_reference_for_every_length_and_capacity)
                     float ao[2], bo[2];
                     a.process (inL, inR, ceilAmp, rel, laNow, ao[0], ao[1]);
                     b.process (inL, inR, ceilAmp, rel, laNow, bo[0], bo[1]);
-                    ok = sameBits (ao, bo, 2) && CompressorOptTest::sameLimiter (a, b);
+                    ok = sameOut (a, b, ao, bo, laNow) && CompressorOptTest::sameLimiter (a, b);
                     if (!ok)
-                        std::printf ("limiter differs: la %d cap %d variant %d sample %d\n", laNow, cap, variant, i);
+                        std::printf ("limiter differs: la %d cap %d variant %d sample %d (%s) gain %.9g reference %.9g\n", laNow, cap, variant, i, sameOut (a, b, ao, bo, laNow) ? "state" : "gain / output", static_cast<double> (b.lastGain), static_cast<double> (a.lastGain));
                 }
                 CHECK (ok);
                 ++runs;
@@ -138,7 +175,7 @@ TEST (limiter_with_look_ahead_not_below_capacity_uses_the_old_indexing)
                 float ao[2], bo[2];
                 a.process (inL, inR, 1.0f, 0.01f, la, ao[0], ao[1]);
                 b.process (inL, inR, 1.0f, 0.01f, la, bo[0], bo[1]);
-                ok = sameBits (ao, bo, 2) && CompressorOptTest::sameLimiter (a, b);
+                ok = sameOut (a, b, ao, bo, la) && CompressorOptTest::sameLimiter (a, b);
             }
             CHECK (ok);
         }
@@ -166,10 +203,98 @@ TEST (limiter_special_value_at_every_position)
                         float ao[2], bo[2];
                         a.process (x, -x, 0.8f, 0.02f, la, ao[0], ao[1]);
                         b.process (x, -x, 0.8f, 0.02f, la, bo[0], bo[1]);
-                        ok = sameBits (ao, bo, 2) && CompressorOptTest::sameLimiter (a, b);
+                        ok = sameOut (a, b, ao, bo, la) && CompressorOptTest::sameLimiter (a, b);
                     }
                     CHECK (ok);
                 }
+}
+
+// The bound of the running sum (CPU review item 1): a long run of audio that limits hard, with the release of the factory range, against the serial float sum of the reference. The gain
+// of every sample is compared (not only the output, which is the gain times a held input that may be zero), and the state of the min filter and the release memcmp. The running sum is
+// also compared with the exact sum of the window (long double): it is the accurate one, the serial float sum is what drifts (the more the longer the window).
+TEST (limiter_running_sum_stays_within_the_bound_of_the_serial_sum)
+{
+    std::mt19937 rng (2026);
+    double worstRef[2] = { 0.0, 0.0 }, worstExact = 0.0; // vs the reference: up to the 72 samples of 48 kHz, longer windows; the running sum vs the exact sum
+    long long samples = 0;
+    for (int la : { 1, 2, 7, 33, 66, 72, 144 })
+        for (float ceilAmp : { 0.05f, 0.5f, 0.9f })
+            for (float relCoef : { 1.0f / 5.0f, 1.0f / 1800.0f, 1.0f / 40000.0f })
+            {
+                const int cap = la + 8;
+                CompressorOptTest::Limiter a, b;
+                a.prepare (cap);
+                b.prepare (cap);
+                a.reference = true;
+                bool ok = true;
+                for (int i = 0; i < 24000 && ok; ++i)
+                {
+                    // bursts of loud audio between quiet stretches: the gain moves in the whole range, and sits at exactly 1 in between
+                    const bool loud = (i / 1500) % 3 == 1 || (i / 97) % 11 == 0;
+                    const float amp = loud ? 4.0f : 0.02f;
+                    const float inL = amp * (static_cast<float> (rng() % 200001) / 100000.0f - 1.0f), inR = amp * (static_cast<float> (rng() % 200001) / 100000.0f - 1.0f);
+                    float ao[2], bo[2];
+                    if (i % 32 == 0)
+                        b.resumNext(); // what Compressor::process does at the start of every call
+                    a.process (inL, inR, ceilAmp, relCoef, la, ao[0], ao[1]);
+                    b.process (inL, inR, ceilAmp, relCoef, la, bo[0], bo[1]);
+                    ++samples;
+                    ok = sameOut (a, b, ao, bo, la) && CompressorOptTest::sameLimiter (a, b);
+                    long double exact = 0.0L;
+                    for (int k = 0; k <= la; ++k)
+                        exact += static_cast<long double> (b.g1[static_cast<size_t> ((b.pos - k + 4 * cap) % cap)]);
+                    exact /= static_cast<long double> (la + 1);
+                    worstExact = std::max (worstExact, static_cast<double> (std::fabs ((static_cast<long double> (b.lastGain) - exact) / exact)));
+                    worstRef[la > 72 ? 1 : 0] = std::max (worstRef[la > 72 ? 1 : 0], std::fabs (static_cast<double> (a.lastGain) - static_cast<double> (b.lastGain)) / static_cast<double> (a.lastGain));
+                }
+                CHECK (ok);
+            }
+    std::printf ("limiter running sum over %lld samples: worst relative gain difference to the serial float sum %.3g (windows up to 73 samples; bound 3e-6) and %.3g (up to 145; bound 6e-8 per sample), to the exact sum %.3g\n",
+                 samples, worstRef[0], worstRef[1], worstExact);
+    CHECK (worstRef[0] <= 3.0e-6);
+    CHECK (worstRef[1] <= 6.0e-8 * 145.0);
+    CHECK (worstExact <= 2.0e-7); // one float rounding of the sum and one of the quotient
+}
+
+// The exact fast paths: no required gain below 1 in the window gives the minimum 1.0f, and a released gain of exactly 1.0f for a whole window gives the gain exactly 1.0f (the same bits as the
+// reference), also at the first limited sample and again after a reset (the release stalls at 1 - 2^-24 after a limit, so exact ones occur from a reset to the first limit only).
+TEST (limiter_exact_fast_paths_give_exactly_one)
+{
+    for (int la : { 1, 5, 66 })
+    {
+        const int cap = la + 8;
+        CompressorOptTest::Limiter a, b;
+        a.prepare (cap);
+        b.prepare (cap);
+        a.reference = true;
+        int exactOnes = 0;
+        for (int i = 0; i < 40000; ++i)
+        {
+            if (i == 20000)
+            {
+                a.reset();
+                b.reset();
+            }
+            // 3000 samples below the ceiling, then 400 of loud audio, then quiet again; the same after the reset
+            const int ph = i % 20000;
+            const float amp = ph < 3000 ? 0.1f : (ph < 3400 ? 3.0f : 0.1f);
+            const float inL = amp * std::sin (0.07f * static_cast<float> (i)), inR = 0.5f * inL;
+            float ao[2], bo[2];
+            if (i % 32 == 0)
+                b.resumNext();
+            a.process (inL, inR, 0.5f, 0.05f, la, ao[0], ao[1]);
+            b.process (inL, inR, 0.5f, 0.05f, la, bo[0], bo[1]);
+            CHECK (sameOut (a, b, ao, bo, la) && CompressorOptTest::sameLimiter (a, b));
+            if (ph < 3000)
+            {
+                ++exactOnes;
+                CHECK (b.lastGain == 1.0f);
+                CHECK (a.lastGain == 1.0f); // (the serial sum of la + 1 ones is exact too)
+                CHECK (std::memcmp (ao, bo, 8) == 0);
+            }
+        }
+        CHECK (exactOnes == 6000);
+    }
 }
 
 // The whole Compressor, every mode, band setting and sample rate: random blocks of odd lengths, parameter changes between the blocks.
@@ -217,10 +342,15 @@ TEST (compressor_matches_reference_over_blocks_and_parameter_changes)
                     ra[static_cast<size_t> (i)] = sampleOf (rng, pass == 2 ? 2000 : 0, amp);
                 }
                 std::vector<float> lb = la, rb = ra;
+                float peakIn = 0.0f;
+                for (int i = 0; i < n; ++i)
+                    if (std::isfinite (la[static_cast<size_t> (i)]) && std::isfinite (ra[static_cast<size_t> (i)]))
+                        peakIn = std::max ({ peakIn, std::fabs (la[static_cast<size_t> (i)]), std::fabs (ra[static_cast<size_t> (i)]) });
                 a.process (la.data(), ra.data(), n);
                 b.process (lb.data(), rb.data(), n);
                 ++blocks;
-                ok = sameBits (la.data(), lb.data(), la.size()) && sameBits (ra.data(), rb.data(), ra.size());
+                const int look = CompressorOptTest::lookAhead (a);
+                ok = closeBlock (la.data(), lb.data(), la.size(), peakIn, look) && closeBlock (ra.data(), rb.data(), ra.size(), peakIn, look);
                 for (int k = 0; k < 3; ++k)
                     ok = ok && CompressorOptTest::sameLimiter (CompressorOptTest::limiter (a, k), CompressorOptTest::limiter (b, k));
                 if (!ok)
@@ -261,10 +391,164 @@ TEST (compressor_reset_and_reprepare)
             std::vector<float> lb = la, rb = ra;
             a.process (la.data(), ra.data(), 200);
             b.process (lb.data(), rb.data(), 200);
-            ok = ok && sameBits (la.data(), lb.data(), 200) && sameBits (ra.data(), rb.data(), 200);
+            ok = ok && closeBlock (la.data(), lb.data(), 200, 1.5f, Compressor::lookAheadFor (sr)) && closeBlock (ra.data(), rb.data(), 200, 1.5f, Compressor::lookAheadFor (sr));
         }
     }
     CHECK (ok);
+}
+
+// CPU review item 2 (2026-11-26): Biquad::design computes the power of ten of the gain only for the types that use it, and the Compressor's low band (the all pass of the upper
+// crossover) is one all pass biquad instead of LP (f2)^2 + HP (f2)^2. The design change is bit identical (a local copy of the old design is compared); the all pass is not (bound below).
+namespace
+{
+/** Biquad::design as it was before item 2 (the power of ten for every type), for the bit comparison. */
+void designBefore (Biquad& b, Biquad::Type type, float hz, float q, float gainDb, double sr, float maxFrac)
+{
+    const float w0 = kTwoPif * std::clamp (hz, 10.0f, static_cast<float> (sr) * maxFrac) / static_cast<float> (sr);
+    const float cs = std::cos (w0), sn = std::sin (w0);
+    const float alpha = sn / (2.0f * std::max (q, 0.05f));
+    const float A = std::pow (10.0f, gainDb / 40.0f);
+    switch (type)
+    {
+        case Biquad::lowpass: b.set ((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + alpha, -2 * cs, 1 - alpha); break;
+        case Biquad::highpass: b.set ((1 + cs) / 2, -(1 + cs), (1 + cs) / 2, 1 + alpha, -2 * cs, 1 - alpha); break;
+        case Biquad::peak: b.set (1 + alpha * A, -2 * cs, 1 - alpha * A, 1 + alpha / A, -2 * cs, 1 - alpha / A); break;
+        case Biquad::notch: b.set (1, -2 * cs, 1, 1 + alpha, -2 * cs, 1 - alpha); break;
+        case Biquad::lowShelf:
+        {
+            const float sq = 2.0f * std::sqrt (A) * alpha;
+            b.set (A * ((A + 1) - (A - 1) * cs + sq), 2 * A * ((A - 1) - (A + 1) * cs), A * ((A + 1) - (A - 1) * cs - sq),
+                   (A + 1) + (A - 1) * cs + sq, -2 * ((A - 1) + (A + 1) * cs), (A + 1) + (A - 1) * cs - sq);
+            break;
+        }
+        case Biquad::highShelf:
+        {
+            const float sq = 2.0f * std::sqrt (A) * alpha;
+            b.set (A * ((A + 1) + (A - 1) * cs + sq), -2 * A * ((A - 1) + (A + 1) * cs), A * ((A + 1) + (A - 1) * cs - sq),
+                   (A + 1) - (A - 1) * cs + sq, 2 * ((A - 1) - (A + 1) * cs), (A + 1) - (A - 1) * cs - sq);
+            break;
+        }
+        default: break;
+    }
+}
+bool sameCoefficients (const Biquad& a, const Biquad& b)
+{
+    const float x[5] = { a.b0, a.b1, a.b2, a.a1, a.a2 }, y[5] = { b.b0, b.b1, b.b2, b.a1, b.a2 };
+    return std::memcmp (x, y, sizeof x) == 0;
+}
+} // namespace
+
+TEST (biquad_design_without_the_unused_power_is_bit_identical)
+{
+    std::mt19937 rng (31);
+    int compared = 0;
+    for (double sr : { 22050.0, 44100.0, 48000.0, 96000.0 })
+        for (int ty = 0; ty <= 5; ++ty)
+            for (int i = 0; i < 2000; ++i)
+            {
+                const float hz = 5.0f + static_cast<float> (rng() % 2000000) / 100.0f, q = 0.05f + static_cast<float> (rng() % 5000) / 250.0f;
+                const float gain = static_cast<float> (static_cast<int> (rng() % 4801) - 2400) / 100.0f; // -24 .. +24 dB, also 0
+                const float maxFrac = (i & 1) != 0 ? 0.45f : 0.499f;
+                Biquad now, before;
+                now.design (static_cast<Biquad::Type> (ty), hz, q, gain, sr, maxFrac);
+                designBefore (before, static_cast<Biquad::Type> (ty), hz, q, gain, sr, maxFrac);
+                CHECK (sameCoefficients (now, before));
+                ++compared;
+            }
+    std::printf ("biquad designs compared: %d\n", compared);
+}
+
+TEST (compressor_low_band_all_pass_merge_stays_below_minus_80_db)
+{
+    // the old structure of the multiband path (bands = 0), as set () and process () had it: per channel LP / HP (f1), LP / HP (f2), and the low band through LP (f2)^2 + HP (f2)^2
+    struct Old
+    {
+        Biquad lr[8], ap[4];
+        void design (float f1, float f2, double sr)
+        {
+            lr[0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sr, 0.499f); lr[1].copyCoefficients (lr[0]);
+            lr[2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sr, 0.499f); lr[3].copyCoefficients (lr[2]);
+            lr[4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sr, 0.499f); lr[5].copyCoefficients (lr[4]);
+            lr[6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sr, 0.499f); lr[7].copyCoefficients (lr[6]);
+            ap[0].copyCoefficients (lr[4]); ap[1].copyCoefficients (lr[4]); ap[2].copyCoefficients (lr[6]); ap[3].copyCoefficients (lr[6]);
+        }
+        /** low + mid + high of one sample, added in the order of Compressor::process (out = 0 + low, + mid, + high). */
+        float sum (float x)
+        {
+            float low = lr[1].process (lr[0].process (x));
+            const float rest = lr[3].process (lr[2].process (x));
+            const float mid = lr[5].process (lr[4].process (rest)), high = lr[7].process (lr[6].process (rest));
+            low = ap[1].process (ap[0].process (low)) + ap[3].process (ap[2].process (low));
+            float out = 0.0f;
+            out += low;
+            out += mid;
+            out += high;
+            return out;
+        }
+    };
+    std::mt19937 rng (77);
+    double worstDb = -400.0;
+    for (double sr : { 44100.0, 48000.0 })
+        for (float f1 : { 60.0f, 160.0f, 400.0f })
+            for (float f2 : { 1000.0f, 2500.0f, 6000.0f })
+              for (float tone : { 0.0f, 0.25f, 0.7f, 0.95f, 1.0f, 1.05f, 1.4f, 3.0f }) // 0: noise and a sweep, else a sine at that multiple of the upper crossover
+            {
+                Compressor c;
+                c.prepare (sr);
+                Compressor::Params p; // unity: the thresholds above anything the input reaches, no ratio, no makeup, mix 1, so the output is the flat sum of the three bands
+                p.bands = 0;
+                p.mode = 0;
+                p.mix = 1.0f;
+                p.crossLow = f1;
+                p.crossHigh = f2;
+                for (auto& bd : p.band)
+                {
+                    bd.upperDb = 12.0f;
+                    bd.lowerDb = -120.0f;
+                    bd.upperRatio = 0.5f;
+                    bd.lowerRatio = 0.0f;
+                    bd.gainDb = 0.0f;
+                }
+                c.set (p);
+                Old o[2];
+                for (auto& x : o)
+                    x.design (f1, f2, sr);
+                const int n = 30000;
+                std::vector<float> l (static_cast<size_t> (n)), r (static_cast<size_t> (n));
+                for (int i = 0; i < n; ++i)
+                {
+                    // noise with a swept sine on top: every frequency, around both crossovers
+                    const float sweep = 0.3f * std::sin (6.2831853f * (20.0f + 0.5f * static_cast<float> (i) * (static_cast<float> (sr) * 0.4f) / static_cast<float> (n)) * static_cast<float> (i) / static_cast<float> (sr));
+                    l[static_cast<size_t> (i)] = 0.3f * (static_cast<float> (rng() % 20001) / 10000.0f - 1.0f) + sweep;
+                    r[static_cast<size_t> (i)] = 0.3f * (static_cast<float> (rng() % 20001) / 10000.0f - 1.0f) - sweep;
+                }
+                if (tone > 0.0f)
+                    for (int i = 0; i < n; ++i)
+                    {
+                        // a pure tone relative to the upper crossover: the error of the all pass is narrow band, around f2
+                        const float s = 0.5f * std::sin (6.2831853f * tone * f2 * static_cast<float> (i) / static_cast<float> (sr));
+                        l[static_cast<size_t> (i)] = s;
+                        r[static_cast<size_t> (i)] = -0.7f * s;
+                    }
+                std::vector<float> refL (static_cast<size_t> (n)), refR (static_cast<size_t> (n));
+                for (int i = 0; i < n; ++i)
+                {
+                    refL[static_cast<size_t> (i)] = o[0].sum (l[static_cast<size_t> (i)]);
+                    refR[static_cast<size_t> (i)] = o[1].sum (r[static_cast<size_t> (i)]);
+                }
+                c.process (l.data(), r.data(), n);
+                double errSq = 0.0, refSq = 0.0;
+                for (int i = 2000; i < n; ++i) // after the start of the filters
+                {
+                    const double dl = static_cast<double> (l[static_cast<size_t> (i)]) - static_cast<double> (refL[static_cast<size_t> (i)]), dr = static_cast<double> (r[static_cast<size_t> (i)]) - static_cast<double> (refR[static_cast<size_t> (i)]);
+                    errSq += dl * dl + dr * dr;
+                    refSq += static_cast<double> (refL[static_cast<size_t> (i)]) * static_cast<double> (refL[static_cast<size_t> (i)]) + static_cast<double> (refR[static_cast<size_t> (i)]) * static_cast<double> (refR[static_cast<size_t> (i)]);
+                }
+                const double db = 10.0 * std::log10 (std::max (errSq, 1.0e-300) / refSq);
+                worstDb = std::max (worstDb, db);
+                CHECK (db < -80.0);
+            }
+    std::printf ("compressor low band all pass merge: worst difference to the four biquad form %.1f dB (bound -80 dB)\n", worstDb);
 }
 
 // Timing (printed, not asserted): the limit mode of one band over 128 sample blocks at 48 kHz, old against new.

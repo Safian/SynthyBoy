@@ -87,24 +87,24 @@ public:
         histUp_.fill (0.0f);
         histDownA_.fill (0.0f);
         histDownB_.fill (0.0f);
+        posUp_ = posDownA_ = posDownB_ = 0;
     }
 
     /** 2x upsampler: takes 1 sample at 1x, outputs 2 samples at 2x. */
     std::array<float, 2> up (float x) noexcept
     {
+        // The history is a doubled ring buffer (every value stored at i and i + 15): h[i] = the sample i + 1 steps back, as a contiguous run from the position, no shifting.
+        const float* const h = histUp_.data() + posUp_;
         // Even polyphase branch: 16 even taps with current x and 15 past samples.
         float acc = taps_[0] * x;
         for (int i = 1; i < kPolyTaps; ++i)
-            acc += taps_[static_cast<size_t> (i)] * histUp_[static_cast<size_t> (i - 1)];
+            acc += taps_[static_cast<size_t> (i)] * h[i - 1];
         const float y0 = 2.0f * acc;
 
         // Odd polyphase branch: pure delay of 7 samples (index 6 in past history) scaled by center tap.
-        const float y1 = 2.0f * center_ * histUp_[6]; // x[n - 7]
+        const float y1 = 2.0f * center_ * h[6]; // x[n - 7]
 
-        // Shift history of 15 floats:
-        for (int i = 14; i > 0; --i)
-            histUp_[static_cast<size_t> (i)] = histUp_[static_cast<size_t> (i - 1)];
-        histUp_[0] = x;
+        push (histUp_, posUp_, x);
 
         return { y0, y1 };
     }
@@ -119,22 +119,18 @@ public:
     /** 2x decimator: takes 2 samples at 2x (a = even, b = odd), outputs 1 sample at 1x. */
     float down (float a, float b) noexcept
     {
+        const float* const ha = histDownA_.data() + posDownA_;
+        const float* const hb = histDownB_.data() + posDownB_;
         // Even branch: 16 even taps with current a and 15 past samples of a.
         float acc = taps_[0] * a;
         for (int i = 1; i < kPolyTaps; ++i)
-            acc += taps_[static_cast<size_t> (i)] * histDownA_[static_cast<size_t> (i - 1)];
+            acc += taps_[static_cast<size_t> (i)] * ha[i - 1];
 
         // Odd branch: center tap with b delayed by 8 samples (index 7 in past history).
-        const float delayed = center_ * histDownB_[7]; // b[n - 8]
+        const float delayed = center_ * hb[7]; // b[n - 8]
 
-        // Shift histories of 15 floats:
-        for (int i = 14; i > 0; --i)
-            histDownA_[static_cast<size_t> (i)] = histDownA_[static_cast<size_t> (i - 1)];
-        histDownA_[0] = a;
-
-        for (int i = 14; i > 0; --i)
-            histDownB_[static_cast<size_t> (i)] = histDownB_[static_cast<size_t> (i - 1)];
-        histDownB_[0] = b;
+        push (histDownA_, posDownA_, a);
+        push (histDownB_, posDownB_, b);
 
         return acc + delayed;
     }
@@ -146,9 +142,19 @@ private:
     std::array<float, kPolyTaps> taps_ {};
     float center_ = 0.5f;
 
-    std::array<float, 15> histUp_ {};
-    std::array<float, 15> histDownA_ {};
-    std::array<float, 15> histDownB_ {};
+    /** The ring buffers are 30 floats: the 15 samples, twice. The newest sample is at the position, the oldest 14 further on; a push moves the position back by one (with a wrap) and writes the
+        sample at both places. Bit identical to shifting the 15 floats (the same values at the same distances). */
+    static void push (std::array<float, 30>& h, int& pos, float x) noexcept
+    {
+        pos = pos == 0 ? 14 : pos - 1;
+        h[static_cast<size_t> (pos)] = x;
+        h[static_cast<size_t> (pos) + 15] = x;
+    }
+
+    std::array<float, 30> histUp_ {};
+    std::array<float, 30> histDownA_ {};
+    std::array<float, 30> histDownB_ {};
+    int posUp_ = 0, posDownA_ = 0, posDownB_ = 0;
 };
 
 } // namespace own

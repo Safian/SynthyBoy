@@ -5,7 +5,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include "fx_dsp.h"
+#include "fx_makeup.h"
 
 namespace synthyboy
 {
@@ -28,6 +31,10 @@ public:
             for (auto& b : c)
                 b.reset();
         primed = false;
+        for (auto& k : svfKey)
+            k.valid = false; // the sections hold their defaults again
+        for (auto& k : rbjKey)
+            k.valid = false;
     }
     void set (const Params& np) noexcept
     {
@@ -77,13 +84,33 @@ public:
             return;
         }
         const float invP = 1.0f / static_cast<float> (std::max (period, 1));
-        for (int i = 0; i < n; ++i)
+        // band after band, every band over the whole call (a band only needs the output of the band before it for the same sample, and the sections of both channels are independent: the
+        // same arithmetic as the sample by sample loop over the bands). A band whose coefficients stand still (the interpolation prev + (cur - prev) * t is exactly prev for the same
+        // finite values, a negative zero excepted) runs on the coefficients themselves.
+        for (int b = 0; b < 4; ++b)
         {
-            const float t = static_cast<float> (t0 + i + 1) * invP;
-            for (int b = 0; b < 4; ++b)
+            if (b == 2 && !mid2On)
+                continue;
+            if (steady (prevCo[b], curCo[b]))
             {
-                if (b == 2 && !mid2On)
-                    continue;
+                const float c0 = curCo[b][0], c1 = curCo[b][1], c2 = curCo[b][2], c3 = curCo[b][3], c4 = curCo[b][4];
+                for (int c = 0; c < 2; ++c)
+                {
+                    Biquad& q = bq[c][b];
+                    float* const x = io[c];
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const float y = c0 * x[i] + q.z1;
+                        q.z1 = flushDenormal (c1 * x[i] - c3 * y + q.z2);
+                        q.z2 = flushDenormal (c2 * x[i] - c4 * y);
+                        x[i] = y;
+                    }
+                }
+                continue;
+            }
+            for (int i = 0; i < n; ++i)
+            {
+                const float t = static_cast<float> (t0 + i + 1) * invP;
                 float co[5];
                 for (int k = 0; k < 5; ++k)
                     co[k] = prevCo[b][k] + (curCo[b][k] - prevCo[b][k]) * t;
@@ -111,8 +138,36 @@ private:
     {
         float g = 0.1f, R = 1.0f, wl = 1.0f, wb = 0.0f, wh = 0.0f, ic1 = 0.0f, ic2 = 0.0f;
     };
+    /** The inputs of a band design, compared by their bits: a design that was made for the same inputs is not made again (pow, tan, sin, cos, sqrt per band and control period). */
+    struct DesignKey
+    {
+        int kind = 0;
+        float hz = 0.0f, gainDb = 0.0f, res = 0.0f;
+        bool valid = false;
+        bool same (int k, const Band& b) const noexcept
+        {
+            return valid && kind == k && std::memcmp (&hz, &b.hz, 4) == 0 && std::memcmp (&gainDb, &b.gainDb, 4) == 0 && std::memcmp (&res, &b.res, 4) == 0;
+        }
+        void store (int k, const Band& b) noexcept { kind = k; hz = b.hz; gainDb = b.gainDb; res = b.res; valid = true; }
+    };
+    /** True if the interpolation of a coefficient set between prev and cur is the identity: the bits are the same, finite, and not a negative zero (prev + (cur - prev) * t would give +0). */
+    static bool steady (const float* prev, const float* cur) noexcept
+    {
+        for (int k = 0; k < 5; ++k)
+        {
+            uint32_t a, b;
+            std::memcpy (&a, &prev[k], 4);
+            std::memcpy (&b, &cur[k], 4);
+            if (a != b || (a & 0x7f800000u) == 0x7f800000u || a == 0x80000000u)
+                return false;
+        }
+        return true;
+    }
     void designSvf (int band, Kind kind, const Band& b) noexcept
     {
+        if (svfKey[band].same (kind, b) && !makeup::legacyCaches())
+            return;
+        svfKey[band].store (kind, b);
         const float r = clamp01 (b.res);
         const float Q = 0.5f + 15.5f * r * r * r, R = 1.0f / Q;
         const float A = std::pow (10.0f, std::clamp (b.gainDb, -24.0f, 24.0f) * 0.05f);
@@ -161,6 +216,11 @@ private:
     }
     void designRbj (int band, Biquad::Type type, const Band& b, bool shelf) noexcept
     {
+        // (the key holds the type and the shelf flag: the shelf flag of the call is the mode of the band, which is not in the key of the band)
+        const int kindKey = static_cast<int> (type) * 2 + (shelf ? 1 : 0);
+        if (rbjKey[band].same (kindKey, b) && !makeup::legacyCaches())
+            return;
+        rbjKey[band].store (kindKey, b);
         const float r = clamp01 (b.res);
         const float q = shelf ? 0.4f + 1.7417f * r * r * r : 0.1f + 18.9053f * r * r * r * r;
         Biquad d;
@@ -178,6 +238,7 @@ private:
     Sv svf[2][4];
     Biquad bq[2][4];
     float prevCo[4][5] = {}, curCo[4][5] = {};
+    DesignKey svfKey[4], rbjKey[4];
     bool primed = false;
 };
 } // namespace own

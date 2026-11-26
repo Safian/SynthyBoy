@@ -10,11 +10,9 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
- #include <arm_neon.h>
-#endif
 
 #include "fx_dsp.h"
+#include "fx_makeup.h"
 
 namespace synthyboy
 {
@@ -35,6 +33,8 @@ public:
     void prepare (double sr)
     {
         sampleRate = sr;
+        designValid = false;
+        preValid = false;
         lookAhead = lookAheadFor (sr);
         const int cap = lookAhead + 8;
         for (auto& b : lim)
@@ -46,7 +46,7 @@ public:
     void reset() noexcept
     {
         for (auto& c : lr) for (auto& b : c) b.reset();
-        for (auto& c : ap) for (auto& b : c) b.reset();
+        for (auto& b : lowAp) b.reset();
         for (auto& e : envHi) e = 0.0f;
         for (auto& e : envLo) e = 1.0f;
         for (auto& b : lim) b.reset();
@@ -57,24 +57,40 @@ public:
     void set (const Params& np) noexcept
     {
         p = np;
-        // one split (two bands) for the Low / High band modes, two splits for Multiband
+        // one split (two bands) for the Low / High band modes, two splits for Multiband; the single band mode uses no crossover
         const float f1 = p.bands == 2 ? p.crossHigh : p.crossLow, f2 = p.crossHigh;
-        for (int c = 0; c < 2; ++c)
+        const bool legacy = makeup::legacyCaches(); // tests: every filter designed on every call, as before the item 5 caches
+        const int need = legacy ? 2 : (p.bands == 3 ? 0 : (p.bands == 0 ? 2 : 1)); // the splits this mode runs
+        // the designs (cos, sin and a power per filter) are made again only when a frequency or the mode's need changed (the exact bits); what the mode does not run is not designed
+        if (!legacy && designValid && need <= designNeed && (need == 0 || sameBits (f1, designF1)) && (need < 2 || sameBits (f2, designF2)))
+            return;
+        designValid = true;
+        designNeed = need;
+        designF1 = f1;
+        designF2 = f2;
+        if (need == 0)
+            return;
+        // designed once, for the left channel; the right channel copies the coefficients (the states stay apart)
+        lr[0][0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
+        lr[0][1].copyCoefficients (lr[0][0]);
+        lr[0][2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
+        lr[0][3].copyCoefficients (lr[0][2]);
+        if (need == 2)
         {
-            lr[c][0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][1].copyCoefficients (lr[c][0]);
-            lr[c][2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][3].copyCoefficients (lr[c][2]);
-            lr[c][4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][5].copyCoefficients (lr[c][4]);
-            lr[c][6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][7].copyCoefficients (lr[c][6]);
-            // the low band passes an all pass of the upper crossover (LP + HP of it) so the three bands sum flat
-            ap[c][0].copyCoefficients (lr[c][4]);
-            ap[c][1].copyCoefficients (lr[c][4]);
-            ap[c][2].copyCoefficients (lr[c][6]);
-            ap[c][3].copyCoefficients (lr[c][6]);
+            lr[0][4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
+            lr[0][5].copyCoefficients (lr[0][4]);
+            lr[0][6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
+            lr[0][7].copyCoefficients (lr[0][6]);
+            // the low band passes an all pass of the upper crossover so the three bands sum flat: one second order all pass with the poles of the crossover filters. It replaces
+            // LP (f2)^2 + HP (f2)^2 (four biquads), which is this all pass for the exact Butterworth Q of 1 / sqrt (2); the Q of 0.7071 here makes the two differ by about -100 dB
+            // (CPU review item 2, 2026-11-26; docs/MPC.md "Sound differences")
+            lowAp[0].design (Biquad::allpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
         }
+        const int lastLr = need == 2 ? 8 : 4;
+        for (int k = 0; k < lastLr; ++k)
+            lr[1][k].copyCoefficients (lr[0][k]);
+        if (need == 2)
+            lowAp[1].copyCoefficients (lowAp[0]);
     }
     /** Test only: run the limiter as it was before the CPU review item M1. */
     void setReferenceLimiter (bool on) noexcept { for (auto& b : lim) b.reference = on; }
@@ -83,35 +99,34 @@ public:
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        static const float kAtk[3] = { 2.8f, 1.4f, 0.7f }, kRel[3] = { 40.0f, 28.0f, 15.0f };
         int use[3] = { 0, 1, 2 };
         if (p.bands == 1) { use[0] = 0; use[1] = 1; use[2] = 1; }
         if (p.bands == 2) { use[0] = 1; use[1] = 2; use[2] = 2; }
         if (p.bands == 3) { use[0] = use[1] = use[2] = 1; }
         const bool limitMode = p.mode == 1, serumMode = p.mode == 2;
-        const float expoA = std::exp (8.0f * p.attack - 4.0f), expoR = std::exp (8.0f * p.release - 4.0f);
-        const float serumAtkMs = 0.1f * std::pow (10.0f, 4.0f * p.attack), serumRelMs = 0.1f * std::pow (10.0f, 4.0f * p.release);
-        const float serumAtkTau = 0.37f * serumAtkMs * serumAtkMs / (serumAtkMs + 4.0f);
-        const float serumAtkCo = 1.0f - std::exp (-1.0f / std::max (serumAtkTau * 0.001f * sr, 1.0e-3f)), serumRelCo = 1.0f - std::exp (-1.0f / std::max (serumRelMs * 0.001f * sr, 1.0f));
-        const float peakDecay = std::exp (-1.0f / (0.001f * sr));
-        // per band (the same for every sample of the call): the thresholds, the make-up gain, the ceiling and the time constants of the two envelopes
-        struct BandConst { float thrUdb, thrLdb, thrU, thrL, makeup, ceilAmp, Na, Nr; };
-        BandConst bc[3];
+        // what the call needs of libm (the envelope times, the thresholds, the makeup and the ceiling, the Serum smoothing constants) depends on the parameters only: made again only when
+        // one of the keys changed (the exact bits), and only what the mode reads
+        PreKey key;
+        key.attack = p.attack;
+        key.release = p.release;
+        key.srf = sr;
+        key.mode = p.mode;
+        key.bands = p.bands;
         for (int b = 0; b < 3; ++b)
+            key.band[b] = p.band[b];
+        const bool legacy = makeup::legacyCaches(); // tests: everything made on every call, as before the item 5 caches
+        if (legacy || !preValid || std::memcmp (&key, &preKey, sizeof key) != 0)
         {
-            const int tb = use[b];
-            const Band& bd = p.band[tb];
-            BandConst& k = bc[b];
-            k.thrUdb = std::clamp (bd.upperDb, -120.0f, 12.0f);
-            k.thrLdb = std::clamp (bd.lowerDb, -120.0f, 12.0f);
-            k.thrU = std::pow (10.0f, k.thrUdb * 0.1f);
-            k.thrL = std::pow (10.0f, k.thrLdb * 0.1f);
-            k.makeup = std::pow (10.0f, bd.gainDb * 0.05f);
-            k.ceilAmp = limitMode ? std::pow (10.0f, k.thrUdb * 0.05f) : 1.0f;
-            k.Na = std::max (5.0f, kAtk[tb] * sr * 0.001f * expoA);
-            k.Nr = std::max (5.0f, kRel[tb] * sr * 0.001f * expoR);
+            preKey = key;
+            preValid = true;
+            buildPre (use, sr, limitMode, serumMode, legacy);
         }
+        const float serumAtkCo = pre.serumAtkCo, serumRelCo = pre.serumRelCo, peakDecay = pre.peakDecay;
+        const BandConst* const bc = pre.bc;
         auto powG = [this] (float x, float y) noexcept { return fast ? (y == 0.0f ? 1.0f : fastmath::pow (x, y)) : std::pow (x, y); }; // tier low: exp2 / log2 forms
+        if (limitMode)
+            for (auto& b : lim)
+                b.resumNext(); // the running sum of the limiter's box filter is made exactly once per call (at most one control period of samples between two exact sums)
         for (int i = 0; i < n; ++i)
         {
             const float in[2] = { l[i], r[i] };
@@ -137,7 +152,7 @@ public:
                     {
                         midS = lr[c][5].process (lr[c][4].process (restS));
                         highS = lr[c][7].process (lr[c][6].process (restS));
-                        lowS = ap[c][1].process (ap[c][0].process (lowS)) + ap[c][3].process (ap[c][2].process (lowS));
+                        lowS = lowAp[c].process (lowS);
                     }
                     else midS = restS;
                     sig[0][c] = lowS; sig[1][c] = midS; sig[2][c] = highS;
@@ -219,10 +234,15 @@ public:
 
 private:
     friend struct CompressorOptTest;
-    /** The look-ahead brickwall limiter of one band: min filter of the required gain over the look-ahead, release, a box filter of the look-ahead length. */
+    /** The look-ahead brickwall limiter of one band: min filter of the required gain over the look-ahead, release, a box filter of the look-ahead length.
+        The min filter is a monotone deque of the entries below 1 (an empty deque is the minimum 1.0f), the box filter a running sum in double that is made exactly again at least every
+        kSumPeriod samples and while the window may hold a gain outside kMinGain .. 1. The box filter is not bit identical to the serial float sum it replaces (CPU review item 1, 2026-11-26): the
+        gain differs by at most 1.4e-6 relative (measured, test_own_compressor_opt.cpp); the min filter, the release and the required gain stay bit identical, and nothing feeds the gain back. */
     struct Limiter
     {
         std::vector<float> xl, xr, req, g1;
+        std::vector<float> dqVal;
+        std::vector<uint32_t> dqTick;
         int pos = 0, cap = 8;
         float relGain = 1.0f, prevL = 0.0f, prevR = 0.0f, prev2L = 0.0f, prev2R = 0.0f;
         void prepare (int c)
@@ -232,6 +252,8 @@ private:
             xr.assign (static_cast<size_t> (c), 0.0f);
             req.assign (static_cast<size_t> (c), 1.0f);
             g1.assign (static_cast<size_t> (c), 1.0f);
+            dqVal.assign (static_cast<size_t> (c), 1.0f);
+            dqTick.assign (static_cast<size_t> (c), 0u);
             reset();
         }
         void reset() noexcept
@@ -244,11 +266,22 @@ private:
             oddLeft = 0;
             relGain = 1.0f;
             prevL = prevR = prev2L = prev2R = 0.0f;
+            dqValid = false;
+            sumValid = false;
+            sumOddLeft = 0;
+            onesRun = cap; // the ring holds only ones
+            lastGain = 1.0f;
         }
         /** True: the code as it was before the CPU review item M1 (a `%` per index), kept for the comparison test only. */
         bool reference = false;
-        /** Samples for which the window may still hold a value the NEON min does not treat like std::min (a NaN, an infinity, a subnormal or a negative zero). */
+        /** Samples for which the window may still hold a value the min filter does not treat like std::min (a NaN, an infinity, a subnormal or a negative zero). */
         int oddLeft = 0;
+        /** The next sample sums the window again exactly (Compressor::process calls it at the start of every call: at most one control period of samples between two exact sums). */
+        void resumNext() noexcept { sumValid = false; }
+        /** The box filter output (the gain) of the last sample; the test compares it with the reference. */
+        float lastGain = 1.0f;
+        static constexpr int kSumPeriod = 32;
+        static constexpr float kMinGain = 1.0f / 65536.0f; // a window that holds a smaller released gain is summed serially in float, as the reference does
 
         /** The old process (): the same arithmetic in the same order, kept as the reference and for a look-ahead that is not below the capacity. */
         void processReference (float inL, float inR, float ceilAmp, float relCoef, int la, float& outL, float& outR) noexcept
@@ -272,12 +305,13 @@ private:
             for (int k = 0; k <= la; ++k)
                 sum += g1[static_cast<size_t> ((pos - k + cap * 4) % cap)];
             const float gSm = sum / static_cast<float> (la + 1);
+            lastGain = gSm;
             const size_t di = static_cast<size_t> ((pos - la + cap * 4) % cap);
             outL = xl[di] * gSm;
             outR = xr[di] * gSm;
         }
 
-        /** True for a value that is not a normal number and not +0: the NEON min (flush to zero, the sign of a zero) could differ from std::min on it. */
+        /** True for a value that is not a normal number and not +0: the min filter (flush to zero, the sign of a zero) could differ from std::min on it. */
         static bool oddValue (float v) noexcept
         {
             uint32_t u;
@@ -292,6 +326,10 @@ private:
             if (reference || la >= cap || la < 0)
             {
                 oddLeft = cap; // conservative if the fast path runs again later
+                dqValid = false;
+                sumValid = false;
+                sumOddLeft = cap;
+                onesRun = 0;
                 processReference (inL, inR, ceilAmp, relCoef, la, outL, outR);
                 return;
             }
@@ -300,11 +338,13 @@ private:
             prev2L = prevL; prev2R = prevR; prevL = inL; prevR = inR;
             const float r = pk > ceilAmp ? ceilAmp / pk : 1.0f;
             pos = pos + 1 == cap ? 0 : pos + 1;
+            ++tick;
             xl[static_cast<size_t> (pos)] = inL;
             xr[static_cast<size_t> (pos)] = inR;
             req[static_cast<size_t> (pos)] = r;
             if (oddValue (r))
                 oddLeft = cap;
+            const int W = la + 1;
             // the window (this sample and the la before it) is at most two contiguous runs of the ring: [lo1, pos] and, when it wraps, [cap - wrapped, cap - 1]
             const int lo1 = pos - la < 0 ? 0 : pos - la;
             const int wrapped = pos - la < 0 ? la - pos : 0;
@@ -312,6 +352,7 @@ private:
             if (oddLeft > 0)
             {
                 --oddLeft;
+                dqValid = false;
                 for (int j = pos; j >= lo1; --j)
                     m = std::min (m, req[static_cast<size_t> (j)]);
                 for (int j = cap - 1; j >= cap - wrapped; --j)
@@ -319,49 +360,167 @@ private:
             }
             else
             {
-                // every value is a normal number or +0: the minimum is the same bits in any order
-                m = minRun (req.data() + lo1, pos - lo1 + 1, m);
-                if (wrapped > 0)
-                    m = minRun (req.data() + (cap - wrapped), wrapped, m);
+                // every value of the window is a normal number or +0: the minimum is the same bits in any order, so the deque of the entries below 1 gives it (1.0f when it is empty)
+                if (!dqValid || dqLa != la)
+                    rebuildDeque (la);
+                else
+                {
+                    while (dqCount > 0 && tick - dqTick[static_cast<size_t> (dqHead)] >= static_cast<uint32_t> (W))
+                        popFront();
+                    if (r < 1.0f)
+                        pushBack (r);
+                }
+                if (dqCount > 0)
+                    m = dqVal[static_cast<size_t> (dqHead)];
             }
             relGain = std::min (m, relGain + (1.0f - relGain) * relCoef);
-            g1[static_cast<size_t> (pos)] = relGain;
-            float sum = 0.0f; // the same order as before: k = 0 .. la, that is the indices pos down to 0, then cap - 1 down
-            for (int j = pos; j >= lo1; --j)
-                sum += g1[static_cast<size_t> (j)];
-            for (int j = cap - 1; j >= cap - wrapped; --j)
-                sum += g1[static_cast<size_t> (j)];
-            const float gSm = sum / static_cast<float> (la + 1);
+            const float g = relGain;
+            const bool oddG = !(g >= kMinGain && g <= 1.0f); // outside the range where a running sum keeps its relative accuracy (a gain 96 dB down or more, negative, NaN, infinity)
+            const int dLeave = pos - W < 0 ? pos - W + cap : pos - W; // the entry that leaves the window with this sample (read before the write: for la = cap - 1 it is the same cell)
+            const float leaving = g1[static_cast<size_t> (dLeave)];
+            g1[static_cast<size_t> (pos)] = g;
+            onesRun = g == 1.0f ? std::min (onesRun + 1, cap) : 0;
+            if (oddG)
+                sumOddLeft = cap;
+            float gSm;
+            if (sumOddLeft > 0)
+            {
+                // a gain outside kMinGain .. 1 (tiny, negative, NaN, infinity) may be in the window: the serial float sum of the reference
+                --sumOddLeft;
+                sumValid = false;
+                float sum = 0.0f;
+                for (int j = pos; j >= lo1; --j)
+                    sum += g1[static_cast<size_t> (j)];
+                for (int j = cap - 1; j >= cap - wrapped; --j)
+                    sum += g1[static_cast<size_t> (j)];
+                gSm = sum / static_cast<float> (W);
+            }
+            else if (onesRun >= W)
+            {
+                // the whole window is exactly 1.0f: the sum and the gain are exact
+                runSum = static_cast<double> (W);
+                sumValid = true;
+                sinceSum = 0;
+                sumLa = la;
+                gSm = 1.0f;
+            }
+            else
+            {
+                if (!sumValid || sumLa != la || sinceSum >= kSumPeriod)
+                {
+                    double s = 0.0;
+                    for (int j = pos; j >= lo1; --j)
+                        s += static_cast<double> (g1[static_cast<size_t> (j)]);
+                    for (int j = cap - 1; j >= cap - wrapped; --j)
+                        s += static_cast<double> (g1[static_cast<size_t> (j)]);
+                    runSum = s;
+                    sumValid = true;
+                    sinceSum = 0;
+                    sumLa = la;
+                }
+                else
+                {
+                    runSum += static_cast<double> (g) - static_cast<double> (leaving);
+                    ++sinceSum;
+                }
+                gSm = static_cast<float> (runSum) / static_cast<float> (W);
+            }
+            lastGain = gSm;
             const int di = pos - la < 0 ? pos - la + cap : pos - la;
             outL = xl[static_cast<size_t> (di)] * gSm;
             outR = xr[static_cast<size_t> (di)] * gSm;
         }
 
-        /** std::min (m, v[0]), then v[1] ... of a run of normal numbers and +0 (any order gives the same bits). */
-        static float minRun (const float* v, int n, float m) noexcept
+        // the monotone deque (a ring of cap entries, the sample number and the value; the values rise from the front to the back) and the running sum
+        uint32_t tick = 0;
+        int dqHead = 0, dqCount = 0, dqLa = -1;
+        bool dqValid = false;
+        double runSum = 0.0;
+        bool sumValid = false;
+        int sumLa = -1, sinceSum = 0, sumOddLeft = 0, onesRun = 0;
+        void popFront() noexcept { dqHead = dqHead + 1 == cap ? 0 : dqHead + 1; --dqCount; }
+        void pushBack (float v) noexcept
         {
-            int i = 0;
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-            if (n >= 4)
+            while (dqCount > 0)
             {
-                float32x4_t acc = vdupq_n_f32 (m);
-                for (; i + 4 <= n; i += 4)
-                    acc = vminq_f32 (acc, vld1q_f32 (v + i));
-                const float32x2_t h = vmin_f32 (vget_low_f32 (acc), vget_high_f32 (acc));
-                const float32x2_t f = vpmin_f32 (h, h);
-                m = vget_lane_f32 (f, 0);
+                const int back = dqHead + dqCount - 1 >= cap ? dqHead + dqCount - 1 - cap : dqHead + dqCount - 1;
+                if (dqVal[static_cast<size_t> (back)] < v)
+                    break;
+                --dqCount;
             }
-#endif
-            for (; i < n; ++i)
-                m = std::min (m, v[i]);
-            return m;
+            const int at = dqHead + dqCount >= cap ? dqHead + dqCount - cap : dqHead + dqCount;
+            dqVal[static_cast<size_t> (at)] = v;
+            dqTick[static_cast<size_t> (at)] = tick;
+            ++dqCount;
+        }
+        /** The deque of the window that ends at the current sample, oldest entry first (every value of the window is a normal number or +0). */
+        void rebuildDeque (int la) noexcept
+        {
+            dqHead = 0;
+            dqCount = 0;
+            const uint32_t now = tick;
+            for (int age = la; age >= 0; --age)
+            {
+                const int j = pos - age < 0 ? pos - age + cap : pos - age;
+                const float v = req[static_cast<size_t> (j)];
+                if (v < 1.0f)
+                {
+                    tick = now - static_cast<uint32_t> (age);
+                    pushBack (v);
+                }
+            }
+            tick = now;
+            dqValid = true;
+            dqLa = la;
         }
     };
+
+    /** Per band, the same for every sample of a call: the thresholds, the make-up gain, the ceiling and the time constants of the two envelopes. */
+    struct BandConst { float thrUdb = 0.0f, thrLdb = 0.0f, thrU = 1.0f, thrL = 1.0f, makeup = 1.0f, ceilAmp = 1.0f, Na = 5.0f, Nr = 5.0f; };
+    struct Pre { float serumAtkCo = 0.0f, serumRelCo = 0.0f, peakDecay = 0.0f; BandConst bc[3]; };
+    /** The parameters Pre is made from (floats and ints only: compared with memcmp). */
+    struct PreKey { float attack = 0.0f, release = 0.0f, srf = 0.0f; int mode = 0, bands = 0; Band band[3]; };
+    static bool sameBits (float a, float b) noexcept { return std::memcmp (&a, &b, 4) == 0; }
+    void buildPre (const int* use, float sr, bool limitMode, bool serumMode, bool everything) noexcept
+    {
+        static const float kAtk[3] = { 2.8f, 1.4f, 0.7f }, kRel[3] = { 40.0f, 28.0f, 15.0f };
+        const float expoA = std::exp (8.0f * p.attack - 4.0f), expoR = std::exp (8.0f * p.release - 4.0f);
+        if (serumMode || everything)
+        {
+            const float serumAtkMs = 0.1f * std::pow (10.0f, 4.0f * p.attack), serumRelMs = 0.1f * std::pow (10.0f, 4.0f * p.release);
+            const float serumAtkTau = 0.37f * serumAtkMs * serumAtkMs / (serumAtkMs + 4.0f);
+            pre.serumAtkCo = 1.0f - std::exp (-1.0f / std::max (serumAtkTau * 0.001f * sr, 1.0e-3f));
+            pre.serumRelCo = 1.0f - std::exp (-1.0f / std::max (serumRelMs * 0.001f * sr, 1.0f));
+            pre.peakDecay = std::exp (-1.0f / (0.001f * sr));
+        }
+        for (int b = 0; b < 3; ++b)
+        {
+            const bool skip = (p.bands == 1 && b == 2) || (p.bands == 2 && b == 2) || (p.bands == 3 && b != 1); // the bands the loop of process () skips
+            if (skip && !everything)
+                continue;
+            const int tb = use[b];
+            const Band& bd = p.band[tb];
+            BandConst& k = pre.bc[b];
+            k.thrUdb = std::clamp (bd.upperDb, -120.0f, 12.0f);
+            k.thrLdb = std::clamp (bd.lowerDb, -120.0f, 12.0f);
+            k.thrU = (limitMode || serumMode) && !everything ? 1.0f : std::pow (10.0f, k.thrUdb * 0.1f);   // read by the Compress mode only
+            k.thrL = bd.lowerRatio != 0.0f || everything ? std::pow (10.0f, k.thrLdb * 0.1f) : 1.0f;   // read when the lower ratio is not 0
+            k.makeup = bd.gainDb != 0.0f || everything ? std::pow (10.0f, bd.gainDb * 0.05f) : 1.0f;    // (the power of 0 is exactly 1)
+            k.ceilAmp = limitMode ? std::pow (10.0f, k.thrUdb * 0.05f) : 1.0f;
+            k.Na = std::max (5.0f, kAtk[tb] * sr * 0.001f * expoA);
+            k.Nr = std::max (5.0f, kRel[tb] * sr * 0.001f * expoR);
+        }
+    }
 
     Params p;
     double sampleRate = 48000.0;
     int lookAhead = 72;
-    Biquad lr[2][8], ap[2][4];
+    bool designValid = false, preValid = false;
+    int designNeed = 0;
+    float designF1 = 0.0f, designF2 = 0.0f;
+    PreKey preKey;
+    Pre pre;
+    Biquad lr[2][8], lowAp[2];
     float envHi[3] = {}, envLo[3] = { 1.0f, 1.0f, 1.0f }, serumPeak[3] = {}, serumGr[3] = {};
     Limiter lim[3];
     DelayLine dry[2];

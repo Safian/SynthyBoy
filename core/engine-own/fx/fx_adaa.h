@@ -13,6 +13,15 @@
 #include "../dsp/fastmath.h"
 #include "../dsp/util.h"
 
+// A law function called with a constant type (Distortion::run<T>) must fold its switches: forced inline where the compiler supports it.
+#if defined (__GNUC__) || defined (__clang__)
+ #define SB_ADAA_INLINE inline __attribute__ ((always_inline))
+#elif defined (_MSC_VER)
+ #define SB_ADAA_INLINE __forceinline
+#else
+ #define SB_ADAA_INLINE inline
+#endif
+
 namespace synthyboy
 {
 namespace own
@@ -34,10 +43,21 @@ struct State
 /** tanh (0.3), the constant the Tube law (type 6) subtracts. */
 constexpr float kTanh03 = 0.29131261f;
 constexpr float kLn2 = 0.69314718f;
+/** |t| from which lncoshBnd () is exactly -kLn2. */
+constexpr float kLncoshSaturated = 8.8f;
+/** What the fast form of lncoshBnd () gives for 1 + e == 1: kLn2 * log2 (1) - kLn2 with the polynomial log2 (its constant term 4.9e-8 is not 0). Computed at start-up with the same expression
+    (a run time value, so that a platform that fuses the multiply and the subtract fuses it here too). */
+inline const float kLncoshSatFast = [] { volatile float one = 1.0f; return kLn2 * fastmath::log2 (one) - kLn2; }();
 
 /** ln cosh (t) - |t| = L (|t|) - ln 2 with L (s) = log1p (exp (-2 s)): bounded, between -0.7 and 0. */
 inline float lncoshBnd (float t, bool fast) noexcept
 {
+    // From |t| = 8.8 on, e = exp (-2 |t|) is below 2.3e-8: 1 + e is exactly 1, the library's log1p (e) is e, which is under half the spacing (5.96e-8) of the floats just below kLn2 = 0.6931472,
+    // so L (s) - kLn2 is exactly -kLn2; on the fast form 1 + e is 1 as well and the result is the constant of the polynomial log2 at 1 (kLncoshSatFast). The exp and the log are not computed.
+    // An infinity gives the same, a NaN is not above the limit and goes the long way. The test (test_fxopt_cpu_distortion.cpp) compares every float from 8 to 32 and a dense sample up to
+    // infinity with the old formula, for both forms.
+    if (std::fabs (t) >= kLncoshSaturated)
+        return fast ? kLncoshSatFast : -kLn2;
     const float e = fast ? fastmath::exp (-2.0f * std::fabs (t)) : std::exp (-2.0f * std::fabs (t));
     const float l = fast ? kLn2 * fastmath::log2 (1.0f + e) : std::log1p (e);
     return l - kLn2;
@@ -58,7 +78,7 @@ inline float foldIntegral (float v) noexcept
 }
 
 /** The piecewise linear part of the antiderivative at t, the argument of the closed form (t = v; type 9: 32 v; type 6: v + 0.3). */
-inline float lin (int type, float t) noexcept
+SB_ADAA_INLINE float lin (int type, float t) noexcept
 {
     switch (type)
     {
@@ -71,7 +91,7 @@ inline float lin (int type, float t) noexcept
 }
 
 /** The bounded part of the antiderivative at t: F = lin + bnd. */
-inline float bnd (int type, float t, bool fast) noexcept
+SB_ADAA_INLINE float bnd (int type, float t, bool fast) noexcept
 {
     const float s = std::fabs (t);
     switch (type)
@@ -92,7 +112,7 @@ inline float bnd (int type, float t, bool fast) noexcept
 }
 
 /** Today's law (docs/engine-spec/06-effects.md section 4) of a converted type at t (the argument of the closed form). */
-inline float naive (int type, float t, bool fast) noexcept
+SB_ADAA_INLINE float naive (int type, float t, bool fast) noexcept
 {
     auto th = [fast] (float a) noexcept { return fast ? fastmath::tanh (a) : std::tanh (a); };
     switch (type)
@@ -121,7 +141,7 @@ inline float naive (int type, float t, bool fast) noexcept
 }
 
 /** One sample of the converted type `type`: x = the raw input, g = the drive gain. The result has no DC blocker applied. */
-inline float step (int type, State& s, float x, float g, bool fast) noexcept
+SB_ADAA_INLINE float step (int type, State& s, float x, float g, bool fast) noexcept
 {
     const float ge = type == 9 ? 32.0f * g : g; // Zero-Square is tanh (32 v)
     const float off = type == 6 ? 0.3f : 0.0f;  // Tube is tanh (v + 0.3) - tanh (0.3)
