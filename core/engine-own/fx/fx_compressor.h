@@ -10,9 +10,6 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
- #include <arm_neon.h>
-#endif
 
 #include "fx_dsp.h"
 
@@ -112,6 +109,9 @@ public:
             k.Nr = std::max (5.0f, kRel[tb] * sr * 0.001f * expoR);
         }
         auto powG = [this] (float x, float y) noexcept { return fast ? (y == 0.0f ? 1.0f : fastmath::pow (x, y)) : std::pow (x, y); }; // tier low: exp2 / log2 forms
+        if (limitMode)
+            for (auto& b : lim)
+                b.resumNext(); // the running sum of the limiter's box filter is made exactly once per call (at most one control period of samples between two exact sums)
         for (int i = 0; i < n; ++i)
         {
             const float in[2] = { l[i], r[i] };
@@ -219,10 +219,15 @@ public:
 
 private:
     friend struct CompressorOptTest;
-    /** The look-ahead brickwall limiter of one band: min filter of the required gain over the look-ahead, release, a box filter of the look-ahead length. */
+    /** The look-ahead brickwall limiter of one band: min filter of the required gain over the look-ahead, release, a box filter of the look-ahead length.
+        The min filter is a monotone deque of the entries below 1 (an empty deque is the minimum 1.0f), the box filter a running sum in double that is made exactly again at least every
+        kSumPeriod samples and while the window may hold a gain outside kMinGain .. 1. The box filter is not bit identical to the serial float sum it replaces (CPU review item 1, 2026-11-26): the
+        gain differs by at most 1.4e-6 relative (measured, test_own_compressor_opt.cpp); the min filter, the release and the required gain stay bit identical, and nothing feeds the gain back. */
     struct Limiter
     {
         std::vector<float> xl, xr, req, g1;
+        std::vector<float> dqVal;
+        std::vector<uint32_t> dqTick;
         int pos = 0, cap = 8;
         float relGain = 1.0f, prevL = 0.0f, prevR = 0.0f, prev2L = 0.0f, prev2R = 0.0f;
         void prepare (int c)
@@ -232,6 +237,8 @@ private:
             xr.assign (static_cast<size_t> (c), 0.0f);
             req.assign (static_cast<size_t> (c), 1.0f);
             g1.assign (static_cast<size_t> (c), 1.0f);
+            dqVal.assign (static_cast<size_t> (c), 1.0f);
+            dqTick.assign (static_cast<size_t> (c), 0u);
             reset();
         }
         void reset() noexcept
@@ -244,11 +251,22 @@ private:
             oddLeft = 0;
             relGain = 1.0f;
             prevL = prevR = prev2L = prev2R = 0.0f;
+            dqValid = false;
+            sumValid = false;
+            sumOddLeft = 0;
+            onesRun = cap; // the ring holds only ones
+            lastGain = 1.0f;
         }
         /** True: the code as it was before the CPU review item M1 (a `%` per index), kept for the comparison test only. */
         bool reference = false;
-        /** Samples for which the window may still hold a value the NEON min does not treat like std::min (a NaN, an infinity, a subnormal or a negative zero). */
+        /** Samples for which the window may still hold a value the min filter does not treat like std::min (a NaN, an infinity, a subnormal or a negative zero). */
         int oddLeft = 0;
+        /** The next sample sums the window again exactly (Compressor::process calls it at the start of every call: at most one control period of samples between two exact sums). */
+        void resumNext() noexcept { sumValid = false; }
+        /** The box filter output (the gain) of the last sample; the test compares it with the reference. */
+        float lastGain = 1.0f;
+        static constexpr int kSumPeriod = 32;
+        static constexpr float kMinGain = 1.0f / 65536.0f; // a window that holds a smaller released gain is summed serially in float, as the reference does
 
         /** The old process (): the same arithmetic in the same order, kept as the reference and for a look-ahead that is not below the capacity. */
         void processReference (float inL, float inR, float ceilAmp, float relCoef, int la, float& outL, float& outR) noexcept
@@ -272,12 +290,13 @@ private:
             for (int k = 0; k <= la; ++k)
                 sum += g1[static_cast<size_t> ((pos - k + cap * 4) % cap)];
             const float gSm = sum / static_cast<float> (la + 1);
+            lastGain = gSm;
             const size_t di = static_cast<size_t> ((pos - la + cap * 4) % cap);
             outL = xl[di] * gSm;
             outR = xr[di] * gSm;
         }
 
-        /** True for a value that is not a normal number and not +0: the NEON min (flush to zero, the sign of a zero) could differ from std::min on it. */
+        /** True for a value that is not a normal number and not +0: the min filter (flush to zero, the sign of a zero) could differ from std::min on it. */
         static bool oddValue (float v) noexcept
         {
             uint32_t u;
@@ -292,6 +311,10 @@ private:
             if (reference || la >= cap || la < 0)
             {
                 oddLeft = cap; // conservative if the fast path runs again later
+                dqValid = false;
+                sumValid = false;
+                sumOddLeft = cap;
+                onesRun = 0;
                 processReference (inL, inR, ceilAmp, relCoef, la, outL, outR);
                 return;
             }
@@ -300,11 +323,13 @@ private:
             prev2L = prevL; prev2R = prevR; prevL = inL; prevR = inR;
             const float r = pk > ceilAmp ? ceilAmp / pk : 1.0f;
             pos = pos + 1 == cap ? 0 : pos + 1;
+            ++tick;
             xl[static_cast<size_t> (pos)] = inL;
             xr[static_cast<size_t> (pos)] = inR;
             req[static_cast<size_t> (pos)] = r;
             if (oddValue (r))
                 oddLeft = cap;
+            const int W = la + 1;
             // the window (this sample and the la before it) is at most two contiguous runs of the ring: [lo1, pos] and, when it wraps, [cap - wrapped, cap - 1]
             const int lo1 = pos - la < 0 ? 0 : pos - la;
             const int wrapped = pos - la < 0 ? la - pos : 0;
@@ -312,6 +337,7 @@ private:
             if (oddLeft > 0)
             {
                 --oddLeft;
+                dqValid = false;
                 for (int j = pos; j >= lo1; --j)
                     m = std::min (m, req[static_cast<size_t> (j)]);
                 for (int j = cap - 1; j >= cap - wrapped; --j)
@@ -319,42 +345,118 @@ private:
             }
             else
             {
-                // every value is a normal number or +0: the minimum is the same bits in any order
-                m = minRun (req.data() + lo1, pos - lo1 + 1, m);
-                if (wrapped > 0)
-                    m = minRun (req.data() + (cap - wrapped), wrapped, m);
+                // every value of the window is a normal number or +0: the minimum is the same bits in any order, so the deque of the entries below 1 gives it (1.0f when it is empty)
+                if (!dqValid || dqLa != la)
+                    rebuildDeque (la);
+                else
+                {
+                    while (dqCount > 0 && tick - dqTick[static_cast<size_t> (dqHead)] >= static_cast<uint32_t> (W))
+                        popFront();
+                    if (r < 1.0f)
+                        pushBack (r);
+                }
+                if (dqCount > 0)
+                    m = dqVal[static_cast<size_t> (dqHead)];
             }
             relGain = std::min (m, relGain + (1.0f - relGain) * relCoef);
-            g1[static_cast<size_t> (pos)] = relGain;
-            float sum = 0.0f; // the same order as before: k = 0 .. la, that is the indices pos down to 0, then cap - 1 down
-            for (int j = pos; j >= lo1; --j)
-                sum += g1[static_cast<size_t> (j)];
-            for (int j = cap - 1; j >= cap - wrapped; --j)
-                sum += g1[static_cast<size_t> (j)];
-            const float gSm = sum / static_cast<float> (la + 1);
+            const float g = relGain;
+            const bool oddG = !(g >= kMinGain && g <= 1.0f); // outside the range where a running sum keeps its relative accuracy (a gain 96 dB down or more, negative, NaN, infinity)
+            const int dLeave = pos - W < 0 ? pos - W + cap : pos - W; // the entry that leaves the window with this sample (read before the write: for la = cap - 1 it is the same cell)
+            const float leaving = g1[static_cast<size_t> (dLeave)];
+            g1[static_cast<size_t> (pos)] = g;
+            onesRun = g == 1.0f ? std::min (onesRun + 1, cap) : 0;
+            if (oddG)
+                sumOddLeft = cap;
+            float gSm;
+            if (sumOddLeft > 0)
+            {
+                // a gain outside kMinGain .. 1 (tiny, negative, NaN, infinity) may be in the window: the serial float sum of the reference
+                --sumOddLeft;
+                sumValid = false;
+                float sum = 0.0f;
+                for (int j = pos; j >= lo1; --j)
+                    sum += g1[static_cast<size_t> (j)];
+                for (int j = cap - 1; j >= cap - wrapped; --j)
+                    sum += g1[static_cast<size_t> (j)];
+                gSm = sum / static_cast<float> (W);
+            }
+            else if (onesRun >= W)
+            {
+                // the whole window is exactly 1.0f: the sum and the gain are exact
+                runSum = static_cast<double> (W);
+                sumValid = true;
+                sinceSum = 0;
+                sumLa = la;
+                gSm = 1.0f;
+            }
+            else
+            {
+                if (!sumValid || sumLa != la || sinceSum >= kSumPeriod)
+                {
+                    double s = 0.0;
+                    for (int j = pos; j >= lo1; --j)
+                        s += static_cast<double> (g1[static_cast<size_t> (j)]);
+                    for (int j = cap - 1; j >= cap - wrapped; --j)
+                        s += static_cast<double> (g1[static_cast<size_t> (j)]);
+                    runSum = s;
+                    sumValid = true;
+                    sinceSum = 0;
+                    sumLa = la;
+                }
+                else
+                {
+                    runSum += static_cast<double> (g) - static_cast<double> (leaving);
+                    ++sinceSum;
+                }
+                gSm = static_cast<float> (runSum) / static_cast<float> (W);
+            }
+            lastGain = gSm;
             const int di = pos - la < 0 ? pos - la + cap : pos - la;
             outL = xl[static_cast<size_t> (di)] * gSm;
             outR = xr[static_cast<size_t> (di)] * gSm;
         }
 
-        /** std::min (m, v[0]), then v[1] ... of a run of normal numbers and +0 (any order gives the same bits). */
-        static float minRun (const float* v, int n, float m) noexcept
+        // the monotone deque (a ring of cap entries, the sample number and the value; the values rise from the front to the back) and the running sum
+        uint32_t tick = 0;
+        int dqHead = 0, dqCount = 0, dqLa = -1;
+        bool dqValid = false;
+        double runSum = 0.0;
+        bool sumValid = false;
+        int sumLa = -1, sinceSum = 0, sumOddLeft = 0, onesRun = 0;
+        void popFront() noexcept { dqHead = dqHead + 1 == cap ? 0 : dqHead + 1; --dqCount; }
+        void pushBack (float v) noexcept
         {
-            int i = 0;
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-            if (n >= 4)
+            while (dqCount > 0)
             {
-                float32x4_t acc = vdupq_n_f32 (m);
-                for (; i + 4 <= n; i += 4)
-                    acc = vminq_f32 (acc, vld1q_f32 (v + i));
-                const float32x2_t h = vmin_f32 (vget_low_f32 (acc), vget_high_f32 (acc));
-                const float32x2_t f = vpmin_f32 (h, h);
-                m = vget_lane_f32 (f, 0);
+                const int back = dqHead + dqCount - 1 >= cap ? dqHead + dqCount - 1 - cap : dqHead + dqCount - 1;
+                if (dqVal[static_cast<size_t> (back)] < v)
+                    break;
+                --dqCount;
             }
-#endif
-            for (; i < n; ++i)
-                m = std::min (m, v[i]);
-            return m;
+            const int at = dqHead + dqCount >= cap ? dqHead + dqCount - cap : dqHead + dqCount;
+            dqVal[static_cast<size_t> (at)] = v;
+            dqTick[static_cast<size_t> (at)] = tick;
+            ++dqCount;
+        }
+        /** The deque of the window that ends at the current sample, oldest entry first (every value of the window is a normal number or +0). */
+        void rebuildDeque (int la) noexcept
+        {
+            dqHead = 0;
+            dqCount = 0;
+            const uint32_t now = tick;
+            for (int age = la; age >= 0; --age)
+            {
+                const int j = pos - age < 0 ? pos - age + cap : pos - age;
+                const float v = req[static_cast<size_t> (j)];
+                if (v < 1.0f)
+                {
+                    tick = now - static_cast<uint32_t> (age);
+                    pushBack (v);
+                }
+            }
+            tick = now;
+            dqValid = true;
+            dqLa = la;
         }
     };
 

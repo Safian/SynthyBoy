@@ -172,6 +172,7 @@
 - [ ] 16. (maradék) Effektlánc: bekapcsoláskor 0,73 ms-os felúsztatás, kikapcsoláskor nincs leúsztatás (kattanás, levágott lecsengés); sorrendváltásnál nincs átúsztatás; a 255 mintánál hosszabb késleltetés csendben csonkul; a némított splitter-sávok effektjei is futnak.
 - [ ] 17. Chorus: rögzített nedves szint a hangszámtól függetlenül (1 és 4 hang között szintugrás); phaser: nincs denormális-védelem a visszacsatolásban; a szinkronizált LFO-k nem igazodnak az ütemhez.
 - [ ] 18. Öt effekt (kompresszor, Hyper, Utility, Bode, konvolúció) 0% mixnél sem marad ki a „low" szinten; a lecsengés-tartás 20 másodperc minden típusra.
+- [ ] FX budget table `kCompressor` (`core/engine-own/fx/fx_budget.cpp`, 9.44 / 5.55 / 5.49 % of a block for the multiband Limit / Compress / Serum, 3.72 / 2.55 / 2.58 single band) was measured before the limiter's running sum (min deque and double box sum, 2026-11-26) and the later compressor items; the Limit rows are too high now (x86 host, labelled host numbers, not the device: one band, 128 sample block, old 41-57 us, new 3.9-6.8 us in `compressor_limiter_timing_report`). Done when the rows are measured again on the Key 61 (A/B/A, `docs/dsp-knowledge/measurement.md`) and the three V1-V3 stacks of `docs/dsp-knowledge/fx-budget.md` are re-checked against the 35% budget.
 
 ## Halasztott funkciók (Release utáni MPC backlog)
 
