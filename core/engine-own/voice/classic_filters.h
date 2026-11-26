@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include "../dsp/util.h"
@@ -202,8 +204,13 @@ public:
     }
     float hardtanh (float v) const noexcept
     {
+        // |v| <= 0.66f on the bit pattern (0x3f28f5c3 is 0.66f; a NaN is above it, as the float compare is false for it): the knee test without a VFP flag transfer
+        uint32_t u;
+        std::memcpy (&u, &v, sizeof u);
+        if ((u & 0x7fffffffu) <= 0x3f28f5c3u)
+            return v;
         const float a = std::fabs (v);
-        return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * th ((a - 0.66f) / 0.34f), v);
+        return std::copysign (0.66f + 0.34f * th ((a - 0.66f) / 0.34f), v);
     }
     bool fastMath = false;
     bool scalarLoops = false; // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the scalar pair loop also where the NEON form exists

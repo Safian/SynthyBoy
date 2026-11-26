@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include "../dsp/util.h"
 #include "../dsp/simd.h"
 #include "classic_filters.h"
@@ -154,29 +155,17 @@ public:
             const float invP = 1.0f / static_cast<float> (kControlPeriod);
             float tmpL[kControlPeriod], tmpR[kControlPeriod];
             const bool cleaning = curClean > 0.5f || prevClean > 0.5f;
-            // the clean gain does not move across the period (prevClean == curClean, both 0 or 1: lerp (x, x, t) is x exactly): one dbToGain for the whole block (scalarOnly keeps the per sample form)
-            const bool cleanSteady = cleaning && prevClean == curClean && !scalarOnly;
             const float* srcL = inL;
             const float* srcR = inR;
             if (cleaning)
             {
-                if (cleanSteady)
+                for (int k = 0; k < n; ++k)
                 {
-                    const float g = dbToGain (-24.0f * curClean);
-                    for (int k = 0; k < n; ++k)
-                    {
-                        tmpL[k] = inL[k] * g;
-                        tmpR[k] = inR[k] * g;
-                    }
+                    const float c = lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP);
+                    const float g = cleanIn.get (-24.0f * c);
+                    tmpL[k] = inL[k] * g;
+                    tmpR[k] = inR[k] * g;
                 }
-                else
-                    for (int k = 0; k < n; ++k)
-                    {
-                        const float c = lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP);
-                        const float g = dbToGain (-24.0f * c);
-                        tmpL[k] = inL[k] * g;
-                        tmpR[k] = inR[k] * g;
-                    }
                 srcL = tmpL;
                 srcR = tmpR;
             }
@@ -208,11 +197,10 @@ public:
                 simd::clampTo (outR, -16.0f, 16.0f, n);
                 return;
             }
-            const float cSteady = cleanSteady ? dbToGain (24.0f * curClean) : 1.0f;
             for (int k = 0; k < n; ++k)
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;
-                const float c = cleanSteady ? cSteady : (cleaning ? dbToGain (24.0f * lerp (prevClean, curClean, t)) : 1.0f);
+                const float c = cleaning ? cleanOut.get (24.0f * lerp (prevClean, curClean, t)) : 1.0f;
                 const float m = lerp (prevMix, curMix, t);
                 outL[k] = std::clamp (outL[k] * c, -16.0f, 16.0f);
                 outR[k] = std::clamp (outR[k] * c, -16.0f, 16.0f);
@@ -228,46 +216,25 @@ public:
             const bool cleaning = curClean > 0.5f || prevClean > 0.5f;
             const float invP = 1.0f / static_cast<float> (kControlPeriod);
             float tmpL[kControlPeriod], tmpR[kControlPeriod];
-            const bool cleanSteady = cleaning && prevClean == curClean && !scalarOnly; // as above: one dbToGain per direction for the block
             if (cleaning)
             {
-                if (cleanSteady)
+                for (int k = 0; k < n; ++k)
                 {
-                    const float g = dbToGain (-24.0f * curClean);
-                    for (int k = 0; k < n; ++k)
-                    {
-                        tmpL[k] = inL[k] * g;
-                        tmpR[k] = inR[k] * g;
-                    }
+                    const float g = cleanIn.get (-24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
+                    tmpL[k] = inL[k] * g;
+                    tmpR[k] = inR[k] * g;
                 }
-                else
-                    for (int k = 0; k < n; ++k)
-                    {
-                        const float g = dbToGain (-24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
-                        tmpL[k] = inL[k] * g;
-                        tmpR[k] = inR[k] * g;
-                    }
                 if (scalarOnly || !filters::Filter::processPair (left, right, tmpL, outL, tmpR, outR, n))
                 {
                     left.process (tmpL, outL, n);
                     right.process (tmpR, outR, n);
                 }
-                if (cleanSteady)
+                for (int k = 0; k < n; ++k)
                 {
-                    const float g = dbToGain (24.0f * curClean);
-                    for (int k = 0; k < n; ++k)
-                    {
-                        outL[k] *= g;
-                        outR[k] *= g;
-                    }
+                    const float g = cleanOut.get (24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
+                    outL[k] *= g;
+                    outR[k] *= g;
                 }
-                else
-                    for (int k = 0; k < n; ++k)
-                    {
-                        const float g = dbToGain (24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
-                        outL[k] *= g;
-                        outR[k] *= g;
-                    }
             }
             else
             {
@@ -322,6 +289,22 @@ private:
     ClassicFilter cl[2];
     ClassicParams prevP, curP, prevPR, curPR;
     filters::FilterParams paramsR;
+    /** dbToGain of the clean mode's gains, remembered for the last argument: the clean setting is 0 or 1, so the argument is the same for every sample of a block that has no switch in it
+        (lerp (x, x, t) is x exactly) and the pow runs once for the block instead of once per sample. The same value for the same argument: the output does not change. */
+    struct GainMemo
+    {
+        float arg = std::numeric_limits<float>::quiet_NaN(), gain = 1.0f; // (a NaN is equal to nothing: the first call computes)
+        float get (float db) noexcept
+        {
+            if (!(db == arg))
+            {
+                arg = db;
+                gain = dbToGain (db);
+            }
+            return gain;
+        }
+    };
+    GainMemo cleanIn, cleanOut;
     bool classic = false, scalarOnly = false;
     bool sameStartLR = true, sameEndLR = true, steadyL = true, steadyR = true; // sameParams of (prevP, prevPR), (curP, curPR), (prevP, curP), (prevPR, curPR): set () decides them once
     float trim = 1.0f;

@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include <vector>
 
+#include "dsp/fastmath.h"
 #include "synthyboy/filters/filter.h"
 #include "synthyboy/filters/filter_types.h"
 #include "voice/classic_filters.h"
@@ -317,33 +319,256 @@ TEST (own_filter_savings_unit_booleans_and_steady_clean_match_the_reference)
             }
 }
 
-/** Item 7 for the Serum models (the clean gain around the collection's filter): the unit against the one with `scalarOnly`, which keeps the per sample dbToGain loops. */
+namespace
+{
+/** The Serum branch of FilterUnit as it was (the collection's two filters with the clean gain computed per sample): the reference of the Serum clean test. */
+struct ReferenceSerumUnit
+{
+    synthyboy::filters::Filter left, right;
+    float prevClean = 0.0f, curClean = 0.0f;
+    void prepare (double sr)
+    {
+        left.prepare (sr);
+        right.prepare (sr);
+    }
+    void set (const FilterSettings& s)
+    {
+        prevClean = curClean;
+        curClean = (s.clean && s.model != 5 && s.model != 6) ? 1.0f : 0.0f;
+        float morph = -1.0f;
+        const int type = FilterUnit::typeFor (s.model, s.style, s.blend, morph);
+        if (type != left.getType())
+        {
+            left.setType (type);
+            right.setType (type);
+        }
+        synthyboy::filters::FilterParams p;
+        p.cutoff = std::clamp (s.cutoffHz, 20.0f, 20000.0f);
+        p.resonance = clamp01 (s.resonance);
+        p.drive = clamp01 (s.drive);
+        p.var = clamp01 (morph >= 0.0f ? morph : s.var);
+        p.blend = clamp01 (s.blend);
+        p.mix = clamp01 (s.mix);
+        p.jump = s.noSmoothing;
+        p.coefHold = s.fast ? 4 : 1;
+        left.setParams (p);
+        right.setParams (p);
+    }
+    void process (const float* inL, const float* inR, float* outL, float* outR, int n, int t0)
+    {
+        const bool cleaning = curClean > 0.5f || prevClean > 0.5f;
+        const float invP = 1.0f / static_cast<float> (kControlPeriod);
+        float tmpL[kControlPeriod], tmpR[kControlPeriod];
+        if (cleaning)
+        {
+            for (int k = 0; k < n; ++k)
+            {
+                const float g = dbToGain (-24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
+                tmpL[k] = inL[k] * g;
+                tmpR[k] = inR[k] * g;
+            }
+            if (!synthyboy::filters::Filter::processPair (left, right, tmpL, outL, tmpR, outR, n))
+            {
+                left.process (tmpL, outL, n);
+                right.process (tmpR, outR, n);
+            }
+            for (int k = 0; k < n; ++k)
+            {
+                const float g = dbToGain (24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
+                outL[k] *= g;
+                outR[k] *= g;
+            }
+        }
+        else if (!synthyboy::filters::Filter::processPair (left, right, inL, outL, inR, outR, n))
+        {
+            left.process (inL, outL, n);
+            right.process (inR, outR, n);
+        }
+        // the limiter after the filter: no runaway in these tests, the output is only limited (the unit's vector form of std::clamp)
+        simd::clampTo (outL, -16.0f, 16.0f, n);
+        simd::clampTo (outR, -16.0f, 16.0f, n);
+    }
+};
+} // namespace
+
+/** Item 7 for the Serum models (the clean gain around the collection's filter): the unit against ReferenceSerumUnit with the per sample dbToGain loops. */
 TEST (own_filter_savings_serum_clean_steady_matches_the_per_sample_gain)
 {
     const int models[] = { 8, 9, 12, 20, 26 };
     for (int model : models)
         for (int fastI = 0; fastI < 2; ++fastI)
         {
-            FilterUnit newer, older;
-            newer.prepare (44100.0);
-            older.prepare (44100.0);
+            FilterUnit unit;
+            ReferenceSerumUnit ref;
+            unit.prepare (44100.0);
+            ref.prepare (44100.0);
             sbtest::Rng rng (0x5e70ull + static_cast<uint64_t> (model * 3 + fastI));
             for (int tick = 0; tick < 60; ++tick)
             {
                 FilterSettings s = settingsFor (model, 0, fastI != 0, 800.0f + 40.0f * static_cast<float> (tick), -1.0f, 0.3f, 3.0f);
                 s.clean = (tick / 8) % 2 == 1;
                 s.drive = 0.3f;
-                s.scalarOnly = false;
-                newer.set (s);
-                s.scalarOnly = true;
-                older.set (s);
+                unit.set (s);
+                ref.set (s);
                 std::vector<float> inL (32), inR (32), a1 (32), a2 (32), b1 (32), b2 (32);
                 fillInput (rng, inL, 0.4f, false);
                 fillInput (rng, inR, 0.4f, false);
-                newer.process (inL.data(), inR.data(), a1.data(), a2.data(), 32, 0);
-                older.process (inL.data(), inR.data(), b1.data(), b2.data(), 32, 0);
+                unit.process (inL.data(), inR.data(), a1.data(), a2.data(), 32, 0);
+                ref.process (inL.data(), inR.data(), b1.data(), b2.data(), 32, 0);
                 CHECK (sameBits (a1, b1));
                 CHECK (sameBits (a2, b2));
             }
         }
+}
+
+// ---- Item 3: the compares on the bit pattern, against the float forms they replaced, over all 2^32 patterns ----
+
+namespace
+{
+float floatFrom (uint32_t u)
+{
+    float f;
+    std::memcpy (&f, &u, sizeof f);
+    return f;
+}
+bool isNanBits (uint32_t u)
+{
+    return (u & 0x7fffffffu) > 0x7f800000u;
+}
+
+// the code before
+float oldFlushDenormal (float v)
+{
+    return std::fabs (v) < 1.0e-18f ? 0.0f : v;
+}
+float oldFastTanh (float x)
+{
+    if (x >= 4.972f)
+        return 1.0f;
+    if (x <= -4.972f)
+        return -1.0f;
+    const float x2 = x * x;
+    return x * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2))) / (135135.0f + x2 * (62370.0f + x2 * (3150.0f + 28.0f * x2)));
+}
+float oldHardtanh (const ClassicFilter& f, float v)
+{
+    const float a = std::fabs (v);
+    return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * f.th ((a - 0.66f) / 0.34f), v);
+}
+
+struct SweepResult
+{
+    uint64_t flushDiff = 0, tanhDiff = 0, tanhNanPayload = 0, kneeDiff = 0, hardDiff = 0, hardChecked = 0;
+};
+
+/** Every bit pattern u in [from, to) through the old and the new forms. A result differs when its bits differ; two NaNs of another payload are counted apart (tanhNanPayload):
+    both forms are the same expression on a NaN, so the payload follows the hardware's rule for it. */
+SweepResult sweep (uint64_t from, uint64_t to, bool hardtanhExact)
+{
+    SweepResult r;
+    ClassicFilter fast, exact;
+    fast.fastMath = true;
+    exact.fastMath = false;
+    for (uint64_t u = from; u < to; ++u)
+    {
+        const uint32_t b = static_cast<uint32_t> (u);
+        const float x = floatFrom (b);
+        if (bitsOf (flushDenormal (x)) != bitsOf (oldFlushDenormal (x)))
+            ++r.flushDiff;
+        const float tn = fastmath::tanh (x), tOld = oldFastTanh (x);
+        if (bitsOf (tn) != bitsOf (tOld))
+        {
+            if (isNanBits (bitsOf (tn)) && isNanBits (bitsOf (tOld)))
+                ++r.tanhNanPayload;
+            else
+                ++r.tanhDiff;
+        }
+        // the knee test of hardtanh: |v| <= 0.66f
+        const bool knee = (b & 0x7fffffffu) <= 0x3f28f5c3u;
+        if (knee != (std::fabs (x) <= 0.66f))
+            ++r.kneeDiff;
+        // hardtanh as a whole against its old form (the knee test above covers every pattern; here the whole function on a stride of the patterns: the tier low tanh on every 16th, the
+        // libm tanh on every 97th, a library call)
+        if (b % 16u == 0u)
+        {
+            const float h = fast.hardtanh (x), o = oldHardtanh (fast, x);
+            ++r.hardChecked;
+            if (bitsOf (h) != bitsOf (o) && !(isNanBits (bitsOf (h)) && isNanBits (bitsOf (o))))
+                ++r.hardDiff;
+        }
+        if (hardtanhExact && b % 97u == 0u)
+        {
+            const float h = exact.hardtanh (x), o = oldHardtanh (exact, x);
+            ++r.hardChecked;
+            if (bitsOf (h) != bitsOf (o) && !(isNanBits (bitsOf (h)) && isNanBits (bitsOf (o))))
+                ++r.hardDiff;
+        }
+    }
+    return r;
+}
+
+SweepResult sweepAll (bool hardtanhExact)
+{
+    const unsigned threads = std::clamp (std::thread::hardware_concurrency(), 1u, 16u);
+    std::vector<SweepResult> results (threads);
+    std::vector<std::thread> pool;
+    const uint64_t total = 1ull << 32;
+    for (unsigned t = 0; t < threads; ++t)
+        pool.emplace_back ([&, t]
+                           {
+                               results[t] = sweep (total * t / threads, total * (t + 1) / threads, hardtanhExact);
+                           });
+    for (auto& th : pool)
+        th.join();
+    SweepResult sum;
+    for (const auto& r : results)
+    {
+        sum.flushDiff += r.flushDiff;
+        sum.tanhDiff += r.tanhDiff;
+        sum.tanhNanPayload += r.tanhNanPayload;
+        sum.kneeDiff += r.kneeDiff;
+        sum.hardDiff += r.hardDiff;
+        sum.hardChecked += r.hardChecked;
+    }
+    return sum;
+}
+} // namespace
+
+#if defined(__SSE__) || defined(__x86_64__)
+#include <xmmintrin.h>
+#endif
+
+TEST (own_filter_savings_integer_compares_match_the_float_forms_on_denormals_with_flush_to_zero)
+{
+#if defined(__SSE__) || defined(__x86_64__)
+    // the engine runs with FZ set on the devices: the denormal patterns (and the smallest normals) through the old and the new forms with FTZ / DAZ on (x86 MXCSR here)
+    const unsigned oldCsr = _mm_getcsr();
+    _mm_setcsr (oldCsr | 0x8040u); // FTZ | DAZ
+    const SweepResult pos = sweep (0u, 0x01000000u, true), neg = sweep (0x80000000ull, 0x81000000ull, true);
+    _mm_setcsr (oldCsr);
+    CHECK (pos.flushDiff + neg.flushDiff == 0);
+    CHECK (pos.tanhDiff + neg.tanhDiff == 0);
+    CHECK (pos.kneeDiff + neg.kneeDiff == 0);
+    CHECK (pos.hardDiff + neg.hardDiff == 0);
+#else
+    std::printf ("SAVINGS-SWEEP flush-to-zero sweep skipped: no x86 control register here (the ARM FZ bit is covered by the device and arm_denormal_check)\n");
+#endif
+}
+
+TEST (own_filter_savings_integer_compares_match_the_float_forms_on_all_bit_patterns)
+{
+    // the constants the integer forms carry
+    CHECK (bitsOf (1.0e-18f) == 0x219392efu);
+    CHECK (bitsOf (4.972f) == 0x409f1aa0u);
+    CHECK (bitsOf (0.66f) == 0x3f28f5c3u);
+    CHECK (std::isinf (floatFrom (0x7f800000u)) && !std::isinf (floatFrom (0x7f7fffffu)));
+    const SweepResult r = sweepAll (true);
+    std::printf ("SAVINGS-SWEEP 2^32 patterns: flushDenormal differences %llu, tanh clamp differences %llu (NaN payload only: %llu), knee test differences %llu, hardtanh differences %llu of %llu\n",
+                 static_cast<unsigned long long> (r.flushDiff), static_cast<unsigned long long> (r.tanhDiff), static_cast<unsigned long long> (r.tanhNanPayload),
+                 static_cast<unsigned long long> (r.kneeDiff), static_cast<unsigned long long> (r.hardDiff), static_cast<unsigned long long> (r.hardChecked));
+    CHECK (r.flushDiff == 0);
+    CHECK (r.tanhDiff == 0);
+    CHECK (r.tanhNanPayload == 0);
+    CHECK (r.kneeDiff == 0);
+    CHECK (r.hardDiff == 0);
 }
