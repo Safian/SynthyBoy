@@ -160,6 +160,8 @@ public:
         lad = o.lad; ladValid = o.ladValid;
         dio = o.dio; dioValid = o.dioValid;
         fmt = o.fmt; fmtValid = o.fmtValid;
+        cmb = o.cmb; cmbValid = o.cmbValid;
+        phs = o.phs; phsValid = o.phsValid;
         for (int k = 0; k < 4; ++k)
             fmtCf[k] = o.fmtCf[k];
     }
@@ -259,6 +261,8 @@ public:
         ladValid = false;
         dioValid = false;
         fmtValid = false;
+        cmbValid = false;
+        phsValid = false;
         mf = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
         md = std::pow (10.0f, p.driveDb * 0.05f);
         mr = clamp01 (p.res);
@@ -306,7 +310,10 @@ public:
 #if SB_NEON
         if (model == 3 && !A.scalarLoops)
         {
-            svfPairLoopDigitalNeon (A, B, za, zb, inA, outA, inB, outB, n);
+            if (A.fastMath && B.fastMath)
+                svfPairLoopDigitalNeon<true> (A, B, za, zb, inA, outA, inB, outB, n);
+            else
+                svfPairLoopDigitalNeon<false> (A, B, za, zb, inA, outA, inB, outB, n);
             return;
         }
 #endif
@@ -315,7 +322,10 @@ public:
 #if SB_NEON
     /** The Digital model (3) of svfPairLoopScalar () with the two channels in the two lanes of a NEON register: the operations of tpt () and of the loop one by one
         (separate multiply and add, the true division: one instruction on AArch64, two scalar divisions on 32 bit ARM), flushDenormal () as a select, and the limiter
-        hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. */
+        hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. With `Recip` (tier low,
+        both channels) the two divisions per sample are multiplications by the reciprocals of the denominators, made once per call by the same scalar expressions as in
+        svfPairLoopScalar () and svfRun (): the same samples as those loops, within the bound of tpt () of the exact division. */
+    template <bool Recip>
     static void svfPairLoopDigitalNeon (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
     {
         // the lanes are written as the S halves of the D register (GCC's vector subscript; a float t[2] went through the stack on 32 bit ARM), and the compares are
@@ -350,6 +360,10 @@ public:
         // the denominators of tpt (): 1 + g Rloop + g g, with Rloop = R1 in the first section and R in the last (the same expression, once instead of per sample)
         const float32x2_t den1 = pair (1.0f + za.g * za.R1 + za.g * za.g, 1.0f + zb.g * zb.R1 + zb.g * zb.g);
         const float32x2_t den2 = pair (1.0f + za.g * za.R + za.g * za.g, 1.0f + zb.g * zb.R + zb.g * zb.g);
+        // tier low: the reciprocals, by the scalar divisions of svfPairLoopScalar () (one per denominator and call), not a vector estimate: the same values
+        const float32x2_t inv1 = Recip && two ? pair (1.0f / (1.0f + za.g * za.R1 + za.g * za.g), 1.0f / (1.0f + zb.g * zb.R1 + zb.g * zb.g)) : vdup_n_f32 (1.0f);
+        const float32x2_t inv2 = Recip ? pair (1.0f / (1.0f + za.g * za.R + za.g * za.g), 1.0f / (1.0f + zb.g * zb.R + zb.g * zb.g)) : vdup_n_f32 (1.0f);
+        auto quotient = [&divide] (float32x2_t num, float32x2_t den, float32x2_t inv) noexcept { return Recip ? vmul_f32 (num, inv) : divide (num, den); };
         const float32x2_t twoV = vdup_n_f32 (2.0f);
         const int k2 = two ? 3 : 0;
         float32x2_t a1 = pair (A.s[0], B.s[0]), a2 = pair (A.s[1], B.s[1]);       // the states of the first section (the only one when !two)
@@ -361,7 +375,7 @@ public:
             {
                 // tpt (0, u, g, R1, R, ...): the loop runs with R1, the high pass output with the true R
                 const float32x2_t v3 = vsub_f32 (u, a2);
-                const float32x2_t v1 = divide (vadd_f32 (a1, vmul_f32 (g, v3)), den1);
+                const float32x2_t v1 = quotient (vadd_f32 (a1, vmul_f32 (g, v3)), den1, inv1);
                 const float32x2_t v2 = vadd_f32 (a2, vmul_f32 (g, v1));
                 a1 = flush (vsub_f32 (vmul_f32 (twoV, v1), a1));
                 a2 = flush (vsub_f32 (vmul_f32 (twoV, v2), a2));
@@ -372,7 +386,7 @@ public:
             float32x2_t& c1 = two ? b1 : a1;
             float32x2_t& c2 = two ? b2 : a2;
             const float32x2_t v3 = vsub_f32 (u, c2);
-            const float32x2_t v1 = divide (vadd_f32 (c1, vmul_f32 (g, v3)), den2);
+            const float32x2_t v1 = quotient (vadd_f32 (c1, vmul_f32 (g, v3)), den2, inv2);
             const float32x2_t v2 = vadd_f32 (c2, vmul_f32 (g, v1));
             c1 = flush (vsub_f32 (vmul_f32 (twoV, v1), c1));
             c2 = flush (vsub_f32 (vmul_f32 (twoV, v2), c2));
@@ -402,13 +416,8 @@ public:
         const bool linearHard = model == 3;
         const bool two = za.two;
         const bool sat = A.satLoop;
-        // tier low: the reciprocals of the denominators of tpt () once for the call, as in svfRun (). Not for the Digital model where its NEON loop (true division) exists: the
-        // scalar loop is that loop's reference (scalarLoops, the tests), and the NEON loop has to give the same samples; it takes the reciprocals once it has been verified on ARM.
-#if SB_NEON
-        const bool recip = A.fastMath && B.fastMath && model != 3;
-#else
+        // tier low: the reciprocals of the denominators of tpt () once for the call, as in svfRun () and the NEON Digital loop (svfPairLoopDigitalNeon: the same values)
         const bool recip = A.fastMath && B.fastMath;
-#endif
         const float inva1 = recip && two ? 1.0f / (1.0f + za.g * za.R1 + za.g * za.g) : 1.0f, invb1 = recip && two ? 1.0f / (1.0f + zb.g * zb.R1 + zb.g * zb.g) : 1.0f;
         const float inva2 = recip ? 1.0f / (1.0f + za.g * za.R + za.g * za.g) : 1.0f, invb2 = recip ? 1.0f / (1.0f + zb.g * zb.R + zb.g * zb.g) : 1.0f;
         for (int i = 0; i < n; ++i)
@@ -1188,40 +1197,73 @@ private:
         }
     }
 
+    /** What the Comb model derives from its parameters (the delay length, the one pole coefficients, the phase delay of the loop filter by a polar / atan2 / exp2 / exp):
+        made when the parameters change (remember ()) and shared with the other channel (adoptMemo ()). */
+    struct CombSetup
+    {
+        bool styled = false, band = false;
+        int fbStyle = 0;
+        float a = 0.0f, aA = 0.0f, aB = 0.0f, lowGain = 1.0f, highGain = 0.0f, readAt = 0.0f, fb = 0.0f, scale = 1.0f, sgn = 1.0f;
+    };
+    /** What the phaser model derives from its parameters (the stage coefficient by a tan, the tap weights, the two one pole coefficients by exp). */
+    struct PhaserSetup
+    {
+        float a = 0.0f, p1 = 0.0f, p3 = 0.0f, p5 = 0.0f, inv = 1.0f, c1 = 0.0f, c2 = 0.0f, drive = 1.0f, r = 0.0f;
+    };
+
     /** The Comb model (document 05, 8): style 0 is the plain comb (the one-pole loop filter at the comb offset; blend and style are not read), styles 1 .. 5 are
         `style = feedback_style + 3 * filter_style` (feedback_style 0 comb, 1 positive flange, 2 negative flange; filter_style 0 low / high blend, 1 band); a style above 5 is 5. */
     void combFilter (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
     {
-        const int st = std::clamp (p.style, 0, 5);
-        if (st == 0)
-            combPlain (in, out, n, f, r, p);
-        else
-            combStyled (in, out, n, f, r, p, st);
+        if (!cmbValid)
+        {
+            cmb = combSetup (f, r, p);
+            cmbValid = true;
+        }
+        combRun (cmb, in, out, n);
     }
 
-    void combStyled (const float* in, float* out, int n, float f, float r, const ClassicParams& p, int st) noexcept
+    CombSetup combSetup (float f, float r, const ClassicParams& p) const noexcept
     {
-        const int fbStyle = st % 3;
-        const bool band = st >= 3;
+        CombSetup z;
+        const int st = std::clamp (p.style, 0, 5);
+        if (st == 0)
+        {
+            const float T = std::clamp (static_cast<float> (sr) / std::max (f, 20.0f), 2.0f, static_cast<float> (sr) * 0.09f);
+            float fb = lerp (-1.0f, 1.0f, r);
+            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+            z.fb = std::clamp (fb, -0.98f, 0.98f);
+            z.scale = 1.0f - 0.5f * z.fb * z.fb;
+            const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
+            z.a = OnePole::coefficient (loopHz, sr);
+            // The loop filter delays the signal as well: the phase delay of its one pole at the pitch (about T / 70 at the default offset of 42 semitones, 1.1 % of the period
+            // = 19 cents flat) is taken off the length of the delay line, so the comb resonates at sr / T, the pitch of the cutoff.
+            const float w0 = kTwoPif * std::max (f, 20.0f) / static_cast<float> (sr), bpole = 1.0f - z.a;
+            const float loopDelay = std::atan2 (bpole * std::sin (w0), 1.0f - bpole * std::cos (w0)) / w0;
+            z.readAt = std::max (T - 1.0f - loopDelay, 0.0f);
+            return z;
+        }
+        z.styled = true;
+        z.fbStyle = st % 3;
+        z.band = st >= 3;
         const float srf = static_cast<float> (sr), fe = std::max (f, 20.0f);
         const float T = std::clamp (srf / fe, 2.0f, srf * 0.09f);
         const float fc = fe * std::exp2 (p.combOffset / 12.0f);
         const float edge = srf / 2.1f;
-        float aA, aB, lowGain = 1.0f, highGain = 0.0f;
-        if (!band)
+        if (!z.band)
         {
             // a low / high blend around the corner n_cut + comb_offset (one pole split), then a second one pole high pass at n_cut - 48 semitones
-            aA = OnePole::coefficient (std::clamp (fc, 1.0f, edge), sr);
-            lowGain = std::clamp (2.0f - p.blendRaw, 0.0f, 1.0f);
-            highGain = std::clamp (p.blendRaw, 0.0f, 1.0f);
-            aB = OnePole::coefficient (std::clamp (fe * 0.0625f, 1.0f, edge), sr);
+            z.aA = OnePole::coefficient (std::clamp (fc, 1.0f, edge), sr);
+            z.lowGain = std::clamp (2.0f - p.blendRaw, 0.0f, 1.0f);
+            z.highGain = std::clamp (p.blendRaw, 0.0f, 1.0f);
+            z.aB = OnePole::coefficient (std::clamp (fe * 0.0625f, 1.0f, edge), sr);
         }
         else
         {
             // a band around n_cut + comb_offset whose half width is blend * 4 octaves: a high pass at the lower corner, a low pass at the upper one
             const float octaves = clamp01 (p.blendRaw * 0.5f) * 4.0f;
-            aA = OnePole::coefficient (std::clamp (fc * std::exp2 (octaves), 1.0f, edge), sr);
-            aB = OnePole::coefficient (std::clamp (fc * std::exp2 (-octaves), 1.0f, edge), sr);
+            z.aA = OnePole::coefficient (std::clamp (fc * std::exp2 (octaves), 1.0f, edge), sr);
+            z.aB = OnePole::coefficient (std::clamp (fc * std::exp2 (-octaves), 1.0f, edge), sr);
         }
         // the loop filter delays the signal at the pitch: its phase delay is taken off the delay line (as for the plain comb), so the comb rings at sr / T
         using Cx = std::complex<float>;
@@ -1229,16 +1271,53 @@ private:
         const Cx zi = std::polar (1.0f, -w0);
         auto onePole = [&] (float a) { return Cx (a) / (Cx (1.0f) - Cx (1.0f - a) * zi); };
         Cx H;
-        if (!band)
+        if (!z.band)
         {
-            const Cx lp = onePole (aA);
-            H = (lowGain * lp + highGain * (Cx (1.0f) - lp)) * (Cx (1.0f) - onePole (aB));
+            const Cx lp = onePole (z.aA);
+            H = (z.lowGain * lp + z.highGain * (Cx (1.0f) - lp)) * (Cx (1.0f) - onePole (z.aB));
         }
         else
-            H = (Cx (1.0f) - onePole (aB)) * onePole (aA);
+            H = (Cx (1.0f) - onePole (z.aB)) * onePole (z.aA);
         const float loopDelay = -std::arg (H) / w0;
-        const float lineT = fbStyle == 2 ? 0.5f * T : T;
-        const float readAt = std::max (lineT - 1.0f - loopDelay, 0.0f);
+        const float lineT = z.fbStyle == 2 ? 0.5f * T : T;
+        z.readAt = std::max (lineT - 1.0f - loopDelay, 0.0f);
+        if (z.fbStyle == 0)
+        {
+            float fb = lerp (-1.0f, 1.0f, r);
+            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+            z.fb = std::clamp (fb, -0.98f, 0.98f);
+            z.scale = 1.0f - 0.5f * z.fb * z.fb;
+        }
+        else
+        {
+            // flanges: the delay line holds x / sqrt (2) + hardtanh (fb filtered (delay)); the output is x / sqrt (2) scale + filtered (negative: the feedback and the output term
+            // inverted, the read at T / 2)
+            z.fb = std::min (clamp01 (r), 0.98f);
+            z.sgn = z.fbStyle == 2 ? -1.0f : 1.0f;
+            z.scale = 1.0f / (1.0f + z.fb);
+        }
+        return z;
+    }
+
+    void combRun (const CombSetup& z, const float* in, float* out, int n) noexcept
+    {
+        combUsed = true;
+        if (!z.styled)
+        {
+            const float a = z.a, fb = z.fb, scale = z.scale, readAt = z.readAt;
+            for (int i = 0; i < n; ++i)
+            {
+                const float v = scale * in[i] + fb * comb.read (readAt);
+                lpA += a * (v - lpA);
+                lpA = flushDenormal (lpA);
+                const float w = hardtanh (lpA);
+                comb.push (w);
+                out[i] = w;
+            }
+            return;
+        }
+        const bool band = z.band;
+        const float aA = z.aA, aB = z.aB, lowGain = z.lowGain, highGain = z.highGain, readAt = z.readAt, fb = z.fb, scale = z.scale;
         auto filtered = [&] (float x) noexcept
         {
             if (!band)
@@ -1253,13 +1332,8 @@ private:
             lpA = flushDenormal (lpA + aA * (h - lpA));
             return lpA;
         };
-        combUsed = true;
-        if (fbStyle == 0)
+        if (z.fbStyle == 0)
         {
-            float fb = lerp (-1.0f, 1.0f, r);
-            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
-            fb = std::clamp (fb, -0.98f, 0.98f);
-            const float scale = 1.0f - 0.5f * fb * fb;
             for (int i = 0; i < n; ++i)
             {
                 const float w = hardtanh (filtered (scale * in[i] + fb * comb.read (readAt)));
@@ -1268,11 +1342,7 @@ private:
             }
             return;
         }
-        // flanges: the delay line holds x / sqrt (2) + hardtanh (fb filtered (delay)); the output is x / sqrt (2) scale + filtered (negative: the feedback and the output term
-        // inverted, the read at T / 2)
-        const float fb = std::min (clamp01 (r), 0.98f);
-        const float sgn = fbStyle == 2 ? -1.0f : 1.0f;
-        const float scale = 1.0f / (1.0f + fb);
+        const float sgn = z.sgn;
         const float inGain = 0.70710678f;
         for (int i = 0; i < n; ++i)
         {
@@ -1282,45 +1352,39 @@ private:
         }
     }
 
-    void combPlain (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
-    {
-        const float T = std::clamp (static_cast<float> (sr) / std::max (f, 20.0f), 2.0f, static_cast<float> (sr) * 0.09f);
-        float fb = lerp (-1.0f, 1.0f, r);
-        fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
-        fb = std::clamp (fb, -0.98f, 0.98f);
-        const float scale = 1.0f - 0.5f * fb * fb;
-        const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
-        const float a = OnePole::coefficient (loopHz, sr);
-        // The loop filter delays the signal as well: the phase delay of its one pole at the pitch (about T / 70 at the default offset of 42 semitones, 1.1 % of the period
-        // = 19 cents flat) is taken off the length of the delay line, so the comb resonates at sr / T, the pitch of the cutoff.
-        const float w0 = kTwoPif * std::max (f, 20.0f) / static_cast<float> (sr), bpole = 1.0f - a;
-        const float loopDelay = std::atan2 (bpole * std::sin (w0), 1.0f - bpole * std::cos (w0)) / w0;
-        const float readAt = std::max (T - 1.0f - loopDelay, 0.0f);
-        combUsed = true;
-        for (int i = 0; i < n; ++i)
-        {
-            const float v = scale * in[i] + fb * comb.read (readAt);
-            lpA += a * (v - lpA);
-            lpA = flushDenormal (lpA);
-            const float w = hardtanh (lpA);
-            comb.push (w);
-            out[i] = w;
-        }
-    }
-
     void phaserFilter (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
     {
+        if (!phsValid)
+        {
+            phs = phaserSetup (f, r, d, p);
+            phsValid = true;
+        }
+        phaserRun (phs, in, out, n);
+    }
+
+    PhaserSetup phaserSetup (float f, float r, float d, const ClassicParams& p) const noexcept
+    {
+        PhaserSetup z;
         const float g = phaserStageG (f, sr);
-        const float a = g / (1.0f + g);
-        const float b = clamp01 (p.blendRaw);
+        z.a = g / (1.0f + g);
         const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f);
-        const float p1 = clamp01 (1.0f - braw), p5 = clamp01 (braw - 1.0f), p3 = 1.0f - p1 - p5;
-        const float inv = p.style == 1 ? -1.0f : 1.0f;
-        (void) b;
-        const float c1 = OnePole::coefficient (f / 20.0f, sr), c2 = OnePole::coefficient (f * 20.0f, sr);
+        z.p1 = clamp01 (1.0f - braw);
+        z.p5 = clamp01 (braw - 1.0f);
+        z.p3 = 1.0f - z.p1 - z.p5;
+        z.inv = p.style == 1 ? -1.0f : 1.0f;
+        z.c1 = OnePole::coefficient (f / 20.0f, sr);
+        z.c2 = OnePole::coefficient (f * 20.0f, sr);
+        z.drive = d * (1.0f + 0.5f * r); // the product the loop formed per sample first: (d * (1 + 0.5 r)) * in
+        z.r = r;
+        return z;
+    }
+
+    void phaserRun (const PhaserSetup& z, const float* in, float* out, int n) noexcept
+    {
+        const float a = z.a, p1 = z.p1, p3 = z.p3, p5 = z.p5, inv = z.inv, c1 = z.c1, c2 = z.c2, drive = z.drive, r = z.r;
         for (int i = 0; i < n; ++i)
         {
-            float x = hardtanh (d * (1.0f + 0.5f * r) * in[i] + inv * fbState);
+            float x = hardtanh (drive * in[i] + inv * fbState);
             float tap[3] = { 0, 0, 0 };
             for (int st = 0; st < 12; ++st)
             {
@@ -1339,6 +1403,10 @@ private:
             out[i] = 0.5f * (in[i] + inv * outAp);
         }
     }
+
+    CombSetup cmb;       // the setups of the Comb and phaser models for the parameters last passed to remember ()
+    PhaserSetup phs;
+    bool cmbValid = false, phsValid = false;
 
     double sr = 48000.0;
     static constexpr float kAn[6] = { 1.0f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
