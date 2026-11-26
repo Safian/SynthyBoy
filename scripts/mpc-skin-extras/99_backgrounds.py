@@ -35,6 +35,9 @@ KNOWN = {
     "lfo1": ("LFO", CANVAS_ASSET, 900, 2, "0b1029"),
     "mod": ("Mod", CANVAS_ASSET, 900, 20, "0b1022"),
     "filter1": ("Filter", CANVAS_ASSET, 900, 95, "171c35"),
+    "filter2": ("Filter 2", CANVAS_ASSET, 900, 95, "171c35"),
+    "filternote": ("Note", CANVAS_ASSET, 900, 95, "171c35"),
+    "filtervelo": ("Velo", CANVAS_ASSET, 900, 95, "171c35"),
     # Master: in the title strip of a block panel right of its title, on both sides (the colour is close to the panel fill); Voice: in the gutter between RANDOM and SCALING
     # (close to the canvas). No control lies there (master_layout.json, voice_layout.json).
     "master": ("Master", CANVAS_ASSET, 600, 74, "141a38"),

@@ -19,6 +19,9 @@ static const uint32_t shim_marker_pairs[][2] = {
     { 0x8e3a2c, 0x3a8e64 },  // fx
     { 0x873a2c, 0x3a8764 },  // mixer
     { 0x103a2c, 0x3a1064 },  // filter1
+    { 0x3a5a2c, 0x5a3a64 },  // filter2
+    { 0x415a2c, 0x5a4164 },  // filternote
+    { 0x485a2c, 0x5a4864 },  // filtervelo
     { 0x953a2c, 0x3a9564 },  // mod
     { 0x9c3a2c, 0x3a9c64 },  // master
     { 0x335a2c, 0x5a3364 },  // tuning
@@ -42,6 +45,9 @@ static const int shim_marker_centers[][4] = {
     { 36, 137, 1244, 137 },  // fx
     { 36, 137, 1244, 137 },  // mixer
     { 36, 117, 1244, 117 },  // filter1
+    { 36, 117, 1244, 117 },  // filter2
+    { 36, 117, 1244, 117 },  // filternote
+    { 36, 117, 1244, 117 },  // filtervelo
     { 36, 137, 1244, 137 },  // mod
     { 36, 137, 1244, 137 },  // master
     { 36, 137, 1244, 137 },  // tuning

@@ -9,7 +9,7 @@ from pathlib import Path
 
 VIEW_IDS = {"Play": "play1", "Macros": "macros", "Osc": "osca", "Osc B": "oscb", "Osc C": "oscc",
             "Sub": "oscsub", "Noise": "oscnoise", "Env": "env1", "Env 2": "env2", "Env 3": "env3", "Env 4": "env4", "Env 5": "env5", "Env 6": "env6", "LFO": "lfo1", "FX": "fx",
-            "Mix": "mixer", "Filter": "filter1", "Mod": "mod", "Master": "master", "Tuning": "tuning", "Voice": "voice"}
+            "Mix": "mixer", "Filter": "filter1", "Filter 2": "filter2", "Note": "filternote", "Velo": "filtervelo", "Mod": "mod", "Master": "master", "Tuning": "tuning", "Voice": "voice"}
 PASSIVE = {"Label", "Image", "Meter", "Indicator", "Focus"}
 ACTUATORS = {"Button", "Knob", "Slider", "MenuOverlay", "KnobOverlay", "NumericOverlay"}
 

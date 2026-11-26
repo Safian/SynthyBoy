@@ -673,6 +673,117 @@
       }
     },
     {
+      "name": "filter2",
+      "kind": "filterui",
+      "index": 2,
+      "tab": "Filter 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 4,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 4,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a3a64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 4,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "filternote",
+      "kind": "filterui",
+      "index": 3,
+      "tab": "Note",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 4,
+          "w": 6,
+          "h": 6,
+          "rgb": "415a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 4,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a4164",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 4,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "filtervelo",
+      "kind": "filterui",
+      "index": 4,
+      "tab": "Velo",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 4,
+          "w": 6,
+          "h": 6,
+          "rgb": "485a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 4,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a4864",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 4,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
       "name": "mod",
       "kind": "mod",
       "index": 1,

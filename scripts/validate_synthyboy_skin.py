@@ -15,7 +15,7 @@ SURFACES = {
     "Play": "playOscSelector", "Macros": "macroCard", "Osc": "oscNativeSurface",
     "Osc B": "oscNativeSurface", "Osc C": "oscNativeSurface", "Sub": "oscNativeSurface",
     "Noise": "oscNativeSurface", **dict.fromkeys(("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6"), "envNativeFullFields"), "LFO": "lfoNativeFullEditor",
-    "FX": "fxNativeEditorSurface", "Mix": "mixerStripSourceFrame", "Filter": "filterNativeEditorSurface",
+    "FX": "fxNativeEditorSurface", "Mix": "mixerStripSourceFrame", "Filter": "filterNativeEditorSurface", "Filter 2": "filterNativeEditorSurface", "Note": "filterNativeCurveSurface", "Velo": "filterNativeCurveSurface",
     "Mod": "modNativeRowNormal", "Master": "masterNativeOutputMeters", "Tuning": "masterNativeBlock_scale", "Voice": "voiceNativeStepLevel",
 }
 BUILTINS = {"Button", "Focus", "Image", "Knob", "Label", "MenuOverlay", "Meter", "NumericOverlay", "Slider"}

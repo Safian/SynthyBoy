@@ -40,24 +40,26 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         cls.skin = NoFallbackTests.skins
         cls.params = NoFallbackTests.params
         cls.tui = NoFallbackTests.tui
-        cls.tab = next(t for t in NoFallbackTests.tui["pageData"]["tabs"] if t["tabName"] == "Filter")
+        tabs = {t["tabName"]: t for t in NoFallbackTests.tui["pageData"]["tabs"]}
+        cls.tab = tabs["Filter"]
         cls.items = cls.tab["componentDefinition"]["componentsData"]
+        cls.filter2_items = tabs["Filter 2"]["componentDefinition"]["componentsData"]
+        cls.note_items = tabs["Note"]["componentDefinition"]["componentsData"]
+        cls.velo_items = tabs["Velo"]["componentDefinition"]["componentsData"]
         definitions = {d["key"]: d["value"] for d in cls.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         kind = "filterNativeEditorSurface"
         cls.surface = next(c for c in cls.items if c["componentData"]["type"] == kind)
-        cls.curve_surface = next(c for c in cls.items if c["componentData"]["type"] == "filterNativeCurveSurface")
-        cls.split_left_surfaces = [c for c in cls.items if c["componentData"]["type"] == "filterNativeSplitLeftSurface"]
-        cls.split_right_surfaces = [c for c in cls.items if c["componentData"]["type"] == "filterNativeSplitRightSurface"]
-        cls.surfaces = [cls.surface, cls.curve_surface, *cls.split_left_surfaces, *cls.split_right_surfaces]
+        # one tab page = one screen: Filter and Filter 2 carry the filter surface, Note and Velo the curve surface
+        cls.curve_surface = next(c for c in cls.note_items if c["componentData"]["type"] == "filterNativeCurveSurface")
+        cls.surfaces = [cls.surface]
         cls.controls = definitions[kind]["componentsData"]
         cls.curve_controls = definitions["filterNativeCurveSurface"]["componentsData"]
-        cls.split_left_controls = definitions["filterNativeSplitLeftSurface"]["componentsData"]
-        cls.split_right_controls = definitions["filterNativeSplitRightSurface"]["componentsData"]
         cls.toolbar = [c for c in cls.items if c["componentData"]["type"] == "filterNativePzToolbar"]
         cls.tools = definitions["filterNativePzToolbar"]["componentsData"]
         cls.top_native = [c for c in cls.items if c["componentData"]["name"].startswith("Filter Native ")
                           and c not in cls.surfaces and c not in cls.toolbar]
-        cls.native = cls.top_native + cls.controls + cls.curve_controls
+        cls.curve_top = [c for c in (*cls.note_items, *cls.velo_items) if c["componentData"]["name"].startswith("Filter Native Glide ")]
+        cls.native = cls.top_native + cls.curve_top + cls.controls + cls.curve_controls
 
     def test_marker_and_instance_rects_are_clear_in_all_skin_states(self):
         self.assertEqual(self.result, (0, ""))
@@ -67,11 +69,9 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         self.assertIs(sentinel, self.items[-1])
         self.assertEqual(sentinel["bounds"]["acceptsHWFocus"], "No")
         self.assertTrue(self.native)
-        self.assertEqual(len(self.split_left_surfaces), 2)
-        self.assertEqual(len(self.split_right_surfaces), 2)
         mod_editors = [c for c in self.items if c["componentData"]["type"] == "nativeModulationEditor"]
         self.assertEqual(len(self.items), len(markers) + len(self.surfaces) + len(self.top_native) + len(self.toolbar) + len(mod_editors))
-        all_leaf_controls = self.native + self.split_left_controls + self.split_right_controls + self.tools
+        all_leaf_controls = self.native + self.tools
         for mark in (c for c in markers if c is not sentinel):
             self.assertFalse(any(overlaps(rect(mark), rect(c)) for c in all_leaf_controls), mark["componentData"]["name"])
         for side, colour in (("left", (16, 58, 44)), ("right", (58, 16, 100))):
@@ -94,14 +94,11 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         action = state + 28
         by_name = {c["componentData"]["name"]: c for c in self.native}
         self.assertEqual(len(by_name), len(self.native))
-        for index, label in enumerate(("NOTE", "VELO"), 3):
-            c = by_name[f"Filter Native {label}"]
-            self.assertEqual(handle(c), action)
-            self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], [f"RangedEnabling/3/4/5/Parameter {state}"])
-            self.assertEqual(c["componentData"]["data"]["buttonId"], index)
-            exp = by_name[f"Filter Native Exp {label}"]
-            self.assertEqual(handle(exp), action)
-            self.assertEqual(exp["bounds"]["additionalInvalidatingHandles"][0], f"RangedEnabling/1/2/5/Parameter {state}")
+        # the hardware sub-tab names the view: no NOTE / VELO / Exp cells, no expand buttons, no split
+        for gone in ("NOTE", "VELO", "Exp NOTE", "Exp VELO", "NOTE art", "VELO art", "Exp NOTE art", "Exp VELO art", "Curve Chain",
+                     "Collapse Curve", "Split Expand Curve", "Split Chain", "Expand Filter F1 0"):
+            self.assertNotIn(f"Filter Native {gone}", by_name, gone)
+        self.assertFalse([name for name in by_name if "Split " in name or name.startswith("Filter Native Expand ")])
         power = by_name["Filter Native Power"]
         self.assertEqual(handle(power), state + 1)
         self.assertEqual(rect(power), (16, 80, 56, 56))
@@ -120,9 +117,8 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
     def test_active_widgets_follow_all_four_views_and_filter_models(self):
         state = len(self.params) + 213
 
-        def current_names(view, model, power_frame, *, split=False, scalar=0):
-            args = {state: view, state + 18: model, state + 31: 2 if (split and scalar == 0) else 0,
-                    state + 32: 2 if (split and scalar == 1) else 0, state + 33: power_frame}
+        def current_names(view, model, power_frame):
+            args = {state: view, state + 18: model, state + 33: power_frame}
             args.update((i, 0) for i, p in enumerate(self.params) if p["key"] in ("curve.note.legato", "curve.velocity.legato"))
             args.update((i, 0) for i, p in enumerate(self.params) if p["key"] == "filter.routing")
             args.update((i, model) for i, p in enumerate(self.params) if p["key"] in ("filter1.model", "filter2.model"))
@@ -142,16 +138,6 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             def visible(component):
                 return all(matches(gate) for gate in component["bounds"].get("additionalInvalidatingHandles", []))
 
-            if split:
-                left_ok = any(visible(s) for s in self.split_left_surfaces)
-                right_ok = any(visible(s) for s in self.split_right_surfaces)
-                out = set()
-                if left_ok:
-                    out |= {c["componentData"]["name"].removeprefix("Filter Native ") for c in self.split_left_controls if visible(c)}
-                if right_ok:
-                    out |= {c["componentData"]["name"].removeprefix("Filter Native ") for c in self.split_right_controls if visible(c)}
-                return out
-
             return {c["componentData"]["name"].removeprefix("Filter Native ") for c in self.native
                     if visible(c)
                     and (c not in self.controls or visible(self.surface))
@@ -162,32 +148,27 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             off = current_names(view, 5, 0)
             self.assertIn("Power", off)
             self.assertFalse(any(n.startswith("Cutoff ") and not n.endswith(" off") for n in off))
-            self.assertTrue({"Chain", "Exp NOTE", "Exp VELO", "dual"} <= off)
+            self.assertTrue({"Chain", "dual"} <= off)
             for model in range(27):
                 names = current_names(view, model, 2)
                 self.assertEqual(sum(n.startswith("Cutoff ") and not n.endswith(" off") for n in names), 1)
                 self.assertEqual(any(n.startswith("F Reso ") and not n.endswith(" off") for n in names), model == 5)
                 self.assertEqual(any(n.startswith("Comb ") and not n.endswith(" off") for n in names), model == 6)
                 self.assertEqual(any(n.startswith("Clean ") and not n.endswith(" off") for n in names), model not in (5, 6))
-            for model in range(27):
-                passive = current_names(view, model, 0, split=True)
-                self.assertEqual(any(n.startswith("Split F Reso ") for n in passive), model == 5)
-                self.assertEqual(any(n.startswith("Split Var ") for n in passive), model != 5)
-                self.assertEqual(any(n.startswith("Split Comb ") for n in passive), model == 6)
-                self.assertEqual(any(n.startswith("Split Clean ") for n in passive), model not in (5, 6))
             for power in (0, 1, 2):
                 self.assertIn("Chain", current_names(view, 3, power))
-                self.assertIn("Split Chain", current_names(view, 3, power, split=True))
-            split_one_off = current_names(view, 3, 1, split=True, scalar=1)
-            self.assertIn(f"Split Cutoff 0 F{view} off", split_one_off)
-            self.assertIn("Split Curve Point", split_one_off)
-            split_on = current_names(view, 5, 2, split=True, scalar=0)
-            self.assertTrue(any(n.startswith("Split F Reso ") and not n.endswith(" off") for n in split_on))
-            self.assertFalse(any(n.startswith("Split X ") for n in split_on))
         for view in (3, 4):
             names = current_names(view, 0, 0)
             self.assertTrue({"Curve Point", "Curve Legato", "Init", "Undo", "Delete Point", "Targets"} <= names)
-            self.assertFalse({"Power", "dual"} & names)
+            self.assertFalse({"Power", "dual", "Chain"} & names)
+
+        # a tab carries only what its state can show
+        def tab_names(items):
+            return {c["componentData"]["name"].removeprefix("Filter Native ") for c in items if c["componentData"]["name"].startswith("Filter Native ")}
+        self.assertEqual(tab_names(self.items), tab_names(self.filter2_items))
+        self.assertFalse(tab_names(self.items) & {"Curve Surface", "Glide note", "Glide velocity"})
+        self.assertEqual(tab_names(self.note_items), {"Glide note", "Curve Surface"})
+        self.assertEqual(tab_names(self.velo_items), {"Glide velocity", "Curve Surface"})
 
     def test_model_and_style_open_the_sdk_domains(self):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
@@ -298,8 +279,6 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         self.assertEqual(rect(pz)[2:], (56, 56))
         self.assertEqual(pz["bounds"]["additionalInvalidatingHandles"],
                          [f"RangedEnabling/1/2/5/Parameter {state}",
-                          f"RangedEnabling/0/1/4/Parameter {state + 31}",
-                          f"RangedEnabling/0/1/4/Parameter {state + 32}",
                           f"RangedEnabling/2/3/4/Parameter {state + 33}",
                           f"IndexedEnabling/21/27/Parameter {state + 18}"])
         style = rect(items["Single Style 21"])
@@ -347,7 +326,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         ids = {p["key"]: i for i, p in enumerate(self.params)}
         for f in (1, 2):
-            off = next(c for c in self.split_left_controls if c["componentData"]["name"] == f"Filter Native Split Cutoff 0 F{f} off")
+            off = next(c for c in self.controls if c["componentData"]["name"] == f"Filter Native Cutoff 0 F{f} off")
             definition = definitions[off["componentData"]["type"]]
             self.assertTrue(definition["ignoreMousePresses"])
             self.assertTrue(definition["disableCoarseDataWheel"])
@@ -359,12 +338,9 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             self.assertEqual(off["handle remapping"]["map"][0]["value"], f"Parameter {ids[f'filter{f}.cutoff']}")
             self.assertEqual(off["bounds"]["acceptsHWFocus"], "No")
 
-    def test_integer_remainder_cell_widths_share_component_subtrees(self):
+    def test_there_are_no_compact_split_definitions(self):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        compact_dials = [key for key in definitions if key.startswith("filterNativeDial_side_") and key.endswith("x60")]
-        self.assertEqual({key.rsplit("_", 1)[1] for key in compact_dials}, {"128x60", "131x60", "200x60"})
-        compact_fields = [key for key in definitions if key.startswith("filterNativeNv_") and key.endswith("x56")]
-        self.assertEqual(compact_fields, ["filterNativeNv_119x56"])
+        self.assertFalse([key for key in definitions if key.startswith("filterNativeSplit") or (key.startswith("filterNativeDial_side_") and key.endswith("x60"))])
 
     def test_filter_native_interactive_children_fit_full_and_compact_controls(self):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
@@ -383,16 +359,14 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                     visited.add(key)
                     check_children(definitions[kind].get("componentsData", []), minimum, (w, h))
 
-        for group, parent, minimum in ((self.controls, self.surface, 56), (self.curve_controls, self.curve_surface, 56),
-                                       (self.split_left_controls, self.split_left_surfaces[0], 48),
-                                       (self.split_right_controls, self.split_right_surfaces[0], 48)):
+        for group, parent, minimum in ((self.controls, self.surface, 56), (self.curve_controls, self.curve_surface, 56)):
             check_children(group, minimum, rect(parent)[2:])
 
     def test_compact_filter_chain_shares_native_menu_and_actual_power(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        instances = [item for item in (*self.top_native, *self.split_left_controls, *defs["mixerPeekFilterEditorSurface"]["componentsData"])
+        instances = [item for item in (*self.top_native, *defs["mixerPeekFilterEditorSurface"]["componentsData"])
                      if item["componentData"]["type"] == "filterNativeChain"]
-        self.assertEqual(len(instances), 12)
+        self.assertEqual(len(instances), 6)
         params = {p["key"]: i for i, p in enumerate(self.params)}
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         for instance in instances:
@@ -416,7 +390,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                              for c in defs["filterNativeChainChoices"]["componentsData"]), 1)
         rows = [c for c in defs["filterNativeChainChoices"]["componentsData"] if c["componentData"]["type"] == "Button"]
         self.assertEqual([r["componentData"]["data"]["buttonId"] for r in rows], list(range(5)))
-        for pool in (self.controls, self.split_left_controls):
+        for pool in (self.controls,):
             self.assertFalse(any("Routing " in c["componentData"]["name"] for c in pool))
 
 

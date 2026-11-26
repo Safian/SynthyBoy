@@ -1,3 +1,3 @@
 {
-  "tabs": ["macros", "play1", "mixer", "fx", "master", "tuning", "voice", "filter1", "osca", "oscb", "oscc", "oscsub", "oscnoise", "mod", "lfo1", "env1", "env2", "env3", "env4", "env5", "env6"]
+  "tabs": ["macros", "play1", "mixer", "fx", "master", "tuning", "voice", "filter1", "filter2", "filternote", "filtervelo", "osca", "oscb", "oscc", "oscsub", "oscnoise", "mod", "lfo1", "env1", "env2", "env3", "env4", "env5", "env6"]
 }

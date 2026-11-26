@@ -271,8 +271,8 @@ inline void runFilter (Preset& a, Preset& b)
         a.set ((pre + ".cutoff").c_str(), 175);
         b.set ((pre + ".cutoff").c_str(), 6350);
         const std::string label = "Filter " + std::to_string (f) + " response";
-        roundTrip (label.c_str(), "filter1", a, b, root,
-                   [&] (Page& p) { return filter (p).full().display.rect().inset (12); }, 1, 1, f - 1);
+        roundTrip (label.c_str(), f == 1 ? "filter1" : "filter2", a, b, root,   // the hardware sub-tabs Filter and Filter 2
+                   [&] (Page& p) { return filter (p).full().display.rect().inset (12); }, 1, 1, 0);
         roundTrip (("Mixer PEEK " + label).c_str(), "mixer", a, b,
                    [f] (Page& p) { p.openPeek (f - 1); },
                    [] (Page& p) {
@@ -286,13 +286,13 @@ inline void runFilter (Preset& a, Preset& b)
                    p.update();
                },
                [&] (Page& p) { return filter (p).isDual() ? filter (p).full().display.rect().inset (12) : ui::Rect {}; },
-               1, 1, tabview::encodeFilterSplit (0, 0, tabview::kFilterExpandedFilter));
+               1, 1, 0);
     b = a;
     a.content.noteCurve = a.content.velocityCurve = {{0, 0}, {0.3f, 0.78f}, {1, 1}};
     b.content.noteCurve = b.content.velocityCurve = {{0, 0}, {0.6f, 0.1f}, {1, 1}};
     for (int v = 2; v <= 3; ++v)
-        roundTrip (v == 2 ? "Filter NOTE" : "Filter VELO", "filter1", a, b, root,
-                   [&] (Page& p) { return filter (p).curveUi().screen.canvas.plot(); }, 1, 1, v);
+        roundTrip (v == 2 ? "Filter NOTE" : "Filter VELO", v == 2 ? "filternote" : "filtervelo", a, b, root,   // the hardware sub-tabs Note and Velo
+                   [&] (Page& p) { return filter (p).curveUi().screen.canvas.plot(); }, 1, 1, 0);
     a.set ("filter1.model", FilterUi::kModelPz);
     b.set ("filter1.model", FilterUi::kModelPz);
     a.content.filterCurves = {{"filter1", {{0, -35}, {0.32f, -8}, {1, 20}}}};
@@ -304,13 +304,13 @@ inline void runFilter (Preset& a, Preset& b)
     for (int f = 1; f <= 2; ++f)
     {
         const auto label = "Filter " + std::to_string (f) + " PZ SVF EDIT";
-        roundTrip (label.c_str(), "filter1", a, b,
+        roundTrip (label.c_str(), f == 1 ? "filter1" : "filter2", a, b,
                    [] (Page& p) {
                        p.inst.filterAction = nativeui::FilterEditPz;
                        p.update();
                    },
                    [&] (Page& p) { return filter (p).topPage() == FilterUi::kPagePz ? filter (p).pzEditor().canvas.plot() : ui::Rect {}; },
-                   1, 1, f - 1);
+                   1, 1, 0);
     }
 
 }

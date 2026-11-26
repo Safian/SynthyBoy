@@ -106,6 +106,17 @@ public:
     int standaloneFilter() const noexcept { return standaloneFilter_; }
     bool isStandalone() const noexcept { return standaloneFilter_ >= 1 && standaloneFilter_ <= 2; }
 
+    /** The page of a hardware sub-tab (one tab page = one screen): Filter 1, Filter 2, Note or Velo (the view's instance number 1 .. 4). The state of the page is the sub-tab's: nothing is read from or written to the
+        chunk view state (`mpcTabView.filter`), there is no VIEW selector (F1 | F2 | NOTE | VELO), no 60/40 split and no expand toggle. The F1+F2 curve view toggle stays (a view of the page, not a choice of what it shows). */
+    void setSubTab (bool on) noexcept
+    {
+        subTab_ = on;
+        full_.setSubTabPage (on);
+        if (on)
+            adoptSplitState (filterSel_, scalarSel_, tabview::kFilterExpandedFilter);
+    }
+    bool isSubTab() const noexcept { return subTab_; }
+
     // Native controls are the only base-control owner; there is no fallback switch.
     bool hasNativePower() const noexcept { return true; }
     void setHostBackground (bool on) noexcept { nativeGround_ = on; }
@@ -200,6 +211,21 @@ public:
         {
             targetFilter = standaloneFilter_ - 1;
             targetExpand = tabview::kFilterExpandedFilter;
+        }
+        else if (subTab_)
+        {
+            if (in.instance >= 3)   // Note (3) or Velo (4): the scalar curve editor of the source, in the expanded curve view
+            {
+                targetFilter = filterSel_;
+                targetScalar = std::clamp (in.instance, 3, 4) - 3;
+                targetExpand = tabview::kFilterExpandedCurve;
+            }
+            else   // Filter 1 (1) or Filter 2 (2)
+            {
+                targetFilter = std::clamp (in.instance, 1, 2) - 1;
+                targetScalar = scalarSel_;
+                targetExpand = tabview::kFilterExpandedFilter;
+            }
         }
         else if (in.instance == 2)
         {
@@ -791,6 +817,9 @@ private:
     void nativeAction (int action, IInstanceView& inst, UiStack& stack)
     {
         using namespace nativeui;
+        if (subTab_ && (action == FilterF1 || action == FilterF2 || action == FilterNote || action == FilterVelo
+                        || action == FilterExpandFilter || action == FilterExpandCurve))
+            return;   // the hardware sub-tab names the state of the page: no view choice, no split, no expand
         if (action == FilterF1 || action == FilterF2)
             chooseFilter (inst, action - FilterF1);
         else if (action == FilterNote || action == FilterVelo)
@@ -799,7 +828,7 @@ private:
             handle (ui::Change::indexed (kBoth, ! dual_, 0.0), stack, inst);
         else if (action == FilterEditPz && filterShown())
             handlePz (kPzOpen, stack, inst);
-        else if (action == FilterExpandFilter && peekFilter_ < 0 && ! isStandalone())
+        else if (action == FilterExpandFilter && peekFilter_ < 0 && ! isStandalone() && ! subTab_)
         {
             const int next = expandMode_ == tabview::kFilterSplit ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
             chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -812,7 +841,7 @@ private:
             curveUi().handle (ui::Change::request (ids[action - FilterInit]), inst, nowMs_);
             drainCurveRequests (stack, inst);
         }
-        else if (action == FilterExpandCurve && peekFilter_ < 0 && ! isStandalone())
+        else if (action == FilterExpandCurve && peekFilter_ < 0 && ! isStandalone() && ! subTab_)
         {
             const int next = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterSplit : tabview::kFilterExpandedCurve;
             chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -1136,7 +1165,7 @@ private:
             if (cu.expandRequested)
             {
                 cu.expandRequested = false;
-                if (peekFilter_ < 0 && ! isStandalone() && pageTop_ == 0)
+                if (peekFilter_ < 0 && ! isStandalone() && ! subTab_ && pageTop_ == 0)
                 {
                     const int next = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterSplit : tabview::kFilterExpandedCurve;
                     chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -1175,7 +1204,7 @@ private:
         f = std::clamp (f, 0, 1);
         s = std::clamp (s, 0, 1);
         e = std::clamp (e, 0, 2);
-        if (peekFilter_ < 0 && ! isStandalone())
+        if (peekFilter_ < 0 && ! isStandalone() && ! subTab_)
             inst.setTabView (IInstanceView::kTabViewFilter, tabview::encodeFilterSplit (f, s, e));
         adoptSplitState (f, s, e);
         qSlots_.forget();
@@ -1401,7 +1430,7 @@ private:
             switch (c.id)
             {
                 case kExpand:
-                    if (peekFilter_ < 0 && ! isStandalone())
+                    if (peekFilter_ < 0 && ! isStandalone() && ! subTab_)
                     {
                         const int next = isSplit() ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
                         chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -2052,6 +2081,7 @@ private:
     bool nativePeek_ = false;
     int peekFilter_ = -1; // fixed filter while embedded in the Mixer; the native tab keeps its own view
     int standaloneFilter_ = -1; // fixed filter instance when operating as a standalone tab (1 or 2)
+    bool subTab_ = false;       // the page of a hardware sub-tab: Filter 1, Filter 2, Note or Velo (the view's instance number), see setSubTab
     bool nativeGround_ = false;
     int nativeLastView_ = -1, nativeLastScalar_ = -1, nativeLastModel_ = -1, nativeUsedMask_ = 0;
     bool nativeLastOn_ = false, nativeLastAnyOn_ = true, nativeLastSplit_ = false;

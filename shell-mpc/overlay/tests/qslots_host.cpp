@@ -285,115 +285,50 @@ void testVoice()
 
 void testFilter()
 {
-    RoutedPage<FilterUi> r ("filter1", layout::kKindFilterUi);
-    r.refresh();
-    auto activateExpanded = [&] (int g) { r.ui.full().setActiveGroup (g); r.refresh(); };
-    // 1. 60/40 Split root: 4 banks (MAIN, TRACK, OUT, CURVE EDIT) = 16 slots, no overflow
-    {
-        auto tapEdit = [&] () { r.tap (r.ui.curveUi().screen.point); };
-        auto tapFilterGroup = [&] (int g)
-        {
-            const ui::Component* m = (g == 2 && ! r.ui.full().power.state.on)
-                ? static_cast<const ui::Component*> (&r.ui.full().routing)
-                : r.ui.full().groups[g].member (0);
-            if (m != nullptr)
-                r.tap (*m);
-        };
-        r.inst.tabViewV[IInstanceView::kTabViewFilter] = 0;
-        r.inst.set ("filter1.on", 1.0f);
-        r.inst.set ("filter2.on", 1.0f);
-        r.inst.set ("filter1.model", 3.0f);
-        r.refresh();
-        checkPage ("Filter Split", r, 4, [&] (int g) { if (g == 3) tapEdit(); else tapFilterGroup (g); });
-        expectGroups ("Filter Split F1", r,
-                      { { "filter1.cutoff", "filter1.resonance", "filter1.drive", "filter1.mix" },
-                        { "filter1.keytrack", "filter1.env1", "filter1.var", "" },
-                        { "filter1.blend", "filter.routing", "filter1.model", "filter1.style" },
-                        { "virt:0", "virt:1", "virt:2", "virt:3" } },
-                      [&] (int g) { if (g == 3) tapEdit(); else tapFilterGroup (g); });
-        // F1 OFF + F2 ON: F1 params are -1, shared filter.routing in OUT and Curve EDIT stay active
-        const bool wasWide = ui::QGroup::wideDevice();
-        ui::QGroup::setWideDevice (true);
-        r.inst.set ("filter1.on", 0.0f);
-        r.refresh();
-        auto expectOffGroups = [&] (const char* label, bool routingOn)
-        {
-            const std::vector<Quad> groups { {}, {}, { "", routingOn ? "filter.routing" : "", "", "" },
-                                            { "virt:0", "virt:1", "virt:2", "virt:3" } };
-            for (bool wide : { true, false })
-            {
-                ui::QGroup::setWideDevice (wide);
-                // OFF controls cannot select an edit bank. Exercise every remaining
-                // live bank and check all sixteen slots, including the empty banks.
-                for (int active : { 2, 3 })
-                {
-                    if (active == 2 && ! routingOn)
-                        continue;
-                    if (active == 2) r.tap (r.ui.full().routing); else tapEdit();
-                    bool correct = true;
-                    for (int slot = 0; slot < 16; ++slot)
-                    {
-                        const int group = wide ? slot / 4 : (active + slot / 4) % 4;
-                        const auto& quad = groups[group];
-                        const std::string wanted = slot % 4 < static_cast<int> (quad.size()) ? quad[slot % 4] : "";
-                        correct &= keyOf (r.inst.q[slot]) == wanted;
-                    }
-                    check (correct, std::string (label) + (wide ? " XL" : " Key61") + " live bank " + std::to_string (active) + " keeps all sixteen target slots");
-                }
-            }
-        };
-        expectOffGroups ("Filter Split F1 OFF / F2 ON", true);
-        // Both OFF: only the independent curve bank can be selected for editing.
-        r.inst.set ("filter2.on", 0.0f);
-        r.refresh();
-        expectOffGroups ("Filter Split Both OFF", false);
-        ui::QGroup::setWideDevice (wasWide);
-        r.inst.set ("filter1.on", 1.0f);
-        r.inst.set ("filter2.on", 1.0f);
-    }
-    // 2. Expanded Filter (tabView 6 F1, 7 F2): MAIN, TRACK, OUT (+ FORMANT when Formant)
+    // the hardware sub-tabs Filter (view 1), Filter 2 (2), Note (3) and Velo (4): the state of the page is the sub-tab's (no 60/40 split, no selector)
+    auto activateExpanded = [&] (auto& r, int g) { r.ui.full().setActiveGroup (g); r.refresh(); };
+    // 1. Filter 1 / Filter 2: MAIN, TRACK, OUT (+ FORMANT when Formant)
     for (const int f : { 1, 2 })
     {
-        const std::string pre = "filter" + std::to_string (f) + ".", st = "Filter F" + std::to_string (f);
-        r.inst.tabViewV[IInstanceView::kTabViewFilter] = 5 + f;   // 6 (F1 Expanded), 7 (F2 Expanded)
+        RoutedPage<FilterUi> r (f == 1 ? "filter1" : "filter2", layout::kKindFilterUi, f);
         r.refresh();
+        const auto activate = [&] (int g) { activateExpanded (r, g); };
+        const std::string pre = "filter" + std::to_string (f) + ".", st = "Filter F" + std::to_string (f);
         if (f == 1)
         {
-            checkPage ("Filter Expanded", r, 3, activateExpanded);
+            checkPage ("Filter Expanded", r, 3, activate);
             check (r.ui.full().groups[0].block() == 1 || r.ui.full().groups[1].block() == 1 || r.ui.full().groups[2].block() == 1, "Filter: the groups that are not active have a block of knobs");
             check (r.inst.q[12] == -1 && r.inst.q[15] == -1, "Filter: three groups leave Q 13 .. 16 without a target");
         }
         r.inst.set ("filter1.on", 0.0f);
         r.inst.set ("filter2.on", 0.0f);
-        expectGroups (st + " Both OFF", r, { {} }, activateExpanded);
+        expectGroups (st + " Both OFF", r, { {} }, activate);
         r.inst.set ("filter1.on", 1.0f);
         r.inst.set ("filter2.on", 1.0f);
         r.inst.set ((pre + "model").c_str(), 3.0f);
         r.refresh();
-        expectGroups (st, r, { { pre + "cutoff", pre + "resonance", pre + "drive", pre + "mix" }, { pre + "keytrack", pre + "env1", pre + "var", "" }, { pre + "blend", "filter.routing", pre + "model", pre + "style" } }, activateExpanded);
+        expectGroups (st, r, { { pre + "cutoff", pre + "resonance", pre + "drive", pre + "mix" }, { pre + "keytrack", pre + "env1", pre + "var", "" }, { pre + "blend", "filter.routing", pre + "model", pre + "style" } }, activate);
         r.inst.set ((pre + "model").c_str(), 6.0f);   // the Comb model: COMB is the fourth member of TRACK
         r.refresh();
-        expectGroups (st + " (Comb model)", r, { { pre + "cutoff", pre + "resonance", pre + "drive", pre + "mix" }, { pre + "keytrack", pre + "env1", pre + "var", pre + "comb_offset" }, { pre + "blend", "filter.routing", pre + "model", pre + "style" } }, activateExpanded);
+        expectGroups (st + " (Comb model)", r, { { pre + "cutoff", pre + "resonance", pre + "drive", pre + "mix" }, { pre + "keytrack", pre + "env1", pre + "var", pre + "comb_offset" }, { pre + "blend", "filter.routing", pre + "model", pre + "style" } }, activate);
         r.inst.set ((pre + "model").c_str(), 5.0f);   // the Formant model: the FORMANT block is a fourth group, the formant RESONANCE takes the place of VAR in TRACK
         r.refresh();
         expectGroups (st + " (Formant model)", r, { { pre + "cutoff", pre + "resonance", pre + "drive", pre + "mix" }, { pre + "keytrack", pre + "env1", pre + "formant.resonance", "" }, { pre + "blend", "filter.routing", pre + "model", pre + "style" },
-                                                    { pre + "formant.x", pre + "formant.y", pre + "formant.transpose", pre + "formant.spread" } }, activateExpanded);
-        checkPage (st + " (Formant model)", r, 4, activateExpanded);
+                                                    { pre + "formant.x", pre + "formant.y", pre + "formant.transpose", pre + "formant.spread" } }, activate);
+        checkPage (st + " (Formant model)", r, 4, activate);
         r.inst.set ((pre + "model").c_str(), 3.0f);
     }
-    // 3. Expanded NOTE and VELO (2, 3): EDIT [0..3], LEGATO AND GRID [legato, 4..6]
-    for (const int state : { 2, 3 })
+    // 2. Note and Velo: EDIT [0..3], LEGATO AND GRID [legato, 4..6]
+    for (const int sub : { 3, 4 })
     {
-        const std::string legato = state == 2 ? "curve.note.legato" : "curve.velocity.legato", nm = state == 2 ? "Filter NOTE" : "Filter VELO";
-        r.inst.tabViewV[IInstanceView::kTabViewFilter] = state;
+        const std::string legato = sub == 3 ? "curve.note.legato" : "curve.velocity.legato", nm = sub == 3 ? "Filter NOTE" : "Filter VELO";
+        RoutedPage<FilterUi> r (sub == 3 ? "filternote" : "filtervelo", layout::kKindFilterUi, sub);
         r.refresh();
         auto activateCurve = [&] (int g) { r.ui.curveUi().screen.setActiveGroup (g); r.refresh(); };
         expectGroups (nm, r, { { "virt:0", "virt:1", "virt:2", "virt:3" }, { legato, "virt:4", "virt:5", "virt:6" } }, activateCurve);
         checkPage (nm, r, 2, activateCurve);
         check (r.inst.q[8] == -1 && r.inst.q[12] == -1, nm + ": two groups leave Q 9 .. 16 without a target");
     }
-    r.inst.tabViewV[IInstanceView::kTabViewFilter] = 0;
-    r.refresh();
 }
 
 void testOscillator()

@@ -1,5 +1,7 @@
 # UI Map: Filter Page (`filterui`)
 
+> **Update 2026-11-26 (one tab page = one screen).** The Filter key has FOUR sub-tabs again: `Filter`, `Filter 2`, `Note`, `Velo` (views `filter1`, `filter2`, `filternote`, `filtervelo` of `shell-mpc/overlay/overlay_layout.json`; the view's `index` 1 .. 4 is the state of the page: F1, F2, NOTE, VELO). `pages::make` puts the page in sub-tab mode (`FilterUi::setSubTab`): the state comes from `page::Input::instance`, the chunk view state `mpcTabView.filter` is neither read nor written, the in-screen VIEW selector, the NOTE | VELO selector, the 60/40 split and both expand toggles do not exist (the skin has no cells for them and the plugin ignores the old actions). The F1+F2 curve view toggle stays on the filter pages. The skin carries only what a state can show: Filter and Filter 2 the filter surface, the chain, the PZ launcher and toolbars; Note and Velo the curve surface and their GLIDE readout (`scripts/mpc-skin-extras/98_filter_native.py`). The passages below that speak of the selector, of the split or of expand describe the old single tab; the chain menu still lists the rows F1 and F2 until the Mixer peek is gone (next commit).
+
 Rewritten 2026-11-21 for the ONE Filter tab (step 4 of `docs/ui-map/env-filter-lfo-plan.md`, spec `SIMPLIFY.md` E; before / after pictures and the control counts: `docs/ui-map/filter-bold-cut/README.md`). Line numbers are left out on purpose (the file changes): names of members and functions are the references.
 
 ## Purpose

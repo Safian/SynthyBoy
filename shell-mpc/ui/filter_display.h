@@ -797,6 +797,18 @@ public:
         layout();
     }
 
+    /** The page of a hardware sub-tab (Filter 1, Filter 2, Note, Velo): there is no VIEW selector and no NOTE | VELO selector, the sub-tab names the state. The top bar keeps its geometry: the place of the
+        selector is the filter chain of the skin. */
+    void setSubTabPage (bool on)
+    {
+        subTabPage_ = on;
+        show (view, ! on);
+        show (scalarView, false);
+        if (rect_.w > 0)
+            layout();
+    }
+    bool subTabPage() const noexcept { return subTabPage_; }
+
     /** The page of its own tab: there is nothing to close. */
     void setPageMode (bool page)
     {
@@ -1171,7 +1183,7 @@ protected:
             p.textLeft ({ outReadout.rect().x + 4, outBlock_.y + 3, std::max (0, outReadout.rect().w - 4), 16 }, "SET ON MIXER", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
     }
 
-    bool isFormant_ = false, combMode_ = false, pageMode_ = false, splitMode_ = false, anyOn_ = true;
+    bool isFormant_ = false, combMode_ = false, pageMode_ = false, subTabPage_ = false, splitMode_ = false, anyOn_ = true;
     int activeGroup_ = 0, view_ = 0, scalarSel_ = 0;
     Rect mainBlock_, trackBlock_, outBlock_, formantBlock_, graphRect_;
 };

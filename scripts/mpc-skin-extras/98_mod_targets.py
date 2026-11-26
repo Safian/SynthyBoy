@@ -116,7 +116,7 @@ def apply(tui, qlinks, ctx):
 
     kind = "nativeModulationEditor"
     ctx.add_component_definition(kind, passive_layer(items))
-    pages = {"Macros": 1, **dict.fromkeys(ENV_TAB_NAMES, 2), "LFO": 3, "Filter": 4, "Mod": 5, "Play": 6,
+    pages = {"Macros": 1, **dict.fromkeys(ENV_TAB_NAMES, 2), "LFO": 3, **dict.fromkeys(("Filter", "Filter 2", "Note", "Velo"), 4), "Mod": 5, "Play": 6,
              **dict.fromkeys((*OSC_TAB_NAMES, "Osc"), 7), **dict.fromkeys(("Mix", "Mixer"), 8)}
     for tab in tui["pageData"]["tabs"]:
         if (frame := pages.get(tab["tabName"])) is not None:

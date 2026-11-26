@@ -200,7 +200,7 @@ def recognise(image, mode=11, alphabet=None):
 
 
 ALIASES = [{"PLAY", "MACROS"}, {"OSC", "OSCA", "OSCB", "OSCC", "SUB", "NOISE"}, {"ENV", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6"}, {"LFO"},
-           {"FX"}, {"MIX", "MIXER"}, {"FILTER"}, {"MOD"}, {"MASTER", "TUNING", "VOICE"}]
+           {"FX"}, {"MIX", "MIXER"}, {"FILTER", "FILTER 2", "NOTE", "VELO"}, {"MOD"}, {"MASTER", "TUNING", "VOICE"}]
 
 
 def footer_labels(image):

@@ -20,7 +20,7 @@ constexpr int kInstanceSteps = 32;   // the parameter's value of frame f is f / 
 constexpr unsigned kInstanceSlotRgb[kMaxInstances] = { 0x1414d8, 0x3e14d8, 0x6814d8, 0x9214d8, 0x143ed8, 0x3e3ed8, 0x683ed8, 0x923ed8, 0x1468d8, 0x3e68d8, 0x6868d8, 0x9268d8, 0x1492d8, 0x3e92d8, 0x6892d8, 0x9292d8 };
 constexpr unsigned kInstanceNoneRgb = 0xc814d8;    // frame 17: an instance without a slot
 constexpr unsigned kInstanceBlankRgb = 0x14c8d8;   // frame 0 (nothing reported yet) and the frames after 17
-constexpr int kNumViews = 21;
+constexpr int kNumViews = 24;
 constexpr View kViews[kNumViews] = {
     { "play1", 5, 1, { 23, 110, 1234, 204 }, true, { { { 33, 111, 6, 6 }, 0x723a2c, 0x1e1d1e }, { { 1241, 111, 6, 6 }, 0x3a7264, 0x1e1d1e } }, { 45, 111, 6, 6 } },   // tab "Play"
     { "macros", 10, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x6b3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a6b64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Macros"
@@ -39,6 +39,9 @@ constexpr View kViews[kNumViews] = {
     { "fx", 8, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x8e3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8e64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "FX"
     { "mixer", 7, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x873a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8764, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Mixer"
     { "filter1", 6, 1, { 0, 110, 1280, 628 }, true, { { { 33, 114, 6, 6 }, 0x103a2c, 0x1e1d1e }, { { 1241, 114, 6, 6 }, 0x3a1064, 0x1e1d1e } }, { 45, 114, 6, 6 } },   // tab "Filter"
+    { "filter2", 6, 2, { 0, 110, 1280, 628 }, true, { { { 33, 114, 6, 6 }, 0x3a5a2c, 0x1e1d1e }, { { 1241, 114, 6, 6 }, 0x5a3a64, 0x1e1d1e } }, { 45, 114, 6, 6 } },   // tab "Filter 2"
+    { "filternote", 6, 3, { 0, 110, 1280, 628 }, true, { { { 33, 114, 6, 6 }, 0x415a2c, 0x1e1d1e }, { { 1241, 114, 6, 6 }, 0x5a4164, 0x1e1d1e } }, { 45, 114, 6, 6 } },   // tab "Note"
+    { "filtervelo", 6, 4, { 0, 110, 1280, 628 }, true, { { { 33, 114, 6, 6 }, 0x485a2c, 0x1e1d1e }, { { 1241, 114, 6, 6 }, 0x5a4864, 0x1e1d1e } }, { 45, 114, 6, 6 } },   // tab "Velo"
     { "mod", 9, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x953a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a9564, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Mod"
     { "master", 11, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x9c3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a9c64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Master"
     { "tuning", 11, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x335a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x5a3364, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Tuning"

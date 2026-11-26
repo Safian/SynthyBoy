@@ -127,6 +127,25 @@
       ]
     },
     {
+      "name": "Filter 2",
+      "fn": "Filter",
+      "kick": [
+        "filter2_main"
+      ]
+    },
+    {
+      "name": "Note",
+      "fn": "Filter",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "Velo",
+      "fn": "Filter",
+      "kick": [],
+      "custom": true
+    },
+    {
       "name": "Mod",
       "fn": "Mod",
       "kick": [

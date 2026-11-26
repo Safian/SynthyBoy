@@ -131,7 +131,7 @@ class NoFallbackTests(unittest.TestCase):
 
     def test_each_tab_contains_its_detection_pictures_and_configured_background(self):
         tabs = self.tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 21)
+        self.assertEqual(len(tabs), 24)
         views = {v["tab"]: v for v in self.layout["views"]}
         labels = {p["name"]: p.get("label", p["name"]) for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"]}
         for name, view in views.items():
@@ -148,8 +148,10 @@ class NoFallbackTests(unittest.TestCase):
                 "Env": {"Env Native Attack", "Env Native Decay", "Env Native Sustain", "Env Native Release",
                         "Env Native Attack Curve", "Env Native Decay Curve", "Env Native Release Curve",
                         "Env Native Targets", "Env Native Delay", "Env Native Hold", "Env Native Beats", "Env Native Retrig"},
-                "Filter": {"Filter Native Editor Surface", "Filter Native NOTE", "Filter Native VELO",
-                           "Filter Native PZ Toolbar F1", "Filter Native PZ Toolbar F2"},
+                "Filter": {"Filter Native Editor Surface", "Filter Native PZ Toolbar F1", "Filter Native PZ Toolbar F2"},
+                "Filter 2": {"Filter Native Editor Surface", "Filter Native PZ Toolbar F1", "Filter Native PZ Toolbar F2"},
+                "Note": {"Filter Native Curve Surface", "Filter Native Glide note"},
+                "Velo": {"Filter Native Curve Surface", "Filter Native Glide velocity"},
             }.get("Env" if name.startswith("Env ") else name, set())   # every Env sub-tab carries the same native controls
             actual_names = {c["componentData"]["name"] for c in items}
             native_names = {c["componentData"]["name"] for c in items if is_native_component(c)}
@@ -235,9 +237,9 @@ class NoFallbackTests(unittest.TestCase):
         for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
             check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2833",))
 
-    def test_the_q_proxies_are_on_all_21_tabs(self):
+    def test_the_q_proxies_are_on_all_24_tabs(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
-        self.assertEqual(len(self.qlinks), 21)
+        self.assertEqual(len(self.qlinks), 24)
         for entry in self.qlinks:
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(16)], entry)
             self.assertEqual(entry["Bank Direction"], "Row")

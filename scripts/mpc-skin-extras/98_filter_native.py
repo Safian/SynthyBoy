@@ -454,6 +454,36 @@ def _emit_curve_controls(ctx, container, rects, base, action, state, displays, *
         container.append(_button(key, expand_rect, action, split_or_curve_gates, EXPAND_CURVE_ACTION, FILTER_ACTION_COUNT, (exp_art, exp_art)))
 
 
+FILTER_TAB_NAMES = ("Filter", "Filter 2", "Note", "Velo")   # the hardware sub-tabs of the Filter key: the state of the page is the sub-tab's (1, 2: the filter; 3, 4: the NOTE / VELO curve)
+CURVE_ENTRIES = ("Filter Native Curve ", "Filter Native Glide ")
+
+
+def _is_curve_entry(item):
+    return item["componentData"]["name"].startswith(CURVE_ENTRIES)
+
+
+def _distribute(ctx, items, existing):
+    """The first tab has made every entry of the page states (the filter ones and the curve ones). Filter and Filter 2 keep the filter entries, Note and Velo the curve entries: a tab carries only
+    what its state can show. The markers and the instance picture of every tab stay its own."""
+    added = [item for item in items if not any(item is old for old in existing)]
+    filter_entries = [item for item in added if not _is_curve_entry(item)]
+    curve_entries = [item for item in added if _is_curve_entry(item)]
+    present = {tab["tabName"] for tab in ctx._tui["pageData"]["tabs"]}
+    ordered = {"Filter": filter_entries, "Filter 2": filter_entries, "Note": curve_entries, "Velo": curve_entries}
+    for name in FILTER_TAB_NAMES:
+        if name not in present:
+            continue
+        tab_items = ctx.tab(name)["componentDefinition"]["componentsData"]
+        wanted = [item for item in ordered[name] if not (name == "Note" and item["componentData"]["name"].endswith("Glide velocity"))
+                  and not (name == "Velo" and item["componentData"]["name"].endswith("Glide note"))]
+        if name != "Filter":
+            tab_items[:] = [*(copy.deepcopy(item) for item in wanted), *tab_items]
+            tab_items.sort(key=lambda item: item["componentData"]["name"].startswith(("Overlay Marker ", "Overlay Instance ")))
+        else:
+            tab_items[:] = [*(item for item in tab_items if item in existing), *wanted]
+            tab_items.sort(key=lambda item: item["componentData"]["name"].startswith(("Overlay Marker ", "Overlay Instance ")))
+
+
 def apply(tui, qlinks, ctx):
     if (ctx.meta or {}).get("variant") != "overlay":
         return
@@ -462,6 +492,7 @@ def apply(tui, qlinks, ctx):
     manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
     items = ctx.tab("Filter")["componentDefinition"]["componentsData"]
     items[:] = [item for item in items if item["componentData"]["name"] not in ("Filter 1 Power", "Filter 2 Power")]
+    existing = list(items)   # the page markers and the instance picture of the first sub-tab
 
     state = ctx.param_count + STATE_OFFSET
     base = state + 1
@@ -475,19 +506,13 @@ def apply(tui, qlinks, ctx):
     ui_button.write_transparent_hit(ctx.skins_dir)
 
     dial_assets = _ensure_dial_assets(ctx.skins_dir)
-    split_dial_assets = _ensure_dial_assets(ctx.skins_dir, style.size("height.medium"))
     power_art = _ensure_power_art(ctx.skins_dir)
     domains = json.loads(FX_CONTRACT.read_text(encoding="utf-8"))["domains"]
 
     items.extend(_pz_toolbar(ctx, manifest["pz_toolbar"]))
 
-    # Gates distinguishing Split vs Expanded Filter vs Expanded Curve
-    split_note_gates = _state_gates(state, (1, 2)) + [f"RangedEnabling/2/3/4/Parameter {note_ind}"]
-    split_velo_gates = _state_gates(state, (1, 2)) + [f"RangedEnabling/2/3/4/Parameter {velo_ind}"]
-    expanded_filter_gates = _state_gates(state, (1, 2)) + [
-        f"RangedEnabling/0/1/4/Parameter {note_ind}",
-        f"RangedEnabling/0/1/4/Parameter {velo_ind}",
-    ]
+    # Gates distinguishing the Filter 1 / Filter 2 sub-tabs (state 1, 2) from the Note / Velo sub-tabs (state 3, 4)
+    expanded_filter_gates = _state_gates(state, (1, 2))
     expanded_curve_gates = _state_gates(state, (3, 4))
 
     # =========================================================================
@@ -617,18 +642,6 @@ def apply(tui, qlinks, ctx):
     # Expanded top bar, graph corner Expand and PZ Edit
     vx, vy, vw, vh = manifest["view"]
     items.extend(chain("Chain", vx, vy, vh, expanded_filter_gates))
-    items.extend(chain("Curve Chain", vx, vy, vh, expanded_curve_gates))
-    for i, label in enumerate(SELECT[2:], 2):
-        rect = (vx + i * vw // style.size("filter.apply.rect.4"), vy, vw // style.size("filter.apply.rect.4"), vh)
-        file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_{label.lower()}.png", rect[2:],
-                                             [(label + (" ·" if i >= 2 and k & 1 else ""), bool(k & 2)) for k in range(4)])
-        # Expanded Curve keeps canonical "Filter Native F1..VELO" names on state 3..4;
-        # Expanded Filter mounts them when NOT in Split (!note_ind[2..3] & !velo_ind[2..3])
-        items.extend((_film(label + " art", file, rect, displays + i, expanded_curve_gates, 4),
-                      _hidden_hit(label, rect, action, i + 1, expanded_curve_gates)))
-        items.extend((_film("Exp " + label + " art", file, rect, displays + i, expanded_filter_gates, 4),
-                      _hidden_hit("Exp " + label, rect, action, i + 1, expanded_filter_gates)))
-
     both = manifest["both"]
     dual_frames = [("F1+F2", bool(frame & 1)) for frame in range(4)]
     art = ui_radio.write_segmented_strip(ctx.skins_dir / "filter_native_dual.png", both[2:], dual_frames)
@@ -637,21 +650,6 @@ def apply(tui, qlinks, ctx):
 
     exp_rect = manifest["expand_filter"]
     exp_art = _write_action_slot_art(ctx.skins_dir, "expand", tuple(exp_rect[2:]), icon="expand")
-    off_exp_art = _write_action_slot_art(ctx.skins_dir, "expand_off", tuple(exp_rect[2:]),
-                                         icon="expand", colour=style.color("smooth.value.off"))
-
-    def add_filter_expand(container, name, rect, gates):
-        for suffix, power_gate, artwork in (("", enabled, exp_art), (" Off", passive, off_exp_art)):
-            container.append(_button(name + suffix, rect, action, [*gates, power_gate],
-                                     EXPAND_FILTER_ACTION, FILTER_ACTION_COUNT, (artwork, artwork)))
-
-    for f in (1, 2):
-        selected = f"IndexedEnabling/{f}/5/Parameter {state}"
-        model_param = ctx.param_index(f"filter{f}.model")
-        for start, end in ((0, 4), (5, 5), (6, 26)):
-            rect = manifest["expand_filter_formant"] if start == 5 else exp_rect
-            gate = f"RangedEnabling/{start}/{end}/27/Parameter {model_param}"
-            add_filter_expand(items, f"Expand Filter F{f} {start}", rect, [*expanded_filter_gates, selected, gate])
 
     pz_rect = manifest["pz_expand"]
     pz_gates = [*expanded_filter_gates, enabled, f"IndexedEnabling/{PZ_MODEL}/27/Parameter {model}"]
@@ -664,7 +662,7 @@ def apply(tui, qlinks, ctx):
     # =========================================================================
     curve_items = []
     _emit_curve_controls(ctx, curve_items, manifest["curve"], base, action, state, displays,
-                         is_split=False, expand_rect=manifest["expand_curve_top"])
+                         is_split=False, expand_rect=None)
     curve_kind = "filterNativeCurveSurface"
     ctx.add_component_definition(curve_kind, {
         "version": 2, "actions": [], "ignoreMousePresses": True, "disableCoarseDataWheel": True,
@@ -675,120 +673,5 @@ def apply(tui, qlinks, ctx):
     curve_surface["bounds"]["acceptsHWFocus"] = "Children"
     items.append(curve_surface)
 
-    # =========================================================================
-    # 3. 60/40 Split Left Filter surface (filterNativeSplitLeftSurface)
-    #    Power frame 0: both off, 1: other filter on, 2: selected filter on.
-    # =========================================================================
-    split = manifest["split"]
-    split_sel_on = f"IndexedEnabling/2/4/Parameter {power_frame}"
-    split_sel_off = f"RangedEnabling/0/1/4/Parameter {power_frame}"
-
-    split_left = []
-    svx, svy, _, svh = split["view"]
-    split_left.extend(chain("Split Chain", svx, svy, svh))
-
-    split_pwr_rect = split["filter"][0][POWER]
-    split_left.append(_button("Split Power", split_pwr_rect, base + POWER, (), art=power_art))
-
-    split_exp_rect = split["filter_expand"]
-    add_filter_expand(split_left, "Split Expand Filter", split_exp_rect, ())
-
-    split_pz_rect = split["pz_expand"]
-    split_pz = _button("Split Edit PZ Curve", split_pz_rect, action,
-                       [split_sel_on, f"IndexedEnabling/{PZ_MODEL}/27/Parameter {model}"], PZ_ACTION, FILTER_ACTION_COUNT, (exp_art, exp_art))
-    split_pz["handle remapping"]["map"][0]["value"] = "WithName[Edit PZ Curve]/FromGesture/" + split_pz["handle remapping"]["map"][0]["value"]
-    split_left.append(split_pz)
-
-    for slot, word in ((MODEL, "Model"), (STYLE, "Style")):
-        rect = split["filter"][0][slot]
-        definition = "filterNativeSplit" + word
-        _choice_definition(tui, ctx, definition, *rect[2:], active=True)
-        off_def = definition + "Off"
-        _choice_definition(tui, ctx, off_def, *rect[2:], active=False)
-        models = range(27) if slot == STYLE else (None,)
-        for model_id in models:
-            if model_id in manifest["one_style"]:
-                continue
-            gates = [split_sel_on]
-            if model_id is not None:
-                gates.append(f"IndexedEnabling/{model_id}/27/Parameter {model}")
-            parameter = domain_base + (STYLE_DOMAIN + model_id if model_id is not None else 0)
-            name = f"Split {word}" if model_id is None else f"Split {word} {model_id}"
-            split_left.append(_entry(name, definition, {"version": 1, "handleName": "Data"}, rect, parameter, gates, True))
-        for f in (1, 2):
-            split_left.append(_entry(f"Split {word} F{f} off", off_def, {"version": 1, "handleName": "Data"}, rect,
-                                     ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}"),
-                                     [split_sel_off, f"IndexedEnabling/{f}/5/Parameter {state}"]))
-
-    ssx, ssy, ssw, ssh = split["filter"][0][STYLE]
-    for model_id in manifest["one_style"]:
-        gates = [split_sel_on, f"IndexedEnabling/{model_id}/27/Parameter {model}"]
-        split_left.append(_label(f"Split Single Style {model_id}", domains[STYLE_DOMAIN + model_id][0],
-                                 (ssx, ssy, ssw, ssh), model, gates))
-
-    for slot in range(1, POINT):
-        if slot in (ROUTE, MODEL, STYLE):
-            continue
-        groups = {}
-        for model_id in range(27):
-            variant = 1 if model_id == 5 else 2 if model_id == 6 else 0
-            rect = split["filter"][variant][slot]
-            if rect is not None:
-                groups.setdefault(tuple(rect), []).append(model_id)
-        for rect, models in groups.items():
-            for start, end in _runs(models):
-                host_value = base + slot
-                name = f"Split {FIELDS[slot]} {start}"
-                model_gate = [] if (start, end) == (0, 26) else [f"RangedEnabling/{start}/{end}/27/Parameter {model}"]
-                active_gates = [split_sel_on, *model_gate]
-                passive_gates = [split_sel_off, *model_gate]
-                if slot in TOGGLES:
-                    _emit_toggle(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
-                                 active_gates, passive_gates, ctx.skins_dir, model_proxy=model,
-                                 passive_models=[(f" F{f}", f"IndexedEnabling/{f}/5/Parameter {state}",
-                                                  ctx.param_index(f"filter{f}.model"), ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}")) for f in (1, 2)])
-                else:
-                    _emit_dial(ctx, split_left, name, rect, host_value, FIELDS[slot].upper(),
-                               slot in BIPOLAR, active_gates, passive_gates, split_dial_assets, side_layout=True,
-                               passive_bindings=[(f" F{f}", ctx.param_index(f"filter{f}.{FILTER_KEYS[slot]}"),
-                                                  f"IndexedEnabling/{f}/5/Parameter {state}", ctx.param_index(f"filter{f}.model"))
-                                                 for f in (1, 2)], model_proxy=model)
-
-    split_left_kind = "filterNativeSplitLeftSurface"
-    ctx.add_component_definition(split_left_kind, {
-        "version": 2, "actions": [], "ignoreMousePresses": True, "disableCoarseDataWheel": True,
-        "backgroundData": {"version": 1, "focussed": transparent, "unfocussed": transparent},
-        "componentsData": split_left,
-    })
-    for tag, gates in (("Split Left Note", split_note_gates), ("Split Left Velo", split_velo_gates)):
-        entry = _entry(tag, split_left_kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, gates)
-        entry["bounds"]["acceptsHWFocus"] = "Children"
-        items.append(entry)
-
-    # =========================================================================
-    # 4. 60/40 Split Right Curve surface (filterNativeSplitRightSurface)
-    # =========================================================================
-    split_right = []
-    srx, sry, srw, srh = split["scalar_view"]
-    for i, label in enumerate(("NOTE", "VELO")):
-        rect = (srx + i * srw // 2, sry, srw // 2, srh)
-        file = ui_radio.write_segmented_strip(ctx.skins_dir / f"filter_native_split_{label.lower()}.png", rect[2:],
-                                             [(label + (" ·" if k & 1 else ""), bool(k & 2)) for k in range(4)])
-        split_right.extend((_film(f"Split {label} art", file, rect, displays + 2 + i, (), 4),
-                            _hidden_hit(f"Split {label}", rect, action, 3 + i, ())))
-
-    _emit_curve_controls(ctx, split_right, split["curve"], base, action, state, displays,
-                         is_split=True, expand_rect=split["curve_expand"])
-
-    split_right_kind = "filterNativeSplitRightSurface"
-    ctx.add_component_definition(split_right_kind, {
-        "version": 2, "actions": [], "ignoreMousePresses": True, "disableCoarseDataWheel": True,
-        "backgroundData": {"version": 1, "focussed": transparent, "unfocussed": transparent},
-        "componentsData": split_right,
-    })
-    for tag, gates in (("Split Right Note", split_note_gates), ("Split Right Velo", split_velo_gates)):
-        entry = _entry(tag, split_right_kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, gates)
-        entry["bounds"]["acceptsHWFocus"] = "Children"
-        items.append(entry)
-
     items.sort(key=lambda item: item["componentData"]["name"].startswith(("Overlay Marker ", "Overlay Instance ")))
+    _distribute(ctx, items, existing)

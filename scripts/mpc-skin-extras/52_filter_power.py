@@ -8,5 +8,5 @@ def apply(tui, qlinks, ctx):
     if (ctx.meta or {}).get("variant") != "overlay":
         return
     for tab in tui["pageData"]["tabs"]:
-        if tab["tabName"] == "Filter":
+        if tab["tabName"] in ("Filter", "Filter 2", "Note", "Velo"):
             sanitize_tab_navigation(tab, {num: ctx.param_index(filter_power_param_key(num)) for num in (1, 2)})

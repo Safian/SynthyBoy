@@ -1210,11 +1210,47 @@ void testNoteVeloStates()
 // ENV 1 and CLEAN are LED toggles, ROUTING a LED list of its three options (all visible); a tap writes the parameter, the lit dot follows it
 
 
+/** The hardware sub-tabs Filter, Filter 2, Note and Velo (views 1 .. 4): the state of the page is the sub-tab's; the chunk view state (`mpcTabView.filter`) is neither read nor written, there is no split and no expand. */
+static void testFilterSubTabs ()
+{
+    using namespace nativeui;
+    static const char* const names[4] = { "filter1", "filter2", "filternote", "filtervelo" };
+    FakeInst inst;
+    inst.tabViewV[IInstanceView::kTabViewFilter] = 4;   // a stale chunk state (VELO, split): the sub-tabs must not look at it
+    for (int sub = 1; sub <= 4; ++sub)
+    {
+        auto view = pages::make (names[sub - 1], layout::kKindFilterUi, sub);
+        auto& root = static_cast<pages::FilterPage&> (*view).ui();
+        UiStack stack;
+        stack.openFull (FilterUi::kElementPage);
+        ViewInput in;
+        in.io = &inst;
+        in.ui = &stack;
+        in.panelEdgeX = 1280;
+        in.nowMs = 1000.0;
+        view->update (in);
+        const std::string n = std::string ("sub-tab ") + names[sub - 1];
+        check (root.isSubTab() && ! root.isSplit() && root.nativeViewFrame() == sub, n + ": the state of the page is the sub-tab's (frame " + std::to_string (root.nativeViewFrame()) + ")");
+        check (root.curveView() == (sub >= 3) && root.filterShown() == (sub <= 2), n + (sub >= 3 ? ": the curve editor, no filter part" : ": the filter part, no curve editor"));
+        check (sub >= 3 || root.editFilter() == sub, n + ": the controls edit the filter of the sub-tab");
+        for (int stale : { FilterF1, FilterF2, FilterNote, FilterVelo, FilterExpandFilter, FilterExpandCurve })
+        {
+            inst.action (stale);
+            in.nowMs += 20;
+            view->update (in);
+        }
+        check (root.nativeViewFrame() == sub && ! root.isSplit() && inst.tabViewV[IInstanceView::kTabViewFilter] == 4,
+               n + ": the old selector and expand actions change nothing and the chunk view state is untouched");
+        view->onHidden();
+    }
+}
+
 static void testFilterFactoryBackground ()
 {
     using namespace nativeui;
-    auto view = pages::make ("filter1", layout::kKindFilterUi, 1);
-    auto& root = static_cast<pages::FilterPage&> (*view);
+    auto view = pages::make ("filter1", layout::kKindFilterUi, 1);   // the hardware sub-tabs Filter, Filter 2, Note and Velo are views 1 .. 4: the state of the page is the sub-tab's
+    const auto open = [&] (const char* name, int index) { view = pages::make (name, layout::kKindFilterUi, index); };
+    const auto rootOf = [&] () -> pages::FilterPage& { return static_cast<pages::FilterPage&> (*view); };
     FakeInst inst;
     UiStack stack;
     stack.openFull (FilterUi::kElementPage);
@@ -1234,15 +1270,15 @@ static void testFilterFactoryBackground ()
     };
     for (int filter : { 1, 2 })
     {
-        inst.setTabView (IInstanceView::kTabViewFilter, 5 + filter);   // Expanded Filter F1 / F2
+        open (filter == 1 ? "filter1" : "filter2", filter);   // the sub-tab Filter n
         const std::string prefix = "filter" + std::to_string (filter);
         inst.set ((prefix + ".on").c_str(), 1.0f);
         render (false);
-        const auto power = root.ui().nativePowerRect();
-        const auto cutoff = root.ui().full().cutoff.rect();
+        const auto power = rootOf().ui().nativePowerRect();
+        const auto cutoff = rootOf().ui().full().cutoff.rect();
         const int x = cutoff.x + cutoff.w / 2, y = cutoff.y + cutoff.h / 2;
         const auto noOverlay = ev (TouchEvent::Down, x, y);
-        check (view->hasSentinel() && ! root.ui().hostBackground() && pixel (600, 185) != 0u
+        check (view->hasSentinel() && ! rootOf().ui().hostBackground() && pixel (600, 185) != 0u
                && pixel (power.x + 10, power.y + 10) == 0u && pixel (x, y) == 0u
                && ! view->onTouch (noOverlay, stack, inst, in.nowMs),
                prefix + " factory fallback paints the ground and leaves the native footprint and touch intact");
@@ -1252,10 +1288,10 @@ static void testFilterFactoryBackground ()
             for (int py = 113; py < 121; ++py)
                 for (int px = marker - 1; px < marker + 7; ++px)
                     markersCovered &= (pixel (px, py) & 0x00ffffffu) == ui::theme::kNativeCanvas;
-        check (root.ui().hostBackground() && pixel (600, 185) == 0u
+        check (rootOf().ui().hostBackground() && pixel (600, 185) == 0u
                && pixel (power.x + 10, power.y + 10) == 0u && pixel (x, y) == 0u && markersCovered,
                prefix + " verified host ground stays transparent outside native marker covers");
-        const auto out = root.ui().full().nativeOutReadoutRect();
+        const auto out = rootOf().ui().full().nativeOutReadoutRect();
         const int outX = out.x + out.w / 2, outY = out.y + out.h / 2;
         const int writes = inst.writes;
         view->onTouch (ev (TouchEvent::Down, outX, outY), stack, inst, in.nowMs);
@@ -1265,7 +1301,7 @@ static void testFilterFactoryBackground ()
 
         inst.set ((prefix + ".model").c_str(), FilterUi::kModelPz);
         render (false);
-        const auto pz = root.ui().pzEditorButton().rect();
+        const auto pz = rootOf().ui().pzEditorButton().rect();
         const int pzX = pz.x + pz.w / 2, pzY = pz.y + pz.h / 2;
         const auto clearIcon = [&] {
             for (int y = pz.y; y < pz.bottom(); ++y)
@@ -1276,36 +1312,36 @@ static void testFilterFactoryBackground ()
         };
         const bool fallbackClear = clearIcon();
         render (true);
-        const ui::Rect expectedPz { root.ui().full().expand.rect().x - 64, root.ui().full().expand.rect().y, 56, 56 };
+        const ui::Rect expectedPz { rootOf().ui().full().expand.rect().x - 64, rootOf().ui().full().expand.rect().y, 56, 56 };
         check (pz == expectedPz && fallbackClear && clearIcon()
                && ! view->onTouch (ev (TouchEvent::Down, pzX, pzY), stack, inst, in.nowMs),
                prefix + " PZ graph corner is fully transparent and owned by the native launcher");
         view->onTouch (ev (TouchEvent::Up, pzX, pzY), stack, inst, in.nowMs + 1);
-        const auto plot = root.ui().full().display.plot();
+        const auto plot = rootOf().ui().full().display.plot();
         const int x0 = plot.x + plot.w / 2, y0 = plot.y + plot.h / 2;
         const auto before = inst.get (prefix + ".cutoff");
         const bool graphDown = view->onTouch (ev (TouchEvent::Down, x0, y0), stack, inst, in.nowMs + 10);
         view->onTouch (ev (TouchEvent::Move, x0 - 80, y0), stack, inst, in.nowMs + 20);
         view->onTouch (ev (TouchEvent::Up, x0 - 80, y0), stack, inst, in.nowMs + 30);
         check (graphDown && plot.contains (x0, y0) && pixel (x0, y0) != 0u && inst.get (prefix + ".cutoff") != before
-               && root.ui().topPage() == 0, prefix + " graph tap and drag outside the icon still edit the filter response");
+               && rootOf().ui().topPage() == 0, prefix + " graph tap and drag outside the icon still edit the filter response");
         inst.action (FilterEditPz);
         render (true);
-        check (root.ui().topPage() == FilterUi::kPagePz && inst.nativeFilter.layout() == 0,
+        check (rootOf().ui().topPage() == FilterUi::kPagePz && inst.nativeFilter.layout() == 0,
                prefix + " the native launcher opens the existing PZ curve editor and hides the root");
         stack.back();
         render (true);
         inst.nativeWrite (FilterPower, 0.0f);
         render (true);
-        check (inst.get ((prefix + ".on").c_str()) == 0.0f && root.ui().covers (x, y)
-               && pixel (power.x + 10, power.y + 10) == 0u && ! root.ui().covers (power.x + 10, power.y + 10),
+        check (inst.get ((prefix + ".on").c_str()) == 0.0f && rootOf().ui().covers (x, y)
+               && pixel (power.x + 10, power.y + 10) == 0u && ! rootOf().ui().covers (power.x + 10, power.y + 10),
                prefix + " OFF suppresses native cutoff but keeps the host power aperture");
         const int offWrites = inst.writes;
         view->onTouch (ev (TouchEvent::Down, pzX, pzY), stack, inst, in.nowMs);
         view->onTouch (ev (TouchEvent::Up, pzX, pzY), stack, inst, in.nowMs + 1);
         inst.action (FilterEditPz);
         render (true);
-        check (root.ui().topPage() == 0 && inst.pzPosts == 0 && inst.writes == offWrites && stack.depth() == 1,
+        check (rootOf().ui().topPage() == 0 && inst.pzPosts == 0 && inst.writes == offWrites && stack.depth() == 1,
                prefix + " OFF rejects both the icon tap and a delayed native PZ request");
         inst.set ((prefix + ".on").c_str(), 1.0f);
         render (true);
@@ -1314,23 +1350,23 @@ static void testFilterFactoryBackground ()
         view->onTick (stack, inst, in.nowMs);
         view->onTouch (ev (TouchEvent::Up, x, y), stack, inst, in.nowMs);
         render (true);
-        check (root.ui().topPage() == FilterUi::kPageMods && ! root.ui().hostBackground()
+        check (rootOf().ui().topPage() == FilterUi::kPageMods && ! rootOf().ui().hostBackground()
                && inst.nativeFilter.layout() == 0 && (pixel (600, 185) >> 24) == 255,
                prefix + " a valid modulation detail stays opaque and suppresses native root controls");
         stack.back();
     }
     for (int tab : { ui::FilterFullScreen::kViewNote, ui::FilterFullScreen::kViewVelo })
     {
-        inst.setTabView (IInstanceView::kTabViewFilter, tab);
+        open (tab == ui::FilterFullScreen::kViewNote ? "filternote" : "filtervelo", tab + 1);   // the sub-tab Note (3) or Velo (4)
         const char* key = tab == ui::FilterFullScreen::kViewNote ? "curve.note.legato" : "curve.velocity.legato";
         inst.set (key, 1.0f);
         render (false);
-        const auto glide = root.ui().curveUi().screen.nativeGlideRect();
+        const auto glide = rootOf().ui().curveUi().screen.nativeGlideRect();
         const int x = glide.x + glide.w / 2, y = glide.y + glide.h / 2;
         check (! glide.empty() && pixel (x, y) == 0u, std::string (key) + " opens the host-only GLIDE readout");
         inst.set (key, 0.0f);
         render (false);
-        check (root.ui().curveUi().screen.nativeGlideRect().empty() && pixel (x, y) != 0u,
+        check (rootOf().ui().curveUi().screen.nativeGlideRect().empty() && pixel (x, y) != 0u,
                std::string (key) + " OFF closes the GLIDE aperture");
     }
 }
@@ -1852,6 +1888,7 @@ int main (int argc, char** argv)
         return 0;
     }
     testNativeOnlyControlOwnership();
+    testFilterSubTabs();
     testFilterFactoryBackground();
     testNativeFilterBindings();
     testPzCurveEditor();

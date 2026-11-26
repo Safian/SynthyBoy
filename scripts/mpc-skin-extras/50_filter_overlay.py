@@ -27,7 +27,7 @@ LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.jso
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2   # the parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h, shell-mpc/pad_pressure.h)
 # Another plugin (template-mpc) uses these modules with its own layout: the file comes from skin-meta ("layout_path") or the environment (MPC_OVERLAY_LAYOUT), the parameters before "Overlay Instance" from the
 # JSON key "paramsBefore" (SynthyBoy's number is the default), the kind "page" is the generic page the plugin draws entirely.
-FILTERS = (1, 2)
+FILTERS = (1, 2, 3, 4)   # the view index of a filterui view: 1, 2 the filters, 3 NOTE, 4 VELO (the hardware sub-tabs Filter, Filter 2, Note, Velo)
 # the kinds of the views of overlay_layout.json (scripts/gen-overlay-layout-header.py KINDS): the pictures over a region of a host tab (none any more) and the pages the plugin draws entirely (83_pages.py, 82_play.py)
 KNOWN_KINDS = ("play", "filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice", "page")
 
