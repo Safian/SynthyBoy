@@ -183,17 +183,17 @@ void testSelectorWritesPlayEnv()
            "the ADSR group follows the envelope: attack, decay, sustain, release of env3");
 }
 
-/** The Play page's carousel and the Env tab show the SAME list (used + selected + one "+"): two UIs on one instance, for an empty, a partly used and an all used preset. */
+/** The Play page's carousel is made from the same cells as its own selector (used + selected + one "+"), for an empty, a partly used and an all used preset. */
 void testPlayCarouselIsTheTabSelector()
 {
     struct Both
     {
-        EnvUi tab, play;
+        EnvUi play;   // the Play page's UI: its carousel is made from its own UsedSelector (the Env tab pages have no selector and do not take part)
         Inst inst;
-        UiStack tabStack, playStack;
+        UiStack playStack;
         double now = 1000.0;
-        Both() { tabStack.openFull (EnvUi::kElementPage); refresh(); }
-        void refresh() { now += 150.0; page::Input in; tab.update (inst, tabStack, now, in); play.update (inst, 2, playStack, now, nullptr); }
+        Both() { refresh(); }
+        void refresh() { now += 150.0; play.update (inst, 2, playStack, now, nullptr); }
         void route (int slot, int source, const char* key)
         {
             char k[32];
@@ -214,7 +214,7 @@ void testPlayCarouselIsTheTabSelector()
         bool sameAsTab() const
         {
             int cs[ui::UsedSelector::kMaxCells];
-            const ui::UsedSelector& sel = tab.selector();
+            const ui::UsedSelector& sel = play.tabSelector();
             const int n = sel.cells (cs, ui::UsedSelector::kMaxCells);
             const uibind::SelectorCells& c = play.playCells();
             if (n != c.n)
@@ -227,7 +227,7 @@ void testPlayCarouselIsTheTabSelector()
     };
     {
         Both b;
-        check (b.sameAsTab() && b.playText() == "[1] +", "empty preset: the Play carousel and the tab show [1] + (" + b.playText() + ")");
+        check (b.sameAsTab() && b.playText() == "[1] +", "empty preset: the Play carousel and its selector show [1] + (" + b.playText() + ")");
         check (b.play.compact().instances.state.count == 2, "empty preset: the carousel has two entries, not six");
     }
     {
@@ -235,17 +235,17 @@ void testPlayCarouselIsTheTabSelector()
         b.route (1, 2, "master.volume");
         b.inst.set ("env5.decay", 900.0f);
         b.refresh();
-        check (b.sameAsTab() && b.playText() == "[1] [2] [5] +", "partly used (ENV 2 routed, ENV 5 edited): the Play carousel and the tab show [1] [2] [5] + (" + b.playText() + ")");
+        check (b.sameAsTab() && b.playText() == "[1] [2] [5] +", "partly used (ENV 2 routed, ENV 5 edited): the Play carousel and its selector show [1] [2] [5] + (" + b.playText() + ")");
         check (b.play.compact().instances.state.count == 4 && std::string (b.play.compact().instances.nameOf (2)) == "ENV 5" && std::string (b.play.compact().instances.nameOf (3)) == "+", "partly used: the carousel's entries are ENV 1, ENV 2, ENV 5, +");
         b.inst.env = 3;   // an unused, unedited envelope is the selected one: shown while it is selected, on the Play page too
         b.refresh();
-        check (b.sameAsTab() && b.playText() == "[1] [2] [3] [5] +", "a selected unused envelope is shown on both (" + b.playText() + ")");
+        check (b.sameAsTab() && b.playText() == "[1] [2] [3] [5] +", "a selected unused envelope is shown in the carousel (" + b.playText() + ")");
     }
     {
         Both b;
         for (int n = 2; n <= 6; ++n)
             b.route (n, n, "master.volume");
-        check (b.sameAsTab() && b.playText() == "[1] [2] [3] [4] [5] [6]" && b.play.compact().instances.state.count == 6, "all used: six entries, no + on both (" + b.playText() + ")");
+        check (b.sameAsTab() && b.playText() == "[1] [2] [3] [4] [5] [6]" && b.play.compact().instances.state.count == 6, "all used: six entries, no + (" + b.playText() + ")");
     }
     // the tab was left with an unused selected envelope: it falls back to the last used one (a tab leaves the screen: onHidden -> leftTab)
     {
@@ -254,17 +254,17 @@ void testPlayCarouselIsTheTabSelector()
         b.inst.env = 5;   // a "+" pick the user did not edit
         b.refresh();
         const int w0 = b.inst.writes;
-        b.tab.leftTab (b.inst);
-        check (b.inst.env == 2 && b.inst.writes == w0, "leaving the tab with ENV 5 selected (unused, unedited): back to the last used one, ENV 2; no parameter is written");
+        b.play.leftTab (b.inst);
+        check (b.inst.env == 2 && b.inst.writes == w0, "leaving the expansion with ENV 5 selected (unused, unedited): back to the last used one, ENV 2; no parameter is written");
         b.refresh();
         b.inst.set ("env5.decay", 900.0f);
         b.inst.env = 5;
         b.refresh();
-        b.tab.leftTab (b.inst);
+        b.play.leftTab (b.inst);
         check (b.inst.env == 5, "an edited envelope stays selected when the tab is left");
         b.inst.env = 2;
         b.refresh();
-        b.tab.leftTab (b.inst);
+        b.play.leftTab (b.inst);
         check (b.inst.env == 2, "a used envelope stays selected when the tab is left");
     }
 }
@@ -928,14 +928,20 @@ void testEnvelopeParameterCoverage()
 }
 
 // ---- the ONE Env tab (step 2 of docs/ui-map/env-filter-lfo-plan.md): the page, the selector "used + one free", the shared selection, the Q-Links that follow it
+/** The page of the sub-tab `env` (Env 1 .. Env 6: the layout view env<n>, its index is the number of the envelope). */
 struct PageRig
 {
-    std::unique_ptr<IView> page = pages::make ("env1", layout::kKindEnvUi, 1);
-    EnvUi& ui = static_cast<pages::EnvPage&> (*page).ui();
+    static const char* viewName (int env)
+    {
+        static const char* const names[] = { "env1", "env1", "env2", "env3", "env4", "env5", "env6" };
+        return names[env];
+    }
+    std::unique_ptr<IView> page;
+    EnvUi& ui;
     Inst inst;
     UiStack stack;
     double now = 1000.0;
-    PageRig() { stack.openFull (page->pageElement()); refresh(); }
+    explicit PageRig (int env = 1) : page (pages::make (viewName (env), layout::kKindEnvUi, env)), ui (static_cast<pages::EnvPage&> (*page).ui()) { stack.openFull (page->pageElement()); refresh(); }
     void refresh()
     {
         ViewInput in;
@@ -975,29 +981,6 @@ struct PageRig
         g.handlePoint (handle, hx, hy);
         drag (static_cast<int> (std::lround (hx)), static_cast<int> (std::lround (hy)), static_cast<int> (std::lround (hx)) + dx, static_cast<int> (std::lround (hy)) + dy);
     }
-    /** A tap on the cell whose label is `label` ("+" for the plus cell). */
-    bool tapCell (const char* label)
-    {
-        const ui::UsedSelector& sel = ui.selector();
-        int cs[ui::UsedSelector::kMaxCells];
-        const int n = sel.cells (cs, ui::UsedSelector::kMaxCells);
-        for (int k = 0; k < n; ++k)
-            if (std::string (cs[k] == ui::UsedSelector::kPlus ? "+" : sel.labelOf (cs[k])) == label)
-            {
-                const ui::Rect cell = sel.cell (k, n);
-                const int x = cell.x + cell.w / 2, y = cell.y + cell.h / 2;
-                const int frame = inst.nativeFrames[k];
-                const bool down = page->onTouch (ev (TouchEvent::Down, x, y), stack, inst, now);
-                const bool up = page->onTouch (ev (TouchEvent::Up, x, y), stack, inst, now + 40.0);
-                if (down || up || frame <= 0 || frame > nativeui::kEnvSelectorLastFrame)
-                    return false;
-                // The one visible native Button queues its six-way Env step.
-                inst.postNative (nativeui::env::Selection, static_cast<float> ((frame - 1) / 5) / 5.0f);
-                refresh();
-                return true;
-            }
-        return false;
-    }
     void route (int slot, int source, const char* key)
     {
         char k[32];
@@ -1011,7 +994,7 @@ struct PageRig
 
 void testEnvTab()
 {
-    // the 13 controls of the tab: selector, TARGETS, ADSR (4), SHAPE (3), DELAY, HOLD, BEATS, RETRIG; the graph carries the handles
+    // the 12 controls of the tab: TARGETS, ADSR (4), SHAPE (3), DELAY, HOLD, BEATS, RETRIG; the graph carries the handles
     {
         PageRig r;
         int knobs = 0, toggles = 0;
@@ -1022,91 +1005,54 @@ void testEnvTab()
             knobs += it.type == EnvUi::T::Knob;
             toggles += it.type == EnvUi::T::Toggle;
         }
-        check (knobs == 9 && toggles == 2 && r.ui.item (EnvUi::kTargets) != nullptr && r.ui.item (EnvUi::kInstances) != nullptr && r.ui.item (EnvUi::kGraph) != nullptr,
-               "the Env tab has 13 controls: selector, TARGETS, 9 knobs, BEATS, RETRIG (" + std::to_string (knobs) + " knobs, " + std::to_string (toggles) + " toggles) and the graph");
+        check (knobs == 9 && toggles == 2 && r.ui.item (EnvUi::kTargets) != nullptr && r.ui.item (EnvUi::kGraph) != nullptr,
+               "the Env tab has 12 controls: TARGETS, 9 knobs, BEATS, RETRIG (" + std::to_string (knobs) + " knobs, " + std::to_string (toggles) + " toggles) and the graph; no selector");
         check (std::string (ui::EnvFullScreen::groupName (0)) == "ADSR" && std::string (ui::EnvFullScreen::groupName (1)) == "SHAPE" && std::string (ui::EnvFullScreen::groupName (2)) == "TIME",
               "three Q groups: ADSR, SHAPE, TIME (4 + 3 + 4 members, none of 5)");
         check (r.ui.full().legato.state.on == false && std::string (r.ui.full().legato.state.label) == "RETRIG", "U11: the switch of env.legato_inverted reads RETRIG (on = the envelope restarts on a legato note)");
         check (r.ui.full().beats.rect().w > 0 && r.ui.full().legato.rect().w > 0 && r.ui.full().groups[2].member (3) == &r.ui.full().legato, "TIME is [DELAY, HOLD, BEATS, RETRIG]");
     }
-    // the selector for an empty, a partly used and an all used preset
+    // the page has no selector: the hardware sub-tab (Env 1 .. Env 6) names the envelope, one tab page = one screen
     {
         PageRig r;
-        check (cellsText (r.ui.selector()) == "[1] +" && r.ui.selector().state.selected == 1, "empty preset: [1] + , ENV 1 selected (" + cellsText (r.ui.selector()) + ")");
-        const ui::Rect sr = r.ui.selector().rect();
-        ui::Rect cells[ui::UsedSelector::kMaxCells];
-        const int nt = r.ui.selector().touchTargets (cells, ui::UsedSelector::kMaxCells);
-        bool big = nt == 2;
-        for (int i = 0; i < nt; ++i)
-            big = big && cells[i].h >= 56 && cells[i].w >= 56 && sr.contains (cells[i].x, cells[i].y);
-        check (big, "the selector cells are >= 56 x 56 px and inside its rectangle (" + std::to_string (nt) + " cells)");
+        check (! r.ui.nativeInstanceSelector() && r.ui.full().selectorArea().empty() && ! r.ui.full().isNativeSelector (100, 150),
+               "the Env page has no selector (not native, no area, no touch target)");
+        check (r.ui.full().captionRect().w > 0 && r.ui.full().tagsRect().x >= r.ui.full().captionRect().right(), "the caption ENV n stands where the selector was, the tags follow it");
     }
+    // every sub-tab shows its own envelope: the Q-Links, the controls and the display follow it; the Play selection (Play Env) is neither read nor written
+    for (int env = 1; env <= 6; ++env)
     {
-        PageRig r;
-        r.route (1, 2, "master.volume");
-        r.inst.set ("env5.decay", 900.0f);   // edited, no routing: counts as used
-        r.refresh();
-        check (cellsText (r.ui.selector()) == "[1] [2] [5] +", "partly used (ENV 2 routed, ENV 5 edited): [1] [2] [5] + (" + cellsText (r.ui.selector()) + ")");
-        PageRig a;
-        for (int n = 2; n <= 6; ++n)
-            a.route (n, n, "master.volume");
-        check (cellsText (a.ui.selector()) == "[1] [2] [3] [4] [5] [6]", "all used: six cells, no '+' (" + cellsText (a.ui.selector()) + ")");
-        check (a.ui.selector().numCells() == 6 && ! a.ui.selector().hasPlus(), "all used: no free candidate");
-    }
-    // choosing writes nothing, "+" selects the lowest free envelope, an unused selected one disappears when another is chosen, its parameters stay
-    {
-        PageRig r;
-        r.route (1, 2, "master.volume");
-        const int w0 = r.inst.writes;
-        const float decay5 = r.inst.get ("env5.decay");
-        check (r.tapCell ("+"), "tap on '+'");
-        check (r.inst.env == 3 && r.ui.selection() == 3, "'+' selects the lowest free envelope (ENV 3: ENV 1 and 2 are shown)");
-        check (r.inst.writes == w0, "choosing writes NO parameter");
-        check (cellsText (r.ui.selector()) == "[1] [2] [3] +", "the chosen unused envelope is shown while it is selected (" + cellsText (r.ui.selector()) + ")");
-        r.tapCell ("1");
-        check (r.inst.env == 1 && cellsText (r.ui.selector()) == "[1] [2] +", "selecting another one: the unused ENV 3 disappears again (" + cellsText (r.ui.selector()) + ")");
-        check (r.inst.writes == w0 && r.inst.get ("env5.decay") == decay5, "nothing was written, the hidden envelopes keep their parameters");
-        r.tapCell ("2");
-        check (r.inst.env == 2, "a tap on a shown cell selects it (Play Env = 2, shared with the Play page)");
-    }
-    // the Q-Links, the controls and the display follow the selected envelope
-    {
-        PageRig r;
-        r.route (1, 4, "master.volume");
-        r.tapCell ("4");
-        check (r.ui.selection() == 4 && r.inst.q[0] == envIdx (4, "attack") && r.inst.q[1] == envIdx (4, "decay") && r.inst.q[2] == envIdx (4, "sustain") && r.inst.q[3] == envIdx (4, "release"),
-              "Q-Links follow the selected envelope: Q 1 .. 4 are attack, decay, sustain, release of env4");
+        PageRig r (env);
+        const std::string n = "ENV " + std::to_string (env);
+        check (r.ui.selection() == env && r.inst.env == 1, n + ": the sub-tab shows envelope " + std::to_string (env) + " and Play Env stays 1");
+        check (r.inst.q[0] == envIdx (env, "attack") && r.inst.q[1] == envIdx (env, "decay") && r.inst.q[2] == envIdx (env, "sustain") && r.inst.q[3] == envIdx (env, "release"),
+              n + ": Q 1 .. 4 are attack, decay, sustain, release of its envelope");
         r.ui.full().setActiveGroup (2);
         r.refresh();
-        check (r.inst.q[0] == envIdx (4, "delay") && r.inst.q[1] == envIdx (4, "hold") && r.inst.q[2] == envIdx (4, "units") && r.inst.q[3] == envIdx (4, "legato_inverted"), "the TIME group of env4: delay, hold, units, legato_inverted");
-        r.inst.set ("env4.attack", 700.0f);
+        check (r.inst.q[0] == envIdx (env, "delay") && r.inst.q[1] == envIdx (env, "hold") && r.inst.q[2] == envIdx (env, "units") && r.inst.q[3] == envIdx (env, "legato_inverted"), n + ": the TIME group: delay, hold, units, legato_inverted");
+        r.ui.full().setActiveGroup (1);
         r.refresh();
-        check (std::fabs (r.ui.full().graph.state.shape.timeMs[1] - 700.0) < 1.0, "the display shows the selected envelope (ENV 4 attack 700 ms)");
+        check (r.inst.q[3] < 0, n + ": SHAPE has three members (no virtual selector slot)");
+        char key[32];
+        std::snprintf (key, sizeof key, "env%d.attack", env);
+        r.inst.set (key, 700.0f);
+        r.refresh();
+        check (std::fabs (r.ui.full().graph.state.shape.timeMs[1] - 700.0) < 1.0, n + ": the display shows its own attack (700 ms)");
         r.inst.writes = 0;
         r.tapC (r.ui.full().legato.rect());
-        check (r.inst.writes == 0, "the overlay leaves the native RETRIG tap to the host");
-        r.inst.writeParam (envIdx (4, "legato_inverted"), 1.0f);
+        check (r.inst.writes == 0, n + ": the overlay leaves the native RETRIG tap to the host");
+        r.inst.writeParam (envIdx (env, "legato_inverted"), 1.0f);
         r.refresh();
-        check (r.inst.get ("env4.legato_inverted") == 1.0f && r.inst.get ("env1.legato_inverted") == 0.0f && r.inst.writes == 1, "RETRIG writes env4.legato_inverted only");
-        r.tapCell ("1");
-        check (r.inst.q[0] == envIdx (1, "delay") || r.inst.q[0] == envIdx (1, "attack"), "back on ENV 1: the Q-Links point at env1");
+        check (r.inst.get (std::string ("env") + std::to_string (env) + ".legato_inverted") == 1.0f && r.inst.writes == 1, n + ": RETRIG writes its own legato_inverted only");
     }
-    // the selection is the Play page's selection (the data model is shared): a choice on the Play page shows on the tab and the other way round
+    // the selection is NOT the Play page's selection: a choice on the Play page does not move the tab, and leaving the tab does not fall back to another envelope
     {
-        PageRig r;
-        r.inst.env = 5;
+        PageRig r (3);
+        r.inst.env = 5;   // an unused, unedited Play selection: the old tab would have dropped it on leaving
         r.refresh();
-        check (r.ui.selection() == 5 && cellsText (r.ui.selector()) == "[1] [5] +", "Play Env = 5 (set on the Play page): the tab shows ENV 5 (" + cellsText (r.ui.selector()) + ")");
-        r.tapCell ("1");
-        check (r.inst.env == 1, "a choice on the tab is Play Env (the Play page follows)");
-    }
-    // the selector is laid out again with the number of its cells (the tags take the rest)
-    {
-        PageRig r;
-        const int w1 = r.ui.selector().rect().w;
-        for (int n = 2; n <= 6; ++n)
-            r.route (n - 1, n, "master.volume");
-        check (r.ui.selector().rect().w > w1 && r.ui.selector().rect().w >= 6 * 56 && r.ui.full().tagsRect().x >= r.ui.selector().rect().right(), "more cells: the selector grows (" + std::to_string (w1) + " -> " + std::to_string (r.ui.selector().rect().w) + " px), the tags move right");
+        check (r.ui.selection() == 3 && r.inst.env == 5, "Play Env = 5 (set on the Play page): the Env 3 sub-tab still shows ENV 3");
+        r.page->onHidden();
+        check (r.inst.env == 5, "leaving the tab leaves Play Env alone");
     }
 }
 
@@ -1153,7 +1099,7 @@ void testStandaloneEnvNativeRemainingControls()
     PageRig r;
     check (r.ui.nativeADSR() && r.ui.nativeShape() && r.ui.nativeTime() && r.ui.nativeTargets(),
            "opening the normal Env page enables native ADSR, SHAPE, TIME and TARGETS artwork");
-    check (r.ui.nativeInstanceSelector(), "the normal page gives the used/free selector to the native skin");
+    check (! r.ui.nativeInstanceSelector(), "the normal page has no selector: nothing of it is given to the native skin");
 
     // SHAPE knobs are disabled in overlay
     check (! r.ui.full().aCurve.enabled(), "overlay aCurve knob is disabled");
@@ -1198,10 +1144,9 @@ void testStandaloneEnvNativeRemainingControls()
     r.refresh();
     check (r.stack.depth() == 2 && ! r.inst.nativeEnv.layout(), "a repeated host action neither reopens the detail nor exposes native controls");
     check (std::all_of (r.inst.nativeFrames.begin(), r.inst.nativeFrames.end(), [] (int frame) { return frame == 0; }),
-           "native selector buttons are disabled behind Targets");
+           "the page never publishes selector cells");
     r.tapC (r.ui.targetsPage().back.rect());
     check (r.stack.depth() == 1 && r.ui.topPage() == 0, "one Back returns to the Env page");
-    check (r.inst.nativeFrames[0] > 0, "returning restores the native selector cells");
 
     // The interactive curve REMAINS covered and functional
     const ui::Rect gr = r.ui.full().graph.rect();
@@ -1219,7 +1164,7 @@ void testStandaloneEnvNativeRemainingControls()
     r.ui.setSelection (r.inst, 5);
     check (r.inst.env == 5, "setSelection writes Play Env");
     r.refresh();
-    check (r.ui.selection() == 5, "EnvUi selection follows native choice");
+    check (r.ui.selection() == 1, "the page keeps the envelope of its sub-tab: the Play selection does not move it");
 
     // Rendering transparency: verify all native control areas are transparent in overlay
     std::vector<uint32_t> pixels (1280u * 800u);
@@ -1244,134 +1189,58 @@ void testStandaloneEnvNativeRemainingControls()
            checkTransparent (r.ui.full().beats.rect()) && checkTransparent (r.ui.full().legato.rect()),
            "the native TIME cells are transparent");
     check (checkTransparent (tgt), "the complete native TARGETS interior is transparent");
-    check (checkTransparent (r.ui.full().selectorArea()), "the overlay leaves native selection-cell artwork transparent");
+    check (r.ui.full().selectorArea().empty(), "the page has no selection-cell artwork");
 }
 
-void testNativeUsedSelector()
+void testEnvPageNeverPublishesSelector()
 {
-    PageRig r;
-    check (r.inst.nativeFrames == std::array<int, 6>{ 3, 10, 0, 0, 0, 0 },
-           "empty: selected ENV 1 has no dot, '+' selects ENV 2, and later slots are blank");
-    const ui::Rect area = r.ui.full().selectorArea();
-    check (area.x == 68 && area.y == 122 && area.w == 176 && area.h == 56,
-           "the two visible cells align with the generated skin slots");
+    PageRig r (2);
+    check (r.inst.nativeFrames == std::array<int, 6>{}, "the Env 2 page publishes no selector cells");
     r.route (1, 2, "master.volume");
     r.inst.set ("env5.decay", 900.0f);
     r.refresh();
-    check (r.inst.nativeFrames == std::array<int, 6>{ 3, 7, 22, 15, 0, 0 },
-           "partial use: active ENV 1, routed ENV 2 and edited ENV 5 get their states; '+' offers ENV 3");
-    check (r.tapCell ("+") && r.inst.env == 3 && r.inst.writes == 0,
-           "native '+' selects the lowest free envelope without changing the patch");
-    check (r.inst.nativeFrames == std::array<int, 6>{ 1, 7, 13, 22, 20, 0 },
-           "an unused selected ENV 3 is shown without a dot; '+' now offers ENV 4");
-    const ui::Rect selected = r.ui.full().selectorArea();
-    check (r.page->onWheel (selected.x + 8, selected.y + 24, 1, r.stack, r.inst, r.now) && r.inst.env == 5,
-           "wheel over the native selector still steps only over the shown envelopes");
-    r.refresh();
-    check (r.inst.nativeFrames == std::array<int, 6>{ 1, 7, 24, 15, 0, 0 },
-           "leaving an unedited selection drops its cell and retains the two used dots");
-    for (int env : { 3, 4, 6 })
-        r.route (env, env, "master.volume");
-    check (r.inst.nativeFrames == std::array<int, 6>{ 1, 7, 12, 17, 24, 27 },
-           "all used: six numbered states, no '+', and ENV 5 is selected and used");
-
-    check (r.tapCell ("1"), "the native ENV 1 button returns to the amplitude envelope");
-    Inst other;
-    UiStack otherStack;
-    otherStack.openFull (r.page->pageElement());
-    ViewInput in;
-    in.io = &other; in.ui = &otherStack; in.nowMs = r.now + 1.0;
-    r.page->onHidden();
-    check (r.inst.nativeFrames == std::array<int, 6>{}, "leaving clears the old plugin instance's native cells");
-    r.page->onShown();
-    r.page->update (in);
-    check (other.nativeFrames == std::array<int, 6>{ 3, 10, 0, 0, 0, 0 },
-           "an immediate instance switch with the same selected envelope refreshes the used flags");
-    other.set ("env6.decay", 900.0f);
-    ++other.generation;
-    ++in.nowMs;
-    r.page->update (in);
-    check (other.nativeFrames == std::array<int, 6>{ 3, 27, 10, 0, 0, 0 },
-           "a preset change refreshes used flags within the normal scan interval");
-}
-
-void testStandaloneEnvSelectorQ()
-{
+    check (r.inst.nativeFrames == std::array<int, 6>{} && r.ui.selection() == 2, "used envelopes change nothing on the page: no cells, the sub-tab's envelope");
+    check (r.page->onWheel (100, 150, 1, r.stack, r.inst, r.now) == false || r.inst.env == 1, "a wheel turn over the old selector place selects nothing");
     for (bool wide : { false, true })
     {
         ui::QGroup::setWideDevice (wide);
-        PageRig r;
-        r.route (1, uibind::envSource (3), "master.volume");
-        r.route (2, uibind::envSource (6), "filter1.cutoff");
-        const int id = EnvUi::kVirtualSelector;
-        int slot = 7;
-        check (r.inst.router.virtualId (slot) == id, "ENV selector is Q8 in the SHAPE block");
-        auto q = [&] (float x)
-        {
-            return r.inst.router.hostWrite (slot, x, false, [] (int) { return 0.0f; },
-                [&] (int i, float n) { r.inst.writeParam (i, n); });
-        };
-        check (q (0.05f) == QRouter::Write::written, "the router keeps small absolute ENV dial movements");
-        r.refresh();
-        check (r.inst.env == 1 && std::fabs (r.inst.router.value (slot, [] (int) { return 0.0f; }) - 0.05f) < 1e-6f,
-               "ENV sub-step travel is preserved without changing the selection");
-        check (q (1.0f / 3.0f) == QRouter::Write::written, "the ENV virtual dial accepts a point on the used row");
-        r.refresh();
-        check (r.inst.env == 3 && r.ui.selection() == 3 && r.inst.router.target (0) == envIdx (3, "attack"),
-               "the Q turn selects the second shown ENV and remaps ADSR in the same update");
-        r.ui.full().setActiveGroup (2);
-        r.refresh();
-        slot = wide ? 7 : 11;
-        check (r.inst.router.virtualId (slot) == id, "the ENV selector follows SHAPE bank rotation only on the Key 61");
-        check (q (1.0f) == QRouter::Write::written, "the upper end includes the free selector cell");
-        r.refresh();
-        check (r.inst.env == 2 && r.inst.writes == 0, "the ENV '+' Q position selects the lowest free ENV without editing the patch");
-        check (q (1.0f) == QRouter::Write::written, "queue a Q write just before opening Targets");
-        r.tapC (r.ui.full().targetsArea());
-        check (r.ui.topPage() == EnvUi::kPageTargets && r.inst.env == 2,
-               "a Q write from the ENV selector cannot leak into Targets");
-        r.tapC (r.ui.targetsPage().back.rect());
-        check (r.inst.env == 2 && r.inst.router.virtualId (7) == id,
-               "closing Targets restores the ENV selector");
-        slot = 7;
-        check (q (1.0f) == QRouter::Write::written, "queue an ENV selection just before a preset load");
-        ++r.inst.generation;
-        r.refresh();
-        check (r.inst.env == 2, "the newly loaded selection ignores the prior preset's queued Q write");
+        PageRig q (3);
+        for (int slot = 0; slot < 16; ++slot)
+            check (q.inst.router.virtualId (slot) < 0 || q.inst.router.virtualId (slot) != 0, "no Q slot of the Env page is a virtual selector (slot " + std::to_string (slot) + ")");
+        q.ui.full().setActiveGroup (1);
+        q.refresh();
+        check (q.inst.env == 1, "turning in SHAPE does not select an envelope");
     }
     ui::QGroup::setWideDevice (false);
 }
 
 void testStandaloneEnvNativeControlsAcrossInstancesAndPresets()
 {
-    PageRig r;
-    r.ui.setHostBackground (true);
-    check (r.ui.hostBackground(), "standalone ENV enables host background when sentinel is verified");
-    check (r.ui.nativeADSR() && r.ui.nativeShape() && r.ui.nativeTime(), "native scalar groups are enabled by entering the actual Env page");
+    PageRig first;
+    first.ui.setHostBackground (true);
+    check (first.ui.hostBackground(), "standalone ENV enables host background when sentinel is verified");
+    check (first.ui.nativeADSR() && first.ui.nativeShape() && first.ui.nativeTime(), "native scalar groups are enabled by entering the actual Env page");
 
-    // 1. Across all 6 instances: verify selection, labels, parameters and Q targets
+    // 1. Across all 6 sub-tabs: verify selection, labels, parameters and Q targets
     for (int env = 1; env <= 6; ++env)
     {
-        r.ui.setSelection (r.inst, env);
-        check (r.inst.env == env, "setSelection writes instance " + std::to_string (env));
-        r.refresh();
-        check (r.ui.selection() == env, "EnvUi selection follows native choice for env " + std::to_string (env));
-        check (r.ui.currentChoiceLabel (r.inst) == "ENV " + std::to_string (env),
+        PageRig p (env);
+        check (p.ui.selection() == env, "the Env " + std::to_string (env) + " sub-tab shows its envelope");
+        check (p.ui.currentChoiceLabel (p.inst) == "ENV " + std::to_string (env),
                "currentChoiceLabel matches ENV " + std::to_string (env));
-        check (EnvUi::choiceLabel (r.inst, env) == "ENV " + std::to_string (env),
+        check (EnvUi::choiceLabel (p.inst, env) == "ENV " + std::to_string (env),
                "choiceLabel matches ENV " + std::to_string (env));
 
-        // Q targets follow selected instance
-        check (r.inst.q[0] == envIdx (env, "attack") &&
-               r.inst.q[1] == envIdx (env, "decay") &&
-               r.inst.q[2] == envIdx (env, "sustain") &&
-               r.inst.q[3] == envIdx (env, "release"),
-               "ADSR Q targets follow selected instance env" + std::to_string (env));
+        // Q targets follow the sub-tab's envelope
+        check (p.inst.q[0] == envIdx (env, "attack") &&
+               p.inst.q[1] == envIdx (env, "decay") &&
+               p.inst.q[2] == envIdx (env, "sustain") &&
+               p.inst.q[3] == envIdx (env, "release"),
+               "ADSR Q targets follow the sub-tab env" + std::to_string (env));
     }
 
-    // Return to env 1
-    r.ui.setSelection (r.inst, 1);
-    r.refresh();
+    PageRig r (4);
+    r.ui.setHostBackground (true);
 
     // Modulation targets added: preset with multiple targets.
     for (int n = 2; n <= 6; ++n)
@@ -1380,10 +1249,9 @@ void testStandaloneEnvNativeControlsAcrossInstancesAndPresets()
 
     // Top tags must not overlap the native selector aperture
     const ui::Rect tags = r.ui.full().tagsRect();
-    check (tags.x >= r.ui.full().selectorArea().right(), "tagsRect does not encroach on the live selector");
+    check (tags.x >= r.ui.full().captionRect().right(), "tagsRect does not encroach on the caption");
 
     // Beats unit preset change
-    check (r.tapCell ("4") && r.inst.env == 4, "a normal selector gesture changes the edited envelope");
     r.inst.writeParam (envIdx (4, "units"), 1.0f);
     r.refresh();
     check (r.ui.beats() && r.inst.get ("env1.units") == 0.0f, "the selected envelope changes to beats without touching ENV 1");
@@ -1437,12 +1305,11 @@ void testStandaloneEnvNativeControlsAcrossInstancesAndPresets()
 void testEnvEditorHostsOnlyCurrentFields()
 {
     namespace n = nativeui::env;
-    PageRig r;
     constexpr const char* keys[] { "attack", "decay", "sustain", "release", "attack_curve", "decay_curve",
                                   "release_curve", "delay", "hold", "units", "legato_inverted" };
     for (int env = 1; env <= 6; ++env)
     {
-        r.inst.env = env;
+        PageRig r (env);   // the sub-tab Env <n> binds the cells to envelope n
         for (bool beats : { false, true })
         {
             r.inst.set ("env" + std::to_string (env) + ".units", beats ? 1.0f : 0.0f);
@@ -1461,7 +1328,7 @@ void testEnvEditorHostsOnlyCurrentFields()
             }
         }
     }
-    r.inst.env = 2;
+    PageRig r (2);
     r.inst.set ("env2.units", 0.0f);
     r.refresh();
     const int writes = r.inst.writes;
@@ -1478,14 +1345,13 @@ void testEnvEditorHostsOnlyCurrentFields()
     r.page->onTouch (ev (TouchEvent::Down, x, y), r.stack, r.inst, r.now);
     r.inst.postNative (n::Attack, 0.8f);
     ++r.inst.generation;
-    r.inst.env = 6;
     r.refresh();
     check (r.inst.writes == writes + 1 && r.inst.nativeEnv.at (n::Attack).cell().target < 0,
-           "a held, queued edit cannot cross a preset and envelope change");
+           "a held, queued edit cannot cross a preset change");
     r.page->onTouch (ev (TouchEvent::Up, x, y), r.stack, r.inst, r.now + 40.0);
     r.inst.postNative (n::Attack, 0.25f);
     r.refresh();
-    check (r.inst.writes == writes + 2 && r.inst.lastWritten == envIdx (6, "attack_beats"),
+    check (r.inst.writes == writes + 2 && r.inst.lastWritten == envIdx (2, "attack_beats"),
            "the newly bound dial is editable again after release");
 
     r.page->onTouch (ev (TouchEvent::Down, x, y), r.stack, r.inst, r.now);
@@ -1505,8 +1371,7 @@ void testEnvEditorHostsOnlyCurrentFields()
 
 static void testEnvFactoryComposite()
 {
-    PageRig r;
-    r.ui.setSelection (r.inst, 4);
+    PageRig r (4);
     r.inst.set ("env4.attack", 500);
     r.route (1, 4, "master.volume");
     r.refresh();
@@ -1611,8 +1476,7 @@ int main (int argc, char** argv)
     testEnvTab();
     testStandaloneEnvNativeADSR();
     testStandaloneEnvNativeRemainingControls();
-    testNativeUsedSelector();
-    testStandaloneEnvSelectorQ();
+    testEnvPageNeverPublishesSelector();
     testStandaloneEnvNativeControlsAcrossInstancesAndPresets();
     testEnvEditorHostsOnlyCurrentFields();
     testPlayCarouselIsTheTabSelector();

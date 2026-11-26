@@ -10,6 +10,11 @@ static const uint32_t shim_marker_pairs[][2] = {
     { 0xbf3a2c, 0x3abf64 },  // oscsub
     { 0xc63a2c, 0x3ac664 },  // oscnoise
     { 0x4f3a2c, 0x3a4f64 },  // env1
+    { 0x105a2c, 0x5a1064 },  // env2
+    { 0x175a2c, 0x5a1764 },  // env3
+    { 0x1e5a2c, 0x5a1e64 },  // env4
+    { 0x255a2c, 0x5a2564 },  // env5
+    { 0x2c5a2c, 0x5a2c64 },  // env6
     { 0x1e3a2c, 0x3a1e64 },  // lfo1
     { 0x8e3a2c, 0x3a8e64 },  // fx
     { 0x873a2c, 0x3a8764 },  // mixer
@@ -19,7 +24,7 @@ static const uint32_t shim_marker_pairs[][2] = {
     { 0xa33a2c, 0x3aa364 },  // voice
 };
 static const int shim_marker_centers[][4] = {
-    { 36, 137, 1244, 137 },  // play1
+    { 36, 114, 1244, 114 },  // play1
     { 36, 137, 1244, 137 },  // macros
     { 36, 137, 1244, 137 },  // osca
     { 36, 137, 1244, 137 },  // oscb
@@ -27,6 +32,11 @@ static const int shim_marker_centers[][4] = {
     { 36, 137, 1244, 137 },  // oscsub
     { 36, 137, 1244, 137 },  // oscnoise
     { 36, 137, 1244, 137 },  // env1
+    { 36, 137, 1244, 137 },  // env2
+    { 36, 137, 1244, 137 },  // env3
+    { 36, 137, 1244, 137 },  // env4
+    { 36, 137, 1244, 137 },  // env5
+    { 36, 137, 1244, 137 },  // env6
     { 36, 114, 1244, 114 },  // lfo1
     { 36, 137, 1244, 137 },  // fx
     { 36, 137, 1244, 137 },  // mixer

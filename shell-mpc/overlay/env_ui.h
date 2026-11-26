@@ -78,7 +78,6 @@ public:
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     static constexpr int kCompactX = 440, kCompactW = 400;       // the middle third of the Play page
     static constexpr double kModsRefreshMs = 100.0;
-    static constexpr int kVirtualSelector = 0;
 
     EnvUi() { setCanvas (kCanvasW, kCanvasH); compact_.setNativeInstanceSelector (false); compact_.setNativeDials(); configure (1); }
 
@@ -128,6 +127,9 @@ public:
         if (sel >= 1 && sel <= kEnvs)
             uibind::chooseEnv (inst, sel);
     }
+    /** The envelope this UI shows: on the page of a tab (page_view.h) the one the hardware sub-tab names (Env 1 .. Env 6: the view's own instance number, no selector on the screen, nothing shared with the Play page); on the Play
+        page's expansion the shared Play selection (Play Env, chunk saved). */
+    int shownEnv (const IInstanceView& inst) const noexcept { return pageEnv_ > 0 ? pageEnv_ : uibind::selectedEnv (inst); }
 
     void setCanvas (int w, int h)
     {
@@ -148,7 +150,6 @@ public:
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
         highlight_ = highlight;
-        readSelectorQ (inst, stack);
         const uint64_t generation = inst.stateGeneration();
         if (selectorInstance_ != &inst || selectorGeneration_ != generation)
         {
@@ -156,7 +157,7 @@ public:
             selectorGeneration_ = generation;
             modsDirty_ = true;
         }
-        const int sel = uibind::selectedEnv (inst);   // ONE selection for the Env tab and the Play page (Play Env, chunk saved): the tab and the Play page show the same envelope
+        const int sel = shownEnv (inst);   // the page of a tab: its sub-tab's envelope; the Play page's expansion: the Play selection (Play Env, chunk saved)
         if (sel != sel_ || ! configured_)
             configure (sel);
         selectedSource_ = uibind::envSource (sel_);
@@ -207,6 +208,8 @@ public:
             page_ = true;
             full_.setPageMode (true);
         }
+        pageEnv_ = std::clamp (in.instance, 1, kEnvs);
+        full_.setPageCaption (pageEnv_);
         if (selectorInstance_ != &inst || selectorGeneration_ != inst.stateGeneration())
         {
             inst.setNativeEnvEditor (false, nullptr);
@@ -214,7 +217,7 @@ public:
             gesture_ = nullptr;
             gestureDown_ = false;
         }
-        else if (stack.depth() == 1 && stack.element() == kElementEnv && uibind::selectedEnv (inst) == sel_)
+        else if (stack.depth() == 1 && stack.element() == kElementEnv && shownEnv (inst) == sel_)
         {
             const auto& targets = nativeCells_[nativeui::env::Targets];
             float action = 0.0f;
@@ -800,6 +803,8 @@ private:
     /** The selector: ENV 1 .. 6, the used ones, the selected one and one free (`+`); the scan is the one of the last refreshMods (never per frame). */
     void pullSelector (IInstanceView& v)
     {
+        if (page_)
+            return;   // the page of a tab has no selector: the hardware sub-tab names the envelope
         uibind::fillSelector (uibind::SelKind::Env, scan_, v, full_.selector);
         full_.syncSelectorLayout();
         uibind::cellsFromSelector (uibind::SelKind::Env, full_.selector, playCells_);   // the Play page's carousel: the same list
@@ -810,41 +815,6 @@ private:
             cellColours_[k] = id > 0 ? ui::envColour (id - 1) : 0u;
             if (id > 0 && (compact_.instances.targetMask() & (1u << (id - 1))) != 0)
                 cellDots_ |= 1u << k;   // the dot of an envelope that has targets
-        }
-        if (page_ && full_.nativeInstanceSelector())
-            publishNativeSelector (v);
-        if (page_ && stackDepth_ == 1 && pageTop_ == 0)
-        {
-            const int last = std::max (0, playCells_.n - 1);
-            if (selectorQValue_ < 0.0f || std::lround (selectorQValue_ * last) != playCells_.selectedPos)
-                selectorQValue_ = last > 0 ? static_cast<float> (playCells_.selectedPos) / last : 0.0f;
-            v.setQVirtual (kVirtualSelector, selectorQValue_);
-            selectorQOwner_ = &v;
-        }
-    }
-
-    /** Q represents the previous published row, including its single free candidate. */
-    void readSelectorQ (IInstanceView& v, const UiStack& stack) noexcept
-    {
-        if (! page_)
-            return;
-        const bool visible = stack.depth() == 1 && stack.element() == kElementEnv;
-        const bool owned = selectorQOwner_ == &v;
-        const bool same = owned && selectorGeneration_ == v.stateGeneration();
-        float value;
-        if ((visible || owned) && v.takeQVirtual (kVirtualSelector, value) && visible && same && playCells_.n > 0)
-        {
-            selectorQValue_ = std::clamp (value, 0.0f, 1.0f);
-            const int pos = static_cast<int> (std::lround (selectorQValue_ * (playCells_.n - 1)));
-            const int id = uibind::cellChoice (full_.selector, playCells_, pos);
-            if (id > 0 && id != uibind::selectedEnv (v))
-                uibind::chooseEnv (v, id);
-        }
-        // The id is shared with other pages; never apply a queued write when ownership changes.
-        if (! visible || ! same)
-        {
-            selectorQOwner_ = nullptr;
-            selectorQValue_ = -1.0f;
         }
     }
 
@@ -887,21 +857,10 @@ public:
     {
         hideNativeTargets (v);
         selectorInstance_ = nullptr;
-        if (selectorQOwner_ == &v)
-        {
-            float pending;
-            v.takeQVirtual (kVirtualSelector, pending);
-            selectorQOwner_ = nullptr;
-            selectorQValue_ = -1.0f;
-        }
-        if (page_ && full_.nativeInstanceSelector())
-        {
-            const int frames[nativeui::kEnvSelectorCells] = {};
-            v.setNativeEnvSelector (frames);
-        }
         if (page_)
-            v.setNativeEnvEditor (false, nullptr);
-        uibind::leaveSelector (uibind::SelKind::Env, v);
+            v.setNativeEnvEditor (false, nullptr);   // the sub-tab's envelope is its own: no shared selection to fall back (no leaveSelector)
+        else
+            uibind::leaveSelector (uibind::SelKind::Env, v);
     }
 private:
     /** The text under a knob: the value with its unit. */
@@ -1212,7 +1171,7 @@ private:
     int modsTarget_ = 0, modsTargetParam_ = -1, modsAddOffer_ = 0;
     bool modsContextValid (const IInstanceView& inst) const noexcept
     {
-        if (pageTop_ != kPageMods || modsTargetParam_ < 0 || modsPreset_ != inst.stateGeneration() || uibind::selectedEnv (inst) != sel_)
+        if (pageTop_ != kPageMods || modsTargetParam_ < 0 || modsPreset_ != inst.stateGeneration() || shownEnv (inst) != sel_)
             return false;
         const auto* control = item (modsTarget_);
         const int units = uibind::indexOfKey (prefix_ + "units");
@@ -1592,8 +1551,6 @@ private:
             qSlots_.publish (v, used, pos, [&] (int k, int* t)
             {
                 members (full_.groups[ids[k]], t);
-                if (page_ && ids[k] == 1 && t[3] < 0)
-                    t[3] = QRouter::encode (kVirtualSelector, QRouter::kVirtual);   // spare slot in SHAPE
             });
             setBlocks (full_.groups, ui::EnvFullScreen::kMaxGroups, ids, used, pos);
         }
@@ -1623,8 +1580,7 @@ private:
     uibind::UsedScan scan_;              // the last scan of the matrix and the parameters (selector candidates)
     const IInstanceView* selectorInstance_ = nullptr;
     uint64_t selectorGeneration_ = 0;
-    const IInstanceView* selectorQOwner_ = nullptr;
-    float selectorQValue_ = -1.0f;
+    int pageEnv_ = 0;                    // the page of a tab: the envelope of the sub-tab (1 .. 6); 0 in the Play page's expansion
     bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, beats_ = false, nativeGround_ = false;
     int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0;
     int timeMs_[5] = { -1, -1, -1, -1, -1 }, timeBeats_[5] = { -1, -1, -1, -1, -1 }, sustainP_ = -1, curveP_[3] = { -1, -1, -1 };

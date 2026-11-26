@@ -1,6 +1,6 @@
 // SynthyBoy - MPC UI library test coverage: steppers and lists
 // Tests untested public behaviors of Stepper, UpDownStepper, PictogramSelector,
-// SourcePicker, EnvSelector, ShapePicker, ToolSelector, and ModRowSelector.
+// SourcePicker, ShapePicker, ToolSelector, and ModRowSelector.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -356,26 +356,6 @@ static void test_source_picker()
     check (drawnOutside (im, sp.rect(), backgroundPixel()) == 0, "SourcePicker draws strictly inside rect");
 }
 
-static void test_env_selector()
-{
-    EnvSelector es;
-    es.setId (107);
-    es.place ({ 50, 50, 360, 56 });
-
-    check (es.count() == 6, "EnvSelector count is 6");
-    es.setTargetMask (0b000101); // ENV 1 and ENV 3 have targets
-    check (es.targetMask() == 0b000101, "EnvSelector targetMask getter");
-    check (es.hasTargets (0), "EnvSelector ENV 1 has targets");
-    check (! es.hasTargets (1), "EnvSelector ENV 2 has no targets");
-    check (es.hasTargets (2), "EnvSelector ENV 3 has targets");
-    check (! es.hasTargets (6), "EnvSelector out-of-range index has no targets");
-
-    check (es.minSize().w >= 56 * 6, "EnvSelector minSize width accommodates 6 envelopes");
-
-    Image im = drawComponent (es, 500, 200);
-    check (drawnOutside (im, es.rect(), backgroundPixel()) == 0, "EnvSelector draws strictly inside rect");
-}
-
 static void test_shape_picker()
 {
     ShapePicker spk;
@@ -578,7 +558,6 @@ int main()
     test_pictogram_selector_horizontal_and_disabled();
     test_pictogram_selector_vertical();
     test_source_picker();
-    test_env_selector();
     test_shape_picker();
     test_tool_selector();
     test_mod_row_selector();

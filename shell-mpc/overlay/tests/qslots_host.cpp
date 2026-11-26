@@ -563,20 +563,16 @@ void testEnvLfo()
             mapped += f.groups[ids[g]].block() >= 1;
         check (mapped == std::min (n - 1, 3), "LFO page: the groups after the active one have their blocks (" + std::to_string (mapped) + ")");
     }
-    // the ONE Env tab and the ONE LFO tab: the Q-Links follow the selected item (the selection is Play Env / Play LFO / mpcTabView.rnd, view state only)
+    // the Env sub-tabs (Env 1 .. Env 6: the view's instance number) and the ONE LFO tab (the Q-Links follow the selected item: Play LFO / mpcTabView.rnd, view state only)
+    for (int e : { 4, 6, 1 })
     {
-        demo::Rig<EnvUi> r;
+        demo::Rig<EnvUi> r (e);
         r.refresh();
-        for (int e : { 4, 6, 1 })
-        {
-            r.inst.playSel[1] = e;
-            r.refresh();
-            r.ui.full().setActiveGroup (0);
-            r.refresh();
-            const std::string pre = "env" + std::to_string (e) + ".";
-            check (r.inst.q[0] == demo::Inst::idx (pre + "attack") && r.inst.q[3] == demo::Inst::idx (pre + "release") && r.inst.q[4] == demo::Inst::idx (pre + "attack_curve") && r.inst.q[8] == demo::Inst::idx (pre + "delay"),
-                   "Env tab: ENV " + std::to_string (e) + " selected: Q 1 .. 4 ADSR, Q 5 SHAPE, Q 9 TIME of " + pre);
-        }
+        r.ui.full().setActiveGroup (0);
+        r.refresh();
+        const std::string pre = "env" + std::to_string (e) + ".";
+        check (r.inst.q[0] == demo::Inst::idx (pre + "attack") && r.inst.q[3] == demo::Inst::idx (pre + "release") && r.inst.q[4] == demo::Inst::idx (pre + "attack_curve") && r.inst.q[8] == demo::Inst::idx (pre + "delay"),
+               "Env sub-tab " + std::to_string (e) + ": Q 1 .. 4 ADSR, Q 5 SHAPE, Q 9 TIME of " + pre);
     }
     {
         demo::Rig<LfoUi> r;

@@ -14,6 +14,7 @@ from components import style as _ui_style
 
 
 import copy
+import re
 from pathlib import Path
 
 from components.native.button.button import TRANSPARENT_HIT, button as native_button, write_transparent_hit
@@ -242,26 +243,49 @@ def _build_targets_definition(ctx, width, height):
     ctx.add_component_definition("envNativeTargets", targets_def)
 
 
-def apply(tui, qlinks, ctx):
-    """Install native ENV controls. Idempotent: second invocation adds nothing."""
-    if not ctx.meta or ctx.meta.get("variant") != "overlay":
-        return
-    if not any(t["name"] == "Env" for t in ctx.meta["tabs"]):
-        return
-
-    tab = ctx.tab("Env")
+def _install_tab(ctx, tab, bindings, first):
+    """The native controls of one Env sub-tab (tab n shows envelope n; the cells follow the plugin's page, which publishes the envelope of its own sub-tab)."""
+    gate, selector_index, targets_index, values = bindings
     items = tab["componentDefinition"]["componentsData"]
-
     # Idempotence: if native controls already present, skip
     if any(c["componentData"]["name"].startswith("Env Native ") for c in items):
         tab["qlinkBoundsData"] = []
         return
+    # Remove the static widgets of the generator ("Env 1 Attack" ... of the tab's kick page)
+    items[:] = [c for c in items if not re.match(r"Env \d ", c["componentData"]["name"])]
 
-    # Remove old static ENV-1 widgets
-    items[:] = [c for c in items if not c["componentData"]["name"].startswith("Env 1 ")]
+    # 1. The selector strip exists on the first tab only, as the source 98_play_expanded.py takes the strip of the Play page's expanded editor from
+    #    (it moves the cells out of the tab: no Env tab keeps a selector, the hardware sub-tab names the envelope).
+    if first:
+        _append_selector(ctx, items, selector_index, gate)
+
+    # 2. TARGETS button
+    items.append(_entry(
+        "Env Native Targets", "envNativeTargets",
+        targets_index, "TARGETS",
+        tuple(_ui_style.size('screen.env_native.apply.rect')), [gate],
+    ))
+
+    # 3. The field controls
+    for field, (caption, rect, kind) in enumerate(CELLS):
+        if caption in ("Beats", "Retrig"):
+            kind = "envNativeBeatsSwitch" if caption == "Beats" else "envNativeRetrigSwitch"
+        items.append(_entry(f"Env Native {caption}", kind, values + field, caption, rect, [gate]))
+    tab["qlinkBoundsData"] = []
+
+
+def apply(tui, qlinks, ctx):
+    """Install native ENV controls on every Env sub-tab. Idempotent: a second invocation adds nothing."""
+    if not ctx.meta or ctx.meta.get("variant") != "overlay":
+        return
+    present = {t["name"] for t in ctx.meta["tabs"]}
+    names = [n for n in handles.ENV_TAB_NAMES if n in present]
+    if not names:
+        return
 
     base = handles.mixer_peek_index(ctx.param_count)
     gate = f"NonZero/Parameter {base + handles.ENV_VIEW}"
+    values = base + handles.ENV_FIELDS
 
     # Get existing definitions
     definitions = {
@@ -269,70 +293,43 @@ def apply(tui, qlinks, ctx):
         for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     }
 
-    # 1. Selector
-    _append_selector(ctx, items, base + handles.ENV_SELECTION, gate)
+    if "envNativeTargets" not in definitions:
+        _build_targets_definition(ctx, 160, 56)
 
-    # 2. TARGETS button
-    _build_targets_definition(ctx, 160, 56)
-    items.append(_entry(
-        "Env Native Targets", "envNativeTargets",
-        base + handles.ENV_TARGETS, "TARGETS",
-        tuple(_ui_style.size('screen.env_native.apply.rect')), [gate],
-    ))
+        # Dial definitions (ADSR+Delay+Hold unipolar, curves bipolar)
+        bipolar_data = pan_dial_data(ctx.skins_dir, frame_size=_ui_style.size('screen.env_native.data.frame_size'))
+        _build_dial_definitions(ctx, definitions, bipolar_data)
 
-    # 3. Dial definitions (ADSR+Delay+Hold unipolar, curves bipolar)
-    bipolar_data = pan_dial_data(ctx.skins_dir, frame_size=_ui_style.size('screen.env_native.data.frame_size'))
-    _build_dial_definitions(ctx, definitions, bipolar_data)
+        # Switch definitions (BEATS/RETRIG via ActiveText)
+        beats_on, beats_off = _write_active_text_assets(
+            ctx.skins_dir, text="BEATS", width=_ui_style.size('screen.env_native.apply.width'), height=_ui_style.size('screen.env_native.apply.height'),
+            on_name="env_beats_on.png", off_name="env_beats_off.png",
+        )
+        retrig_on, retrig_off = _write_active_text_assets(
+            ctx.skins_dir, text="RETRIG", width=_ui_style.size('screen.env_native.apply.width.2'), height=_ui_style.size('screen.env_native.apply.height'),
+            on_name="env_retrig_on.png", off_name="env_retrig_off.png",
+        )
+        beats_def = active_text_definition(
+            "envNativeBeatsSwitch", beats_on, beats_off, tuple(_ui_style.size('screen.env_native.beats_def.size')),
+            handle="Data",
+        )
+        beats_def["ignoreMousePresses"] = True
+        ctx.add_component_definition("envNativeBeatsSwitch", beats_def)
+        retrig_def = active_text_definition(
+            "envNativeRetrigSwitch", retrig_on, retrig_off, tuple(_ui_style.size('screen.env_native.retrig_def.size')),
+            handle="Data",
+        )
+        retrig_def["ignoreMousePresses"] = True
+        ctx.add_component_definition("envNativeRetrigSwitch", retrig_def)
 
-    # 4. Switch definitions (BEATS/RETRIG via ActiveText)
-    # 5. Create envNativeBeatsSwitch and envNativeRetrigSwitch definitions
-    beats_on, beats_off = _write_active_text_assets(
-        ctx.skins_dir, text="BEATS", width=_ui_style.size('screen.env_native.apply.width'), height=_ui_style.size('screen.env_native.apply.height'),
-        on_name="env_beats_on.png", off_name="env_beats_off.png",
-    )
-    retrig_on, retrig_off = _write_active_text_assets(
-        ctx.skins_dir, text="RETRIG", width=_ui_style.size('screen.env_native.apply.width.2'), height=_ui_style.size('screen.env_native.apply.height'),
-        on_name="env_retrig_on.png", off_name="env_retrig_off.png",
-    )
+        # State strings
+        strings = tui["pageData"].setdefault("replacementStrings", [])
+        keys_present = {s.get("key") for s in strings}
+        for field_offset, choices in ((9, ["MS", "BEATS"]), (10, ["OFF", "ON"])):
+            key = f"Parameter {values + field_offset}"
+            if key not in keys_present:
+                strings.append({"key": key, "value": choices})
 
-    beats_def = active_text_definition(
-        "envNativeBeatsSwitch", beats_on, beats_off, tuple(_ui_style.size('screen.env_native.beats_def.size')),
-        handle="Data",
-
-    )
-    beats_def["ignoreMousePresses"] = True
-    ctx.add_component_definition("envNativeBeatsSwitch", beats_def)
-
-    retrig_def = active_text_definition(
-        "envNativeRetrigSwitch", retrig_on, retrig_off, tuple(_ui_style.size('screen.env_native.retrig_def.size')),
-        handle="Data",
-
-    )
-    retrig_def["ignoreMousePresses"] = True
-    ctx.add_component_definition("envNativeRetrigSwitch", retrig_def)
-
-    # 6. Add all field controls
-    values = base + handles.ENV_FIELDS
-    for field, (caption, rect, kind) in enumerate(CELLS):
-        if caption in ("Beats", "Retrig"):
-            # Use the specific switch type for each
-            switch_type = "envNativeBeatsSwitch" if caption == "Beats" else "envNativeRetrigSwitch"
-            items.append(_entry(
-                f"Env Native {caption}", switch_type,
-                values + field, caption, rect, [gate],
-            ))
-        else:
-            items.append(_entry(
-                f"Env Native {caption}", kind,
-                values + field, caption, rect, [gate],
-            ))
-
-    # 7. State strings
-    strings = tui["pageData"].setdefault("replacementStrings", [])
-    keys_present = {s.get("key") for s in strings}
-    for field_offset, choices in ((9, ["MS", "BEATS"]), (10, ["OFF", "ON"])):
-        key = f"Parameter {values + field_offset}"
-        if key not in keys_present:
-            strings.append({"key": key, "value": choices})
-
-    tab["qlinkBoundsData"] = []
+    bindings = (gate, base + handles.ENV_SELECTION, base + handles.ENV_TARGETS, values)
+    for index, name in enumerate(names):
+        _install_tab(ctx, ctx.tab(name), bindings, index == 0)

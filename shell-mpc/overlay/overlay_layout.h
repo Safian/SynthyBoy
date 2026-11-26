@@ -20,7 +20,7 @@ constexpr int kInstanceSteps = 32;   // the parameter's value of frame f is f / 
 constexpr unsigned kInstanceSlotRgb[kMaxInstances] = { 0x1414d8, 0x3e14d8, 0x6814d8, 0x9214d8, 0x143ed8, 0x3e3ed8, 0x683ed8, 0x923ed8, 0x1468d8, 0x3e68d8, 0x6868d8, 0x9268d8, 0x1492d8, 0x3e92d8, 0x6892d8, 0x9292d8 };
 constexpr unsigned kInstanceNoneRgb = 0xc814d8;    // frame 17: an instance without a slot
 constexpr unsigned kInstanceBlankRgb = 0x14c8d8;   // frame 0 (nothing reported yet) and the frames after 17
-constexpr int kNumViews = 15;
+constexpr int kNumViews = 20;
 constexpr View kViews[kNumViews] = {
     { "play1", 5, 1, { 23, 110, 1234, 204 }, true, { { { 33, 111, 6, 6 }, 0x723a2c, 0x1e1d1e }, { { 1241, 111, 6, 6 }, 0x3a7264, 0x1e1d1e } }, { 45, 111, 6, 6 } },   // tab "Play"
     { "macros", 10, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x6b3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a6b64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Macros"
@@ -30,6 +30,11 @@ constexpr View kViews[kNumViews] = {
     { "oscsub", 15, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xbf3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3abf64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Sub"
     { "oscnoise", 15, 5, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xc63a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3ac664, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Noise"
     { "env1", 13, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x4f3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a4f64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env"
+    { "env2", 13, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x105a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x5a1064, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 2"
+    { "env3", 13, 3, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x175a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x5a1764, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 3"
+    { "env4", 13, 4, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x1e5a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x5a1e64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 4"
+    { "env5", 13, 5, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x255a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x5a2564, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 5"
+    { "env6", 13, 6, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x2c5a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x5a2c64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 6"
     { "lfo1", 14, 1, { 0, 110, 1280, 628 }, true, { { { 33, 111, 6, 6 }, 0x1e3a2c, 0x1e1d1e }, { { 1241, 111, 6, 6 }, 0x3a1e64, 0x1e1d1e } }, { 45, 111, 6, 6 } },   // tab "LFO"
     { "fx", 8, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x8e3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8e64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "FX"
     { "mixer", 7, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x873a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8764, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Mixer"

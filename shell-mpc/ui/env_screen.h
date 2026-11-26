@@ -30,54 +30,6 @@ inline uint32_t envColour (int n) noexcept
 }
 
 // ===============================================================================================================================================================
-/** EnvSelector: the six buttons ENV 1 .. 6, a PictogramSelector (the same touch rules: a tap on a cell, turn steps) that is drawn in the colours of the envelopes: the current one outlined in its own colour,
-    an envelope that has modulation targets marked with a small filled dot. */
-class EnvSelector : public PictogramSelector
-{
-public:
-    uint8_t targetMask_ = 0;
-
-    void setTargetMask (uint8_t m) noexcept { targetMask_ = m; }
-    uint8_t targetMask() const noexcept { return targetMask_; }
-    bool hasTargets (int i) const noexcept { return i >= 0 && i < kNumEnvs && (targetMask_ & (1u << i)) != 0; }
-
-    EnvSelector()
-    {
-        for (int i = 0; i < kNumEnvs; ++i)
-        {
-            char t[8];
-            std::snprintf (t, sizeof t, "ENV %d", i + 1);
-            setItem (i, -1, t);
-        }
-    }
-
-    /** The cells are as wide as the label "ENV n" at the size it is drawn in needs (at least 56). */
-    Size minSize() const override
-    {
-        const int w = std::max (56, static_cast<int> (std::ceil (Pen::textWidth ("ENV 6", theme::L().fLabel + 2.0f))) + 14);
-        return vertical() ? Size { w, std::max (1, count()) * kCellH } : Size { std::max (1, count()) * w, kCellH };
-    }
-
-protected:
-    void drawBody (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        for (int i = 0; i < count(); ++i)
-        {
-            const Rect c = cell (i).inset (2);
-            const bool cur = i == state.index;
-            const uint32_t col = envColour (i);
-            p.control (c, false, cur);
-            if (cur)
-                p.rrect (c, T.rControl, p.c (col, 255), 1.8f);
-            if (hasTargets (i))
-                p.disc (static_cast<float> (c.x + c.w / 2), static_cast<float> (c.bottom() - 7), 2.5f, p.c (col, 255));
-            p.textCentered ({ c.x + 2, c.y + 2, std::max (0, c.w - 4), std::max (0, c.h - 8) }, state.items[i].label, T.fLabel + 2.0f, p.c (cur ? T.text : T.textDim, 255), T.fMin);
-        }
-    }
-};
-
-// ===============================================================================================================================================================
 /** EnvCarousel: the selector of the envelope in the compact view, the same component as the LFO's and the oscillator's (a Carousel: the current entry in the middle, the neighbours at its sides, a tap on a neighbour steps, a tap on the
     name opens the list of ENV 1 .. 6), with what the six tabs showed: a small dot in the colour of the envelope beside the name (and a smaller one beside the neighbour's) when the envelope has modulation targets (`setTargetMask`:
     bit n = envelope n + 1). The list rows carry the same dots (ListPopup::State::dotMask). */
@@ -249,8 +201,8 @@ public:
     /** The skin draws and handles taps on the instance cells; the overlay retains wheel navigation. */
     void setNativeInstanceSelector (bool native = true)
     {
-        nativeSelector_ = native;
-        show (selector, ! native);
+        nativeSelector_ = native && ! pageMode_;   // the page of a tab has no selector at all
+        show (selector, ! native && ! pageMode_);
     }
     bool nativeInstanceSelector() const noexcept { return nativeSelector_; }
 
@@ -326,6 +278,8 @@ public:
     /** Bounding box of the instance selector. */
     Rect selectorArea() const noexcept
     {
+        if (pageMode_)
+            return {};   // no selector on the page of a tab
         return nativeSelector_ ? selector.rect() : Rect::unite (caption_, selector.rect());
     }
 
@@ -433,7 +387,8 @@ public:
         active_ = i >= 0 && i < kMaxGroups ? i : -1;
     }
     Change turnQ (int knobIndex, double delta) { return active_ >= 0 ? groups[active_].turn (knobIndex, delta) : Change::none(); }
-    /** The page of its own tab (the plugin draws the whole tab): there is nothing to close, the selector takes the place of CLOSE. */
+    /** The page of its own tab (the plugin draws the whole tab): there is nothing to close and no selector (the hardware sub-tab Env 1 .. Env 6 names the envelope: one tab page = one screen); the caption "ENV n" stands where
+        the selector was and the tags of the targets take the width the selector had. */
     void setPageMode (bool page)
     {
         pageMode_ = page;
@@ -441,10 +396,16 @@ public:
         setNativeADSR (page);
         setNativeShape (page);
         setNativeTime (page);
-        setNativeInstanceSelector (page);
+        setNativeInstanceSelector (false);
+        show (selector, ! page);
         setNativeTargets (page);
         if (rect_.w > 0)
             layout();
+    }
+    /** The envelope the page names (1 .. 6) in its caption. */
+    void setPageCaption (int env) noexcept
+    {
+        std::snprintf (caption_text_, sizeof caption_text_, "ENV %d", env);
     }
     /** The selector shows more or fewer cells than the last layout assumed (the owner filled it): the top bar is laid out again (the selector takes the width of its cells, the tags the rest). */
     void syncSelectorLayout()
@@ -487,7 +448,7 @@ public:
     void drawFixedLabels (Pen& p) const
     {
         const theme::Look& T = theme::L();
-        p.textLeft (caption_, "ENV", T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.textLeft (caption_, pageMode_ && caption_text_[0] != '\0' ? caption_text_ : "ENV", T.fLabel + 2.0f, p.c (pageMode_ ? T.text : T.textDim, 255), T.fMin);
         for (int i = 0; i < kMaxGroups; ++i)
         {
             p.textLeft ({ blocks_[i].x + KnobPanel::kBlockPad + 4, blocks_[i].y + 3, std::max (0, blocks_[i].w - 16), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
@@ -578,8 +539,10 @@ protected:
         close.place ({ nativePlayEditor_ ? rect_.x + 58 : r[0].x, top.y + (top.h - 56) / 2, r[0].w, 56 });
         laidCells_ = selector.numCells();
         caption_ = nativePlayEditor_ ? Rect {} : Rect { r[1].x, top.y + (top.h - 56) / 2, kCaptionW, 56 };
-        const int selW = std::min (std::max (0, r[1].w - kCaptionW), std::max (1, laidCells_) * kSelectorCellW);
-        selector.place ({ r[1].x + kCaptionW, top.y + (top.h - 56) / 2, selW, 56 });
+        const int captionW = pageMode_ ? kPageCaptionW : kCaptionW;
+        caption_.w = nativePlayEditor_ ? 0 : captionW;
+        const int selW = pageMode_ ? 0 : std::min (std::max (0, r[1].w - kCaptionW), std::max (1, laidCells_) * kSelectorCellW);
+        selector.place ({ r[1].x + (pageMode_ ? captionW : kCaptionW), top.y + (top.h - 56) / 2, selW, 56 });
         targets.place ({ r[2].x, top.y + (top.h - 56) / 2, pageMode_ || nativePlayEditor_ ? 160 : r[2].w, 56 });
         const int selRight = selector.rect().right();
         tags_ = { selRight + 16, top.y + (top.h - 56) / 2, std::max (0, targets.rect().x - 12 - (selRight + 16)), 56 };
@@ -632,7 +595,8 @@ protected:
         drawFixedLabels (p);
         drawLiveLabels (p);
     }
-    static constexpr int kBlockGap = 8, kCaptionW = 56, kSelectorCellW = 88;
+    static constexpr int kBlockGap = 8, kCaptionW = 56, kPageCaptionW = 96, kSelectorCellW = 88;
+    char caption_text_[8] = {};
     Rect blocks_[kMaxGroups], tags_, caption_;
     int laidCells_ = 0;
     int active_ = -1;

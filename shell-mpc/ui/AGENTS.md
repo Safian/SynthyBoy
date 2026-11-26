@@ -137,7 +137,7 @@ DetailPage | panel.h | back + display + panel in Q groups | R per part
 OscillatorCompact | screen.h | third of the Play page | I R V
 OscillatorFullScreen | screen.h | full oscillator page | I R V M
 EnvGraph | env_graph.h | DAHDSR graph with handles | V R
-EnvCarousel / EnvSelector | env_screen.h | envelope 1..6 selector (carousel with target dots) / cells | I R
+EnvCarousel | env_screen.h | envelope 1..6 selector of the Play page (carousel with target dots) | I R
 TypeSelector | base.h | PictogramSelector that can be a drop-down (type of an oscillator) | I R
 EnvCompact / EnvFullScreen | env_screen.h | envelope views | V I R
 FilterDisplay | filter_display.h | response + cutoff/reso handle, formant pad | V (x, then y by takePending)

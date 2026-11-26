@@ -61,6 +61,41 @@
       ]
     },
     {
+      "name": "Env 2",
+      "fn": "Env",
+      "kick": [
+        "env2"
+      ]
+    },
+    {
+      "name": "Env 3",
+      "fn": "Env",
+      "kick": [
+        "env3"
+      ]
+    },
+    {
+      "name": "Env 4",
+      "fn": "Env",
+      "kick": [
+        "env4"
+      ]
+    },
+    {
+      "name": "Env 5",
+      "fn": "Env",
+      "kick": [
+        "env5"
+      ]
+    },
+    {
+      "name": "Env 6",
+      "fn": "Env",
+      "kick": [
+        "env6"
+      ]
+    },
+    {
       "name": "LFO",
       "fn": "LFO",
       "kick": [

@@ -1,15 +1,17 @@
 # UI Map: Envelope Page (`envui`)
 Refreshed 2026-11-23 against the three full-screen Q groups and the compact Play controls.
 
+> **Update 2026-11-26 (one tab page = one screen).** The Env key has SIX sub-tabs again: `Env`, `Env 2` .. `Env 6` (views `env1` .. `env6` of `shell-mpc/overlay/overlay_layout.json`, the view's `index` is the envelope). The page has NO selector: `EnvUi::update` takes the envelope from `page::Input::instance` (`shownEnv`), nothing of it is shared with the Play page (`Play Env` is neither read nor written by the tab, and leaving the tab does not fall back to another envelope); the Q-Link virtual selector of the SHAPE block and the native selector cells of the tab are gone, the top bar shows the caption `ENV n` where the selector was and the tags take its width. The Play page keeps its carousel and the expanded editor its selector strip (`Play Expanded Envelope Selector`). The text below that speaks of the tab's selector describes the Play expansion.
+>
 > **Update 2026-11-21 (bold cut, step 2; `docs/ui-map/env-lfo-bold-cut/README.md`).** ONE tab `Env`. The selector is `ui::UsedSelector` ("used + one free": ENV 1 always, the used envelopes, the selected one, one `+`), the selection is `Play Env` (shared with the Play page, chunk saved), choosing writes nothing, the Q-Links and the graph follow the selected envelope. The LEGATO switch is labelled RETRIG now (Questionable 2 below: ON restarts the envelope on a legato note) and the dead `T::Field` path (Questionable 1) is deleted. 13 controls, 3 Q groups. The text below describes the page before the merge where it names the six fixed cells or the four tabs.
 
 ## Purpose
 
 The Envelope page provides comprehensive configuration and real-time visualization of the DAHDSR modulation envelopes (Delay, Attack, Hold, Decay, Sustain, Release, and curvature) in SynthyBoy.
-In the overlay layout (`shell-mpc/overlay/overlay_layout.json:268-390`), the page kind `envui` defines ONE tab since 2026-11-21: `env1` (tab "Env"); the former tabs Env 2 - 4 are gone, the six envelopes are chosen with the selector of the page.
+In the overlay layout (`shell-mpc/overlay/overlay_layout.json:268-390`), the page kind `envui` defines SIX tabs since 2026-11-26: `env1` .. `env6` (tabs "Env", "Env 2" .. "Env 6", the sub-tabs of the function key Env); the hardware sub-tab chooses the envelope.
 Each tab instantiates `PageView<EnvUi>` via `pages::make()` (`shell-mpc/overlay/pages.h:35, 65`), configuring `EnvUi` in full-screen tab mode (`shell-mpc/overlay/env_ui.h:127-136`).
 
-On the standalone tab the host owns the eleven scalar cells, the used/free selector and TARGETS. The active envelope and MS/BEATS choice determine the scalar bindings. Double tap a dial or press Enter while it has focus to open the MPC numeric editor. A stationary long press opens the overlay modulation detail for that dial. TARGETS shows the currently selected envelope’s routed destination count and opens the overlay’s grouped routing editor. Both overlay details hide the native cells while open. The curve and its running dots stay with the overlay.
+On the standalone tab the host owns the eleven scalar cells and TARGETS. The active envelope and MS/BEATS choice determine the scalar bindings. Double tap a dial or press Enter while it has focus to open the MPC numeric editor. A stationary long press opens the overlay modulation detail for that dial. TARGETS shows the currently selected envelope’s routed destination count and opens the overlay’s grouped routing editor. Both overlay details hide the native cells while open. The curve and its running dots stay with the overlay.
 
 The same underlying `EnvUi` implementation powers the compact envelope panel occupying the middle third of the Play tab (`shell-mpc/overlay/play_view.h:490-496`, `shell-mpc/overlay/env_ui.h:73, 82`), whose expand button opens the same full-screen view (`shell-mpc/overlay/env_ui.h:344, 850`).
 
@@ -28,7 +30,7 @@ The overlay operates on a 1280 x 800 display, occupying the primary tab area fro
 
 ```
 +----------------------------------------------------------------------------------------------------+ y=110
-| ENV [ 1 ][ 2 ][ 5 ][ + ]   Destination tags                                          [TARGETS 2] | Top bar (page mode; CLOSE only in the full screen over the Play page)
+| ENV n   Destination tags                                                     [TARGETS 2] | Top bar (page mode; CLOSE only in the full screen over the Play page)
 +----------------------------------------------------------------------------------------------------+ y=182
 | [LOCKED]                                                                                           |
 |                                                                                                    |

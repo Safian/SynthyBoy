@@ -15,11 +15,241 @@
   ],
   "env1": [
     {
-      "text": "ENV",
+      "text": "ENV 1",
       "rect": [
         12,
         27,
+        60,
+        26
+      ],
+      "size": 17,
+      "colour": "text.caption"
+    },
+    {
+      "text": "ADSR",
+      "rect": [
+        18,
+        445,
         35,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        478,
+        445,
+        42,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        825,
+        445,
+        32,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "env2": [
+    {
+      "text": "ENV 2",
+      "rect": [
+        12,
+        27,
+        60,
+        26
+      ],
+      "size": 17,
+      "colour": "text.caption"
+    },
+    {
+      "text": "ADSR",
+      "rect": [
+        18,
+        445,
+        35,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        478,
+        445,
+        42,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        825,
+        445,
+        32,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "env3": [
+    {
+      "text": "ENV 3",
+      "rect": [
+        12,
+        27,
+        60,
+        26
+      ],
+      "size": 17,
+      "colour": "text.caption"
+    },
+    {
+      "text": "ADSR",
+      "rect": [
+        18,
+        445,
+        35,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        478,
+        445,
+        42,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        825,
+        445,
+        32,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "env4": [
+    {
+      "text": "ENV 4",
+      "rect": [
+        12,
+        27,
+        60,
+        26
+      ],
+      "size": 17,
+      "colour": "text.caption"
+    },
+    {
+      "text": "ADSR",
+      "rect": [
+        18,
+        445,
+        35,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        478,
+        445,
+        42,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        825,
+        445,
+        32,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "env5": [
+    {
+      "text": "ENV 5",
+      "rect": [
+        12,
+        27,
+        60,
+        26
+      ],
+      "size": 17,
+      "colour": "text.caption"
+    },
+    {
+      "text": "ADSR",
+      "rect": [
+        18,
+        445,
+        35,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        478,
+        445,
+        42,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        825,
+        445,
+        32,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "env6": [
+    {
+      "text": "ENV 6",
+      "rect": [
+        12,
+        27,
+        60,
         26
       ],
       "size": 17,

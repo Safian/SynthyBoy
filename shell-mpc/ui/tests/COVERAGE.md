@@ -229,18 +229,6 @@ For each component class, it records what it does in one line, its public behavi
 | **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | `ui_env_host.cpp`: "eight touch targets of at least 56 x 56" |
 | **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | `ui_env_host.cpp`: "envelope graph scene fits ops" |
 
-### 23. `EnvSelector` (env_screen.h)
-**Description**: Envelopes 1..6 tab selector with active target presence indicators
-
-| Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
-| :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
-| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
-| **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
-| **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
-| **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | not tested |
-| **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | not tested |
-
 ### 24. `EnvCompact` (env_screen.h)
 **Description**: Compact overview panel for an envelope instance with mini graph and key parameters
 

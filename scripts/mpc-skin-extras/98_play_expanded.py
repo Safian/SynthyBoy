@@ -10,7 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
-from native_ui_params import ENV_VIEW, LFO_OFFSET, PLAY_EXPANDED, PLAY_EXPANDED_CLOSE, mixer_peek_index
+from native_ui_params import ENV_TAB_NAMES, ENV_VIEW, LFO_OFFSET, PLAY_EXPANDED, PLAY_EXPANDED_CLOSE, mixer_peek_index
 
 
 def _entry(name, kind, rect, data, gate=None, focus="Children", caption=None):
@@ -74,18 +74,25 @@ def apply(tui, qlinks, ctx):
                                   (0, 0, 1280, 628), view, f"RangedEnabling/1/2/7/{view}"))
         _close(play, (1148, 116, 120, 56), 1, close, view, "Oscillator")
 
-    if "Env" in names:
-        env = ctx.tab("Env")
+    env_names = [n for n in ENV_TAB_NAMES if n in names]
+    if env_names:
+        env = ctx.tab(env_names[0])
         env_view = f"Parameter {base + ENV_VIEW}"
         selector = "envNativeSelectorStrip"
         fields = "envNativeFullFields"
         root_selector = lambda c: c["componentData"]["type"] == "envNativeSelectorCell"
-        first = _extract(ctx, env, selector, root_selector, origin=(68, 12))
-        _components(env).insert(first, _entry("Env Native Selector Strip", selector, (68, 12, 528, 56), env_view))
+        # The selector strip belongs to the Play page's expanded editor only: the Env sub-tabs have none (the hardware sub-tab names the envelope)
+        _extract(ctx, env, selector, root_selector, origin=(68, 12))
         first = _extract(ctx, env, fields,
                          lambda c: c["componentData"]["name"].startswith("Env Native ")
                          and c["componentData"]["type"] != selector)
         _components(env).insert(first, _entry("Env Native Full Controls", fields, (0, 0, 1280, 628), env_view))
+        for other in env_names[1:]:
+            tab = ctx.tab(other)
+            items = _components(tab)
+            at = next(i for i, c in enumerate(items) if c["componentData"]["name"].startswith("Env Native "))
+            items[:] = [c for c in items if not c["componentData"]["name"].startswith("Env Native ")]
+            items.insert(at, _entry("Env Native Full Controls", fields, (0, 0, 1280, 628), env_view))
         gate = f"IndexedEnabling/3/7/{view}"
         _insert_play(play, _entry("Play Expanded Envelope Controls", fields, (0, 0, 1280, 628), env_view, gate))
         _insert_play(play, _entry("Play Expanded Envelope Selector", selector, (164, 12, 528, 56), env_view, gate))

@@ -131,7 +131,7 @@ class NoFallbackTests(unittest.TestCase):
 
     def test_each_tab_contains_its_detection_pictures_and_configured_background(self):
         tabs = self.tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 15)
+        self.assertEqual(len(tabs), 20)
         views = {v["tab"]: v for v in self.layout["views"]}
         labels = {p["name"]: p.get("label", p["name"]) for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"]}
         for name, view in views.items():
@@ -150,7 +150,7 @@ class NoFallbackTests(unittest.TestCase):
                         "Env Native Targets", "Env Native Delay", "Env Native Hold", "Env Native Beats", "Env Native Retrig"},
                 "Filter": {"Filter Native Editor Surface", "Filter Native NOTE", "Filter Native VELO",
                            "Filter Native PZ Toolbar F1", "Filter Native PZ Toolbar F2"},
-            }.get(name, set())
+            }.get("Env" if name.startswith("Env ") else name, set())   # every Env sub-tab carries the same native controls
             actual_names = {c["componentData"]["name"] for c in items}
             native_names = {c["componentData"]["name"] for c in items if is_native_component(c)}
             self.assertEqual((set(expected) | required_native) - actual_names, set(), name)
@@ -235,9 +235,9 @@ class NoFallbackTests(unittest.TestCase):
         for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
             check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2833",))
 
-    def test_the_q_proxies_are_on_all_15_tabs(self):
+    def test_the_q_proxies_are_on_all_20_tabs(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
-        self.assertEqual(len(self.qlinks), 15)
+        self.assertEqual(len(self.qlinks), 20)
         for entry in self.qlinks:
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(16)], entry)
             self.assertEqual(entry["Bank Direction"], "Row")
@@ -443,7 +443,8 @@ class NoFallbackTests(unittest.TestCase):
             name = "Play Expanded " + label
             entry = play[name]
             self.assertEqual(entry["componentData"]["type"], kind)
-            self.assertEqual(len([c for c in tabs[tab] if c["componentData"]["type"] == kind]), 1)
+            # the selector strip belongs to the Play page's expanded editor only: no Env sub-tab has one (the hardware sub-tab names the envelope)
+            self.assertEqual(len([c for c in tabs[tab] if c["componentData"]["type"] == kind]), 0 if kind == "envNativeSelectorStrip" else 1)
             self.assertEqual(entry["bounds"]["bounds"], rect)
             self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], [f"{gate}/7/Parameter 3537"])
             self.assertLess(list(play).index(name), first_marker)
@@ -505,7 +506,10 @@ class NoFallbackTests(unittest.TestCase):
                 for tab in self.tui["pageData"]["tabs"]}
         definitions = {d["key"]: d["value"]
                        for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        cells = [c for c in tabs["Env"] if c["componentData"]["type"] == "envNativeSelectorCell"]
+        self.assertEqual([c for name in ("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6") for c in tabs[name] if c["componentData"]["type"] == "envNativeSelectorCell"], [],
+                         "the Env sub-tabs have no selector cells: the hardware sub-tab names the envelope")
+        # the cells live in the strip of the Play page's expanded envelope editor (origin 68, 12)
+        cells = definitions["envNativeSelectorStrip"]["componentsData"]
         self.assertEqual(len(cells), 6)
         definition = definitions["envNativeSelectorCell"]
         children = definition["componentsData"]
@@ -532,7 +536,7 @@ class NoFallbackTests(unittest.TestCase):
         self.assertEqual(len(buttons), 6)
         frame_base = len(self.params) + 82 + 21   # append only, after the entire Mixer block
         for slot, cell in enumerate(cells):
-            self.assertEqual(cell["bounds"]["bounds"], f"{68 + 88 * slot} 12 88 56")
+            self.assertEqual(cell["bounds"]["bounds"], f"{88 * slot} 0 88 56")
             remap = {item["key"]: item["value"] for item in cell["handle remapping"]["map"]}
             frame_handle = f"Parameter {frame_base + slot}"
             self.assertEqual(remap["Data"], "Parameter 2941")

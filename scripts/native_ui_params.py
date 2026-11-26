@@ -31,7 +31,8 @@ MOD_ROWS = MOD_VIEW + 1
 MOD_FIELDS = MOD_ROWS + MOD_WINDOW_ROWS
 ENV_VIEW = MOD_FIELDS + MOD_WINDOW_ROWS * MOD_ROW_FIELDS + MOD_DETAIL_FIELDS
 ENV_FIELDS = ENV_VIEW + 1
-ENV_SELECTION, ENV_TARGETS = ENV_FIELDS + 11, ENV_FIELDS + 12
+ENV_SELECTION, ENV_TARGETS = ENV_FIELDS + 11, ENV_FIELDS + 12   # ENV_SELECTION: the selector strip of the Play page's expanded envelope editor only (the Env tabs have none)
+ENV_TAB_NAMES = ("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6")   # the hardware sub-tabs of the Env key: tab n shows envelope n (one tab page = one screen)
 PLAY_LFO_STANDARD = ENV_TARGETS + 1
 MOD_NAVIGATION = PLAY_LFO_STANDARD + 1
 MOD_NAV_HEADER_FIELDS, MOD_NAV_ROW_FIELDS = 4, 3

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SURFACES = {
     "Play": "playOscSelector", "Macros": "macroCard", "Osc": "oscNativeSurface",
     "Osc B": "oscNativeSurface", "Osc C": "oscNativeSurface", "Sub": "oscNativeSurface",
-    "Noise": "oscNativeSurface", "Env": "envNativeFullFields", "LFO": "lfoNativeFullEditor",
+    "Noise": "oscNativeSurface", **dict.fromkeys(("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6"), "envNativeFullFields"), "LFO": "lfoNativeFullEditor",
     "FX": "fxNativeEditorSurface", "Mix": "mixerStripSourceFrame", "Filter": "filterNativeEditorSurface",
     "Mod": "modNativeRowNormal", "Master": "masterNativeOutputMeters", "Voice": "voiceNativeStepLevel",
 }

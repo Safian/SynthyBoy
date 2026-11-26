@@ -35,9 +35,9 @@ def layout_doc(path):
 class LayoutFileTests(unittest.TestCase):
     """The layout files themselves (no SDK needed)."""
 
-    def test_default_layout_has_15_tabs(self):
+    def test_default_layout_has_20_tabs(self):
         doc = layout_doc(DEFAULT_LAYOUT)
-        self.assertEqual(len(doc["pages"]), 15)
+        self.assertEqual(len(doc["pages"]), 20)
 
     def test_function_keys_follow_each_other_and_have_at_most_8_sub_tabs(self):
         for path in LAYOUTS:
@@ -172,7 +172,7 @@ class SubTabSkinTests(unittest.TestCase):
 
     def test_tab_count(self):
         counts = {name: len(tabs) for name, tabs, _ in self.each()}
-        self.assertEqual(counts["mpc-ui-pages-overlay.json"], 15)
+        self.assertEqual(counts["mpc-ui-pages-overlay.json"], 20)
         for name, n in counts.items():
             self.assertEqual(n, len(layout_doc(ROOT / "scripts" / "overlay-skin" / name)["pages"]), name)
 

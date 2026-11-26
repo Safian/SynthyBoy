@@ -69,14 +69,16 @@ class UiScreenEnvTest(unittest.TestCase):
         self.assertEqual(bg["unfocussed"].get("image"), "overlay_canvas.png")
 
     def test_selector_strip_and_cells(self):
-        """Selector must provide 6 instances with >= 56px touch targets."""
+        """The Env tabs have no selector (the hardware sub-tab names the envelope); the Play page's expanded editor keeps its 6 cells with >= 56px touch targets."""
         defs = self.local_defs()
-        tab = self.tab()
-        items = tab["componentDefinition"]["componentsData"]
-        selector_strip = next((c for c in items if c["componentData"]["name"] == "Env Native Selector Strip"), None)
-        self.assertIsNotNone(selector_strip, "Env Native Selector Strip must be present on Env tab")
+        for name in ("Env", "Env 2", "Env 3", "Env 4", "Env 5", "Env 6"):
+            tab = next(t for t in self.tui["pageData"]["tabs"] if t.get("tabName") == name)
+            self.assertFalse([c for c in tab["componentDefinition"]["componentsData"] if "Selector" in c["componentData"]["name"]], name)
+        play = next(t for t in self.tui["pageData"]["tabs"] if t.get("tabName") == "Play")
+        selector_strip = next((c for c in play["componentDefinition"]["componentsData"] if c["componentData"]["name"] == "Play Expanded Envelope Selector"), None)
+        self.assertIsNotNone(selector_strip, "the expanded Play envelope editor keeps its selector strip")
         rect = [int(v) for v in selector_strip["bounds"]["bounds"].split()]
-        self.assertEqual(rect, [68, 12, 528, 56])
+        self.assertEqual(rect, [164, 12, 528, 56])
 
         # Verify packed child cells
         strip_def = defs.get(selector_strip["componentData"]["type"])

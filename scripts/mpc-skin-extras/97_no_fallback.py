@@ -16,6 +16,7 @@ _SCRIPTS = _HERE.parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from native_ui_params import ENV_TAB_NAMES
 from native_voice.voice_tab import VOICE_NATIVE_CONTROL_NAMES
 from native_master.master_controls import MASTER_CONTROL_NAMES
 
@@ -47,7 +48,7 @@ def _keep_component(tab, component):
         return True
     if tab.get("tabName") == "Macros":
         return False  # 99_ui_screen_macros installs the eight complete MacroCards.
-    if tab.get("tabName") == "Env" and name.startswith("Env Native "):
+    if tab.get("tabName") in ENV_TAB_NAMES and name.startswith("Env Native "):
         return True
     if tab.get("tabName") == "LFO" and name.startswith("LFO 1 Native "):
         return True

@@ -340,6 +340,191 @@
       }
     },
     {
+      "name": "env2",
+      "kind": "envui",
+      "index": 2,
+      "tab": "Env 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "105a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a1064",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env3",
+      "kind": "envui",
+      "index": 3,
+      "tab": "Env 3",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "175a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a1764",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env4",
+      "kind": "envui",
+      "index": 4,
+      "tab": "Env 4",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "1e5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a1e64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env5",
+      "kind": "envui",
+      "index": 5,
+      "tab": "Env 5",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "255a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a2564",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env6",
+      "kind": "envui",
+      "index": 6,
+      "tab": "Env 6",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "2c5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a2c64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
       "name": "lfo1",
       "kind": "lfoui",
       "index": 1,
