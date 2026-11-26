@@ -737,7 +737,9 @@ def _apply_native_editor(tui, tab, ctx):
         if not 0 <= slot < min(FX_CELL_COUNT, rows * 4):
             raise ValueError(f"FX cell {slot} is outside layout {layout}")
         row_h = (style.size("fx.apply_native_editor.row_h.620") - top) // rows
-        rect = _side_cell_rect(top, side, row, col) if side and side[0] else (style.size("fx.apply_native_editor.rect.8") + style.size("fx.apply_native_editor.rect.318") * col, top + style.size("fx.apply_native_editor.rect.16") + row_h * row, style.size("fx.apply_native_editor.rect.310"), max(style.size("fx.apply_native_editor.rect.72"), row_h - style.size("fx.apply_native_editor.rect.16")))
+        # a stacked cell stands at the top of its row, at most cell_max_h high (shell-mpc/native_fx_cells.h fxStackedCellH)
+        cell_h = min(max(style.size("fx.apply_native_editor.rect.72"), row_h - style.size("fx.apply_native_editor.rect.16")), manifest["cell_max_h"])
+        rect = _side_cell_rect(top, side, row, col) if side and side[0] else (style.size("fx.apply_native_editor.rect.8") + style.size("fx.apply_native_editor.rect.318") * col, top + style.size("fx.apply_native_editor.rect.16") + row_h * row, style.size("fx.apply_native_editor.rect.310"), cell_h)
         target = base + FX_VALUE_OFFSET + slot
         focus = True
         if kind in scalars:
@@ -817,7 +819,7 @@ def _apply_native_editor(tui, tab, ctx):
             dock_top = top - style.size("fx.apply_native_editor.dock_top.64") if top >= style.size("fx.apply_native_editor.dock_top.344") else top
             row_h = (docked_bottom - dock_top) // rows
             cell_top = dock_top + style.size("fx.apply_native_editor.cell_top.16") + row_h * row
-            cell_h = min(max(style.size("fx.apply_native_editor.cell_h.72"), row_h - style.size("fx.apply_native_editor.cell_h.16")), max(style.size("fx.apply_native_editor.cell_h.56"), docked_bottom - cell_top))
+            cell_h = min(max(style.size("fx.apply_native_editor.cell_h.72"), row_h - style.size("fx.apply_native_editor.cell_h.16")), max(style.size("fx.apply_native_editor.cell_h.56"), docked_bottom - cell_top), manifest["cell_max_h"])
             dock_cell_rects[f"FX Cell {layout_id}.{slot + 1}.{cell_kind}"] = (
                 8 + 318 * col, cell_top, 310, cell_h
             )

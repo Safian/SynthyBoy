@@ -136,7 +136,7 @@ inline auto widgets (bool& consistent)
                                     consistent = false;
                             }
                             else if (rect.x != 8 + 318 * col || rect.w != 310
-                                || rect.y != 110 + g.top + 16 + row * rowH || rect.h != std::max (72, rowH - 16))
+                                || rect.y != 110 + g.top + 16 + row * rowH || rect.h != nativeui::fxStackedCellH (rowH))
                                 consistent = false;
                             if (! nativeui::fxCellProxy (widget))
                             {
@@ -229,7 +229,7 @@ inline bool exportManifest ()
     const auto headers = headerRects (consistent);
     if (! consistent)
         return false;
-    std::printf ("{\n  \"kind_last\": %d,\n  \"layouts\": [", nativeui::kFxKindLast);
+    std::printf ("{\n  \"kind_last\": %d,\n  \"cell_max_h\": %d,\n  \"layouts\": [", nativeui::kFxKindLast, nativeui::kFxCellMaxH);
     for (int i = 0; i < nativeui::kFxLayoutLast; ++i)
     {
         const auto& g = nativeui::kFxLayouts[i];

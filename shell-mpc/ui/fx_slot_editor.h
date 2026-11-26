@@ -274,7 +274,7 @@ public:
         const int gapX = 8, cellW = (knobArea_.w - 3 * gapX) / 4;
         const int rowH = knobArea_.h / std::max (1, rowsPerPage());
         const int x = knobArea_.x + col * (cellW + gapX);
-        return { x, knobArea_.y + row * rowH + kQLane, col == 3 ? knobArea_.right() - x : cellW, std::max (72, rowH - kQLane) };
+        return { x, knobArea_.y + row * rowH + kQLane, col == 3 ? knobArea_.right() - x : cellW, nativeui::fxStackedCellH (rowH) };
     }
 
     Size minSize() const override { return { 1200, 400 }; }

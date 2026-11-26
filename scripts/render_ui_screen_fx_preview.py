@@ -33,6 +33,7 @@ STATES = {
     "filter-main": (6, 0, 0), "filter-tone": (6, 1, 0), "filter-formant-tone": (6, 1, 1),
     "flanger": (7, 0, 0), "phaser": (8, 0, 0), "hyperdim": (10, 0, 0), "utility": (11, 0, 0),
     "bode": (12, 0, 0), "convolve": (13, 0, 0),
+    "compressor-main-gen1": (2, 0, 0), "delay-main-gen1": (3, 0, 0),   # the Key 61 look: the Q frames of the side layout's 2 x 2 blocks
 }
 
 

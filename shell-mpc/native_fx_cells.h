@@ -21,6 +21,10 @@ struct FxLayout
     int lines[4] = {};
 };
 constexpr int kFxSideX = 644, kFxSideStride = 318, kFxSideLane = 16, kFxSideLine = 72, kFxSideCellW = 310;
+/** The height of a cell of a STACKED layout of rows `rowH` apart: the row under its 16 px Q lane, at least 72 and at most kFxCellMaxH px (FX screen review 2026-11-26: a page of one or two rows
+    no longer stretches a switch into a box of 190 px; the rows keep their pitch, the cell stands at the top of its row). The skin reads the cap from the contract ("cell_max_h"). */
+constexpr int kFxCellMaxH = 104;
+constexpr int fxStackedCellH (int rowH) noexcept { return rowH - kFxSideLane < 72 ? 72 : (rowH - kFxSideLane > kFxCellMaxH ? kFxCellMaxH : rowH - kFxSideLane); }
 /** Tab y of the first cell line of `row` of a side layout. */
 constexpr int fxSideRowY (const FxLayout& g, int row) noexcept
 {

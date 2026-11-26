@@ -1,5 +1,6 @@
 {
   "kind_last": 51,
+  "cell_max_h": 104,
   "layouts": [[208, 2], [208, 4], [404, 2], [360, 2], [344, 2], [344, 3], [390, 1], [424, 2], [208, 3], [272, 2], [272, 3], [408, 2], [424, 3], [272, 1], [208, 3, 1, 2, 2, 1, 0], [208, 2, 1, 2, 2, 0, 0], [272, 2, 1, 2, 2, 0, 0], [272, 2, 1, 2, 1, 0, 0], [272, 2, 1, 1, 1, 0, 0], [272, 1, 1, 2, 0, 0, 0], [408, 1]],
   "domains": [
     ["Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF", "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream", "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF", "Normal", "Multi Morph", "Flanges", "Misc", "New"],

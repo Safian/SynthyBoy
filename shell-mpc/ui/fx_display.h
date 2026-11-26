@@ -1,8 +1,10 @@
 // SynthyBoy - MPC UI component library: the FX DISPLAY component (FxDisplay): the picture of what an effect does, drawn from the parameters of the selected slot with thin smooth lines:
-//   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass: the textbook biquads of the settings), with a dot at the centre of each band
-//   COMPRESSOR  the transfer curve (input level to output level) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): below the lower
-//               threshold the lower ratio, between the thresholds 1 : 1, above the upper threshold the upper ratio, and the make-up gain of the band
-//   DELAY       the echoes in time: the two taps (left above the line, right under it), the repeats with the feedback, the time axis in milliseconds (a tempo sync is turned into milliseconds by the owner)
+//   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass) as the engine's equalizer makes it in either law (state variable or
+//               cookbook biquads, with the engine's Q of the resonance; ui_fx_editor_host compares it with the engine's impulse response), with a dot at the centre of each band
+//   COMPRESSOR  the transfer curve (the peak level of a steady tone in, out) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): the
+//               upward stage under the lower threshold, the downward stage above the upper one (Limit: the ceiling), the make-up gain and the mix, as the engine's gain computer sets them
+//   DELAY       the echoes of a click in time (left above the line, right under it) by the network of the engine's style, with the offsets of the two times, the time axis in milliseconds (a tempo sync is
+//               turned into milliseconds by the owner)
 //   FX FILTER   the response of the filter (the owner computes it with the engine's own filter, the same as the filter page), a line with a faint fill
 //   DISTORTION  the transfer curve of the waveshaper (the type and the drive) over the whole plot, with the grid, the scales, the identity as a reference and the present signal level as a dot
 // The other effects (and the splitters, whose page shows the racks of their bands instead: fx_band_board.h) have no display (the editor gives their knobs the room). Same contract as every component (core.h): a state in, no touch.
