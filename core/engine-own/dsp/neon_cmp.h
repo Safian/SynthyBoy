@@ -115,6 +115,31 @@ inline uint32x4_t absGeConstFinite (float32x4_t x, float c) noexcept
     const uint32_t lo = bitsOf (c);
     return vcltq_u32 (vsubq_u32 (vandq_u32 (vreinterpretq_u32_f32 (x), vdupq_n_u32 (kAbsMask)), vdupq_n_u32 (lo)), vdupq_n_u32 (kInfBits - lo));
 }
+/** x < 0 (the IEEE compare, for every bit pattern): a negative number that is not -0 and not a NaN, a negative subnormal included. The bits of such an x, unsigned, lie in
+    [0x80000001, bits (-infinity)]; one subtraction turns the range into a single unsigned compare. Mode note: in flush-to-zero mode the float compare takes a negative subnormal for
+    -0 (false); this form is true there as in IEEE mode, so a site must not depend on a subnormal operand (each site says why it does not). */
+inline uint32x4_t ltZero (float32x4_t x) noexcept
+{
+    return vcleq_u32 (vsubq_u32 (vreinterpretq_u32_f32 (x), vdupq_n_u32 (0x80000001u)), vdupq_n_u32 ((0x80000000u | kInfBits) - 0x80000001u));
+}
+/** x < float (i) for i = vcvtq_s32_f32 (x), the truncation of x (saturating at +-2^31, a NaN gives 0): the correction of a floor made from the truncation. True exactly where x is
+    negative (ltZero) and not equal to its truncation (the bits differ: both are finite or the saturated +-2^31 of an infinity or a larger x), so it is the IEEE compare for every
+    bit pattern x (a NaN, -0, +0, every positive x and every integer-valued x give false; a negative subnormal gives true, see ltZero). */
+inline uint32x4_t belowTruncation (float32x4_t x, int32x4_t i) noexcept
+{
+    return vbicq_u32 (ltZero (x), vceqq_u32 (vreinterpretq_u32_f32 (x), vreinterpretq_u32_f32 (vcvtq_f32_s32 (i))));
+}
+/** Domain of gtNonNeg / geNonNeg: a +0, a normal number with the sign bit clear or +infinity (not -0, not negative, not a NaN, not a subnormal). All ones where it holds. For
+    such operands the float order is the unsigned integer order of the bits, in IEEE and in flush-to-zero mode alike. */
+inline uint32x4_t nonNegNormalOrZero (float32x4_t x) noexcept
+{
+    const uint32x4_t u = vreinterpretq_u32_f32 (x);
+    return vorrq_u32 (vcleq_u32 (vsubq_u32 (u, vdupq_n_u32 (0x00800000u)), vdupq_n_u32 (kInfBits - 0x00800000u)), vceqq_u32 (u, vdupq_n_u32 (0u)));
+}
+/** a > b / a >= b on the bits, for operands that all satisfy nonNegNormalOrZero () (the caller tests that and sends anything else to the scalar compare): the same masks as the float
+    compares in IEEE and in flush-to-zero mode. Outside that domain they are NOT the float compares (a negative number, -0, a NaN and a subnormal compare differently). */
+inline uint32x4_t gtNonNeg (float32x4_t a, float32x4_t b) noexcept { return vcgtq_u32 (vreinterpretq_u32_f32 (a), vreinterpretq_u32_f32 (b)); }
+inline uint32x4_t geNonNeg (float32x4_t a, float32x4_t b) noexcept { return vcgeq_u32 (vreinterpretq_u32_f32 (a), vreinterpretq_u32_f32 (b)); }
 inline int32x4_t orderKey (float32x4_t x) noexcept
 {
     const int32x4_t b = vreinterpretq_s32_f32 (x);

@@ -152,7 +152,6 @@
 - [ ] 4. Warp előtti sávhatár `3.2 * sampleRate` 4x túlmintavételezésnél. Szúrópróba: a szám megvan (`wt_osc.h:672`), de a 2–3,2 fs közti összetevők a hallható sáv fölé tükröződnek és a decimáló kiszűri őket; csak a nemlineáris warpok keverhetik vissza. Feltevés, mérés dönti el.
 - [ ] 5. Kemény nemlinearitások és hard sync csak túlmintavételezésre támaszkodnak (a „low" szinten 2x), és mintánként `libm` hívások futnak (`core/engine-own/osc/warp.h`): ADAA / BLEP és polinomos közelítés.
 - [ ] 9. Mintánkénti `pow` / `tan` / trigonometria és osztás a szűrők belső ciklusában (`core/engine-own/voice/filter_unit.h`, `core/filters-serum/src/filter_dsp.h`, `filter.cpp`, `classic_filters.h`).
-- [ ] 11. Nyers NEON lebegőpontos összehasonlítások maradtak (`wt_osc.h`, `core/spectral/src/kernels.cpp`), ARMv7-en skalárra esnek vissza.
 - [ ] 12. Spektrális morph: teljes 2048 pontos komplex IFFT a fél méretű valós helyett, magas hangoknál is.
 - [ ] 16. A szűrő vágási frekvenciája lineáris Hz-ben simít 5,5 ms-mal: elkeni a gyors szűrőburkolót.
 - [ ] 17. (maradék) Granulár hurok-átúsztatás, szélső esetek (`docs/review/GRANULAR-LOOP-CROSSFADE-ANALYSIS-2026-11-20.md`, Q6): ha a hurokhatár a fájl szélétől 1–2 mintán belül van, az interpoláció a fájlon kívüli (nulla) mintát is érinti; ha se a hurok előtt, se utána nincs elég anyag, az átúsztatás a rendelkezésre álló hosszra rövidül, teljes fájlos huroknál megszűnik. Eldöntendő, kell-e ezekre külön megoldás (pl. körbeforduló olvasás).

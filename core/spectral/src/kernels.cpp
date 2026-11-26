@@ -12,6 +12,7 @@
 
 #if SB_SPECTRAL_NEON
  #include <arm_neon.h>
+ #include "../../engine-own/dsp/neon_cmp.h"   // the float compares of the vector forms as integer compares of the bit patterns (a float compare is scalar code per lane on 32 bit ARM)
 #endif
 
 // The scalar and the vector forms must compute the same bits: no fused multiply-add in either, on any compiler / CPU (AArch64 always has it and GCC / clang contract by default).
@@ -264,7 +265,9 @@ inline void sincosN (const float32x4_t* x, float32x4_t* rs, float32x4_t* rc) noe
     uint32x4_t swap[U], negS[U], negC[U];
     const int32x4_t one = vdupq_n_s32 (1);
     const uint32x4_t sign = vdupq_n_u32 (0x80000000u);
-    for (int u = 0; u < U; ++u) half[u] = vbslq_f32 (vcltq_f32 (x[u], vdupq_n_f32 (0.0f)), vdupq_n_f32 (-0.5f), vdupq_n_f32 (0.5f));
+    // a < 0 as the integer compare (neoncmp::ltZero, the IEEE compare for every bit pattern). Where a is a subnormal (or zero) the choice of the sign of the half does not matter: a * 2/pi
+    // + 0.5 and + -0.5 both round to +-0.5, which converts to j = 0, so the flush-to-zero and the IEEE compare give the same j and the same bits.
+    for (int u = 0; u < U; ++u) half[u] = vbslq_f32 (neoncmp::ltZero (x[u]), vdupq_n_f32 (-0.5f), vdupq_n_f32 (0.5f));
     for (int u = 0; u < U; ++u) j[u] = vcvtq_s32_f32 (vaddq_f32 (vmulq_f32 (x[u], vdupq_n_f32 (kTwoOverPi)), half[u]));
     for (int u = 0; u < U; ++u) y[u] = vcvtq_f32_s32 (j[u]);
     for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (x[u], vmulq_f32 (y[u], vdupq_n_f32 (kC1)));
@@ -291,11 +294,13 @@ inline void sincosN (const float32x4_t* x, float32x4_t* rs, float32x4_t* rc) noe
 template <int U>
 inline void wrapN (const float32x4_t* x, float32x4_t* out) noexcept
 {
-    const float32x4_t hundred = vdupq_n_f32 (100.0f), two = vdupq_n_f32 (kTwoPiF), zero = vdupq_n_f32 (0.0f);
+    const float32x4_t two = vdupq_n_f32 (kTwoPiF);
     float32x4_t ax[U], nf[U], r[U], r1[U], t2[U], u3[U], s[U], bb[U], e[U], w[U], bw[U], e2[U];
     uint32x4_t wrapIt[U];
     for (int u = 0; u < U; ++u) ax[u] = vabsq_f32 (x[u]);
-    for (int u = 0; u < U; ++u) wrapIt[u] = vcgtq_f32 (ax[u], hundred);
+    // the compares of this function are the integer forms of dsp/neon_cmp.h (the IEEE compares for every bit pattern, the constants are normal numbers). The two against zero (r < 0, x < 0)
+    // see no subnormal operand where their result is used: a selected lane has |x| > 100, and its remainder r is an exact multiple of the ulp of |x| (at least 2^-17), or zero.
+    for (int u = 0; u < U; ++u) wrapIt[u] = neoncmp::gtConst (ax[u], 100.0f);
     for (int u = 0; u < U; ++u) nf[u] = vcvtq_f32_s32 (vcvtq_s32_f32 (vmulq_f32 (ax[u], vdupq_n_f32 (kInvTwoPiLow))));
     for (int u = 0; u < U; ++u) r1[u] = vsubq_f32 (ax[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW1)));
     for (int u = 0; u < U; ++u) t2[u] = vmulq_f32 (nf[u], vdupq_n_f32 (kW2));
@@ -307,10 +312,10 @@ inline void wrapN (const float32x4_t* x, float32x4_t* out) noexcept
     for (int u = 0; u < U; ++u) bw[u] = vsubq_f32 (w[u], s[u]);
     for (int u = 0; u < U; ++u) e2[u] = vaddq_f32 (vsubq_f32 (s[u], vsubq_f32 (w[u], bw[u])), vsubq_f32 (vnegq_f32 (u3[u]), bw[u]));
     for (int u = 0; u < U; ++u) r[u] = vaddq_f32 (w[u], vaddq_f32 (e2[u], e[u]));
-    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcgeq_f32 (r[u], two), vsubq_f32 (r[u], two), r[u]);
-    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcltq_f32 (r[u], zero), vaddq_f32 (r[u], two), r[u]);
-    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcgtq_f32 (r[u], vdupq_n_f32 (kPiF)), vsubq_f32 (r[u], two), r[u]);
-    for (int u = 0; u < U; ++u) out[u] = vbslq_f32 (wrapIt[u], vbslq_f32 (vcltq_f32 (x[u], zero), vnegq_f32 (r[u]), r[u]), x[u]);
+    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (neoncmp::geConst (r[u], kTwoPiF), vsubq_f32 (r[u], two), r[u]);
+    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (neoncmp::ltZero (r[u]), vaddq_f32 (r[u], two), r[u]);
+    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (neoncmp::gtConst (r[u], kPiF), vsubq_f32 (r[u], two), r[u]);
+    for (int u = 0; u < U; ++u) out[u] = vbslq_f32 (wrapIt[u], vbslq_f32 (neoncmp::ltZero (x[u]), vnegq_f32 (r[u]), r[u]), x[u]);
 }
 } // namespace
 #endif
@@ -533,11 +538,11 @@ void gainClamp (float* out, const float* in, float gain, int n, bool neon) noexc
 #if SB_SPECTRAL_NEON
     if (neon)
     {
-        const float32x4_t vg = vdupq_n_f32 (gain), vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f), vinf = vdupq_n_f32 (std::numeric_limits<float>::infinity());
+        const float32x4_t vg = vdupq_n_f32 (gain), vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f);
         for (; i + 4 <= n; i += 4)
         {
             const float32x4_t x = vmulq_f32 (vld1q_f32 (in + i), vg);
-            const uint32x4_t finite = vcltq_f32 (vabsq_f32 (x), vinf);   // false for infinity and NaN
+            const uint32x4_t finite = neoncmp::absLt (x, std::numeric_limits<float>::infinity());   // |x| < infinity on the bit patterns: false for infinity and NaN, true for every finite x
             const float32x4_t c = vminq_f32 (vmaxq_f32 (x, vlo), vhi);
             vst1q_f32 (out + i, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (c), finite)));
         }
@@ -645,9 +650,14 @@ float maxBins (const float* a, int n, bool neon) noexcept
 #if SB_SPECTRAL_NEON
     if (neon && n >= 4)
     {
+        // vmaxq_f32 returns a NaN where one operand is a NaN, std::max (top, a) keeps top: a NaN lane is masked to +0 first (neoncmp::absLe on the bits: |x| <= infinity is false for a
+        // NaN), so a NaN does not change the maximum, as in the scalar loop (top starts at 0, so a +0 is neutral).
         float32x4_t v = vdupq_n_f32 (0.0f);
         for (; k + 4 <= n; k += 4)
-            v = vmaxq_f32 (v, vld1q_f32 (a + k));
+        {
+            const float32x4_t x = vld1q_f32 (a + k);
+            v = vmaxq_f32 (v, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (x), neoncmp::absLe (x, std::numeric_limits<float>::infinity()))));
+        }
         const float32x2_t m = vpmax_f32 (vget_low_f32 (v), vget_high_f32 (v));
         top = std::max (vget_lane_f32 (m, 0), vget_lane_f32 (m, 1));
     }
@@ -659,6 +669,17 @@ float maxBins (const float* a, int n, bool neon) noexcept
     return top;
 }
 
+namespace
+{
+/** A magnitude of the domain of neoncmp::gtNonNeg (): +0, a normal number with the sign bit clear, or +infinity (the scalar form of neoncmp::nonNegNormalOrZero). */
+inline bool plainMagnitude (float x) noexcept
+{
+    uint32_t u;
+    std::memcpy (&u, &x, 4);
+    return u == 0u || u - 0x00800000u <= 0x7f800000u - 0x00800000u;
+}
+} // namespace
+
 int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool neon) noexcept
 {
     const float threshold = 1.0e-5f * top;
@@ -669,12 +690,17 @@ int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool 
     {
         // pass 1: one flag byte (1 or 0) per bin, sixteen bins per iteration, nothing moved to the ARM registers; pass 2: the flags are read in order and the index appended without a branch (a
         // compare and branch per bin of the plain loop mispredicts at every peak: a recorded sample has one every third bin or so)
+        // The three compares are the integer compares of the bit patterns (neoncmp::gtNonNeg / geNonNeg: a float compare is scalar code per lane on 32 bit ARM), which equal the float compares
+        // for magnitudes that are +0, normal numbers or +infinity: the same in IEEE and in flush-to-zero mode. A magnitude outside that domain (negative, -0, a NaN, a subnormal) anywhere
+        // in the bins the vector loop reads, or in the threshold, sends the whole call to the scalar loop below, which is the reference: the same peaks for every input.
         uint8_t flags[1056];
         const float32x4_t vth = vdupq_n_f32 (threshold);
+        uint32x4_t inDomain = vdupq_n_u32 (0xffffffffu);
         const auto mask4 = [&] (int at)
         {
             const float32x4_t c = vld1q_f32 (m + at), p = vld1q_f32 (m + at - 1), q = vld1q_f32 (m + at + 1);
-            return vandq_u32 (vandq_u32 (vcgtq_f32 (c, p), vcgeq_f32 (c, q)), vcgtq_f32 (c, vth));
+            inDomain = vandq_u32 (inDomain, neoncmp::nonNegNormalOrZero (c));   // every bin read as p or q is read as c too, except m[0] and the bin after the last block (tested below)
+            return vandq_u32 (vandq_u32 (neoncmp::gtNonNeg (c, p), neoncmp::geNonNeg (c, q)), neoncmp::gtNonNeg (c, vth));
         };
         int at = 1;
         for (; at + 16 <= n - 1; at += 16)
@@ -683,14 +709,19 @@ int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool 
             const uint16x8_t hi = vcombine_u16 (vmovn_u32 (mask4 (at + 8)), vmovn_u32 (mask4 (at + 12)));
             vst1q_u8 (flags + at, vshrq_n_u8 (vcombine_u8 (vmovn_u16 (lo), vmovn_u16 (hi)), 7));
         }
-        for (int j = at; j < n - 1; ++j)
-            flags[j] = (m[j] > m[j - 1] && m[j] >= m[j + 1] && m[j] > threshold) ? 1 : 0;
-        for (int j = 1; j < n - 1 && count < maxPeaks; ++j)
+        const uint32x2_t both = vand_u32 (vget_low_u32 (inDomain), vget_high_u32 (inDomain));
+        const bool plain = (vget_lane_u32 (both, 0) & vget_lane_u32 (both, 1)) == 0xffffffffu && plainMagnitude (threshold) && (at == 1 || (plainMagnitude (m[0]) && plainMagnitude (m[at])));
+        if (plain)
         {
-            peaks[count] = j;
-            count += flags[j];
+            for (int j = at; j < n - 1; ++j)
+                flags[j] = (m[j] > m[j - 1] && m[j] >= m[j + 1] && m[j] > threshold) ? 1 : 0;
+            for (int j = 1; j < n - 1 && count < maxPeaks; ++j)
+            {
+                peaks[count] = j;
+                count += flags[j];
+            }
+            return count;
         }
-        return count;
     }
 #else
     (void) neon;
@@ -713,7 +744,25 @@ void placeRegion (const float* mag, const float* freq, const float* theta, float
         for (; k + 3 <= to; k += 4)
         {
             const float32x4_t mv = vld1q_f32 (mag + k), ov = vld1q_f32 (om + k + offset);
-            const uint32x4_t above = vcgtq_f32 (mv, ov);
+            // mag > om on the bit patterns (neoncmp::gtNonNeg: a float compare is scalar code per lane on 32 bit ARM), exact for magnitudes that are +0, normal or +infinity (IEEE and
+            // flush-to-zero mode alike). Four bins with anything else (negative, -0, a NaN, a subnormal) go through the scalar compare below: the same result for every input.
+            const uint32x4_t plain = vandq_u32 (neoncmp::nonNegNormalOrZero (mv), neoncmp::nonNegNormalOrZero (ov));
+            const uint32x2_t plain2 = vand_u32 (vget_low_u32 (plain), vget_high_u32 (plain));
+            if ((vget_lane_u32 (plain2, 0) & vget_lane_u32 (plain2, 1)) != 0xffffffffu)
+            {
+                for (int i = 0; i < 4; ++i)
+                {
+                    const int j = k + i + offset;
+                    if (mag[k + i] > om[j])
+                    {
+                        om[j] = mag[k + i];
+                        of[j] = freq[k + i] * r + shiftRad;
+                        oth[j] = theta[k + i];
+                    }
+                }
+                continue;
+            }
+            const uint32x4_t above = neoncmp::gtNonNeg (mv, ov);
             vst1q_f32 (om + k + offset, vbslq_f32 (above, mv, ov));
             vst1q_f32 (of + k + offset, vbslq_f32 (above, vaddq_f32 (vmulq_f32 (vld1q_f32 (freq + k), vr), vs), vld1q_f32 (of + k + offset)));
             vst1q_f32 (oth + k + offset, vbslq_f32 (above, vld1q_f32 (theta + k), vld1q_f32 (oth + k + offset)));
