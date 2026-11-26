@@ -18,6 +18,7 @@
 #include "../osc/lib_osc.h"
 #include "../osc/wt_osc.h"
 #include "own_content.h"
+#include "filter_setup.h"
 #include "filter_unit.h"
 #include "param_index.h"
 
@@ -60,6 +61,8 @@ struct TickGlobals
     bool scalarContent = false;              // measurements (kOwnSavingContentKernels): the library oscillators run their reference code, not the block kernels
     bool scalarFilters = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): no pair kernels in the voice filters
     bool referenceControl = false;           // measurements (setOwnSavingsOff, kOwnSavingVoiceControl): the control code of the voice as it was before the caches of CPU-REVIEW-VOICE-MOD.md
+    bool lfoDisplaySkip = false;             // an LFO that no slot reads is evaluated (shape, smoothing) only in the newest voice, the one the display reads; the others only advance its clock (off: every voice evaluates it)
+    uint32_t newestSerial = 0;               // the largest serial of the active voices (OwnEngine::controlTick), with lfoDisplaySkip
     uint32_t economy = 0;                    // the economy groups in force (EconomyFlags of quality.h); the three tiers: all at low, none at medium / high
     MorphCache* morphCache = nullptr;        // the engine's cache of morph cycles (may be null)
     float killSeconds = 0.05f;               // the fade of a voice that was stolen (Kill mode); tier low: OwnEngine::setLowTierKillFade
@@ -103,6 +106,15 @@ struct MixOut
     float (*meterL)[kControlPeriod] = nullptr;
     float (*meterR)[kControlPeriod] = nullptr;
 };
+
+/** The field groups of Voice::OscPart (V7): every field of the part of an oscillator is a function of the keys of its own group alone, so a period in which a slot touched a key re-reads
+    only the groups of that key (and of the keys touched in the period before, which fall back to their knob). */
+enum OscField : uint32_t { kOfRoute = 1u << 0, kOfWt = 1u << 1, kOfPitch = 1u << 2, kOfFrame = 1u << 3, kOfLevel = 1u << 4, kOfUni = 1u << 5, kOfWarp = 1u << 6, kOfMorph = 1u << 7, kOfLib = 1u << 8,
+                           kOfAll = (1u << 9) - 1u };
+
+/** Per parameter index, the OscField groups its value reaches: 0 for a key of an oscillator that the part does not read (the period reads it itself), kOfAll for a key of an oscillator
+    that no group claims (a key added later without a group refreshes everything instead of nothing). Built once (Voice::prepare); the test walks it. */
+const uint16_t* oscFieldMasks() noexcept;
 
 class Voice
 {
@@ -211,7 +223,9 @@ private:
     }
     float modulatedSlow (int idx, float base, float delta) const noexcept;
     void clearMod() noexcept;
-    float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;
+    /** `advanceOnly`: the clock, the age and the display position of the LFO move as usual, the shape and the smoothing are not evaluated (the output is not made: lfoSkipped remembers it, and the
+        next evaluation starts the smoothing at the value instead of at the stale state). */
+    float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1, bool advanceOnly = false) noexcept;
     float lfoValueReference (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;   // as before the settings cache (TickGlobals::referenceControl)
     /** What an LFO derives from its keys, the tempo, the voice control and the sample rate (CPU-REVIEW-VOICE-MOD.md V3): kept per voice and LFO while those are the same and no slot touched a
         key of the LFO (the key follow rate, sync 4, reads the pitch of the voice and is computed every time from the kept keys). */
@@ -231,6 +245,7 @@ private:
         const LfoCore* monoCore = nullptr;
     };
     LfoSettings lfoSet[10];
+    uint16_t lfoSkipped = 0;   // bit l: the output and the smoothing of LFO l were not evaluated in a period since they were last (lfoDisplaySkip)
     /** The same for a random LFO: its keys and the rate (except the key follow rate). */
     struct RlfoSettings
     {
@@ -257,9 +272,11 @@ private:
         bool libValid = false;
         bool ok = false;
         uint32_t epoch = 0;
+        uint32_t modFields = 0;   // the field groups (OscField) that hold a value read with a modulation delta; the others hold the knob (the delta of the next period must revert them)
     };
     OscPart oscPart[3];
-    void fillOscPart (int o, OscPart& op) noexcept;
+    /** Reads the field groups `fields` (OscField bits) of the part of oscillator o: each field is a function of the keys of its own group alone (CPU-REVIEW-VOICE-MOD.md V7, refresh by group). */
+    void fillOscPart (int o, OscPart& op, uint32_t fields) noexcept;
     /** The same for the sub oscillator (its keys alone). */
     struct SubPart
     {
@@ -388,6 +405,9 @@ private:
     bool filtEnv1[2] = { true, true };
     int filtDest[2] = { 0, 0 };
     float filtLevel[2] = { 1.0f, 1.0f }, filtLevelPrev[2] = { 1.0f, 1.0f };
+    FilterSetupMemo filtMemo[2];        // the exp2 results of fillFilterSettings () of each filter (the reference calls them every period)
+    uint32_t lvlKey[2] = { 0, 0 };      // the bit pattern of filterN.level (dB) that lvlGain belongs to: dbToGain (+0) = 1
+    float lvlGain[2] = { 1.0f, 1.0f };
     int routing = 0;
     float envStart = 0.0f;
     float ampPrev = 0.0f, ampCur = 0.0f, velGain = 1.0f, velGainPrev = 1.0f;

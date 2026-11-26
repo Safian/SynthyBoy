@@ -318,8 +318,11 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
     const int i = findParamIndex (id);
     if (i < 0 || std::isnan (plain))
         return;
-    storeParamAt (i, plain);
-    paramGen.fetch_add (1u, std::memory_order_release);
+    const bool changed = storeParamAt (i, plain);
+    // a write of the value the parameter already holds (the host and the display repeat values) needs no new snapshot: the generation moves only for a changed bit pattern
+    // (kOwnSavingParamDiff off: as before, every write moves it)
+    if (changed || (savingsOff.load (std::memory_order_relaxed) & kOwnSavingParamDiff) != 0)
+        paramGen.fetch_add (1u, std::memory_order_release);
 }
 
 void OwnEngine::setPresetParams (const ParamValues& values) noexcept
@@ -331,9 +334,14 @@ void OwnEngine::setPresetParams (const ParamValues& values) noexcept
     paramGen.fetch_add (1u, std::memory_order_release);
 }
 
-void OwnEngine::storeParamAt (int i, float plain) noexcept
+bool OwnEngine::storeParamAt (int i, float plain) noexcept
 {
     const float v = constrainValue (paramTable()[i], plain);
+    const float held = params[static_cast<size_t> (i)].load (std::memory_order_relaxed);
+    uint32_t newBits, heldBits;
+    std::memcpy (&newBits, &v, sizeof newBits);
+    std::memcpy (&heldBits, &held, sizeof heldBits);
+    const bool changed = newBits != heldBits; // the bit pattern, as the snapshot compares: -0 and +0 are different values
     params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
     for (int k = 0; k < 6; ++k)
         if (wtParamIdx[k] == i)
@@ -361,6 +369,7 @@ void OwnEngine::storeParamAt (int i, float plain) noexcept
             }
             break;
         }
+    return changed;
 }
 
 float OwnEngine::getParam (uint32_t id) const noexcept
@@ -639,6 +648,8 @@ void OwnEngine::clearLatencyDelays() noexcept
 
 void OwnEngine::reset()
 {
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
+    readoutIdle = false;
     for (int ch = 0; ch < 2; ++ch)
         for (int s = 0; s < LiveValues::kMaxStrips; ++s)
         {
@@ -842,16 +853,34 @@ void OwnEngine::addGhosts (int n) noexcept
         if (!g.used)
             continue;
         const float inv = 1.0f / static_cast<float> (g.total);
+        // the gain of each sample is the same for the four buses: made once (the same expression of the same values), not once per bus (the reference, kOwnSavingVoiceControl, makes it per bus)
+        float gains[kControlPeriod];
+        bool gainsMade = false;
         for (int t = 0; t < 4; ++t)
         {
             const float l = g.v[t][0], r = g.v[t][1];
             if (l == 0.0f && r == 0.0f)
                 continue;
+            if (globals.referenceControl)
+            {
+                for (int k = 0; k < n; ++k)
+                {
+                    const float gain = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
+                    mixL[t][k] += l * gain;
+                    mixR[t][k] += r * gain;
+                }
+                continue;
+            }
+            if (!gainsMade)
+            {
+                for (int k = 0; k < n; ++k)
+                    gains[k] = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
+                gainsMade = true;
+            }
             for (int k = 0; k < n; ++k)
             {
-                const float gain = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
-                mixL[t][k] += l * gain;
-                mixR[t][k] += r * gain;
+                mixL[t][k] += l * gains[k];
+                mixR[t][k] += r * gains[k];
             }
         }
         g.age += n;
@@ -1341,6 +1370,13 @@ void OwnEngine::controlTick() noexcept
     }
     globals.activeVoices = activeCount.load (std::memory_order_relaxed);
     updateLowestNote();
+    {
+        // the voice the display reads (the newest, as writeReadout and the global modulation find it): the other voices skip what only the display of an unused LFO needs
+        globals.lfoDisplaySkip = !globals.referenceControl && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingLfoDisplay) == 0;
+        uint32_t newestSerial = 0;
+        forEachActive ([&] (int i) { newestSerial = std::max (newestSerial, voices[static_cast<size_t> (i)]->serial()); });
+        globals.newestSerial = newestSerial;
+    }
     forEachActive ([&] (int i) { voices[static_cast<size_t> (i)]->tick (globals, i); });
     // the global modulation (sources that do not belong to a voice) of the global parameters
     for (int i = 0; i < gnumTouched; ++i)
@@ -1515,7 +1551,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     // What the changed parameters can reach (kParamSlot / kParamTuning / kParamVoice, see classifyParams): the matrix is compiled again only when a slot parameter or the content changed,
     // the tuning table only when a tuning parameter or the content changed, the voices drop what they derived from the parameters only when a parameter they can read changed.
     // kOwnSavingParamDiff off (measurements, the bit identity test): everything is rebuilt on every change, as it was before.
-    bool matrixDirty = true, tuningDirty = true, voicesDirty = true;
+    bool matrixDirty = true, tuningDirty = true, voicesDirty = true, noopGeneration = false;
     if (blockDirty)
     {
         const bool full = !snapValid || (savingsOff.load (std::memory_order_relaxed) & kOwnSavingParamDiff) != 0 || paramClass.size() != base.size();
@@ -1527,6 +1563,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         else
         {
             uint8_t changed = 0;
+            bool anyChanged = false;
             for (size_t i = 0; i < base.size(); ++i)
             {
                 const float v = params[i].load (std::memory_order_relaxed);
@@ -1537,30 +1574,43 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 {
                     base[i] = v;
                     changed |= paramClass[i];
+                    anyChanged = true;
                 }
             }
             matrixDirty = contentChanged || content.content != snapContentPtr || (changed & kParamSlot) != 0;
             tuningDirty = contentChanged || (changed & kParamTuning) != 0;
             voicesDirty = contentChanged || (changed & kParamVoice) != 0;
+            // a generation that moved without a value or the content changing (a write of the value a parameter already had, a tuning source that was set again): the snapshot is the one
+            // of the block before, so nothing it feeds is derived again (the FX budget, the idle effect racks, the master gains and the latency plan keep their inputs)
+            noopGeneration = !anyChanged && !contentChanged && content.content == snapContentPtr;
         }
-        matrix.setContent (content.content);
-        statSnapshots.fetch_add (1u, std::memory_order_relaxed);
-        if (matrixDirty)
+        if (noopGeneration)
         {
-            matrix.compile (base.data());
-            statMatrixCompiles.fetch_add (1u, std::memory_order_relaxed);
+            snapGen = gen;
+            blockDirty = false;
+            matrixDirty = tuningDirty = voicesDirty = false;
         }
-        if (contentChanged)
-            morphCache.clear(); // setContent can also replace the user wavetables
-        snapContentPtr = content.content;
-        snapGen = gen;
-        snapContentGen = content.generation;
-        snapValid = true;
-        ++snapEpoch;
-        if (voicesDirty)
+        else
         {
-            ++baseEpoch;
-            statVoiceEpochs.fetch_add (1u, std::memory_order_relaxed);
+            matrix.setContent (content.content);
+            statSnapshots.fetch_add (1u, std::memory_order_relaxed);
+            if (matrixDirty)
+            {
+                matrix.compile (base.data());
+                statMatrixCompiles.fetch_add (1u, std::memory_order_relaxed);
+            }
+            if (contentChanged)
+                morphCache.clear(); // setContent can also replace the user wavetables
+            snapContentPtr = content.content;
+            snapGen = gen;
+            snapContentGen = content.generation;
+            snapValid = true;
+            ++snapEpoch;
+            if (voicesDirty)
+            {
+                ++baseEpoch;
+                statVoiceEpochs.fetch_add (1u, std::memory_order_relaxed);
+            }
         }
     }
     const ParamIndex& pi = paramIndex();
@@ -1869,6 +1919,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 float T = 1.0f;
                 float targetDb = 0.0f;
+                const bool vcgCache = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVcgCache) == 0;
                 if (n_eff <= 1.0f)
                 {
                     T = 1.0f;
@@ -1876,8 +1927,25 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 else
                 {
-                    T = std::pow (n_eff, -alpha);
-                    targetDb = -alpha * (20.0f * std::log10 (n_eff));
+                    // T and targetDb are functions of n_eff and alpha alone, and those are the same period after period while the voices sound: the two libm calls are made when either changed
+                    uint32_t nBits, aBits;
+                    std::memcpy (&nBits, &n_eff, sizeof nBits);
+                    std::memcpy (&aBits, &alpha, sizeof aBits);
+                    if (vcgCache && vcgTargetOk && vcgKeyNeff == nBits && vcgKeyAlpha == aBits)
+                    {
+                        T = vcgT;
+                        targetDb = vcgTargetDb;
+                    }
+                    else
+                    {
+                        T = std::pow (n_eff, -alpha);
+                        targetDb = -alpha * (20.0f * std::log10 (n_eff));
+                        vcgKeyNeff = nBits;
+                        vcgKeyAlpha = aBits;
+                        vcgT = T;
+                        vcgTargetDb = targetDb;
+                        vcgTargetOk = true;
+                    }
                 }
                 if (soundingBefore == 0)
                 {
@@ -1894,7 +1962,18 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                         voiceCountGainDb = std::max (voiceCountGainDb - maxDownDb, targetDb);
                     else if (targetDb > voiceCountGainDb)
                         voiceCountGainDb = std::min (voiceCountGainDb + maxUpDb, targetDb);
-                    voiceCountGainCur = std::pow (10.0f, voiceCountGainDb * 0.05f);
+                    // the third call: the gain of the stepped level, the same value once the level has reached its target
+                    uint32_t dBits;
+                    std::memcpy (&dBits, &voiceCountGainDb, sizeof dBits);
+                    if (vcgCache && vcgGainOk && vcgKeyDb == dBits)
+                        voiceCountGainCur = vcgDbGain;
+                    else
+                    {
+                        voiceCountGainCur = std::pow (10.0f, voiceCountGainDb * 0.05f);
+                        vcgKeyDb = dBits;
+                        vcgDbGain = voiceCountGainCur;
+                        vcgGainOk = true;
+                    }
                 }
                 if (std::fabs (voiceCountGainCur - T) < 1e-6f)
                 {
@@ -2200,9 +2279,62 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     int count = 0;
     forEachActive ([&] (int i) { count += voices[static_cast<size_t> (i)]->killing() ? 0 : 1; }); // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
     activeCount.store (count, std::memory_order_relaxed);
-    publishStats();
-    writeReadout();
+    bool writeNow = true;
+    if ((savingsOff.load (std::memory_order_relaxed) & kOwnSavingReadoutCadence) == 0)
+    {
+        int d = readoutDemand.load (std::memory_order_relaxed);
+        if (d > 0)
+            readoutDemand.compare_exchange_strong (d, d - 1, std::memory_order_relaxed); // (a poll since the load stays whole)
+        else
+            writeNow = false;
+    }
+    if (writeNow)
+    {
+        if (readoutIdle)
+        {
+            // blocks passed without a readout: the meters start again from nothing (their memory would show a peak from before the pause)
+            std::fill (std::begin (stripShown), std::end (stripShown), 0.0f);
+            masterShownL = masterShownR = 0.0f;
+            for (int ch = 0; ch < 2; ++ch)
+                for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+                {
+                    stereoShown[ch][s] = stereoHold[ch][s] = 0.0f;
+                    stereoHoldFrames[ch][s] = stereoClipFrames[ch][s] = 0;
+                }
+        }
+        readoutIdle = false;
+        publishStats();
+        writeReadout();
+    }
+    else
+    {
+        readoutIdle = true;
+        publishMissing();
+    }
     blockCounter.fetch_add (1, std::memory_order_relaxed);
+}
+
+/** The content that no voice needs yet but the patch asks for, as the bits of missingContent (): a user table that is not there, the impulse of Convolve, the sample of the noise source. */
+unsigned OwnEngine::contentAskedFor() const noexcept
+{
+    unsigned miss = 0;
+    const ParamIndex& pi = paramIndex();
+    const ContentSet* cs = globals.content;
+    for (int o = 0; o < 3; ++o)
+        if (base[static_cast<size_t> (pi.osc[o].on)] >= 0.5f && base[static_cast<size_t> (pi.osc[o].type)] < 0.5f
+            && static_cast<int> (base[static_cast<size_t> (pi.osc[o].wavetable)] + 0.5f) == kWavetablePresetTable && (cs == nullptr || cs->userTable[o] == nullptr))
+            miss |= 8u << o;
+    if (convolveOnIndex >= 0 && base[static_cast<size_t> (convolveOnIndex)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
+        miss |= 64u;
+    return miss;
+}
+
+/** missingContent () for the blocks that do not publish the statistics: it is a state of the engine that any caller may read at any time, not a display value. */
+void OwnEngine::publishMissing() noexcept
+{
+    unsigned miss = contentAskedFor();
+    forEachActive ([&] (int i) { miss |= voices[static_cast<size_t> (i)]->missingMask(); });
+    missingMask.store (miss, std::memory_order_relaxed);
 }
 
 /** The snapshot of voiceStats (): the voices, the keys the events say are held, and the bug state: a voice that is not released while its key is not held and the pedal is up. */
@@ -2227,17 +2359,7 @@ void OwnEngine::publishStats() noexcept
         if (!held)
             ++orphans;
     });
-    {
-        // the content that no voice needs yet but the patch asks for: a user table that is not there, the impulse of Convolve, the sample of the noise source
-        const ParamIndex& pi = paramIndex();
-        const ContentSet* cs = globals.content;
-        for (int o = 0; o < 3; ++o)
-            if (base[static_cast<size_t> (pi.osc[o].on)] >= 0.5f && base[static_cast<size_t> (pi.osc[o].type)] < 0.5f
-                && static_cast<int> (base[static_cast<size_t> (pi.osc[o].wavetable)] + 0.5f) == kWavetablePresetTable && (cs == nullptr || cs->userTable[o] == nullptr))
-                miss |= 8u << o;
-        if (convolveOnIndex >= 0 && base[static_cast<size_t> (convolveOnIndex)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
-            miss |= 64u;
-    }
+    miss |= contentAskedFor();
     missingMask.store (miss, std::memory_order_relaxed);
     int lo = -1, hi = -1;
     for (int i = 0; i < numPressed; ++i)
@@ -2259,6 +2381,7 @@ void OwnEngine::publishStats() noexcept
 
 bool OwnEngine::voiceStats (VoiceStats& out) const noexcept
 {
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
     out.active = stIntegers[0].load (std::memory_order_relaxed);
     out.released = stIntegers[1].load (std::memory_order_relaxed);
     out.sustaining = stIntegers[2].load (std::memory_order_relaxed);
@@ -2280,10 +2403,12 @@ void OwnEngine::setReadoutTargets (const int* idx, int count) noexcept
     for (int i = 0; i < n; ++i)
         pendingTargets[i].store (idx[i], std::memory_order_relaxed);
     pendingCount.store (n, std::memory_order_release);
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
 }
 
 bool OwnEngine::copyReadout (LiveValues& out) const noexcept
 {
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
     out.block = blockCounter.load (std::memory_order_relaxed);
     out.activeVoices = activeCount.load (std::memory_order_relaxed);
     for (int i = 0; i < LiveValues::kMaxSources; ++i)
@@ -2429,22 +2554,50 @@ void OwnEngine::writeReadout() noexcept
         liveSampleHead[o].store (newest != nullptr ? newest->sampleHead (o) : -1.0f, std::memory_order_relaxed);
     // the newest active voices (newest first, at most kReadVoices): the read positions of the sample based oscillators, the phase of the sub; the grains of the voice that is heard
     {
+        // the newest kReadVoices serials, newest first: one pass over the active voices. A serial the voices share is taken once, by the first voice of the pool that has it (what the passes
+        // for the largest serial below the last one gave).
         const Voice* order[LiveValues::kReadVoices] = {};
-        uint32_t bound = 0xffffffffu;
         int found = 0;
-        for (; found < LiveValues::kReadVoices; ++found)
+        if ((savingsOff.load (std::memory_order_relaxed) & kOwnSavingReadoutCadence) != 0)
         {
-            const Voice* best = nullptr;
-            forEachActive ([&] (int i)
+            // the reference (the test of the one pass): one pass over the voices for each of the voices, the largest serial below the last one
+            uint32_t bound = 0xffffffffu;
+            for (; found < LiveValues::kReadVoices; ++found)
             {
-                const Voice* v = voices[static_cast<size_t> (i)].get();
-                if (v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
-                    best = v;
-            });
-            if (best == nullptr)
-                break;
-            order[found] = best;
-            bound = best->serial();
+                const Voice* best = nullptr;
+                forEachActive ([&] (int i)
+                {
+                    const Voice* v = voices[static_cast<size_t> (i)].get();
+                    if (v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
+                        best = v;
+                });
+                if (best == nullptr)
+                    break;
+                order[found] = best;
+                bound = best->serial();
+            }
+        }
+        else
+        {
+        forEachActive ([&] (int i)
+        {
+            const Voice* v = voices[static_cast<size_t> (i)].get();
+            const uint32_t sv = v->serial();
+            if (sv >= 0xffffffffu)
+                return;
+            int at = 0;
+            while (at < found && order[at]->serial() > sv)
+                ++at;
+            if (at < found && order[at]->serial() == sv)
+                return; // the serial is taken
+            if (at >= LiveValues::kReadVoices)
+                return;
+            const int last = std::min (found, LiveValues::kReadVoices - 1);
+            for (int k = last; k > at; --k)
+                order[k] = order[k - 1];
+            order[at] = v;
+            found = std::min (found + 1, static_cast<int> (LiveValues::kReadVoices));
+        });
         }
         for (int i = 0; i < LiveValues::kReadVoices; ++i)
         {

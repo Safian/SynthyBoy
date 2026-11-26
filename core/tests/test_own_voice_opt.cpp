@@ -39,13 +39,26 @@ namespace own
 struct VoiceOptTest
 {
     static bool same (const void* a, const void* b, size_t n) { return std::memcmp (a, b, n) == 0; }
-    static int diff (const Voice& a, const Voice& b)
+    /** The sources and the output of the LFOs in `ignoreLfo` (bit l = LFO l + 1) are not compared: nothing reads them (no slot), only a display, and a voice that is not the newest does not make them. */
+    static bool sameSources (const float* x, const float* y, uint32_t ignoreLfo)
+    {
+        for (int i = 0; i < kNumSourceIds; ++i)
+        {
+            bool skip = false;
+            for (int l = 0; l < 10; ++l)
+                skip = skip || (((ignoreLfo >> l) & 1u) != 0 && srcLfo (l) == i);
+            if (!skip && std::memcmp (x + i, y + i, sizeof (float)) != 0)
+                return false;
+        }
+        return true;
+    }
+    static int diff (const Voice& a, const Voice& b, uint32_t ignoreLfo = 0)
     {
         if (a.active != b.active || a.released != b.released) return 1;
         if (!a.active)
             return 0;
-        if (!same (a.src, b.src, sizeof a.src)) return 2;
-        if (!same (a.srcR, b.srcR, sizeof a.srcR)) return 3;
+        if (!sameSources (a.src, b.src, ignoreLfo)) return 2;
+        if (!sameSources (a.srcR, b.srcR, ignoreLfo)) return 3;
         if (!same (a.envOut, b.envOut, sizeof a.envOut)) return 4;
         for (int e = 0; e < 6; ++e)
         {
@@ -59,8 +72,13 @@ struct VoiceOptTest
         }
         if (!same (a.envLen, b.envLen, sizeof a.envLen)) return 7;
         if (!same (a.legatoInv, b.legatoInv, sizeof a.legatoInv)) return 8;
-        if (!same (a.lfoOut, b.lfoOut, sizeof a.lfoOut) || !same (a.lfoOutR, b.lfoOutR, sizeof a.lfoOutR)) return 9;
-        if (!same (a.lfoSmoothL, b.lfoSmoothL, sizeof a.lfoSmoothL) || !same (a.lfoSmoothR, b.lfoSmoothR, sizeof a.lfoSmoothR)) return 10;
+        for (int l = 0; l < 10; ++l)
+        {
+            if (((ignoreLfo >> l) & 1u) != 0)
+                continue;
+            if (!same (a.lfoOut + l, b.lfoOut + l, 4) || !same (a.lfoOutR + l, b.lfoOutR + l, 4)) return 9;
+            if (!same (a.lfoSmoothL + l, b.lfoSmoothL + l, 4) || !same (a.lfoSmoothR + l, b.lfoSmoothR + l, 4)) return 10;
+        }
         if (!same (a.lfoAge, b.lfoAge, sizeof a.lfoAge) || !same (a.lfoReadPos, b.lfoReadPos, sizeof a.lfoReadPos)) return 11;
         for (int l = 0; l < 10; ++l)
             if (!same (&a.lfoCore[l].offset, &b.lfoCore[l].offset, 4) || !same (&a.lfoCore[l].age, &b.lfoCore[l].age, 4)) return 12;
@@ -87,6 +105,31 @@ struct VoiceOptTest
         if (!same (a.lastBusL, b.lastBusL, sizeof a.lastBusL) || !same (a.lastBusR, b.lastBusR, sizeof a.lastBusR)) return 27;
         return 0;
     }
+    /** 0 when two parts are the same field for field (the library keys only where both hold them), else the number of the first field that differs. */
+    static int partDiff (const Voice::OscPart& x, const Voice::OscPart& y)
+    {
+        int n = 0;
+#define SB_SAME(f) do { ++n; if (std::memcmp (&x.f, &y.f, sizeof x.f) != 0) return n; } while (0)
+        SB_SAME (dest); SB_SAME (wtChoice); SB_SAME (pmode); SB_SAME (ratioSrc); SB_SAME (transposeSnap); SB_SAME (voicesRaw); SB_SAME (stack); SB_SAME (stackRepeat); SB_SAME (mode);
+        SB_SAME (law); SB_SAME (morphType); SB_SAME (remapSlot); SB_SAME (warp); SB_SAME (blend); SB_SAME (send); SB_SAME (fixedNote); SB_SAME (coarseSemis); SB_SAME (transpose);
+        SB_SAME (tune001); SB_SAME (frame); SB_SAME (frameSpread); SB_SAME (level); SB_SAME (pan); SB_SAME (panRight); SB_SAME (detuneSemis); SB_SAME (curve); SB_SAME (blendShape);
+        SB_SAME (spread); SB_SAME (uniBlend); SB_SAME (morphAmount); SB_SAME (morphSpread); SB_SAME (remapRise); SB_SAME (remapFall); SB_SAME (warpAmount); SB_SAME (warpPhase);
+        SB_SAME (warpSpread); SB_SAME (env1); SB_SAME (track); SB_SAME (bendTrack); SB_SAME (smooth); SB_SAME (remapOn);
+#undef SB_SAME
+        if (x.libValid && y.libValid && std::memcmp (x.libV, y.libV, sizeof x.libV) != 0)
+            return 100;
+        return 0;
+    }
+    /** What `v` kept of oscillator o against the whole part read again from every key now (what the reference reads every period): 0 when the same. */
+    static int oscPartVsWhole (Voice& v, int o)
+    {
+        Voice::OscPart whole;
+        v.fillOscPart (o, whole, kOfAll);
+        return partDiff (v.oscPart[o], whole);
+    }
+    static bool oscPartOk (const Voice& v, int o) { return v.oscPart[o].ok; }
+    static int groupOfKey (const Voice& v, int idx) { return v.groupOf[idx]; }
+    static uint32_t lfoSkippedMask (const Voice& v) { return v.lfoSkipped; }
 };
 } // namespace own
 } // namespace synthyboy
@@ -243,11 +286,15 @@ struct EnginePair
     std::unique_ptr<IEngine> opt, ref;
     std::vector<int> targets;
 
-    EnginePair (const std::vector<float>& plain, Tier tier, Rand& r)
+    /** `refSavings`: the savings the reference engine has off (the old code of the item under test); `optSavings`: the savings both engines have off. Every test that edits the patch while voices sound
+        keeps the display only evaluation of unused LFOs off in both (an edit that newly routes an LFO starts its smoothing from the value, not from the state of an earlier period: not bit identical by
+        design, see the tests of kOwnSavingLfoDisplay). */
+    EnginePair (const std::vector<float>& plain, Tier tier, Rand& r, uint32_t refSavings = kOwnSavingVoiceControl, uint32_t optSavings = kOwnSavingLfoDisplay)
     {
         opt = createOwnEngine();
         ref = createOwnEngine();
-        CHECK (setOwnSavingsOff (*ref, kOwnSavingVoiceControl));
+        CHECK (setOwnSavingsOff (*ref, refSavings | optSavings));
+        CHECK (setOwnSavingsOff (*opt, optSavings));
         Quality q = qualityForTier (tier);
         q.realtime = false;
         for (IEngine* e : { opt.get(), ref.get() })
@@ -272,7 +319,7 @@ struct EnginePair
 };
 
 /** Plays `blocks` blocks of random events, parameter moves and tempo changes into both engines; false at the first difference (printed). */
-bool playAndCompare (EnginePair& p, Rand& r, int blocks, const char* what)
+bool playAndCompare (EnginePair& p, Rand& r, int blocks, const char* what, bool edits = true, uint64_t ignoreSources = 0)
 {
     std::vector<float> lo (128), ro (128), lr (128), rr (128);
     std::vector<int> held;
@@ -334,7 +381,7 @@ bool playAndCompare (EnginePair& p, Rand& r, int blocks, const char* what)
         }
         std::stable_sort (ev.begin(), ev.end(), [] (const Event& x, const Event& y) { return x.frame < y.frame; });
         // parameters between blocks (the snapshot epoch moves): a voice key, a macro, a slot amount; the tempo
-        if (r.chance (0.06f))
+        if (edits && r.chance (0.06f))
         {
             const size_t i = static_cast<size_t> (r.range (0, static_cast<int> (paramCount()) - 1));
             if (voiceKey (table[i].key) || startsWith (table[i].key, "mod"))
@@ -344,7 +391,7 @@ bool playAndCompare (EnginePair& p, Rand& r, int blocks, const char* what)
                 p.ref->setParam (table[i].id, v);
             }
         }
-        if (r.chance (0.04f))
+        if (edits && r.chance (0.04f))
         {
             const int m = r.range (1, 8);
             char key[16];
@@ -380,6 +427,9 @@ bool playAndCompare (EnginePair& p, Rand& r, int blocks, const char* what)
         LiveValues a, c;
         p.opt->copyReadout (a);
         p.ref->copyReadout (c);
+        for (int id = 1; id <= LiveValues::kMaxSources; ++id) // the sources the caller does not compare (the display value of an unused LFO of a voice that is not the newest)
+            if (id < 64 && ((ignoreSources >> id) & 1u) != 0)
+                a.source[id - 1] = c.source[id - 1] = 0.0f;
         if (std::memcmp (&a, &c, sizeof a) != 0)
         {
             const auto* x = reinterpret_cast<const uint8_t*> (&a);
@@ -612,6 +662,696 @@ TEST (voice_opt_voice_state_is_bit_identical)
         }
     }
     std::printf ("%d voice patches, %d differ, %.1f s\n", patches, failed, std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V7 by group: a period in which a slot touched a key of an oscillator reads only the field groups of that key (and of the keys touched in the period before); every key of every
+// oscillator is touched alone, the part the voice keeps is compared field for field with the whole part read again, and the voice with the reference code (which reads the whole part
+// every period) is compared in state and output.
+
+namespace
+{
+/** The keys of oscillator o that its part (or its library keys) reads, with the group they are in. */
+std::vector<int> oscKeys (int o)
+{
+    std::vector<int> keys;
+    const OscIdx& oi = paramIndex().osc[o];
+    const int* f = reinterpret_cast<const int*> (&oi);
+    for (size_t i = 0; i < sizeof (OscIdx) / sizeof (int); ++i)
+        if (f[i] >= 0)
+            keys.push_back (f[i]);
+    for (int i = 0; i < kLibKeyCount; ++i)
+        if (libKeys (o).idx[i] >= 0)
+            keys.push_back (libKeys (o).idx[i]);
+    std::sort (keys.begin(), keys.end());
+    keys.erase (std::unique (keys.begin(), keys.end()), keys.end());
+    return keys;
+}
+} // namespace
+
+TEST (voice_opt_osc_part_refresh_by_group_touches_every_key_alone)
+{
+    ensureAllBuiltinWavetables();
+    float bends[16] = {}, wheel[16] = {}, after[16] = {}, tuned[128];
+    for (int k = 0; k < 128; ++k)
+        tuned[k] = static_cast<float> (k);
+    float lfoPhase[10] = {}, rlfoValue[4] = {};
+    int tested = 0, notModulatable = 0, failed = 0;
+    for (int o = 0; o < 3; ++o)
+        for (const int key : oscKeys (o))
+        {
+            const size_t choice = modDestinationChoiceOf (static_cast<size_t> (key));
+            if (choice == 0)
+            {
+                ++notModulatable;
+                continue;
+            }
+            for (int variant = 0; variant < 3; ++variant)
+            {
+                // the defaults with the three oscillators on, and one slot: macro 1 -> the key (the depth moves it across a large part of its range, the base value is varied by the variant)
+                std::vector<float> base (kMaxParams, 0.0f);
+                for (size_t i = 0; i < paramCount(); ++i)
+                    base[i] = paramTable()[i].def;
+                for (int q = 0; q < 3; ++q)
+                    base[static_cast<size_t> (paramIndex().osc[q].on)] = 1.0f;
+                base[static_cast<size_t> (paramIndex().filter[0].on)] = 1.0f;
+                const ParamInfo& info = paramTable()[key];
+                if (variant == 1)
+                    base[static_cast<size_t> (key)] = info.min + 0.3f * (info.max - info.min);
+                if (variant == 2)
+                    base[static_cast<size_t> (key)] = info.max;
+                const ModSlotParams& sp = paramIndex().slot[0];
+                base[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcMacro1);
+                base[static_cast<size_t> (sp.destination)] = static_cast<float> (choice);
+                base[static_cast<size_t> (sp.amount)] = variant == 2 ? -80.0f : 70.0f;
+                ModMatrix matrix;
+                matrix.compile (base.data());
+                VoiceRig a, b;
+                a.v.prepare (kSr);
+                b.v.prepare (kSr);
+                for (VoiceRig* x : { &a, &b })
+                {
+                    TickGlobals& g = x->g;
+                    g.base = base.data();
+                    g.matrix = &matrix;
+                    g.sampleRate = kSr;
+                    g.bpm = 120.0;
+                    g.channelBendSemis = bends;
+                    g.channelModWheel = wheel;
+                    g.channelAftertouch = after;
+                    g.tunedNotes = tuned;
+                    g.lfoPhase = lfoPhase;
+                    g.rlfoValue = rlfoValue;
+                    g.economy = 0u;
+                    g.usedSources = matrix.sourceMask();
+                    g.baseEpoch = 1;
+                    g.activeVoices = 1;
+                }
+                b.g.referenceControl = true;
+                NoteStart n;
+                n.key = 57 + variant;
+                n.tunedNote = static_cast<float> (n.key);
+                n.velocity = 0.8f;
+                n.serial = 1;
+                n.sequence = 1;
+                a.v.start (n, 0.0f, 0.0f);
+                b.v.start (n, 0.0f, 0.0f);
+                bool touchedOnce = false, untouchedAfterTouched = false, prevTouched = false;
+                for (int t = 0; t < 40; ++t)
+                {
+                    // touched, untouched, touched twice ... : the key returns to its knob while the epoch stays the same
+                    static const float kPattern[] = { 0.0f, 0.0f, 1.0f, 0.0f, 0.6f, 0.6f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f };
+                    const float m = kPattern[t % (sizeof kPattern / sizeof kPattern[0])];
+                    a.g.macro[0] = b.g.macro[0] = m;
+                    a.v.tick (a.g, 0);
+                    b.v.tick (b.g, 0);
+                    int d = VoiceOptTest::diff (a.v, b.v);
+                    for (int q = 0; q < 3 && d == 0; ++q)
+                        d = VoiceOptTest::oscPartVsWhole (a.v, q) != 0 ? 200 + q : 0;
+                    if (d == 0)
+                    {
+                        a.render (kControlPeriod, 0);
+                        b.render (kControlPeriod, 0);
+                        if (std::memcmp (a.mixL, b.mixL, sizeof a.mixL) != 0 || std::memcmp (a.mixR, b.mixR, sizeof a.mixR) != 0)
+                            d = 100;
+                    }
+                    touchedOnce = touchedOnce || m > 0.0f;
+                    untouchedAfterTouched = untouchedAfterTouched || (prevTouched && m == 0.0f);
+                    prevTouched = m > 0.0f;
+                    if (d != 0)
+                    {
+                        std::printf ("osc%d key %s variant %d period %d: field %d differs\n", o + 1, paramTable()[key].key, variant, t, d);
+                        ++failed;
+                        break;
+                    }
+                }
+                if (failed == 0)
+                    CHECK (touchedOnce && untouchedAfterTouched);
+                ++tested;
+            }
+        }
+    std::printf ("%d (osc key, base) cases, %d keys without a modulation destination, %d differ\n", tested, notModulatable, failed);
+    CHECK (tested > 150);
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The exp2 calls of fillFilterSettings () (key track, voice control cutoff, pan shift) are kept per voice and filter under the bit patterns of their arguments (+-0: no call)
+
+TEST (filter_setup_memo_gives_the_settings_the_calls_give_for_every_kind_of_argument)
+{
+    const FilterIdx& fi = paramIndex().filter[0];
+    std::vector<float> v (kMaxParams, 0.0f);
+    for (size_t i = 0; i < paramCount(); ++i)
+        v[i] = paramTable()[i].def;
+    static const float kSpecial[] = { 0.0f, -0.0f, 1.0e-40f, -1.0e-40f, 1.0e-30f, 0.5f, -0.5f, 1.0f, 100.0f, -100.0f, 50.0f, -12.5f, NAN, INFINITY, -INFINITY, 1.0e38f, 1.0e-45f };
+    constexpr int kNumSpecial = static_cast<int> (sizeof kSpecial / sizeof kSpecial[0]);
+    Rand r (2026);
+    FilterSetupMemo memo;
+    float vcSemis = 0.0f, trackKnob = 0.0f, panKnob = 0.0f, cutoff = 1000.0f;
+    int key = 60;
+    auto pick = [&] (float& x, float lo, float hi)
+    {
+        if (r.chance (0.7f))
+            return; // the same as the period before: the memo answers
+        x = r.chance (0.5f) ? kSpecial[r.range (0, kNumSpecial - 1)] : lo + (hi - lo) * r.uni();
+    };
+    auto sameBits = [] (float x, float y) { return (x != x && y != y) || std::memcmp (&x, &y, 4) == 0; };
+    long long cases = 0, bad = 0, hits = 0;
+    for (int n = 0; n < 300000; ++n)
+    {
+        pick (vcSemis, -36.0f, 36.0f);
+        pick (trackKnob, -200.0f, 200.0f);
+        pick (panKnob, -100.0f, 100.0f);
+        pick (cutoff, 20.0f, 20000.0f);
+        if (r.chance (0.3f))
+            key = r.range (0, 127);
+        v[static_cast<size_t> (fi.keytrack)] = trackKnob;
+        if (fi.pan >= 0)
+            v[static_cast<size_t> (fi.pan)] = panKnob;
+        v[static_cast<size_t> (fi.cutoff)] = cutoff;
+        auto P = [&] (int idx) { return v[static_cast<size_t> (idx)]; };
+        FilterSettings a, b;
+        const uint32_t k0 = memo.ktKey, k1 = memo.vcKey, k2 = memo.panKey;
+        fillFilterSettings (a, fi, P, P, false, key, vcSemis, false, nullptr);
+        fillFilterSettings (b, fi, P, P, false, key, vcSemis, false, &memo);
+        hits += (k0 == memo.ktKey && k1 == memo.vcKey && k2 == memo.panKey) ? 1 : 0;
+        ++cases;
+        if (!sameBits (a.cutoffHz, b.cutoffHz) || !sameBits (a.cutoffHzR, b.cutoffHzR))
+        {
+            if (bad < 5)
+                std::printf ("filter memo: key %d vc %g track %g pan %g cutoff %g: %g / %g against %g / %g\n", key, static_cast<double> (vcSemis), static_cast<double> (trackKnob),
+                             static_cast<double> (panKnob), static_cast<double> (cutoff), static_cast<double> (b.cutoffHz), static_cast<double> (b.cutoffHzR), static_cast<double> (a.cutoffHz),
+                             static_cast<double> (a.cutoffHzR));
+            ++bad;
+        }
+    }
+    std::printf ("%lld filter settings, %lld answered from the memo, %lld differ\n", cases, hits, bad);
+    CHECK (hits > cases / 5);
+    CHECK_EQ (bad, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The voice count gain keeps the last results of its three libm calls (kOwnSavingVcgCache): the same samples as the engine that calls them every control period
+
+TEST (voice_opt_voice_count_gain_cache_is_bit_identical)
+{
+    ensureAllBuiltinWavetables();
+    const std::vector<std::vector<float>> presets = factoryPresets();
+    int failed = 0, runs = 0;
+    const float alphas[] = { 0.5f, 0.25f, 1.0f, 0.0f, 0.73f };
+    for (size_t i = 0; i < presets.size(); i += sbtest::instrumented() ? 24 : 6)
+    {
+        Rand r (static_cast<uint32_t> (4100 + i));
+        const std::vector<float> plain = randomPatch (r, &presets[i], 0.02f);
+        EnginePair p (plain, i % 4 == 1 ? Tier::high : Tier::low, r, kOwnSavingVcgCache);
+        const float alpha = alphas[i % 5];
+        CHECK (setOwnVoiceCountAlpha (*p.opt, alpha));
+        CHECK (setOwnVoiceCountAlpha (*p.ref, alpha));
+        char what[64];
+        std::snprintf (what, sizeof what, "voice count gain, preset %zu alpha %.2f", i, static_cast<double> (alpha));
+        ++runs;
+        failed += playAndCompare (p, r, 400, what) ? 0 : 1;
+    }
+    for (int s = 0; s < (sbtest::instrumented() ? 4 : 24); ++s)
+    {
+        Rand r (static_cast<uint32_t> (4900 + s));
+        std::vector<float> plain = randomPatch (r, nullptr, 0.2f);
+        plain[static_cast<size_t> (idxOf ("master.polyphony"))] = static_cast<float> (r.range (4, 16));
+        EnginePair p (plain, s % 2 == 0 ? Tier::low : Tier::high, r, kOwnSavingVcgCache);
+        const float alpha = 0.1f + 0.9f * r.uni();
+        CHECK (setOwnVoiceCountAlpha (*p.opt, alpha));
+        CHECK (setOwnVoiceCountAlpha (*p.ref, alpha));
+        char what[64];
+        std::snprintf (what, sizeof what, "voice count gain, random patch %d", s);
+        ++runs;
+        failed += playAndCompare (p, r, 500, what) ? 0 : 1;
+    }
+    std::printf ("%d voice count gain runs, %d differ\n", runs, failed);
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// An LFO no slot reads is evaluated (shape, smoothing) only in the newest voice: the others advance its clock, its age and its display position. The sound, every clock and every source that
+// something reads stay bit for bit those of the voice that evaluates everything; the display value of an unused LFO of a voice that is not the newest is not made.
+
+TEST (voice_opt_unused_lfo_display_skip_keeps_the_sound_and_the_clocks)
+{
+    ensureAllBuiltinWavetables();
+    const int patches = sbtest::instrumented() ? 10 : 100;
+    int failed = 0;
+    long long skippedPeriods = 0;
+    float bends[16] = {}, wheel[16] = {}, after[16] = {}, tuned[128];
+    for (int k = 0; k < 128; ++k)
+        tuned[k] = static_cast<float> (k);
+    float lfoPhase[10] = {}, rlfoValue[4] = {};
+    for (int s = 0; s < patches && failed == 0; ++s)
+    {
+        Rand r (static_cast<uint32_t> (8000 + s));
+        std::vector<float> base = randomPatch (r, nullptr, 0.3f);
+        base.resize (kMaxParams, 0.0f);
+        ModMatrix matrix;
+        matrix.compile (base.data());
+        uint32_t ignoreLfo = 0;
+        for (int l = 0; l < 10; ++l)
+            if (((matrix.sourceMask() >> srcLfo (l)) & 1u) == 0)
+                ignoreLfo |= 1u << l;
+        VoiceRig a, b;
+        a.v.prepare (kSr);
+        b.v.prepare (kSr);
+        for (VoiceRig* x : { &a, &b })
+        {
+            TickGlobals& g = x->g;
+            g.base = base.data();
+            g.matrix = &matrix;
+            g.sampleRate = kSr;
+            g.bpm = 120.0;
+            g.channelBendSemis = bends;
+            g.channelModWheel = wheel;
+            g.channelAftertouch = after;
+            g.tunedNotes = tuned;
+            g.lfoPhase = lfoPhase;
+            g.rlfoValue = rlfoValue;
+            g.economy = (s % 2 == 0) ? kEconomyAll : 0u;
+            g.usedSources = matrix.sourceMask();
+            g.baseEpoch = 1;
+            g.activeVoices = 2;
+        }
+        // both voices run the shipped control code (the V1 .. V13 caches); `a` also skips the display of the unused LFOs, `b` evaluates every LFO
+        a.g.lfoDisplaySkip = true;
+        uint32_t serial = 1, sequence = 1;
+        bool started = false;
+        for (int t = 0; t < 1200 && failed == 0; ++t)
+        {
+            if (!started || r.chance (0.01f))
+            {
+                NoteStart n;
+                n.key = r.range (30, 100);
+                n.tunedNote = static_cast<float> (n.key);
+                n.velocity = r.chance (0.1f) ? 0.0f : r.uni();
+                n.serial = serial++;
+                n.sequence = sequence++;
+                const float lastL = r.chance (0.5f) ? 0.0f : r.uni() - 0.5f;
+                if (started && a.v.isActive() && r.chance (0.4f))
+                {
+                    a.v.legatoTo (n);
+                    b.v.legatoTo (n);
+                }
+                else
+                {
+                    a.v.start (n, lastL, -lastL);
+                    b.v.start (n, lastL, -lastL);
+                }
+                started = true;
+            }
+            if (r.chance (0.006f))
+            {
+                const float rv = r.uni();
+                a.v.release (rv);
+                b.v.release (rv);
+            }
+            if (r.chance (0.002f))
+            {
+                a.v.startKill();
+                b.v.startKill();
+            }
+            if (r.chance (0.02f))
+            {
+                const int m = r.range (0, 7);
+                a.g.macro[m] = b.g.macro[m] = r.chance (0.3f) ? 0.0f : r.uni();
+                bends[0] = r.chance (0.5f) ? 0.0f : -2.0f + 4.0f * r.uni();
+            }
+            if (r.chance (0.005f))
+                a.g.bpm = b.g.bpm = 60.0 + 120.0 * r.uni();
+            for (int l = 0; l < 10; ++l)
+                lfoPhase[l] = std::fmod (lfoPhase[l] + 0.01f * static_cast<float> (l + 1), 1.0f);
+            for (int q = 0; q < 4; ++q)
+                rlfoValue[q] = -1.0f + 2.0f * r.uni();
+            if (!a.v.isActive())
+            {
+                started = false;
+                continue;
+            }
+            // the newest voice changes now and then: this voice is it for a stretch, then another one (a higher serial) is
+            if (r.chance (0.03f))
+                a.g.newestSerial = r.chance (0.4f) ? serial - 1 : serial + 5;
+            a.v.tick (a.g, 0);
+            b.v.tick (b.g, 0);
+            skippedPeriods += VoiceOptTest::lfoSkippedMask (a.v) != 0 ? 1 : 0;
+            int d = VoiceOptTest::diff (a.v, b.v, ignoreLfo);
+            if (d == 0 && a.v.isActive())
+            {
+                a.render (kControlPeriod, 0);
+                b.render (kControlPeriod, 0);
+                if (std::memcmp (a.mixL, b.mixL, sizeof a.mixL) != 0 || std::memcmp (a.mixR, b.mixR, sizeof a.mixR) != 0)
+                    d = 100;
+                else if (std::memcmp (a.srcSq, b.srcSq, sizeof a.srcSq) != 0)
+                    d = 101;
+                else
+                    d = VoiceOptTest::diff (a.v, b.v, ignoreLfo);
+            }
+            if (d != 0)
+            {
+                std::printf ("unused LFO skip, patch %d period %d: field %d differs\n", s, t, d);
+                ++failed;
+            }
+        }
+    }
+    std::printf ("%d patches, %lld periods with an LFO not evaluated, %d differ\n", patches, skippedPeriods, failed);
+    CHECK (skippedPeriods > 1000);
+    CHECK_EQ (failed, 0);
+}
+
+/** The engines with and without the display only evaluation (kOwnSavingLfoDisplay): random patches whose slots stay as they are (no parameter edits) while notes start, end and are stolen; the audio
+    is bit for bit the same, and so is every value of the display readout except the display value of an unused LFO, which is not made for a voice that is not the newest (when the newest voice ends in
+    the last period of a block, the voice that becomes the newest shows the value of its last evaluation until the next block). */
+TEST (voice_opt_engine_unused_lfo_display_skip_sounds_the_same)
+{
+    ensureAllBuiltinWavetables();
+    const std::vector<std::vector<float>> presets = factoryPresets();
+    int failed = 0, runs = 0;
+    for (int s = 0; s < (sbtest::instrumented() ? 6 : 48); ++s)
+    {
+        Rand r (static_cast<uint32_t> (6100 + s));
+        std::vector<float> plain = s % 3 == 2 ? presets[static_cast<size_t> (s) % presets.size()] : randomPatch (r, nullptr, 0.2f);
+        plain[static_cast<size_t> (idxOf ("master.polyphony"))] = static_cast<float> (r.range (2, 8));
+        std::vector<float> padded = plain;
+        padded.resize (kMaxParams, 0.0f);
+        ModMatrix matrix;
+        matrix.compile (padded.data());
+        uint64_t ignore = 0;
+        for (int l = 0; l < 10; ++l)
+            if (((matrix.sourceMask() >> srcLfo (l)) & 1u) == 0)
+                ignore |= uint64_t (1) << srcLfo (l);
+        EnginePair p (plain, s % 2 == 0 ? Tier::low : Tier::high, r, kOwnSavingLfoDisplay, 0u);
+        char what[64];
+        std::snprintf (what, sizeof what, "unused LFO skip, patch %d", s);
+        ++runs;
+        failed += playAndCompare (p, r, 500, what, false, ignore) ? 0 : 1;
+    }
+    std::printf ("%d runs, %d differ\n", runs, failed);
+    CHECK_EQ (failed, 0);
+}
+
+/** The display of the newest voice, block by block: a chord of voices with the ten LFOs at different rates, none of them read by a slot; the readout (every source, the LFO positions of all
+    voices, the envelopes) is the whole LiveValues, compared bit for bit with the engine that evaluates the LFOs in every voice. No voice ends in the run. */
+TEST (voice_opt_engine_unused_lfo_display_readout_of_the_newest_voice_is_the_same)
+{
+    ensureAllBuiltinWavetables();
+    int failed = 0;
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        std::vector<float> plain (paramCount());
+        for (size_t i = 0; i < plain.size(); ++i)
+            plain[i] = paramTable()[i].def;
+        auto set = [&] (const char* key, float v) { plain[static_cast<size_t> (idxOf (key))] = v; };
+        set ("osc1.on", 1.0f);
+        set ("filter1.on", 1.0f);
+        set ("env1.release", 3000.0f);
+        set ("master.polyphony", 8.0f);
+        for (int l = 1; l <= 10; ++l)
+        {
+            char key[48];
+            std::snprintf (key, sizeof key, "lfo%d.rate", l);
+            set (key, 0.4f + 0.9f * static_cast<float> (l) * (variant % 2 == 0 ? 1.0f : 3.0f));
+            std::snprintf (key, sizeof key, "lfo%d.shape", l);
+            set (key, static_cast<float> ((l + variant) % 12));
+            std::snprintf (key, sizeof key, "lfo%d.smooth", l);
+            set (key, l % 2 == 0 ? 1.0f : 0.0f);
+            std::snprintf (key, sizeof key, "lfo%d.sync", l);
+            set (key, 0.0f);
+        }
+        if (variant >= 2)
+        {
+            // one LFO used by a slot (every voice evaluates it): the others are still display only
+            const ModSlotParams& sp = paramIndex().slot[0];
+            plain[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcLfo1 + 2);
+            plain[static_cast<size_t> (sp.destination)] = static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (idxOf ("osc1.tune"))));
+            plain[static_cast<size_t> (sp.amount)] = 40.0f;
+        }
+        Rand r (static_cast<uint32_t> (31 + variant));
+        EnginePair p (plain, variant % 2 == 0 ? Tier::low : Tier::high, r, kOwnSavingLfoDisplay, 0u);
+        std::vector<float> lo (128), ro (128), lr (128), rr (128);
+        const int onAt[] = { 0, 3, 4, 9, 16, 23 }, key[] = { 48, 55, 60, 64, 67, 72 };
+        int ni = 0;
+        for (int b = 0; b < 90 && failed == 0; ++b)
+        {
+            std::vector<Event> ev;
+            if (ni < 6 && b == onAt[ni])
+            {
+                Event e;
+                e.type = Event::NoteOn;
+                e.frame = static_cast<int16_t> (5 + 7 * ni);
+                e.key = static_cast<int16_t> (key[ni]);
+                e.value = 0.5f + 0.08f * static_cast<float> (ni);
+                e.channel = 0;
+                ev.push_back (e);
+                ++ni;
+            }
+            if (b == 50 || b == 60)
+            {
+                Event e;
+                e.type = Event::NoteOff;
+                e.frame = 11;
+                e.key = static_cast<int16_t> (key[b == 50 ? 5 : 2]);
+                e.value = 0.4f;
+                ev.push_back (e);
+            }
+            p.opt->process (ev.data(), static_cast<int> (ev.size()), lo.data(), ro.data(), 128);
+            p.ref->process (ev.data(), static_cast<int> (ev.size()), lr.data(), rr.data(), 128);
+            LiveValues x, y;
+            p.opt->copyReadout (x);
+            p.ref->copyReadout (y);
+            if (std::memcmp (lo.data(), lr.data(), 128 * 4) != 0 || std::memcmp (ro.data(), rr.data(), 128 * 4) != 0)
+            {
+                std::printf ("variant %d block %d: the audio differs\n", variant, b);
+                ++failed;
+            }
+            else if (std::memcmp (&x, &y, sizeof x) != 0)
+            {
+                int first = -1;
+                for (int i = 0; i < LiveValues::kMaxSources && first < 0; ++i)
+                    if (std::memcmp (&x.source[i], &y.source[i], 4) != 0)
+                        first = i;
+                std::printf ("variant %d block %d: the readout differs (first differing source index %d)\n", variant, b, first);
+                ++failed;
+            }
+        }
+    }
+    CHECK_EQ (failed, 0);
+}
+
+/** An edit that newly routes an LFO: the voice that skipped it starts the smoothing at the value of the first period that uses it (the reference smooths from the state of the earlier period).
+    The two agree to the smoothing within a few smooth times; this is the one difference, and it is not bit identity. */
+TEST (voice_opt_unused_lfo_newly_routed_starts_its_smoothing_at_the_value)
+{
+    ensureAllBuiltinWavetables();
+    float bends[16] = {}, wheel[16] = {}, after[16] = {}, tuned[128];
+    for (int k = 0; k < 128; ++k)
+        tuned[k] = static_cast<float> (k);
+    float lfoPhase[10] = {}, rlfoValue[4] = {};
+    std::vector<float> base (kMaxParams, 0.0f);
+    for (size_t i = 0; i < paramCount(); ++i)
+        base[i] = paramTable()[i].def;
+    base[static_cast<size_t> (idxOf ("osc1.on"))] = 1.0f;
+    base[static_cast<size_t> (idxOf ("filter1.on"))] = 1.0f;
+    base[static_cast<size_t> (idxOf ("lfo1.rate"))] = 3.0f;
+    base[static_cast<size_t> (idxOf ("lfo1.smooth"))] = 1.0f;
+    base[static_cast<size_t> (idxOf ("lfo1.smooth_time"))] = 80.0f;
+    ModMatrix unused;
+    unused.compile (base.data());
+    std::vector<float> routed = base;
+    const ModSlotParams& sp = paramIndex().slot[0];
+    routed[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcLfo1);
+    routed[static_cast<size_t> (sp.destination)] = static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (idxOf ("osc1.level"))));
+    routed[static_cast<size_t> (sp.amount)] = 50.0f;
+    ModMatrix used;
+    used.compile (routed.data());
+    VoiceRig a, b;
+    a.v.prepare (kSr);
+    b.v.prepare (kSr);
+    for (VoiceRig* x : { &a, &b })
+    {
+        TickGlobals& g = x->g;
+        g.base = base.data();
+        g.matrix = &unused;
+        g.sampleRate = kSr;
+        g.bpm = 120.0;
+        g.channelBendSemis = bends;
+        g.channelModWheel = wheel;
+        g.channelAftertouch = after;
+        g.tunedNotes = tuned;
+        g.lfoPhase = lfoPhase;
+        g.rlfoValue = rlfoValue;
+        g.economy = kEconomyAll;
+        g.usedSources = unused.sourceMask();
+        g.baseEpoch = 1;
+        g.activeVoices = 2;
+    }
+    a.g.lfoDisplaySkip = true;
+    a.g.newestSerial = 99; // `a` is not the newest voice
+    NoteStart n;
+    n.key = 60;
+    n.tunedNote = 60.0f;
+    n.velocity = 0.8f;
+    n.serial = 1;
+    n.sequence = 1;
+    a.v.start (n, 0.0f, 0.0f);
+    b.v.start (n, 0.0f, 0.0f);
+    for (int t = 0; t < 600; ++t)
+    {
+        a.v.tick (a.g, 0);
+        b.v.tick (b.g, 0);
+        CHECK_EQ (VoiceOptTest::diff (a.v, b.v, 0x3FFu), 0); // no LFO is read: the display values are the one thing that may differ
+    }
+    CHECK ((VoiceOptTest::lfoSkippedMask (a.v) & 1u) != 0);
+    // the edit: LFO 1 now modulates osc1.level
+    for (VoiceRig* x : { &a, &b })
+    {
+        x->g.base = routed.data();
+        x->g.matrix = &used;
+        x->g.usedSources = used.sourceMask();
+        x->g.baseEpoch = 2;
+    }
+    float worst = 0.0f, firstGap = -1.0f;
+    for (int t = 0; t < 900; ++t)
+    {
+        a.v.tick (a.g, 0);
+        b.v.tick (b.g, 0);
+        const float x = a.v.sourceValues()[srcLfo (0)], y = b.v.sourceValues()[srcLfo (0)];
+        if (t == 0)
+        {
+            firstGap = std::fabs (x - y);
+            CHECK ((VoiceOptTest::lfoSkippedMask (a.v) & 1u) == 0); // evaluated now
+        }
+        if (t >= 600)
+            worst = std::max (worst, std::fabs (x - y));
+    }
+    std::printf ("newly routed LFO: first period differs by %.4g, after 600 periods by at most %.3g\n", static_cast<double> (firstGap), static_cast<double> (worst));
+    CHECK (firstGap > 1.0e-4f); // the difference exists (the reference smooths from the state of the earlier period) ...
+    CHECK (worst < 1.0e-6f);    // ... and is gone to the smoothing within 600 periods (19 time constants)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The display readout and the voice statistics are written while somebody asks (copyReadout, voiceStats, setReadoutTargets; kOwnSavingReadoutCadence off = every block, as before), and the
+// newest voices are found in one pass. The audio is the same in every case.
+
+namespace
+{
+Event noteEvent (Event::Type type, int frame, int key, float value)
+{
+    Event e;
+    e.type = type;
+    e.frame = static_cast<int16_t> (frame);
+    e.key = static_cast<int16_t> (key);
+    e.value = value;
+    e.channel = 0;
+    return e;
+}
+
+bool sameBits (const float* a, const float* b, size_t n) { return std::memcmp (a, b, n * sizeof (float)) == 0; }
+} // namespace
+
+TEST (voice_opt_engine_readout_on_demand_is_the_same_while_it_is_polled_and_waits_when_it_is_not)
+{
+    ensureAllBuiltinWavetables();
+    int failed = 0;
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        Rand r (static_cast<uint32_t> (900 + variant));
+        std::vector<float> plain = randomPatch (r, nullptr, 0.15f);
+        plain[static_cast<size_t> (idxOf ("master.polyphony"))] = variant < 2 ? 6.0f : 12.0f; // up to 6 voices: the newest voices of the readout are all of them; 9 and more: the newest eight
+        plain[static_cast<size_t> (idxOf ("osc1.on"))] = 1.0f;
+        plain[static_cast<size_t> (idxOf ("env1.sustain"))] = 100.0f; // the notes stay
+        plain[static_cast<size_t> (idxOf ("env1.attack"))] = 1.0f;
+        EnginePair p (plain, variant % 2 == 0 ? Tier::low : Tier::high, r, kOwnSavingReadoutCadence, 0u);
+        int mostVoices = 0;
+        std::vector<float> lo (128), ro (128), lr (128), rr (128);
+        auto block = [&] (const std::vector<Event>& ev)
+        {
+            p.opt->process (ev.data(), static_cast<int> (ev.size()), lo.data(), ro.data(), 128);
+            p.ref->process (ev.data(), static_cast<int> (ev.size()), lr.data(), rr.data(), 128);
+            if (!sameBits (lo.data(), lr.data(), 128) || !sameBits (ro.data(), rr.data(), 128))
+            {
+                std::printf ("variant %d: the audio differs\n", variant);
+                ++failed;
+            }
+        };
+        auto poll = [&] (LiveValues& a, LiveValues& c, VoiceStats& sa, VoiceStats& sc)
+        {
+            CHECK (p.opt->copyReadout (a));
+            CHECK (p.ref->copyReadout (c));
+            CHECK (p.opt->voiceStats (sa));
+            CHECK (p.ref->voiceStats (sc));
+        };
+        // 1. polled about 30 times a second (one block in 11): every poll reads what the engine that writes every block reads
+        for (int b = 0; b < 330 && failed == 0; ++b)
+        {
+            std::vector<Event> ev;
+            if (b % 37 == 0)
+                ev.push_back (noteEvent (Event::NoteOn, 9, 40 + (b / 37) * 4, 0.6f));
+            block (ev);
+            if (b % 11 == 0)
+            {
+                LiveValues a, c;
+                VoiceStats sa, sc;
+                poll (a, c, sa, sc);
+                mostVoices = std::max (mostVoices, a.numLfoVoices);
+                if (std::memcmp (&a, &c, sizeof a) != 0 || std::memcmp (&sa, &sc, sizeof sa) != 0)
+                {
+                    std::printf ("variant %d block %d: a polled readout differs\n", variant, b);
+                    ++failed;
+                }
+            }
+        }
+        CHECK (variant < 2 || mostVoices == LiveValues::kReadVoices); // more voices than the readout holds: the newest eight
+        // 2. nobody asks for 400 blocks (the last poll keeps the readout going for 256 blocks), two notes start at the end: the readout is not written any more (the statistics are the old ones),
+        //    the audio is the same
+        LiveValues a, c;
+        VoiceStats sa, sc;
+        poll (a, c, sa, sc);
+        const unsigned noteOnsBefore = sa.noteOns;
+        for (int b = 0; b < 400 && failed == 0; ++b)
+        {
+            std::vector<Event> ev;
+            if (b == 350 || b == 380)
+                ev.push_back (noteEvent (Event::NoteOn, 20, 50 + (b - 350) / 10, 0.7f));
+            if (b == 320)
+            {
+                // a state flag that anybody may read at any time (missingContent): oscillator 2 asks for the user table of the preset, which is not there
+                for (IEngine* e : { p.opt.get(), p.ref.get() })
+                {
+                    e->setParam (findParamByKey ("osc2.on")->id, 1.0f);
+                    e->setParam (findParamByKey ("osc2.type")->id, 0.0f);
+                    e->setParam (findParamByKey ("osc2.wavetable")->id, static_cast<float> (kWavetablePresetTable));
+                }
+            }
+            block (ev);
+        }
+        CHECK ((p.ref->missingContent() & 16u) != 0u);                       // the engine that writes every block saw it
+        CHECK_EQ (p.opt->missingContent(), p.ref->missingContent());         // and so does the engine that waits for a poll
+        p.opt->voiceStats (sa);
+        p.ref->voiceStats (sc);
+        CHECK_EQ (sc.noteOns, noteOnsBefore + 2u); // the engine that writes every block counted them
+        CHECK_EQ (sa.noteOns, noteOnsBefore);      // the engine that waits for a poll did not publish them yet
+        // 3. the poll woke it: the next block writes, and the readout is the one of the engine that writes every block (the meters start again from nothing: not compared)
+        block ({});
+        poll (a, c, sa, sc);
+        CHECK_EQ (sa.noteOns, sc.noteOns);
+        CHECK (std::memcmp (&sa, &sc, sizeof sa) == 0);
+        const bool same = sameBits (a.source, c.source, LiveValues::kMaxSources) && sameBits (a.lfoPhase, c.lfoPhase, LiveValues::kNumLfos)
+                          && sameBits (&a.lfoVoicePhase[0][0], &c.lfoVoicePhase[0][0], LiveValues::kNumLfos * LiveValues::kReadVoices)
+                          && sameBits (&a.voicePos[0][0], &c.voicePos[0][0], 3 * LiveValues::kReadVoices) && sameBits (a.subPhase, c.subPhase, LiveValues::kReadVoices)
+                          && sameBits (a.envStage, c.envStage, LiveValues::kNumEnvs) && sameBits (a.envPosition, c.envPosition, LiveValues::kNumEnvs)
+                          && sameBits (&a.envVoiceStage[0][0], &c.envVoiceStage[0][0], LiveValues::kNumEnvs * LiveValues::kReadVoices) && a.activeVoices == c.activeVoices;
+        if (!same)
+            std::printf ("variant %d: the readout after the wake-up differs\n", variant);
+        CHECK (same);
+        // the meters of the woken engine start from nothing: never above those of the engine that kept them (it only decays from what it saw)
+        for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+            CHECK (a.stripPeak[s] <= c.stripPeak[s] + 1.0e-6f);
+    }
     CHECK_EQ (failed, 0);
 }
 

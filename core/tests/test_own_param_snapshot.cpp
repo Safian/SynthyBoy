@@ -284,3 +284,91 @@ TEST (own_param_snapshot_rebuilds_only_what_a_changed_parameter_reaches)
     CHECK_EQ (r1.voiceEpochs - r0.voiceEpochs, 1u);
     CHECK_EQ (p.mismatches, 0);
 }
+
+TEST (own_param_snapshot_a_write_of_the_held_value_derives_nothing_again)
+{
+    Pair p = makePair (Tier::high);
+    patch (p);
+    chord (p, true);
+    for (int i = 0; i < 6; ++i)
+        renderBlock (p, {});
+    auto deltaOf = [&] (bool ref, const own::OwnEngine::SnapshotStats& before)
+    {
+        const auto after = statsOf (p, ref);
+        own::OwnEngine::SnapshotStats d {};
+        d.snapshots = after.snapshots - before.snapshots;
+        d.matrixCompiles = after.matrixCompiles - before.matrixCompiles;
+        d.tuningComputes = after.tuningComputes - before.tuningComputes;
+        d.voiceEpochs = after.voiceEpochs - before.voiceEpochs;
+        return d;
+    };
+    // the value a parameter holds written again, for one key of every consumer of the snapshot: the engine derives nothing again, the reference (kOwnSavingParamDiff) rebuilds as it did
+    for (const char* key : { "filter1.cutoff", "reverb.mix", "mod01.amount", "master.tuning.a4", "macro.1", "master.volume", "osc1.level" })
+    {
+        const ParamInfo* info = findParamByKey (key);
+        CHECK (info != nullptr);
+        if (info == nullptr)
+            continue;
+        const float held = p.inc->getParam (info->id);
+        setBothAt (p, *info, held);
+        const auto bi = statsOf (p, false), br = statsOf (p, true);
+        renderBlock (p, {});
+        const auto di = deltaOf (false, bi), dr = deltaOf (true, br);
+        if (di.snapshots != 0u || di.matrixCompiles != 0u || di.tuningComputes != 0u || di.voiceEpochs != 0u)
+            std::printf ("a write of the held value of %s rebuilt: %u snapshots\n", key, di.snapshots);
+        CHECK_EQ (di.snapshots, 0u);
+        CHECK_EQ (di.matrixCompiles, 0u);
+        CHECK_EQ (di.tuningComputes, 0u);
+        CHECK_EQ (di.voiceEpochs, 0u);
+        CHECK_EQ (dr.snapshots, 1u);
+        CHECK_EQ (dr.matrixCompiles, 1u);
+        renderBlock (p, {});
+    }
+    // the same values as a whole preset: a new generation, no changed value
+    {
+        ParamValues values = ParamValues::defaults();
+        for (size_t i = 0; i < paramCount(); ++i)
+            values.plain[i] = p.inc->getParam (paramTable()[i].id);
+        const auto bi = statsOf (p, false), br = statsOf (p, true);
+        p.inc->setPresetParams (values);
+        p.ref->setPresetParams (values);
+        renderBlock (p, {});
+        const auto di = deltaOf (false, bi), dr = deltaOf (true, br);
+        CHECK_EQ (di.snapshots, 0u);
+        CHECK_EQ (dr.snapshots, 1u);
+    }
+    // a changed value still rebuilds, and the +0 / -0 pair of one parameter is a change (the bit pattern is compared)
+    {
+        const ParamInfo* info = findParamByKey ("osc1.tune");
+        CHECK (info != nullptr);
+        setBothAt (p, *info, 0.0f);
+        renderBlock (p, {});
+        const float before = p.inc->getParam (info->id);
+        uint32_t b0 = 0;
+        std::memcpy (&b0, &before, 4);
+        const auto bi = statsOf (p, false);
+        setBothAt (p, *info, -0.0f);
+        renderBlock (p, {});
+        const float after = p.inc->getParam (info->id);
+        uint32_t b1 = 0;
+        std::memcpy (&b1, &after, 4);
+        const auto di = deltaOf (false, bi);
+        CHECK_EQ (di.snapshots, b0 != b1 ? 1u : 0u);
+        setBothAt (p, *findParamByKey ("filter1.cutoff"), 777.0f);
+        const auto bj = statsOf (p, false);
+        renderBlock (p, {});
+        CHECK_EQ (deltaOf (false, bj).snapshots, 1u);
+    }
+    // writes that change nothing, mixed with blocks that follow real changes, sound as the reference does
+    uint64_t rng = 7;
+    for (int round = 0; round < 60; ++round)
+    {
+        const ParamInfo& info = paramTable()[static_cast<size_t> (round * 37) % paramCount()];
+        if (round % 3 == 0)
+            setBothAt (p, info, nextValue (info, rng));
+        else
+            setBothAt (p, info, p.inc->getParam (info.id));
+        renderBlock (p, {});
+    }
+    CHECK_EQ (p.mismatches, 0);
+}

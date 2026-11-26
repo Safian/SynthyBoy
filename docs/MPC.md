@@ -571,6 +571,15 @@ The benchmark `synthyboy_bench` (`bench/bench_engine.cpp`) and `synthyboy_noteon
 - `synthyboy_tier_bench` also: `--scalar-content` (the content oscillators run their reference code), `--no-voice-savings` (the voice control and the matrix without the round 13 caches and skips; `--verify` includes it), `--profile FILE`, `--micro`, `--tolerance X` (with `--verify`) and, with `--sections`, the sections of the longest block.
 - `--unison-cap N` (0 = none), `--morph-spread 0|1`, `--kill-fade MS` set the tier low options of the engine described above. `--ftz` sets flush-to-zero like the plugin; `--idle` plays no notes.
 
+## What the display reads after the CPU follow-up (2026-11-26)
+
+The control-period caches of `docs/dsp-knowledge/voice-control.md` (the section "Per-period derivations") leave every output sample of a fixed patch as it was (offline tests: bit for bit, x86). Two of them change what the display can read, not what is heard:
+
+- An LFO that no modulation slot reads is evaluated in the newest voice only (the voice the display reads); the other voices advance its clock and its display position but do not make its value. The cursors of the LFO pictures (`lfoVoicePhase`, `lfoPhase`) are unchanged for every voice. The value of such an LFO as a source for the newest voice is unchanged; when the newest voice ends in the last control period of a block, the voice that becomes the newest shows an older value of it for up to one block. After an edit that routes an LFO that a voice had not evaluated, its smoothing starts at the value (the sound differs from the old code to the smoothing and agrees again within a few smoothing times).
+- The readout (`copyReadout`, the voice statistics) is written only while something polls it (a 256 block countdown that every `copyReadout`, `voiceStats` and `setReadoutTargets` call restarts). A display that polls 30 times a second reads exactly what it read before; a host that does not poll saves the work, and the meters start from nothing at the first block after a pause.
+
+Neither is measured on a device; the instruction counts are in the voice control file (x86 callgrind, not the Cortex-A17 or A76).
+
 ## LFO pictures
 
 The tabs `LFO 1` to `LFO 4` (sub-tabs of the function key `LFO`; ONE tab `LFO` since 2026-11-21) had the same layout as the Env and Osc tabs: a large picture of the selected shape in the upper two rows, with a cursor that follows the cycle of the voice that was played last, and the eight main controls of the LFO in the lower two rows, which are Q-Link 1 to 8 (the rows on the screen are the rows of the hardware): Shape, Sync, Rate, Division / Trigger, Phase, Fade In, Delay. The Q-Link frames cover the lower two rows (`x 301 288 323`, see "Q-Link frames and alignment"). (The host tab and its generator `30_lfo.py` were deleted on 2026-11-21 with the host fallback widgets; the LFO pages of the plugin draw the shape and the cursor.)

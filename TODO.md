@@ -122,6 +122,8 @@
 
 - [ ] A Key 61-en futtasd a valós idejű ütemezést megkövetelő modulmérést és az interferencia-összehasonlítást. Rögzítsd a modulonkénti költséget, a p99 szórását, a CPU-affinitást és az ütemezést (scripts/perf-device.sh, modules és e1 fázis).
 - [ ] 18. A mérőprogram más `libm`-et használ, mint az eszközön futó plugin; kivételkezelés és RTTI bekapcsolva a DSP-könyvtárakban.
+- [ ] Display readout cadence (owner decision): `OwnEngine::writeReadout` and `publishStats` now run only while something polls (`readoutDemand`, 256 blocks), so a polled engine still writes them every block and nothing is saved while the MPC overlay polls (about 30 Hz). Writing only every fourth block while polled would save about 6.5 k Ir per block (x86 callgrind estimate, device not measured) but a poll would read data older by about 7 blocks (20 ms); the meter peaks would have to be collected over the skipped blocks (the audio-thread block peaks reset every block today). Done when the owner has decided the display latency and the device PMU shows the gain.
+- [ ] Device measurement of the control-period caches of `docs/dsp-knowledge/voice-control.md` (oscillator part by field group, filter setup memo, unused LFOs in the newest voice only, render tail, no-op snapshot, voice count gain cache): only x86 callgrind instruction counts exist (Mac / VM, not the Cortex-A17 or A76). Done when an A/B/A on the Key 61 (`docs/dsp-knowledge/measurement.md`) shows the gain per preset or the item is reverted.
 
 ## Memóriahasználat és motorvezérlés
 
