@@ -7,6 +7,7 @@
 #include <cmath>
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <vector>
 
 #include "fx_dsp.h"
@@ -153,11 +154,43 @@ public:
         const int type = std::clamp (p.type, 0, 5);
         if (groupOf (type) != activeGroup)
             enterGroup (groupOf (type));
-        const float aHs = TrapLp::coefficient (p.highShelfHz, sampleRate), aLs = TrapLp::coefficient (p.lowShelfHz, sampleRate);
-        coefs.cHi = OnePole::coefficient (p.highCut, sampleRate);
-        coefs.cLo = OnePole::coefficient (p.lowCut, sampleRate);
+        // what a call needs of libm depends on the settings and the rate alone: made again only when one of them changed (the exact bits). The two shelf coefficients (a tan each) are
+        // the cores' (types 1 .. 5) and are not made for the 16 line network; the input band pass (two exp) and the network's lengths, gains and shelves (17 pow / exp2, 4 exp) are kept
+        float aHs = 0.0f, aLs = 0.0f;
+        if (type != 0)
+        {
+            if (!shelfValid || !sameBits (p.highShelfHz, shelfKey[0]) || !sameBits (p.lowShelfHz, shelfKey[1]) || shelfRate != sampleRate)
+            {
+                shelfCoef[0] = TrapLp::coefficient (p.highShelfHz, sampleRate);
+                shelfCoef[1] = TrapLp::coefficient (p.lowShelfHz, sampleRate);
+                shelfKey[0] = p.highShelfHz;
+                shelfKey[1] = p.lowShelfHz;
+                shelfRate = sampleRate;
+                shelfValid = true;
+            }
+            aHs = shelfCoef[0];
+            aLs = shelfCoef[1];
+        }
+        if (!cutValid || !sameBits (p.highCut, cutKey[0]) || !sameBits (p.lowCut, cutKey[1]) || cutRate != sampleRate)
+        {
+            coefs.cHi = OnePole::coefficient (p.highCut, sampleRate);
+            coefs.cLo = OnePole::coefficient (p.lowCut, sampleRate);
+            cutKey[0] = p.highCut;
+            cutKey[1] = p.lowCut;
+            cutRate = sampleRate;
+            cutValid = true;
+        }
         if (type == 0)
-            prepareFdn();
+        {
+            const float key[7] = { p.size, p.decay, p.highShelfDb, p.lowShelfDb, p.highShelfHz, p.lowShelfHz, p.chorusAmount };
+            if (!fdnValid || std::memcmp (key, fdnKey, sizeof key) != 0 || fdnRate != sampleRate)
+            {
+                prepareFdn();
+                std::memcpy (fdnKey, key, sizeof key);
+                fdnRate = sampleRate;
+                fdnValid = true;
+            }
+        }
         else
             prepareCore (type, aHs, aLs);
         const float pd = pdCur;
@@ -348,11 +381,19 @@ private:
         phase += std::min (p.chorusRate, 16.0f) / sr;
         phase -= std::floor (phase);
         float v[kLines];
+        // the four groups share the four lane phases: group 0 and 1 take the cosine (group 1 negated), group 2 and 3 the sine (group 3 negated), of the same argument: 4 cosines and
+        // 4 sines per sample instead of 16 calls (the same values: bit identical)
+        float lcos[4], lsin[4];
+        for (int lane = 0; lane < 4; ++lane)
+        {
+            const float ph = kTwoPif * (phase + static_cast<float> (lane) / 16.0f);
+            lcos[lane] = std::cos (ph);
+            lsin[lane] = std::sin (ph);
+        }
         for (int k = 0; k < kLines; ++k)
         {
             const int group = k / 4, lane = k % 4;
-            const float ph = kTwoPif * (phase + static_cast<float> (lane) / 16.0f);
-            const float mod = fdnDepth * (group == 0 ? std::cos (ph) : (group == 1 ? -std::cos (ph) : (group == 2 ? std::sin (ph) : -std::sin (ph))));
+            const float mod = fdnDepth * (group == 0 ? lcos[lane] : (group == 1 ? -lcos[lane] : (group == 2 ? lsin[lane] : -lsin[lane])));
             const float lenK = std::max (fdnLen[k] + mod, 32.0f);
             const float rd = line[k].readLagrange4 (std::max (lenK - 1.0f, 1.0f));
             const float aRead = apLine[k].line.readCubic (std::max (kA[k] * static_cast<float> (scale) - 1.0f, 1.0f));
@@ -644,6 +685,11 @@ private:
     AllPassLine apLine[kLines];
     float hsLp[kLines] = {}, lsLp[kLines] = {}, inLp[4] = {};
     float fdnLen[kLines] = {}, fdnGain[kLines] = {}, fdnAHs = 1.0f, fdnALs = 0.0f, fdnCHs = 0.1f, fdnCLs = 0.01f, fdnDepth = 0.0f;
+    // the settings the per call coefficients were made for (process ())
+    static bool sameBits (float a, float b) noexcept { return std::memcmp (&a, &b, 4) == 0; }
+    float fdnKey[7] = {}, shelfKey[2] = {}, shelfCoef[2] = {}, cutKey[2] = {};
+    double fdnRate = 0.0, shelfRate = 0.0, cutRate = 0.0;
+    bool fdnValid = false, shelfValid = false, cutValid = false;
     float phase = 0.0f, pdCur = -1.0f;
     // network cores
     DelayLine net[8], erLine;

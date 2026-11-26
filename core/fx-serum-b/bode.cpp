@@ -138,6 +138,7 @@ void Bode::process (float* l, float* r, int n) noexcept
     delaySec = std::clamp (delaySec, 0.0001, 2.0);
 
     const float blurAmount = std::clamp (params.blur, 0.0f, 1.0f);
+    const bool blurOff = blurAmount == 0.0f; // (a NaN is not 0)
     const double blurIncL = kTwoPi * 1.3 / m_sampleRate;
     const double blurIncR = kTwoPi * 1.9 / m_sampleRate;
 
@@ -176,8 +177,9 @@ void Bode::process (float* l, float* r, int n) noexcept
         float delOutR = 0.0f;
         if (m_delayCapacity > 0)
         {
-            const double modL = blurAmount * 0.002 * std::sin (m_blurPhaseL);
-            const double modR = blurAmount * 0.002 * std::cos (m_blurPhaseR);
+            // blur 0: 0 times a sine is a zero (of either sign) and delaySec + 0 is delaySec for the clamped delaySec >= 0.0001: the sine and the cosine are not computed (the phases run on)
+            const double modL = blurOff ? 0.0 : blurAmount * 0.002 * std::sin (m_blurPhaseL);
+            const double modR = blurOff ? 0.0 : blurAmount * 0.002 * std::cos (m_blurPhaseR);
             m_blurPhaseL += blurIncL;
             if (m_blurPhaseL > kTwoPi) m_blurPhaseL -= kTwoPi;
             m_blurPhaseR += blurIncR;
