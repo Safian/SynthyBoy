@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <array>
+#include <cstdint>
+#include <cstring>
 
 #include "../osc/warp.h"
 #include "synthyboy/aa_switch.h"
@@ -47,6 +49,7 @@ struct LoopBand
         aLo = OnePole::coefficient (fLo, sr);
         gain = fLo / fHi + 1.0f;
     }
+    void copyCoefficients (const LoopBand& o) noexcept { aHi = o.aHi; aLo = o.aLo; gain = o.gain; }
     float process (float x) noexcept
     {
         const float l = hi.process (x * gain, aHi);
@@ -69,6 +72,8 @@ public:
         sampleRate = sr;
         for (auto& d : line)
             d.prepare (static_cast<int> (sr * 4.2));
+        for (auto& k : tapCache)
+            k.valid = false;
         reset();
     }
     void reset() noexcept
@@ -97,17 +102,41 @@ public:
             primed = true;
         }
         const float glide = 1.0f - std::pow (0.5f, 1.0f / (0.02f * sr)); // half life of 20 ms: a change of the time bends the echoes like a tape
-        for (auto& b : band)
-            b.set (p.cutoff, p.spread, sampleRate);
+        band[0].set (p.cutoff, p.spread, sampleRate); // both sides have the same filter coefficients: designed once
+        band[1].copyCoefficients (band[0]);
         const float fb = std::clamp (p.feedback, -1.0f, 1.0f);
         for (int i = 0; i < n; ++i)
         {
-            for (int c = 0; c < 2; ++c)
-                fLast[c] += (fTarget[c] - fLast[c]) * glide;
-            const float period[2] = { std::clamp (sr / fLast[0], 3.0f, 4.0f * sr), std::clamp (sr / fLast[1], 3.0f, 4.0f * sr) };
             float rd[2];
             for (int c = 0; c < 2; ++c)
-                rd[c] = p.hq ? line[c].readLagrange8 (period[c]) : line[c].readCubic (period[c]);
+            {
+                fLast[c] += (fTarget[c] - fLast[c]) * glide;
+                // the read position, its split and the Lagrange weights are functions of fLast alone: once the glide has settled (the float no longer changes) they are the same as the
+                // sample before, so they are kept (the quotient sr / fLast, the clamp, the truncation and the weights are not redone)
+                TapCache& k = tapCache[c];
+                uint32_t bits;
+                std::memcpy (&bits, &fLast[c], sizeof bits);
+                if (!k.valid || bits != k.fBits)
+                {
+                    k.fBits = bits;
+                    k.valid = true;
+                    k.period = std::clamp (sr / fLast[c], 3.0f, 4.0f * sr);
+                    k.cubic = DelayLine::cubicTap (k.period);
+                    k.lagValid = false;
+                }
+                if (p.hq)
+                {
+                    if (!k.lagValid || k.lagDivision != divisionWeights)
+                    {
+                        k.lag = DelayLine::lagrange8Tap (k.period, divisionWeights);
+                        k.lagDivision = divisionWeights;
+                        k.lagValid = true;
+                    }
+                    rd[c] = line[c].readLagrange8At (k.lag);
+                }
+                else
+                    rd[c] = line[c].readCubicAt (k.cubic);
+            }
             const float xl = l[i], xr = r[i];
             float wl = 0.0f, wr = 0.0f, outL = 0.0f, outR = 0.0f;
             switch (p.style)
@@ -149,12 +178,26 @@ public:
     }
 
 private:
+    /** The read position of one side for the fLast it was made for (bits), so a settled glide costs nothing per sample. */
+    struct TapCache
+    {
+        uint32_t fBits = 0;
+        bool valid = false, lagValid = false, lagDivision = false;
+        float period = 0.0f;
+        DelayLine::CubicTap cubic;
+        DelayLine::Lagrange8Tap lag;
+    };
     Params p;
     double sampleRate = 48000.0;
     std::array<DelayLine, 2> line;
     LoopBand band[2];
     float fLast[2] = {}, fbRead[2] = {};
     bool primed = false;
+    TapCache tapCache[2];
+
+public:
+    /** Tests only: the 8 point Lagrange weights in the division form of the first version (bit identical to it), not the products (rounding level, CPU review item 3). */
+    bool divisionWeights = false;
 };
 
 class Chorus

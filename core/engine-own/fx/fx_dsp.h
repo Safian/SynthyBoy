@@ -73,17 +73,27 @@ public:
         const float a = ptr[static_cast<size_t> ((pos - i) & mask)], b = ptr[static_cast<size_t> ((pos - i - 1) & mask)];
         return a + (b - a) * f;
     }
-    /** Catmull-Rom (cubic) interpolation, `d` samples back from the newest sample (d >= 1 for the full four points). */
-    float readCubic (float d) const noexcept
+    /** The split of a delay time for the cubic read: the whole samples and the fraction (readCubic () is readCubicAt () of it; a caller whose time did not change keeps it). */
+    struct CubicTap { int i = 0; float t = 0.0f; };
+    static CubicTap cubicTap (float d) noexcept
     {
         const float dd = std::max (d, 1.0f);
-        const int i = static_cast<int> (dd);
-        const float t = dd - static_cast<float> (i);
+        CubicTap k;
+        k.i = static_cast<int> (dd);
+        k.t = dd - static_cast<float> (k.i);
+        return k;
+    }
+    float readCubicAt (const CubicTap& k) const noexcept
+    {
+        const int i = k.i;
+        const float t = k.t;
         const float y0 = ptr[static_cast<size_t> ((pos - i + 1) & mask)], y1 = ptr[static_cast<size_t> ((pos - i) & mask)];
         const float y2 = ptr[static_cast<size_t> ((pos - i - 1) & mask)], y3 = ptr[static_cast<size_t> ((pos - i - 2) & mask)];
         const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
+    /** Catmull-Rom (cubic) interpolation, `d` samples back from the newest sample (d >= 1 for the full four points). */
+    float readCubic (float d) const noexcept { return readCubicAt (cubicTap (d)); }
     /** 4 point (cubic) Lagrange interpolation, `d` samples back from the newest sample (d >= 1). */
     float readLagrange4 (float d) const noexcept
     {
@@ -97,23 +107,57 @@ public:
                     c2 = -(t + 1.0f) * t * (t - 2.0f) * 0.5f, c3 = (t + 1.0f) * t * (t - 1.0f) * (1.0f / 6.0f);
         return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
     }
-    /** 8 point Lagrange interpolation (the high quality mode of the delay). */
-    float readLagrange8 (float d) const noexcept
+    /** The split of a delay time for the 8 point Lagrange read, with its eight weights (the weights depend on the fraction only: a caller whose time did not change keeps them). */
+    struct Lagrange8Tap { int i = 0; float t = 0.0f; float w[8] = {}; };
+    /** The weights of the nodes -3 .. 4 around the point at t: w_k = prod over m != k of (t - m) / (k - m).
+        divisionForm: seven quotients per weight in the order of the first version (56 divisions; readLagrange8 () and the reference of the tests); otherwise the products of (t - m)
+        (prefix and suffix products) times the constants 1 / prod (k - m), no division (CPU review item 3, 2026-11-26: rounding level, below 1e-6 relative on every weight). */
+    static void lagrange8Weights (float t, float* w, bool divisionForm) noexcept
+    {
+        if (divisionForm)
+        {
+            for (int k = -3; k <= 4; ++k)
+            {
+                float x = 1.0f;
+                for (int m = -3; m <= 4; ++m)
+                    if (m != k)
+                        x *= (t - static_cast<float> (m)) / static_cast<float> (k - m);
+                w[k + 3] = x;
+            }
+            return;
+        }
+        // 1 / prod (k - m) over m = -3 .. 4, m != k: k = -3 .. 4
+        static constexpr float kInv[8] = { -1.0f / 5040.0f, 1.0f / 720.0f, -1.0f / 240.0f, 1.0f / 144.0f, -1.0f / 144.0f, 1.0f / 240.0f, -1.0f / 720.0f, 1.0f / 5040.0f };
+        float d[8], pre[8], suf[8];
+        for (int j = 0; j < 8; ++j)
+            d[j] = t - static_cast<float> (j - 3);
+        pre[0] = 1.0f;
+        for (int j = 1; j < 8; ++j)
+            pre[j] = pre[j - 1] * d[j - 1];
+        suf[7] = 1.0f;
+        for (int j = 6; j >= 0; --j)
+            suf[j] = suf[j + 1] * d[j + 1];
+        for (int j = 0; j < 8; ++j)
+            w[j] = pre[j] * suf[j] * kInv[j];
+    }
+    static Lagrange8Tap lagrange8Tap (float d, bool divisionForm) noexcept
     {
         const float dd = std::max (d, 4.0f);
-        const int i = static_cast<int> (dd);
-        const float t = dd - static_cast<float> (i);
+        Lagrange8Tap k;
+        k.i = static_cast<int> (dd);
+        k.t = dd - static_cast<float> (k.i);
+        lagrange8Weights (k.t, k.w, divisionForm);
+        return k;
+    }
+    float readLagrange8At (const Lagrange8Tap& k) const noexcept
+    {
         float acc = 0.0f;
-        for (int k = -3; k <= 4; ++k)
-        {
-            float w = 1.0f;
-            for (int m = -3; m <= 4; ++m)
-                if (m != k)
-                    w *= (t - static_cast<float> (m)) / static_cast<float> (k - m);
-            acc += w * ptr[static_cast<size_t> ((pos - i - k) & mask)];
-        }
+        for (int j = 0; j < 8; ++j)
+            acc += k.w[j] * ptr[static_cast<size_t> ((pos - k.i - (j - 3)) & mask)];
         return acc;
     }
+    /** 8 point Lagrange interpolation (the high quality mode of the delay), the weights in the division form. */
+    float readLagrange8 (float d) const noexcept { return readLagrange8At (lagrange8Tap (d, true)); }
     int capacity() const noexcept { return mask; }
 
 private:

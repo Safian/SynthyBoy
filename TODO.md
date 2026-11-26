@@ -163,7 +163,6 @@
 - [ ] Torzító: a megvalósult ADAA, 2× OS és X-Shaper mérését a profilonkénti regressziók alapjaként használni. A még problémás spektrum vagy szint konkrét típusát azonosítani kell új algoritmus előtt. D1/E7–E9 az XL-profilon; mért kiindulás: `docs/dsp-knowledge/antialiasing.md`.
 - [ ] 4. Konvolúció: egyenletes 128 mintás partíciók (33,5 MB), komplex FFT valós adaton, impulzuscsere átúsztatás nélkül, adatverseny a `live.tone`-on (`core/fx-serum-b/convolve.cpp`, `fx_modules.cpp:1014`).
 - [ ] Zengető: a 2,36 MB-os közös aréna megtartásával ellenőrizni a mintánkénti trigonometria/osztás költségét és a Nitrous Space csillapítását. Bitazonos referencia és eszközmérés: `docs/plans/reverb-convolve.md`.
-- [ ] 6. Késleltető HQ mód: a 8 pontos Lagrange 56 osztást végez mintánként és csatornánként. Szúrópróba: igaz, beágyazott ciklus osztással (`core/engine-own/fx/fx_dsp.h:65-80`).
 - [ ] 7. (maradék) Bode frekvenciatoló: mintánként 64 egész modulo és 4 trigonometria (`core/fx-serum-b/bode.cpp`); a Hilbert-szűrő 800 Hz alatt gyenge.
 - [ ] 10. Szinte minden effekt 32 mintánként lépteti a paramétereit (lépcsőzaj); a „low" szinten a chorus 4, a phaser 8 mintáig tartja az értéket.
 - [ ] 12. Hyper / Dimension: 11 puffer ugyanazzal a jellel, mintánként akár 23 `sin` / `cos`; a Dimension 0% mixnél is fut.
