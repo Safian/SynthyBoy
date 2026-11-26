@@ -99,7 +99,6 @@ public:
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        static const float kAtk[3] = { 2.8f, 1.4f, 0.7f }, kRel[3] = { 40.0f, 28.0f, 15.0f };
         int use[3] = { 0, 1, 2 };
         if (p.bands == 1) { use[0] = 0; use[1] = 1; use[2] = 1; }
         if (p.bands == 2) { use[0] = 1; use[1] = 2; use[2] = 2; }
