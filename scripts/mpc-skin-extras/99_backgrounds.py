@@ -32,7 +32,20 @@ KNOWN = {
     "env4": ("Env 4", CANVAS_ASSET, 900, 2, "0b1023"),
     "env5": ("Env 5", CANVAS_ASSET, 900, 2, "0b1023"),
     "env6": ("Env 6", CANVAS_ASSET, 900, 2, "0b1023"),
-    "lfo1": ("LFO", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo1": ("LFO", CANVAS_ASSET, 900, 2, "0b1029"),   # the 14 hardware sub-tabs LFO, LFO 2 .. LFO 10, RND 1 .. RND 4 (one sentinel colour)
+    "lfo2": ("LFO 2", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo3": ("LFO 3", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo4": ("LFO 4", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo5": ("LFO 5", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo6": ("LFO 6", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo7": ("LFO 7", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo8": ("LFO 8", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo9": ("LFO 9", CANVAS_ASSET, 900, 2, "0b1029"),
+    "lfo10": ("LFO 10", CANVAS_ASSET, 900, 2, "0b1029"),
+    "rnd1": ("RND 1", CANVAS_ASSET, 900, 2, "0b1029"),
+    "rnd2": ("RND 2", CANVAS_ASSET, 900, 2, "0b1029"),
+    "rnd3": ("RND 3", CANVAS_ASSET, 900, 2, "0b1029"),
+    "rnd4": ("RND 4", CANVAS_ASSET, 900, 2, "0b1029"),
     "mod": ("Mod", CANVAS_ASSET, 900, 20, "0b1022"),
     "filter1": ("Filter", CANVAS_ASSET, 900, 95, "171c35"),
     "filter2": ("Filter 2", CANVAS_ASSET, 900, 95, "171c35"),
@@ -111,14 +124,14 @@ def apply(tui, qlinks, ctx):
             ("Overlay Background Sentinel ", "Native Caption " + view))]
         children.append(sentinel_entry(view, marker, SENTINELS[view]))
         # LFO captions belong to its layout-gated native hook.
-        if view != "lfo1":
+        if not view.startswith(("lfo", "rnd")):
             from native_static_captions import caption_entries
             gates = ()
             if view == "tuning":
                 children.extend(caption_entries("tuning_header", prefix="Native Caption tuning header"))
             if view == "master":
                 import native_ui_params
-                master_view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
+                master_view = native_ui_params.native_base_index(ctx.param_count) + native_ui_params.MASTER_VIEW
                 children.extend(caption_entries("master_header", prefix="Native Caption master header"))
                 # The block titles of both sides are part of their native panels (native_master).
                 gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)

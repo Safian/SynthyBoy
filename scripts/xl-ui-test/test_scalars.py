@@ -15,7 +15,7 @@ class ScalarsTest(unittest.TestCase):
 
     def test_published_editors_select_their_actual_instance(self):
         engine = {"env5.units":1, "env5.hold_beats":0, "lfo8.swing":.5, "mod40.amount":.1, "filter2.resonance":1}
-        base = native.mixer_peek_index(len(engine))
+        base = native.native_base_index(len(engine))
         values = {base+native.ENV_SELECTION:.8, base+native.LFO_OFFSET:7/13,
                   base+native.MOD_ROWS+2:40/64, base+native.FILTER_STATE_OFFSET:.5}
         for path, key in (("env1/Env Native Hold/knob","env5.hold_beats"),

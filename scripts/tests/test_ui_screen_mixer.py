@@ -25,9 +25,8 @@ from native_ui_params import (
     MIXER_HOLD_OFFSET,
     MIXER_MUTE_OFFSET,
     MIXER_PEAK_OFFSET,
-    MIXER_PEEK_TARGETS,
     MIXER_SOLO_OFFSET,
-    mixer_peek_index,
+    native_base_index,
 )
 
 
@@ -53,12 +52,12 @@ class UiScreenMixerTests(unittest.TestCase):
         from PIL import Image
         from native_ui_params import MIXER_STEREO_BASE, NATIVE_PARAMS
         self.assertEqual(self.code, 0, self.err)
-        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (900, 966))
+        self.assertEqual((MIXER_STEREO_BASE, NATIVE_PARAMS), (897, 963))
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
         entries = [e for e in tab["componentDefinition"]["componentsData"]
                    if e["componentData"]["type"] in ("mixerStripSourceFrame", "mixerStripFilterFrame", "mixerStripBusFrame", "mixerStripMasterFrame")]
         self.assertEqual(len(entries), 10)
-        base_offset = mixer_peek_index(len(self.params)) + MIXER_STEREO_BASE
+        base_offset = native_base_index(len(self.params)) + MIXER_STEREO_BASE
         fields = ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")
         bound = set()
         for strip, entry in enumerate(entries):
@@ -81,7 +80,7 @@ class UiScreenMixerTests(unittest.TestCase):
                     self.assertEqual(cell["bounds"]["acceptsHWFocus"], "No")
                     for image in (data["inactiveImage"], data["peakImage"]):
                         with Image.open(self.skins / image) as art:
-                            self.assertEqual(art.size, (8, 4 if role == "Clip" else 192 if strip < 7 else 408))
+                            self.assertEqual(art.size, (8, 4 if role == "Clip" else 248 if strip < 7 else 464))
         self.assertEqual(len(bound), 60)
 
     def test_hook_discovery_and_execution_clean(self):
@@ -111,7 +110,7 @@ class UiScreenMixerTests(unittest.TestCase):
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
 
         handles = {p["key"]: f"Parameter {i}" for i, p in enumerate(self.params)}
-        native_base = mixer_peek_index(len(self.params))
+        native_base = native_base_index(len(self.params))
 
         strips = (
             ("SUB", "sub"), ("A", "osc1"), ("B", "osc2"), ("C", "osc3"), ("NOISE", "noise"),
@@ -123,8 +122,8 @@ class UiScreenMixerTests(unittest.TestCase):
             self.assertIn(strip_name, components)
             comp = components[strip_name]
 
-            # Verify geometry: start_x=10, stride=127, y=10, w=115, h=550
-            expected_bounds = f"{10 + 127 * i} 10 115 550"
+            # Verify geometry: start_x=10, stride=127, y=10, w=115, h=606 (the strips take the whole tab: no peek tab bar)
+            expected_bounds = f"{10 + 127 * i} 10 115 606"
             self.assertEqual(comp["bounds"]["bounds"], expected_bounds)
 
             remap = {h["key"]: h["value"] for h in comp["handle remapping"]["map"]}
@@ -158,7 +157,7 @@ class UiScreenMixerTests(unittest.TestCase):
                 self.assertEqual(remap.get("Level"), handles["master.volume"])
 
         for def_name in ("mixerStripSourceFrame", "mixerStripFilterFrame", "mixerStripBusFrame", "mixerStripMasterFrame",
-                         "mixerDestination56", "mixerSliderLEVEL198", "mixerSliderLEVEL414",
+                         "mixerDestination56", "mixerSliderLEVEL254", "mixerSliderLEVEL470",
                          "mixerSliderPAN56", "mixerSliderB156", "mixerSliderB256"):
             self.assertIn(def_name, definitions, f"{def_name} must remain in generated TUI.json (not pruned as dead)")
             self.assertIn("componentsData", definitions[def_name])
@@ -174,45 +173,23 @@ class UiScreenMixerTests(unittest.TestCase):
             else:
                 self.assertIn("FxVisual", remap, f"{caption} strip must map FxVisual")
 
-    def test_mixer_peek_buttons_and_surfaces(self):
-        """Verify the 6 persistent bottom tab buttons (0..5) and non-overlapping Filter/FX editor surfaces."""
+    def test_mixer_has_no_peek_tab_bar_or_docked_surfaces(self):
+        """The Mixer is one screen: ten strips over the whole tab, no tab bar, no docked Filter or FX editor, no tab gate."""
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer"))
         components = {c["componentData"]["name"]: c for c in tab["componentDefinition"]["componentsData"]}
-        native_base = mixer_peek_index(len(self.params))
-
+        self.assertFalse([name for name in components if name.endswith(" Peek") or " Peek " in name],
+                         "no peek button or docked surface remains on the Mixer tab")
+        bottom = 0
         for s_cap in ("SUB", "A", "B", "C", "NOISE", "F1", "F2", "BUS 1", "BUS 2", "MAIN"):
-            strip_gates = components[f"Mixer Native {s_cap} Strip"]["bounds"]["additionalInvalidatingHandles"]
-            self.assertIn(f"IndexedEnabling/0/6/Parameter {native_base + 856}", strip_gates)
-
-        all_tabs = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
-        for i, caption in enumerate(all_tabs):
-            peek_name = f"Mixer Native {caption} Peek"
-
-            self.assertIn(peek_name, components)
-            btn = components[peek_name]
-            self.assertEqual(btn["componentData"]["type"], "Button")
-            remap = {h["key"]: h["value"] for h in btn["handle remapping"]["map"]}
-            self.assertEqual(remap.get("Data"), f"Parameter {native_base}")
-            data = btn["componentData"]["data"]
-            self.assertEqual(data["buttonId"], i, f"{caption} buttonId must be {i} (0..5)")
-            self.assertEqual(data["numButtonsInGroup"], 6)
-            self.assertEqual(data["gestureBehaviour"], "Instant")
-            bounds = btn["bounds"]["bounds"].split()
-            self.assertEqual(int(bounds[1]), 566)
-            self.assertEqual(int(bounds[3]), 56)
-            # Persistent tabs keep modal_gate (active in 0..18 across MIXER + 5 docked views, hidden on full-screen popups)
-            gates = btn["bounds"].get("additionalInvalidatingHandles", [])
-            self.assertTrue(any(g.startswith("RangedEnabling/0/18/33/") for g in gates),
-                            f"{caption} persistent tab must carry Overlay Instance modal gate (< 19)")
-            self.assertFalse(any(g.startswith("IndexedEnabling/0/6/") for g in gates),
-                             f"{caption} persistent tab must NOT be gated to tab 0 only")
-
-        # Docked surfaces must exclude bottom tab bar (height <= 564)
-        self.assertIn("Mixer Native Peek Filter", components)
-        self.assertIn("Mixer Native Peek FX", components)
-        for name in ("Mixer Native Peek Filter", "Mixer Native Peek FX"):
-            _, y, _, h = map(int, components[name]["bounds"]["bounds"].split())
-            self.assertLessEqual(y + h, 564, f"{name} must not cover bottom tab bar y=566..622")
+            comp = components[f"Mixer Native {s_cap} Strip"]
+            _, y, _, h = map(int, comp["bounds"]["bounds"].split())
+            bottom = max(bottom, y + h)
+            gates = comp["bounds"]["additionalInvalidatingHandles"]
+            self.assertTrue(all(g.startswith("RangedEnabling/0/18/33/") for g in gates),
+                            f"{s_cap} strip carries the modal gate only (no active-tab gate)")
+        self.assertEqual(bottom, 616, "the strips end 12 px above the tab bottom: the freed bottom row belongs to them")
+        names = {entry["key"] for entry in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        self.assertFalse({n for n in names if n.startswith("mixerPeek")}, "no mixerPeek definition remains")
 
     def test_sdk_docs_present_and_applicable(self):
         """Verify targeted SDK documentation exists at the required location."""

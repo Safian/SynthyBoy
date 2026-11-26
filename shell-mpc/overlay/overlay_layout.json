@@ -562,6 +562,487 @@
       }
     },
     {
+      "name": "lfo2",
+      "kind": "lfoui",
+      "index": 2,
+      "tab": "LFO 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "4f5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a4f64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo3",
+      "kind": "lfoui",
+      "index": 3,
+      "tab": "LFO 3",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "565a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a5664",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo4",
+      "kind": "lfoui",
+      "index": 4,
+      "tab": "LFO 4",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5d5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a5d64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo5",
+      "kind": "lfoui",
+      "index": 5,
+      "tab": "LFO 5",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "645a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a6464",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo6",
+      "kind": "lfoui",
+      "index": 6,
+      "tab": "LFO 6",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "6b5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a6b64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo7",
+      "kind": "lfoui",
+      "index": 7,
+      "tab": "LFO 7",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "725a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a7264",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo8",
+      "kind": "lfoui",
+      "index": 8,
+      "tab": "LFO 8",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "795a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a7964",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo9",
+      "kind": "lfoui",
+      "index": 9,
+      "tab": "LFO 9",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "805a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a8064",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo10",
+      "kind": "lfoui",
+      "index": 10,
+      "tab": "LFO 10",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "875a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a8764",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "rnd1",
+      "kind": "lfoui",
+      "index": 11,
+      "tab": "RND 1",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "8e5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a8e64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "rnd2",
+      "kind": "lfoui",
+      "index": 12,
+      "tab": "RND 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "955a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a9564",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "rnd3",
+      "kind": "lfoui",
+      "index": 13,
+      "tab": "RND 3",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "9c5a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5a9c64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "rnd4",
+      "kind": "lfoui",
+      "index": 14,
+      "tab": "RND 4",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "a35a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 1,
+          "w": 6,
+          "h": 6,
+          "rgb": "5aa364",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 1,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
       "name": "fx",
       "kind": "fx",
       "index": 1,

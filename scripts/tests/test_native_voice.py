@@ -331,7 +331,7 @@ class TestNativeVoiceTab(unittest.TestCase):
             self.assertEqual((t_data["buttonId"], t_data["numButtonsInGroup"], t_data["handleName"]), (1, 1, item["handle"]))
             self.assertNotEqual(t_data["onImage"], t_data["offImage"])
         base = sequence_base(self.ctx)
-        self.assertEqual(base, 2969)
+        self.assertEqual(base, 2968)
         strings = {entry["key"]: entry["value"] for entry in page["replacementStrings"]}
         self.assertEqual(strings[f"Parameter {base}"], list(VOICE_ROWS))
         self.assertEqual(strings[f"Parameter {base + 1}"], list(VOICE_STEPS))

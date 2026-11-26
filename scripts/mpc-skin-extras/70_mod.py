@@ -64,7 +64,7 @@ def apply(tui, qlinks, ctx):
         raise ValueError("Mod skin geometry and parameter layout disagree")
     items = ctx.tab("Mod")["componentDefinition"]["componentsData"]
     items[:] = [c for c in items if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
-    base = handles.mixer_peek_index(ctx.param_count)
+    base = handles.native_base_index(ctx.param_count)
     view, row_base, field_base = (base + offset for offset in (handles.MOD_VIEW, handles.MOD_ROWS, handles.MOD_FIELDS))
     nav_base = base + handles.MOD_NAVIGATION
     replacement = tui["pageData"].setdefault("replacementStrings", [])

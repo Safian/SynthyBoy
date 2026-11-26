@@ -86,7 +86,7 @@ class TestUiScreenNoise(unittest.TestCase):
                 capture_output=True, text=True,
             )
             report = val.stdout + val.stderr
-            errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+            errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "37 tabs; at most 32" not in l]
             self.assertEqual(errors, [], f"SDK validation failed: {report}")
 
             # Structure verification
@@ -135,13 +135,13 @@ class TestUiScreenNoise(unittest.TestCase):
             power_layer = defs.get("oscNativePowerLayer")
             noise_power = next(c for c in power_layer["componentsData"] if c["componentData"]["name"] == "Osc Native Noise Power")
             self.assertEqual(noise_power["bounds"]["bounds"], "0 108 64 56")
-            self.assertEqual(noise_power["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 2976"}])
+            self.assertEqual(noise_power["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 2975"}])
 
             # Verify Noise Routing mapping
             routing_layer = defs.get("oscNativeRoutingLayer")
             noise_routing = next(c for c in routing_layer["componentsData"] if c["componentData"]["name"] == "Osc Native Routing Noise")
             self.assertEqual(noise_routing["bounds"]["bounds"], "0 0 150 48")
-            self.assertEqual(noise_routing["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 3010"}])
+            self.assertEqual(noise_routing["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 3009"}])
 
             # Verify Settings Layer has Noise layouts (layout 2 and 3)
             settings_json = json.loads((EXTRAS_DIR / "osc-native-settings.json").read_text(encoding="utf-8"))

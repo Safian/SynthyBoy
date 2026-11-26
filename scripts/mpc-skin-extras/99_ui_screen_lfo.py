@@ -59,20 +59,12 @@ SENTINEL_RIGHT = (1241, 1, 6, 6)
 # Inventory of built / integrated native components on LFO:
 REBUILT_NATIVE_COMPONENTS = (
     {
-        "id": "lfo_instance_select",
-        "name": "LFO Native Instance Select",
-        "kind": "lfoNativeChoice",
-        "rect": tuple(_ui_style.size('screen.ui_screen_lfo.rect.rect')),
-        "role": "LFO példány választó (LFO 1..10, RND 1..4) popup választó overlay-jel",
-        "status": "MEGÉPÍTETT (200x56 px, >=56 px érintési felület)",
-    },
-    {
         "id": "lfo_waveform_picker",
         "name": "LFO Native Waveform Picker",
         "kind": "lfoNativeChoice",
         "rect": tuple(_ui_style.size('screen.ui_screen_lfo.rect.rect.2')),
         "role": "Hullámforma választó (Sine, Tri, Saw, Ramp, Square, Pulse, Smooth Rnd, Stepped Rnd, Drawn)",
-        "status": "MEGÉPÍTETT (848x56 px, fejléc menü és léptető)",
+        "status": "MEGÉPÍTETT (1056x56 px, fejléc menü és léptető; a LFO-választó helyét átvette)",
     },
     {
         "id": "lfo_targets_action",
@@ -328,9 +320,9 @@ def apply(tui, qlinks, ctx):
     captions = [e for e in root_items if e["componentData"]["name"].startswith(PREFIX + "Group ")]
     controls = [e for e in root_items if e not in captions]
     # Two SYNC composites became six directly bound Button leaves apiece.
-    # The 25 scalar composites and two action Buttons retain their contracts.
-    if len(controls) != 39 or sum(e["componentData"]["type"] == "Button" for e in controls) != 14:
-        raise ValueError(f"Expected 39 root native LFO controls including 14 Buttons, found {len(controls)}")
+    # The 24 scalar composites (the source selector is gone: the 14 hardware sub-tabs name the LFO) and two action Buttons retain their contracts.
+    if len(controls) != 38 or sum(e["componentData"]["type"] == "Button" for e in controls) != 14:
+        raise ValueError(f"Expected 38 root native LFO controls including 14 Buttons, found {len(controls)}")
     if len(captions) != 12 or any(e["componentData"]["type"] != "Label" for e in captions):
         raise ValueError("Expected twelve layout-gated native LFO group captions")
     if len(editor_items) != 29:
@@ -363,8 +355,8 @@ def apply(tui, qlinks, ctx):
 
     # 7. Verify replacement strings for choice menus
     replacements = {r.get("key"): r.get("value") for r in tui["pageData"].get("replacementStrings", [])}
-    if not any("Parameter" in k and isinstance(v, list) and any("LFO" in str(x) for x in v) for k, v in replacements.items()):
-        raise ValueError("Missing replacementStrings for LFO source selector")
+    if not any("Parameter" in k and isinstance(v, list) and "Drawn" in v for k, v in replacements.items()):
+        raise ValueError("Missing replacementStrings for the LFO waveform choice")
 
     # 8. Attach metadata contract to ctx
     if not hasattr(ctx, "screen_lfo_contract"):

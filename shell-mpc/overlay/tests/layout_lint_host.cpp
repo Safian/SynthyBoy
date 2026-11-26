@@ -951,25 +951,6 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
         }
         case layout::kKindMixer:
             sub ("main", [&] { Rig<MixerUi> r (base, v.index); r.refresh(); lintRig (run, r, pg, "main", { &r.ui.screen() }); });
-            for (int target = 0; target < 3; ++target)
-            {
-                static const char* const names[] = { "peek-filter1", "peek-filter2", "peek-main-fx" };
-                sub (names[target], [&] {
-                    Rig<MixerUi> r (base, v.index);
-                    if (target == 2)
-                    {
-                        r.inst.set ("chorus.on", 1.0f);
-                        r.inst.set ("chorus.rack", 0.0f);
-                    }
-                    r.refresh();
-                    const ui::Rect button = r.ui.screen().routingBar.peekRect (target);
-                    r.tapAt (button.x + button.w / 2, button.y + button.h / 2);
-                    if (auto* root = r.ui.peekRoot())
-                        lintRig (run, r, pg, names[target], { root, &r.ui.peekClose() }, true);
-                    else
-                        run.problems.push_back (pg + "/" + names[target] + ": Mixer tap did not open the panel");
-                });
-            }
             break;
         case layout::kKindFilterUi:
         {
@@ -1083,98 +1064,69 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
         }
         case layout::kKindLfoUi:
         {
-            // ONE LFO tab since the merge: LFO 1 .. 10 and RND 1 .. 4 are states of it (Play LFO and mpcTabView.rnd = the selection)
+            // One tab page per source (the sub-tabs LFO .. LFO 10, RND 1 .. RND 4): the page of the view shows its own source (the view's index 1 .. 14), there is no selector
+            const bool rnd = v.index > 10;
+            const int n = rnd ? v.index - 10 : v.index;
+            const std::string ownKey = (rnd ? "rlfo" : "lfo") + std::to_string (n);
             struct M { const char* n; float sync; };
             const M ms[] = { { "hz", 0.0f }, { "bpm", 1.0f }, { "key", 4.0f } };
-            for (int n = 1; n <= 10; ++n)
-            {
-                const std::string sfx = n == 1 ? std::string() : "-lfo" + std::to_string (n);
-                LintInst lb = base;
-                lb.playSel[2] = n;
-                for (const M& m : ms)
-                    sub ((std::string (m.n) + sfx).c_str(), [&] {
-                        LintInst inst = lb;
-                        inst.set ("lfo" + std::to_string (n) + ".sync", m.sync);
-                        Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, (std::string (m.n) + sfx).c_str(), { &r.ui.full() });
-                    });
-                sub (("drawn" + sfx).c_str(), [&] {   // EDIT is there while the drawn shape is shown
-                    LintInst inst = lb;
-                    inst.set ("lfo" + std::to_string (n) + ".shape", 12.0f);
-                    Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, ("drawn" + sfx).c_str(), { &r.ui.full() });
+            for (const M& m : ms)
+                sub (m.n, [&] {
+                    LintInst inst = base;
+                    inst.set (ownKey + ".sync", m.sync);
+                    Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, m.n, { &r.ui.full() });
                 });
-                sub (("drawn-bpm" + sfx).c_str(), [&] {
-                    LintInst inst = lb;
-                    inst.set ("lfo" + std::to_string (n) + ".shape", 12.0f);
-                    inst.set ("lfo" + std::to_string (n) + ".sync", 1.0f);
-                    Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, ("drawn-bpm" + sfx).c_str(), { &r.ui.full() });
+            if (! rnd)
+            {
+                sub ("drawn", [&] {   // EDIT is there while the drawn shape is shown
+                    LintInst inst = base;
+                    inst.set (ownKey + ".shape", 12.0f);
+                    Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, "drawn", { &r.ui.full() });
+                });
+                sub ("drawn-bpm", [&] {
+                    LintInst inst = base;
+                    inst.set (ownKey + ".shape", 12.0f);
+                    inst.set (ownKey + ".sync", 1.0f);
+                    Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, "drawn-bpm", { &r.ui.full() });
                 });
             }
             sub ("base", [&] { Rig<LfoUi> r (base, v.index); r.refresh(); lintRig (run, r, pg, "base", { &r.ui.full() }); });
-            for (int m = 1; m <= 4; ++m)
-                for (const M& mo : ms)
-                {
-                    const std::string nm = "random-r" + std::to_string (m) + "-" + mo.n;
-                    sub (nm.c_str(), [&] {
-                        LintInst inst = base;
-                        inst.tabViewState[0] = m;
-                        inst.set ("rlfo" + std::to_string (m) + ".sync", mo.sync);
-                        Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, nm.c_str(), { &r.ui.full() });
-                    });
-                }
-            sub ("random", [&] {
-                LintInst inst = base;
-                inst.tabViewState[0] = 1;
-                Rig<LfoUi> r (inst, 1); r.refresh(); lintRig (run, r, pg, "random", { &r.ui.full() });
-            });
-            sub ("all-used", [&] {   // 10 LFOs and 4 random LFOs routed: the widest selector (14 cells)
-                LintInst inst = base;
-                int slot = 1;
-                for (int n = 1; n <= 10; ++n)
-                    inst.mod (slot++, sourceChoice (("lfo" + std::to_string (n)).c_str()), "filter1.cutoff", 20.0f);
-                for (int m = 1; m <= 4; ++m)
-                    inst.mod (slot++, sourceChoice (("rlfo" + std::to_string (m)).c_str()), "filter1.cutoff", 20.0f);
-                Rig<LfoUi> r (inst, v.index); r.refresh(); lintRig (run, r, pg, "all-used", { &r.ui.full() });
-            });
-            sub ("plus-list", [&] {   // the '+' with two free kinds: the two-row list over the page
-                Rig<LfoUi> r (base, v.index); r.refresh();
-                ui::Component* sel = &r.ui.full().selector;
-                r.tapAt (r.ui.full().selector.cell (r.ui.full().selector.numCells() - 1, r.ui.full().selector.numCells()).x + 10, sel->rect().y + 20);
-                r.refresh();
-                lintRig (run, r, pg, "plus-list", { &r.ui.list() }, true);
-            });
-            sub ("editor", [&] { Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh(); lintRig (run, r, pg, "editor", { &r.ui.editor() }); });
-            // the editor in its other states: the LOOP marker (a loop mode) with a selection of every point, the page of the modulation of a point, the lists of SHAPES and MORE over the editor
-            sub ("editor-loop", [&] {
-                LintInst inst = base;
-                inst.set ("lfo" + std::to_string (v.index) + ".sync_type", 4.0f);
-                Rig<LfoUi> r (inst, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
-                r.ui.editor().canvas.selectAll(); r.refresh();
-                lintRig (run, r, pg, "editor-loop", { &r.ui.editor() });
-            });
-            sub ("editor-pointmod", [&] {
-                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
-                r.ui.editor().canvas.selectOnly (1); r.refresh();
-                r.stack.openDetail (LfoUi::kPagePointMod); r.refresh();
-                lintRig (run, r, pg, "editor-pointmod", { &r.ui.pointModPage() });
-            });
-            sub ("editor-shapes-list", [&] {
-                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
-                r.tap (r.ui.editor().shapes); r.refresh();
-                lintRig (run, r, pg, "editor-shapes-list", { &r.ui.list() }, true);
-            });
-            sub ("editor-more-list", [&] {
-                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
-                r.tap (r.ui.editor().more); r.refresh();
-                lintRig (run, r, pg, "editor-more-list", { &r.ui.list() }, true);
-            });
+            if (! rnd)
+            {
+                sub ("editor", [&] { Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh(); lintRig (run, r, pg, "editor", { &r.ui.editor() }); });
+                // the editor in its other states: the LOOP marker (a loop mode) with a selection of every point, the page of the modulation of a point, the lists of SHAPES and MORE over the editor
+                sub ("editor-loop", [&] {
+                    LintInst inst = base;
+                    inst.set ("lfo" + std::to_string (v.index) + ".sync_type", 4.0f);
+                    Rig<LfoUi> r (inst, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                    r.ui.editor().canvas.selectAll(); r.refresh();
+                    lintRig (run, r, pg, "editor-loop", { &r.ui.editor() });
+                });
+                sub ("editor-pointmod", [&] {
+                    Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                    r.ui.editor().canvas.selectOnly (1); r.refresh();
+                    r.stack.openDetail (LfoUi::kPagePointMod); r.refresh();
+                    lintRig (run, r, pg, "editor-pointmod", { &r.ui.pointModPage() });
+                });
+                sub ("editor-shapes-list", [&] {
+                    Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                    r.tap (r.ui.editor().shapes); r.refresh();
+                    lintRig (run, r, pg, "editor-shapes-list", { &r.ui.list() }, true);
+                });
+                sub ("editor-more-list", [&] {
+                    Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                    r.tap (r.ui.editor().more); r.refresh();
+                    lintRig (run, r, pg, "editor-more-list", { &r.ui.list() }, true);
+                });
+            }
             sub ("targets-page", [&] {
                 LintInst inst = base;
-                inst.mod (1, sourceChoice (("lfo" + std::to_string (v.index)).c_str()), "filter1.cutoff", 45.0f);
+                inst.mod (1, sourceChoice (ownKey.c_str()), "filter1.cutoff", 45.0f);
                 Rig<LfoUi> r (inst, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageTargets); r.refresh(); lintRig (run, r, pg, "targets-page", { &r.ui.targetsPage() });
             });
             sub ("mods", [&] {
                 LintInst inst = base;
-                inst.mod (1, sourceChoice (("lfo" + std::to_string (v.index)).c_str()), "filter1.cutoff", 45.0f);
+                inst.mod (1, sourceChoice (ownKey.c_str()), "filter1.cutoff", 45.0f);
                 Rig<LfoUi> r (inst, v.index);
                 openMods (r, r.ui.full(), LfoUi::kPageMods);
                 lintRig (run, r, pg, "mods", { &r.ui.modsPage() });

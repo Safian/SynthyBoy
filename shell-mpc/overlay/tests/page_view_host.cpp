@@ -334,7 +334,7 @@ int main (int argc, char** argv)
         }
         check (all && pageKinds && wholeTab, "the layout has the 14 page views of the tabs the plugin draws entirely (whole tab, opaque; ONE Filter tab, no filter2)");
         check (layout::isPageKind (layout::kKindPlay) && layout::isPageKind (layout::kKindOscUi) && ! layout::isPageKind (layout::kKindFilter), "a page kind is the Play page and the pages of the elements (the oscillators of the OSC tab included): no tab of the layout is a host page any more");
-        check (layout::kNumViews <= 24, "the layout has " + std::to_string (layout::kNumViews) + " views (the detector holds 24)");
+        check (layout::kNumViews <= 40, "the layout has " + std::to_string (layout::kNumViews) + " views (the detector holds 40)");
     }
     // ---- the host background switch: only the views of the build-time manifest (backgrounds_manifest.h, generated from the skin generator's BACKGROUND_TABS) get it; the others draw everything
     {
@@ -749,47 +749,20 @@ int main (int argc, char** argv)
         check (! pv.ui().hostBackground() && ! pv.ui().nativeBase(),
                "Mixer marker absent: host background and native base inactive");
         const auto writes = inst.uiWrites.load();
-        tap (pv.ui().screen().routingBar.peekRect (1));
-        auto* filter = static_cast<synthyboy_mpc::ui::FilterFullScreen*> (pv.ui().peekRoot());
-        check (filter && filter->display.state.liveCutoffHz == values[2] && filter->display.state.liveResoPct == values[3],
-               "Mixer F2 shows the modulated F2 readout");
-        if (filter)
-        {
-            tap (filter->model.rect());
-            const int* slots = pv.ui().qTargets();
-            const int* end = slots + pv.ui().qSlotCount();
-            check (pv.ui().topPage() == MixerUi::kPagePeek && std::find (slots, end, inst.index ("filter2.cutoff")) != end
-                   && std::find (slots, end, inst.index ("filter2.model")) != end,
-                   "a native model aperture never revives a GPU model list; Filter Q targets remain owned by the panel");
-            const int y = MixerUi::kTabY + 2;
-            touch (TouchEvent::Down, 20, y);
-            touch (TouchEvent::Move, 95, y);
-            touch (TouchEvent::Up, 95, y);
-            refresh();
-            check (pv.ui().topPage() == MixerUi::kPagePeek, "a backdrop drag leaves the panel open");
-            touch (TouchEvent::Down, 20, y);
-            touch (TouchEvent::Up, 20, y);
-            refresh();
-            check (pv.ui().topPage() == 0 && pv.ui().qTargets()[0] == -1 && pv.ui().qTargets()[1] == inst.index ("osc1.level") && inst.uiWrites.load() == writes,
-                   "a backdrop tap dismisses only the panel and restores Mixer Q targets (sub powered off: unmapped, osc1 active) without writes");
-            inst.set ("sub.on", 1.0f);
-            refresh();
-            check (pv.ui().topPage() == 0 && pv.ui().qTargets()[0] == inst.index ("sub.level") && inst.uiWrites.load() == writes,
-                   "sub powered on restores exact sub.level Q target without writes");
-            pv.setHostBackground (true);
-            refresh();
-            check (pv.ui().hostBackground() && pv.ui().nativeBase(),
-                   "Mixer with panel closed and marker present: native base active");
-            pv.setHostBackground (false);
-            refresh();
-            check (! pv.ui().hostBackground() && ! pv.ui().nativeBase(),
-                   "Mixer marker absent: native base inactive");
-        }
-        synthyboy_mpc::ui::MixerRoutingBar bar;
-        const auto min = bar.minSize();
-        bar.place ({ 0, 0, min.w, min.h });
-        check (! bar.peekRect (0).overlaps (bar.peekRect (1)) && ! bar.peekRect (1).overlaps (bar.peekRect (2)) && bar.peekRect (0).w >= 56,
-               "at the routing bar minimum width its three touch targets remain disjoint and at least 56 px");
+        check (pv.ui().topPage() == 0 && pv.ui().qTargets()[0] == -1 && pv.ui().qTargets()[1] == inst.index ("osc1.level"),
+               "the Mixer publishes its level Q targets (sub powered off: unmapped, osc1 active)");
+        inst.set ("sub.on", 1.0f);
+        refresh();
+        check (pv.ui().topPage() == 0 && pv.ui().qTargets()[0] == inst.index ("sub.level") && inst.uiWrites.load() == writes,
+               "sub powered on restores exact sub.level Q target without writes");
+        pv.setHostBackground (true);
+        refresh();
+        check (pv.ui().hostBackground() && pv.ui().nativeBase(),
+               "Mixer marker present: native base active");
+        pv.setHostBackground (false);
+        refresh();
+        check (! pv.ui().hostBackground() && ! pv.ui().nativeBase(),
+               "Mixer marker absent: native base inactive");
     }
     // ---- a page of the KIT over the page view (migration step 6): BasicPageView<KitPage, NoHooks> takes mpckit::IInstance, loads no macro names and has no loading bar
     {

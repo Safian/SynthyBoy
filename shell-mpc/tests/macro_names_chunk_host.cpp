@@ -123,7 +123,7 @@ int main (int argc, char** argv)
 
     // ---- the parameter list is the one of before: names are state, not parameters
     check (a->numParams == 2719 + synthyboy_mpc::nativeui::kCount && synthyboy::paramCount() == 2637 && text (a, effGetParamName, macroIdx[0]) == "Macro 1"
-           && text (a, effGetParamName, 2718) == "Q 16" && text (a, effGetParamName, 2719) == "Mixer Peek",
+           && text (a, effGetParamName, 2718) == "Q 16" && text (a, effGetParamName, 2719) == "Mixer Peak 1",
            "macro names keep their engine indices and Q 16 still ends the legacy prefix");
 
     // ---- a chunk of before the names: no member, default names

@@ -39,7 +39,7 @@ from components.native.level.level import (
 )
 from components.style import size as _style_size
 from native_play.osc import add_compact_osc
-from native_ui_params import PLAY_LFO_STANDARD, PLAY_OSC, mixer_peek_index
+from native_ui_params import PLAY_LFO_STANDARD, PLAY_OSC, native_base_index
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"   # (skin-meta "layout_path" or the environment MPC_OVERLAY_LAYOUT name another; a layout without play views leaves this module idle)
@@ -171,7 +171,7 @@ def apply(tui, qlinks, ctx):
     # selector parameter.  Keep the Play LFO range at 1..10: RND is a
     # standalone LFO page, not a compact Play selector value.
     replacement = tui["pageData"].setdefault("replacementStrings", [])
-    standard_lfo = mixer_peek_index(ctx.param_count) + PLAY_LFO_STANDARD
+    standard_lfo = native_base_index(ctx.param_count) + PLAY_LFO_STANDARD
     ctx.add_param_key(standard_lfo, "shell.play_lfo_standard")
     selector_choices = (
         list(OSC_INSTANCE_NAMES),
@@ -314,7 +314,7 @@ def apply(tui, qlinks, ctx):
         _require(active_smooth, standard)
         _require(passive_smooth, standard)
         extra.extend((active_smooth, passive_smooth))
-        add_compact_osc(tui, ctx, extra, mixer_peek_index(ctx.param_count) + PLAY_OSC, sel_idx[0],
+        add_compact_osc(tui, ctx, extra, native_base_index(ctx.param_count) + PLAY_OSC, sel_idx[0],
                         selector_source, stock_menu, unipolar)
         links = {f"Q-Link {i + 1}": index for i, index in enumerate(q_idx)}
         for c in extra:

@@ -199,26 +199,25 @@ void testLfoNavigationButtons()
 {
     using namespace synthyboy_mpc::overlay;
     namespace u = synthyboy_mpc::nativeui;
-    auto rig = std::make_unique<Rig>();
-    auto& r = *rig;
-    auto page = std::make_unique<pages::LfoPage> ("lfo1", 1);
-    pages::configureNativeTab (*page, page->name());
-    page->setHostBackground (true);
-    r.stack.openFull (page->pageElement());
-    const auto tick = [&]
-    {
-        ViewInput input;
-        input.instance = input.io = &r.plugin.overlayView;
-        input.ui = &r.stack;
-        input.nowMs = r.now += 100.0;
-        page->update (input);
-        r.plugin.nativeUiPoll (&r.effect);
-    };
     const int targets = PluginInstance::nativeUiBase() + u::kLfoTargetsAction;
     const int expand = PluginInstance::nativeUiBase() + u::kLfoBase + u::lfo::kAction;
-    for (int source : { 1, 11 })
+    for (int source : { 1, 11 })   // the sub-tabs LFO and RND 1: each page shows its own source, nothing is chosen
     {
-        uibind::chooseLfo (r.plugin.overlayView, source);
+        auto rig = std::make_unique<Rig>();
+        auto& r = *rig;
+        auto page = std::make_unique<pages::LfoPage> (source == 1 ? "lfo1" : "rnd1", source);
+        pages::configureNativeTab (*page, page->name());
+        page->setHostBackground (true);
+        r.stack.openFull (page->pageElement());
+        const auto tick = [&]
+        {
+            ViewInput input;
+            input.instance = input.io = &r.plugin.overlayView;
+            input.ui = &r.stack;
+            input.nowMs = r.now += 100.0;
+            page->update (input);
+            r.plugin.nativeUiPoll (&r.effect);
+        };
         tick();
         tick();
         r.effect.setParameter (&r.effect, targets, 1.0f);
@@ -932,7 +931,7 @@ void testHiddenNativePolling()
     auto rig = std::make_unique<Rig>();
     auto& r = *rig;
     const int peak = u::kMixerPeakBase + 2, right = u::kMixerStereoBase + u::kMixerStrips + 2;
-    r.plugin.overlayView.setNativeMixerPeekEnabled (true);
+    r.plugin.overlayView.setNativeMixerActive (true);
     r.plugin.overlayView.setNativeMixerMeter (2, 0.6f, 0.75f);
     float stereo[u::kMixerStereoFields] { 0.6f, 0.8f, 0.75f, 0.9f, 0, 1 };
     r.plugin.overlayView.setNativeMixerStereoMeter (2, stereo);
@@ -949,7 +948,7 @@ void testHiddenNativePolling()
            "the modulation list and its first row publish their gates");
     const int row = PluginInstance::nativeUiBase() + u::kModBoardControl + u::modboard::ListRow;
     r.effect.setParameter (&r.effect, row, 1.0f);
-    r.plugin.overlayView.setNativeMixerPeekEnabled (false);
+    r.plugin.overlayView.setNativeMixerActive (false);
     r.plugin.overlayView.setNativeModBoard (0, nullptr);
     r.plugin.nativeUiPoll (&r.effect);
     std::fill (std::begin (stereo), std::end (stereo), 0.0f);
@@ -1019,16 +1018,16 @@ void testNativeRootPaintBeforeMetadata()
     u::lfo::ViewState lfo;
     lfo.selection = 1;
     lfo.layout = 1;
-    lfo.fields = u::lfo::bit (u::lfo::kSelection);
-    lfo.values[u::lfo::kSelection] = 0.0f;
+    lfo.fields = u::lfo::bit (u::lfo::kShape);
+    lfo.values[u::lfo::kShape] = 0.0f;
     lfo.values[u::lfo::kLayout] = 1.0f / u::lfo::kLayoutLast;
     r.plugin.requestProxyNames();
     r.plugin.overlayView.setNativeLfoState (lfo);
     r.plugin.nativeLfoPoll (&r.effect);
     const auto paint = r.plugin.nativePagePaintUntil;
     check (paint >= 0 && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kLayout] == lfo.values[u::lfo::kLayout]
-               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kSelection] == lfo.values[u::lfo::kSelection],
-           "the first standalone LFO frame publishes its layout and selector together");
+               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kShape] == lfo.values[u::lfo::kShape],
+           "the first standalone LFO frame publishes its layout and waveform together");
     r.plugin.flushProxyNames (&r.effect, paint - 1);
     check (displayRefreshes == before + 1, "a pending Q name refresh waits for the fresh LFO controls to paint");
     r.plugin.flushProxyNames (&r.effect, paint);
@@ -1037,14 +1036,14 @@ void testNativeRootPaintBeforeMetadata()
     std::this_thread::sleep_for (std::chrono::milliseconds (2));
     lfo.selection = 11;
     lfo.layout = 4;
-    lfo.values[u::lfo::kSelection] = 10.0f / (u::lfo::kInstances - 1);
+    lfo.values[u::lfo::kShape] = 10.0f / (u::lfo::kInstances - 1);
     lfo.values[u::lfo::kLayout] = 4.0f / u::lfo::kLayoutLast;
     r.plugin.requestProxyNames();
     r.plugin.overlayView.setNativeLfoState (lfo);
     r.plugin.nativeLfoPoll (&r.effect);
     const auto rndPaint = r.plugin.nativePagePaintUntil;
     check (rndPaint > paint && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kLayout] == lfo.values[u::lfo::kLayout]
-               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kSelection] == lfo.values[u::lfo::kSelection],
+               && r.plugin.nativeUiReported[u::kLfoBase + u::lfo::kShape] == lfo.values[u::lfo::kShape],
            "switching directly from LFO 1 to RND 1 opens a new paint window and publishes both controls");
     std::this_thread::sleep_for (std::chrono::milliseconds (2));
     r.plugin.overlayView.setNativeLfoState (lfo);
@@ -1056,197 +1055,7 @@ void testNativeRootPaintBeforeMetadata()
     check (displayRefreshes == before + 3, "the RND name refresh is delivered at its original deadline");
 }
 
-void testMixerPeekDisplayRefresh()
-{
-    Rig r;
-    const int before = displayRefreshes;
-    r.plugin.overlayView.setNativeMixerPeekView (nativeui::MixerPeekFilter);
-    r.plugin.requestProxyNames ();
-    r.plugin.requestProxyNames ();
-    const auto request = r.plugin.proxyNamesRequestedAt;
-    r.plugin.flushProxyNames (&r.effect, request);
-    check (displayRefreshes == before, "leave the host free to draw the Filter before rebuilding proxy names");
-    r.plugin.overlayView.observeHostWidgetGate (true);
-    r.plugin.flushProxyNames (&r.effect, request);
-    r.plugin.flushProxyNames (&r.effect, request + 20);
-    check (displayRefreshes == before + 1, "the observed modal frame releases both proxy changes once");
-    r.plugin.overlayView.observeHostWidgetGate (false);
-    r.plugin.requestProxyNames ();
-    r.plugin.flushProxyNames (&r.effect, r.plugin.proxyNamesRequestedAt + 2000);
-    check (displayRefreshes == before + 2, "an unavailable primary frame still releases the metadata update");
-    r.plugin.requestProxyNames ();
-    r.plugin.overlayView.setNativeMixerPeekView (nativeui::MixerBase);
-    r.plugin.flushProxyNames (&r.effect, r.plugin.proxyNamesRequestedAt);
-    check (displayRefreshes == before + 3, "leaving the Filter releases a pending refresh");
-}
-
-void testMixerPeekVst ()
-{
-    namespace u = synthyboy_mpc::nativeui;
-    using namespace synthyboy_mpc::overlay;
-    auto rig = std::make_unique<Rig>();
-    auto& r = *rig;
-    pages::MixerPage view ("mixer", 0, {});
-    pages::configureNativeTab (view, "mixer");
-    view.setHostBackground (false); // Stock control ownership survives a missing background sentinel.
-    r.stack.openFull (MixerUi::kElementPage);
-    r.plugin.overlayView.setTabView (IInstanceView::kTabViewFilter, 3);
-    const int base = PluginInstance::nativeUiBase();
-    const int viewParam = base + u::kMixerPeekView;
-    const auto read = [&] (int index) { return r.effect.getParameter (&r.effect, index); };
-    const auto write = [&] (int index, float norm) { r.effect.setParameter (&r.effect, index, norm); };
-    const auto writes = [&] { return r.plugin.uiWriteCalls.load (std::memory_order_relaxed); };
-    const auto near = [] (float a, float b) { return std::fabs (a - b) < 1.0e-4f; };
-    const auto tick = [&] {
-        ViewInput in;
-        in.ui = &r.stack;
-        in.instance = in.io = &r.plugin.overlayView;
-        in.nowMs = r.now += 75.0;
-        view.update (in);
-        r.plugin.nativeUiPoll (&r.effect);
-    };
-    const auto tap = [&] (synthyboy_mpc::ui::Rect area) {
-        const int x = area.x + area.w / 2, y = area.y + area.h / 2;
-        view.onTouch (TouchEvent { TouchEvent::Down, x, y }, r.stack, r.plugin.overlayView, r.now);
-        view.onTouch (TouchEvent { TouchEvent::Up, x, y }, r.stack, r.plugin.overlayView, r.now + 30);
-    };
-    write (target ("filter1.on"), 1.0f);
-    write (target ("filter2.on"), 1.0f);
-    write (target ("delay.on"), 1.0f);
-    write (target ("chorus.on"), 1.0f);
-    write (target ("reverb.on"), 1.0f);
-    write (target ("delay.rack"), 0.0f);
-    write (target ("chorus.rack"), 1.0f / 9.0f);
-    write (target ("reverb.rack"), 2.0f / 9.0f);
-    tick();
-    check (! view.ui().hostBackground() && view.ui().nativeBase(),
-           "the real Mixer keeps native root ownership while supplying its foreground ground");
-
-    const int keys[] { target ("filter1.cutoff"), target ("filter2.cutoff"), target ("delay.feedback"),
-                       target ("chorus.mix"), target ("reverb.mix") };
-    const int names = static_cast<int> (std::size (keys));
-    std::array<int, synthyboy_mpc::QRouter::kCount> mixerQ;
-    std::copy_n (view.ui().qTargets(), mixerQ.size(), mixerQ.begin());
-    for (int selected = 0; selected < names; ++selected)
-    {
-        write (base + u::kMixerPeek, static_cast<float> (selected + 1) / names);
-        tick();
-        const bool filter = selected < 2;
-        const float expectedView = filter ? 0.5f : 1.0f;
-        check (view.ui().topPage() == MixerUi::kPagePeek && r.stack.element() == MixerUi::kElementPage
-                   && read (viewParam) == expectedView,
-               "the real Mixer PEEK action opens its native editor without selecting a different host tab");
-        check (std::count (view.ui().qTargets(), view.ui().qTargets() + synthyboy_mpc::QRouter::kCount, keys[selected]) == 1,
-               "the open PEEK Q group contains its selected engine parameter once");
-        int handle = filter ? base + u::kFilterValueBase + u::FilterCutoff : -1;
-        if (! filter)
-            for (int slot = 0; slot < u::kFxCells; ++slot)
-                if (r.plugin.nativeFxCells.at (slot).cell().target == keys[selected])
-                    handle = base + u::kFxValueBase + slot;
-        check (handle >= base, "the rack's actual selected native cell is published");
-        if (handle < base)
-        {
-            tap (view.ui().peekCloseRect());
-            tick();
-            continue;
-        }
-        std::array<float, names> old;
-        std::transform (std::begin (keys), std::end (keys), old.begin(), read);
-        const float next = old[selected] > 0.45f ? 0.25f : 0.75f;
-        const auto before = writes();
-        write (handle, next);
-        tick();
-        check (near (read (keys[selected]), next) && near (read (handle), next) && writes() == before + 1,
-               "the native PEEK handle makes exactly one engine write to its selected target");
-        for (int i = 0; i < names; ++i)
-            if (i != selected)
-                check (read (keys[i]) == old[i], "the other filter and FX racks remain isolated");
-
-        // A host drawer runs the PageView hide hook without changing our stack.
-        write (handle, 0.5f);
-        view.onHidden();
-        view.setHostBackground (false);
-        write (handle, 0.6f);
-        check (read (viewParam) == 0.0f && view.ui().topPage() == MixerUi::kPagePeek,
-               "a host drawer disarms all PEEK bindings but retains the selected editor");
-        view.onShown();
-        tick();
-        check (read (viewParam) == expectedView && near (read (keys[selected]), next) && writes() == before + 1,
-               "the drawer's pending callback is dropped and its PEEK can resume");
-
-        write (handle, 0.5f);
-        tap (view.ui().peekCloseRect());
-        write (handle, 0.6f);
-        tick();
-        check (read (viewParam) == 0.0f && ! view.ui().peekRoot() && near (read (keys[selected]), next)
-                   && writes() == before + 1 && std::equal (mixerQ.begin(), mixerQ.end(), view.ui().qTargets()),
-               "closing drops queued and late PEEK writes and restores all sixteen Mixer Q slots");
-        check (r.plugin.overlayView.tabView (IInstanceView::kTabViewFilter) == 3,
-               "PEEK preserves the standalone Filter selection");
-    }
-
-    write (base + u::kMixerPeek, 0.2f);
-    tick();
-    const int cutoff = base + u::kFilterValueBase + u::FilterCutoff;
-    const auto beforeSwitch = writes();
-    write (cutoff, 0.5f);
-    view.onHidden();
-    view.setHostBackground (false);
-    r.stack.closeAll();
-    write (cutoff, 0.6f);
-    r.stack.openFull (MixerUi::kElementPage);
-    tick();
-    check (! view.ui().peekRoot() && read (viewParam) == 0.0f && writes() == beforeSwitch,
-           "actual tab departure discards the open PEEK stack and ignores its late handle");
-
-    // The last card can be powered, removed and added again through the
-    // shared FX chain and gallery without touching either neighbouring rack.
-    namespace c = u::fxchain;
-    namespace h = u::fxheader;
-    const int chain = base + u::kFxChain;
-    write (base + u::kMixerPeek, 1.0f);
-    tick();
-    const int reverbOn = target ("reverb.on"), chorusOn = target ("chorus.on"), delayOn = target ("delay.on");
-    write (chain + c::Power, 0.0f);
-    tick();
-    check (read (reverbOn) == 0.0f && read (chorusOn) == 1.0f && read (delayOn) == 1.0f,
-           "powering a native BUS 2 card down touches neither BUS 1 nor MAIN");
-    write (chain + c::Power, 1.0f);
-    tick();
-    const auto header = r.plugin.nativeFxHeader.state();
-    if (header.item >= 0)
-        write (base + u::kFxHeader + 2 + header.item * h::kFields + h::Remove, 1.0f);
-    tick();
-    const float chainMode = read (chain + c::View);
-    check (header.item >= 0 && read (viewParam) == 1.0f && read (chain + c::Count) == 0.0f
-               && near (chainMode, float (c::MainGallery) / (c::kModes - 1)),
-           "removing the last BUS 2 card leaves the same native PEEK and opens its empty gallery");
-    const int addDistortion = chain + c::Gallery + synthyboy::kFxTypeDistortion - 1;
-    check (read (addDistortion) == 1.0f, "the empty BUS 2 gallery advertises the native distortion card");
-    write (addDistortion, 0.0f);
-    tick();
-    const auto added = r.plugin.nativeFxChain.card (0);
-    check (near (read (chain + c::Count), 1.0f / c::kSlots) && added.rack == 2
-               && added.kind == synthyboy::kFxTypeDistortion && added.on
-               && read (chorusOn) == 1.0f && read (delayOn) == 1.0f,
-           "the shared native gallery adds the effect only to the PEEK rack");
-    tap (view.ui().peekCloseRect());
-    tick();
-
-    char name[synthyboy_mpc::kParamStrBytes] {};
-    VstParameterProperties properties {};
-    const auto named = r.effect.dispatcher (&r.effect, effGetParamName, viewParam, 0, name, 0);
-    const auto described = r.effect.dispatcher (&r.effect, effGetParameterProperties, viewParam, 0, &properties, 0);
-    write (viewParam, 1.0f);
-    check (viewParam == 3349 && base + u::kOscDetail == 3350 && base + u::kMacroTarget == 3541
-               && base + u::kMixerControl == 3549 && base + u::kModDetailReserved == 3569
-               && base + u::kMixerActiveTab == 3575
-               && r.effect.numParams == base + u::kCount && named == 1 && described == 1
-               && std::strcmp (name, "Mixer PEEK View") == 0 && properties.maxInteger == 2 && read (viewParam) == 0.0f,
-           "the appended Mixer PEEK view handle is stepped, read-only and stable");
-}
-
-void testMixerTabsAndRouteClosureVisuals()
+void testMixerRouteClosureVisuals()
 {
     namespace u = synthyboy_mpc::nativeui;
     using namespace synthyboy_mpc::overlay;
@@ -1284,46 +1093,13 @@ void testMixerTabsAndRouteClosureVisuals()
     write (pIdx ("filter2.on"), 1.0f);
 
     // Before Mixer opens, appended visual handles report 0.0f cleanly
-    check (read (base + u::kMixerActiveTab) == 0.0f && read (base + u::kMixerSoloVisual) == 0.0f
+    check (read (base + u::kMixerSoloVisual) == 0.0f
                && read (base + u::kMixerMuteVisual) == 0.0f,
            "Mixer presentation handles read zero before Mixer opens");
 
     r.stack.openFull (mixer.pageElement());
     r.plugin.overlayView.setTabView (IInstanceView::kTabViewFilter, 3);
     tick();
-
-    // An MPC radio group writes only when its own handle differs from the pressed step.
-    const auto pressTab = [&] (int tab)
-    {
-        const float selected = static_cast<float> (tab) / u::kMixerPeekTargets;
-        if (read (base + u::kMixerPeek) != selected)
-            write (base + u::kMixerPeek, selected);
-        tick();
-        return read (base + u::kMixerPeek) == selected && r.plugin.nativeUiReported[u::kMixerPeek] == selected;
-    };
-    // Test all 36 from -> to tab transitions through the real VST MIXER_PEEK proxy
-    bool all36Ok = true;
-    for (int from = 0; from < 6; ++from)
-    {
-        for (int to = 0; to < 6; ++to)
-        {
-            all36Ok &= pressTab (from);
-            all36Ok &= std::fabs (read (base + u::kMixerActiveTab) - static_cast<float> (from) / 5.0f) < 1.0e-5f;
-
-            all36Ok &= pressTab (to);
-            all36Ok &= std::fabs (read (base + u::kMixerActiveTab) - static_cast<float> (to) / 5.0f) < 1.0e-5f;
-            if (to == 0)
-                all36Ok &= (mixer.ui().peekRoot() == nullptr && r.plugin.hostMixerWidgetsHidden.load (std::memory_order_acquire) == false);
-            else if (to == 1 || to == 2)
-                all36Ok &= (r.plugin.nativeFilter.layout() == to && r.plugin.nativeMixerPeekView.load (std::memory_order_acquire) == u::MixerPeekFilter);
-            else
-                all36Ok &= (r.plugin.nativeMixerPeekView.load (std::memory_order_acquire) == u::MixerPeekFx);
-            all36Ok &= (r.plugin.overlayView.tabView (IInstanceView::kTabViewFilter) == 3);
-        }
-    }
-    write (base + u::kMixerPeek, 0.0f);
-    tick();
-    check (all36Ok && mixer.ui().peekRoot() == nullptr, "all 36 VST proxy tab transitions preserve Filter/FX/MIXER identity");
 
     // Verify route-closure readouts: source OFF -> Disabled (3/4 = 0.75), Bus 1 solo preserves Sub feeder, dims Osc A
     write (pIdx ("sub.on"), 1.0f);
@@ -1340,15 +1116,13 @@ void testMixerTabsAndRouteClosureVisuals()
     const float oscMute = read (base + u::kMixerMuteVisual + 1);
     const float noiseSolo = read (base + u::kMixerSoloVisual + 4);
     const float bus1Solo = read (base + u::kMixerSoloVisual + 7);
-    write (base + u::kMixerActiveTab, 1.0f);   // attempt host write to read-only tab handle
     write (base + u::kMixerSoloVisual + 7, 0.0f);
     write (base + u::kMixerMuteVisual + 1, 0.0f);
     check (std::fabs (subSolo - 0.0f) < 1.0e-5f
                && std::fabs (subMute - 0.0f) < 1.0e-5f       // feeder preserved
                && std::fabs (oscMute - 0.5f) < 1.0e-5f       // unsoloed non-feeder = DIM (2/4)
                && std::fabs (noiseSolo - 0.75f) < 1.0e-5f    // source OFF = DISABLED (3/4)
-               && std::fabs (bus1Solo - 0.25f) < 1.0e-5f     // explicit Solo = ON (1/4)
-               && read (base + u::kMixerActiveTab) == 0.0f,  // read-only rejected write
+               && std::fabs (bus1Solo - 0.25f) < 1.0e-5f,    // explicit Solo = ON (1/4)
            "Mixer route closure visual handles publish feeder preservation, dim solo, disabled source and reject host writes");
 
     mixer.onHidden();
@@ -1595,48 +1369,6 @@ void testSavedDisabledEditors()
         }
     }
     fx.onHidden();
-
-    pages::MixerPage mixer ("mixer", 0);
-    for (int which = 1; which <= 2; ++which)
-    {
-        restore();
-        open (mixer);
-        const auto beforeFilter = writes();
-        const int filterOn = target (which == 1 ? "filter1.on" : "filter2.on");
-        const int cutoff = target (which == 1 ? "filter1.cutoff" : "filter2.cutoff");
-        const float value = read (cutoff), next = value > 0.5f ? 0.2f : 0.8f;
-        const int edit = base + u::kFilterValueBase + u::FilterCutoff;
-        const float button = static_cast<float> (which) / u::kMixerPeekTargets;
-        write (base + u::kMixerPeek, button);
-        tick (mixer);
-        auto* root = dynamic_cast<synthyboy_mpc::ui::FilterFullScreen*> (mixer.ui().peekRoot());
-        check (root && ! root->power.state.on && ! root->cutoff.enabled(), "the restored OFF filter can open its PEEK editor");
-        if (root == nullptr)
-            continue;
-        hit (mixer, root->cutoff.rect(), -30);
-        write (edit, next);
-        attemptQ();
-        tick (mixer);
-        hit (mixer, mixer.ui().peekCloseRect(), 0);
-        tick (mixer);
-        write (edit, next);
-        write (base + u::kMixerPeek, button);
-        tick (mixer);
-        check (read (filterOn) == 0.0f && read (cutoff) == value && mixer.ui().peekRoot() != nullptr,
-               "CLOSE and reopening preserve the restored OFF filter and its cutoff");
-        assertUntouched (beforeFilter, "an OFF Filter PEEK rejects drag, virtual Q and delayed handles without any writes");
-
-        write (base + u::kFilterValueBase + u::FilterPower, 1.0f);
-        tick (mixer);
-        write (edit, next);
-        tick (mixer);
-        check (read (filterOn) == 1.0f && std::fabs (read (cutoff) - next) < 1.0e-4f
-                   && writes() == beforeFilter + 2 && r.save() != saved,
-               "restoring Filter PEEK POWER rearms its own cutoff with one parameter write per action");
-        hit (mixer, mixer.ui().peekCloseRect(), 0);
-        tick (mixer);
-        mixer.onHidden();
-    }
 }
 
 void testMasterPanelNavigation()
@@ -1677,7 +1409,7 @@ void testMasterPanelNavigation()
     page.setHostBackground (true);
     tuning.setHostBackground (true);
     tick (page);
-    check (panel == 3460 && read (panel) == 0.0f && read (base + n::kMasterView) == 0.5f && page.ui().qTargets()[0] == target ("master.volume"),
+    check (panel == 3458 && read (panel) == 0.0f && read (base + n::kMasterView) == 0.5f && page.ui().qTargets()[0] == target ("master.volume"),
            "the Master sub-tab is the MAIN side: MAIN view published, the reserved Master Panel slot stays 0, the OUTPUT group is on Q 1");
     post (1.0f);
     tick (page);
@@ -1761,7 +1493,7 @@ void testNativeOscRootLoad()
     const auto frame = [&] { return r.effect.getParameter (&r.effect, current); };
     r.stack.openFull (a.pageElement());
     tick (a);
-    check (fieldA == 3498 && current == 3501 && frame() == 1.0f / 3.0f && name (fieldA) == "LOAD SAMPLE",
+    check (fieldA == 3496 && current == 3499 && frame() == 1.0f / 3.0f && name (fieldA) == "LOAD SAMPLE",
            "the actual VST announces OSC A's empty sample button at its own ABI indices");
     const auto saved = r.save();
     tap (fieldA);
@@ -1842,7 +1574,7 @@ void testPzCurveToolbar()
     auto& editor = page.ui().pzEditor();
     std::vector<uint32_t> pixels (1280 * 800);
     page.render (pixels.data(), 1280, 800);
-    check (first == 3494 && read (source) == 0.5f && read (availability) == 0.0f
+    check (first == 3492 && read (source) == 0.5f && read (availability) == 0.0f
            && editor.canvas.points().size() == 3 && page.ui().topPage() == FilterUi::kPagePz,
            "the clean F1 PZ editor publishes the source with only Back and Reset active");
     for (const auto rect : editor.toolbarRects())
@@ -1954,7 +1686,7 @@ void testCompressorBandNavigation()
     tick();
     const auto& editor = view.ui().screen().slotEditor;
     const auto rect = editor.nativeBandRect();
-    check (firstBand == 3461 && r.plugin.nativeFxHeader.state().item == fixedItem
+    check (firstBand == 3459 && r.plugin.nativeFxHeader.state().item == fixedItem
            && read (bandMode) == 2.0f / 3.0f && ! rect.empty(), "all three native compressor bands are live");
     if (rect.empty())
         return;
@@ -2605,7 +2337,7 @@ int main (int argc, char** argv)
     r.tick();
     VstParameterProperties sync {};
     r.effect.dispatcher (&r.effect, effGetParameterProperties, parameter (n::StandardSync), 0, &sync, 0);
-    check (parameter (n::StandardSync) == 3348 && parameter (n::Sync) == 3309 && r.read (n::Sync) == 0.0f
+    check (parameter (n::StandardSync) == 3347 && parameter (n::Sync) == 3308 && r.read (n::Sync) == 0.0f
                && r.read (n::StandardSync) == 0.5f && sync.maxInteger == 2,
            "the appended standard handle exposes three modes and reports triplet as BPM");
     for (const auto& mode : std::array<std::pair<float, float>, 4> {{{0.5f, 0.75f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {0.5f, 0.25f}}})
@@ -2698,13 +2430,11 @@ int main (int argc, char** argv)
     testCompactOscVst();
     testCompactExpandVst();
     testExpandedOscVst();
-    testMixerPeekVst();
     testVoiceValueReports();
     testNativeRootPaintBeforeMetadata();
     testHiddenNativePolling();
     testPlayMetadataRefresh();
-    testMixerPeekDisplayRefresh();
-    testMixerTabsAndRouteClosureVisuals();
+    testMixerRouteClosureVisuals();
     testEnvTargetCount();
     testLfoNavigationButtons();
     testEnvLfoRootMask();

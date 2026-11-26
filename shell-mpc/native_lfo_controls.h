@@ -13,7 +13,8 @@ namespace synthyboy_mpc::nativeui::lfo
 {
 enum Field
 {
-    kSelection, kShape, kStyle, kSmooth, kSmoothTime, kAction, kLayout,
+    kSelection,   // RESERVED since 2026-11-26: the page has no in-screen selector (the 14 hardware sub-tabs LFO .. LFO 10, RND 1 .. RND 4 name the LFO); the slot is never published and a write is dropped, it stays so that no later index moves
+    kShape, kStyle, kSmooth, kSmoothTime, kAction, kLayout,
     kRate, kDivision, kRise, kSync, kMode, kRandomMode, kPhase, kDelay, kHost,
     kDirection, kSwing, kStereo, kMono, kRandomStereo, kTranspose, kTune, kCount
 };
@@ -21,7 +22,7 @@ enum Action { kIdle, kTargets, kExpand, kActionLast = kExpand };
 constexpr int kInstances = 14, kStandard = 10, kLayoutLast = 6;
 constexpr int kShapeLast = 12, kStyleLast = 4;
 constexpr const char* kNames[kCount] = {
-    "LFO Source", "LFO Waveform", "RND Style", "LFO Smooth", "LFO Smooth Time", "LFO Action", "LFO Layout",
+    "LFO Reserved", "LFO Waveform", "RND Style", "LFO Smooth", "LFO Smooth Time", "LFO Action", "LFO Layout",
     "LFO Rate", "LFO Division", "LFO Rise", "LFO Sync", "LFO Mode", "RND Mode", "LFO Phase", "LFO Delay",
     "LFO Host", "LFO Direction", "LFO Swing", "LFO Stereo", "LFO Mono", "RND Stereo", "LFO Transpose", "LFO Tune"
 };

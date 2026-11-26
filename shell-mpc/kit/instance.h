@@ -91,8 +91,6 @@ public:
     // ---- the overlay's own bookkeeping
     /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets (the display parameter "Overlay Instance" takes the frame the skin hides them at). */
     virtual void setUiFullOpen (bool /*open*/) noexcept {}
-    /** The controller has sampled the skin's full-screen instance frame on the primary plane. */
-    virtual void observeHostWidgetGate (bool /*hidden*/) noexcept {}
     /** Asks the instance to report its display parameter "Overlay Instance" to the host again soon. It must only set a flag (the instance's display thread makes the call). */
     virtual void requestOverlayReport() noexcept {}
 

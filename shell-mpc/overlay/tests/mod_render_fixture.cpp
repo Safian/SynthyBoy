@@ -360,7 +360,7 @@ int main (int argc, char** argv)
     if (! outJson.empty())
     {
         const int pCount = static_cast<int> (synthyboy::paramCount());
-        const int base = pCount + 82; // mixer_peek_index: param_count + 82 (LEGACY_EXTRAS=70 + 12)
+        const int base = pCount + 82; // native_base_index: param_count + 82 (LEGACY_EXTRAS=70 + 12)
         const int viewParam = base + 169; // 2888
         const int rowsBase = viewParam + 1; // 2889
         const int fieldsBase = rowsBase + 7; // 2896

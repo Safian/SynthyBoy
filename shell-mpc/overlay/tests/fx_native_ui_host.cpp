@@ -305,27 +305,6 @@ void testDelayAndCompressor ()
            "Compressor BANDS exposes output and crossovers without replacing the header");
 }
 
-void testPeek ()
-{
-    for (int rack = 0; rack < 3; ++rack)
-    {
-        NativeInst inst;
-        addPool (inst, 0, synthyboy::kFxTypeChorus);
-        inst.setAt (synthyboy::fxInstanceKeys (0).rack, static_cast<float> (rack));
-        FxUi peek (rack);
-        peek.setNativeControls (true);
-        UiStack stack;
-        stack.openFull (FxUi::kElementPage);
-        peek.update (inst, stack, 0.0, {});
-        const auto point = peek.screen().slotEditor.cellRect (0, 0);
-        const auto power = peek.screen().slotEditor.power.rect();
-        check (inst.bank.layout() == 0 && inst.header.state().layout == nativeui::fxheader::Hidden
-               && ! peek.nativeControls() && peek.covers (point.x + 5, point.y + 5)
-               && peek.covers (power.x + 8, power.y + 8),
-               "Mixer PEEK owns the editor in each rack without publishing standalone native cells");
-    }
-}
-
 void testNativeChain ()
 {
     namespace c = nativeui::fxchain;
@@ -755,7 +734,6 @@ int main (int argc, char** argv)
     testChorus();
     testNativeOwnershipDuringList();
     testDelayAndCompressor();
-    testPeek();
     testNativeChain();
     testNativeChainCapacityAndDrag();
     testNativeChainReports();

@@ -22,7 +22,7 @@ struct MarkerSpec
 
 struct Detection
 {
-    static constexpr int kMaxViews = 24;
+    static constexpr int kMaxViews = 40;   // the page set of SynthyBoy has 37 (24 until the LFO sub-tabs of 2026-11-26): at most 10 pixel reads a view and a picture, about 400 at the limit
     bool readable = false;           // the framebuffer could be read
     int view = -1;                   // the first view whose two markers are both on screen, -1 when none
     int slot = kSlotUnknown;         // with a view: the instance the page belongs to (the colour of the view's instance picture): 0 .. 15, kSlotNone, or kSlotUnknown (blank or not a colour of the table)

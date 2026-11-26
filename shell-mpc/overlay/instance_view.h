@@ -83,11 +83,8 @@ public:
     virtual bool nativeMixerWidgetsAvailable() const noexcept { return false; }
     virtual void setNativeMixerMeter (int /*strip*/, float /*peak*/, float /*hold*/) noexcept {}
     virtual void setNativeMixerStereoMeter (int /*strip*/, const float* /*sixFields*/) noexcept {}
-    /** Only the visible, compact native Mixer accepts PEEK requests. */
-    virtual void setNativeMixerPeekEnabled (bool /*enabled*/) noexcept {}
-    virtual int takeNativeMixerPeek() noexcept { return -1; }
-    virtual void setNativeMixerPeekView (int /*view*/) noexcept {}
-    virtual void setNativeMixerActiveTab (int /*tab*/) noexcept {}
+    /** The native Mixer strips are on screen (and no destination list covers them): the host reads their solo / mute presentation and the page's widgets stay shown. */
+    virtual void setNativeMixerActive (bool /*active*/) noexcept {}
     virtual void setNativeMixerStripVisuals (int /*strip*/, int /*soloVisual*/, int /*muteVisual*/) noexcept {}
     virtual void setMixerSolo (int /*strip*/, bool /*solo*/) noexcept {}
     virtual void setMixerMute (int /*strip*/, bool /*mute*/) noexcept {}

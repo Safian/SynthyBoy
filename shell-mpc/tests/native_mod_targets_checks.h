@@ -52,7 +52,7 @@ void testNativeModTargets()
         std::vector<uint32_t> pixels (1280 * 800);
         view.render (pixels.data(), 1280, 800);
         const int x = area.x + area.w / 2, y = area.y + area.h / 2;
-        check (base == 3502 && read (t::kView) == static_cast<float> (frame) / t::kLastFrame
+        check (base == 3500 && read (t::kView) == static_cast<float> (frame) / t::kLastFrame
                && read (t::kRowGate) == 1.0f && r.stack.top() == top && screen.numRows() == 1
                && pixels[1280 * y + x] == 0u && ! tap (view, area),
                "the owning TARGETS view publishes a transparent, host-owned row");

@@ -37,7 +37,7 @@ void check (bool ok, const std::string& what)
 using MixRig = demo::Rig<MixerUi>;
 struct FxRig : demo::Rig<FxUi>
 {
-    // Exercise the overlay-only editor (also used by Mixer PEEK).
+    // Exercise the overlay-only editor.
     FxRig() { ui.setNativeControls (false); }
 };
 
@@ -114,11 +114,6 @@ void testMixerBoldCut()
     check (! r.ui.listOpen() && r.stack.top() == MixerUi::kElementPage, "a tap under the MASTER power opens no destination list");
     for (int s = 0; s < 9; ++s)
         check (m.strips[s].hasDestination() && m.strips[s].destButton.rect().h == 56 && m.strips[s].destButton.rect().w > 0, "strip " + std::to_string (s) + " keeps its destination button");
-    // inert destination labels of the routing bar (DIRECT, MASTER) take no touch
-    const int sel = m.routingBar.selectedStrip;
-    const ui::Rect rb = m.routingBar.rect();
-    r.tapAt (rb.x + static_cast<int> (rb.w * ui::MixerRoutingBar::kTargetX[5]), rb.y + 15);   // the "DIRECT" label
-    check (! r.ui.listOpen() && r.ui.topPage() != MixerUi::kPagePeek && m.routingBar.selectedStrip == sel, "a tap on an inert destination label of the routing bar does nothing (no touch, the selection stays)");
     // the LEVELS layout: [SUB, A, B, C], [NOISE, F1, F2, MAIN], [BUS 1, BUS 2]; PAN, the sends and the destinations are touch only
     check (ui::MixerFullScreen::kMaxGroups == 3 && m.groups[0].numMembers() == 4 && m.groups[1].numMembers() == 4 && m.groups[2].numMembers() == 2 && m.groups[1].frameless(), "the Q groups are the levels: four, four (frameless: the buses lie between) and two members");
     check (m.groups[1].member (3) == &m.strips[9].fader && m.groups[2].member (0) == &m.strips[7].fader && m.groups[2].member (2) == nullptr, "the fourth member of NOISE, F1, F2 is the MAIN fader, the third group is the two buses");
@@ -238,8 +233,6 @@ void testMixerQPerStrip()
         const int gOf = ui::MixerFullScreen::groupOfStrip (s), slot = ui::MixerFullScreen::slotOfStrip (s);
         if (m.activeGroup() != gOf || ! m.groups[gOf].active() || m.selectedStrip() != s)
             fail (s, "the strip's group is not the active one");
-        if (m.routingBar.selectedStrip != s)
-            fail (s, "the routing bar does not follow the strip");
         for (int g = 0; g < ui::MixerFullScreen::kMaxGroups; ++g)
             if (g != gOf && m.groups[g].active())
                 fail (s, "another group is active too");
@@ -314,89 +307,10 @@ void testMixerDraw()
     check (cv.size() == 1280u * 800u, "the CPU renderer draws the mixer");
 }
 
-// PEEK is local to the Mixer. Compare the complete published XL map with the
-// native module's map, including unused slots, then return to the Mixer.
-void testMixerPeek()
-{
-    const bool wide = ui::QGroup::wideDevice();
-    ui::QGroup::setWideDevice (true);
-    MixRig r;
-    r.inst.setTabView (IInstanceView::kTabViewFilter, 3); // VELO on the native Filter tab
-    r.inst.set ("filter1.on", 1);
-    r.inst.set ("filter2.on", 1);
-    r.inst.set ("filter1.style", 8);                     // old preset with a stale style
-    r.inst.set ("filter2.style", 8);
-    r.inst.set ("chorus.on", 1);                         // BUS 1 never owns MAIN FX slots
-    r.inst.set ("chorus.rack", 1);
-    r.refresh();
-
-    auto tapCentre = [&r] (ui::Rect target) { r.tapAt (target.x + target.w / 2, target.y + target.h / 2); };
-    std::array<int, QRouter::kCount> mixerTargets;
-    std::copy_n (r.inst.q, mixerTargets.size(), mixerTargets.begin());
-    const int selectorWrites = r.inst.selectorWrites;
-    auto exercise = [&] (int target, const int* expected, const char* name)
-    {
-        const std::string label (name);
-        const int writes = r.inst.writes;
-        const ui::Rect button = r.ui.screen().routingBar.peekRect (target);
-        check (button.w >= 56 && button.h >= 56, label + " has a full touch target");
-        tapCentre (button);
-        check (r.ui.topPage() == MixerUi::kPagePeek && r.stack.element() == MixerUi::kElementPage,
-               label + " opens over the Mixer");
-        check (std::equal (expected, expected + QRouter::kCount, r.inst.q)
-                 && std::equal (expected, expected + QRouter::kCount, r.ui.qTargets()), label + " publishes all 16 module slots");
-
-        const ui::Rect close = r.ui.peekCloseRect();
-        check (close.w >= 56 && close.h >= 56, label + " has a full CLOSE target");
-        tapCentre (close);
-        check (r.ui.topPage() == 0 && r.stack.top() == MixerUi::kElementPage && r.stack.depth() == 1, label + " closes back to the Mixer");
-        check (std::equal (mixerTargets.begin(), mixerTargets.end(), r.inst.q)
-                 && std::equal (mixerTargets.begin(), mixerTargets.end(), r.ui.qTargets()), label + " restores every Mixer slot");
-        check (r.inst.writes == writes && r.inst.selectorWrites == selectorWrites
-                 && r.inst.tabView (IInstanceView::kTabViewFilter) == 3, label + " open/close preserves parameters and the native tab selection");
-    };
-    for (int filter = 0; filter < 2; ++filter)
-    {
-        demo::Rig<FilterUi> native;
-        native.inst.setTabView (IInstanceView::kTabViewFilter,
-                                tabview::encodeFilterSplit (filter, 0, tabview::kFilterExpandedFilter));
-        native.inst.set (filter == 0 ? "filter1.on" : "filter2.on", 1);
-        native.refresh();
-        const char* prefix = filter == 0 ? "filter1.cutoff" : "filter2.cutoff";
-        check (std::find (std::begin (native.inst.q), std::end (native.inst.q), demo::Inst::idx (prefix)) != std::end (native.inst.q),
-               "native reference maps the requested filter cutoff");
-        exercise (filter, native.inst.q, filter == 0 ? "FLT 1" : "FLT 2");
-    }
-    std::array<int, QRouter::kCount> empty;
-    empty.fill (-1);
-    exercise (2, empty.data(), "MAIN FX with only a bus effect");
-    r.inst.set ("delay.on", 1);
-    FxRig nativeFx;
-    nativeFx.inst.set ("delay.on", 1);
-    nativeFx.refresh();
-    check (std::any_of (std::begin (nativeFx.inst.q), std::end (nativeFx.inst.q), [] (int id) { return id >= 0; }),
-           "native reference maps a populated main FX rack");
-    exercise (2, nativeFx.inst.q, "MAIN FX with a delay");
-    // BUS 1 / BUS 2 use the same editor, but their PEEK is isolated to the
-    // tapped rack and ADD writes the new slot into that rack.
-    r.inst.set ("chorus.on", 1);
-    r.inst.set ("chorus.rack", 1);
-    FxRig nativeBus;
-    nativeBus.inst.set ("chorus.on", 1);
-    nativeBus.inst.set ("chorus.rack", 1);
-    nativeBus.refresh();
-    exercise (3, nativeBus.inst.q, "BUS 1 FX");
-    r.inst.set ("chorus.rack", 2);
-    nativeBus.inst.set ("chorus.rack", 2);
-    nativeBus.refresh();
-    exercise (4, nativeBus.inst.q, "BUS 2 FX");
-    ui::QGroup::setWideDevice (wide);
-}
-
 // Verifies the complete 10-channel Mixer natively on XL: switches, routing selectors,
-// pan, sends, faders, values, per-channel peak/hold and PEEK openers.
+// pan, sends, faders, values and per-channel peak/hold.
 // Proves real track signal bindings, touch interaction, 16-knob Q-Link allocation,
-// preset changes (A -> B -> A), and full return allocation when closing PEEK panels.
+// and preset changes (A -> B -> A).
 void testMixerCompleteNativeXL()
 {
     const bool wide = ui::QGroup::wideDevice();
@@ -637,26 +551,6 @@ void testMixerCompleteNativeXL()
            && std::string (m.strips[1].pan.state.valueText) == "L 25",
            "returning to preset A restores exact state");
 
-    // 6. Overlay fallback PEEK openers and return allocation restoration on XL
-    r.ui.setHostBackground (false);
-    r.refresh();
-    static const char* const peekNames[5] = { "FLT 1", "FLT 2", "MAIN FX", "BUS 1 FX", "BUS 2 FX" };
-    for (int target = 0; target < 5; ++target)
-    {
-        const ui::Rect btn = m.routingBar.peekRect (target);
-        r.tapAt (btn.x + btn.w / 2, btn.y + btn.h / 2);
-        check (r.ui.topPage() == MixerUi::kPagePeek, std::string (peekNames[target]) + " opens PEEK over mixer");
-
-        // Close PEEK
-        const ui::Rect close = r.ui.peekCloseRect();
-        r.tapAt (close.x + close.w / 2, close.y + close.h / 2);
-        check (r.ui.topPage() == 0 && r.stack.top() == MixerUi::kElementPage && r.stack.depth() == 1,
-               std::string (peekNames[target]) + " closes back to Mixer");
-        check (std::equal (xlExpected.begin(), xlExpected.end(), r.inst.q)
-               && std::equal (xlExpected.begin(), xlExpected.end(), r.ui.qTargets()),
-               std::string (peekNames[target]) + " close restores complete 16-slot XL Mixer mapping");
-    }
-
     ui::QGroup::setWideDevice (wide);
 }
 
@@ -669,21 +563,6 @@ void addEffect (Rig& r, int typeRow)
     r.ui.list().showCurrent();   // the list scrolls: the row is in its window
     const ui::Rect row = r.ui.list().rowRect (typeRow);
     r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
-}
-
-template <int Rack>
-void testBusAdd()
-{
-    struct BusEditor : FxUi { BusEditor() : FxUi (Rack) {} };
-    demo::Rig<BusEditor> r;
-    r.inst.set ("delay.on", 1);
-    r.refresh();
-    check (r.ui.numCards() == 0, "an empty bus hides the MAIN delay");
-    addEffect (r, 4);
-    check (r.ui.numCards() == 1 && r.ui.screen().chainBar.cards[0].state.rack == Rack
-           && r.ui.screen().slotEditor.currentType() == synthyboy::kFxTypeEq
-           && r.inst.get ("delay.rack") == 0 && r.inst.get ("delay.on") == 1,
-           "ADD places EQ on BUS " + std::to_string (Rack) + " and preserves the MAIN delay");
 }
 
 /** Sets the parameter `key` of the effect in pool slot `slot` (its type `type`) to the plain value. */
@@ -699,7 +578,6 @@ void setPool (FxRig& r, int slot, int type, const char* key, float plain)
 void testFxListBackDuringTouch()
 {
     FxRig r;
-    r.stack.openDetail (MixerUi::kPagePeek);
     r.refresh();
     r.tap (r.ui.screen().chainBar.plusCard);
     const ui::Rect row = r.ui.list().rowRect (0);
@@ -714,7 +592,7 @@ void testFxListBackDuringTouch()
     finger.kind = TouchEvent::Up;
     r.ui.touch (finger, r.stack, r.inst, r.now + 30);
     r.refresh();
-    check (r.inst.writes == writes && r.ui.numCards() == 0 && r.stack.top() == MixerUi::kPagePeek,
+    check (r.inst.writes == writes && r.ui.numCards() == 0 && r.stack.depth() == 1,
            "hardware Back during FX list row touch discards its release and preserves the parent");
 }
 
@@ -875,13 +753,7 @@ void testFxPresetGenerationRetainsIdentity()
 void testDistortionMarkerLayers()
 {
     FxRig fx;
-    MixRig mixer;
     fx.inst.set ("distortion.on", 1.0f);
-    mixer.inst.set ("distortion.on", 1.0f);
-    mixer.refresh();
-    const auto peek = mixer.ui.screen().routingBar.peekRect (2);
-    mixer.tapAt (peek.x + peek.w / 2, peek.y + peek.h / 2);
-    check (mixer.ui.topPage() == MixerUi::kPagePeek, "the Mixer shows the MAIN FX editor");
 
     auto scene = std::make_unique<gpu::SceneData>();
     auto verify = [&](auto& rig, const std::string& name)
@@ -929,7 +801,6 @@ void testDistortionMarkerLayers()
         check (keys (plan()) != silent, name + " redraws the transfer curve after a drive edit");
     };
     verify (fx, "standalone FX");
-    verify (mixer, "Mixer FX PEEK");
 }
 
 void testFxRackSnapshot()
@@ -2011,10 +1882,7 @@ int main()
     testMixerGroupsAndList();
     testMixerQPerStrip();
     testMixerDraw();
-    testMixerPeek();
     testMixerCompleteNativeXL();
-    testBusAdd<1>();
-    testBusAdd<2>();
     testDistortionMarkerLayers();
     testFxRackSnapshot();
     testFxGalleryEmptyState();

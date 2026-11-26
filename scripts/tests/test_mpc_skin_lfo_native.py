@@ -45,8 +45,8 @@ class LfoSkinTest(unittest.TestCase):
         cls.entries = list(standalone_editor_entries(cls.tab, definitions))
 
     def test_targets_and_expand_use_independent_instant_handles(self):
-        from native_ui_params import LFO_OFFSET, LFO_TARGETS_ACTION, mixer_peek_index
-        base = mixer_peek_index(len(self.params))
+        from native_ui_params import LFO_OFFSET, LFO_TARGETS_ACTION, native_base_index
+        base = native_base_index(len(self.params))
         buttons = {c["componentData"]["name"]: c for c in self.entries}
         for action, offset in ((1, LFO_TARGETS_ACTION), (2, LFO_OFFSET + 5)):
             button = buttons[f"LFO 1 Native Action {action}"]
@@ -98,11 +98,11 @@ class LfoSkinTest(unittest.TestCase):
             first, last = map(int, span.split("-"))
             field, action = int(field), int(action)
             inactive = name.endswith(" inactive")
-            gates = [f"IndexedEnabling/{first}/7/Parameter 2833" if first == last
-                     else f"RangedEnabling/{first}/{last}/7/Parameter 2833"]
-            target = ("FromGesture/" if action else "") + f"Parameter {2827 + field}"
+            gates = [f"IndexedEnabling/{first}/7/Parameter 2832" if first == last
+                     else f"RangedEnabling/{first}/{last}/7/Parameter 2832"]
+            target = ("FromGesture/" if action else "") + f"Parameter {2826 + field}"
             if field == 4:
-                gates.append(f"IndexedEnabling/{0 if inactive else 1}/2/Parameter 2830")
+                gates.append(f"IndexedEnabling/{0 if inactive else 1}/2/Parameter 2829")
             self.assertEqual(e["bounds"]["additionalInvalidatingHandles"], gates, name)
             self.assertEqual(e["bounds"]["showWhenDataModelInvalid"], "Hide")
             self.assertEqual(e["bounds"]["acceptsHWFocus"], "No" if inactive else "Yes")
@@ -111,7 +111,7 @@ class LfoSkinTest(unittest.TestCase):
             if field in (3, 15, 19, 20):
                 self.assertEqual(remaps["Active"], target)
             if field == 4:
-                self.assertEqual(remaps["Active"], "Parameter 2830")
+                self.assertEqual(remaps["Active"], "Parameter 2829")
             rect = tuple(map(int, e["bounds"]["bounds"].split()))
             keys = [(layout, field, action) for layout in range(first, last + 1)]
             for key in keys:
@@ -210,8 +210,8 @@ class LfoSkinTest(unittest.TestCase):
                  for item in self.entries
                  if item["componentData"]["name"].startswith(prefix)}
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        optional = {field: 3219 + i for i, field in enumerate(contract["availability"])}
-        base_gate = "IndexedEnabling/1/2/Parameter 3196"
+        optional = {field: 3218 + i for i, field in enumerate(contract["availability"])}
+        base_gate = "IndexedEnabling/1/2/Parameter 3195"
         self.assertEqual(len(contract["fields"]), 22)
         self.assertEqual(len(optional), 11)
         self.assertEqual(len(items), 29)
@@ -223,7 +223,7 @@ class LfoSkinTest(unittest.TestCase):
             x, y, w, h = rect
             self.assertTrue(x + w <= canvas_x or y + h <= canvas_y or canvas_x + canvas_w <= x or canvas_y + canvas_h <= y)
             self.assertEqual(item["bounds"]["showWhenDataModelInvalid"], "Hide")
-            target = ("FromGesture/" if kind == "Action" else "") + f"Parameter {3197 + field}"
+            target = ("FromGesture/" if kind == "Action" else "") + f"Parameter {3196 + field}"
             remap = {"Data": target}
             if kind == "Toggle":
                 remap["Active"] = target
@@ -267,7 +267,7 @@ class LfoSkinTest(unittest.TestCase):
                 continue
             if name == "CURVE":
                 for scale, caption in enumerate(("CURVE", "SCALE")):
-                    definition = verify(caption, field, rect, [f"IndexedEnabling/{scale}/2/Parameter 3230"], kind)
+                    definition = verify(caption, field, rect, [f"IndexedEnabling/{scale}/2/Parameter 3229"], kind)
                     self.assertEqual({a["additionalData"] for a in definition["actions"]}, {"fx editor number menu"})
             else:
                 definition = verify(name, field, rect, [], kind)
@@ -276,7 +276,7 @@ class LfoSkinTest(unittest.TestCase):
                     self.assertEqual({a["additionalData"] for a in definition["actions"]}, {f"fx editor {menu} menu"})
         self.assertEqual(items, {})
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
-        self.assertEqual(replacements["Parameter 3218"],
+        self.assertEqual(replacements["Parameter 3217"],
                          next(p["choices"] for p in self.params if p["key"] == "lfo1.sync_type"))
 
     def test_shape_detail_has_exclusive_point_controls_and_eight_dynamic_choices(self):
@@ -303,42 +303,42 @@ class LfoSkinTest(unittest.TestCase):
                 self.assertTrue(all(c["componentData"]["type"] == "Label" for c in kind["componentsData"]))
             return kind
 
-        point = "IndexedEnabling/1/4/Parameter 3285"
+        point = "IndexedEnabling/1/4/Parameter 3284"
         for field, title in enumerate(("BACK", "MODULATE", "AMOUNT", "REMOVE")):
             action = field in (0, 3)
             bindings = [point]
             if field > 0:
                 low, high = ((1, 4), (2, 3), (2, 4))[field - 1]
-                bindings += [f"RangedEnabling/{low}/{high}/5/Parameter 3290"]
-            item = check_item(title, field, 3286 + field, bindings, action=action)
+                bindings += [f"RangedEnabling/{low}/{high}/5/Parameter 3289"]
+            item = check_item(title, field, 3285 + field, bindings, action=action)
             if field in (1, 2):
                 want = "choice" if field == 1 else "number"
                 self.assertEqual({a["additionalData"] for a in item["actions"]}, {f"fx editor {want} menu"})
         for field, title, low, gate in (
-            (1, "MODULATE", 0, "IndexedEnabling/0/5/Parameter 3290"),
-            (2, "AMOUNT", 0, "RangedEnabling/0/1/5/Parameter 3290"),
-            (2, "AMOUNT", 4, "IndexedEnabling/4/5/Parameter 3290"),
-            (3, "REMOVE", 0, "RangedEnabling/0/1/5/Parameter 3290"),
+            (1, "MODULATE", 0, "IndexedEnabling/0/5/Parameter 3289"),
+            (2, "AMOUNT", 0, "RangedEnabling/0/1/5/Parameter 3289"),
+            (2, "AMOUNT", 4, "IndexedEnabling/4/5/Parameter 3289"),
+            (3, "REMOVE", 0, "RangedEnabling/0/1/5/Parameter 3289"),
         ):
-            check_item(title + f" unavailable {low}", field, 3286 + field, [point, gate], active=False, action=field == 3)
-        menu = "RangedEnabling/2/3/4/Parameter 3285"
-        check_item("Heading", 4, 3293, [menu, "IndexedEnabling/0/2/Parameter 3291"], active=False)
-        check_item("Header", 4, 3293, [menu, "IndexedEnabling/1/2/Parameter 3291"], action=True)
+            check_item(title + f" unavailable {low}", field, 3285 + field, [point, gate], active=False, action=field == 3)
+        menu = "RangedEnabling/2/3/4/Parameter 3284"
+        check_item("Heading", 4, 3292, [menu, "IndexedEnabling/0/2/Parameter 3290"], active=False)
+        check_item("Header", 4, 3292, [menu, "IndexedEnabling/1/2/Parameter 3290"], action=True)
         for row in range(8):
-            kind = check_item(f"Row {row + 1}", 5 + row, 3294 + row,
-                              [menu, f"RangedEnabling/{row + 1}/8/9/Parameter 3292"], action=True)
+            kind = check_item(f"Row {row + 1}", 5 + row, 3293 + row,
+                              [menu, f"RangedEnabling/{row + 1}/8/9/Parameter 3291"], action=True)
             button, label = (c["componentData"] for c in kind["componentsData"])
             self.assertEqual((button["type"], label["type"], label["data"]["type"]), ("Button", "Label", "Name"))
         self.assertEqual(items, {})
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
-        self.assertEqual(replacements["Parameter 3287"], ["TIME", "LEVEL", "CURVE"])
+        self.assertEqual(replacements["Parameter 3286"], ["TIME", "LEVEL", "CURVE"])
 
     def test_drawers_label_and_select_every_native_choice(self):
         page = self.tui["pageData"]
         definitions = {entry["key"]: entry["value"] for entry in page["componentDefinitions"]["localComponentDefinitions"]}
         replacements = {entry["key"]: entry["value"] for entry in page["replacementStrings"]}
-        for field in (0, 1, 2, 8, 11, 12, 16):
-            names = replacements[f"Parameter {2827 + field}"]
+        for field in (1, 2, 8, 11, 12, 16):   # field 0 (the source selector) is reserved: the 14 sub-tabs name the LFO
+            names = replacements[f"Parameter {2826 + field}"]
             children = definitions[f"lfoNativeChoiceDrawer{field}"]["componentsData"]
             captions = [child["componentData"]["data"]["text"] for child in children
                         if child["componentData"]["type"] == "Label"]
@@ -358,18 +358,17 @@ class LfoSkinTest(unittest.TestCase):
     def test_host_menus_and_physical_q_proxies(self):
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         params = {p["key"]: p for p in self.params}
-        self.assertEqual(replacements["Parameter 2827"],
-                         [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)])
-        self.assertEqual(replacements["Parameter 2828"], params["lfo1.shape"]["choices"][:-1] + ["Drawn"])
-        self.assertEqual(replacements["Parameter 2829"], params["rlfo1.style"]["choices"])
-        self.assertEqual(replacements["Parameter 2837"], params["lfo1.sync"]["choices"])
+        self.assertNotIn("Parameter 2826", replacements, "the reserved selector handle has no choice list")
+        self.assertEqual(replacements["Parameter 2827"], params["lfo1.shape"]["choices"][:-1] + ["Drawn"])
+        self.assertEqual(replacements["Parameter 2828"], params["rlfo1.style"]["choices"])
+        self.assertEqual(replacements["Parameter 2836"], params["lfo1.sync"]["choices"])
         m = next(m for m in self.qlinks if m["Tab"] == self.tab["fnKeyIndex"] + 1 and m["SubTab"] == self.tab["fnKeySubIndex"] + 1)
         self.assertEqual([m["Q-Links"][f"Q-Link {i}"] for i in range(1, 17)], list(range(2703, 2719)))
         self.assertEqual(m["Bank Direction"], "Row")
         self.assertEqual(self.tab["qlinkBoundsData"], [])
 
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        for name, overlay in (("Choice", "lfoNativeChoiceDrawer0"), ("Number", "fx editor number menu")):
+        for name, overlay in (("Choice", "lfoNativeChoiceDrawer1"), ("Number", "fx editor number menu")):
             field = 0 if name == "Choice" else 21
             entry = next(e for e in self.entries if e["componentData"]["name"].startswith("LFO 1 Native ")
                          and e["componentData"]["name"].split()[3].split(".")[1:3] == [str(field), "0"])

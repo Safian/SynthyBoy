@@ -14,12 +14,12 @@ Design principles and specifications:
      Source-on gating: Destination, Level, Meter, Pan, Sends are gated on Mute / Power parameter.
   2. BUS: Effect return bus channel strip (BUS 1, BUS 2).
      Includes: Strip name plate, Solo (S) and Mute (M) pushbuttons (each 56x56 px), destination dropdown,
-     tall 414 px vertical TrackAndThumb LEVEL fader with live Peak/Hold Meter alongside.
+     tall 470 px vertical TrackAndThumb LEVEL fader with live Peak/Hold Meter alongside.
      Honest bypass: dry audio routing, level control, and metering are NOT gated by FX bypass.
      Lacks: PAN and sends (stereo sum return).
   3. MASTER: Main output console channel strip (MAIN / MASTER).
      Includes: Strip name plate, honest MAIN FX enable button (56x56 px) and Master Mute (M) button (56x56 px),
-     tall 414 px vertical TrackAndThumb LEVEL fader with live Peak/Hold Meter alongside.
+     tall 470 px vertical TrackAndThumb LEVEL fader with live Peak/Hold Meter alongside.
      Honest bypass: master level control and metering are NOT gated by FX bypass.
      Lacks: Destination, PAN, and sends (terminal output). Master solo is omitted (no clickable dead S).
 - Real TrackAndThumb Native Vertical Fader:
@@ -134,8 +134,8 @@ TYPE_STRIP_SOURCE = "mixerStripSource"
 TYPE_STRIP_BUS = "mixerStripBus"
 TYPE_STRIP_MASTER = "mixerStripMaster"
 
-TYPE_FADER_LEVEL_198 = "mixerSliderLEVEL198"
-TYPE_FADER_LEVEL_414 = "mixerSliderLEVEL414"
+TYPE_FADER_LEVEL_254 = "mixerSliderLEVEL254"
+TYPE_FADER_LEVEL_470 = "mixerSliderLEVEL470"
 TYPE_SLIDER_PAN_56 = "mixerSliderPAN56"
 TYPE_SLIDER_B1_56 = "mixerSliderB156"
 TYPE_SLIDER_B2_56 = "mixerSliderB256"
@@ -542,7 +542,6 @@ def render_mixer_full_screen_background() -> Image.Image:
     - Subtle dark console surface
     - 10 channel columns with crisp name plates, S/M button wells, fader track grooves,
       accurate scale ticks, and highlighted 0 dB / 100% unity reference marks.
-    - Bottom routing bar / PEEK action row area (y = 566..622)
     - Preserves exact sentinel pixel block at (900, 18) with color #141a35.
     """
     W, H = 1280, 628
@@ -572,11 +571,6 @@ def render_mixer_full_screen_background() -> Image.Image:
         if i > 0:
             div_x = x - (stride - strip_w) // 2
             draw.line([div_x, strip_y + 4, div_x, strip_y + strip_h - 4], fill=_style_rgb("preview.divider"), width=1)
-
-    # Bottom Routing Bar Area (y = 566..622)
-    routing_y = strip_y + strip_h + 6
-    draw.rectangle([0, routing_y, W - 1, routing_y + 56], fill=_style_rgb("surface.panel"))
-    draw.line([0, routing_y, W - 1, routing_y], fill=_style_rgb("panel.border"), width=1)
 
     # Sentinel block (900, 18, 5x5, mixer.sentinel) - Required for DRM plane sync
     draw.rectangle([900, 18, 904, 22], fill=_style_rgb("mixer.sentinel"))
@@ -628,8 +622,8 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
 
     defs: Dict[str, Dict[str, Any]] = {
         TYPE_DESTINATION_56: build_destination_definition(),
-        TYPE_FADER_LEVEL_198: build_fader_definition(TYPE_FADER_LEVEL_198, h_level_source, SCALE_PERCENT),
-        TYPE_FADER_LEVEL_414: build_fader_definition(TYPE_FADER_LEVEL_414, h_level_bus, SCALE_SKEW_DB),
+        TYPE_FADER_LEVEL_254: build_fader_definition(TYPE_FADER_LEVEL_254, h_level_source, SCALE_PERCENT),
+        TYPE_FADER_LEVEL_470: build_fader_definition(TYPE_FADER_LEVEL_470, h_level_bus, SCALE_SKEW_DB),
         TYPE_SLIDER_PAN_56: build_compact_dial_definition(bipolar=True, skins_dir=skins_dir),
         TYPE_SLIDER_B1_56: build_compact_dial_definition(bipolar=False, skins_dir=skins_dir),
         TYPE_SLIDER_B2_56: build_compact_dial_definition(bipolar=False, skins_dir=skins_dir),
@@ -682,7 +676,7 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
         "componentsData": [
             _entry("header", TYPE_HEADER_SOURCE, {"version": 1, "handleName": "Data"}, rect_header, sm_remaps),
             _entry("destination", TYPE_DESTINATION_56, {"version": 1, "handleName": "Data"}, rect_destination, (("Data", "Destination"),), power_gate),
-            _entry("level", TYPE_FADER_LEVEL_198, {"version": 1, "handleName": "Data"}, rect_level_source, (("Data", "Level"),)),
+            _entry("level", TYPE_FADER_LEVEL_254, {"version": 1, "handleName": "Data"}, rect_level_source, (("Data", "Level"),)),
             _entry("meter_block", TYPE_METER_BLOCK_SOURCE, {"version": 1, "handleName": "Data"}, rect_meter_source, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
             *dials,
         ],
@@ -698,7 +692,7 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
         "componentsData": [
             _entry("header", TYPE_HEADER_BUS, {"version": 1, "handleName": "Data"}, rect_header, sm_remaps),
             _entry("destination", TYPE_DESTINATION_56, {"version": 1, "handleName": "Data"}, rect_destination, (("Data", "Destination"),)),
-            _entry("level", TYPE_FADER_LEVEL_414, {"version": 1, "handleName": "Data"}, rect_level_bus, (("Data", "Level"),)),
+            _entry("level", TYPE_FADER_LEVEL_470, {"version": 1, "handleName": "Data"}, rect_level_bus, (("Data", "Level"),)),
             _entry("meter_block", TYPE_METER_BLOCK_BUS, {"version": 1, "handleName": "Data"}, rect_meter_bus, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
         ],
     }
@@ -712,7 +706,7 @@ def build_mixer_strip_definitions(skins_dir: Optional[Path] = None) -> Dict[str,
         "disableCoarseDataWheel": False,
         "componentsData": [
             _entry("header", TYPE_HEADER_MASTER, {"version": 1, "handleName": "Data"}, rect_header, master_hdr_remaps),
-            _entry("level", TYPE_FADER_LEVEL_414, {"version": 1, "handleName": "Data"}, rect_level_bus, (("Data", "Level"),)),
+            _entry("level", TYPE_FADER_LEVEL_470, {"version": 1, "handleName": "Data"}, rect_level_bus, (("Data", "Level"),)),
             _entry("meter_block", TYPE_METER_BLOCK_BUS, {"version": 1, "handleName": "Data"}, rect_meter_bus, tuple((name, name) for name in ("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR"))),
         ],
     }
@@ -907,8 +901,8 @@ __all__ = [
     "TYPE_STRIP_SOURCE",
     "TYPE_STRIP_BUS",
     "TYPE_STRIP_MASTER",
-    "TYPE_FADER_LEVEL_198",
-    "TYPE_FADER_LEVEL_414",
+    "TYPE_FADER_LEVEL_254",
+    "TYPE_FADER_LEVEL_470",
     "TYPE_SLIDER_PAN_56",
     "TYPE_SLIDER_B1_56",
     "TYPE_SLIDER_B2_56",

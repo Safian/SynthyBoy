@@ -196,17 +196,17 @@ int main (int argc, char** argv)
     // (2707 .. 2718). The native skin parameters follow the intact 2719-parameter prefix.
     check (n == 2637 && ovl == 2675 && sel0 == 2676 && prox0 == 2679 && q0 == 2703, "the old indices: engine 0 .. 2636, Overlay Instance 2675, Play selectors 2676 .. 2678, Play proxies 2679 .. 2702, Q 1 at 2703");
     const int nativeBase = q0 + synthyboy_mpc::QRouter::kCount;
-    check (nativeBase == 2719 && nativeBase + nativeui::kMixerPeekView == 3349
-           && nativeBase + nativeui::kOscDetail == 3350 && nativeBase + nativeui::kMasterPanel == 3460
-           && nativeBase + nativeui::kFxBandBase == 3461 && nativeBase + nativeui::kFxBandMode == 3493
-           && nativeBase + nativeui::kPzAction == 3494 && nativeBase + nativeui::kPzAvailability == 3497
-           && nativeBase + nativeui::kMasterScaleInput == 3679 && nativeBase + nativeui::kFilterChainMenu == 3680
-           && nativeBase + nativeui::kFxEditorPower == 3683 && nativeBase + nativeui::kLfoTargetsAction == 3684
-           && a->numParams == nativeBase + nativeui::kCount && a->numParams == 3685,
-           "the legacy prefix ends before Mixer PEEK action 2719, Mixer PEEK visibility is 3349 and OSC detail begins at 3350");
+    check (nativeBase == 2719 && nativeBase + nativeui::kMixerPeakBase == 2719
+           && nativeBase + nativeui::kOscDetail == 3348 && nativeBase + nativeui::kMasterPanel == 3458
+           && nativeBase + nativeui::kFxBandBase == 3459 && nativeBase + nativeui::kFxBandMode == 3491
+           && nativeBase + nativeui::kPzAction == 3492 && nativeBase + nativeui::kPzAvailability == 3495
+           && nativeBase + nativeui::kMasterScaleInput == 3676 && nativeBase + nativeui::kFilterChainMenu == 3677
+           && nativeBase + nativeui::kFxEditorPower == 3680 && nativeBase + nativeui::kLfoTargetsAction == 3681
+           && a->numParams == nativeBase + nativeui::kCount && a->numParams == 3682,
+           "the legacy prefix ends before the first Mixer peak handle 2719 (no peek handles), OSC detail begins at 3348 and the native block ends at 3682");
     {
-        constexpr int view = 3312, subPower = 3313, subOctave = 3317, aType = 3323,
-                      lastRoute = 3343, noiseSound = 3344, lastLevel = 3347;
+        constexpr int view = 3311, subPower = 3312, subOctave = 3316, aType = 3322,
+                      lastRoute = 3342, noiseSound = 3343, lastLevel = 3346;
         VstParameterProperties modes {}, octave {}, destination {};
         check (nativeBase + nativeui::kPlayOsc == view && text (a, effGetParamName, view) == "Compact OSC View"
                && text (a, effGetParamName, subPower) == "Play Sub Power"
@@ -223,7 +223,7 @@ int main (int argc, char** argv)
                "compact OSC appends five source-local bindings and stable menu and octave ranges");
     }
     {
-        constexpr int view = 3285, target = 3287, amount = 3288, rows = 3292, last = 3301;
+        constexpr int view = 3284, target = 3286, amount = 3287, rows = 3291, last = 3300;
         VstParameterProperties props {};
         check (nativeBase + nativeui::kLfoDetail == view
                    && text (a, effGetParamName, view) == "LFO Shape Detail View"
@@ -244,8 +244,8 @@ int main (int argc, char** argv)
         check (inert, "hidden detail values and dynamic rows reject host writes");
     }
     {
-        constexpr int view = 3231, count = 3232, firstSelect = 3233, lastPower = 3264,
-                      firstType = 3265, lastType = 3280, add = 3281, page = 3284;
+        constexpr int view = 3230, count = 3231, firstSelect = 3232, lastPower = 3263,
+                      firstType = 3264, lastType = 3279, add = 3280, page = 3283;
         VstParameterProperties countProps {}, addProps {}, pageProps {};
         check (nativeBase + nativeui::kFxChain == view && text (a, effGetParamName, view) == "FX Chain View"
                && text (a, effGetParamName, firstSelect) == "FX Select 1"
@@ -260,7 +260,7 @@ int main (int argc, char** argv)
                "the native FX chain appends its complete select, power, gallery and paging contract");
     }
     {
-        constexpr int view = 3196, point = 3210, x = 3211, mode = 3218, availability = 3219, scale = 3230;
+        constexpr int view = 3195, point = 3209, x = 3210, mode = 3217, availability = 3218, scale = 3229;
         VstParameterProperties p {};
         check (nativeBase + nativeui::kLfoEditor == view
                    && text (a, effGetParamName, view) == "LFO Shape Editor View"
@@ -289,12 +289,11 @@ int main (int argc, char** argv)
                 ok &= text (a, effGetParamName, nativeBase + offset + i) == prefix + std::to_string (i + 1);
             return ok;
         };
-        check (text (a, effGetParamName, 2719) == "Mixer Peek"
-               && names (nativeui::kMixerPeakBase, 10, "Mixer Peak ") && names (nativeui::kMixerHoldBase, 10, "Mixer Hold ")
-               && nativeBase + nativeui::kEnvSelectorBase == 2740 && names (nativeui::kEnvSelectorBase, 6, "Env Selector Cell ")
-               && nativeBase + nativeui::kFxValueBase == 2746 && names (nativeui::kFxValueBase, 16, "FX Cell ")
-               && names (nativeui::kFxKindBase, 16, "FX Cell Kind ") && text (a, effGetParamName, 2778) == "FX Cell Layout"
-               && text (a, effGetParamName, 2779) == "FX Domain 0" && text (a, effGetParamName, 2826) == "FX Domain 47",
+        check (names (nativeui::kMixerPeakBase, 10, "Mixer Peak ") && names (nativeui::kMixerHoldBase, 10, "Mixer Hold ")
+               && nativeBase + nativeui::kEnvSelectorBase == 2739 && names (nativeui::kEnvSelectorBase, 6, "Env Selector Cell ")
+               && nativeBase + nativeui::kFxValueBase == 2745 && names (nativeui::kFxValueBase, 16, "FX Cell ")
+               && names (nativeui::kFxKindBase, 16, "FX Cell Kind ") && text (a, effGetParamName, 2777) == "FX Cell Layout"
+               && text (a, effGetParamName, 2778) == "FX Domain 0" && text (a, effGetParamName, 2825) == "FX Domain 47",
                "native names match the append-only skin handles");
         auto fxRange = [&] (int domain, int low, int high)
         {
@@ -316,15 +315,15 @@ int main (int argc, char** argv)
             a->setParameter (a, p, 1.0f - expected);
             transient &= a->getParameter (a, p) == expected;
         }
-        bool lfoNames = nativeBase + nativeui::kLfoBase == 2827;
+        bool lfoNames = nativeBase + nativeui::kLfoBase == 2826;
         for (int field = 0; field < nativeui::lfo::kCount; ++field)
             lfoNames &= text (a, effGetParamName, nativeBase + nativeui::kLfoBase + field) == nativeui::lfo::kNames[field];
         check (lfoNames, "the 23 appended standalone LFO handles have stable names and order");
-        check (nativeBase + nativeui::kFilterBase == 2850 && text (a, effGetParamName, 2850) == "Filter Native View"
-               && text (a, effGetParamName, 2851) == "Filter Power" && text (a, effGetParamName, 2878) == "Filter Native Action"
+        check (nativeBase + nativeui::kFilterBase == 2849 && text (a, effGetParamName, 2849) == "Filter Native View"
+               && text (a, effGetParamName, 2850) == "Filter Power" && text (a, effGetParamName, 2877) == "Filter Native Action"
                && names (nativeui::kFilterIndicatorBase, 5, "Filter Indicator "),
                "standalone Filter appends its view, editor slots and indicators after the LFO handles");
-        bool oscFields = nativeBase + nativeui::kOscBase == 2884;
+        bool oscFields = nativeBase + nativeui::kOscBase == 2883;
         constexpr int oscMax[] { 4, 6, 2 };
         for (int field = 0; field < nativeui::osc::kCount; ++field)
         {
@@ -338,42 +337,42 @@ int main (int argc, char** argv)
         check (oscFields, "standalone OSC source, routing and visibility retain their append-only indices and integer ranges");
         const int master = nativeBase + nativeui::kMasterView;
         VstParameterProperties masterProps {};
-        check (master == 2887 && text (a, effGetParamName, master) == "Master Editor View"
+        check (master == 2886 && text (a, effGetParamName, master) == "Master Editor View"
                && a->dispatcher (a, effGetParameterProperties, master, 0, &masterProps, 0.0f) == 1
                && (masterProps.flags & kVstParameterUsesIntegerMinMax) != 0 && masterProps.minInteger == 0
                && masterProps.maxInteger == 2 && masterProps.stepInteger == 1,
                "Master appends one non-automatable editor view with Hidden, MAIN and TUNING frames");
         const int modView = nativeBase + nativeui::kModView;
         VstParameterProperties modRowProps {};
-        check (modView == 2888 && text (a, effGetParamName, modView) == "Mod Matrix View"
-               && text (a, effGetParamName, 2889) == "Mod Row 1 Slot" && text (a, effGetParamName, 2895) == "Mod Row 7 Slot"
-               && text (a, effGetParamName, 2896) == "Mod Row 1 Amount" && text (a, effGetParamName, 2916) == "Mod Row 7 Bypass"
-               && text (a, effGetParamName, 2917) == "Mod Detail Amount" && text (a, effGetParamName, 2928) == "Mod Detail Delay Sync"
-               && a->dispatcher (a, effGetParameterProperties, 2889, 0, &modRowProps, 0.0f) == 1
+        check (modView == 2887 && text (a, effGetParamName, modView) == "Mod Matrix View"
+               && text (a, effGetParamName, 2888) == "Mod Row 1 Slot" && text (a, effGetParamName, 2894) == "Mod Row 7 Slot"
+               && text (a, effGetParamName, 2895) == "Mod Row 1 Amount" && text (a, effGetParamName, 2915) == "Mod Row 7 Bypass"
+               && text (a, effGetParamName, 2916) == "Mod Detail Amount" && text (a, effGetParamName, 2927) == "Mod Detail Delay Sync"
+               && a->dispatcher (a, effGetParameterProperties, 2888, 0, &modRowProps, 0.0f) == 1
                && (modRowProps.flags & kVstParameterUsesIntegerMinMax) != 0 && modRowProps.maxInteger == 64,
                "Mod appends a view, seven slot identities, 21 matrix cells and 12 detail cells");
         const int envView = nativeBase + nativeui::kEnvView;
         VstParameterProperties envSelectProps {};
-        check (envView == 2929 && text (a, effGetParamName, envView) == "Env Editor View"
-               && text (a, effGetParamName, 2930) == "Env Native Attack" && text (a, effGetParamName, 2940) == "Env Native Retrig"
-               && text (a, effGetParamName, 2941) == "Env Native Selection" && text (a, effGetParamName, 2942) == "Env Native Targets"
-               && a->dispatcher (a, effGetParameterProperties, 2941, 0, &envSelectProps, 0.0f) == 1
+        check (envView == 2928 && text (a, effGetParamName, envView) == "Env Editor View"
+               && text (a, effGetParamName, 2929) == "Env Native Attack" && text (a, effGetParamName, 2939) == "Env Native Retrig"
+               && text (a, effGetParamName, 2940) == "Env Native Selection" && text (a, effGetParamName, 2941) == "Env Native Targets"
+               && a->dispatcher (a, effGetParameterProperties, 2940, 0, &envSelectProps, 0.0f) == 1
                && envSelectProps.maxInteger == 5,
                "standalone ENV appends transient view, scalar and action handles after the stable prefix");
         const int modNavigation = nativeBase + nativeui::kModNavigation;
         VstParameterProperties navMode {}, navSource {}, navDestination {};
-        check (modNavigation == 2944 && text (a, effGetParamName, 2943) == "Play LFO Standard"
+        check (modNavigation == 2943 && text (a, effGetParamName, 2942) == "Play LFO Standard"
                && text (a, effGetParamName, modNavigation) == "Mod Navigation Mode"
-               && text (a, effGetParamName, 2947) == "Mod Navigation Add"
-               && text (a, effGetParamName, 2948) == "Mod Row 1 Source"
-               && text (a, effGetParamName, 2968) == "Mod Row 7 More"
-               && a->dispatcher (a, effGetParameterProperties, 2944, 0, &navMode, 0.0f) == 1 && navMode.maxInteger == 3
-               && a->dispatcher (a, effGetParameterProperties, 2945, 0, &navSource, 0.0f) == 1 && navSource.maxInteger == 5
-               && a->dispatcher (a, effGetParameterProperties, 2946, 0, &navDestination, 0.0f) == 1 && navDestination.maxInteger == 10,
+               && text (a, effGetParamName, 2946) == "Mod Navigation Add"
+               && text (a, effGetParamName, 2947) == "Mod Row 1 Source"
+               && text (a, effGetParamName, 2967) == "Mod Row 7 More"
+               && a->dispatcher (a, effGetParameterProperties, 2943, 0, &navMode, 0.0f) == 1 && navMode.maxInteger == 3
+               && a->dispatcher (a, effGetParameterProperties, 2944, 0, &navSource, 0.0f) == 1 && navSource.maxInteger == 5
+               && a->dispatcher (a, effGetParameterProperties, 2945, 0, &navDestination, 0.0f) == 1 && navDestination.maxInteger == 10,
                "Mod navigation appends the header and seven Source, Target and More groups");
         namespace voice = nativeui::voice;
         const int voiceBase = nativeBase + nativeui::kVoiceSequence;
-        bool voiceProps = voiceBase == 2969;
+        bool voiceProps = voiceBase == 2968;
         for (int field = 0; field < voice::kCount; ++field)
         {
             const int index = voiceBase + field;
@@ -384,9 +383,9 @@ int main (int argc, char** argv)
                        && props.minInteger == (field == voice::kValue ? -100 : 0)
                        && props.maxInteger == (field == voice::kValue ? 100 : field == voice::kRow ? 5 : 7);
         }
-        check (voiceProps, "Voice appends two stepped selectors and an integer keypad range at 2969..2971");
+        check (voiceProps, "Voice appends two stepped selectors and an integer keypad range at 2968..2970");
         const int powers = nativeBase + nativeui::kOscPower;
-        bool oscPower = powers == 2972;
+        bool oscPower = powers == 2971;
         for (int field = 0; field < nativeui::osc::kLastSource; ++field)
         {
             VstParameterProperties props {};
@@ -397,12 +396,12 @@ int main (int argc, char** argv)
                      && (props.flags & kVstParameterUsesIntegerMinMax) != 0
                      && props.minInteger == 0 && props.maxInteger == 1 && props.stepInteger == 1;
         }
-        check (oscPower, "the five standalone oscillator power handles append at 2972..2976 with discrete ON/OFF values");
+        check (oscPower, "the five standalone oscillator power handles append at 2971..2975 with discrete ON/OFF values");
         namespace m = nativeui::master;
         const int masterOutput = nativeBase + nativeui::kMasterOutput;
         const char* outputNames[] { "Master Peak L", "Master Peak R", "Master Hold L", "Master Hold R",
             "Master Voice Meter", "Master Voice Count", "Master Output Limiter", "Master Clip", "Master Clear Clip" };
-        bool outputProps = masterOutput == 2977;
+        bool outputProps = masterOutput == 2976;
         for (int field = 0; field < m::kOutputFields; ++field)
         {
             VstParameterProperties props {};
@@ -414,7 +413,7 @@ int main (int argc, char** argv)
                         && ((props.flags & kVstParameterIsSwitch) != 0) == (field >= m::Limiter)
                         && a->getParameter (a, index) == 0.0f;
         }
-        check (outputProps, "nine Master output handles append at 2977..2985, default to zero and reject off-page writes");
+        check (outputProps, "nine Master output handles append at 2976..2984, default to zero and reject off-page writes");
         check (text (a, effGetParamDisplay, masterOutput + m::VoiceCount) == "0 / 16 VOICES",
                "the native voice count includes the polyphony limit");
         std::string limiterOn = before;
@@ -434,7 +433,7 @@ int main (int argc, char** argv)
         const int oscSettingsView = nativeBase + nativeui::kOscSettingsView;
         const int oscRouting = nativeBase + nativeui::kOscRoutingBySource;
         VstParameterProperties oscSettingsProps {};
-        bool oscSettings = oscSettingsView == 2986 && oscRouting == 3006
+        bool oscSettings = oscSettingsView == 2985 && oscRouting == 3005
             && text (a, effGetParamName, oscSettingsView) == "Osc Settings View"
             && a->dispatcher (a, effGetParameterProperties, oscSettingsView, 0, &oscSettingsProps, 0.0f) == 1
             && oscSettingsProps.maxInteger == 8;
@@ -450,16 +449,16 @@ int main (int argc, char** argv)
         check (oscSettings, "Sub and Noise settings and five source-owned routing handles append after Master");
         const int abcSettings = nativeBase + nativeui::kOscAbcSettings;
         VstParameterProperties warpProps {};
-        check (abcSettings == 3012 && text (a, effGetParamName, abcSettings) == "Osc A Setting 1"
+        check (abcSettings == 3011 && text (a, effGetParamName, abcSettings) == "Osc A Setting 1"
                && text (a, effGetParamName, abcSettings + 18) == "Osc B Setting 1"
-               && text (a, effGetParamName, 3065) == "Osc C Setting 18"
-               && text (a, effGetParamName, 3011) == "Osc Warp Layout"
-               && a->dispatcher (a, effGetParameterProperties, 3011, 0, &warpProps, 0.0f) == 1
+               && text (a, effGetParamName, 3064) == "Osc C Setting 18"
+               && text (a, effGetParamName, 3010) == "Osc Warp Layout"
+               && a->dispatcher (a, effGetParameterProperties, 3010, 0, &warpProps, 0.0f) == 1
                && warpProps.maxInteger == 3,
                "Osc A/B/C append distinct field ranges and the four Warp geometry states");
         namespace fxh = nativeui::fxheader;
         const int fxHeader = nativeBase + nativeui::kFxHeader;
-        check (fxHeader == 3066 && text (a, effGetParamName, fxHeader) == "FX Header Source"
+        check (fxHeader == 3065 && text (a, effGetParamName, fxHeader) == "FX Header Source"
                && text (a, effGetParamName, fxHeader + 1) == "FX Header Layout",
                "standalone FX appends its source and layout");
         bool fxHeaders = true;
@@ -628,7 +627,7 @@ int main (int argc, char** argv)
         const int time = prox0 + 2 * pl::kSlots + pl::kLfoSmoothTimeSlot;
         const int toggle = prox0 + 2 * pl::kSlots + pl::kLfoSmoothOnSlot;
         VstParameterProperties gateProps {};
-        check (gate == 2943 && text (host, effGetParamName, gate) == "Play LFO Standard"
+        check (gate == 2942 && text (host, effGetParamName, gate) == "Play LFO Standard"
                && host->getParameter (host, gate) == 1.0f
                && host->dispatcher (host, effGetParameterProperties, gate, 0, &gateProps, 0.0f) != 0
                && gateProps.maxInteger == 1 && host->dispatcher (host, effCanBeAutomated, gate, 0, nullptr, 0.0f) == 0,

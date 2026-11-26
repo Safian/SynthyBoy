@@ -1348,27 +1348,6 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.picture (outDir + "/" + state + "_mixer_dest_popup.png");
         }
 
-        // 7.3 Peek buttons (Filter 1, Filter 2, Main FX, Bus 1 FX, Bus 2 FX)
-        {
-            static const char* const kPeekNames[] = { "filter1", "filter2", "main_fx", "bus1_fx", "bus2_fx" };
-            for (int target = 0; target < 5; ++target)
-            {
-                GalleryRig<MixerUi> r (baseInst, 1);
-                if (target == 2 && (state == "Init" || state == "test_init"))
-                    setupEffectNonDefault (r.inst, 1); // show the Chorus controls in the Main FX example
-                if (target == 3 || target == 4)
-                {
-                    setupEffectNonDefault (r.inst, 1);
-                    r.inst.set ("chorus.on", 1.0f);
-                    r.inst.set ("chorus.rack", target == 3 ? 1.0f : 2.0f);
-                }
-                r.refresh (2);
-                const ui::Rect rect = r.ui.screen().routingBar.peekRect (target);
-                r.tapAt (rect.x + rect.w / 2, rect.y + rect.h / 2);
-                r.refresh (2);
-                r.picture (outDir + "/" + state + "_mixer_peek_" + kPeekNames[target] + ".png");
-            }
-        }
     }
 
     // =========================================================================
@@ -1694,11 +1673,6 @@ int main (int argc, char** argv)
             "test_init_mixer_strip_sub.png",
             "test_init_mixer_strip_osca.png",
             "test_init_mixer_dest_popup.png",
-            "test_init_mixer_peek_filter1.png",
-            "test_init_mixer_peek_filter2.png",
-            "test_init_mixer_peek_main_fx.png",
-            "test_init_mixer_peek_bus1_fx.png",
-            "test_init_mixer_peek_bus2_fx.png",
             "test_init_filter1_off.png",
             "test_init_fx_chorus_page1.png",
             "test_init_fx_chorus_page2.png",

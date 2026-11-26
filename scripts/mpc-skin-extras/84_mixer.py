@@ -1,4 +1,4 @@
-# SynthyBoy - native MPC Mixer controls, meters and PEEK buttons.
+# SynthyBoy - native MPC Mixer controls and meters (one screen: ten strips, no peek tab bar).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from copy import deepcopy
@@ -6,7 +6,6 @@ from pathlib import Path
 
 from native_ui_params import (
     MIXER_STEREO_BASE,
-    MIXER_ACTIVE_TAB,
     MIXER_CONTROL,
     MIXER_HOLD_OFFSET,
     MIXER_MUTE_OFFSET,
@@ -14,11 +13,9 @@ from native_ui_params import (
     MIXER_PEAK_OFFSET,
     MIXER_SOLO_OFFSET,
     MIXER_SOLO_VISUAL,
-    MIXER_TABS,
-    mixer_peek_index,
+    native_base_index,
 )
 from components.style import size as _style_size
-from components.native.tab_bar.tab_bar import tab_bar
 
 from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
@@ -40,7 +37,6 @@ STRIPS = (
     ("SUB", "sub"), ("A", "osc1"), ("B", "osc2"), ("C", "osc3"), ("NOISE", "noise"),
     ("F1", "filter1"), ("F2", "filter2"), ("BUS 1", "bus1"), ("BUS 2", "bus2"), ("MAIN", "main")
 )
-PEEK_LABELS = ("FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
 NATIVE = "Mixer Native "
 
 
@@ -98,9 +94,7 @@ def apply(tui, qlinks, ctx):
         raise ValueError("native Mixer needs its Overlay Instance marker")
     overlay_idx = int(marker["handle remapping"]["map"][0]["value"].split()[1])
     modal_gate = ("RangedEnabling/0/18/33/Parameter %d" % overlay_idx,)
-    base = mixer_peek_index(ctx.param_count)
-    ctx.add_param_key(base, "shell.mixer_peek")
-    ctx.add_param_key(base + MIXER_ACTIVE_TAB, "shell.mixer_active_tab")
+    base = native_base_index(ctx.param_count)
     for i in range(len(STRIPS)):
         ctx.add_param_key(base + MIXER_PEAK_OFFSET + i, "shell.mixer_peak_%d" % (i + 1))
         ctx.add_param_key(base + MIXER_HOLD_OFFSET + i, "shell.mixer_hold_%d" % (i + 1))
@@ -133,8 +127,8 @@ def apply(tui, qlinks, ctx):
     if hasattr(ctx, "skins_dir") and ctx.skins_dir:
         write_mixer_strip_assets(Path(ctx.skins_dir))
 
-    # Keep overlay marker, instances, and docked PEEK surfaces
-    components[:] = [c for c in components if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance", "Mixer Native Peek "))]
+    # Keep the overlay marker and instances only
+    components[:] = [c for c in components if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
 
     # Layout tokens for mixer channel strips
     start_x = _style_size("mixer_strip.start_x")
@@ -200,7 +194,7 @@ def apply(tui, qlinks, ctx):
         for field, name in enumerate(("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")):
             handles[name] = base + MIXER_STEREO_BASE + field * len(STRIPS) + i
         tag = f"{NATIVE}{caption} Strip"
-        strip_gates = (modal_gate[0], f"IndexedEnabling/0/{MIXER_TABS}/Parameter {base + MIXER_ACTIVE_TAB}")
+        strip_gates = (modal_gate[0],)
         strip = create_mixer_strip_instance(
             variant=variant,
             rect=rect,
@@ -211,14 +205,3 @@ def apply(tui, qlinks, ctx):
         )
         frame = "mixerStripFilterFrame" if source in ("filter1", "filter2") else strip["componentData"]["type"] + "Frame"
         components.extend(_bind_strip_cells(strip, definitions, caption, frame))
-
-    # Native 6-tab navigation action row (MIXER=0, FLT 1=1, FLT 2=2, MAIN FX=3, BUS 1=4, BUS 2=5).
-    # Gated on modal_gate (< 19) so tabs remain active in MIXER and all 5 docked editors (where
-    # mixerPeek keeps Overlay Instance < 19), while hiding cleanly for full-screen modals (MODS/List).
-    all_tabs = ("MIXER", *PEEK_LABELS)
-    supply_replacement_strings(tui, base, all_tabs)
-    peek_y = start_y + height + _style_size("mixer_strip.tab.gap_y")
-    rect = (_style_size("mixer_strip.tab.start_x"), peek_y, _style_size("mixer_strip.tab.width"),
-            _style_size("mixer_strip.tab.height"))
-    components.extend(tab_bar(NATIVE.rstrip(), all_tabs, rect, f"Parameter {base + MIXER_ACTIVE_TAB}",
-                              f"Parameter {base}", skins_dir, modal_gate))

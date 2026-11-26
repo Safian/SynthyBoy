@@ -1,8 +1,10 @@
 # LFO / RND standalone screen
 
-Updated 2026-11-24. This describes the current standalone native skin and its production C++ overlay, rather than the historical shape-grid layout.
+Updated 2026-11-26 (one tab page = one screen). The LFO has FOURTEEN hardware sub-tabs on two function keys: `LFO`, `LFO 2` .. `LFO 8` (key `LFO`) and `LFO 9`, `LFO 10`, `RND 1` .. `RND 4` (key `LFO 9`); the views `lfo1` .. `lfo10`, `rnd1` .. `rnd4` of `shell-mpc/overlay/overlay_layout.json` have the index 1 .. 14, which the page takes from `page::Input::instance` (`LfoUi::update`, `pageSlot_`). The page has no SOURCE cell, no dropdown and no selector Q dial, and shares nothing with the Play selection; the handle `LFO Reserved` (`nativeui::lfo::kSelection`) stays in the handle block so that no index moves, and is never published. The sections below that speak of the SOURCE selector describe the old single tab.
 
-The header contains SOURCE (LFO 1–10 / RND 1–4), WAVEFORM or STYLE, and TARGETS. The graph spans the page below it. The standard LFO graph has the existing expand icon in its upper-right corner, which opens the real nested waveform editor. There is no EDIT text button or neighbouring-source carousel.
+This describes the current standalone native skin and its production C++ overlay, rather than the historical shape-grid layout.
+
+The header contains WAVEFORM or STYLE (the whole width the SOURCE cell left, x 8, 1056 px) and TARGETS. The graph spans the page below it. The standard LFO graph has the existing expand icon in its upper-right corner, which opens the real nested waveform editor. There is no EDIT text button or neighbouring-source carousel.
 
 The native host draws controls and owns their normal input. The production `PageView<LfoUi>` / `LfoFullScreen` overlay draws the graph, live cursor, functional block outlines and generation-dependent Q focus. Source selection, parameter values and physical routing use the existing selected-instance contract; this change adds no parameter slots.
 
@@ -12,7 +14,7 @@ The [native contract](../../scripts/mpc-skin-extras/lfo-native-contract.json) is
 
 | Area | Controls and current shared primitives |
 |---|---|
-| Header | Shared native selector for SOURCE and WAVEFORM/STYLE; shared ActionButton for TARGETS |
+| Header | Shared native selector for WAVEFORM/STYLE; shared ActionButton for TARGETS |
 | Graph | Production LFO shape / Random trace and cursor; shared expand icon for the standard editor |
 | RATE | Own blue LEVEL dial or native DIVISION selector; KEY substitutes TRANSPOSE and TUNE number fields |
 | Standard RATE additions | RISE plus one SMOOTH ActiveText state caption and the shared Smooth time dial |

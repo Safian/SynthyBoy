@@ -91,7 +91,7 @@ struct Layout
     int defaultRows = 0;      // historical table metadata; panelsOf() owns current row-to-panel assignment
     Row row[kMaxRows];
     /** DISPLAY LEFT, CONTROLS RIGHT: the display takes the left half of the page over its whole height and the controls stand in two columns (cells of two per line) at the right (a Q group of four is a block of two
-        lines). Used when the page has no Mixer-peek inset and the visible rows of the panel fit the height at the right (FxSlotEditor::sideMode); otherwise the standard stacked layout applies. Effects with a
+        lines). Used when the visible rows of the panel fit the height at the right (FxSlotEditor::sideMode); otherwise the standard stacked layout applies. Effects with a
         display (Compressor, Delay, Distortion, EQ, FX Filter) have it. */
     bool side = false;
 };

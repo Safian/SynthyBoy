@@ -6,7 +6,7 @@ import copy
 import json
 from pathlib import Path
 
-from native_ui_params import LFO_OFFSET, LFO_TARGETS_ACTION, mixer_peek_index
+from native_ui_params import LFO_OFFSET, LFO_TARGETS_ACTION, native_base_index
 from components import style as _ui_style
 from components.native.button.button import button as native_button
 from components.native.selector.selector import labelled_choice_drawer
@@ -14,7 +14,7 @@ from components.native.selector.selector import labelled_choice_drawer
 CONTRACT = Path(__file__).with_name("lfo-native-contract.json")
 PREFIX = "LFO 1 Native "
 DEFINITION = "lfoNative"
-SELECT, SHAPE, STYLE, SMOOTH, SMOOTH_TIME, ACTION, LAYOUT = range(7)
+SELECT, SHAPE, STYLE, SMOOTH, SMOOTH_TIME, ACTION, LAYOUT = range(7)   # SELECT: RESERVED (the page has no selector: the 14 hardware sub-tabs name the LFO)
 CHOICE_FIELDS = {
     SHAPE: "lfo1.shape", STYLE: "rlfo1.style", 8: "lfo1.division", 10: "lfo1.sync",
     11: "lfo1.sync_type", 12: "rlfo1.sync_type", 16: "lfo1.direction",
@@ -169,10 +169,9 @@ def apply(tui, qlinks, ctx):
 
     # Regenerate with lfo_ui_host --skin-contract from the standalone layout.
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    base = mixer_peek_index(ctx.param_count) + LFO_OFFSET
+    base = native_base_index(ctx.param_count) + LFO_OFFSET
     params = {p["key"]: p for p in ctx.params}
     choices = {field: list(params[key]["choices"]) for field, key in CHOICE_FIELDS.items()}
-    choices[SELECT] = [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)]
     choices[SHAPE][-1] = "Drawn"
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     for field, names in choices.items():
@@ -224,7 +223,7 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
         from components.native.button.button import action_button
         if field == ACTION:
             if action == 1:
-                handle = f"Parameter {mixer_peek_index(ctx.param_count) + LFO_TARGETS_ACTION}"
+                handle = f"Parameter {native_base_index(ctx.param_count) + LFO_TARGETS_ACTION}"
             child = action_button(ctx, PREFIX + f"Action {action}", tuple(rect),
                                   "FromGesture/" + handle,
                                   text="TARGETS" if action == 1 else None,
@@ -275,7 +274,7 @@ def _apply_shape_editor(tui, items, ctx):
     )
 
     contract = json.loads(Path(__file__).with_name("lfo-shape-editor-contract.json").read_text(encoding="utf-8"))
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     gate = f"IndexedEnabling/1/2/Parameter {base + LFO_EDITOR_VIEW}"
     optional = {field: base + LFO_EDITOR_AVAILABILITY + i for i, field in enumerate(contract["availability"])}
     curve_gate = f"Parameter {base + LFO_EDITOR_SCALE}"
@@ -401,7 +400,7 @@ def _apply_shape_detail(tui, items, ctx):
     from native_ui_params import LFO_DETAIL
 
     rects = json.loads(Path(__file__).with_name("lfo-shape-detail-contract.json").read_text(encoding="utf-8"))
-    base = mixer_peek_index(ctx.param_count) + LFO_DETAIL
+    base = native_base_index(ctx.param_count) + LFO_DETAIL
     prefix = PREFIX + "Detail "
     point_view = f"IndexedEnabling/1/4/Parameter {base}"
     list_view = f"RangedEnabling/2/3/4/Parameter {base}"

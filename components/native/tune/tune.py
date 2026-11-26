@@ -91,13 +91,13 @@ DEFAULT_BTN_GAP = _style_size('gap.field')
 LEGACY_EXTRAS = 82
 
 
-def mixer_peek_index(param_count):
+def native_base_index(param_count):
     return param_count + LEGACY_EXTRAS
 
 
-OSC_ABC_SETTINGS = 293
+OSC_ABC_SETTINGS = 292
 OSC_ABC_SETTINGS_FIELDS = 18
-OSC_DETAIL = 631
+OSC_DETAIL = 629
 OSC_DETAIL_CELLS = 32
 
 # Native detail navigation offsets proven from shell-mpc/native_osc_detail.h
@@ -217,7 +217,7 @@ def resolve_native_base(base=None, param_count=None):
     if base is not None:
         return base
     if param_count is not None:
-        return mixer_peek_index(param_count)
+        return native_base_index(param_count)
     raise ValueError("Supply the native host base or parameter count to bind TUNE.")
 
 

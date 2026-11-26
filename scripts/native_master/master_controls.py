@@ -420,7 +420,7 @@ def _voice_meter(width, height):
 
 def _output_widgets(ctx, view):
     n = native_ui_params
-    base = n.mixer_peek_index(ctx.param_count)
+    base = n.native_base_index(ctx.param_count)
     main = (f"IndexedEnabling/1/3/Parameter {view}",)
 
     def meter(name, kind, definition, links):
@@ -526,7 +526,7 @@ def apply_master_native_controls(tui, qlinks, ctx):
         added_definitions.add(definition)
         return definition
 
-    view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
+    view = native_ui_params.native_base_index(ctx.param_count) + native_ui_params.MASTER_VIEW
     frames = {"main": 1, "tuning": 2}
     by_side = {"main": [], "tuning": []}
 
@@ -565,7 +565,7 @@ def apply_master_native_controls(tui, qlinks, ctx):
             component["bounds"]["acceptsHWFocus"] = "Children"
         by_side[spec["side"]].append(component)
 
-    base = native_ui_params.mixer_peek_index(ctx.param_count)
+    base = native_ui_params.native_base_index(ctx.param_count)
     control = base + native_ui_params.MASTER_SCALE_INPUT
     by_side["tuning"].append(mode_button(ctx, "Master Scale Input", _rect(LAYOUT["scale_input"]),
                                          f"Parameter {control}", on_text="KEY MODE  •  SELECT ROOT  •  TAP TO PLAY",

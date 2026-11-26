@@ -347,7 +347,7 @@ int main (int argc, char** argv)
     inst.liveVal.lfoVoicePhase[0][0] = 0.42f;
     inst.liveVal.source[uibind::lfoSource (1) - 1] = 0.707f;
 
-    PageView<LfoUi> page ("lfo1", 1);
+    PageView<LfoUi> page ("lfo1", selection);   // the sub-tab of the shown LFO (1 .. 10) or RND (11 .. 14)
     UiStack stack;
     stack.openFull (page.pageElement());
 
@@ -358,12 +358,6 @@ int main (int argc, char** argv)
     in.live = &inst.liveVal;
     in.panelEdgeX = page::kW;
     page.update (in);
-
-    if (selection >= 11)
-    {
-        inst.nativeBank.post (nativeui::lfo::kSelection, static_cast<float> (selection - 1) / (nativeui::lfo::kInstances - 1));
-        page.update (in);
-    }
 
     if (isEditorOpen)
     {
@@ -443,9 +437,7 @@ int main (int argc, char** argv)
                 if (f == nativeui::lfo::kLayout) continue;
                 const char* suffix = nativeui::lfo::kSuffixes[f];
                 const int target = suffix != nullptr ? LfoFixtureInstance::idx (prefix + suffix) : -1;
-                const std::string display = f == nativeui::lfo::kSelection
-                    ? (selection <= 10 ? "LFO " + std::to_string (selection) : "RND " + std::to_string (selection-10))
-                    : target >= 0 ? formatParamText (target, inst.param (target)) : "";
+                const std::string display = target >= 0 ? formatParamText (target, inst.param (target)) : "";
                 entry (baseParam + f, inst.native.values[f], nativeui::lfo::kNames[f], display);
             }
             namespace ed = nativeui::lfoeditor;

@@ -7,9 +7,9 @@
 
 namespace synthyboy_mpc::nativeui::targets
 {
-enum Owner { Hidden, Macros, Env, Lfo, Filter, Mod, PlayEnv, Osc, Mixer, PlayLfo, PlayOsc };
+enum Owner { Hidden, Macros, Env, Lfo, Filter, Mod, PlayEnv, Osc, PlayLfo, PlayOsc };
 enum Mode { Targets, Modulations };
-constexpr int kLastFrame = Mixer;
+constexpr int kLastFrame = Osc;
 enum Field { Back, Add, Page, FirstRow };
 enum RowField { Amount, Polarity, Active, Remove, RowFields };
 constexpr int kRows = 6, kFields = FirstRow + kRows * RowFields;

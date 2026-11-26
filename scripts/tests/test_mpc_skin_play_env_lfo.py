@@ -54,10 +54,10 @@ class PlayEnvLfoSkinTest(unittest.TestCase):
             caption, span = body.rsplit(" ", 1)
             field = len(fields) if standard_mode else fields.index(caption)
             first, last = map(int, span.split("-"))
-            index = 3348 if standard_mode else 3303 + field
+            index = 3347 if standard_mode else 3302 + field
             handle = ("FromGesture/" if field in (0, 1) else "") + f"Parameter {index}"
-            visible = (f"IndexedEnabling/{first}/7/Parameter 3302" if first == last
-                       else f"RangedEnabling/{first}/{last}/7/Parameter 3302")
+            visible = (f"IndexedEnabling/{first}/7/Parameter 3301" if first == last
+                       else f"RangedEnabling/{first}/{last}/7/Parameter 3301")
             self.assertEqual(item["bounds"]["additionalInvalidatingHandles"],
                              ["RangedEnabling/0/18/33/Parameter 2675", visible])
             self.assertEqual(item["handle remapping"]["map"], [{"key": "Data", "value": handle}])
@@ -85,16 +85,16 @@ class PlayEnvLfoSkinTest(unittest.TestCase):
         self.assertEqual(actual, expected)
         self.assertFalse(any((view, field) in actual for view in (3, 6) for field in (3, 4)))
         legacy = next(item for item in self.items if item["componentData"]["name"] == "Play LFO Select")
-        self.assertIn("IndexedEnabling/0/7/Parameter 3302", legacy["bounds"]["additionalInvalidatingHandles"])
+        self.assertIn("IndexedEnabling/0/7/Parameter 3301", legacy["bounds"]["additionalInvalidatingHandles"])
         self.assertEqual(legacy["handle remapping"]["map"][0]["value"], "Parameter 2678")
 
     def test_choice_domains_and_modal_session_markers(self):
         replacement = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
-        self.assertEqual(replacement["Parameter 3311"], [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)])
-        self.assertEqual(replacement["Parameter 3305"], self.params["lfo1.shape"]["choices"][:-1] + ["Drawn"])
-        self.assertEqual(replacement["Parameter 3307"], self.params["lfo1.division"]["choices"])
-        self.assertEqual(replacement["Parameter 3308"], self.params["rlfo1.style"]["choices"])
-        self.assertEqual(replacement["Parameter 3309"], self.params["rlfo1.sync"]["choices"])
+        self.assertEqual(replacement["Parameter 3310"], [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)])
+        self.assertEqual(replacement["Parameter 3304"], self.params["lfo1.shape"]["choices"][:-1] + ["Drawn"])
+        self.assertEqual(replacement["Parameter 3306"], self.params["lfo1.division"]["choices"])
+        self.assertEqual(replacement["Parameter 3307"], self.params["rlfo1.style"]["choices"])
+        self.assertEqual(replacement["Parameter 3308"], self.params["rlfo1.sync"]["choices"])
         for caption, x, rgb in (("Select", 88, "459be9"), ("SHAPE", 100, "aee33c"),
                                 ("DIVISION", 112, "9659df"), ("STYLE", 124, "f0bc77"), ("SYNC", 136, "6ef2a0")):
             name = "playEnvLfoMenu " + caption

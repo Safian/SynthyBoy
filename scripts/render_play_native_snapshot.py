@@ -50,17 +50,17 @@ BaseSketch = preview_mod.Sketch
 # Documented fixture parameter state for Play tab:
 # Sub active, Env 1 active, LFO 1 active, highlight on group 1 (Oscillator)
 FIXTURE_STATE = {
-    "Parameter 3529": 0,  # Native modulation editor closed
+    "Parameter 3527": 0,  # Native modulation editor closed
     "Parameter 2675": 0,  # Main page view (normal, not modal/drawer)
-    "Parameter 3537": 0,  # Expanded Play editors closed
+    "Parameter 3535": 0,  # Expanded Play editors closed
     "Parameter 2676": 0,  # Play Osc: Sub (index 0)
     "Parameter 2677": 0,  # Play Env: Env 1 (index 0)
     "Parameter 2678": 0,  # Play LFO: LFO 1 (index 0)
-    "Parameter 3312": 1,  # Compact osc sub-state: Sub active (1)
+    "Parameter 3311": 1,  # Compact osc sub-state: Sub active (1)
     "Parameter 1558": 1,  # Sub power ON (1)
-    "Parameter 2943": 1,  # LFO 1 is standard LFO (1)
+    "Parameter 2942": 1,  # LFO 1 is standard LFO (1)
     "Parameter 2699": 1,  # LFO Smooth switch ON (1) by default
-    "Parameter 3302": 1,  # LFO 1 rate sync mode: Hz mode (1)
+    "Parameter 3301": 1,  # LFO 1 rate sync mode: Hz mode (1)
 }
 
 # Resolved fixture parameter metadata (name, display value, normalized 0..1 for knobs)
@@ -79,13 +79,13 @@ FIXTURE_PARAMS = {
     "Parameter 2696": {"name": "Rise", "value": "0.0 ms", "norm": 0.0},
     "Parameter 2698": {"name": "Time", "value": "150 ms", "norm": 0.2},
     "Parameter 2699": {"name": "Smooth", "value": "ON", "norm": 1.0},
-    "Parameter 3305": {"name": "SHAPE", "value": "SINE", "norm": 0.0},
-    "Parameter 3306": {"name": "RATE", "value": "1.00 Hz", "norm": 0.265},
-    "Parameter 3311": {"name": "Play LFO", "value": "LFO 1", "norm": 0.0},
-    "Parameter 3316": {"name": "WAVE", "value": "SINE", "norm": 0.0},
-    "Parameter 3317": {"name": "OCT", "value": "0", "norm": 0.5},
-    "Parameter 3318": {"name": "PAN", "value": "C", "norm": 0.5},
-    "Parameter 3319": {"name": "LEVEL", "value": "0.0 dB", "norm": 0.75},
+    "Parameter 3304": {"name": "SHAPE", "value": "SINE", "norm": 0.0},
+    "Parameter 3305": {"name": "RATE", "value": "1.00 Hz", "norm": 0.265},
+    "Parameter 3310": {"name": "Play LFO", "value": "LFO 1", "norm": 0.0},
+    "Parameter 3315": {"name": "WAVE", "value": "SINE", "norm": 0.0},
+    "Parameter 3316": {"name": "OCT", "value": "0", "norm": 0.5},
+    "Parameter 3317": {"name": "PAN", "value": "C", "norm": 0.5},
+    "Parameter 3318": {"name": "LEVEL", "value": "0.0 dB", "norm": 0.75},
     "sub.waveform": {"name": "WAVE", "value": "SINE", "norm": 0.0},
     "sub.octave": {"name": "OCT", "value": "0", "norm": 0.5},
     "sub.pan": {"name": "PAN", "value": "C", "norm": 0.5},
@@ -420,7 +420,7 @@ class PlaySketch(BaseSketch):
             elif "power" in btn_name.lower():
                 on = FIXTURE_STATE.get("Parameter 1558", 0) == 1
             elif "sync hz" in btn_name.lower():
-                on = FIXTURE_STATE.get("Parameter 3302", 0) == 1
+                on = FIXTURE_STATE.get("Parameter 3301", 0) == 1
             elif "sync bpm" in btn_name.lower() or "sync key" in btn_name.lower():
                 on = False
             elif handle_name in ("Active", "State") or "smooth" in btn_name.lower():

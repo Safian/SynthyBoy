@@ -11,9 +11,8 @@ import test_mpc_skin_extras as base
 
 
 CONTRACT = base.REAL_EXTRAS / "mod-targets-native-contract.json"
-OWNERS = {"Macros": 1, "Env": 2, "Env 2": 2, "Env 3": 2, "Env 4": 2, "Env 5": 2, "Env 6": 2, "LFO": 3, "Filter": 4, "Filter 2": 4, "Note": 4, "Velo": 4, "Mod": 5, "Play": 6,
-          "Osc": 7, "Osc A": 7, "Osc B": 7, "Osc C": 7, "Sub": 7, "Noise": 7,
-          "Mix": 8, "Mixer": 8}
+OWNERS = {"Macros": 1, "Env": 2, "Env 2": 2, "Env 3": 2, "Env 4": 2, "Env 5": 2, "Env 6": 2, **{n: 3 for n in ("LFO", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4")}, "Filter": 4, "Filter 2": 4, "Note": 4, "Velo": 4, "Mod": 5, "Play": 6,
+          "Osc": 7, "Osc A": 7, "Osc B": 7, "Osc C": 7, "Sub": 7, "Noise": 7}
 
 
 def rect(item):
@@ -58,12 +57,12 @@ class NativeModTargetsTest(unittest.TestCase):
             widget, = widgets
             self.assertEqual(rect(widget), [0, 0, 1280, 628])
             self.assertEqual(widget["bounds"]["acceptsHWFocus"], "Children")
-            self.assertEqual(remap(widget), {"Data": "Parameter 3529"})
+            self.assertEqual(remap(widget), {"Data": "Parameter 3527"})
             self.assertEqual(widget["bounds"]["additionalInvalidatingHandles"],
-                             [f"IndexedEnabling/{frame}/9/Parameter 3529"])
+                             [f"IndexedEnabling/{frame}/8/Parameter 3527"])
             self.assertGreater(32, max(rect(c)[1] + rect(c)[3] for c in components
                                        if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))))
-        self.assertEqual(active, 20)
+        self.assertEqual(active, 32)
 
     def test_six_rows_bind_exact_hitboxes_and_do_not_overlap(self):
         manifest = json.loads(CONTRACT.read_text())
@@ -73,24 +72,24 @@ class NativeModTargetsTest(unittest.TestCase):
         by = {c["componentData"]["name"]: c for c in parent["componentsData"]}
         self.assertEqual(rect(by["BACK"]), manifest["back"])
         self.assertEqual(rect(by["Add"]), manifest["add"])
-        self.assertEqual(remap(by["BACK"]), {"Data": "FromGesture/Parameter 3502"})
-        self.assertEqual(remap(by["Add"]), {"Data": "FromGesture/Parameter 3503", "Caption": "Parameter 3503"})
+        self.assertEqual(remap(by["BACK"]), {"Data": "FromGesture/Parameter 3500"})
+        self.assertEqual(remap(by["Add"]), {"Data": "FromGesture/Parameter 3501", "Caption": "Parameter 3501"})
         self.assertEqual(rect(by["Page arrows"]), manifest["page"])
         for i, name in enumerate(("Previous", "Next"), 1):
             field = by[name]
             self.assertEqual(field["bounds"]["additionalInvalidatingHandles"],
-                             [f"RangedEnabling/{i}/{i + 1}/4/Parameter 3530"])
+                             [f"RangedEnabling/{i}/{i + 1}/4/Parameter 3528"])
             data = field["componentData"]["data"]
             self.assertEqual((data["buttonId"], data["numButtonsInGroup"]), (i, 4))
-            self.assertTrue(remap(field)["Data"].endswith("FromGesture/Parameter 3504"))
+            self.assertTrue(remap(field)["Data"].endswith("FromGesture/Parameter 3502"))
         y = manifest["row"][0][1]
         for row in range(6):
             widget = by[f"Route {row + 1}"]
             self.assertEqual(rect(widget), [0, y + row * manifest["stride"], 1280, 56])
-            self.assertEqual(widget["bounds"]["additionalInvalidatingHandles"], [f"NonZero/Parameter {3531 + row}"])
-            expected = {name: f"Parameter {3505 + 4 * row + i}" for i, name in
+            self.assertEqual(widget["bounds"]["additionalInvalidatingHandles"], [f"NonZero/Parameter {3529 + row}"])
+            expected = {name: f"Parameter {3503 + 4 * row + i}" for i, name in
                         enumerate(("Amount", "Polarity", "Active", "Remove"))}
-            self.assertEqual(remap(widget), {"Data": f"Parameter {3531 + row}", "Present": f"Parameter {3531 + row}", **expected})
+            self.assertEqual(remap(widget), {"Data": f"Parameter {3529 + row}", "Present": f"Parameter {3529 + row}", **expected})
         widgets = {c["componentData"]["name"]: c for c in route["componentsData"]}
         for key, expected in zip(("Target", "Amount", "Polarity", "Active", "Remove"), manifest["row"]):
             x, top, w, h = expected
@@ -161,8 +160,9 @@ class NativeModTargetsTest(unittest.TestCase):
         assert_ordered(actual, expected)
 
 
-class MixerPeekModTargetsSkinTest(unittest.TestCase):
-    def test_mixer_mounts_clipped_native_modulation_editor_with_own_frame(self):
+class MixerHasNoModTargetsEditorSkinTest(unittest.TestCase):
+    """The Mixer is one screen (no Filter peek): only the tabs with an editor of their own mount the modulation editor."""
+    def test_mixer_mounts_no_native_modulation_editor_and_the_filter_tab_does(self):
         mod = base.apply_mod.load_module(base.REAL_EXTRAS / "98_mod_targets.py")
         params = json.loads(base.PARAMS_JSON.read_text(encoding="utf-8"))
         layout = json.loads((base.ROOT / "shell-mpc" / "overlay" / "overlay_layout.json").read_text(encoding="utf-8"))
@@ -198,36 +198,17 @@ class MixerPeekModTargetsSkinTest(unittest.TestCase):
         mix_widgets = [c for c in tabs["Mix"] if c["componentData"]["type"] == "nativeModulationEditor"]
         filter_widgets = [c for c in tabs["Filter"] if c["componentData"]["type"] == "nativeModulationEditor"]
         master_widgets = [c for c in tabs["Master"] if c["componentData"]["type"] == "nativeModulationEditor"]
-        self.assertEqual(len(mix_widgets), 1)
+        self.assertEqual(mix_widgets, [])
         self.assertEqual(len(filter_widgets), 1)
         self.assertEqual(master_widgets, [])
 
-        mix_editor = mix_widgets[0]
-        self.assertEqual(rect(mix_editor), [0, 0, 1280, 628])
-        self.assertEqual(mix_editor["bounds"]["acceptsHWFocus"], "Children")
-        self.assertEqual(remap(mix_editor), {"Data": "Parameter 3529"})
-        self.assertEqual(mix_editor["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/8/9/Parameter 3529"])
-        self.assertEqual(filter_widgets[0]["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/4/9/Parameter 3529"])
+        self.assertEqual(filter_widgets[0]["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/4/8/Parameter 3527"])
+        self.assertEqual(remap(filter_widgets[0]), {"Data": "Parameter 3527"})
 
         defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         editor_def = defs["nativeModulationEditor"]
-        route_def = defs["nativeModulationRoute"]
-        # Mixer PEEK panel cutout is (4, 4, 1272, 620) in tab-local coordinates; markers occupy y=24..30.
-        cutout = (4, 4, 1276, 624)
         for child in editor_def["componentsData"]:
-            x, y, w, h = rect(child)
-            if child["componentData"]["type"] == "nativeModulationRoute":
-                self.assertGreaterEqual(y, 32, child["componentData"]["name"])
-                for sub in route_def["componentsData"]:
-                    sx, sy, sw, sh = rect(sub)
-                    self.assertTrue(cutout[0] <= x + sx and x + sx + sw <= cutout[2]
-                                    and cutout[1] <= y + sy and y + sy + sh <= cutout[3],
-                                    f"{child['componentData']['name']}.{sub['componentData']['name']}")
-            else:
-                self.assertTrue(cutout[0] <= x and x + w <= cutout[2] and cutout[1] <= y and y + h <= cutout[3],
-                                child["componentData"]["name"])
-                self.assertGreaterEqual(y, 32, child["componentData"]["name"])
             for target in remap(child).values():
                 if target.startswith("Parameter ") or "/Parameter " in target:
                     idx = int(target.split("Parameter ")[-1])
-                    self.assertTrue(3502 <= idx <= 3536, target)
+                    self.assertTrue(3500 <= idx <= 3534, target)

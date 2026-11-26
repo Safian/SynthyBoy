@@ -36,7 +36,6 @@
 #include "curve_source.h"
 #include "native_marker_covers.h"
 #include "page_view.h"
-#include "peek_module.h"
 #include "q_publish.h"
 #include "q_publish_mod.h"
 #include "scalar_curve_ui.h"
@@ -53,7 +52,7 @@
 
 namespace synthyboy_mpc { namespace overlay {
 
-class FilterUi : public PeekModule
+class FilterUi
 {
 public:
     // ---- the pages (UiStack ids)
@@ -81,16 +80,14 @@ public:
     static constexpr int kModelFormant = 5, kModelComb = 6, kModelPz = 21;   // the model indices shared by the engine and the patch format
     static constexpr double kModsRefreshMs = 100.0;
 
-    explicit FilterUi (int peekFilter = -1, int standaloneFilter = -1)
-        : peekFilter_ (peekFilter), standaloneFilter_ (standaloneFilter)
+    explicit FilterUi (int standaloneFilter = -1)
+        : standaloneFilter_ (standaloneFilter)
     {
         curve_[0].configure (0);   // velocity (the state VELO)
         curve_[1].configure (1);   // note (the state NOTE)
         setCanvas (kCanvasW, kCanvasH);
         assignIds();
         full_.setPageMode (true);
-        if (peekFilter_ >= 0)
-            full_.setPeekHeader (kCloseWidth);
         if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
             adoptSplitState (standaloneFilter_ - 1, scalarSel_, tabview::kFilterExpandedFilter);
         else
@@ -135,30 +132,6 @@ public:
         return filterSel_ + 1;
     }
 
-    ui::Component& peekRoot() noexcept override { return full_; }
-    void placePeek (ui::Rect panel) override
-    {
-        full_.place (panel);
-        mods_.place (nativePeek_ ? ui::Rect { 0, kTabY, w_, kTabH } : panel);
-    }
-    void setNativePeek (bool enabled) noexcept override
-    {
-        nativePeek_ = enabled;
-        full_.setNativePeekGeometry (enabled);
-    }
-    bool nativePeekReady() const noexcept override { return nativePeek_ && nativeControlsActive(); }
-    ui::Rect nativePeekCloseRect() const noexcept override
-    {
-        const auto view = full_.view.rect();
-        return { view.x, view.y, kCloseWidth, view.h };
-    }
-    void clearNativePeekApertures (gpu::SceneBuilder& sb) const override
-    {
-        if (nativePeekReady())
-            for (const auto area : nativeApertures (true))
-                ui::clearNativeCell (sb, area);
-    }
-
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
@@ -177,7 +150,7 @@ public:
 
     /** Reads the instance: the state of the page (F1, F2, NOTE, VELO: `mpcTabView.filter`), the real response curves, every value of the controls, the modulations of the knobs, the pages of the stack, the Q group.
         `in.targets` the live cutoff and resonance of both filters (cutoff 1, resonance 1, cutoff 2, resonance 2). */
-    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in) override
+    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         pzToolbarSupported_ = inst.nativePzToolbarSupported();
         nowMs_ = nowMs;
@@ -194,7 +167,7 @@ public:
             if (pageTop_ == kPageTargets || pageTop_ == kPageDest)
             {
                 activeModParam_ = -1;
-                while (stack.depth() > (peekFilter_ >= 0 ? 2 : 1))
+                while (stack.depth() > 1)
                     const_cast<UiStack&> (stack).back();
             }
             syncPages (stack);
@@ -202,12 +175,7 @@ public:
         const int rawView = inst.tabView (IInstanceView::kTabViewFilter);
         int targetFilter = 0, targetScalar = 0, targetExpand = tabview::kFilterSplit;
         tabview::decodeFilterSplit (rawView, targetFilter, targetScalar, targetExpand);
-        if (peekFilter_ >= 0)
-        {
-            targetFilter = peekFilter_;
-            targetExpand = tabview::kFilterExpandedFilter;
-        }
-        else if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
+        if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
         {
             targetFilter = standaloneFilter_ - 1;
             targetExpand = tabview::kFilterExpandedFilter;
@@ -304,25 +272,22 @@ public:
         }
 
         auto& mutableStack = const_cast<UiStack&> (stack);
-        if (peekFilter_ < 0 || nativePeek_)
-            updateNativeControls (inst, mutableStack);
-        nativeTargets_.update (inst, targets_, peekFilter_ < 0 && pageTop_ == kPageTargets, nativeui::targets::Filter,
+        updateNativeControls (inst, mutableStack);
+        nativeTargets_.update (inst, targets_, pageTop_ == kPageTargets, nativeui::targets::Filter,
                                curveSource(), targetRows_, [&] (ui::Change change) { handle (change, mutableStack, inst); });
         const auto destination = activeModParam_ >= 0
             ? synthyboy::modDestinationChoiceOf (static_cast<size_t> (activeModParam_)) : 0;
         const int pageBeforeMods = pageTop_;
-        nativeModulations_.update (inst, mods_, (peekFilter_ < 0 || nativePeek_) && ! mods_.boardShown() && modsContextValid (inst),
-            peekFilter_ >= 0 ? nativeui::targets::Mixer : nativeui::targets::Filter, static_cast<int> (destination), modRows_,
+        nativeModulations_.update (inst, mods_, ! mods_.boardShown() && modsContextValid (inst),
+            nativeui::targets::Filter, static_cast<int> (destination), modRows_,
             [&] (ui::Change change) { handle (change, mutableStack, inst); }, nativeui::targets::Modulations);
         syncPages (stack);
-        if (pageBeforeMods == kPageMods && pageTop_ == 0 && (peekFilter_ < 0 || nativePeek_))
+        if (pageBeforeMods == kPageMods && pageTop_ == 0)
             updateNativeControls (inst, mutableStack);
         const bool pzNative = nativePzToolbar();
         pzEditor_.setNativeToolbar (pzNative);
         inst.setNativePzToolbar (pzNative ? pzFilter_ : 0, pzNative ? pzToolbarAvailability() : nativeui::pz::None);
-        // The Mixer owns the host widget gate while the Filter is embedded.
-        if (peekFilter_ < 0)
-            inst.setUiFullOpen (nativeViewFrame() == 0);
+        inst.setUiFullOpen (nativeViewFrame() == 0);
         publishQGroup (inst);
     }
 
@@ -330,8 +295,8 @@ public:
     int filterSelection() const noexcept { return filterSel_; }
     int scalarSelection() const noexcept { return scalarSel_; }
     int expandMode() const noexcept { return expandMode_; }
-    bool isSplit() const noexcept { return peekFilter_ < 0 && ! isStandalone() && expandMode_ == tabview::kFilterSplit; }
-    bool curveView() const noexcept { return peekFilter_ < 0 && ! isStandalone() && expandMode_ == tabview::kFilterExpandedCurve; }
+    bool isSplit() const noexcept { return ! isStandalone() && expandMode_ == tabview::kFilterSplit; }
+    bool curveView() const noexcept { return ! isStandalone() && expandMode_ == tabview::kFilterExpandedCurve; }
     bool curveShown() const noexcept { return isSplit() || curveView(); }
     bool filterShown() const noexcept { return isSplit() || ! curveView(); }
     int editFilter() const noexcept { return editFilter_; }           // 1 or 2: the filter the knobs belong to
@@ -340,12 +305,12 @@ public:
     ScalarCurveUi& curveUi() noexcept { return curve_[scalarSel_ == 0 ? 1 : 0]; }
     const ScalarCurveUi& curveUi() const noexcept { return curve_[scalarSel_ == 0 ? 1 : 0]; }
     ScalarCurveUi& curveUiOf (int which) noexcept { return curve_[which == 1 ? 1 : 0]; }
-    const int* qTargets() const noexcept override { return qSlots_.data(); }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
-    const char* qGroupName() const noexcept override { return qName_; }
-    int topPage() const noexcept override { return pageTop_; }
+    const char* qGroupName() const noexcept { return qName_; }
+    int topPage() const noexcept { return pageTop_; }
     ui::Rect displayRect() const noexcept { return full_.displayRect(); }
-    void leftTab (IInstanceView& inst) noexcept override
+    void leftTab (IInstanceView& inst) noexcept
     {
         nativeTargets_.hide (inst, targets_);
         nativeModulations_.hide (inst, mods_);
@@ -354,31 +319,28 @@ public:
         inst.setNativePzToolbar (0, nativeui::pz::None);
     }
 
-    // The Filter and its PEEK variant already own their ground inside draw().
+    // The Filter already owns its ground inside draw().
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
     /** The Filter foreground, including its opaque fallback or full-screen detail. */
-    void draw (gpu::SceneBuilder& sb) const override
+    void draw (gpu::SceneBuilder& sb) const
     {
-        if (peekFilter_ < 0)
+        if (hostBackground())
+            coverRootMarkers (sb);
+        else if (nativePowerVisible() || nativeControlsActive())
         {
-            if (hostBackground())
-                coverRootMarkers (sb);
-            else if (nativePowerVisible() || nativeControlsActive())
+            const auto& look = ui::theme::L();
+            ui::Pen p (sb, true, false);
+            ui::outsideNativeCells ({ 0, kTabY, w_, kTabH }, nativeApertures (true), [&] (ui::Rect r)
             {
-                const auto& look = ui::theme::L();
-                ui::Pen p (sb, true, false);
-                ui::outsideNativeCells ({ 0, kTabY, w_, kTabH }, nativeApertures (true), [&] (ui::Rect r)
-                {
-                    ui::Cell cell (sb, r, 0);
-                    p.paintY2 (kTabY, kTabY + kTabH, look.bg0, look.bg1, 255);
-                    p.rect (r, p.c (look.bg1, 255));
-                    p.paintOff();
-                });
-            }
-            else
-                page::ground (sb);
+                ui::Cell cell (sb, r, 0);
+                p.paintY2 (kTabY, kTabY + kTabH, look.bg0, look.bg1, 255);
+                p.rect (r, p.c (look.bg1, 255));
+                p.paintOff();
+            });
         }
+        else
+            page::ground (sb);
         if (pageTop_ == kPageMods)
         {
             mods_.draw (sb);
@@ -427,7 +389,7 @@ public:
         }
     }
 
-    bool covers (int x, int y) const noexcept override
+    bool covers (int x, int y) const noexcept
     {
         if ((pageTop_ == kPageTargets && targets_.nativeHit (x, y))
             || (pageTop_ == kPageMods && mods_.nativeHit (x, y)))
@@ -439,12 +401,10 @@ public:
         for (const auto& area : nativeApertures())
             if (area.contains (x, y))
                 return false;
-        if (nativePeek_ && pageTop_ == 0)
-            return full_.rect().contains (x, y);
         return ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y);
     }
 
-    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs) override
+    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         nowMs_ = nowMs;
         const int x = ev.x, y = ev.y;
@@ -532,7 +492,7 @@ public:
         return true;
     }
 
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst) override
+    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
         nowMs_ = nowMs;
         if (curveShown() && pageTop_ == 0)
@@ -552,7 +512,7 @@ public:
         drainCurveRequests (stack, inst);
     }
 
-    void turnQ (int slot, double delta, UiStack& stack, IInstanceView& inst) override
+    void turnQ (int slot, double delta, UiStack& stack, IInstanceView& inst)
     {
         if (pageTop_ == kPagePz)
             return;
@@ -574,7 +534,7 @@ public:
 
     /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
         list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs) override
+    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         ui::Component* top = topComponent (x, y);
         if (! full_.power.state.on && filterShown() && pageTop_ == 0 && top == &full_)
@@ -600,8 +560,8 @@ public:
         return true;
     }
 
-    bool fingerDown() const noexcept override { return gestureDown_ || nativeTouchSlot_ >= 0; }
-    void dropGesture() noexcept override
+    bool fingerDown() const noexcept { return gestureDown_ || nativeTouchSlot_ >= 0; }
+    void dropGesture() noexcept
     {
         if (gesture_ != nullptr)
             gesture_->touchUp (-1, -1);
@@ -610,7 +570,7 @@ public:
         nativeTouchSlot_ = nativeModControl_ = -1;
     }
     /** Another element's page was open: the Q group is published again at the next update. */
-    void forgetQGroup() noexcept override { qSlots_.forget(); }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
 
     ui::FilterFullScreen& full() noexcept { return full_; }
     ui::ModulationsPage& modsPage() noexcept { return mods_; }
@@ -636,7 +596,7 @@ private:
     bool nativePzOpen() const noexcept { return pzButtonShown_ && full_.power.state.on && nativeControlsActive(); }
     bool nativePzToolbar() const noexcept
     {
-        return pzToolbarSupported_ && peekFilter_ < 0 && hasNativePower() && pageTop_ == kPagePz && pzOwner_ != nullptr
+        return pzToolbarSupported_ && hasNativePower() && pageTop_ == kPagePz && pzOwner_ != nullptr
             && w_ == page::kW && h_ == page::kH;
     }
 
@@ -667,8 +627,7 @@ private:
 
     void hideNativeControls (IInstanceView& inst) noexcept
     {
-        if (peekFilter_ < 0 || nativePeek_)
-            inst.setNativeFilterControls (0, nullptr, nullptr, nullptr);
+        inst.setNativeFilterControls (0, nullptr, nullptr, nullptr);
     }
 
     void observeNativeTouch (int x, int y, double nowMs) noexcept
@@ -727,20 +686,14 @@ private:
         if (nativeControlsActive())
         {
             int idx = 0;
-            if (peekFilter_ < 0)
-                out[idx++] = full_.view.rect();
-            else if (nativePeek_)
-            {
-                const auto close = nativePeekCloseRect();
-                out[idx++] = { close.right() + 8, close.y, 56, close.h };
-            }
+            out[idx++] = full_.view.rect();
             if (isSplit())
             {
                 out[idx++] = full_.scalarView.rect();
                 out[idx++] = full_.nativeExpandFilterRect();
                 out[idx++] = curveUi().screen.nativeExpandRect();
             }
-            else if (peekFilter_ < 0)
+            else
             {
                 if (! curveView())
                     out[idx++] = full_.both.rect();
@@ -780,7 +733,7 @@ private:
     {
         using namespace nativeui;
         if (slot == FilterAction)
-            return peekFilter_ < 0 ? FxCell { 0, 0, kFxDial } : FxCell {};
+            return FxCell { 0, 0, kFxDial };
         if (slot >= FilterPoint && slot <= FilterLegato)
         {
             if (! curveShown())
@@ -828,7 +781,7 @@ private:
             handle (ui::Change::indexed (kBoth, ! dual_, 0.0), stack, inst);
         else if (action == FilterEditPz && filterShown())
             handlePz (kPzOpen, stack, inst);
-        else if (action == FilterExpandFilter && peekFilter_ < 0 && ! isStandalone() && ! subTab_)
+        else if (action == FilterExpandFilter && ! isStandalone() && ! subTab_)
         {
             const int next = expandMode_ == tabview::kFilterSplit ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
             chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -841,7 +794,7 @@ private:
             curveUi().handle (ui::Change::request (ids[action - FilterInit]), inst, nowMs_);
             drainCurveRequests (stack, inst);
         }
-        else if (action == FilterExpandCurve && peekFilter_ < 0 && ! isStandalone() && ! subTab_)
+        else if (action == FilterExpandCurve && ! isStandalone() && ! subTab_)
         {
             const int next = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterSplit : tabview::kFilterExpandedCurve;
             chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -1138,8 +1091,7 @@ private:
 
     void syncPages (const UiStack& stack)
     {
-        const int rootDepth = peekFilter_ >= 0 ? 2 : 1;
-        const int top = stack.depth() > rootDepth ? stack.top() : 0;
+        const int top = stack.depth() > 1 ? stack.top() : 0;
         if (top != pageTop_ && gesture_ != nullptr)
             dropGesture();
         pageTop_ = top;
@@ -1165,7 +1117,7 @@ private:
             if (cu.expandRequested)
             {
                 cu.expandRequested = false;
-                if (peekFilter_ < 0 && ! isStandalone() && ! subTab_ && pageTop_ == 0)
+                if (! isStandalone() && ! subTab_ && pageTop_ == 0)
                 {
                     const int next = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterSplit : tabview::kFilterExpandedCurve;
                     chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -1204,7 +1156,7 @@ private:
         f = std::clamp (f, 0, 1);
         s = std::clamp (s, 0, 1);
         e = std::clamp (e, 0, 2);
-        if (peekFilter_ < 0 && ! isStandalone() && ! subTab_)
+        if (! isStandalone() && ! subTab_)
             inst.setTabView (IInstanceView::kTabViewFilter, tabview::encodeFilterSplit (f, s, e));
         adoptSplitState (f, s, e);
         qSlots_.forget();
@@ -1232,7 +1184,7 @@ private:
 
     bool isPzModel (const IInstanceView& inst) const noexcept
     {
-        return peekFilter_ < 0 && ! curveView() && inst.param (paramForId (kModel, editFilter_)) == kModelPz;
+        return ! curveView() && inst.param (paramForId (kModel, editFilter_)) == kModelPz;
     }
 
     bool pzPowered (const IInstanceView& inst) const noexcept
@@ -1430,7 +1382,7 @@ private:
             switch (c.id)
             {
                 case kExpand:
-                    if (peekFilter_ < 0 && ! isStandalone() && ! subTab_)
+                    if (! isStandalone() && ! subTab_)
                     {
                         const int next = isSplit() ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
                         chooseSplitState (inst, filterSel_, scalarSel_, next);
@@ -2078,8 +2030,6 @@ private:
     int pzFilter_ = 1;
     bool pzButtonShown_ = false;
     bool pzToolbarSupported_ = false;
-    bool nativePeek_ = false;
-    int peekFilter_ = -1; // fixed filter while embedded in the Mixer; the native tab keeps its own view
     int standaloneFilter_ = -1; // fixed filter instance when operating as a standalone tab (1 or 2)
     bool subTab_ = false;       // the page of a hardware sub-tab: Filter 1, Filter 2, Note or Velo (the view's instance number), see setSubTab
     bool nativeGround_ = false;

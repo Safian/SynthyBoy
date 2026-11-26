@@ -13,8 +13,8 @@ from pathlib import Path
 import test_mpc_skin_extras as skin
 
 
-VIEW, ROW_BASE, FIELD_BASE = 2888, 2889, 2896
-MODE, SOURCE_GROUP, TARGET_GROUP, ADD, ROW_ACTIONS = range(2944, 2949)
+VIEW, ROW_BASE, FIELD_BASE = 2887, 2888, 2895
+MODE, SOURCE_GROUP, TARGET_GROUP, ADD, ROW_ACTIONS = range(2943, 2948)
 
 
 def intersects(a, b):

@@ -23,7 +23,7 @@ from components.native.name_value.name_value import build_name_value_definition
 from components.native.radio_button.radio_button import titled_radio_grid
 from components.native.panel.panel import panel_definitions, panel_entry
 from components.native.selector.selector import build_titled_selector, selector_definition
-from scripts.native_ui_params import VOICE_SEQUENCE, mixer_peek_index
+from scripts.native_ui_params import VOICE_SEQUENCE, native_base_index
 from .sequence_readouts import SEQUENCE_READOUT_NAMES, sequence_readout_definitions, sequence_readout_entries
 from .step_controls import VOICE_STEP_KNOB_NAMES, VOICE_STEP_KNOB_PREFIX, VOICE_STEP_ROWS, build_voice_step_knobs
 
@@ -78,7 +78,7 @@ VOICE_NATIVE_CONTROL_NAMES = VOICE_NATIVE_CONTROL_NAMES | VOICE_PANEL_NAMES
 
 
 def sequence_base(ctx):
-    return mixer_peek_index(len(ctx.params)) + VOICE_SEQUENCE
+    return native_base_index(len(ctx.params)) + VOICE_SEQUENCE
 
 
 # Live sounding voices come from the audio engine rather than a host parameter.

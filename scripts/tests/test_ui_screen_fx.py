@@ -25,7 +25,7 @@ from native_ui_params import (
     FX_CELL_COUNT, FX_DOMAIN_COUNT, FX_DOMAIN_OFFSET,
     FX_BAND_BASE, FX_BAND_MODE, FX_HEADER, FX_HEADER_ITEMS,
     FX_KIND_OFFSET, FX_LAYOUT_OFFSET, FX_VALUE_OFFSET,
-    FX_CHAIN, MIXER_PEEK_VIEW, mixer_peek_index,
+    FX_CHAIN, native_base_index,
 )
 
 
@@ -93,17 +93,6 @@ class FxNativeContractAndSdkTest(unittest.TestCase):
         self.assertEqual(surface["componentData"]["type"], "fxNativeEditorSurface")
         self.assertEqual(surface["bounds"]["bounds"], "0 0 1280 628")
         self.assertEqual(surface["bounds"]["acceptsHWFocus"], "Children")
-
-    def test_mixer_peek_fx_surface_is_present(self):
-        tabs = self.tui["pageData"]["tabs"]
-        mixer_tab = next((t for t in tabs if t.get("tabName") in ("Mix", "Mixer")), None)
-        self.assertIsNotNone(mixer_tab, "Mixer tab must exist")
-
-        components = mixer_tab["componentDefinition"]["componentsData"]
-        peek = next((c for c in components if c["componentData"]["name"] == "Mixer Native Peek FX"), None)
-        self.assertIsNotNone(peek, "Mixer Native Peek FX must be present on Mixer tab")
-        self.assertEqual(peek["componentData"]["type"], "mixerPeekFxEditorSurface")
-        self.assertEqual(peek["bounds"]["bounds"], "0 0 1280 564")
 
     def test_all_native_cell_definitions_present(self):
         expected_cells = (

@@ -109,10 +109,10 @@ int main()
             synthyboy::OscCycle::readoutIndices (osc, o);
             expected.insert (expected.end(), o, o + 4);
         }
-        // Mixer PEEK and the Filter tab share one pair of values per filter.
+        // The Filter tabs share one pair of values per filter.
         expected.insert (expected.end(), f1, f1 + 2);
         expected.insert (expected.end(), f2, f2 + 2);
-        check (t == expected, "Play, OSC, Mixer PEEK and Filter share sixteen readout targets in layout order");
+        check (t == expected, "Play, OSC and Filter share sixteen readout targets in layout order");
     }
     // ---- the Filter 1 view ----------------------------------------------------------------------------------------------------------------------------------------
     {

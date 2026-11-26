@@ -27,7 +27,7 @@ class TestUiScreenMod(unittest.TestCase):
         page = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))["pageData"]
         cls.mod = next(tab for tab in page["tabs"] if tab["tabName"] == "Mod")
         cls.items = {c["componentData"]["name"]: c for c in cls.mod["componentDefinition"]["componentsData"]}
-        cls.base = handles.mixer_peek_index(len(json.loads(skin.PARAMS_JSON.read_text())["params"]))
+        cls.base = handles.native_base_index(len(json.loads(skin.PARAMS_JSON.read_text())["params"]))
         cls.definitions = {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}
 
     @classmethod

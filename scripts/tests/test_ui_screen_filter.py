@@ -70,17 +70,6 @@ class TestFilterScreenNative(unittest.TestCase):
 
         self.assertIn("Filter Native dual", by_name)
 
-    def test_mixer_peek_filter_integrity(self):
-        """Verify Mixer tab includes the shared Filter PEEK surface."""
-        mixer = next((t for t in self.tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer")), None)
-        self.assertIsNotNone(mixer)
-        peek = next((c for c in mixer["componentDefinition"]["componentsData"]
-                     if c["componentData"]["name"] == "Mixer Native Peek Filter"), None)
-        self.assertIsNotNone(peek)
-        self.assertEqual(peek["componentData"]["type"], "mixerPeekFilterEditorSurface")
-        self.assertEqual(peek["bounds"]["acceptsHWFocus"], "Children")
-        self.assertEqual(peek["bounds"]["bounds"], "0 0 1280 564")
-
     def test_no_visible_qlink_numbers_or_lanes(self):
         """Verify owner rule: no visible Q-Link numbers, badges, or dedicated number lanes."""
         surface_controls = self.defs["filterNativeEditorSurface"]["componentsData"]

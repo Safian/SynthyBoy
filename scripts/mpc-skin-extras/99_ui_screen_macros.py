@@ -5,7 +5,7 @@
 from components.native.macro_card.macro_card import (
     CARD_HEIGHT, CARD_WIDTH, MACRO_CARD_POSITIONS, build_macro_card_definitions, build_macro_card_instance,
 )
-from native_ui_params import MACRO_TARGET, mixer_peek_index
+from native_ui_params import MACRO_TARGET, native_base_index
 
 
 def apply(tui, qlinks, ctx):
@@ -27,7 +27,7 @@ def apply(tui, qlinks, ctx):
         if key not in defs:
             ctx.add_component_definition(key, val)
 
-    first_target = mixer_peek_index(ctx.param_count) + MACRO_TARGET
+    first_target = native_base_index(ctx.param_count) + MACRO_TARGET
     cards = []
     # All 8 compact MacroCards in one bottom row across 1280x628 (Bank 1: 0..3, Bank 2: 4..7)
     for i, (x, y) in enumerate(MACRO_CARD_POSITIONS):

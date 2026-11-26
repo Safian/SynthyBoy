@@ -33,8 +33,6 @@ public:
         setNativeControls (true);
     }
 
-    void setHeaderInset (int w) { headerInset_ = w; layout(); }
-
     Size minSize() const override { return { 1280, 628 }; }
 
     int activeGroup() const noexcept { return slotEditor.activeRow(); }
@@ -72,11 +70,6 @@ public:
         slotEditor.setChainInset (native ? FxChainBar::kNativeHeight - kBarH : 0);
         layout();
     }
-    void setPeekInset (int px)
-    {
-        slotEditor.setPeekInset (px);
-        layout();
-    }
 
     bool isNativeControl (int x, int y) const noexcept
     {
@@ -107,14 +100,13 @@ protected:
     {
         const int pad = 8;
         const int barH = nativeChain_ ? FxChainBar::kNativeHeight : kBarH;
-        chainBar.place ({ rect_.x + pad + headerInset_, rect_.y + pad, rect_.w - 2 * pad - headerInset_, barH });
+        chainBar.place ({ rect_.x + pad, rect_.y + pad, rect_.w - 2 * pad, barH });
         const int topY = rect_.y + pad + barH + pad;
         slotEditor.place ({ rect_.x, topY, rect_.w, std::max (100, rect_.bottom() - topY) });
         gallery.place ({ rect_.x + pad, topY, rect_.w - 2 * pad, std::max (100, rect_.bottom() - topY - pad) });
     }
 
 private:
-    int headerInset_ = 0;   // a Mixer panel reserves room for its CLOSE button
     bool editorShown_ = false;
     bool nativeControls_ = true;
     bool nativeChain_ = false;

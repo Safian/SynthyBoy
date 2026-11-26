@@ -249,7 +249,7 @@ def render_variants_comparison(out_path: Path):
         draw.rectangle((sx - 1, sy - 1, sx + sw, sy + sh), outline=_style_rgb("voice.border"), width=1)
 
         # Dimension annotation below strip
-        draw.text((cx + col_w // 2, sy + sh + 14), "115 × 550 px (all touch targets >= 56 px)", font=f_note, fill=_style_rgb("text.caption"), anchor="mm")
+        draw.text((cx + col_w // 2, sy + sh + 14), "115 × 606 px (all touch targets >= 56 px)", font=f_note, fill=_style_rgb("text.caption"), anchor="mm")
 
     # Bottom notice
     draw.text(
@@ -276,7 +276,7 @@ def render_catalog_card(out_path: Path):
     f_note = get_font(_style_size("mixer_strip.font.note"))
 
     draw.text((W // 2, 20), "Native MPC MixerStrip", font=f_title, fill=_style_rgb("text.icon"), anchor="mm")
-    draw.text((W // 2, 38), "Compound Channel Strip Component (115 × 550 px)", font=f_sub, fill=_style_rgb("voice.value"), anchor="mm")
+    draw.text((W // 2, 38), "Compound Channel Strip Component (115 × 606 px)", font=f_sub, fill=_style_rgb("voice.value"), anchor="mm")
 
     # Render SOURCE and BUS strips side-by-side
     s_src = render_mixer_strip(VARIANT_SOURCE, {"power": 1, "name": "SUB", "destination": "Filters 1+2", "level": 0.50, "level_text": "50.0%", "peak": 0.0, "hold": 0.0, "pan": 0.0, "pan_text": "0.0%", "send1": 0.0, "send1_text": "0.0%", "send2": 0.0, "send2_text": "0.0%"})

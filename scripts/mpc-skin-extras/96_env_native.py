@@ -283,7 +283,7 @@ def apply(tui, qlinks, ctx):
     if not names:
         return
 
-    base = handles.mixer_peek_index(ctx.param_count)
+    base = handles.native_base_index(ctx.param_count)
     gate = f"NonZero/Parameter {base + handles.ENV_VIEW}"
     values = base + handles.ENV_FIELDS
 

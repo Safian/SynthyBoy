@@ -208,7 +208,7 @@ int main()
         { Broken b = fresh(); b.defs[0].markers[1].cover = b.colours.slot[0]; check (! mpckit::validatePages (b, why), "an instance colour that is the colour under a marker is refused: " + why); }
         { Broken b = fresh(); b.defs[4].instance = { 2000, 2000, 6, 6 }; check (! mpckit::validatePages (b, why), "an instance picture outside its region is refused: " + why); }
         { Broken b = fresh(); b.defs[4].instance = { b.defs[4].markers[0].rect.x + 3, b.defs[4].markers[0].rect.y, 6, 6 }; check (! mpckit::validatePages (b, why), "an instance picture on a marker is refused: " + why); }
-        { Broken b = fresh(); while (b.numPages() < 25) b.defs.push_back (b.defs[0]); check (! mpckit::validatePages (b, why), "more than 24 pages are refused: " + why); }
+        { Broken b = fresh(); while (b.numPages() < 41) b.defs.push_back (b.defs[0]); check (! mpckit::validatePages (b, why), "more than 40 pages are refused: " + why); }
         { Broken b = fresh(); b.defs.clear(); check (! mpckit::validatePages (b, why), "no page is refused: " + why); }
     }
     // ---- the branding: the default is SynthyBoy's (the old literal names), a plugin's own prefix gives its own

@@ -27,7 +27,7 @@ from components.native.level.level import (
 from components.native.selector.selector import build_shape_selector, selector_definition
 from components.native.radio_button.radio_button import create_segmented_radio_button_group
 from components.style import argb as _style_argb, opacity as _style_opacity, size as _style_size, apply_control_state
-from native_ui_params import PLAY_ENV_LFO, PLAY_LFO_STANDARD_SYNC, mixer_peek_index
+from native_ui_params import PLAY_ENV_LFO, PLAY_LFO_STANDARD_SYNC, native_base_index
 
 ENV_EXPAND, LFO_EXPAND, SHAPE, RATE, DIVISION, STYLE, SYNC, STEREO, CHOOSE, STANDARD_SYNC = range(10)
 POPUPS = {
@@ -54,7 +54,7 @@ def _entry(name, kind, data, rect, bindings=(), gates=(), focus=True):
 
 
 def apply(tui, items, ctx, contract):
-    native_base = mixer_peek_index(ctx.param_count)
+    native_base = native_base_index(ctx.param_count)
     base = native_base + PLAY_ENV_LFO
     modal_gate = f"RangedEnabling/0/18/33/Parameter {ctx.param_count + 38}"
     choice_data = {"version": 1, "handleName": "Data"}

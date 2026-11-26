@@ -49,15 +49,15 @@ class PlayPreviewRendererTests(unittest.TestCase):
     def test_shared_fixture_state_consistency(self):
         """Verify documented shared parameter fixture state has no placeholders and covers all 3 compact modules."""
         # 1. State flags verify compact view with Sub, Env 1, LFO 1 active and modals closed
-        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3529"), 0, "Mod editor must be closed")
-        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3537"), 0, "Expanded editors must be closed")
+        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3527"), 0, "Mod editor must be closed")
+        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3535"), 0, "Expanded editors must be closed")
         self.assertEqual(snap.FIXTURE_STATE.get("Parameter 2676"), 0, "Play Osc must be Sub (0)")
         self.assertEqual(snap.FIXTURE_STATE.get("Parameter 2677"), 0, "Play Env must be Env 1 (0)")
         self.assertEqual(snap.FIXTURE_STATE.get("Parameter 2678"), 0, "Play LFO must be LFO 1 (0)")
         self.assertEqual(snap.FIXTURE_STATE.get("Parameter 1558"), 1, "Sub power must be ON")
-        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3312"), 1, "Sub compact sub-state must be active")
-        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 2943"), 1, "LFO 1 must be standard LFO")
-        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3302"), 1, "LFO 1 rate mode must be Hz")
+        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3311"), 1, "Sub compact sub-state must be active")
+        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 2942"), 1, "LFO 1 must be standard LFO")
+        self.assertEqual(snap.FIXTURE_STATE.get("Parameter 3301"), 1, "LFO 1 rate mode must be Hz")
 
         # 2. Check resolved fixture parameter metadata
         # All required labels must exist and contain NO placeholder text ("plugin parameter", "NAME", "0.0")
@@ -74,13 +74,13 @@ class PlayPreviewRendererTests(unittest.TestCase):
             "Parameter 2695",  # Rate
             "Parameter 2696",  # Rise
             "Parameter 2698",  # Time
-            "Parameter 3305",  # SHAPE
-            "Parameter 3306",  # RATE
-            "Parameter 3311",  # Play LFO Choose
-            "Parameter 3316",  # Sub WAVE
-            "Parameter 3317",  # Sub OCT
-            "Parameter 3318",  # Sub PAN
-            "Parameter 3319",  # Sub LEVEL
+            "Parameter 3304",  # SHAPE
+            "Parameter 3305",  # RATE
+            "Parameter 3310",  # Play LFO Choose
+            "Parameter 3315",  # Sub WAVE
+            "Parameter 3316",  # Sub OCT
+            "Parameter 3317",  # Sub PAN
+            "Parameter 3318",  # Sub LEVEL
             "sub.waveform",
             "sub.octave",
             "lfo.shape",
@@ -115,19 +115,19 @@ class PlayPreviewRendererTests(unittest.TestCase):
         sketch = snap.PlaySketch.__new__(snap.PlaySketch)
 
         # Inactive components must be filtered out
-        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["RangedEnabling/1/1/handle/Parameter 3537"]}),
+        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["RangedEnabling/1/1/handle/Parameter 3535"]}),
                          "Expanded editor component must be inactive")
-        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["RangedEnabling/1/1/handle/Parameter 3529"]}),
+        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["RangedEnabling/1/1/handle/Parameter 3527"]}),
                          "Modulation editor component must be inactive")
-        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/0/handle/Parameter 3312"]}),
+        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/0/handle/Parameter 3311"]}),
                          "Osc A compact controls must be inactive when Sub is selected")
-        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/4/handle/Parameter 3312"]}),
+        self.assertFalse(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/4/handle/Parameter 3311"]}),
                          "Noise compact controls must be inactive when Sub is selected")
 
         # Active components must pass
-        self.assertTrue(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/1/handle/Parameter 3312"]}),
+        self.assertTrue(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/1/handle/Parameter 3311"]}),
                         "Sub compact controls must be active")
-        self.assertTrue(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/1/handle/Parameter 2943"]}),
+        self.assertTrue(sketch.is_visible({"additionalInvalidatingHandles": ["IndexedEnabling/1/handle/Parameter 2942"]}),
                         "Standard LFO controls must be active")
 
     def test_knob_aspect_ratio_and_image_filmstrip_slicing(self):

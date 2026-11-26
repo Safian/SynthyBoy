@@ -1,26 +1,23 @@
-# MixerFullScreen, MixerStrip, MixerRoutingBar
+# MixerFullScreen, MixerStrip
 
 ## What it is
-The mixer page: a routing bar on top and ten channel strips side by side (SUB, A, B, C, NOISE, F1, F2, BUS1, BUS2, MASTER). A strip has a header (power with the strip name, the destination dropdown) and a Q group column: PAN slider, two send sliders and the level fader with its live peak meter and per-channel peak hold line. `MixerRoutingBar` draws the signal flow from the sources to FLT 1, FLT 2, MAIN FX, BUS 1, BUS 2, DIRECT, MASTER with the selected strip highlighted.
+The mixer page: ten channel strips side by side over the whole tab (SUB, A, B, C, NOISE, F1, F2, BUS1, BUS2, MASTER); the Mixer is one screen (the Filter and the FX editors are tabs of their own; the routing bar with its peek buttons is gone, 2026-11-26). A strip has a header (power with the strip name, the destination dropdown) and a Q group column: PAN slider, two send sliders and the level fader with its live peak meter and per-channel peak hold line.
 
 ## Header and types
-`shell-mpc/ui/mixer_screen.h`: `MixerFullScreen : Composite`, `MixerRoutingBar : Component`. `shell-mpc/ui/mixer_strip.h`: `MixerStrip : Composite`, `StripPower`, `RouteDropdown`, `Fader`, `SliderBar` ([bars.md](bars.md)).
+`shell-mpc/ui/mixer_screen.h`: `MixerFullScreen : Composite`. `shell-mpc/ui/mixer_strip.h`: `MixerStrip : Composite`, `StripPower`, `RouteDropdown`, `Fader`, `SliderBar` ([bars.md](bars.md)).
 
 ## State
-`MixerFullScreen`: `routingBar`, `strips[kStrips = 10]`, `groups[kMaxGroups]` (three Q groups for the ten level faders); `assignIds (baseId)` (strip i gets `baseId + i * 10`), `setStripMembers (strip, level, pan, send1, send2)` (a member the engine has no parameter for, such as pan on a bus, is not drawn, takes no touch and is no group member), `setActiveGroup (g)`, `activeGroup()`, `numGroups()`, `groupName (g)`, `turnQ`.
+`MixerFullScreen`: `strips[kStrips = 10]`, `groups[kMaxGroups]` (three Q groups for the ten level faders); `assignIds (baseId)` (strip i gets `baseId + i * 10`), `setStripMembers (strip, level, pan, send1, send2)` (a member the engine has no parameter for, such as pan on a bus, is not drawn, takes no touch and is no group member), `setActiveGroup (g)`, `activeGroup()`, `numGroups()`, `groupName (g)`, `turnQ`.
 `MixerStrip`: `title`, `power` (`StripPower`), `destButton` (`RouteDropdown`, "MAIN"), `pan`, `send1`, `send2` (`SliderBar`), `fader` (`Fader`); `setTitle (t)`, `setPresent (...)`, `setHasDestination (bool)` (the MASTER strip has none: the button is hidden, no rectangle, no touch), `hasDestination()`, `assignIds (baseId)` (power +0, dest +1, pan +2, send1 +3, send2 +4, fader +5), `kCellH` 56, `kMinH`.
-`MixerRoutingBar`: `destinations[10]`, `selectedStrip`, `setDestination (strip, dest)`, `setSelectedStrip (s)`.
 
 ## Size
-`MixerFullScreen::minSize()` 1280 x 628; `MixerStrip::minSize()` 96 x `kMinH` (header, then the Q column with the fader at 96 px and three 56 px slider cells, each under a 16 px lane for its chip); `MixerRoutingBar` 400 x 56.
+`MixerFullScreen::minSize()` 1280 x 628; `MixerStrip::minSize()` 96 x `kMinH` (header, then the Q column with the fader at 96 px and three 56 px slider cells, each under a 16 px lane for its chip); the strips take the tab from y 10 to 12 px above its bottom (606 px in the native skin).
 
 ## Touch and knob behaviour
-Tap FLT 1, FLT 2, MAIN FX, BUS 1 or BUS 2 in the routing bar to open its PEEK panel over the Mixer. CLOSE returns to the same Mixer strip. DIRECT and MASTER are labels.
-
-A touch on a strip makes its group active (the routing bar follows). Changes come out with the strip's ids: fader and sliders `Value`, power `Index`, destination `Request` (the owner opens the list of 3 to 5 destinations).
+A touch on a strip makes its group active. Changes come out with the strip's ids: fader and sliders `Value`, power `Index`, destination `Request` (the owner opens the list of 3 to 5 destinations).
 
 ## Q-Link
-The Mixer maps level faders in three groups: SUB/A/B/C, NOISE/F1/F2/MAIN, and BUS 1/BUS 2. On the XL those ten slots stay fixed. While a PEEK panel is open, the Q-Links drive its controls. CLOSE restores the Mixer mapping.
+The Mixer maps level faders in three groups: SUB/A/B/C, NOISE/F1/F2/MAIN, and BUS 1/BUS 2. On the XL those ten slots stay fixed.
 
 ## Options and variants
 `setStripMembers` for strips with fewer members. A `Fader` scale from the parameter range via `state.numTicks`.
@@ -59,7 +56,7 @@ The dedicated skin extra `scripts/mpc-skin-extras/84_mixer.py` configures real n
 - When rendered by the host, the host owns the touch and gestures for these native widgets.
 - `MixerUi::touch` identifies native-owned controls via `isNativeOwned(strip, controlType)` and yields touch input directly to the host (`return false`), while updating the active strip selection and published Q groups.
 - Plugin-owned controls (SUB, OSC A/B/C, NOISE levels, power, pan, and sends, as well as Master volume) are owned and processed by the overlay.
-- Modal PEEK panels (`kPagePeek`: FLT 1, FLT 2, MAIN FX, BUS 1, BUS 2) and destination popup lists (`kPageList`) take modal input ownership over the tab until closed.
+- The destination popup lists (`kPageList`) take modal input ownership over the tab until closed.
 
 ### Residuals and Gaps Against Generated Skin:
 - The generated skin's kick pages for the Mixer tab (`mix_routing` and `mix_bus`) provide native controls for the 9 parameters above, plus `osc1..3.filter_blend`, `noise.filter_blend`, and `direct.level`.
@@ -68,5 +65,4 @@ The dedicated skin extra `scripts/mpc-skin-extras/84_mixer.py` configures real n
 
 ## Limits and pitfalls
 - The destination of a strip stays a dropdown (a list of 3 to 5 rows would take the height of the fader); the strip power stays a glyph with the name.
-- `MixerRoutingBar` is declared but the strip destinations must be given by the owner with `setDestination`.
 - `Fader` writes `state.value` inside `touchMove`, `touchUp` and `turn`: write the parameter value back to `state.value` on every update so it does not drift.

@@ -155,7 +155,7 @@ public:
             g = -1;
     }
 
-    /** Makes the views (the 24 pages' scenes: every layout view is constructed, its region and readout targets are taken) and the page detector. The constructor does it unless `deferViews` was given (the service does:
+    /** Makes the views (the 37 pages' scenes: every layout view is constructed, its region and readout targets are taken) and the page detector. The constructor does it unless `deferViews` was given (the service does:
         the plugin's calling thread, the host's effOpen path, must not pay for it); then the first tick () of the overlay thread does it. Idempotent. Only the thread that ticks calls it after construction. */
     void buildViews()
     {
@@ -1271,7 +1271,6 @@ private:
         in.live = haveLive ? liveBuf_.data() : nullptr;
         const int base = targetBase_[current_];
         in.targets = haveLive ? factory_.viewTargets (liveBuf_.data(), base, targetCount_[current_]) : nullptr;
-        v->observeHostWidgetGate (instanceSeen_ == pages_.instanceColours().blank);
         view.setHostBackground (hostBgOn_);   // (host_background.h: transparent only while the sentinel of the host's background is read)
         in.nowMs = nowMs;
         in.frames = &frames_;

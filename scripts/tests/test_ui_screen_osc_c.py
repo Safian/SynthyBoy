@@ -15,7 +15,7 @@ from native_ui_params import (
     OSC_POWER,
     OSC_ROUTING_BY_SOURCE,
     OSC_SOURCE,
-    mixer_peek_index,
+    native_base_index,
 )
 from test_mpc_skin_extras import (
     PARAMS_JSON,
@@ -41,7 +41,7 @@ class OscCScreenTests(unittest.TestCase):
         }
         cls.params = json.loads(PARAMS_JSON.read_text(encoding="utf-8"))["params"]
         cls.param_count = len(cls.params)
-        cls.base = mixer_peek_index(cls.param_count)
+        cls.base = native_base_index(cls.param_count)
 
     @classmethod
     def tearDownClass(cls):

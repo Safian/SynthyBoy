@@ -150,12 +150,6 @@ public:
     static constexpr int kMaxGroups = 6, kBandH = 290, kBandRandomH = 196, kTopH = 64, kPickerCols = 5;   // kBandRandomH: the bottom band of a random LFO is lower (the display takes the room)
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     UsedSelector selector;                                  // LFO 1 .. 10 and R1 .. R4 as "used + one free" (docs/ui-map/env-filter-lfo-plan.md (b)); the owner fills it every update
-    struct InstanceSelector : public Carousel
-    {
-        Size minSize() const override { return { 200, 56 }; }
-        bool sizeOk() const noexcept override { return rect_.w >= 200 && rect_.h >= 56; }
-    };
-    InstanceSelector instance;                              // the standalone tab's readable dropdown; the full cell row remains for the Play full-screen view
     SyncSwitch syncSwitch;                                  // the logic of HZ / BPM / KEY (its list `syncSwitch.mode` is the first member of TIMING / RANDOM); TRIP and DOT are `rate.trip` and `rate.dot`
     DetailButton targets { DetailButton::Icon::Route, "TARGETS" };
     ShapePicker picker;                                     // the shapes (13) or the styles (5)
@@ -196,7 +190,7 @@ public:
         keyTune.state.min = -100; keyTune.state.max = 100; keyTune.state.pxPerStep = 3;
         picker.state.cols = kPickerCols;
         namedPicker.setCaption ("WAVEFORM"); namedPicker.listable = true; namedPicker.state.wrap = true;
-        addKid (close); addKid (selector); addKid (instance); addKid (syncSwitch.mode); addKid (targets);
+        addKid (close); addKid (selector); addKid (syncSwitch.mode); addKid (targets);
         addKid (picker); addKid (namedPicker); addKid (hostPick); addKid (edit);
         addKid (rate); addKid (rise); addKid (smoothTime);
         addKid (mode); addKid (modeList, false); addKid (phase); addKid (delay);
@@ -204,7 +198,6 @@ public:
         addKid (keyTranspose); addKid (keyTune);
         configure (false);
         setKeyActive (false);
-        instance.listable = true;
     }
     /** An LFO (shape) or a random LFO (style): the parts that belong to the type are shown, the Q groups are built, the first one is active. */
     void configure (bool random)
@@ -213,7 +206,6 @@ public:
         picker.state.styles = random;
         picker.state.cols = random ? 2 : kPickerCols;
         namedPicker.setCaption (random ? "STYLE" : "WAVEFORM");
-        show (instance, pageMode_);
         show (picker, ! pageMode_); show (namedPicker, pageMode_);
         show (hostPick, ! random); show (edit, ! random && editShown_ && ! nativePageControls_);
         show (rise, ! random);
@@ -373,7 +365,6 @@ public:
         pageMode_ = page;
         show (close, ! page);
         show (selector, ! page);
-        show (instance, page);
         show (picker, ! page);
         show (namedPicker, page);
         setNativeSmooth (nativePageControls_);
@@ -479,22 +470,19 @@ protected:
         const int W = rect_.w, m = 8, g = kGap;
         if (pageMode_)
         {
-            // Redesigned standalone LFO tab (owner instruction 2026-11-24):
+            // The page of an LFO sub-tab (one tab page = one screen: the hardware sub-tab names the LFO, there is no instance selector on the screen):
             // Compact horizontal top header row:
-            // Left: instance selector (LFO 1..10, RND 1..4, 200x56)
-            // Middle: readable named waveform / style selector (namedPicker, 848x56)
+            // Left to right: the readable named waveform / style selector (namedPicker, the width the selector left free)
             // Right: TARGETS action button (200x56)
             const int bandH = random_ ? kBandRandomH : kBandH;
             const int bandY = rect_.bottom() - m - bandH;
             const int topY = rect_.y + m;
-            const int instanceW = 200;
             const int targetsW = 200;
             const int midY = topY + 56 + m;
             const int midH = std::max (0, bandY - m - midY);
 
-            instance.place ({ rect_.x + m, topY, instanceW, 56 });
             targets.place ({ rect_.right() - m - targetsW, topY, targetsW, 56 });
-            const int pickerX = rect_.x + m + instanceW + 8;
+            const int pickerX = rect_.x + m;
             const int pickerW = std::max (0, (rect_.right() - m - targetsW - 8) - pickerX);
             namedPicker.place ({ pickerX, topY, pickerW, 56 });
             picker.place ({});
@@ -706,7 +694,6 @@ protected:
     void syncNativePageWidgets()
     {
         const bool overlay = ! nativePageControls_;
-        show (instance, overlay && pageMode_);
         show (namedPicker, overlay && pageMode_);
         show (targets, overlay);
         show (edit, overlay && ! random_ && editShown_);

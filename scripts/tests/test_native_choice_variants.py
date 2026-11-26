@@ -22,7 +22,7 @@ class TestNativeChoiceVariants(unittest.TestCase):
     def test_segmented_variant_3_choices(self):
         rect = (100, 200, 248, 48)
         labels = ("HZ", "BPM", "KEY")
-        handle = "Parameter 3348"
+        handle = "Parameter 3347"
         items = ncg.create_segmented_choice_group("LFO Sync Mode", rect, labels, handle, self.skins_dir)
 
         self.assertEqual(len(items), 3)
@@ -99,7 +99,7 @@ class TestNativeChoiceVariants(unittest.TestCase):
     def test_play_lfo_choice_group_binding(self):
         rect = (0, 0, 248, 48)
         labels = ("HZ", "BPM", "KEY")
-        handle = "Parameter 3348"
+        handle = "Parameter 3347"
         items = ncg.build_choice_group_entries("Play LFO Sync", rect, labels, ncg.VARIANT_SEGMENTED, handle, self.skins_dir)
         self.assertEqual(len(items), 3)
         self.assertEqual(items[1]["componentData"]["data"]["buttonId"], 1)

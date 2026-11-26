@@ -13,7 +13,7 @@ if str(SCRIPTS) not in sys.path:
 from components import style
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
 from components.native.button.button import button, icon_button
-from native_ui_params import OSC_POWER, OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
+from native_ui_params import OSC_POWER, OSC_SOURCE, OSC_VISIBILITY, native_base_index
 
 # OscillatorFullScreen::layout, tab-local coordinates.
 POWER_RECT = (12, 8, 106, 164)
@@ -30,7 +30,7 @@ def apply(tui, qlinks, ctx):
     for filename, colour in ((POWER_OFF, style.color("accent.red")), (POWER_ON, style.color("accent.green"))):
         icon_button("power", colour).save(ctx.skins_dir / filename)
 
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     view = f"Parameter {base + OSC_VISIBILITY}"
     children = []
     for source, label in enumerate(OSC_TAB_NAMES):

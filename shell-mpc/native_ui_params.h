@@ -14,10 +14,8 @@
 
 namespace synthyboy_mpc::nativeui
 {
-constexpr int kMixerPeek = 0;
-constexpr int kMixerPeekTargets = 5;   // zero is idle
 constexpr int kMixerStrips = 10;
-constexpr int kMixerPeakBase = kMixerPeek + 1;
+constexpr int kMixerPeakBase = 0;
 constexpr int kMixerHoldBase = kMixerPeakBase + kMixerStrips;
 constexpr int kEnvSelectorBase = kMixerHoldBase + kMixerStrips;
 constexpr int kEnvSelectorCells = 6;
@@ -27,7 +25,7 @@ constexpr int kFxValueBase = kEnvSelectorBase + kEnvSelectorCells;
 constexpr int kFxCells = 16;
 constexpr int kFxKindBase = kFxValueBase + kFxCells;
 constexpr int kFxLayout = kFxKindBase + kFxCells;
-constexpr int kFxLayoutLast = 21;
+constexpr int kFxLayoutLast = 18;
 constexpr int kFxDomainBase = kFxLayout + 1;
 constexpr int kFxStyleModels = 27;
 constexpr int kFxHidden = 0, kFxDial = 1, kFxToggle = 2, kFxFirstDomain = 3;
@@ -84,8 +82,7 @@ constexpr int kPlayEnvLfoHandles = 10;
 constexpr int kPlayOsc = kPlayEnvLfo + kPlayEnvLfoHandles;
 constexpr int kPlayOscHandles = 36;
 constexpr int kPlayLfoStandardSync = kPlayOsc + kPlayOscHandles;
-constexpr int kMixerPeekView = kPlayLfoStandardSync + 1;
-constexpr int kOscDetail = kMixerPeekView + 1;
+constexpr int kOscDetail = kPlayLfoStandardSync + 1;
 constexpr int kOscDetailHandles = 110;
 constexpr int kMasterPanel = kOscDetail + kOscDetailHandles;
 constexpr int kFxBandBase = kMasterPanel + 1;
@@ -116,8 +113,7 @@ constexpr int kModDetailReserved = kMixerControl + mixer::kHandles;
 constexpr int kModDetailReservedCount = 6;
 constexpr int kModDetailControl = kModDetailReserved;
 // Read-only Mixer UI presentation handles appended after Mod's reserved range.
-constexpr int kMixerActiveTab = kModDetailReserved + kModDetailReservedCount;
-constexpr int kMixerSoloVisual = kMixerActiveTab + 1;
+constexpr int kMixerSoloVisual = kModDetailReserved + kModDetailReservedCount;
 constexpr int kMixerMuteVisual = kMixerSoloVisual + kMixerStrips;
 constexpr int kModBoardControl = kMixerMuteVisual + kMixerStrips;
 constexpr int kMixerStereoBase = kModBoardControl + modboard::kHandles;
@@ -126,12 +122,11 @@ constexpr int kMasterScaleInput = kMixerStereoBase + kMixerStereoFields * kMixer
 // The SDK menu labels are fixed per handle. One five-choice menu per routing state
 // marks that route while the host's current-choice indicator follows the edited filter.
 constexpr int kFilterChainMenu = kMasterScaleInput + 1;
-constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = 4;
+constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = kFilterChainRoutes - 1;   // the routing only (Parallel, F1 to F2, F2 to F1)
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
 constexpr int kLfoTargetsAction = kFxEditorPower + 1;
 constexpr int kCount = kLfoTargetsAction + 1;
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
-constexpr int kMixerTabs = 6;
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }
 constexpr bool isPzToolbarOffset (int offset) noexcept { return offset >= kPzAction && offset <= kPzAvailability; }
@@ -140,11 +135,10 @@ constexpr bool isModTargetsOffset (int offset) noexcept { return offset >= kModT
 constexpr bool isPlayExpandedOffset (int offset) noexcept { return offset >= kPlayExpanded && offset < kMacroTarget; }
 constexpr bool isMacroTargetOffset (int offset) noexcept { return offset >= kMacroTarget && offset < kMixerControl; }
 constexpr bool isMixerControlOffset (int offset) noexcept { return offset >= kMixerControl && offset < kModDetailReserved; }
-constexpr bool isModDetailReservedOffset (int offset) noexcept { return offset >= kModDetailReserved && offset < kMixerActiveTab; }
-constexpr bool isMixerActiveTabOffset (int offset) noexcept { return offset == kMixerActiveTab; }
+constexpr bool isModDetailReservedOffset (int offset) noexcept { return offset >= kModDetailReserved && offset < kMixerSoloVisual; }
 constexpr bool isMixerSoloVisualOffset (int offset) noexcept { return offset >= kMixerSoloVisual && offset < kMixerMuteVisual; }
 constexpr bool isMixerMuteVisualOffset (int offset) noexcept { return offset >= kMixerMuteVisual && offset < kModBoardControl; }
-constexpr bool isModDetailControlOffset (int offset) noexcept { return offset >= kModDetailControl && offset < kMixerActiveTab; }
+constexpr bool isModDetailControlOffset (int offset) noexcept { return offset >= kModDetailControl && offset < kMixerSoloVisual; }
 constexpr bool isModBoardControlOffset (int offset) noexcept { return offset >= kModBoardControl && offset < kMixerStereoBase; }
 constexpr bool isMixerStereoOffset (int offset) noexcept { return offset >= kMixerStereoBase && offset < kMasterScaleInput; }
 namespace pz
@@ -152,44 +146,10 @@ namespace pz
 enum Action { Back = 1, Reset, Remove, Apply };
 enum Availability { None, RemoveOnly, Both, ApplyOnly };
 }
-enum MixerPeekView { MixerBase, MixerPeekFilter, MixerPeekFx, kMixerPeekLastView = MixerPeekFx };
 static_assert (kEnvSelectorCells * kEnvSelectorFrameBits <= 32 && kEnvSelectorLastFrame < (1 << kEnvSelectorFrameBits));
 
 inline float meterValue (float value) noexcept
 {
     return std::isfinite (value) ? std::clamp (value, 0.0f, 1.0f) : 0.0f;
 }
-
-class MixerPeekRequest
-{
-public:
-    bool enabled() const noexcept { return state_.load (std::memory_order_relaxed) >= 0; }
-
-    bool setEnabled (bool enabled) noexcept
-    {
-        if (! enabled)
-            return state_.exchange (-1, std::memory_order_relaxed) != -1;
-        int disabled = -1;
-        return state_.compare_exchange_strong (disabled, 0, std::memory_order_relaxed);
-    }
-
-    void post (float normalised) noexcept
-    {
-        if (! std::isfinite (normalised) || normalised < 0.0f || normalised > 1.0f)
-            return;
-        const int tab = std::clamp (static_cast<int> (std::lround (normalised * kMixerPeekTargets)), 0, kMixerPeekTargets);
-        int cur = state_.load (std::memory_order_relaxed);
-        while (cur >= 0 && ! state_.compare_exchange_weak (cur, tab + 1, std::memory_order_relaxed))
-            ;
-    }
-
-    int take() noexcept
-    {
-        int request = state_.load (std::memory_order_relaxed);
-        return request > 0 && state_.compare_exchange_strong (request, 0, std::memory_order_relaxed) ? request - 1 : -1;
-    }
-
-private:
-    std::atomic<int> state_ { -1 };   // disabled, idle, or a pending 1-based action
-};
 }

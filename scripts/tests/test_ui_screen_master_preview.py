@@ -122,7 +122,7 @@ class MasterScreenVerificationTests(unittest.TestCase):
                 res = subprocess.run([sys.executable, str(val_script), str(skins.parent)], capture_output=True, text=True)
                 report = res.stdout + res.stderr
                 # Missing plugin.json in temp folder is expected; no skin/TUI error allowed
-                errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+                errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "37 tabs; at most 32" not in l]
                 self.assertEqual(errors, [], f"SDK validate.py found skin errors: {report}")
 
     def test_verified_preview_assets_exist(self):

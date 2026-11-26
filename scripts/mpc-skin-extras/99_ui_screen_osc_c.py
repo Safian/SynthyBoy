@@ -34,7 +34,7 @@ from native_ui_params import (
     OSC_POWER,
     OSC_ROUTING_BY_SOURCE,
     OSC_SOURCE,
-    mixer_peek_index,
+    native_base_index,
 )
 
 
@@ -66,7 +66,7 @@ def apply(tui, qlinks, ctx):
 
     defs = {d["key"]: d["value"] for d in tui.get("pageData", {}).get("componentDefinitions", {}).get("localComponentDefinitions", [])}
 
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     source_idx = 3  # Osc C is 0-indexed instance 3 in (Sub=0, Osc A=1, Osc B=2, Osc C=3, Noise=4)
     expected_power_param = base + OSC_POWER + source_idx
     expected_route_param = base + OSC_ROUTING_BY_SOURCE + source_idx

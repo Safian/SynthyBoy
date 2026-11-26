@@ -25,10 +25,7 @@ namespace
 class MixerInstance final : public demo::Inst
 {
 public:
-    void setNativeMixerPeekEnabled (bool enabled) noexcept override { peek.setEnabled (enabled); }
-    int takeNativeMixerPeek() noexcept override { return peek.take(); }
-    void setNativeMixerPeekView (int view) noexcept override { peekView = view; }
-    void setNativeMixerActiveTab (int tab) noexcept override { activeTab = tab; }
+    void setNativeMixerActive (bool active) noexcept override { mixerActive = active; }
     void setNativeMixerStripVisuals (int strip, int soloV, int muteV) noexcept override
     {
         soloVisual[strip] = soloV;
@@ -65,9 +62,7 @@ public:
         fullOpen = open;
     }
     int nativeMixerReveals = 0;
-    nativeui::MixerPeekRequest peek;
-    int peekView = nativeui::MixerBase;
-    int activeTab = 0;
+    bool mixerActive = false;
     int soloVisual[nativeui::kMixerStrips] = {};
     int muteVisual[nativeui::kMixerStrips] = {};
     nativeui::FilterCellBank filter;
@@ -97,7 +92,7 @@ static std::vector<uint32_t> renderUi (MixerUi& mix, bool wide)
     gpu::SceneBuilder sb (*data);
     sb.begin (gpu::kKindPlay, 0, MixerUi::kCanvasW, MixerUi::kCanvasH);
     sb.clear (0u);
-    if (! mix.hostBackground() && ! (mix.hostConfirmed() && mix.peekRoot()))
+    if (! mix.hostBackground())
         page::ground (sb);
     mix.draw (sb);
     std::vector<uint32_t> pixels;
@@ -220,7 +215,7 @@ static void assertBasePageNativeHandoff (bool wide)
     assert (r.ui.hostBackground());
     assert (r.ui.nativeWidgetsEnabled());
     assert (! r.ui.listOpen());
-    assert (r.ui.peekRoot() == nullptr);
+    assert (r.inst.mixerActive);
 
     const auto pixels = renderUi (r.ui, wide);
     assertNativeRectsTransparent (r.ui, pixels);
@@ -231,7 +226,8 @@ static void assertBasePageNativeHandoff (bool wide)
         assert (divider.total == 2 && divider.transparent == divider.total);
     }
     // In host-only mode, the normal Mixer tab overlay scene is completely empty
-    assert (inspectRect (pixels, r.ui.screen().routingBar.rect()).nonZero == 0);
+    const auto strips = r.ui.screen().strips[9].rect();
+    assert (inspectRect (pixels, { strips.x, strips.bottom(), strips.w, 12 }).nonZero == 0);
 
     const int writesBefore = r.inst.writes;
     for (const auto rect : nativeControlRects (r.ui))
@@ -244,13 +240,8 @@ static void assertBasePageNativeHandoff (bool wide)
     assert (r.inst.writes == writesBefore);
     assert (r.ui.screen().selectedStrip() == 9);
 
-    for (int i = 0; i < 5; ++i)
-    {
-        const auto rect = r.ui.screen().routingBar.peekRect (i);
-        assert (! r.ui.covers (cx (rect), cy (rect)));
-        const auto caption = inspectRect (pixels, { rect.x, rect.y, rect.w, 28 });
-        assert (caption.transparent == caption.total);
-    }
+    // The strips fill the whole tab: the freed bottom row (the old peek tab bar) belongs to them
+    assert (r.ui.screen().strips[9].rect().bottom() == r.ui.screen().rect().bottom() - 12);
 
     r.ui.setHostBackground (false);
     assertNativeRectsOpaque (r.ui, renderUi (r.ui, wide));
@@ -349,233 +340,19 @@ static void assertMeterDisplayValues()
     assert (nativeui::meterValue (std::numeric_limits<float>::quiet_NaN()) == 0.0f);
 }
 
-static void assertFallbackPeekIsolation()
-{
-    for (int peekIdx = 0; peekIdx < 5; ++peekIdx)
-    {
-        MixerRig r;
-        seedActiveMixer (r);
-        r.ui.setNativeWidgetsEnabled (true);
-        r.ui.setHostBackground (true);
-        r.refresh (2);
-
-        const auto peekBtn = r.ui.screen().routingBar.peekRect (peekIdx);
-        assert (! r.ui.covers (cx (peekBtn), cy (peekBtn)));
-        r.inst.peek.post (float (peekIdx + 1) / 5.0f);
-        r.refresh();
-
-        assert (r.ui.peekRoot() != nullptr);
-        assert (! r.ui.hostBackground());
-
-        r.ui.setHostBackground (false);   // the opaque release fallback keeps the original editor and layout
-        r.refresh();
-
-        // Modal PEEK scene covers every pixel of the native controls and covers() returns true.
-        const auto peekPixels = renderUi (r.ui, true);
-        assertNativeRectsOpaque (r.ui, peekPixels);
-
-        for (const auto rect : nativeControlRects (r.ui))
-            assert (r.ui.covers (cx (rect), cy (rect)));
-        assert (! r.ui.covers (10, 50));
-        assert (! r.ui.covers (10, 760));
-
-        // Direct touch, drag, and wheel inside peekPanelRect() over Bus 1 & Bus 2 native fader coords
-        // must be absorbed by the PEEK modal and never leak to Mixer strips or bus params.
-        const int groupBefore = r.ui.screen().activeGroup();
-        const float bus1LevelBefore = r.inst.get ("bus1.level");
-        const float bus2LevelBefore = r.inst.get ("bus2.level");
-        const float bus1BypassBefore = r.inst.get ("bus1.fx_bypass");
-        const float bus2BypassBefore = r.inst.get ("bus2.fx_bypass");
-
-        const auto& bus1 = r.ui.screen().strips[7];
-        const auto& bus2 = r.ui.screen().strips[8];
-        const auto& main = r.ui.screen().strips[9];
-        for (const auto rect : { bus1.power.rect(), bus1.destButton.rect(), bus1.fader.rect(),
-                                 bus2.power.rect(), bus2.destButton.rect(), bus2.fader.rect(), main.power.rect() })
-        {
-            const int testY = cy (rect) < r.ui.peekPanelRect().bottom()
-                                  ? cy (rect)
-                                  : r.ui.peekPanelRect().bottom() - 20;
-            const bool wheelHandled = r.ui.wheel (cx (rect), testY, 1, r.stack, r.inst, 500.0);
-            assert (wheelHandled);
-            r.drag (cx (rect), testY, cx (rect), testY - 30, true);
-            assert (r.ui.peekRoot() != nullptr);
-        }
-        assert (r.ui.screen().activeGroup() == groupBefore);
-        assert (r.inst.get ("bus1.level") == bus1LevelBefore);
-        assert (r.inst.get ("bus2.level") == bus2LevelBefore);
-        assert (r.inst.get ("bus1.fx_bypass") == bus1BypassBefore);
-        assert (r.inst.get ("bus2.fx_bypass") == bus2BypassBefore);
-
-        // Backdrop drag below peekPanelRect() directly over Bus 1 native fader bottom (956, 725)
-        // must keep PEEK open and not leak touch/wheel to bus1.level.
-        assert (r.ui.covers (956, 725));
-        assert (r.ui.wheel (956, 725, 1, r.stack, r.inst, 600.0));
-        const int writesPreDrag = r.inst.writes;
-        r.drag (940, 725, 980, 725, true);
-        assert (r.ui.peekRoot() != nullptr);
-        assert (r.inst.writes == writesPreDrag);
-        assert (r.inst.get ("bus1.level") == bus1LevelBefore);
-
-        // The host owns the Filter model menu. The overlay stays on PEEK and isolates the Mixer strips.
-        if (peekIdx == 0 || peekIdx == 1)
-        {
-            auto* fltFull = dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot());
-            assert (fltFull != nullptr);
-            r.tap (fltFull->model);
-            r.refresh (1);
-            assert (r.ui.topPage() == MixerUi::kPagePeek);
-            assert (r.ui.covers (956, 520));
-            assert (r.ui.covers (1083, 520));
-            assert (r.ui.wheel (956, 725, 1, r.stack, r.inst, 700.0));
-            r.drag (956, 520, 956, 460, true);
-            assert (r.inst.get ("bus1.level") == bus1LevelBefore);
-            assert (r.inst.get ("bus2.level") == bus2LevelBefore);
-            assert (r.ui.topPage() == MixerUi::kPagePeek);
-        }
-        else
-        {
-            auto* fxFull = dynamic_cast<ui::FxFullScreen*> (r.ui.peekRoot());
-            assert (fxFull != nullptr);
-            assert (r.ui.covers (956, 520));
-            assert (r.ui.covers (1083, 520));
-            // If dragging across chainBar opened FxUi's nested list (kPageList), verify its
-            // isolation over native Bus 1/2 rects and close it back to kPagePeek before closing PEEK.
-            if (r.ui.topPage() != MixerUi::kPagePeek)
-            {
-                assert (r.ui.wheel (956, 725, 1, r.stack, r.inst, 700.0));
-                r.drag (956, 520, 956, 460, true);
-                assert (r.inst.get ("bus1.level") == bus1LevelBefore);
-                assert (r.inst.get ("bus2.level") == bus2LevelBefore);
-                r.tapAt (10, 725, 40);
-                assert (r.ui.topPage() == MixerUi::kPagePeek);
-            }
-        }
-
-        // Backdrop tap at Bus 1 native fader bottom (956, 725) dismisses PEEK cleanly without writing bus1.level
-        // and restores hostBackground() + transparent native rects on base page.
-        const int wPreClose = r.inst.writes;
-        if (r.ui.peekRoot() != nullptr)
-            r.tapAt (956, 725, 40);
-        r.refresh (1);
-        assert (r.ui.peekRoot() == nullptr);
-        assert (r.inst.writes == wPreClose);
-        assert (r.inst.get ("bus1.level") == bus1LevelBefore);
-        r.ui.setHostBackground (true);
-        r.refresh();
-        assert (r.ui.hostBackground());
-        const auto afterPixels = renderUi (r.ui, true);
-        assertNativeRectsTransparent (r.ui, afterPixels);
-        assert (! r.ui.covers (956, 520));
-    }
-}
-
-static void assertNativePeekApertures()
-{
-    for (int target = 0; target < 5; ++target)
-    {
-        MixerRig r;
-        seedActiveMixer (r);
-        r.inst.set ("filter1.on", 1.0f);
-        r.inst.set ("filter2.on", 1.0f);
-        r.inst.set ("delay.on", 1.0f);
-        r.inst.set ("delay.rack", 0.0f);
-        r.inst.set ("chorus.on", 1.0f);
-        r.inst.set ("chorus.rack", 1.0f);
-        r.inst.set ("reverb.on", 1.0f);
-        r.inst.set ("reverb.rack", 2.0f);
-        r.ui.setHostBackground (true);
-        r.refresh();
-        const int reveals = r.inst.nativeMixerReveals;
-        r.inst.peek.post (static_cast<float> (target + 1) / 5);
-        r.refresh();
-        assert (r.ui.topPage() == MixerUi::kPagePeek);
-        r.refresh();
-        assert (r.inst.nativeMixerReveals == reveals);
-
-        const auto close = r.ui.peekCloseRect(), panel = r.ui.peekPanelRect();
-        assert (close.w >= 56 && close.h >= 56 && panel.contains (cx (close), cy (close)));
-        const auto pixels = renderUi (r.ui, true);
-        auto verify = [&] (ui::Rect area, bool native) {
-            const int x = cx (area), y = cy (area);
-            assert (panel.contains (x, y) && ! close.contains (x, y));
-            assert (r.ui.covers (x, y) != native);
-            const auto centre = inspectRect (pixels, { x, y, 1, 1 });
-            assert (centre.transparent == (native ? 1 : 0));
-        };
-        assert (r.ui.covers (cx (close), cy (close))
-                && inspectRect (pixels, { cx (close), cy (close), 1, 1 }).nonZero == 1);
-        if (target < 2)
-        {
-            auto* filter = dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot());
-            assert (filter && filter->hasNativeControl (nativeui::FilterCutoff));
-            ui::FilterFullScreen reference;
-            reference.setPageMode (true);
-            reference.place ({ 0, MixerUi::kTabY, MixerUi::kCanvasW, MixerUi::kEditorH });
-            assert (filter->model.rect().x == reference.model.rect().x
-                    && filter->cutoff.rect().y == reference.cutoff.rect().y);
-            verify (filter->power.rect(), true);
-            verify (filter->cutoff.rect(), true);
-            verify (filter->displayRect(), false);
-            const auto cutoff = filter->cutoff.rect();
-            r.inst.set (target == 0 ? "filter1.on" : "filter2.on", 0.0f);
-            r.refresh();
-            const auto off = renderUi (r.ui, true);
-            assert (r.ui.covers (cx (cutoff), cy (cutoff))
-                    && inspectRect (off, { cx (cutoff), cy (cutoff), 1, 1 }).transparent == 1);
-        }
-        else
-        {
-            auto* fx = dynamic_cast<ui::FxFullScreen*> (r.ui.peekRoot());
-            assert (fx && fx->nativeControls() && fx->editorShown());
-            ui::FxFullScreen reference;
-            reference.setNativeControls (true);
-            reference.place ({ 0, MixerUi::kTabY, MixerUi::kCanvasW, MixerUi::kTabH });
-            assert (fx->chainBar.nativePowerRect (0).x == reference.chainBar.nativePowerRect (0).x
-                    && fx->slotEditor.power.rect().y == reference.slotEditor.power.rect().y);
-            verify (fx->chainBar.nativePowerRect (0), true);
-            verify (fx->chainBar.nativeSelectRect (0), true);
-            verify (fx->slotEditor.power.rect(), true);
-            int cells = 0;
-            fx->slotEditor.visitNativeControls ([&] (ui::Rect area) { verify (area, true); ++cells; });
-            assert (cells > 4);
-            r.tapAt (cx (close), cy (close));
-            assert (! r.ui.peekRoot());
-        }
-    }
-}
-
-static void assertPeekRequestsFollowThePage()
+static void assertMixerActiveFollowsThePage()
 {
     MixerRig r;
     seedActiveMixer (r);
     r.ui.setHostBackground (true);
-    r.inst.peek.post (0.2f);
-    r.refresh();
-    assert (r.inst.peek.enabled() && ! r.ui.peekRoot());
-    r.inst.peek.post (0.0f);
-    r.refresh();
-    assert (! r.ui.peekRoot());
-    r.inst.peek.post (0.2f);
-    r.refresh();
-    assert (dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot()) && r.inst.peek.enabled() && r.inst.fullOpen);
-
-    r.inst.peek.post (1.0f);
-    r.stack.back();
     r.refresh (2);
-    assert (! r.ui.peekRoot() && r.inst.peek.enabled());
-    r.inst.peek.post (0.2f);
-    r.refresh();
-    assert (dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot()));
-    r.stack.back();
-    r.refresh();
-    r.inst.peek.post (0.6f);
+    assert (r.inst.mixerActive && r.inst.fullOpen == true);
     r.ui.leftTab (r.inst);
-    assert (! r.inst.peek.enabled());
+    assert (! r.inst.mixerActive);
     assert (r.stack.closeAll());
     assert (r.stack.openFull (MixerUi::kElementPage));
     r.refresh (2);
-    assert (! r.ui.peekRoot() && r.inst.peek.enabled());
+    assert (r.inst.mixerActive);
     assert (r.inst.writes == 0);
 }
 
@@ -687,207 +464,6 @@ static void assertDestinationPopupIsolation()
     }
 }
 
-static void assertFilterPeekNativeModulations()
-{
-    namespace n = nativeui::targets;
-    constexpr int kMixerFrame = n::frame (n::Mixer);
-    for (int target = 0; target < 2; ++target)
-    {
-        MixerRig r;
-        seedActiveMixer (r);
-        r.inst.setTabView (IInstanceView::kTabViewFilter, 3);
-        const char* const cutoffKey = target == 0 ? "filter1.cutoff" : "filter2.cutoff";
-        const char* const onKey = target == 0 ? "filter1.on" : "filter2.on";
-        const int cutoffParam = demo::Inst::idx (cutoffKey);
-        for (int i = 0; i < 8; ++i)
-            r.inst.mod (i + 1, i + 1, cutoffKey, 10.0f + static_cast<float> (i));
-
-        r.ui.setHostBackground (true);
-        r.refresh();
-        r.inst.peek.post (static_cast<float> (target + 1) / 5.0f);
-        r.refresh();
-        assert (r.ui.topPage() == MixerUi::kPagePeek);
-        assert (r.inst.peekView == nativeui::MixerPeekFilter);
-        assert (r.inst.filter.layout() == target + 1);
-        assert (r.inst.modTargets.layout() == 0);
-
-        auto* filter = dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot());
-        assert (filter != nullptr);
-        const auto cutoffRect = filter->cutoff.rect();
-        const int writesBeforeHold = r.inst.writes;
-        assert (! r.ui.touch (makeTouch (TouchEvent::Down, cx (cutoffRect), cy (cutoffRect)), r.stack, r.inst, r.now));
-        r.ui.tick (r.now + 600.0, r.stack, r.inst);
-        r.refresh();
-        assert (! r.ui.touch (makeTouch (TouchEvent::Up, cx (cutoffRect), cy (cutoffRect)), r.stack, r.inst, r.now));
-
-        assert (r.ui.topPage() == FilterUi::kPageMods);
-        assert (r.stack.depth() == 3 && r.stack.element() == MixerUi::kElementPage);
-        assert (r.inst.tabView (IInstanceView::kTabViewFilter) == 3);
-        assert (r.inst.peekView == nativeui::MixerBase);
-        assert (r.inst.filter.layout() == 0);
-        assert (r.inst.modTargets.layout() == kMixerFrame && r.inst.modTargets.mode() == n::Modulations);
-        assert (r.inst.writes == writesBeforeHold);
-
-        ui::ModulationsPage ref;
-        ref.place ({ 0, MixerUi::kTabY, MixerUi::kCanvasW, MixerUi::kTabH });
-        ref.setNativeControls (true);
-        ui::ModInput refInput;
-        for (int i = 0; i < 6; ++i)
-            refInput.add (i + 1, "SRC", 0.1, false, false, false);
-        ref.load (refInput, "CUTOFF", 8, 0);
-
-        const auto pixels = renderUi (r.ui, true);
-        const auto panel = r.ui.peekPanelRect();
-        for (const auto area : { ref.back.rect(), ref.add.rect(), ref.page.rect(),
-                                 ref.rows[0].depth.rect(), ref.rows[0].polarity.rect(),
-                                 ref.rows[0].bypass.rect(), ref.rows[0].remove.rect() })
-        {
-            assert (panel.contains (area.x, area.y) && panel.contains (area.right() - 1, area.bottom() - 1));
-            const bool mapped = area.y == ref.rows[0].depth.rect().y && area.x != ref.rows[0].remove.rect().x;
-            const auto badge = mapped ? ui::QGroup::chipRect (area, 1) : ui::Rect {};
-            for (int y = area.y; y < area.bottom(); ++y)
-                for (int x = area.x; x < area.right(); ++x)
-                    if (! badge.contains (x, y))
-                        assert (!(pixels[static_cast<size_t> (y * MixerUi::kCanvasW + x)] >> 24));
-            assert (! r.ui.covers (cx (area), cy (area)));
-            assert (! r.ui.touch (makeTouch (TouchEvent::Down, cx (area), cy (area)), r.stack, r.inst, r.now));
-            assert (! r.ui.wheel (cx (area), cy (area), 1, r.stack, r.inst, r.now));
-        }
-        assert (r.inst.writes == writesBeforeHold);
-
-        for (const auto pt : { std::pair<int, int> { 2, 170 }, std::pair<int, int> { 1278, 170 },
-                               std::pair<int, int> { 640, 112 }, std::pair<int, int> { 640, 736 },
-                               std::pair<int, int> { 200, 170 } })
-        {
-            assert (r.ui.covers (pt.first, pt.second));
-            assert (inspectRect (pixels, { pt.first, pt.second, 1, 1 }).nonZero == 1);
-        }
-
-        const int mod0Amount = demo::Inst::idx ("mod01.amount");
-        r.inst.modTargets.post (r.inst.modTargets.at (n::field (0, n::Amount)), 0.75f, r.inst.generation);
-        r.refresh();
-        assert (r.inst.writes == writesBeforeHold + 1 && r.inst.lastWritten == mod0Amount);
-
-        const float beforeStale = r.inst.get ("mod01.amount");
-        const int beforePreset = r.inst.writes;
-        r.inst.modTargets.post (r.inst.modTargets.at (n::field (0, n::Amount)), 0.25f, r.inst.generation);
-        ++r.inst.generation;
-        r.refresh();
-        assert (r.inst.writes == beforePreset && r.inst.get ("mod01.amount") == beforeStale);
-
-        r.inst.modTargets.post (r.inst.modTargets.at (n::field (0, n::Amount)), 0.15f, r.inst.generation);
-        r.inst.modTargets.post (r.inst.modTargets.at (n::Back), 1.0f, r.inst.generation);
-        r.refresh();
-        assert (r.inst.writes == beforePreset && r.inst.get ("mod01.amount") == beforeStale);
-        assert (r.ui.topPage() == MixerUi::kPagePeek && r.stack.depth() == 2 && r.stack.element() == MixerUi::kElementPage);
-        assert (r.ui.peekRoot() != nullptr);
-        assert (r.inst.modTargets.layout() == 0);
-        assert (r.inst.peekView == nativeui::MixerPeekFilter);
-        assert (r.inst.filter.layout() == target + 1 && r.inst.filter.at (nativeui::FilterCutoff).cell().target == cutoffParam);
-        assert (r.inst.tabView (IInstanceView::kTabViewFilter) == 3);
-
-        // Reopen Modulations, verify fallback switch retires native bank, and verify OFF closes and rejects stale writes.
-        assert (! r.ui.touch (makeTouch (TouchEvent::Down, cx (cutoffRect), cy (cutoffRect)), r.stack, r.inst, r.now));
-        r.ui.tick (r.now + 600.0, r.stack, r.inst);
-        r.refresh();
-        assert (! r.ui.touch (makeTouch (TouchEvent::Up, cx (cutoffRect), cy (cutoffRect)), r.stack, r.inst, r.now));
-        assert (r.ui.topPage() == FilterUi::kPageMods && r.inst.modTargets.layout() == kMixerFrame);
-
-        r.ui.setHostBackground (false);
-        r.refresh();
-        assert (r.inst.modTargets.layout() == 0 && r.ui.covers (cx (ref.rows[0].depth.rect()), cy (ref.rows[0].depth.rect())));
-        r.ui.setHostBackground (true);
-        r.refresh();
-        assert (r.inst.modTargets.layout() == kMixerFrame);
-
-        const int beforeOff = r.inst.writes;
-        r.inst.modTargets.post (r.inst.modTargets.at (n::field (0, n::Amount)), 0.9f, r.inst.generation);
-        r.inst.set (onKey, 0.0f);
-        r.refresh();
-        assert (r.ui.topPage() == MixerUi::kPagePeek && r.stack.depth() == 2);
-        assert (r.inst.modTargets.layout() == 0 && r.inst.writes == beforeOff && r.inst.get ("mod01.amount") == beforeStale);
-    }
-}
-
-static void assertAll36TabTransitionsAndTabBarExclusion()
-{
-    MixerRig r;
-    seedActiveMixer (r);
-    r.inst.set ("filter1.on", 1.0f);
-    r.inst.set ("filter2.on", 1.0f);
-    r.inst.set ("delay.on", 1.0f);
-    r.inst.set ("delay.rack", 0.0f);
-    r.inst.set ("chorus.on", 1.0f);
-    r.inst.set ("chorus.rack", 1.0f);
-    r.inst.set ("reverb.on", 1.0f);
-    r.inst.set ("reverb.rack", 2.0f);
-    r.inst.setTabView (IInstanceView::kTabViewFilter, 3);
-    r.ui.setHostBackground (true);
-    r.refresh (2);
-
-    // Initial tab is 0 (MIXER), host-only, 0 overlay ops
-    assert (r.ui.activeTab() == 0);
-    assert (r.ui.peekRoot() == nullptr);
-    assert (r.ui.hostBackground());
-
-    const ui::Rect tabBar { 0, MixerUi::kTabY + 566, MixerUi::kCanvasW, 56 };
-    for (int from = 0; from < 6; ++from)
-    {
-        for (int to = 0; to < 6; ++to)
-        {
-            // Navigate to `from`
-            r.inst.peek.post (static_cast<float> (from) / 5.0f);
-            r.refresh();
-            assert (r.ui.activeTab() == from);
-
-            // Transition `from -> to`
-            r.inst.peek.post (static_cast<float> (to) / 5.0f);
-            r.refresh();
-            assert (r.ui.activeTab() == to);
-
-            const auto pixels = renderUi (r.ui, true);
-            // Persistent bottom 6-tab bar must have ZERO overlay pixels and ZERO overlay input capture in EVERY view
-            assert (inspectRect (pixels, tabBar).nonZero == 0);
-            for (int k = 0; k < 6; ++k)
-            {
-                const int bx = 10 + 210 * k + 105;
-                const int by = MixerUi::kTabY + 566 + 28;
-                assert (! r.ui.covers (bx, by));
-            }
-
-            if (to == 0)
-            {
-                assert (r.ui.peekRoot() == nullptr);
-                assert (r.ui.hostBackground());
-                assert (r.inst.peekView == nativeui::MixerBase);
-                assertNativeRectsTransparent (r.ui, pixels);
-            }
-            else if (to == 1 || to == 2)
-            {
-                auto* flt = dynamic_cast<ui::FilterFullScreen*> (r.ui.peekRoot());
-                assert (flt != nullptr);
-                assert (r.inst.peekView == nativeui::MixerPeekFilter);
-                assert (r.inst.filter.layout() == to);
-                assert (flt->rect().bottom() <= MixerUi::kTabY + 564);
-            }
-            else
-            {
-                auto* fx = dynamic_cast<ui::FxFullScreen*> (r.ui.peekRoot());
-                assert (fx != nullptr);
-                assert (r.inst.peekView == nativeui::MixerPeekFx);
-                assert (fx->rect().bottom() <= MixerUi::kTabY + 564);
-                const int expectedType = to == 3 ? synthyboy::kFxTypeDelay : to == 4 ? synthyboy::kFxTypeChorus : synthyboy::kFxTypeReverb;
-                assert (fx->chainBar.numActiveSlots() >= 1 && fx->slotEditor.currentType() == expectedType);
-            }
-            assert (r.inst.tabView (IInstanceView::kTabViewFilter) == 3);
-        }
-    }
-    // Return to MIXER cleanly
-    r.inst.peek.post (0.0f);
-    r.refresh();
-    assert (r.ui.activeTab() == 0 && r.ui.peekRoot() == nullptr);
-}
-
 } // namespace
 
 int main()
@@ -896,12 +472,8 @@ int main()
     assertBasePageNativeHandoff (false);
     assertOffSourcesAndDryBypass();
     assertMeterDisplayValues();
-    assertFallbackPeekIsolation();
-    assertNativePeekApertures();
-    assertPeekRequestsFollowThePage();
+    assertMixerActiveFollowsThePage();
     assertDestinationPopupIsolation();
-    assertFilterPeekNativeModulations();
-    assertAll36TabTransitionsAndTabBarExclusion();
     std::printf ("mixer_native_ui_host: all assertions passed\n");
     return 0;
 }

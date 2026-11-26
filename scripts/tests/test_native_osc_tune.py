@@ -47,7 +47,7 @@ from native_ui_params import (
     OSC_DETAIL_CELLS,
     OSC_SETTINGS_VIEW,
     OSC_SOURCE,
-    mixer_peek_index,
+    native_base_index,
 )
 from test_mpc_skin_extras import (
     REAL_EXTRAS,
@@ -73,7 +73,7 @@ class TestNativeOscTune(unittest.TestCase):
         cls.params_doc = json.loads(cls.params_file.read_text(encoding="utf-8"))
         cls.params = cls.params_doc["params"]
         cls.param_count = len(cls.params)
-        cls.base = mixer_peek_index(cls.param_count)
+        cls.base = native_base_index(cls.param_count)
 
     def test_tune_definition_default_32px_geometry_and_structure(self):
         """Verify the approved 278x154 default container, 32 px fields, 4 px gap, and 48 px buttons."""

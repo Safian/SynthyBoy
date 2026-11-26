@@ -455,23 +455,10 @@ struct PluginInstance
                     nativeui::meterValue (fields[field]), std::memory_order_relaxed);
             inst.nativeMetersDue.store (true, std::memory_order_release);
         }
-        void setNativeMixerPeekEnabled (bool enabled) noexcept override
+        void setNativeMixerActive (bool active) noexcept override
         {
-            if (inst.mixerPeek.setEnabled (enabled))
+            if (inst.nativeMixerActive.exchange (active, std::memory_order_relaxed) != active)
                 inst.overlayReportDue.store (true, std::memory_order_release);
-        }
-        int takeNativeMixerPeek() noexcept override { return inst.mixerPeek.take(); }
-        void observeHostWidgetGate (bool hidden) noexcept override
-        {
-            inst.hostMixerWidgetsHidden.store (hidden, std::memory_order_relaxed);
-        }
-        void setNativeMixerPeekView (int view) noexcept override
-        {
-            inst.nativeMixerPeekView.store (view, std::memory_order_release);
-        }
-        void setNativeMixerActiveTab (int tab) noexcept override
-        {
-            inst.nativeMixerActiveTab.store (std::clamp (tab, 0, nativeui::kMixerTabs - 1), std::memory_order_release);
         }
         void setNativeMixerStripVisuals (int strip, int soloVisual, int muteVisual) noexcept override
         {
@@ -1741,8 +1728,7 @@ struct PluginInstance
     uint32_t reportedEnvFrames = 0;  // display thread
     bool mixerVisualsReported = false;
     float nativeUiReported[nativeui::kCount] {};   // display thread only
-    nativeui::MixerPeekRequest mixerPeek;
-    std::atomic<bool> hostMixerWidgetsHidden { false };
+    std::atomic<bool> nativeMixerActive { false };   // the native Mixer strips are on screen
     int nativeVoiceDisplayedRow = -1;   // display thread only
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
     long long nextUiLogMs = 0;
@@ -1766,8 +1752,6 @@ struct PluginInstance
     bool nativeNamesAwaitingPaint = false;
     long long nativePagePaintUntil = -1;
     long long proxyNamesRequestedAt = -1;   // display thread only
-    std::atomic<int> nativeMixerPeekView { nativeui::MixerBase };
-    std::atomic<int> nativeMixerActiveTab { 0 };
     std::array<std::atomic<int>, nativeui::kMixerStrips> nativeMixerSoloVisual {};
     std::array<std::atomic<int>, nativeui::kMixerStrips> nativeMixerMuteVisual {};
     nativeui::FxCellBank nativeFxCells;
@@ -2030,6 +2014,16 @@ struct PluginInstance
         }
     }
 
+    /** The filter routing (0 Parallel, 1 F1 to F2, 2 F2 to F1): the current choice of the Filter chain menu. */
+    int filterRoutingChoice() const noexcept
+    {
+        static const int index = [] {
+            const auto* route = synthyboy::findParamByKey ("filter.routing");
+            return route != nullptr ? static_cast<int> (route - synthyboy::paramTable()) : -1;
+        }();
+        return index < 0 ? 0 : std::clamp (static_cast<int> (paramMirror[index].load (std::memory_order_relaxed) + 0.5f), 0, nativeui::kFilterChainLastChoice);
+    }
+
     float nativeUiValue (int offset) const noexcept
     {
         if (offset == nativeui::kLfoTargetsAction)
@@ -2037,7 +2031,7 @@ struct PluginInstance
         if (offset == nativeui::kFxEditorPower)
             return nativeFxHeader.state().on() ? 1.0f : 0.0f;
         if (nativeui::isFilterChainMenu (offset))
-            return (nativeFilterIndicators[1].load (std::memory_order_relaxed) & 2) ? 1.0f / nativeui::kFilterChainLastChoice : 0.0f;
+            return static_cast<float> (filterRoutingChoice()) / nativeui::kFilterChainLastChoice;
         if (nativeui::isMixerStereoOffset (offset))
             return nativeStereoMeters[offset - nativeui::kMixerStereoBase].load (std::memory_order_relaxed);
         if (nativeui::isModDetailControlOffset (offset))
@@ -2061,14 +2055,9 @@ struct PluginInstance
                 return nativeModBoard.layout() == 2 && nativeModBoard.at (field).cell().target >= 0 ? 1.0f : 0.0f;
             return 0.0f;
         }
-        if (offset == nativeui::kMixerPeek || nativeui::isMixerActiveTabOffset (offset))
-            return mixerPeek.enabled()
-                ? static_cast<float> (std::clamp (nativeMixerActiveTab.load (std::memory_order_acquire), 0, nativeui::kMixerTabs - 1))
-                    / nativeui::kMixerPeekTargets
-                : 0.0f;
         if (nativeui::isMixerSoloVisualOffset (offset))
         {
-            if (! mixerPeek.enabled())
+            if (! nativeMixerActive.load (std::memory_order_relaxed))
                 return 0.0f;
             const int strip = offset - nativeui::kMixerSoloVisual;
             return static_cast<float> (std::clamp (nativeMixerSoloVisual[strip].load (std::memory_order_acquire),
@@ -2077,7 +2066,7 @@ struct PluginInstance
         }
         if (nativeui::isMixerMuteVisualOffset (offset))
         {
-            if (! mixerPeek.enabled())
+            if (! nativeMixerActive.load (std::memory_order_relaxed))
                 return 0.0f;
             const int strip = offset - nativeui::kMixerMuteVisual;
             return static_cast<float> (std::clamp (nativeMixerMuteVisual[strip].load (std::memory_order_acquire),
@@ -2134,8 +2123,6 @@ struct PluginInstance
             return handle == n::kView ? static_cast<float> (nativeOscDetail.layout()) / n::LastFrame
                                      : oscDetailValue (handle, oscDetailCell (handle));
         }
-        if (offset == nativeui::kMixerPeekView)
-            return static_cast<float> (nativeMixerPeekView.load (std::memory_order_acquire)) / nativeui::kMixerPeekLastView;
         if (offset >= nativeui::kPlayOsc && offset < nativeui::kPlayLfoStandardSync)
         {
             namespace n = nativeui::playoscui;
@@ -2635,7 +2622,7 @@ struct PluginInstance
 
     void refreshNativeMixerVisuals() noexcept
     {
-        if (! mixerPeek.enabled() || engine == nullptr)
+        if (! nativeMixerActive.load (std::memory_order_relaxed) || engine == nullptr)
             return;
         uint32_t soloMask = 0;
         uint32_t muteMask = 0;
@@ -2665,16 +2652,12 @@ struct PluginInstance
             for (int i = 0; i < nativeui::kMixerStereoFields * nativeui::kMixerStrips; ++i)
                 reportNativeValue (e, nativeui::kMixerStereoBase + i, nativeStereoMeters[i].load (std::memory_order_relaxed));
         }
-        const bool enabled = mixerPeek.enabled();
+        const bool enabled = nativeMixerActive.load (std::memory_order_relaxed);
         if (! enabled && ! mixerVisualsReported)
             return;
         mixerVisualsReported = enabled;
         if (enabled)
             refreshNativeMixerVisuals();
-        const float tab = enabled ? nativeUiValue (nativeui::kMixerActiveTab) : 0.0f;
-        // The host radio buttons compare against their own navigation handle before writing.
-        reportNativeValue (e, nativeui::kMixerPeek, tab);
-        reportNativeValue (e, nativeui::kMixerActiveTab, tab);
         for (int s = 0; s < nativeui::kMixerStrips; ++s)
         {
             reportNativeValue (e, nativeui::kMixerSoloVisual + s, enabled ? nativeUiValue (nativeui::kMixerSoloVisual + s) : 0.0f);
@@ -2687,10 +2670,6 @@ struct PluginInstance
 
     void nativeUiPoll (AEffect* e)
     {
-        const float peek = nativeUiValue (nativeui::kMixerPeekView);
-        const float lastPeek = nativeUiReported[nativeui::kMixerPeekView];
-        if (lastPeek != 0.0f && lastPeek != peek)
-            reportNativeValue (e, nativeui::kMixerPeekView, 0.0f);
         const auto envFrames = nativeEnvSelector.load (std::memory_order_relaxed);
         if (envFrames != reportedEnvFrames)
         {
@@ -2759,7 +2738,6 @@ struct PluginInstance
         const float layout = nativeUiValue (nativeui::kFxLayout);
         if (layout == 0.0f && nativeUiReported[nativeui::kFxLayout] == 0.0f)
         {
-            reportNativeValue (e, nativeui::kMixerPeekView, peek);
             if (fxLabelsChanged && refreshFxLabels)
                 requestProxyNames();
             return;
@@ -2783,7 +2761,6 @@ struct PluginInstance
             }
         }
         reportNativeValue (e, nativeui::kFxLayout, layout);
-        reportNativeValue (e, nativeui::kMixerPeekView, peek);
         if (fxLabelsChanged && refreshFxLabels)
             requestProxyNames();
     }
@@ -3053,9 +3030,6 @@ struct PluginInstance
         // A full metadata refresh rebuilds the MPC menus and postpones its primary-plane redraw.
         // Publish the new skin controls first. Even an unreadable skin must eventually get the names.
         constexpr long long maxWaitMs = 1000;
-        if (nativeMixerPeekView.load (std::memory_order_acquire) == nativeui::MixerPeekFilter
-            && ! hostMixerWidgetsHidden.load (std::memory_order_relaxed) && nowMs - proxyNamesRequestedAt < maxWaitMs)
-            return;
         if ((nativeNamesAwaitingPaint && nowMs - proxyNamesRequestedAt < kNativePaintWindowMs)
             || (nowMs < nativePagePaintUntil && nowMs - proxyNamesRequestedAt < maxWaitMs))
             return;
@@ -3243,7 +3217,7 @@ struct PluginInstance
         overlay thread asks for a report and the real slot after that: what a host that shows an old picture until the parameter is reported looks like). Display thread and startOverlay. */
     float overlayWantedValue (bool asked = false)
     {
-        const bool hideWidgets = uiFullOpen.load (std::memory_order_relaxed) && ! mixerPeek.enabled();
+        const bool hideWidgets = uiFullOpen.load (std::memory_order_relaxed) && ! nativeMixerActive.load (std::memory_order_relaxed);
         const float real = hideWidgets ? synthyboy_mpc::overlay::fullScreenParamValue() : synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
         bool stale = false;
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
@@ -4255,7 +4229,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, "Filter chain");
                 else if (opcode == effGetParamDisplay)
-                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "F2" : "F1");
+                    synthyboy_mpc::putBounded (buf, kCap, std::array<const char*, nativeui::kFilterChainRoutes> { "Parallel", "F1 to F2", "F2 to F1" }[static_cast<size_t> (inst->filterRoutingChoice())]);
                 return 1;
             }
             if (nativeui::isModDetailControlOffset (offset))
@@ -4360,13 +4334,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     else
                         std::snprintf (buf, kCap, "%s", inst->engine != nullptr && inst->engine->mixerMute (strip) ? "ON" : "OFF");
                 }
-                return 1;
-            }
-            if (nativeui::isMixerActiveTabOffset (offset))
-            {
-                static const char* const tabNames[] = { "MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2" };
-                const int tab = std::clamp (inst->nativeMixerActiveTab.load (std::memory_order_acquire), 0, nativeui::kMixerTabs - 1);
-                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Mixer Active Tab" : tabNames[tab]);
                 return 1;
             }
             if (nativeui::isMixerSoloVisualOffset (offset) || nativeui::isMixerMuteVisualOffset (offset))
@@ -4525,11 +4492,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                             synthyboy_mpc::overlay::uibind::formatValue (info, plain, buf, kCap);
                     }
                 }
-                return 1;
-            }
-            if (offset == nativeui::kMixerPeekView)
-            {
-                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Mixer PEEK View" : "");
                 return 1;
             }
             if (offset == nativeui::kOscSettingsView || offset == nativeui::kOscWarpLayout)
@@ -5063,15 +5025,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     synthyboy_mpc::putBounded (buf, kCap, synthyboy::unitLabel (info->unit));
                 else if (opcode == effGetParamDisplay)
                 {
-                    if (field == n::kSelection)
-                    {
-                        const int choice = static_cast<int> (std::lround (value * (n::kInstances - 1)));
-                        if (choice < n::kStandard)
-                            std::snprintf (buf, kCap, "LFO %d", choice + 1);
-                        else
-                            std::snprintf (buf, kCap, "RND %d", choice - n::kStandard + 1);
-                    }
-                    else if (info != nullptr)
+                    if (info != nullptr)
                     {
                         const float plain = synthyboy::fromNormalised (*info, value);
                         if (info->choices != nullptr && info->numChoices > 0)
@@ -5148,16 +5102,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             }
             if (opcode == effGetParamName)
             {
-                if (offset == nativeui::kMixerPeek)
-                    synthyboy_mpc::putBounded (buf, kCap, "Mixer Peek");
-                else if (offset < nativeui::kMixerHoldBase)
+                if (offset < nativeui::kMixerHoldBase)
                     std::snprintf (buf, kCap, "Mixer Peak %d", offset - nativeui::kMixerPeakBase + 1);
                 else if (offset < nativeui::kEnvSelectorBase)
                     std::snprintf (buf, kCap, "Mixer Hold %d", offset - nativeui::kMixerHoldBase + 1);
                 else
                     std::snprintf (buf, kCap, "Env Selector Cell %d", offset - nativeui::kEnvSelectorBase + 1);
             }
-            else if (opcode == effGetParamDisplay && offset != nativeui::kMixerPeek)
+            else if (opcode == effGetParamDisplay)
                 std::snprintf (buf, kCap, "%.3f", static_cast<double> (inst->nativeUiValue (offset)));
             else
                 buf[0] = '\0';
@@ -5694,12 +5646,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
             return 1;
         }
-        if (nativeui::isMixerActiveTabOffset (nativeOffset)
-            || nativeui::isMixerSoloVisualOffset (nativeOffset)
+        if (nativeui::isMixerSoloVisualOffset (nativeOffset)
             || nativeui::isMixerMuteVisualOffset (nativeOffset))
         {
-            const int maxInt = nativeui::isMixerActiveTabOffset (nativeOffset)
-                ? nativeui::kMixerTabs - 1 : nativeui::mixer::kLastVisualState;
+            const int maxInt = nativeui::mixer::kLastVisualState;
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
             props->maxInteger = maxInt;
@@ -5791,15 +5741,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                                   : cell.kind == n::Semitone ? 11 : cell.kind == n::Phase ? 360 : 1;
                 props->stepInteger = 1;
             }
-            return 1;
-        }
-        if (index == PluginInstance::nativeUiBase() + nativeui::kMixerPeekView)
-        {
-            std::memset (props, 0, sizeof (*props));
-            props->flags = kVstParameterUsesIntegerMinMax;
-            props->maxInteger = nativeui::kMixerPeekLastView;
-            props->stepInteger = 1;
-            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / nativeui::kMixerPeekLastView;
             return 1;
         }
         if (PluginInstance::isNativeUiParam (index))
@@ -6110,7 +6051,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 fillParameterProperties (*info, props);
             else
                 std::memset (props, 0, sizeof (*props));
-            const int last = field == n::kSelection ? n::kInstances - 1 : field == n::kAction ? n::kActionLast
+            const int last = field == n::kAction ? n::kActionLast
                            : field == n::kLayout ? n::kLayoutLast : -1;
             if (last > 0 || field == n::kTranspose || field == n::kTune)
             {
@@ -6143,16 +6084,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 props->stepInteger = 1;
                 props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
             }
-            return 1;
-        }
-        if (index == PluginInstance::nativeUiBase() + nativeui::kMixerPeek)
-        {
-            std::memset (props, 0, sizeof (*props));
-            props->flags = kVstParameterUsesIntegerMinMax;
-            props->minInteger = 0;
-            props->maxInteger = nativeui::kMixerPeekTargets;
-            props->stepInteger = 1;
-            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / nativeui::kMixerPeekTargets;
             return 1;
         }
         if (PluginInstance::isOverlayParam (index))
@@ -6602,17 +6533,9 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     if (! std::isfinite (parameter) || parameter < 0.0f || parameter > 1.0f || inst->nativeFilter.layout() == 0)
                         return;
                     const int choice = static_cast<int> (std::lround (parameter * nativeui::kFilterChainLastChoice));
-                    if (choice >= 2)
-                    {
-                        const auto* route = synthyboy::findParamByKey ("filter.routing");
-                        if (route != nullptr)
-                            inst->uiWrite (static_cast<int> (route - synthyboy::paramTable()), static_cast<float> (choice - 2) / 2.0f);
-                    }
-                    else if (inst->nativeMixerPeekView.load (std::memory_order_acquire) == nativeui::MixerPeekFilter)
-                        inst->mixerPeek.post (static_cast<float> (choice + 1) / nativeui::kMixerPeekTargets);
-                    else
-                        inst->nativeFilter.post (inst->nativeFilter.at (nativeui::FilterAction),
-                            static_cast<float> (nativeui::FilterF1 + choice) / nativeui::FilterLastAction);
+                    const auto* route = synthyboy::findParamByKey ("filter.routing");
+                    if (route != nullptr)
+                        inst->uiWrite (static_cast<int> (route - synthyboy::paramTable()), static_cast<float> (choice) / nativeui::kFilterChainLastChoice);
                     return;
                 }
                 if (nativeui::isMixerStereoOffset (offset)) return;
@@ -6656,7 +6579,6 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     return;
                 }
                 if (nativeui::isModDetailReservedOffset (offset)
-                    || nativeui::isMixerActiveTabOffset (offset)
                     || nativeui::isMixerSoloVisualOffset (offset)
                     || nativeui::isMixerMuteVisualOffset (offset))
                     return;   // read-only presentation / reserved slots
@@ -6757,8 +6679,6 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     }
                     return;
                 }
-                if (offset == nativeui::kMixerPeekView)
-                    return;   // published only by the Mixer view
                 if (const int field = PluginInstance::nativeOscSettingField (offset); field >= 0)
                 {
                     const auto snapshot = inst->nativeOscSettings.at (field);
@@ -6883,9 +6803,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                 }
                 if (offset == nativeui::kMasterView)
                     return;   // the overlay is the exclusive publisher of the tab's visibility
-                if (offset == nativeui::kMixerPeek)
-                    inst->mixerPeek.post (parameter);
-                else if (offset >= nativeui::kOscBase)
+                if (offset >= nativeui::kOscBase)
                     inst->nativeOsc.post (offset - nativeui::kOscBase, parameter);
                 else if (offset >= nativeui::kFilterBase)
                 {
