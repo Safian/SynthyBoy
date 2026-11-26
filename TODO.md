@@ -120,7 +120,6 @@
 
 ## Valós idejű terhelés, szálak és spektrális indítás
 
-- [ ] A tier_bench a --retry-invalid kimerítése után is felhasználja az érvénytelen modulmérés mediánját (bench/tier_bench.cpp, runGated). A modul- és A/B-összesítés utasítsa el az érvénytelen mérést, és regresszióteszt igazolja ezt.
 - [ ] A Key 61-en futtasd a valós idejű ütemezést megkövetelő modulmérést és az interferencia-összehasonlítást. Rögzítsd a modulonkénti költséget, a p99 szórását, a CPU-affinitást és az ütemezést (scripts/perf-device.sh, modules és e1 fázis).
 - [ ] 18. A mérőprogram más `libm`-et használ, mint az eszközön futó plugin; kivételkezelés és RTTI bekapcsolva a DSP-könyvtárakban.
 

@@ -7,7 +7,7 @@
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
 //                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
-//                        [--evict] [--first-blocks N] [--start-budget-us N] [--fx-budget PCT] [--fx-budget-status] [--start-cache] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]
+//                        [--evict] [--first-blocks N] [--start-budget-us N] [--fx-budget PCT] [--fx-budget-status] [--start-cache] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK] [--self-test]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -40,7 +40,9 @@
 //   --first-blocks N  no steady run: for every profile and load a fresh engine, the time of prepare (), then the first N blocks (1 .. 64) with the chord struck in block 0 and no
 //                   warm-up, each with its time and its minor page faults: the first-note and first-touch cost that a long run hides
 //   --retry-invalid N  a run that the health rules mark INVALID (a stall, run queue delay, a frequency drop, a major page fault, heat) is repeated up to N times (default 2);
-//                   the last run is kept and its validity is in the csv
+//                   the last run is kept and its validity is in the csv. With --rt a run that is still INVALID after the retries is REJECTED: it is printed as invalid and
+//                   never folded into a median, cost, spread or per-profile number, and the exit status is 1.
+//   --self-test     no benchmark: checks that an INVALID run is rejected by the retry and aggregation helpers (exit 0 = pass); needs no --presets
 //   --set NAME      the list of profiles (default settings):
 //                     settings  "low" (what the MPC build ships) and one change at a time: unison 4 / 7 / 16, warp 4x, morph full, math exact, control full, fx all,
 //                               samples high; then everything at once with 8 voices; each with the notes of its polyphony
@@ -282,6 +284,7 @@ struct Options
     double budget = 0.0;
     bool verify = false;
     bool micro = false;      // --micro
+    bool selfTest = false;   // --self-test
     double tolerance = 0.0;  // --verify: a sample may differ by this share of the load's largest sample (default 0: the same values)
     std::string profilePath; // --profile
     uint32_t savingsOff = 0; // --no-fx-mute, --scalar-filters: OwnSaving bits switched off (before / after measurements with one binary)
@@ -774,12 +777,113 @@ long currentKhz (int cpu)
     return std::atol (readLine ("/sys/devices/system/cpu/cpu" + std::to_string (cpu) + "/cpufreq/scaling_cur_freq").c_str());
 }
 
+/** A run the health rules (only evaluated with --rt) marked INVALID must never reach a median, a cost or a spread. */
+bool isRejected (const Result& r, int rt)
+{
+    return rt > 0 && ! r.valid;
+}
+
+/** Runs runOnce () and repeats it, while the result is INVALID with --rt, up to retryInvalid more times (onRetry (n, reason) before each repeat). The last result is returned
+    as it is: the caller must test isRejected () before it uses the numbers. */
+template <class RunFn, class RetryFn>
+Result runWithRetries (int rt, int retryInvalid, RunFn runOnce, RetryFn onRetry)
+{
+    Result r;
+    for (int attempt = 0;; ++attempt)
+    {
+        r = runOnce();
+        if (rt <= 0 || r.valid || attempt >= retryInvalid)
+            break;
+        onRetry (attempt + 1, r.invalidReason);
+    }
+    return r;
+}
+
+/** The repetitions of one module case (base and case run, in microseconds per block). One rejected run makes the whole case invalid: nothing of it is kept for the median. */
+struct ModuleCaseAggregate
+{
+    bool valid = true;
+    std::string invalidReason;
+    std::vector<double> baseUs, caseUs, costUs;
+
+    void add (const Result& base, const Result& cs, int rt)
+    {
+        if (! valid)
+            return;
+        const Result* bad = isRejected (base, rt) ? &base : (isRejected (cs, rt) ? &cs : nullptr);
+        if (bad != nullptr)
+        {
+            valid = false;
+            invalidReason = std::string (bad == &base ? "base: " : "case: ") + bad->invalidReason;
+            baseUs.clear();
+            caseUs.clear();
+            costUs.clear();
+            return;
+        }
+        const double b = 1000.0 * base.medianMs, m = 1000.0 * cs.medianMs;
+        baseUs.push_back (b);
+        caseUs.push_back (m);
+        costUs.push_back (m - b);
+    }
+};
+
+/** --self-test: an INVALID run stays rejected after the retries and is not folded into the module aggregates. Returns the number of failed checks. */
+int runSelfTest()
+{
+    int failures = 0;
+    auto check = [&] (bool ok, const char* what)
+    {
+        std::printf ("self-test %-4s %s\n", ok ? "ok" : "FAIL", what);
+        if (! ok)
+            ++failures;
+    };
+    auto makeResult = [] (double medianMs, bool valid, const char* reason)
+    {
+        Result r;
+        r.medianMs = medianMs;
+        r.valid = valid;
+        r.invalidReason = reason;
+        return r;
+    };
+
+    int calls = 0, retries = 0;
+    const Result stuck = runWithRetries (50, 2, [&] { ++calls; return makeResult (9.0, false, "run queue delay"); }, [&] (int, const std::string&) { ++retries; });
+    check (calls == 3 && retries == 2, "an always invalid run is repeated --retry-invalid times and no more");
+    check (isRejected (stuck, 50), "an invalid run is rejected after the retries are exhausted");
+    check (! isRejected (stuck, 0), "without --rt no run is rejected (the health rules did not run)");
+
+    calls = 0;
+    const Result healed = runWithRetries (50, 2, [&] { ++calls; return calls < 2 ? makeResult (9.0, false, "stall") : makeResult (1.0, true, ""); }, [] (int, const std::string&) {});
+    check (calls == 2 && ! isRejected (healed, 50) && healed.medianMs == 1.0, "a retry that comes back valid is accepted");
+
+    ModuleCaseAggregate good;
+    good.add (makeResult (0.010, true, ""), makeResult (0.013, true, ""), 50);
+    good.add (makeResult (0.010, true, ""), makeResult (0.015, true, ""), 50);
+    check (good.valid && good.costUs.size() == 2, "valid repetitions are aggregated");
+
+    ModuleCaseAggregate badCase;
+    badCase.add (makeResult (0.010, true, ""), makeResult (0.013, true, ""), 50);
+    badCase.add (makeResult (0.010, true, ""), stuck, 50);
+    badCase.add (makeResult (0.010, true, ""), makeResult (0.014, true, ""), 50);
+    check (! badCase.valid && badCase.costUs.empty() && badCase.baseUs.empty() && badCase.caseUs.empty(), "one rejected case run invalidates the module case and nothing of it is kept");
+    check (badCase.invalidReason == "case: run queue delay", "the invalid reason is reported");
+
+    ModuleCaseAggregate badBase;
+    badBase.add (stuck, makeResult (0.013, true, ""), 50);
+    check (! badBase.valid && badBase.invalidReason == "base: run queue delay" && badBase.costUs.empty(), "a rejected base run invalidates the module case");
+
+    ModuleCaseAggregate noRt;
+    noRt.add (stuck, makeResult (0.013, true, ""), 0);
+    check (noRt.valid && noRt.costUs.size() == 1, "without --rt the validity flag is not consulted");
+    return failures;
+}
+
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
                           "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
-                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--start-budget-us N] [--fx-budget PCT] [--fx-budget-status] [--start-cache] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]\n", message);
+                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--start-budget-us N] [--fx-budget PCT] [--fx-budget-status] [--start-cache] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK] [--self-test]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -1065,6 +1169,7 @@ int main (int argc, char** argv)
         else if (a == "--repeat")      o.repeat = std::atoi (next());
         else if (a == "--verify")      o.verify = true;
         else if (a == "--micro")       o.micro = true;
+        else if (a == "--self-test")   o.selfTest = true;
         else if (a == "--tolerance")   o.tolerance = std::atof (next());
         else if (a == "--profile")     o.profilePath = next();
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
@@ -1109,6 +1214,8 @@ int main (int argc, char** argv)
         || o.moduleReps < 1 || o.moduleReps > 99 || (o.moduleGroup != "all" && o.moduleGroup != "fx" && o.moduleGroup != "filter" && o.moduleGroup != "warp" && o.moduleGroup != "morph"
                                                       && o.moduleGroup != "unison" && o.moduleGroup != "osc"))
         usage ("argument out of range");
+    if (o.selfTest)
+        return runSelfTest() == 0 ? 0 : 1;
     if (o.modules && ! o.secondsGiven)
         o.seconds = 2.0;
     synthyboy::aa::setOff (o.noAa);   // before any engine is made
@@ -1421,18 +1528,11 @@ int main (int argc, char** argv)
         auto median = [] (std::vector<double> v) { std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
         auto runGated = [&] (const synthyboy_mpc::Profile& profile, const Load& l, int notes)
         {
-            Result r;
-            for (int attempt = 0;; ++attempt)
-            {
-                r = run (o, profile, l, notes, cpu);
-                if (o.rt <= 0 || r.valid || attempt >= o.retryInvalid)
-                    break;
-                std::printf ("    retry %d: %s\n", attempt + 1, r.invalidReason.c_str());
-            }
-            return r;
+            return runWithRetries (o.rt, o.retryInvalid, [&] { return run (o, profile, l, notes, cpu); },
+                                   [] (int n, const std::string& why) { std::printf ("    retry %d: %s\n", n, why.c_str()); });
         };
         const std::vector<perf::ModuleCase> cases = perf::moduleCases();
-        size_t printed = 0;
+        size_t printed = 0, invalidCases = 0;
         for (size_t c = 0; c < configs.size(); ++c)
         {
             const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
@@ -1446,15 +1546,23 @@ int main (int argc, char** argv)
                 l.name = mc.name;
                 l.group = mc.group;
                 l.params = mc.params;
-                std::vector<double> baseUs, caseUs, costUs;
-                for (int rep = 0; rep < o.moduleReps; ++rep)
+                ModuleCaseAggregate agg;
+                for (int rep = 0; rep < o.moduleReps && agg.valid; ++rep)
                 {
-                    const double b = 1000.0 * runGated (profiles[c], base, notes).medianMs;
-                    const double m = 1000.0 * runGated (profiles[c], l, notes).medianMs;
-                    baseUs.push_back (b);
-                    caseUs.push_back (m);
-                    costUs.push_back (m - b);
+                    const Result baseRun = runGated (profiles[c], base, notes);
+                    const Result caseRun = runGated (profiles[c], l, notes);
+                    agg.add (baseRun, caseRun, o.rt);
                 }
+                if (! agg.valid)
+                {
+                    std::printf ("module %s | %s | INVALID (%s) | no cost, excluded from the table\n", mc.group.c_str(), mc.name.c_str(), agg.invalidReason.c_str());
+                    std::fflush (stdout);
+                    ++invalidCases;
+                    continue;
+                }
+                const std::vector<double>& baseUs = agg.baseUs;
+                const std::vector<double>& caseUs = agg.caseUs;
+                const std::vector<double>& costUs = agg.costUs;
                 const double baseMed = median (baseUs), caseMed = median (caseUs), cost = median (costUs);
                 const double spread = baseMed > 0.0 ? 100.0 * (*std::max_element (costUs.begin(), costUs.end()) - *std::min_element (costUs.begin(), costUs.end())) / baseMed : 0.0;
                 std::printf ("module %s | %s | base %.2f us | case %.2f us | cost %+.2f us | %+.2f %% of block | reps %d | spread %.1f %%\n", mc.group.c_str(), mc.name.c_str(), baseMed, caseMed,
@@ -1463,8 +1571,13 @@ int main (int argc, char** argv)
                 ++printed;
             }
         }
-        std::printf ("module-table: %zu cases\n", printed);
-        return 0;
+        if (invalidCases == 0)
+            std::printf ("module-table: %zu cases\n", printed);
+        else
+            std::printf ("module-table: %zu valid cases, %zu invalid cases (INVALID after %d retr%s, rejected)\n", printed, invalidCases, o.retryInvalid, o.retryInvalid == 1 ? "y" : "ies");
+        if (invalidCases != 0)
+            std::fprintf (stderr, "tier_bench: %zu module case%s stayed INVALID after the retries: no cost is reported for them\n", invalidCases, invalidCases == 1 ? "" : "s");
+        return invalidCases == 0 ? 0 : 1;
     }
 
     if (o.firstBlocks > 0)
@@ -1498,6 +1611,7 @@ int main (int argc, char** argv)
     std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s %4s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz", "pass");
     // per profile and load: the 99th percentile and the longest block of every pass
     struct Cell { std::vector<double> p99, max; };
+    size_t rejectedRuns = 0; // runs that stayed INVALID after the retries: printed and kept in the csv, never folded into the per-profile numbers
     std::vector<std::vector<Cell>> cells (configs.size(), std::vector<Cell> (loads.size()));
 #if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
     PcProfiler profiler;
@@ -1609,6 +1723,13 @@ int main (int argc, char** argv)
                                   r.minfltMeasured, r.majflt, r.rssKb, tempText, r.khzBefore, r.valid ? 1 : 0, r.invalidReason.c_str(), pmuCsv.c_str(), o.evict ? "evict" : "warm");
                     std::fflush (csv);
                 }
+                if (isRejected (r, o.rt))
+                {
+                    ++rejectedRuns;
+                    std::printf ("    REJECTED: %s / %s pass %d stayed INVALID after %d retr%s (%s); not used for the per-profile numbers\n", configs[c].c_str(), l.name.c_str(), pass, o.retryInvalid,
+                                 o.retryInvalid == 1 ? "y" : "ies", r.invalidReason.c_str());
+                    continue;
+                }
                 cells[c][li].p99.push_back (r.p99Ms * k);
                 cells[c][li].max.push_back (r.maxMs * k);
             }
@@ -1636,6 +1757,8 @@ int main (int argc, char** argv)
         double bestP99 = -1.0, worstP99 = -1.0;
         for (size_t li = 0; li < loads.size(); ++li)
         {
+            if (cells[c][li].p99.empty())
+                continue; // every pass of this load was rejected
             const double m = median (cells[c][li].p99);
             if (loads[li].kind == Load::preset && m > bestP99)
             {
@@ -1661,7 +1784,7 @@ int main (int argc, char** argv)
                 // the longest block of ANY preset of the profile, not only of the dearest one
                 double longestAll = 0.0;
                 for (size_t li = 0; li < loads.size(); ++li)
-                    if (loads[li].kind == Load::preset)
+                    if (loads[li].kind == Load::preset && ! cells[c][li].max.empty())
                         longestAll = std::max (longestAll, *std::max_element (cells[c][li].max.begin(), cells[c][li].max.end()));
                 std::printf (" | %s", bestP99 <= o.budget && longestAll <= 100.0 ? "inside" : (bestP99 <= o.budget ? "OVER (a block longer than its real time)" : "OVER"));
             }
@@ -1669,6 +1792,11 @@ int main (int argc, char** argv)
         }
         else
             std::printf ("%-58s %5d | %7s %15s %7s  %-24s | %9s\n", configs[c].c_str(), notes, "-", "", "-", "(no preset in this run)", worst);
+    }
+    if (rejectedRuns != 0)
+    {
+        std::fprintf (stderr, "tier_bench: %zu run%s stayed INVALID after the retries and %s left out of the per-profile numbers\n", rejectedRuns, rejectedRuns == 1 ? "" : "s", rejectedRuns == 1 ? "was" : "were");
+        return 1;
     }
     return 0;
 }
