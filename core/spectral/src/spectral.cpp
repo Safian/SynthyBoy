@@ -258,6 +258,12 @@ void buildFilterGains (float* gains, const float* x, const float* y, int numPoin
 
 // ---- spectral warps ----------------------------------------------------------------------------------------------------------------
 
+namespace testhooks
+{
+/** Tests only (core/tests/test_spectral_add_harmonics.cpp declares it): the Add Harmonics warp with the division of every harmonic, as it was before the multiplications by 0.5 and 0.25. */
+bool referenceAddHarmonics = false;
+} // namespace testhooks
+
 namespace
 {
 /** One spectral warp on the magnitudes m and the frequencies f (radians per file sample) of a frame. Returns an extra pitch ratio (1 = none). `twist` receives the phase twist. */
@@ -311,14 +317,32 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
         {
             const int n = 1 + static_cast<int> (v * 3.99f);
             copyOut();
-            for (int k = 1; k < kBins; ++k)
-                for (int h = 2; h <= n + 1 && k * h < kBins; ++h)
-                {
-                    const float value = a * m[k] / static_cast<float> (h);
-                    if (value > tm[k * h])
+            if (testhooks::referenceAddHarmonics)
+            {
+                for (int k = 1; k < kBins; ++k)
+                    for (int h = 2; h <= n + 1 && k * h < kBins; ++h)
                     {
-                        tm[k * h] = value;
-                        tf[k * h] = f[k] * static_cast<float> (h);
+                        const float value = a * m[k] / static_cast<float> (h);
+                        if (value > tm[k * h])
+                        {
+                            tm[k * h] = value;
+                            tf[k * h] = f[k] * static_cast<float> (h);
+                        }
+                    }
+            }
+            else
+                for (int k = 1; k < kBins; ++k)
+                {
+                    const float am = a * m[k]; // the product of the division below, formed once for the bin
+                    for (int h = 2; h <= n + 1 && k * h < kBins; ++h)
+                    {
+                        // x / 2 and x / 4 are x * 0.5 and x * 0.25 exactly (the same correctly rounded value of the same real number, subnormals included); 3 and 5 keep the division
+                        const float value = h == 2 ? am * 0.5f : (h == 4 ? am * 0.25f : am / static_cast<float> (h));
+                        if (value > tm[k * h])
+                        {
+                            tm[k * h] = value;
+                            tf[k * h] = f[k] * static_cast<float> (h);
+                        }
                     }
                 }
             copyBack();

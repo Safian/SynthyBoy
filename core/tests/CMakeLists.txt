@@ -176,6 +176,9 @@ endif()
 target_compile_options(synthyboy_test_own_wt_osc_savings PRIVATE $<IF:$<BOOL:${MSVC}>,/W4,-Wall -Wextra -Wpedantic -ffp-contract=off>)
 target_link_libraries(synthyboy_test_own_wt_osc_savings PRIVATE Threads::Threads)
 add_test(NAME synthyboy_test_own_wt_osc_savings COMMAND synthyboy_test_own_wt_osc_savings)
+# The Add Harmonics warp of the spectral oscillator with multiplications for the second and fourth harmonic against the loop with divisions (bit identical; the old loop is a test hook of spectral.cpp).
+synthyboy_add_test(synthyboy_test_spectral_add_harmonics test_spectral_add_harmonics.cpp LINK synthyboy_spectral)
+target_compile_options(synthyboy_test_spectral_add_harmonics PRIVATE $<$<NOT:$<BOOL:${MSVC}>>:-ffp-contract=off>)
 # The shared decimation of the oversampled oscillator path against the decimator per unison voice (bounded float difference); portable, links only the morph and wavetable sources.
 add_executable(synthyboy_test_own_wt_osc_shared_decim test_own_wt_osc_shared_decim.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
     "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
