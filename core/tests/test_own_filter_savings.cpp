@@ -730,6 +730,7 @@ namespace own
 struct ClassicFilterTestAccess
 {
     static ClassicFilter::SvfSetup setup (const ClassicFilter& f, const ClassicParams& p) { return f.svfSetupFor (p); }
+    static void setFast (ClassicFilter& f, bool on) { f.fastMath = on; } // the limiter of the reference models of item 8
     static void run (ClassicFilter& f, const ClassicFilter::SvfSetup& z, const float* in, float* out, int n, int model, bool reciprocal)
     {
         f.fastMath = reciprocal; // svfRun () multiplies by the reciprocal denominators exactly when fastMath is set (the saturators are not reached at these levels)
@@ -1082,4 +1083,243 @@ TEST (own_filter_savings_diode_ramp_stays_within_half_a_db_of_the_piece_loop)
     std::printf ("SAVINGS-DIODE-RAMP up to 4 semitones per period: worst peak difference %.3f dB, worst band difference %.3f dB, worst RMS %.1f dB\n", worstPeak, worstBand, worstRms);
     CHECK (worstPeak < 0.5);
     CHECK (worstBand < 0.5);
+}
+
+// ---- Item 8: the setups of the Comb and phaser models (classic models 6, 7) made once per parameter change and shared with the right channel ----
+
+namespace
+{
+/** The Comb and phaser models as they were before their setups were split from the sample loops (the code of 2302f7f, one polar / atan2 / exp2 / exp per call), with the
+    block, process and pieceParams logic of ClassicFilter around it: the reference of the item 8 tests. Own state, own delay line. */
+struct ReferenceCombPhaser
+{
+    double sr = 44100.0;
+    DelayLine comb;
+    float ap[12] = {};
+    float fbState = 0.0f, lpA = 0.0f, lpB = 0.0f;
+    ClassicFilter limiter; // only for its hardtanh ()
+
+    void prepare (double rate)
+    {
+        sr = rate;
+        comb.prepare (static_cast<int> (rate * 0.1));
+    }
+    void block (const float* in, float* out, int n, const ClassicParams& p)
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float d = std::pow (10.0f, p.driveDb * 0.05f);
+        const float r = clamp01 (p.res);
+        ClassicFilterTestAccess::setFast (limiter, p.fast);
+        if (p.model == 6)
+        {
+            const int st = std::clamp (p.style, 0, 5);
+            if (st == 0)
+                combPlain (in, out, n, f, r, p);
+            else
+                combStyled (in, out, n, f, r, p, st);
+        }
+        else
+            phaser (in, out, n, f, r, d, p);
+    }
+    void process (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0)
+    {
+        if (ClassicFilter::sameParams (a, b) && a.cutoffHz >= 1.0f)
+        {
+            block (in, out, n, b);
+            return;
+        }
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            const ClassicParams p = ClassicFilter::pieceParams (a, b, t);
+            block (in + i, out + i, m, p);
+            i += m;
+        }
+    }
+    void combStyled (const float* in, float* out, int n, float f, float r, const ClassicParams& p, int st)
+    {
+        const int fbStyle = st % 3;
+        const bool band = st >= 3;
+        const float srf = static_cast<float> (sr), fe = std::max (f, 20.0f);
+        const float T = std::clamp (srf / fe, 2.0f, srf * 0.09f);
+        const float fc = fe * std::exp2 (p.combOffset / 12.0f);
+        const float edge = srf / 2.1f;
+        float aA, aB, lowGain = 1.0f, highGain = 0.0f;
+        if (!band)
+        {
+            aA = OnePole::coefficient (std::clamp (fc, 1.0f, edge), sr);
+            lowGain = std::clamp (2.0f - p.blendRaw, 0.0f, 1.0f);
+            highGain = std::clamp (p.blendRaw, 0.0f, 1.0f);
+            aB = OnePole::coefficient (std::clamp (fe * 0.0625f, 1.0f, edge), sr);
+        }
+        else
+        {
+            const float octaves = clamp01 (p.blendRaw * 0.5f) * 4.0f;
+            aA = OnePole::coefficient (std::clamp (fc * std::exp2 (octaves), 1.0f, edge), sr);
+            aB = OnePole::coefficient (std::clamp (fc * std::exp2 (-octaves), 1.0f, edge), sr);
+        }
+        using Cx = std::complex<float>;
+        const float w0 = kTwoPif * fe / srf;
+        const Cx zi = std::polar (1.0f, -w0);
+        auto onePole = [&] (float a) { return Cx (a) / (Cx (1.0f) - Cx (1.0f - a) * zi); };
+        Cx H;
+        if (!band)
+        {
+            const Cx lp = onePole (aA);
+            H = (lowGain * lp + highGain * (Cx (1.0f) - lp)) * (Cx (1.0f) - onePole (aB));
+        }
+        else
+            H = (Cx (1.0f) - onePole (aB)) * onePole (aA);
+        const float loopDelay = -std::arg (H) / w0;
+        const float lineT = fbStyle == 2 ? 0.5f * T : T;
+        const float readAt = std::max (lineT - 1.0f - loopDelay, 0.0f);
+        auto filtered = [&] (float x) noexcept
+        {
+            if (!band)
+            {
+                lpA = flushDenormal (lpA + aA * (x - lpA));
+                const float sp = lowGain * lpA + highGain * (x - lpA);
+                lpB = flushDenormal (lpB + aB * (sp - lpB));
+                return sp - lpB;
+            }
+            lpB = flushDenormal (lpB + aB * (x - lpB));
+            const float h = x - lpB;
+            lpA = flushDenormal (lpA + aA * (h - lpA));
+            return lpA;
+        };
+        if (fbStyle == 0)
+        {
+            float fb = lerp (-1.0f, 1.0f, r);
+            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+            fb = std::clamp (fb, -0.98f, 0.98f);
+            const float scale = 1.0f - 0.5f * fb * fb;
+            for (int i = 0; i < n; ++i)
+            {
+                const float w = limiter.hardtanh (filtered (scale * in[i] + fb * comb.read (readAt)));
+                comb.push (w);
+                out[i] = w;
+            }
+            return;
+        }
+        const float fb = std::min (clamp01 (r), 0.98f);
+        const float sgn = fbStyle == 2 ? -1.0f : 1.0f;
+        const float scale = 1.0f / (1.0f + fb);
+        const float inGain = 0.70710678f;
+        for (int i = 0; i < n; ++i)
+        {
+            const float fd = filtered (comb.read (readAt));
+            comb.push (inGain * in[i] + limiter.hardtanh (sgn * fb * fd));
+            out[i] = inGain * in[i] * scale + sgn * fd;
+        }
+    }
+    void combPlain (const float* in, float* out, int n, float f, float r, const ClassicParams& p)
+    {
+        const float T = std::clamp (static_cast<float> (sr) / std::max (f, 20.0f), 2.0f, static_cast<float> (sr) * 0.09f);
+        float fb = lerp (-1.0f, 1.0f, r);
+        fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+        fb = std::clamp (fb, -0.98f, 0.98f);
+        const float scale = 1.0f - 0.5f * fb * fb;
+        const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
+        const float a = OnePole::coefficient (loopHz, sr);
+        const float w0 = kTwoPif * std::max (f, 20.0f) / static_cast<float> (sr), bpole = 1.0f - a;
+        const float loopDelay = std::atan2 (bpole * std::sin (w0), 1.0f - bpole * std::cos (w0)) / w0;
+        const float readAt = std::max (T - 1.0f - loopDelay, 0.0f);
+        for (int i = 0; i < n; ++i)
+        {
+            const float v = scale * in[i] + fb * comb.read (readAt);
+            lpA += a * (v - lpA);
+            lpA = flushDenormal (lpA);
+            const float w = limiter.hardtanh (lpA);
+            comb.push (w);
+            out[i] = w;
+        }
+    }
+    void phaser (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p)
+    {
+        const float g = phaserStageG (f, sr);
+        const float a = g / (1.0f + g);
+        const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f);
+        const float p1 = clamp01 (1.0f - braw), p5 = clamp01 (braw - 1.0f), p3 = 1.0f - p1 - p5;
+        const float inv = p.style == 1 ? -1.0f : 1.0f;
+        const float c1 = OnePole::coefficient (f / 20.0f, sr), c2 = OnePole::coefficient (f * 20.0f, sr);
+        for (int i = 0; i < n; ++i)
+        {
+            float x = limiter.hardtanh (d * (1.0f + 0.5f * r) * in[i] + inv * fbState);
+            float tap[3] = { 0, 0, 0 };
+            for (int st = 0; st < 12; ++st)
+            {
+                const float v = (x - ap[st]) * a;
+                const float lp = v + ap[st];
+                ap[st] = flushDenormal (lp + v);
+                x = x - 2.0f * lp;
+                if (st == 3) tap[0] = x;
+                if (st == 7) tap[1] = x;
+                if (st == 11) tap[2] = x;
+            }
+            const float outAp = p1 * tap[0] + p3 * tap[1] + p5 * tap[2];
+            lpA += c2 * (outAp - lpA);
+            lpB += c1 * (lpA - lpB);
+            fbState = flushDenormal (r * (lpA - lpB));
+            out[i] = 0.5f * (in[i] + inv * outAp);
+        }
+    }
+};
+} // namespace
+
+/** The memoised Comb and phaser (every style, both math tiers, still / cutoff only / everything moving, blocks cut at odd places, the specials of a recursion in the input) against
+    the code they replaced, bit for bit, for a single channel and for the twin pass (the right channel adopting the left one's setup). */
+TEST (own_filter_savings_comb_and_phaser_memo_is_bit_identical_to_the_code_before)
+{
+    long compared = 0;
+    for (int model : { 6, 7 })
+        for (int style = 0; style < styleCount (model); ++style)
+            for (int fastI = 0; fastI < 2; ++fastI)
+                for (int motion = 0; motion < 3; ++motion)
+                {
+                    ClassicFilter single, ta, tb;
+                    ReferenceCombPhaser refA, refB;
+                    for (ClassicFilter* f : { &single, &ta, &tb })
+                        f->prepare (44100.0);
+                    refA.prepare (44100.0);
+                    refB.prepare (44100.0);
+                    sbtest::Rng rng (0x6c07ull + static_cast<uint64_t> (model * 1000 + style * 100 + fastI * 10 + motion));
+                    ClassicParams prev = makeParams (model, style, fastI != 0, 700.0f, 0.55f, 5.0f, 0.8f);
+                    prev.combOffset = 24.0f + 12.0f * static_cast<float> (style % 3);
+                    const int cuts[3][3] = { { 32, 0, 0 }, { 5, 27, 0 }, { 8, 8, 16 } };
+                    for (int tick = 0; tick < 80; ++tick)
+                    {
+                        ClassicParams cur = prev;
+                        if (motion >= 1)
+                            cur.cutoffHz = std::clamp (prev.cutoffHz * (0.8f + 0.5f * static_cast<float> (rng.uniform())), 40.0f, 15000.0f);
+                        if (motion >= 2)
+                        {
+                            cur.res = clamp01 (prev.res + 0.3f * static_cast<float> (rng.uniform() - 0.5));
+                            cur.driveDb = std::clamp (prev.driveDb + 4.0f * static_cast<float> (rng.uniform() - 0.5), 0.0f, 24.0f);
+                            cur.blendRaw = std::clamp (prev.blendRaw + 0.4f * static_cast<float> (rng.uniform() - 0.5), 0.0f, 2.0f);
+                        }
+                        const int* cut = cuts[tick % 3];
+                        int t0 = 0;
+                        for (int part = 0; part < 3 && cut[part] > 0; ++part)
+                        {
+                            const int n = cut[part];
+                            std::vector<float> inA (static_cast<size_t> (n)), inB (static_cast<size_t> (n)), oS (static_cast<size_t> (n)), oRA (static_cast<size_t> (n)),
+                                oRB (static_cast<size_t> (n)), oTA (static_cast<size_t> (n)), oTB (static_cast<size_t> (n));
+                            fillInput (rng, inA, 0.6f, tick % 5 == 0);
+                            fillInput (rng, inB, 0.6f, tick % 5 == 0);
+                            refA.process (inA.data(), oRA.data(), n, prev, cur, t0);
+                            refB.process (inB.data(), oRB.data(), n, prev, cur, t0);
+                            single.process (inA.data(), oS.data(), n, prev, cur, t0);
+                            ClassicFilter::processTwin (ta, tb, inA.data(), oTA.data(), inB.data(), oTB.data(), n, prev, cur, t0, ClassicFilter::sameParams (prev, cur));
+                            CHECK (sameBits (oRA, oS));
+                            CHECK (sameBits (oRA, oTA));
+                            CHECK (sameBits (oRB, oTB));
+                            compared += 3 * n;
+                            t0 += n;
+                        }
+                        prev = cur;
+                    }
+                }
+    std::printf ("SAVINGS-COMB-PHASER compared %ld samples against the code before\n", compared);
 }
