@@ -28,7 +28,7 @@ if str(REPO_ROOT / "scripts") not in sys.path:
 from PIL import Image, ImageDraw
 
 # Component-specific native imports
-from components.style import color as _style_color, rgba as _style_rgba, opacity as _style_opacity, size as _style_size
+from components.style import color as _style_color, native_font_em, rgba as _style_rgba, opacity as _style_opacity, size as _style_size
 from components.native.button.button import action_art
 from components.native.selector.selector import filter_chain_definition, selector_definition, semibold as selector_font
 from native_name_value import render_name_value_preview
@@ -61,7 +61,7 @@ def _dial_cell(definition, skins, index, caption, value, size):
         elif model["type"] == "Label":
             style = data["textStyle"]
             text = caption if model["name"] == "name" else value
-            font = selector_font(round(style["font"]["height"]))
+            font = selector_font(round(native_font_em(style["font"]["height"])))
             draw = ImageDraw.Draw(result)
             bounds = draw.textbbox((0, 0), text, font=font)
             tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
@@ -156,7 +156,7 @@ def _render_selector_face(width, height, *, name=None, value="Sine", **variants)
                 font_height = style["font"]["height"]
                 if font_height == _style_size("selector.dropdown")["font"] and not (name or variants):
                     font_height = _style_size("selector.dropdown.preview_font")
-                font = selector_font(round(font_height))
+                font = selector_font(round(native_font_em(font_height)))
                 draw = ImageDraw.Draw(result)
                 bounds = draw.textbbox((0, 0), text, font=font)
                 tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
