@@ -170,6 +170,8 @@ private:
     std::atomic<int> stIntegers[8] = {};   // active, released, sustaining, heldKeys, lowestHeld, highestHeld, orphans, pedal
     std::atomic<unsigned> stCounters[4] = {};
     void publishStats() noexcept;
+    void publishMissing() noexcept;
+    unsigned contentAskedFor() const noexcept;
     /** Bit i: voices[i] is active (each voice keeps its bit, Voice::attachPool; CPU-REVIEW-VOICE-MOD.md V10). forEachActive (f) calls f (i) for the active voices in ascending index, the
         order of the loops over the pool it replaces (with kOwnSavingVoiceControl: those loops). */
     uint64_t activeMask = 0;
@@ -303,6 +305,12 @@ private:
     float masterBlockPeakL = 0.0f, masterBlockPeakR = 0.0f;
     float masterShownL = 0.0f, masterShownR = 0.0f;
     int lastBlockFrames = 0;   // the frames of the block that writeReadout publishes
+    // The display readout and the voice statistics (writeReadout, publishStats) are written while somebody asks: copyReadout, voiceStats and setReadoutTargets set readoutDemand (as
+    // requestMeters sets meterHold), every block that writes takes one off, and a block with none left does not write. A display that polls (about 30 times a second) keeps it going: the
+    // readout is written every block, as it was. After blocks without a write the meters start from nothing (the memory of a peak from before the pause is not shown).
+    static constexpr int kReadoutDemandBlocks = 256;
+    mutable std::atomic<int> readoutDemand { kReadoutDemandBlocks };
+    bool readoutIdle = false;  // the last block did not write the readout
     // the makeup of the bypassed effects of a bus (docs/release/TIER-LEVEL-COMPENSATION.md section 9): the powers of Main, of the bus input and their cross term, smoothed over 100 ms, and the gain
     double busStat[3][3] = {};
     float busMkNow[3] = { 1.0f, 1.0f, 1.0f }, busMkPrev[3] = { 1.0f, 1.0f, 1.0f };

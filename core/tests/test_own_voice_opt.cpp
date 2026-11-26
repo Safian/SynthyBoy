@@ -1234,6 +1234,128 @@ TEST (voice_opt_unused_lfo_newly_routed_starts_its_smoothing_at_the_value)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The display readout and the voice statistics are written while somebody asks (copyReadout, voiceStats, setReadoutTargets; kOwnSavingReadoutCadence off = every block, as before), and the
+// newest voices are found in one pass. The audio is the same in every case.
+
+namespace
+{
+Event noteEvent (Event::Type type, int frame, int key, float value)
+{
+    Event e;
+    e.type = type;
+    e.frame = static_cast<int16_t> (frame);
+    e.key = static_cast<int16_t> (key);
+    e.value = value;
+    e.channel = 0;
+    return e;
+}
+
+bool sameBits (const float* a, const float* b, size_t n) { return std::memcmp (a, b, n * sizeof (float)) == 0; }
+} // namespace
+
+TEST (voice_opt_engine_readout_on_demand_is_the_same_while_it_is_polled_and_waits_when_it_is_not)
+{
+    ensureAllBuiltinWavetables();
+    int failed = 0;
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        Rand r (static_cast<uint32_t> (900 + variant));
+        std::vector<float> plain = randomPatch (r, nullptr, 0.15f);
+        plain[static_cast<size_t> (idxOf ("master.polyphony"))] = variant < 2 ? 6.0f : 12.0f; // up to 6 voices: the newest voices of the readout are all of them; 9 and more: the newest eight
+        plain[static_cast<size_t> (idxOf ("osc1.on"))] = 1.0f;
+        plain[static_cast<size_t> (idxOf ("env1.sustain"))] = 100.0f; // the notes stay
+        plain[static_cast<size_t> (idxOf ("env1.attack"))] = 1.0f;
+        EnginePair p (plain, variant % 2 == 0 ? Tier::low : Tier::high, r, kOwnSavingReadoutCadence, 0u);
+        int mostVoices = 0;
+        std::vector<float> lo (128), ro (128), lr (128), rr (128);
+        auto block = [&] (const std::vector<Event>& ev)
+        {
+            p.opt->process (ev.data(), static_cast<int> (ev.size()), lo.data(), ro.data(), 128);
+            p.ref->process (ev.data(), static_cast<int> (ev.size()), lr.data(), rr.data(), 128);
+            if (!sameBits (lo.data(), lr.data(), 128) || !sameBits (ro.data(), rr.data(), 128))
+            {
+                std::printf ("variant %d: the audio differs\n", variant);
+                ++failed;
+            }
+        };
+        auto poll = [&] (LiveValues& a, LiveValues& c, VoiceStats& sa, VoiceStats& sc)
+        {
+            CHECK (p.opt->copyReadout (a));
+            CHECK (p.ref->copyReadout (c));
+            CHECK (p.opt->voiceStats (sa));
+            CHECK (p.ref->voiceStats (sc));
+        };
+        // 1. polled about 30 times a second (one block in 11): every poll reads what the engine that writes every block reads
+        for (int b = 0; b < 330 && failed == 0; ++b)
+        {
+            std::vector<Event> ev;
+            if (b % 37 == 0)
+                ev.push_back (noteEvent (Event::NoteOn, 9, 40 + (b / 37) * 4, 0.6f));
+            block (ev);
+            if (b % 11 == 0)
+            {
+                LiveValues a, c;
+                VoiceStats sa, sc;
+                poll (a, c, sa, sc);
+                mostVoices = std::max (mostVoices, a.numLfoVoices);
+                if (std::memcmp (&a, &c, sizeof a) != 0 || std::memcmp (&sa, &sc, sizeof sa) != 0)
+                {
+                    std::printf ("variant %d block %d: a polled readout differs\n", variant, b);
+                    ++failed;
+                }
+            }
+        }
+        CHECK (variant < 2 || mostVoices == LiveValues::kReadVoices); // more voices than the readout holds: the newest eight
+        // 2. nobody asks for 400 blocks (the last poll keeps the readout going for 256 blocks), two notes start at the end: the readout is not written any more (the statistics are the old ones),
+        //    the audio is the same
+        LiveValues a, c;
+        VoiceStats sa, sc;
+        poll (a, c, sa, sc);
+        const unsigned noteOnsBefore = sa.noteOns;
+        for (int b = 0; b < 400 && failed == 0; ++b)
+        {
+            std::vector<Event> ev;
+            if (b == 350 || b == 380)
+                ev.push_back (noteEvent (Event::NoteOn, 20, 50 + (b - 350) / 10, 0.7f));
+            if (b == 320)
+            {
+                // a state flag that anybody may read at any time (missingContent): oscillator 2 asks for the user table of the preset, which is not there
+                for (IEngine* e : { p.opt.get(), p.ref.get() })
+                {
+                    e->setParam (findParamByKey ("osc2.on")->id, 1.0f);
+                    e->setParam (findParamByKey ("osc2.type")->id, 0.0f);
+                    e->setParam (findParamByKey ("osc2.wavetable")->id, static_cast<float> (kWavetablePresetTable));
+                }
+            }
+            block (ev);
+        }
+        CHECK ((p.ref->missingContent() & 16u) != 0u);                       // the engine that writes every block saw it
+        CHECK_EQ (p.opt->missingContent(), p.ref->missingContent());         // and so does the engine that waits for a poll
+        p.opt->voiceStats (sa);
+        p.ref->voiceStats (sc);
+        CHECK_EQ (sc.noteOns, noteOnsBefore + 2u); // the engine that writes every block counted them
+        CHECK_EQ (sa.noteOns, noteOnsBefore);      // the engine that waits for a poll did not publish them yet
+        // 3. the poll woke it: the next block writes, and the readout is the one of the engine that writes every block (the meters start again from nothing: not compared)
+        block ({});
+        poll (a, c, sa, sc);
+        CHECK_EQ (sa.noteOns, sc.noteOns);
+        CHECK (std::memcmp (&sa, &sc, sizeof sa) == 0);
+        const bool same = sameBits (a.source, c.source, LiveValues::kMaxSources) && sameBits (a.lfoPhase, c.lfoPhase, LiveValues::kNumLfos)
+                          && sameBits (&a.lfoVoicePhase[0][0], &c.lfoVoicePhase[0][0], LiveValues::kNumLfos * LiveValues::kReadVoices)
+                          && sameBits (&a.voicePos[0][0], &c.voicePos[0][0], 3 * LiveValues::kReadVoices) && sameBits (a.subPhase, c.subPhase, LiveValues::kReadVoices)
+                          && sameBits (a.envStage, c.envStage, LiveValues::kNumEnvs) && sameBits (a.envPosition, c.envPosition, LiveValues::kNumEnvs)
+                          && sameBits (&a.envVoiceStage[0][0], &c.envVoiceStage[0][0], LiveValues::kNumEnvs * LiveValues::kReadVoices) && a.activeVoices == c.activeVoices;
+        if (!same)
+            std::printf ("variant %d: the readout after the wake-up differs\n", variant);
+        CHECK (same);
+        // the meters of the woken engine start from nothing: never above those of the engine that kept them (it only decays from what it saw)
+        for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+            CHECK (a.stripPeak[s] <= c.stripPeak[s] + 1.0e-6f);
+    }
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // V4: the zero skip of the matrix, every combination of the special values of what one () reads
 
 namespace

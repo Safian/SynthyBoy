@@ -648,6 +648,8 @@ void OwnEngine::clearLatencyDelays() noexcept
 
 void OwnEngine::reset()
 {
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
+    readoutIdle = false;
     for (int ch = 0; ch < 2; ++ch)
         for (int s = 0; s < LiveValues::kMaxStrips; ++s)
         {
@@ -2277,9 +2279,62 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     int count = 0;
     forEachActive ([&] (int i) { count += voices[static_cast<size_t> (i)]->killing() ? 0 : 1; }); // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
     activeCount.store (count, std::memory_order_relaxed);
-    publishStats();
-    writeReadout();
+    bool writeNow = true;
+    if ((savingsOff.load (std::memory_order_relaxed) & kOwnSavingReadoutCadence) == 0)
+    {
+        int d = readoutDemand.load (std::memory_order_relaxed);
+        if (d > 0)
+            readoutDemand.compare_exchange_strong (d, d - 1, std::memory_order_relaxed); // (a poll since the load stays whole)
+        else
+            writeNow = false;
+    }
+    if (writeNow)
+    {
+        if (readoutIdle)
+        {
+            // blocks passed without a readout: the meters start again from nothing (their memory would show a peak from before the pause)
+            std::fill (std::begin (stripShown), std::end (stripShown), 0.0f);
+            masterShownL = masterShownR = 0.0f;
+            for (int ch = 0; ch < 2; ++ch)
+                for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+                {
+                    stereoShown[ch][s] = stereoHold[ch][s] = 0.0f;
+                    stereoHoldFrames[ch][s] = stereoClipFrames[ch][s] = 0;
+                }
+        }
+        readoutIdle = false;
+        publishStats();
+        writeReadout();
+    }
+    else
+    {
+        readoutIdle = true;
+        publishMissing();
+    }
     blockCounter.fetch_add (1, std::memory_order_relaxed);
+}
+
+/** The content that no voice needs yet but the patch asks for, as the bits of missingContent (): a user table that is not there, the impulse of Convolve, the sample of the noise source. */
+unsigned OwnEngine::contentAskedFor() const noexcept
+{
+    unsigned miss = 0;
+    const ParamIndex& pi = paramIndex();
+    const ContentSet* cs = globals.content;
+    for (int o = 0; o < 3; ++o)
+        if (base[static_cast<size_t> (pi.osc[o].on)] >= 0.5f && base[static_cast<size_t> (pi.osc[o].type)] < 0.5f
+            && static_cast<int> (base[static_cast<size_t> (pi.osc[o].wavetable)] + 0.5f) == kWavetablePresetTable && (cs == nullptr || cs->userTable[o] == nullptr))
+            miss |= 8u << o;
+    if (convolveOnIndex >= 0 && base[static_cast<size_t> (convolveOnIndex)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
+        miss |= 64u;
+    return miss;
+}
+
+/** missingContent () for the blocks that do not publish the statistics: it is a state of the engine that any caller may read at any time, not a display value. */
+void OwnEngine::publishMissing() noexcept
+{
+    unsigned miss = contentAskedFor();
+    forEachActive ([&] (int i) { miss |= voices[static_cast<size_t> (i)]->missingMask(); });
+    missingMask.store (miss, std::memory_order_relaxed);
 }
 
 /** The snapshot of voiceStats (): the voices, the keys the events say are held, and the bug state: a voice that is not released while its key is not held and the pedal is up. */
@@ -2304,17 +2359,7 @@ void OwnEngine::publishStats() noexcept
         if (!held)
             ++orphans;
     });
-    {
-        // the content that no voice needs yet but the patch asks for: a user table that is not there, the impulse of Convolve, the sample of the noise source
-        const ParamIndex& pi = paramIndex();
-        const ContentSet* cs = globals.content;
-        for (int o = 0; o < 3; ++o)
-            if (base[static_cast<size_t> (pi.osc[o].on)] >= 0.5f && base[static_cast<size_t> (pi.osc[o].type)] < 0.5f
-                && static_cast<int> (base[static_cast<size_t> (pi.osc[o].wavetable)] + 0.5f) == kWavetablePresetTable && (cs == nullptr || cs->userTable[o] == nullptr))
-                miss |= 8u << o;
-        if (convolveOnIndex >= 0 && base[static_cast<size_t> (convolveOnIndex)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
-            miss |= 64u;
-    }
+    miss |= contentAskedFor();
     missingMask.store (miss, std::memory_order_relaxed);
     int lo = -1, hi = -1;
     for (int i = 0; i < numPressed; ++i)
@@ -2336,6 +2381,7 @@ void OwnEngine::publishStats() noexcept
 
 bool OwnEngine::voiceStats (VoiceStats& out) const noexcept
 {
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
     out.active = stIntegers[0].load (std::memory_order_relaxed);
     out.released = stIntegers[1].load (std::memory_order_relaxed);
     out.sustaining = stIntegers[2].load (std::memory_order_relaxed);
@@ -2357,10 +2403,12 @@ void OwnEngine::setReadoutTargets (const int* idx, int count) noexcept
     for (int i = 0; i < n; ++i)
         pendingTargets[i].store (idx[i], std::memory_order_relaxed);
     pendingCount.store (n, std::memory_order_release);
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
 }
 
 bool OwnEngine::copyReadout (LiveValues& out) const noexcept
 {
+    readoutDemand.store (kReadoutDemandBlocks, std::memory_order_relaxed);
     out.block = blockCounter.load (std::memory_order_relaxed);
     out.activeVoices = activeCount.load (std::memory_order_relaxed);
     for (int i = 0; i < LiveValues::kMaxSources; ++i)
@@ -2506,22 +2554,50 @@ void OwnEngine::writeReadout() noexcept
         liveSampleHead[o].store (newest != nullptr ? newest->sampleHead (o) : -1.0f, std::memory_order_relaxed);
     // the newest active voices (newest first, at most kReadVoices): the read positions of the sample based oscillators, the phase of the sub; the grains of the voice that is heard
     {
+        // the newest kReadVoices serials, newest first: one pass over the active voices. A serial the voices share is taken once, by the first voice of the pool that has it (what the passes
+        // for the largest serial below the last one gave).
         const Voice* order[LiveValues::kReadVoices] = {};
-        uint32_t bound = 0xffffffffu;
         int found = 0;
-        for (; found < LiveValues::kReadVoices; ++found)
+        if ((savingsOff.load (std::memory_order_relaxed) & kOwnSavingReadoutCadence) != 0)
         {
-            const Voice* best = nullptr;
-            forEachActive ([&] (int i)
+            // the reference (the test of the one pass): one pass over the voices for each of the voices, the largest serial below the last one
+            uint32_t bound = 0xffffffffu;
+            for (; found < LiveValues::kReadVoices; ++found)
             {
-                const Voice* v = voices[static_cast<size_t> (i)].get();
-                if (v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
-                    best = v;
-            });
-            if (best == nullptr)
-                break;
-            order[found] = best;
-            bound = best->serial();
+                const Voice* best = nullptr;
+                forEachActive ([&] (int i)
+                {
+                    const Voice* v = voices[static_cast<size_t> (i)].get();
+                    if (v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
+                        best = v;
+                });
+                if (best == nullptr)
+                    break;
+                order[found] = best;
+                bound = best->serial();
+            }
+        }
+        else
+        {
+        forEachActive ([&] (int i)
+        {
+            const Voice* v = voices[static_cast<size_t> (i)].get();
+            const uint32_t sv = v->serial();
+            if (sv >= 0xffffffffu)
+                return;
+            int at = 0;
+            while (at < found && order[at]->serial() > sv)
+                ++at;
+            if (at < found && order[at]->serial() == sv)
+                return; // the serial is taken
+            if (at >= LiveValues::kReadVoices)
+                return;
+            const int last = std::min (found, LiveValues::kReadVoices - 1);
+            for (int k = last; k > at; --k)
+                order[k] = order[k - 1];
+            order[at] = v;
+            found = std::min (found + 1, static_cast<int> (LiveValues::kReadVoices));
+        });
         }
         for (int i = 0; i < LiveValues::kReadVoices; ++i)
         {
