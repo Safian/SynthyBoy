@@ -119,7 +119,7 @@ Tests of 2 s or more (seconds; "alone, full" is the time of the coverage as it w
   It is not a flaky test on this machine but a ratio the Xeon does not reach; the limit was not touched. It passed in the owner's runs on other x86 machines.
 
 - `synthyboy_test_own_filter_response` is borderline on this machine even alone: `worstMs < 5.0` (thread CPU time, best of 5) measured worst 4.79, 5.34 and 4.71 ms in three runs in a row,
-  and failed once in the third `ctest -j2` of the full set (the quick set passed 3 of 3). It has `RUN_SERIAL`, so load from other ctest jobs is not the cause; the limit was not touched.
+  and failed once in the `ctest -j2` run of the full set (the quick set passed 3 of 3). It has `RUN_SERIAL`, so load from other ctest jobs is not the cause; the limit was not touched.
 
 ### Where the time of the heavy binaries goes (seconds per case, alone, `SB_TEST_FULL=1`)
 
