@@ -29,7 +29,7 @@ Inventory of 2026-11-26 (`grep` for `arm_neon.h`, `SB_NEON`, `SB_*_NEON`, `simd:
 | `filters-serum/src/filter_lanes.h` NeonLanes, `voice/filter_unit.h` | ScalarLanes, `scalarOnly` | `core/filters-serum/tests/test_filter_pair.cpp` (label slow), `test_own_filter_unit_lanes` (both ARM) | covered |
 | `fx/fx_effects.h` Chorus (refreshFour, readGroup, bandGroup, ffloorFour, sinCyclesFour) | `Chorus::scalarLoops` | `test_own_chorus_lanes` (in the executable of `test_own_filter_unit_lanes`; it did not link before this inventory) | covered in a `-ffp-contract=off` build; see the shipped-code section |
 | `sample-osc/src/sample_voice.cpp` interpN, plain read, loop crossfade | `setVectorKernels (false)` | `test_own_sample_vector_kernels` (new, both ARM) | covered (new) |
-| `granular/src/granular.cpp` grain kernel, clampFinite | `setVectorKernels (false)`, `clampFinite (.., false)` | `core/granular/tests/test_granular.cpp` | covered |
+| `granular/src/granular.cpp` grain kernel, clampFinite | `setVectorKernels (false)`, `clampFinite (.., false)` | `core/granular/tests/test_granular.cpp` | covered on AArch64 (qemu: 16 of 16); ARMv7 (qemu): 15 of 16, the output stage case (clampFinite) fails in the default mode, NEON flush; **open finding**: clampFinite zeroes a subnormal sample in flush-to-zero mode, the scalar clamp keeps it (measured, both ARM forms) |
 | `spectral/src/kernels.cpp` (all kernels) | the scalar form of each (`neon = false`) | `core/spectral/tests/test_spectral.cpp` (random data), `test_own_spectral_lanes` (new: special values, both modes, both ARM) | covered |
 | `shell-mpc/overlay/inhost/blit.h` | pixel blit | not audio | out of scope |
 
