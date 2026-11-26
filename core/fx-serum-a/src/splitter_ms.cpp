@@ -29,10 +29,10 @@ void SplitterMS::reset() noexcept
     std::fill (scratchSideL_.begin(), scratchSideL_.end(), 0.0f);
     std::fill (scratchSideR_.begin(), scratchSideR_.end(), 0.0f);
 
-    currentMidGain_ = params_.midBypass ? 0.0f : dbToGain (params_.midGainDb);
-    currentSideGain_ = params_.sideBypass ? 0.0f : dbToGain (params_.sideGainDb);
+    currentMidGain_ = params_.midBypass ? 0.0f : midGainCache_.get (params_.midGainDb);
+    currentSideGain_ = params_.sideBypass ? 0.0f : sideGainCache_.get (params_.sideGainDb);
     currentMix_ = params_.mix;
-    currentLevel_ = dbToGain (params_.levelDb);
+    currentLevel_ = levelCache_.get (params_.levelDb);
 }
 
 void SplitterMS::split (const float* inL, const float* inR,
@@ -63,10 +63,10 @@ void SplitterMS::merge (const float* midL, const float* midR,
     if (n <= 0)
         return;
 
-    const float targetMidGain = params_.midBypass ? 0.0f : dbToGain (params_.midGainDb);
-    const float targetSideGain = params_.sideBypass ? 0.0f : dbToGain (params_.sideGainDb);
+    const float targetMidGain = params_.midBypass ? 0.0f : midGainCache_.get (params_.midGainDb);
+    const float targetSideGain = params_.sideBypass ? 0.0f : sideGainCache_.get (params_.sideGainDb);
     const float targetMix = std::clamp (params_.mix, 0.0f, 1.0f);
-    const float targetLevel = dbToGain (params_.levelDb);
+    const float targetLevel = levelCache_.get (params_.levelDb);
 
     const float invN = 1.0f / static_cast<float> (n);
     const float stepMidGain = (targetMidGain - currentMidGain_) * invN;
@@ -108,7 +108,7 @@ void SplitterMS::process (float* l, float* r, int n) noexcept
         return;
 
     const float targetMix = std::clamp (params_.mix, 0.0f, 1.0f);
-    const float targetLevel = dbToGain (params_.levelDb);
+    const float targetLevel = levelCache_.get (params_.levelDb);
 
     const bool isBypassed = (targetMix == 0.0f && targetLevel == 1.0f
                              && currentMix_ == 0.0f && currentLevel_ == 1.0f);

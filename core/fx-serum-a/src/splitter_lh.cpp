@@ -35,10 +35,10 @@ void SplitterLH::reset() noexcept
     std::fill (scratchHighL_.begin(), scratchHighL_.end(), 0.0f);
     std::fill (scratchHighR_.begin(), scratchHighR_.end(), 0.0f);
 
-    currentLowGain_ = params_.lowBypass ? 0.0f : dbToGain (params_.lowGainDb);
-    currentHighGain_ = params_.highBypass ? 0.0f : dbToGain (params_.highGainDb);
+    currentLowGain_ = params_.lowBypass ? 0.0f : lowGainCache_.get (params_.lowGainDb);
+    currentHighGain_ = params_.highBypass ? 0.0f : highGainCache_.get (params_.highGainDb);
     currentMix_ = params_.mix;
-    currentLevel_ = dbToGain (params_.levelDb);
+    currentLevel_ = levelCache_.get (params_.levelDb);
 }
 
 int SplitterLH::tailSamples() const noexcept
@@ -88,10 +88,10 @@ void SplitterLH::merge (const float* lowL, const float* lowR,
     if (n <= 0)
         return;
 
-    const float targetLowGain = params_.lowBypass ? 0.0f : dbToGain (params_.lowGainDb);
-    const float targetHighGain = params_.highBypass ? 0.0f : dbToGain (params_.highGainDb);
+    const float targetLowGain = params_.lowBypass ? 0.0f : lowGainCache_.get (params_.lowGainDb);
+    const float targetHighGain = params_.highBypass ? 0.0f : highGainCache_.get (params_.highGainDb);
     const float targetMix = std::clamp (params_.mix, 0.0f, 1.0f);
-    const float targetLevel = dbToGain (params_.levelDb);
+    const float targetLevel = levelCache_.get (params_.levelDb);
 
     const float invN = 1.0f / static_cast<float> (n);
     const float stepLowGain = (targetLowGain - currentLowGain_) * invN;
@@ -133,7 +133,7 @@ void SplitterLH::process (float* l, float* r, int n) noexcept
         return;
 
     const float targetMix = std::clamp (params_.mix, 0.0f, 1.0f);
-    const float targetLevel = dbToGain (params_.levelDb);
+    const float targetLevel = levelCache_.get (params_.levelDb);
 
     // Bypass check: if mix is 0 and level is unity (0 dB), output is bit-for-bit identical to dry
     const bool isBypassed = (targetMix == 0.0f && targetLevel == 1.0f

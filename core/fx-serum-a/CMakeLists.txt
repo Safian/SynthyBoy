@@ -28,6 +28,7 @@ endif()
 if(SYNTHYBOY_BUILD_TESTS)
     add_executable(synthyboy_test_fx_serum_a
         tests/test_fx_serum_a.cpp
+        tests/test_splitter_gain_cache.cpp
         "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp"
     )
     target_link_libraries(synthyboy_test_fx_serum_a PRIVATE synthyboy_fx_serum_a)

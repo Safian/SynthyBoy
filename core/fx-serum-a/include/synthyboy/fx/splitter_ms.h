@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "synthyboy/fx/dsp_utils.h"
+#include "synthyboy/fx/splitter_gain_cache.h"
 
 namespace synthyboy::fx
 {
@@ -58,6 +59,11 @@ private:
     std::vector<float> scratchMidR_;
     std::vector<float> scratchSideL_;
     std::vector<float> scratchSideR_;
+
+    // Exact-bits memos of dbToGain (): the dB parameters are constant for most blocks
+    DbGainCache midGainCache_;
+    DbGainCache sideGainCache_;
+    DbGainCache levelCache_;
 
     // Parameter smoothers
     float currentMidGain_ = 1.0f;
