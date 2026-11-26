@@ -14,6 +14,19 @@
 
 using namespace synthyboy::own;
 
+// fx_effects.h asks makeup::legacyCaches () (core/engine-own/fx/fx_makeup.cpp), which this executable does not link (it needs the FFT of the effects): the flag stays off, as in the engine.
+// Without this definition the executable did not link (found when the test was first built for 32 bit ARM, qemu-user).
+namespace synthyboy
+{
+namespace own
+{
+namespace makeup
+{
+bool legacyCaches() noexcept { return false; }
+} // namespace makeup
+} // namespace own
+} // namespace synthyboy
+
 namespace
 {
 struct CRng

@@ -101,7 +101,7 @@ target_include_directories(synthyboy_test_own_pad_pressure PRIVATE "${PROJECT_SO
 target_compile_definitions(synthyboy_test_own_pad_pressure PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 # The four lane form of the warped oscillator samples against the scalar functions: a translation unit of its own with the NEON forms switched on (also on Apple's
 # arm64, where the engine runs the scalar code) and without fused multiply-add, as the ARM builds that use the form are compiled. It links nothing of the engine.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|arm|armv7.*)$" AND NOT MSVC)
     add_executable(synthyboy_test_own_warp_lanes test_own_warp_lanes.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_include_directories(synthyboy_test_own_warp_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own")
     target_compile_features(synthyboy_test_own_warp_lanes PRIVATE cxx_std_17)
@@ -168,7 +168,25 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|arm|armv7.*)$" AND NOT 
     target_link_libraries(synthyboy_test_own_spectral_lanes PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_spectral_lanes COMMAND synthyboy_test_own_spectral_lanes)
 endif()
+# The NEON loops of dsp/simd.h (the routing, the ramps, the clamp, the runaway test) against the scalar loops they stand for, on special values and every length; header only.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|arm|armv7.*)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_simd_lanes test_own_simd_lanes.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_simd_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_simd_lanes PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_simd_lanes PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_simd_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_simd_lanes PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_simd_lanes COMMAND synthyboy_test_own_simd_lanes)
+endif()
+# The vector form of the sample oscillator block kernel (SampleVoice::setVectorKernels) against its scalar form, every tier, loop mode and pitch. Links the sample oscillator library only.
+add_executable(synthyboy_test_own_sample_vector_kernels test_own_sample_vector_kernels.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+target_include_directories(synthyboy_test_own_sample_vector_kernels PRIVATE "${PROJECT_SOURCE_DIR}/core/tests")
+target_link_libraries(synthyboy_test_own_sample_vector_kernels PRIVATE synthyboy_sampleosc Threads::Threads)
+set_target_properties(synthyboy_test_own_sample_vector_kernels PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(synthyboy_test_own_sample_vector_kernels PRIVATE $<IF:$<BOOL:${MSVC}>,/W4,-Wall -Wextra -Wpedantic -ffp-contract=off>)
+add_test(NAME synthyboy_test_own_sample_vector_kernels COMMAND synthyboy_test_own_sample_vector_kernels)
 # The lane mix of the library players (LibOsc::mixLane: simd::rampLerp + simd::mulAddTo) against the scalar loop, with the NEON forms on (also on Apple's arm64) and without fused multiply-add.
+# 64 bit ARM only: it compares NaN payloads and subnormals in the default float mode, which the NEON of 32 bit ARM does not keep (default NaN, flush); simd_lanes covers 32 bit ARM.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     add_executable(synthyboy_test_own_mix_lanes test_own_mix_lanes.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_include_directories(synthyboy_test_own_mix_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own")
@@ -180,7 +198,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
 endif()
 # The NEON inverse transform of the spectral morph cycle against its scalar loops: morph.cpp and the wavetable it needs compiled into the test with the NEON form on (also on Apple's arm64) and
 # without fused multiply-add; it links nothing else of the engine.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|arm|armv7.*)$" AND NOT MSVC)
     add_executable(synthyboy_test_own_morph_transform test_own_morph_transform.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
         "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_include_directories(synthyboy_test_own_morph_transform PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
@@ -192,7 +210,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     add_test(NAME synthyboy_test_own_morph_transform COMMAND synthyboy_test_own_morph_transform)
 endif()
 # The optimised wavetable oscillator (docs/release/CPU-REVIEW-OSC.md) against the code it replaced (WtOsc::setReference), bit for bit on random patches; the NEON forms on, no fused multiply-add.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|arm|armv7.*)$" AND NOT MSVC)
     add_executable(synthyboy_test_own_wt_osc_opt test_own_wt_osc_opt.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
         "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_include_directories(synthyboy_test_own_wt_osc_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
@@ -210,7 +228,7 @@ add_executable(synthyboy_test_own_wt_osc_savings test_own_wt_osc_savings.cpp "${
 target_include_directories(synthyboy_test_own_wt_osc_savings PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
     "${PROJECT_SOURCE_DIR}/core/src")
 target_compile_features(synthyboy_test_own_wt_osc_savings PRIVATE cxx_std_17)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|arm|armv7.*)$" AND NOT MSVC)
     target_compile_definitions(synthyboy_test_own_wt_osc_savings PRIVATE SB_TEST_NEON=1)
 endif()
 target_compile_options(synthyboy_test_own_wt_osc_savings PRIVATE $<IF:$<BOOL:${MSVC}>,/W4,-Wall -Wextra -Wpedantic -ffp-contract=off>)

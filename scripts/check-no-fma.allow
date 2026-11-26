@@ -1,0 +1,23 @@
+# SynthyBoy - the documented exceptions of scripts/check-no-fma.sh.
+# Format, one per line: <regular expression of the object file path> <regular expression of the function name, no blanks> <class: fma or approx>   # the reason
+# An exception says: this function has no NEON form (or shares its scalar code with the NEON form), so a fused multiply-add there cannot make the two forms differ. It does not say the function
+# is free of contraction. A function that has a NEON twin and is fused is NOT on this list: it is a divergence and the check reports it (docs/dsp-knowledge/vector-paths.md).
+# The ARMv7 (Key 61) build has no fused instruction at all, so none of these lines is needed there.
+
+# --- core library code that is not in the render path of a voice: control rate, offline, import, UI; scalar only, no vector twin
+/(serum_(content|fx|import|map|voice)|vital_import|plugin_import|builtin_ref|formula|wave_convert|wavetable_render|wavetable_bank|sample_data|sample_preview|lfo_display|env_display|params|state|fx_types|content_set|user_content|mod_matrix|fx_makeup)\.cpp\.o$ .* fma   # control rate / offline / import / display code
+/(serum_(content|fx|import|map|voice)|vital_import|plugin_import|builtin_ref|formula|wave_convert|wavetable_render|wavetable_bank|sample_data|sample_preview|lfo_display|env_display|params|state|fx_types|content_set|user_content|mod_matrix|fx_makeup)\.cpp\.o$ .* approx   # (same)
+
+# --- render path TUs: control-rate scalar functions without a vector twin
+/(own_engine|voice)\.cpp\.o$ RandomLfo::advance fma   # the random LFO, once per control period per LFO; scalar only
+/voice\.cpp\.o$ Envelope::advance fma   # the envelope, per control period; scalar only
+/voice\.cpp\.o$ warpEvents fma   # the BLEP / BLAMP event list of the warps; scalar only
+/own_engine\.cpp\.o$ NoteTuning::setContent fma   # note tuning table, at content load
+
+# --- render path TUs: scalar functions that the lane form calls one sample at a time, like the scalar form (no separate vector twin)
+/(voice|lib_osc|osc_cycle)\.cpp\.o$ warpSample fma   # sample domain warps: the lane form of WtOsc::render runs them over the four samples one by one
+/(voice|lib_osc|osc_cycle)\.cpp\.o$ warpadaa::step fma   # the ADAA state machines: a recurrence, one sample at a time in both forms
+
+# --- the sample oscillator block kernel: the vector form and the scalar form are compiled into the same function; the fused operations are the double precision position arithmetic and the
+# --- gains they share. Tested bit identical in this very object: core/tests/test_own_sample_vector_kernels.cpp (links synthyboy_sampleosc, vector kernels on / off)
+/sample_voice\.cpp\.o$ renderBlockT fma   # same arithmetic in both forms, tested
