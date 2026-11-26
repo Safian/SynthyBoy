@@ -18,6 +18,7 @@
 #include "../osc/lib_osc.h"
 #include "../osc/wt_osc.h"
 #include "own_content.h"
+#include "filter_setup.h"
 #include "filter_unit.h"
 #include "param_index.h"
 
@@ -399,6 +400,9 @@ private:
     bool filtEnv1[2] = { true, true };
     int filtDest[2] = { 0, 0 };
     float filtLevel[2] = { 1.0f, 1.0f }, filtLevelPrev[2] = { 1.0f, 1.0f };
+    FilterSetupMemo filtMemo[2];        // the exp2 results of fillFilterSettings () of each filter (the reference calls them every period)
+    uint32_t lvlKey[2] = { 0, 0 };      // the bit pattern of filterN.level (dB) that lvlGain belongs to: dbToGain (+0) = 1
+    float lvlGain[2] = { 1.0f, 1.0f };
     int routing = 0;
     float envStart = 0.0f;
     float ampPrev = 0.0f, ampCur = 0.0f, velGain = 1.0f, velGainPrev = 1.0f;

@@ -771,6 +771,62 @@ TEST (voice_opt_osc_part_refresh_by_group_touches_every_key_alone)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The exp2 calls of fillFilterSettings () (key track, voice control cutoff, pan shift) are kept per voice and filter under the bit patterns of their arguments (+-0: no call)
+
+TEST (filter_setup_memo_gives_the_settings_the_calls_give_for_every_kind_of_argument)
+{
+    const FilterIdx& fi = paramIndex().filter[0];
+    std::vector<float> v (kMaxParams, 0.0f);
+    for (size_t i = 0; i < paramCount(); ++i)
+        v[i] = paramTable()[i].def;
+    static const float kSpecial[] = { 0.0f, -0.0f, 1.0e-40f, -1.0e-40f, 1.0e-30f, 0.5f, -0.5f, 1.0f, 100.0f, -100.0f, 50.0f, -12.5f, NAN, INFINITY, -INFINITY, 1.0e38f, 1.0e-45f };
+    constexpr int kNumSpecial = static_cast<int> (sizeof kSpecial / sizeof kSpecial[0]);
+    Rand r (2026);
+    FilterSetupMemo memo;
+    float vcSemis = 0.0f, trackKnob = 0.0f, panKnob = 0.0f, cutoff = 1000.0f;
+    int key = 60;
+    auto pick = [&] (float& x, float lo, float hi)
+    {
+        if (r.chance (0.7f))
+            return; // the same as the period before: the memo answers
+        x = r.chance (0.5f) ? kSpecial[r.range (0, kNumSpecial - 1)] : lo + (hi - lo) * r.uni();
+    };
+    auto sameBits = [] (float x, float y) { return (x != x && y != y) || std::memcmp (&x, &y, 4) == 0; };
+    long long cases = 0, bad = 0, hits = 0;
+    for (int n = 0; n < 300000; ++n)
+    {
+        pick (vcSemis, -36.0f, 36.0f);
+        pick (trackKnob, -200.0f, 200.0f);
+        pick (panKnob, -100.0f, 100.0f);
+        pick (cutoff, 20.0f, 20000.0f);
+        if (r.chance (0.3f))
+            key = r.range (0, 127);
+        v[static_cast<size_t> (fi.keytrack)] = trackKnob;
+        if (fi.pan >= 0)
+            v[static_cast<size_t> (fi.pan)] = panKnob;
+        v[static_cast<size_t> (fi.cutoff)] = cutoff;
+        auto P = [&] (int idx) { return v[static_cast<size_t> (idx)]; };
+        FilterSettings a, b;
+        const uint32_t k0 = memo.ktKey, k1 = memo.vcKey, k2 = memo.panKey;
+        fillFilterSettings (a, fi, P, P, false, key, vcSemis, false, nullptr);
+        fillFilterSettings (b, fi, P, P, false, key, vcSemis, false, &memo);
+        hits += (k0 == memo.ktKey && k1 == memo.vcKey && k2 == memo.panKey) ? 1 : 0;
+        ++cases;
+        if (!sameBits (a.cutoffHz, b.cutoffHz) || !sameBits (a.cutoffHzR, b.cutoffHzR))
+        {
+            if (bad < 5)
+                std::printf ("filter memo: key %d vc %g track %g pan %g cutoff %g: %g / %g against %g / %g\n", key, static_cast<double> (vcSemis), static_cast<double> (trackKnob),
+                             static_cast<double> (panKnob), static_cast<double> (cutoff), static_cast<double> (b.cutoffHz), static_cast<double> (b.cutoffHzR), static_cast<double> (a.cutoffHz),
+                             static_cast<double> (a.cutoffHzR));
+            ++bad;
+        }
+    }
+    std::printf ("%lld filter settings, %lld answered from the memo, %lld differ\n", cases, hits, bad);
+    CHECK (hits > cases / 5);
+    CHECK_EQ (bad, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // V4: the zero skip of the matrix, every combination of the special values of what one () reads
 
 namespace

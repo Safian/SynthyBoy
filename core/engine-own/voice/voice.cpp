@@ -1592,7 +1592,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             FilterSettings& s = filtSet[f];
             fillFilterSettings (s, fi, P, PR, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
-                                keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
+                                keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0, g.referenceControl ? nullptr : &filtMemo[f]);
             s.scalarOnly = g.scalarFilters;
             s.noSmoothing = g.noSmoothing;
             filt[f].set (s);
@@ -1607,7 +1607,23 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             }
         }
         filtLevelPrev[f] = filtLevel[f];
-        filtLevel[f] = dbToGain (P (fi.level));
+        {
+            // the level of the filter (also of one that is off and has a signal routed through it: runFilter applies it to the copy): dbToGain again only when filterN.level changed
+            const float levelDb = P (fi.level);
+            uint32_t levelBits;
+            std::memcpy (&levelBits, &levelDb, sizeof levelBits);
+            if (g.referenceControl)
+                filtLevel[f] = dbToGain (levelDb);
+            else
+            {
+                if (levelBits != lvlKey[f])
+                {
+                    lvlGain[f] = dbToGain (levelDb);
+                    lvlKey[f] = levelBits;
+                }
+                filtLevel[f] = lvlGain[f];
+            }
+        }
         if (fresh || g.noSmoothing)
             filtLevelPrev[f] = filtLevel[f];
     }
