@@ -580,3 +580,100 @@ TEST (the_four_output_decimator_run_equals_one_dot_product_per_output)
     std::printf ("    %lld outputs: %lld runs differ from dot32 one by one\n", values, bad);
     CHECK_EQ (bad, 0);
 }
+
+namespace
+{
+Wavetable randomTable (TestRng& r, int frames)
+{
+    constexpr int kCyc = Wavetable::kCycle;
+    std::vector<std::vector<float>> cc (static_cast<size_t> (frames), std::vector<float> (kCyc / 2 + 1, 0.0f)), ss = cc;
+    for (int f = 0; f < frames; ++f)
+    {
+        const int top = r.range (1, 1023);
+        for (int h = 1; h <= top; ++h)
+        {
+            const float a = (r.chance (33) ? 0.0f : 1.0f) / static_cast<float> (h);
+            cc[static_cast<size_t> (f)][static_cast<size_t> (h)] = a * r.bi();
+            ss[static_cast<size_t> (f)][static_cast<size_t> (h)] = a * r.bi();
+        }
+        cc[static_cast<size_t> (f)][0] = r.uni() * 0.2f - 0.1f;
+    }
+    Wavetable wt;
+    wt.build (cc, ss, false);
+    return wt;
+}
+
+void poison (MorphScratch& sc, TestRng& r)
+{
+    for (float& x : sc.re) x = r.chance (14) ? std::numeric_limits<float>::quiet_NaN() : r.bi() * 5.0e5f;
+    for (float& x : sc.im) x = r.chance (14) ? std::numeric_limits<float>::quiet_NaN() : r.bi() * 5.0e5f;
+    for (float& x : sc.c) x = r.chance (14) ? std::numeric_limits<float>::quiet_NaN() : r.bi() * 5.0e5f;
+    for (float& x : sc.s) x = r.chance (14) ? std::numeric_limits<float>::quiet_NaN() : r.bi() * 5.0e5f;
+}
+} // namespace
+
+TEST (the_morph_build_with_the_known_reads_only_equals_the_reference_build_on_a_poisoned_scratch)
+{
+    // buildMorphCycle: the source frame interpolated only up to the harmonics the type reads (or read in place), the log2 table, the NEON pre-twiddle and interleaved store, against the
+    // reference build; the scratch (all four arrays) holds random numbers and NaNs, so a read of a harmonic that was not interpolated shows.
+    constexpr int kCyc = Wavetable::kCycle;
+    static MorphScratch fresh, ref;
+    TestRng r (71);
+    std::vector<float> a (static_cast<size_t> (kCyc) + 4), b (static_cast<size_t> (kCyc) + 4);
+    const int kSpecial[10] = { 0, 1, 2, 20, 337, 511, 512, 513, 1022, 1023 };
+    long long builds = 0, differ = 0;
+    int perType[12] = {};
+    for (int tbl = 0; tbl < 8; ++tbl)
+    {
+        const Wavetable wt = randomTable (r, tbl % 4 == 0 ? 1 : r.range (2, 6));
+        for (int i = 0; i < 700; ++i)
+        {
+            const int type = r.range (0, 11);
+            const int K = r.chance (20) ? kSpecial[r.next() % 10] : r.range (0, 1023);
+            const float m = r.chance (16) ? (r.chance (50) ? 0.0f : 1.0f) : r.uni();
+            const float framePos = r.chance (20) ? std::floor (r.uni() * static_cast<float> (std::max (wt.numFrames() - 1, 0))) : r.uni() * static_cast<float> (std::max (wt.numFrames() - 1, 0));
+            const float inc = r.chance (10) ? 0.4f : 0.0005f + r.uni() * 0.4f;
+            const double rate = r.chance (60) ? 44100.0 : (r.chance (50) ? 48000.0 : 96000.0);
+            const bool fast = r.chance (50), scalar = r.chance (50), interp = r.chance (70);
+            poison (fresh, r);
+            poison (ref, r);
+            for (auto& x : a) x = 1.0f;
+            for (auto& x : b) x = 2.0f;
+            buildMorphCycle (wt, framePos, interp, type, m, K, inc, rate, a.data() + 1, fresh, fast, scalar, false);
+            buildMorphCycle (wt, framePos, interp, type, m, K, inc, rate, b.data() + 1, ref, fast, scalar, true);
+            ++builds;
+            ++perType[type];
+            differ += std::memcmp (a.data(), b.data(), a.size() * sizeof (float)) != 0 ? 1 : 0;
+        }
+    }
+    int minPerType = 1 << 30;
+    for (int t = 1; t < 12; ++t)
+        minPerType = std::min (minPerType, perType[t]);
+    std::printf ("    %lld random builds (every type at least %d times, poisoned scratch): %lld differ from the reference build\n", builds, minPerType, differ);
+    CHECK (minPerType > 200);
+    CHECK_EQ (differ, 0);
+}
+
+TEST (the_log2_table_of_the_morph_is_the_std_log2_of_every_harmonic)
+{
+    // Time Skew and Inharmonic Stretch read log2 (i) from a table; the build of Time Skew at a frame position with a large skew must equal the reference build for every K (see the poisoned build test);
+    // here the library function itself is called the way the table is made, on every harmonic, and compared with a build that depends on it through the amounts of the skew.
+    constexpr int kCyc = Wavetable::kCycle;
+    static MorphScratch fresh, ref;
+    TestRng r (81);
+    const Wavetable wt = randomTable (r, 5);
+    std::vector<float> a (static_cast<size_t> (kCyc) + 4), b (static_cast<size_t> (kCyc) + 4);
+    long long differ = 0, builds = 0;
+    for (int type : { static_cast<int> (kMorphTimeSkew), static_cast<int> (kMorphInharmonicStretch) })
+        for (int mi = 0; mi <= 40; ++mi)
+            for (int K : { 1023, 700, 255, 64 })
+            {
+                const float m = static_cast<float> (mi) / 40.0f;
+                buildMorphCycle (wt, 1.7f, true, type, m, K, 0.01f, 44100.0, a.data() + 1, fresh, mi % 2 == 0, false, false);
+                buildMorphCycle (wt, 1.7f, true, type, m, K, 0.01f, 44100.0, b.data() + 1, ref, mi % 2 == 0, false, true);
+                ++builds;
+                differ += std::memcmp (a.data(), b.data(), a.size() * sizeof (float)) != 0 ? 1 : 0;
+            }
+    std::printf ("    %lld Time Skew / Inharmonic Stretch builds: %lld differ from the build that calls std::log2 per harmonic\n", builds, differ);
+    CHECK_EQ (differ, 0);
+}

@@ -24,6 +24,7 @@ struct Twiddles
     uint16_t rev[kN];
     float stageC[kN], stageS[kN]; // the twiddles of each stage side by side: stage of length len (half = len / 2) at offset half - 1, the very values cs[k * step], sn[k * step] of the strided read
     float rnd[16][kH + 1]; // the fixed table of the Random Amplitudes stage
+    float lg[kH];          // std::log2 (float (i)) of every harmonic i (Time Skew, Inharmonic Stretch): the very values of the per harmonic call, made once
     // the pairs (i, j) with i < j = rev[i] of the bit reversal, for the transform of 2048 points and of 1024 points (j = rev[i] >> 1): only these elements change places
     uint16_t swaps[2][kN];
     int swapCount[2] = { 0, 0 };
@@ -57,6 +58,9 @@ struct Twiddles
                 stageC[len / 2 - 1 + k] = cs[k * (kN / len)];
                 stageS[len / 2 - 1 + k] = sn[k * (kN / len)];
             }
+        lg[0] = 0.0f;
+        for (int i = 1; i < kH; ++i)
+            lg[i] = std::log2 (static_cast<float> (i));
         Rng rng;
         rng.seed (0x5EEDu);
         for (auto& row : rnd)
@@ -178,19 +182,62 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
     const float u = interpolate && frames > 1 && f0 < frames - 1 ? framePos - static_cast<float> (f0) : 0.0f;
     const float* a = wt.spectrum (f0);
     const float* b = u > 0.0f ? wt.spectrum (f0 + 1) : nullptr;
-    // source coefficients w_i = (c_i, s_i) of the (interpolated) frame, harmonics 1 .. 1023, zero outside
+    // source coefficients w_i = (c_i, s_i) of the (interpolated) frame, harmonics 1 .. 1023, zero outside (src () below). The build reads them only up to `readTop` (see below), so only
+    // these are interpolated, and a frame that is not interpolated (u = 0) is read in place instead of copied; the reference build makes the whole copy as it always did.
     float* sc_c = sc.c;
     float* sc_s = sc.s;
-    for (int i = 0; i < kH; ++i)
-    {
-        sc_c[i] = b != nullptr ? lerp (a[i], b[i], u) : a[i];
-        sc_s[i] = b != nullptr ? lerp (a[kH + i], b[kH + i], u) : a[kH + i];
-    }
-    const float dc = sc_c[0];
-    sc_c[0] = sc_s[0] = 0.0f;
-    sc_c[kH] = sc_s[kH] = sc_c[kH + 1] = sc_s[kH + 1] = 0.0f;
     const int K = std::clamp (maxHarmonic, 0, kH - 1);
     m = clamp01 (m);
+    // the factor of the harmonic that Vocode and Formant Scale read at (scaleRead () below), made once here
+    float scaleOfType = 1.0f;
+    if (type == kMorphVocode)
+        scaleOfType = std::max (std::exp2 (1.0f - 2.0f * m) * static_cast<float> (kN) * phaseInc * static_cast<float> (hostRate / 44100.0), 1.0e-3f);
+    else if (type == kMorphFormantScale)
+        scaleOfType = std::exp2 (2.0f - 4.0f * m);
+    float dc;
+    const float* srcC;
+    const float* srcS;
+    if (referenceBuild)
+    {
+        for (int i = 0; i < kH; ++i)
+        {
+            sc_c[i] = b != nullptr ? lerp (a[i], b[i], u) : a[i];
+            sc_s[i] = b != nullptr ? lerp (a[kH + i], b[kH + i], u) : a[kH + i];
+        }
+        dc = sc_c[0];
+        sc_c[0] = sc_s[0] = 0.0f;
+        sc_c[kH] = sc_s[kH] = sc_c[kH + 1] = sc_s[kH + 1] = 0.0f;
+        srcC = sc_c;
+        srcS = sc_s;
+    }
+    else if (b == nullptr)
+    {
+        dc = a[0];
+        srcC = a;
+        srcS = a + kH;
+    }
+    else
+    {
+        // the highest harmonic any type reads: K; Vocode and Formant Scale read at i * scale for i up to min (K, 1023 / scale) (and two above: the window of the linear read); Harmonic and
+        // Inharmonic Stretch read the harmonics i = 1 .. 1023 until their target passes K (any i for a small stretch); Shepard reads i and i / 2.
+        int readTop = K;
+        if (type == kMorphVocode || type == kMorphFormantScale)
+        {
+            const double top = std::min (static_cast<double> (K), static_cast<double> (kH - 1) / static_cast<double> (std::max (scaleOfType, 1.0e-6f)));
+            readTop = static_cast<int> (std::min (static_cast<double> (kH - 1), top * static_cast<double> (std::max (scaleOfType, 1.0f)) * 1.001 + 4.0));
+        }
+        else if (type == kMorphHarmonicStretch || type == kMorphInharmonicStretch)
+            readTop = kH - 1;
+        readTop = std::clamp (readTop, 0, kH - 1);
+        dc = lerp (a[0], b[0], u);
+        for (int i = 1; i <= readTop; ++i)
+        {
+            sc_c[i] = lerp (a[i], b[i], u);
+            sc_s[i] = lerp (a[kH + i], b[kH + i], u);
+        }
+        srcC = sc_c;
+        srcS = sc_s;
+    }
     // The half size transform (fast) reads only bins 0 .. K, kM - K .. kM + K and kN - K .. kN - 1 (see the pre-twiddle below), so only these are cleared; the other
     // bins of the scratch hold stale values that nothing reads. The full clear stays for the full transform and for the reference build of the tests.
     if (fast && !referenceBuild)
@@ -227,9 +274,11 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
     auto src = [&] (int i, float& c, float& s) noexcept
     {
         if (i < 1 || i >= kH) { c = s = 0.0f; return; }
-        c = sc_c[i];
-        s = sc_s[i];
+        c = srcC[i];
+        s = srcS[i];
     };
+    // std::log2 of the harmonic number as a float: from the table (the same call, made once at program start); the reference build calls it as it did
+    auto log2Of = [&] (int i) noexcept { return referenceBuild ? std::log2 (static_cast<float> (i)) : tw().lg[i]; };
     auto scaleRead = [&] (float scale) noexcept // Vocode / Formant Scale: harmonic i reads the source at x = i * scale
     {
         const int top = static_cast<int> (std::min (static_cast<float> (K), static_cast<float> (kH - 1) / std::max (scale, 1.0e-6f)));
@@ -252,13 +301,11 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
     {
         case kMorphVocode:
         {
-            const float s0 = std::exp2 (1.0f - 2.0f * m);
-            const float s = s0 * static_cast<float> (kN) * phaseInc * static_cast<float> (hostRate / 44100.0);
-            scaleRead (std::max (s, 1.0e-3f));
+            scaleRead (scaleOfType); // = max (2^(1 - 2m) * N * phaseInc * hostRate / 44100, 1e-3)
             break;
         }
         case kMorphFormantScale:
-            scaleRead (std::exp2 (2.0f - 4.0f * m));
+            scaleRead (scaleOfType); // = 2^(2 - 4m)
             break;
         case kMorphHarmonicStretch:
         case kMorphInharmonicStretch:
@@ -267,7 +314,7 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
             const float s = inh ? std::exp2 (24.0f * m - 12.0f) : std::exp2 (8.0f * m - 4.0f);
             for (int i = 1; i < kH; ++i)
             {
-                const float shift = inh ? std::pow (s, std::log2 (static_cast<float> (std::max (i, 1))) * 0.1f) : s;
+                const float shift = inh ? std::pow (s, log2Of (std::max (i, 1)) * 0.1f) : s;
                 const float x = std::max (1.0f, shift * static_cast<float> (i - 1) + 1.0f);
                 if (x >= static_cast<float> (K))
                     break;
@@ -409,15 +456,15 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         case kMorphTimeSkew:
         {
             const float mp = 16.0f * m * m;
-            const float pos = framePos;
+            const float posN = framePos / 256.0f;
             for (int i = 1; i <= K; ++i)
             {
                 if (frames < 2)
                 {
-                    put (i, sc_c[i], sc_s[i]);
+                    put (i, srcC[i], srcS[i]);
                     continue;
                 }
-                float x = pos / 256.0f + mp * std::log2 (static_cast<float> (i)) / 11.0f;
+                float x = posN + mp * log2Of (i) / 11.0f;
                 x = x * 0.5f;
                 x -= std::floor (x);
                 const float tri = 1.0f - std::fabs (1.0f - 2.0f * x);
@@ -432,7 +479,7 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         }
         default:
             for (int i = 1; i <= K; ++i)
-                put (i, sc_c[i], sc_s[i]);
+                put (i, srcC[i], srcS[i]);
             break;
     }
     sc.re[0] = dc; // the mean of the frame is kept by every morph type
@@ -454,17 +501,45 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         };
         // For K < k < kM - K both X[k] and X[k + kM] are +0, and the loop gives zr = +0 - (+-0) = +0 and zi = +0 + (+-0) = +0 (round to nearest): the same bits as writing +0.
         const int lo = referenceBuild ? kM : std::min (K + 1, kM), hi = referenceBuild ? kM : std::max (kM - K, lo);
-        for (int k = 0; k < lo; ++k)
-            twiddle (k);
+        // four bins at a time with the operations of twiddle () in the same order (NEON; the scalar loops where it is off): the same bits
+        auto twiddleRange = [&] (int from, int to) noexcept // [from, to)
+        {
+            int k = from;
+#if SB_NEON
+            if (! scalarTransform && ! referenceBuild)
+                for (; k + 4 <= to; k += 4)
+                {
+                    const float32x4_t rk = vld1q_f32 (sc.re + k), rk2 = vld1q_f32 (sc.re + k + kM), ik = vld1q_f32 (sc.im + k), ik2 = vld1q_f32 (sc.im + k + kM);
+                    const float32x4_t er = vaddq_f32 (rk, rk2), ei = vaddq_f32 (ik, ik2), dr = vsubq_f32 (rk, rk2), di = vsubq_f32 (ik, ik2);
+                    const float32x4_t c = vld1q_f32 (t.cs + k), sn = vld1q_f32 (t.sn + k);
+                    const float32x4_t orr = vsubq_f32 (vmulq_f32 (dr, c), vmulq_f32 (di, sn)), oi = vaddq_f32 (vmulq_f32 (dr, sn), vmulq_f32 (di, c));
+                    vst1q_f32 (zr + k, vsubq_f32 (er, oi));
+                    vst1q_f32 (zi + k, vaddq_f32 (ei, orr));
+                }
+#endif
+            for (; k < to; ++k)
+                twiddle (k);
+        };
+        twiddleRange (0, lo);
         if (hi > lo)
         {
             std::fill (zr + lo, zr + hi, 0.0f);
             std::fill (zi + lo, zi + hi, 0.0f);
         }
-        for (int k = hi; k < kM; ++k)
-            twiddle (k);
+        twiddleRange (hi, kM);
         inverseFft (zr, zi, kM, scalarTransform, referenceBuild);
-        for (int m = 0; m < kM; ++m)
+        int m = 0;
+#if SB_NEON
+        if (! scalarTransform && ! referenceBuild)
+            for (; m + 4 <= kM; m += 4) // x[2m] = Re Z[m], x[2m + 1] = Im Z[m]: the interleaved store
+            {
+                float32x4x2_t zz;
+                zz.val[0] = vld1q_f32 (zr + m);
+                zz.val[1] = vld1q_f32 (zi + m);
+                vst2q_f32 (dst + 2 * m, zz);
+            }
+#endif
+        for (; m < kM; ++m)
         {
             dst[2 * m] = zr[m];
             dst[2 * m + 1] = zi[m];
