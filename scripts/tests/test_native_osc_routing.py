@@ -403,14 +403,14 @@ class TestNativeOscRouting(unittest.TestCase):
                               "Osc Native Routing", "Osc Native Power",
                               "Osc Native Settings", "Osc Native Detail", "Osc Native Tune A", "Osc Native Tune B", "Osc Native Tune C"])
             widgets = {c["componentData"]["name"]: c for c in controls}
-            for tab_name in ("Osc", "Osc B", "Osc C", "Sub", "Noise"):
+            for tab_name in ("Osc A", "Osc B", "Osc C", "Sub", "Noise"):
                 tab = next(t for t in tui["pageData"]["tabs"] if t["tabName"] == tab_name)
                 children = tab["componentDefinition"]["componentsData"]
                 types = [c["componentData"]["type"] for c in children]
                 self.assertEqual(types.count("oscNativeSurface"), 1, tab_name)
                 pos = types.index("oscNativeSurface")
                 self.assertEqual(children[pos]["bounds"]["bounds"], "0 0 1280 628")
-                self.assertTrue(all(c["componentData"]["name"].startswith("Overlay ") for c in children[pos + 1:]))
+                self.assertTrue(all(c["componentData"]["name"].startswith(("Overlay ", "Native Caption ")) for c in children[pos + 1:]))
             play = next(t for t in tui["pageData"]["tabs"] if t["tabName"] == "Play")
             dock, = [c for c in play["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "oscNativeSurface"]
             self.assertEqual(dock["bounds"]["additionalInvalidatingHandles"], ["RangedEnabling/1/2/7/Parameter 3535"])
@@ -612,7 +612,7 @@ class TestNativeOscRouting(unittest.TestCase):
                             with Image.open(skins / artwork[attr]) as image:
                                 reference = render_active_text_art(field["label"], state, *image.size)
                                 self.assertEqual(image.convert("RGBA").tobytes(), reference.tobytes())
-                    elif field["label"] in ("BROWSE", "MAP"):
+                    elif field["label"] in ("BROWSE", "MAP", "DETAIL"):
                         button, = definition["componentsData"]
                         self.assertEqual(button["componentData"]["type"], "Button")
                         self.assertEqual(button["componentData"]["name"], field["label"])

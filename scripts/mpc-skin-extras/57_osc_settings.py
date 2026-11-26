@@ -149,7 +149,7 @@ def _control(kind, side, skins_dir=None, size=None, caption="", compact_dial=Fal
 
     if kind == "table":
         return command_stepper_definition(skins_dir, (width, height), caption)
-    if kind == "action" and caption in ("BROWSE", "MAP"):
+    if kind == "action" and caption in ("BROWSE", "MAP", "DETAIL"):   # a button with a face (DETAIL opens the unison detail page: no bare text without a button)
         return _definition([action_button(skins_dir, caption, (0, 0, width, height), "Data", text=caption)])
     if kind == "action":
         return _definition([_label("Name", (0.04, 0.04, 0.92, 0.92), height=_ui_style.size('screen.osc_settings.control.height.3'))], "Toggle Switch")
@@ -174,7 +174,7 @@ def apply(tui, qlinks, ctx):
     skins_dir = getattr(ctx, "skins_dir", None)
 
     # These shared names are referenced by the standalone detail grid and expanded views.
-    for kind in ("dial_uni", "dial_bi", "menu", "toggle", "number", "dial_uni_side"):
+    for kind in ("dial_uni", "dial_bi", "menu", "toggle", "number", "dial_uni_side", "action"):   # "action": the text button of the Play page's expanded editors (CLOSE)
         key = "oscNativeSetting_" + kind
         ctx.add_component_definition(key, _control(kind.removesuffix("_side"), kind.endswith("_side"), skins_dir))
         definitions.add(key)
@@ -206,8 +206,10 @@ def apply(tui, qlinks, ctx):
         elif kind == "menu" and 2 <= len(choices) <= 9:
             definition += "_" + field["label"]
             drawer = definition + "Choices"
-        if kind == "action" and field["label"] in ("BROWSE", "MAP"):
+        if kind == "action" and field["label"] in ("BROWSE", "MAP", "DETAIL"):
             definition += "_" + field["label"].lower()
+            if field["label"] == "DETAIL":
+                definition += f"_{rect[2]}x{rect[3]}"   # 181 or 274 px wide, one face each
         if kind not in ("table", "action"):
             if kind == "toggle":
                 definition += "_" + field["label"]
