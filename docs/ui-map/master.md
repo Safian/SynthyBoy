@@ -1,5 +1,5 @@
 # Master UI Map
-Refreshed 2026-11-23
+Refreshed 2026-11-26 (value entry and choice lists)
 
 The mapping below was checked against `MasterScreen::buildGroups` in `shell-mpc/ui/voice_master.h`. GLIDE occupies the fourth bank on MAIN. VEL TRACK, SAME NOTE and STEAL are touch-only. Physical OLED labels and encoder response remain part of the final XL check.
 
@@ -72,74 +72,59 @@ In the gesture column `Qn` is slot n INSIDE the control's Q group; where the gro
 | MAIN | - | Tap | Switches view to the Main side (OUTPUT, PITCH, VOICES, GLIDE blocks) | `shell-mpc/ui/voice_master.h:641-643` |
 | TUNING & MPE | - | Tap | Switches view to the Tuning & MPE side (SCALE, TUNING, MPE blocks) | `shell-mpc/ui/voice_master.h:644` |
 | CLIP | - | Tap | Clears sticky output clip overload warning flag | `shell-mpc/overlay/master_ui.h:413-417` |
-| VOLUME | `master.volume` | Rotary drag / Wheel / Q1 turn / Tap value | Sets master output volume (-60.0 to +6.0 dB, tap value opens text keyboard) | `shell-mpc/overlay/master_ui.h:243` |
-| SPREAD | `master.stereo_spread` | Rotary drag / Wheel / Q2 turn / Tap value | Sets stereo pan spread across voices (0% to 100%, tap value opens text keyboard) | `shell-mpc/overlay/master_ui.h:244` |
-| STEREO | `master.stereo_routing` | Rotary drag / Wheel / Q3 turn / Tap value | Sets stereo routing crossmix percentage (0% to 100%, tap value opens text keyboard) | `shell-mpc/overlay/master_ui.h:245` |
-| VOICE OVERRIDE | `master.voice_override` | Tap option / Wheel / Q4 turn | Sets voice allocation override mode (Kill, Steal) | `shell-mpc/overlay/master_ui.h:246` |
-| LIMIT | - | Tap toggle (touch only) | Toggles plugin output lookahead peak limiter on / off (shell setting) | `shell-mpc/overlay/master_ui.h:277` |
-| NO SMOOTHING | `quality.no_smoothing` | Tap toggle (touch only) | Disables parameter interpolation smoothing across blocks (Off / On) | `shell-mpc/overlay/master_ui.h:278` |
-| OVERSAMPLE 4X | `quality.oversample_4x` | Tap toggle (touch only) | Enables 4x internal oversampling for synthesis engine (Off / On) | `shell-mpc/overlay/master_ui.h:279` |
-| TUNE | `master.tune` | Rotary drag / Wheel / Q1 turn / Tap value | Sets master fine tuning (-100 to +100 cents, tap value opens text keyboard) | `shell-mpc/overlay/master_ui.h:247` |
-| TRANSPOSE | `master.transpose` | Vertical drag / Wheel / Q2 turn | Sets master pitch transposition (-48 to +48 semitones) | `shell-mpc/overlay/master_ui.h:248` |
-| BEND UP | `master.bend_range` | Vertical drag / Wheel / Q3 turn | Sets pitch bend wheel up range (0 to 24 semitones) | `shell-mpc/overlay/master_ui.h:249` |
-| BEND DOWN | `master.bend_down_range` | Vertical drag / Wheel / Q4 turn (PITCH group, only while LINK is off) | Sets pitch bend wheel down range (0 to 24 semitones); hidden (no rectangle, no touch, no Q slot) while LINK is on | `shell-mpc/overlay/master_ui.h:250` |
-| LINK | `master.bend_down_link` | Tap toggle (touch only, no Q slot since the bold cut) | Links pitch bend down range to pitch bend up range (Off / On); while On BEND DOWN is hidden and BEND UP reads BEND | `shell-mpc/overlay/master_ui.h:251` |
-| POLY | `master.polyphony` | Vertical drag / Wheel / Q1 turn | Sets maximum synth polyphony (1 to 32 voices) | `shell-mpc/overlay/master_ui.h:252` |
-| LEGATO | `master.legato` | Tap toggle / Q2 turn | Enables monophonic legato envelope retriggering (Off / On) | `shell-mpc/overlay/master_ui.h:253` |
-| POLY LEG | `master.poly_legato` | Tap toggle / Q3 turn | Enables polyphonic legato envelope retriggering (Off / On) | `shell-mpc/overlay/master_ui.h:254` |
-| PHASE LEG | `voice.phase_legato` | Tap toggle / Q4 turn | Preserves oscillator phase on legato note transitions (Off / On) | `shell-mpc/overlay/master_ui.h:255` |
-| VEL TRACK | `master.velocity_track` | Vertical drag / Wheel (touch only, no Q slot) | Sets velocity tracking sensitivity (-100% to +100%) | `shell-mpc/overlay/master_ui.h:258` |
-| SAME NOTE | `master.voice.same_note` | Tap option / Wheel (touch only, no Q slot) | Sets voice behavior when same note is retriggered (Steal, Stack, Ignore) | `shell-mpc/overlay/master_ui.h:256` |
-| STEAL | `master.voice.steal_priority` | Tap option / Wheel (touch only, no Q slot) | Sets voice stealing priority rule (Newest, Oldest, Highest, Lowest, Velocity) | `shell-mpc/overlay/master_ui.h:257` |
+| VOLUME | `master.volume` | Rotary drag / Wheel / Q1 turn / Double tap or Enter (host numeric entry) | Sets master output volume (-60.0 to +6.0 dB; the host `NumericOverlay` takes the typed value) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| SPREAD | `master.stereo_spread` | Rotary drag / Wheel / Q2 turn / Double tap or Enter (host numeric entry) | Sets stereo pan spread across voices (0% to 100%; the host `NumericOverlay` takes the typed value) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| STEREO | `master.stereo_routing` | Rotary drag / Wheel / Q3 turn / Double tap or Enter (host numeric entry) | Sets stereo routing crossmix percentage (0% to 100%; the host `NumericOverlay` takes the typed value) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| VOICE OVERRIDE | `master.voice_override` | Tap option / Wheel / Q4 turn | Sets voice allocation override mode (Kill, Steal) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| LIMIT | - | Tap toggle (touch only) | Toggles plugin output lookahead peak limiter on / off (shell setting) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| NO SMOOTHING | `quality.no_smoothing` | Tap toggle (touch only) | Disables parameter interpolation smoothing across blocks (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| OVERSAMPLE 4X | `quality.oversample_4x` | Tap toggle (touch only) | Enables 4x internal oversampling for synthesis engine (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| TUNE | `master.tune` | Rotary drag / Wheel / Q1 turn / Double tap or Enter (host numeric entry) | Sets master fine tuning (-100 to +100 cents; the host `NumericOverlay` takes the typed value) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| TRANSPOSE | `master.transpose` | Vertical drag / Wheel / Q2 turn / Touch or Enter (host numeric entry) | Sets master pitch transposition (-48 to +48 semitones) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| BEND UP | `master.bend_range` | Vertical drag / Wheel / Q3 turn / Touch or Enter (host numeric entry) | Sets pitch bend wheel up range (0 to 24 semitones) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| BEND DOWN | `master.bend_down_range` | Vertical drag / Wheel / Q4 turn (PITCH group, only while LINK is off) / Touch or Enter (host numeric entry) | Sets pitch bend wheel down range (0 to 24 semitones); hidden (no rectangle, no touch, no Q slot) while LINK is on | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| LINK | `master.bend_down_link` | Tap toggle (touch only, no Q slot since the bold cut) | Links pitch bend down range to pitch bend up range (Off / On); while On BEND DOWN is hidden and BEND UP reads BEND | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| POLY | `master.polyphony` | Vertical drag / Wheel / Q1 turn / Touch or Enter (host numeric entry) | Sets maximum synth polyphony (1 to 32 voices) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| LEGATO | `master.legato` | Tap toggle / Q2 turn | Enables monophonic legato envelope retriggering (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| POLY LEG | `master.poly_legato` | Tap toggle / Q3 turn | Enables polyphonic legato envelope retriggering (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| PHASE LEG | `voice.phase_legato` | Tap toggle / Q4 turn | Preserves oscillator phase on legato note transitions (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| VEL TRACK | `master.velocity_track` | Vertical drag / Wheel (touch only, no Q slot) / Double tap or Enter (host numeric entry) | Sets velocity tracking sensitivity (-100% to +100%) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| SAME NOTE | `master.voice.same_note` | Tap option / Wheel (touch only, no Q slot) | Sets voice behavior when same note is retriggered (Steal, Stack, Ignore) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| STEAL | `master.voice.steal_priority` | Tap option / Wheel (touch only, no Q slot) | Sets voice stealing priority rule (Newest, Oldest, Highest, Lowest, Velocity) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
 | PAD PRESS | - | Native tap or Enter toggle | Enables the shell pad pressure layer. The stored amount survives switching it off. | `scripts/native_master/master_controls.py` |
 | PAD % | - | Native number entry or focused wheel | Sets the pad pressure amount (0–100%) while PAD PRESS is on. | `scripts/native_master/master_controls.py` |
-| GLIDE | `master.portamento.time` | Rotary drag / Wheel / Q1 turn / Tap value | Sets portamento glide duration (0 to 8000 ms, tap value opens text keyboard) | `shell-mpc/overlay/master_ui.h:259` |
-| SLOPE | `master.portamento.slope` | Rotary drag / Wheel / Q2 turn / Tap value | Sets portamento glide slope curvature (-8.0 concave to +8.0 convex, tap value opens text keyboard) | `shell-mpc/overlay/master_ui.h:260` |
-| ALWAYS | `master.portamento.always` | Tap toggle / Q3 turn | Enables portamento glide on all notes, not just legato overlaps (Off / On) | `shell-mpc/overlay/master_ui.h:261` |
-| SCALED | `master.portamento.scaled` | Tap toggle / Q4 turn | Scales portamento glide time by pitch interval distance (Off / On) | `shell-mpc/overlay/master_ui.h:262` |
-| SCALE | `master.scale.type` | Tap arrows / Turn / Q1 turn / Tap caption | Selects active musical scale (20 options; tap caption opens list popup) | `shell-mpc/overlay/master_ui.h:263` |
-| KEY | `master.scale.key` | Tap arrows / Turn / Q2 turn / Tap caption | Selects musical root key (12 options C..B; tap caption opens list popup) | `shell-mpc/overlay/master_ui.h:264` |
-| MODE | `master.scale.mode` | Tap option / Wheel / Q3 turn | Sets scale quantization mode (Conform, Mark only) | `shell-mpc/overlay/master_ui.h:266` |
-| A4 HZ | `master.tuning.a4` | Vertical drag / Wheel / Q1 turn | Sets reference concert pitch frequency for A4 (400.00 to 480.00 Hz in 0.01 Hz steps) | `shell-mpc/overlay/master_ui.h:267` |
+| GLIDE | `master.portamento.time` | Rotary drag / Wheel / Q1 turn / Double tap or Enter (host numeric entry) | Sets portamento glide duration (0 to 8000 ms; the host `NumericOverlay` takes the typed value) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| SLOPE | `master.portamento.slope` | Rotary drag / Wheel / Q2 turn / Double tap or Enter (host numeric entry) | Sets portamento glide slope curvature (-8.0 concave to +8.0 convex; the host `NumericOverlay` takes the typed value) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| ALWAYS | `master.portamento.always` | Tap toggle / Q3 turn | Enables portamento glide on all notes, not just legato overlaps (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| SCALED | `master.portamento.scaled` | Tap toggle / Q4 turn | Scales portamento glide time by pitch interval distance (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| SCALE | `master.scale.type` | Touch or Enter (host choice menu) / Q1 turn | Selects active musical scale (20 options, chosen in the host `MenuOverlay`) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| KEY | `master.scale.key` | Touch or Enter (host choice menu) / Q2 turn | Selects musical root key (12 options C..B, chosen in the host `MenuOverlay`) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| MODE | `master.scale.mode` | Tap option / Wheel / Q3 turn | Sets scale quantization mode (Conform, Mark only) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| A4 HZ | `master.tuning.a4` | Vertical drag / Wheel / Q1 turn / Double tap or Enter (host numeric entry) | Sets reference concert pitch frequency for A4 (400.00 to 480.00 Hz in 0.01 Hz steps) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
 | TUNING | `master.tuning.scale` | Tap option / Wheel / Q2 turn | Selects microtonal tuning temperament system (12-TET, Pythagorean, Just intonation, User file) | `scripts/native_master/master_controls.py` |
-| MTS-ESP | `master.tuning.mts_esp` | Tap toggle / Q3 turn | Enables MIDI Tuning Standard ESP client synchronization (Off / On) | `shell-mpc/overlay/master_ui.h:269` |
-| NOTE-ON | `master.tuning.mts_note_on_only` | Tap toggle / Q4 turn | Restricts MTS tuning updates to Note-On events only (Off / On) | `shell-mpc/overlay/master_ui.h:270` |
-| MPE | `master.mpe.on` | Tap toggle / Q1 turn | Enables MIDI Polyphonic Expression MPE mode (Off / On) | `shell-mpc/overlay/master_ui.h:271` |
-| MPE BEND | `master.mpe.bend_range` | Vertical drag / Wheel / Q2 turn (only while MPE is on) | Sets per-note MPE pitch bend range (1 to 96 semitones); hidden while MPE is off | `shell-mpc/overlay/master_ui.h:272` |
-| XYZ TO MACROS | `master.mpe.xyz_macro` | Tap option / Wheel / Q3 turn (Q2 while MPE is off) | Routes MPE X/Y/Z expressive dimensions to Macros (Off, XYZ, YZ) | `shell-mpc/overlay/master_ui.h:273` |
-| Y TO WHEEL | `master.mpe.y_modwheel` | Tap toggle / Q1 turn | Maps MPE Y dimension (CC74 timbre) to standard mod wheel CC1 (Off / On) | `shell-mpc/overlay/master_ui.h:274` |
-| BEND TO X | `master.mpe.bend_to_x` | Tap toggle / Q2 turn (only while MPE is on) | Maps standard pitch bend to MPE X horizontal glide dimension (Off / On); hidden while MPE is off | `shell-mpc/overlay/master_ui.h:275` |
-| Y BIPOLAR | `master.mpe.y_bipolar` | Tap toggle / Q3 turn (Q2 while MPE is off) | Treats MPE Y dimension as bipolar centered at 64 (-1.0 to +1.0) instead of unipolar (Off / On) | `shell-mpc/overlay/master_ui.h:276` |
+| MTS-ESP | `master.tuning.mts_esp` | Tap toggle / Q3 turn | Enables MIDI Tuning Standard ESP client synchronization (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| NOTE-ON | `master.tuning.mts_note_on_only` | Tap toggle / Q4 turn | Restricts MTS tuning updates to Note-On events only (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| MPE | `master.mpe.on` | Tap toggle / Q1 turn | Enables MIDI Polyphonic Expression MPE mode (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| MPE BEND | `master.mpe.bend_range` | Vertical drag / Wheel / Q2 turn (only while MPE is on) / Touch or Enter (host numeric entry) | Sets per-note MPE pitch bend range (1 to 96 semitones); hidden while MPE is off | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| XYZ TO MACROS | `master.mpe.xyz_macro` | Tap option / Wheel / Q3 turn (Q2 while MPE is off) | Routes MPE X/Y/Z expressive dimensions to Macros (Off, XYZ, YZ) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| Y TO WHEEL | `master.mpe.y_modwheel` | Tap toggle / Q1 turn | Maps MPE Y dimension (CC74 timbre) to standard mod wheel CC1 (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| BEND TO X | `master.mpe.bend_to_x` | Tap toggle / Q2 turn (only while MPE is on) | Maps standard pitch bend to MPE X horizontal glide dimension (Off / On); hidden while MPE is off | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
+| Y BIPOLAR | `master.mpe.y_bipolar` | Tap toggle / Q3 turn (Q2 while MPE is off) | Treats MPE Y dimension as bipolar centered at 64 (-1.0 to +1.0) instead of unipolar (Off / On) | `MasterUi::configure`, `scripts/native_master/master_controls.py` |
 
 ## Opens
 
 The release skin opens the MPC `MenuOverlay` by touching a selector, and the MPC `NumericOverlay` by touching a whole-number field. Double tap a dial to enter its value. Enter opens the same host menu on a focused control. The host handles the real parameter and its value range. The overlay suspends input and Q-Links while the menu owns the display. Closing it restores the active Master side.
 
-In the overlay-only view used by the UI component tests and gallery, `MasterUi` has its own `UiStack` details:
+Value entry and choice lists belong to the host-native controls of the Master skin (`scripts/native_master/master_controls.py`, `apply_master_native_controls`). `MasterUi` itself opens no page: the former overlay `ListPopup` for SCALE and KEY (`kPageList`) and the `TextEntry` numeric keypad (`kPageKeyboard`) are gone from `shell-mpc/overlay/master_ui.h` (and `docs/ui-components/master-screen.md` records their removal). What opens, per control kind (the triggers are asserted by `scripts/tests/test_native_master.py`):
 
-1. **List Selection Popup (`ui::ListPopup list_`, `kPageList = 15`)**:
-   - **Trigger**: Tapping the caption or center zone of either stepper: `scaleType` ("SCALE") or `scaleKey` ("KEY") (`shell-mpc/overlay/master_ui.h:433-447`). Both steppers are configured with `listable = true` (`shell-mpc/overlay/master_ui.h:282-283`), causing center taps to emit `ChangeKind::Request`.
-   - **Bounds**: Starts at `(340, 130)` and is 600 px wide. The height fits eight list rows and the vertical padding.
-   - **Controls inside popup**:
-     | Label on screen | Parameter key | Gesture | Effect | Source |
-     |---|---|---|---|---|
-     | Choice Item | `master.scale.type` or `master.scale.key` | Tap row / Vertical scroll drag | Selects option, writes plain index to active stepper parameter, and closes popup | `shell-mpc/overlay/master_ui.h:374-380` |
-     | Backdrop | - | Tap outside popup box | Dismisses list popup without changing parameter (`kListBackdrop = 701`) | `shell-mpc/overlay/master_ui.h:369-373` |
+1. **Selectors** (VOICE OVERRIDE, SAME NOTE, STEAL, SCALE, KEY, MODE, TUNING, XYZ TO MACROS): a touch (`Mouse Down`) or Enter runs `Show Overlay` on the host `MenuOverlay` named `fx editor choice menu`. The option texts reach the menu through `pageData.replacementStrings` (`bind_list_choices`), so the 20 scales and the 12 keys are chosen in the host menu, not in an overlay list.
+2. **Whole-number fields** (TRANSPOSE, BEND UP, BEND DOWN, POLY, MPE BEND; `MASTER_INTEGER_FIELDS`) and PAD %: native name-value fields; a touch (`Mouse Down`) or Enter runs `Show Overlay` on the host `NumericOverlay` named `fx editor number menu`. For the stepped `master.*` parameters with interval 1 the VST reports integer minimum and maximum (`fillParameterProperties`, `shell-mpc/synthyboy_mpc.cpp`), because the NumericOverlay needs plain integer bounds.
+3. **Dials** (VOLUME, SPREAD, STEREO, TUNE, VEL TRACK, GLIDE, SLOPE, A4 HZ): drag and wheel edit; `Double Click` or Enter runs `Show Overlay` on the same `fx editor number menu`. A single tap does not open it.
+4. **Toggles**: native ActiveText; Enter runs the host `Toggle Switch` action.
 
-2. **Virtual Numeric Keyboard (`ui::TextEntry entry_`, `kPageKeyboard = 16`)**:
-   - **Trigger**: Tapping the numeric value readout of any Knob on the page (`volume`, `spread`, `stereoRouting`, `tune`, `portaTime`, `portaSlope`). Tapping the value readout emits `ChangeKind::Request` (`shell-mpc/ui/base.h:441-445`), which opens the text entry page (`shell-mpc/overlay/master_ui.h:448-463`).
-   - **Bounds**: Full tab area `(0, 110, 1280, 628)` (`shell-mpc/overlay/master_ui.h:86`, `entry_.place (tab)`).
-   - **Controls inside keyboard**:
-     | Label on screen | Parameter key | Gesture | Effect | Source |
-     |---|---|---|---|---|
-     | Keypad Buttons | - | Tap key (0..9, `-`, `.`) | Appends digit or punctuation symbol to numeric input buffer | `shell-mpc/ui/text_entry.h:113` |
-     | Backspace | - | Tap key | Deletes previous character in input buffer | `shell-mpc/ui/text_entry.h:128` |
-     | Layer Switch | - | Tap key | Toggles between letters and symbols keypad layers | `shell-mpc/ui/text_entry.h:139` |
-     | CANCEL | - | Tap button | Closes virtual keyboard without applying changes (`kKeyboardCancel = 711`) | `shell-mpc/overlay/master_ui.h:381-385` |
-     | OK | - | Tap button | Parses entered text via `strtod`, clamps to parameter range, rounds to 1 decimal place, writes value to the target knob parameter, and closes keyboard (`kKeyboardOk = 710`) | `shell-mpc/overlay/master_ui.h:386-405` |
+The host owns the parameter write and its value range in all four cases. While an overlay (`MenuOverlay`, `NumericOverlay`) is up the overlay suspends input and Q-Links; closing it restores the active Master side.
 
-3. **Modulation Pages**:
-   - Not opened. Even though `Knob::tick` and `NumberField::tick` emit `ChangeKind::ModsRequest` on a 600 ms long press (`shell-mpc/ui/base.h:465,656`), `MasterUi::handle` (`shell-mpc/overlay/master_ui.h:365-478`) does not implement a handler for `ChangeKind::ModsRequest`. Long presses on knobs or number fields have no effect.
+`MasterUi::handle` acts only on `ChangeKind::Value` and `ChangeKind::Index` changes of the overlay-only components; a `ChangeKind::Request` (the `listable` steppers of SCALE and KEY, which `configure()` still marks) and a `ChangeKind::ModsRequest` (600 ms long press, `shell-mpc/ui/base.h`) are ignored (`default: break`). The overlay therefore has no modulation page for Master; what a long press does on a host-native Master control is decided by the host, not by this code.
 
 ## Q-Link groups
 The page has 9 Q-Link groups across its two sides (`MasterScreen::kMaxGroups = 9`, `kFirstTuningGroup = 5`, `shell-mpc/ui/voice_master.h:433,480-481`; members built by `buildGroups`, `shell-mpc/ui/voice_master.h:840-871`). A group is its LIVE members from slot 1 on: a hidden control or a touch-only control is no member and the group closes up (`close`, `shell-mpc/ui/voice_master.h:842-849`). The side that is up decides which five (MAIN) or four (TUNING & MPE) groups exist; groups without members are not published (`usedGroups`, `shell-mpc/overlay/q_publish.h:21-33`). Pictures: `docs/screens/master.jpg`, `docs/ui-map/mixer-master-bold-cut/after/`.
@@ -164,7 +149,7 @@ Change of the Q-Link mapping extension (`docs/ui-map/q-link-audit.md` item 7, "o
 | 8 MPE Y (`shell-mpc/ui/voice_master.h:860-868`) | `master.mpe.y_modwheel` | `master.mpe.bend_to_x` (MPE on) | `master.mpe.y_bipolar` | unassigned; with MPE off: [`master.mpe.y_modwheel`, `master.mpe.y_bipolar`] |
 
 ### Where the groups sit on the knobs
-`MasterUi::publishQGroup` (`shell-mpc/overlay/master_ui.h:490-516`): the groups of the side that is up (`first = 0, count = 5` on MAIN, `first = 5, count = 4` on TUNING & MPE), the ones with members in reading order, mapped by `QSlots::publish` (`shell-mpc/overlay/q_publish.h:57-65`). While a detail page (list or keyboard) is open nothing is published (`shell-mpc/overlay/master_ui.h:495,500-501`).
+`MasterUi::publishQGroup` (`shell-mpc/overlay/master_ui.h:490-516`): the groups of the side that is up (`first = 0, count = 5` on MAIN, `first = 5, count = 4` on TUNING & MPE), the ones with members in reading order, mapped by `QSlots::publish` (`shell-mpc/overlay/q_publish.h:57-65`). While another page is on top of the Master page in the `UiStack` (`pageTop_ != 0`; `MasterUi` opens none itself) nothing is published (`shell-mpc/overlay/master_ui.h:495,500-501`).
 - **MPC XL (16 knobs, no active group).** Four used groups on each side, so each keeps its slots (`QRouter::blockOfGroup`, `shell-mpc/q_router.h:71-79`): MAIN Q1 .. 4 OUTPUT, Q5 .. 8 PITCH, Q9 .. 12 VOICES, Q13 .. 16 GLIDE (Q8 is empty while LINK is on). TUNING & MPE: Q1 .. 4 SCALE, Q5 .. 8 TUNING, Q9 .. 12 MPE, Q13 .. 16 MPE Y. The XL draws no frame; the chips carry 1 .. 16.
 - **Key 61 (four knobs, banks).** Bank n = Q 4n-3 .. 4n of the same list: the ACTIVE group (the last touched) is bank 1, the others follow in reading order and wrap, so MAIN has four banks (OUTPUT, PITCH, VOICES, GLIDE), TUNING & MPE four (SCALE, TUNING, MPE, MPE Y). A frame marks the active group.
 - Not on any Q-Link (touch only): LINK, VEL TRACK, SAME NOTE, STEAL, LIMIT, QUALITY pair (`quality.no_smoothing`, `quality.oversample_4x`), PAD PRESS, PAD %, the side switches.
@@ -244,7 +229,7 @@ All standard synthesis parameters on the Master tab are converted to native MPC 
   - `master.mpe.y_bipolar` (toggle, rect: 1064 666 200 56)
 
 ### 3. Explicit List of Unconverted Controls (Retained in Overlay)
-The following controls are deliberately retained in the overlay layer:
+`UNCONVERTED_CONTROLS` in `scripts/native_master/master_controls.py` lists only the glide slope curve. The overlay list popup and the numeric keypad are not retained: the host `MenuOverlay` and `NumericOverlay` replaced them (see Opens). The overlay layer keeps these controls:
 
 | Control | Component | Region | Reason for Retaining in Overlay |
 |---|---|---|---|
@@ -252,8 +237,6 @@ The following controls are deliberately retained in the overlay layer:
 | Side Switcher TUNING & MPE | `MenuButton` | `(468, 114, 220, 56)` | Page navigation button switching between MAIN and TUNING & MPE sub-views. |
 | Block Headers | `isBlockHeader` | Title strips `(x, y, w, 38)` | Touch targets allowing tapping on a block title to switch active Q-Link group in native mode. |
 | Glide Slope Curve | `PortamentoCurveDisplay` | `(1021, 442, 243, 280)` | 32-point mathematical exponential curve plotting real-time transition curve from `master.portamento.slope`. |
-| Choice Popup | `ListPopup` | `(340, 130, 600, 460)` | Modal detail popup overlay for selecting among 20 musical scales and 12 root keys. |
-| Virtual Keypad | `TextEntry` | `(0, 110, 1280, 628)` | Modal numeric keypad popup opening on knob taps for direct value entry. |
 
 ### 4. Touch Passthrough Protocol & Subpage Exclusivity
 - `MasterUi::covers(x, y)`:
@@ -290,34 +273,14 @@ The following controls are deliberately retained in the overlay layer:
 - None of the other parameter keys bound on this page (`master.stereo_spread`, `master.stereo_routing`, `master.voice_override`, `master.tune`, `master.transpose`, `master.bend_range`, `master.bend_down_range`, `master.bend_down_link`, `master.polyphony`, `master.legato`, `master.poly_legato`, `master.voice.same_note`, `master.voice.steal_priority`, `master.velocity_track`, `master.portamento.time`, `master.portamento.slope`, `master.portamento.always`, `master.portamento.scaled`, `master.scale.type`, `master.scale.key`, `master.scale.mode`, `master.tuning.a4`, `master.tuning.scale`, `master.tuning.mts_esp`, `master.tuning.mts_note_on_only`, `master.mpe.on`, `master.mpe.bend_range`, `master.mpe.xyz_macro`, `master.mpe.y_modwheel`, `master.mpe.bend_to_x`, `master.mpe.y_bipolar`, `quality.no_smoothing`, `quality.oversample_4x`) appear on any other overlay page or tab under `shell-mpc/`.
 
 ## Questionable
-1. **NumberField controls write step index instead of parameter value (Bug)**:
-   - In `shell-mpc/overlay/master_ui.h:472-474`, `handle()` processes `ChangeKind::Index` with:
-     ```cpp
-     case ui::ChangeKind::Index:
-         uibind::writePlain (inst, it->param, ch.index);
-         break;
-     ```
-   - When a user touches or drags any `NumberField` (`transpose`, `bendUp`, `bendDown`, `polyphony`, `velocityTrack`, `tuningA4`, `mpeBend`), `NumberField` emits `Change::indexed (id_, idx, state.min + idx * stepSize())` (`shell-mpc/ui/base.h:665`).
-   - The member ch.index contains the 0-based step index (`idx`), while ch.value contains the actual calculated value (`state.min + idx * stepSize()`).
-   - Writing ch.index corrupts parameter values whenever fields are dragged or turned:
-     - `master.transpose` (range -48 to +48): index 48 (center/0 st) writes 48 semitones to the engine instead of 0.
-     - `master.tuning.a4` (range 400.00 to 480.00 Hz, step 0.01): index 0..8000 writes 0..8000 Hz instead of 400..480 Hz.
-     - `master.velocity_track` (range -100 to +100%): index 100 (0%) writes 100% sensitivity.
-     - `master.polyphony` (range 1 to 32): 1 voice has index 0, writing 0 voices to the engine instead of 1.
-   - Note that `padAmount` in `shell-mpc/overlay/master_ui.h:426-427` specifically used ch.value to avoid this bug (`inst.setPadPressure (on, static_cast<float> (ch.value));`), but the general item handler failed to do so.
+1. FIXED: **NumberField controls wrote the step index instead of the value.** `MasterUi::handle` now writes `ch.value` for a `T::Number` item and `ch.index` only for the other item types (`shell-mpc/overlay/master_ui.h`, `case ui::ChangeKind::Index`).
 
-2. **Knob virtual keyboard dialog title hardcodes "dB" unit for all parameters (Cosmetic/Confusing)**:
-   - In `shell-mpc/overlay/master_ui.h:458`:
-     ```cpp
-     std::snprintf (title, sizeof title, "%s (%.1f .. %.1f dB)", pi.name, pi.min, pi.max);
-     ```
-   - Tapping the numeric readout of any Knob opens `entry_` to allow typing a value. However, the title string unconditionally appends `"dB"` regardless of the parameter's actual unit.
-   - For example, tapping `TUNE` displays `"Master Tune (-100.0 .. 100.0 dB)"` (actual unit: cents), and tapping `GLIDE` displays `"Portamento Time (0.0 .. 8000.0 dB)"` (actual unit: ms).
+2. REMOVED: **The numeric keypad title appended "dB" to every parameter.** The `TextEntry` page that built that title no longer exists in `MasterUi` (see Opens); the host `NumericOverlay` is used instead.
 
 3. **Unhandled `ChangeKind::ModsRequest` (Unwired modulation details)**:
-   - `Knob::tick` (`shell-mpc/ui/base.h:465`) and `NumberField::tick` (`shell-mpc/ui/base.h:656`) emit `ChangeKind::ModsRequest` after a 600 ms long press.
+   - `Knob::tick` and `NumberField::tick` (`shell-mpc/ui/base.h`) emit `ChangeKind::ModsRequest` after a 600 ms long press.
    - `docs/MPC.md:1369` states: *"All elements bind to engine parameters with ui_bind.h ... and open the modulations of a control (long press) and the sources' target list with the shared ModulationsPage / ModTargetsPage."*
-   - However, `MasterUi::handle` (`shell-mpc/overlay/master_ui.h:365-478`) does not handle `ChangeKind::ModsRequest`. Long presses on the master knobs and number fields do nothing.
+   - However, `MasterUi::handle` (`shell-mpc/overlay/master_ui.h`) does not handle `ChangeKind::ModsRequest`, so the overlay components open no modulation page. The host-native controls that now carry the page are not affected by this handler.
 
 4. FIXED (bold cut): **Single-control Q-Link Group 2 ("LINK") wasted three hardware encoders** (LINK is now touch only; the group is gone). Old finding:
    - Group 2 ("LINK", gone since the bold cut) assigns only `master.bend_down_link` to Q1, leaving Q2, Q3, and Q4 unassigned.
