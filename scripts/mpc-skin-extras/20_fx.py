@@ -859,7 +859,8 @@ def _apply_native_editor(tui, tab, ctx):
                             c["componentData"]["type"] = dock_row_key
                             c["bounds"]["bounds"] = f"{cx} {row_y} {cw} 182"
 
-        band_dock = manifest["chain"]["band"]
+        # the docked peek shows the stacked layout (the full page of the compressor is a side layout): its BAND selector stands where the stacked one does
+        band_dock = manifest["chain"].get("band_stacked", manifest["chain"]["band"])
         dock_band_rect = (band_dock[0], band_dock[1] - style.size("fx.apply_native_editor.dock_band_rect.64"), band_dock[2], band_dock[3])
         for c in dock_children:
             cname = c["componentData"]["name"]

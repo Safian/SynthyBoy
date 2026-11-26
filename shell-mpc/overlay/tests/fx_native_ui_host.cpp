@@ -173,7 +173,8 @@ void testChorus ()
     int before = r.inst.writes;
     r.inst.writeHeader (nativeui::fxheader::Page, 1.0f);
     r.refresh();
-    check (ed.numPages() == 1 && binds (r, 6, "chorus.delay1", nativeui::kFxDial) && r.inst.writes == before + 1, "unused panel commands do not alter Chorus routing");
+    check (ed.numPages() == 1 && binds (r, 5, "chorus.delay1", nativeui::kFxDial) && binds (r, 7, "chorus.mix", nativeui::kFxDial) && r.inst.writes == before + 1,
+           "unused panel commands do not alter Chorus routing (VOICES, DELAY 1, DELAY 2, MIX)");
     before = r.inst.writes;
     r.inst.writeCell (0, 0.8f);
     ++r.inst.generation;

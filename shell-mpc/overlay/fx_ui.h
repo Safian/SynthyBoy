@@ -1180,6 +1180,8 @@ private:
                 band (d.eq.mid, "eq.mid", false);
                 band (d.eq.mid2, "eq.mid2", true);
                 band (d.eq.high, "eq.high", false);
+                d.eq.law = static_cast<int> (std::lround (plainOfKey (item, type, inst, "eq.law", 0.0f)));
+                d.eq.sampleRate = inst.sampleRate() > 0.0 ? static_cast<float> (inst.sampleRate()) : 48000.0f;
                 break;
             }
             case K::Compressor:
@@ -1196,6 +1198,8 @@ private:
                     std::snprintf (key, sizeof key, "compressor.%s.gain", kBand[b]); cb.gainDb = plainOfKey (item, type, inst, key, 0.0f);
                 }
                 d.comp.bands = static_cast<int> (std::lround (plainOfKey (item, type, inst, "compressor.bands", 0.0f)));
+                d.comp.mode = static_cast<int> (std::lround (plainOfKey (item, type, inst, "compressor.limit", 0.0f)));
+                d.comp.mix = plainOfKey (item, type, inst, "compressor.mix", 100.0f) * 0.01f;
                 // the band of the row of knobs that is on screen (the first live member of the active row names it)
                 {
                     const ui::FxSlotEditor& ed = screen_.slotEditor;
@@ -1214,6 +1218,8 @@ private:
                 d.delay.timeMs2 = delayMs (item, type, inst, "delay.time2", "delay.division2");
                 d.delay.feedback = plainOfKey (item, type, inst, "delay.feedback", 40.0f) * 0.01f;
                 d.delay.style = static_cast<int> (std::lround (plainOfKey (item, type, inst, "delay.style", 1.0f)));
+                d.delay.offsetL = plainOfKey (item, type, inst, "delay.offset_left", 1.0f);
+                d.delay.offsetR = plainOfKey (item, type, inst, "delay.offset", 1.0f);
                 break;
             }
             case K::Filter:
