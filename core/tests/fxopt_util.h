@@ -105,12 +105,18 @@ inline bool sameBits (const float* a, const float* b, size_t n)
     return true;
 }
 
-/** CPU time of `newer` over the CPU time of `older` (best of `reps` thread CPU times each). */
+/** CPU time of `newer` over the CPU time of `older`: the best (smallest) thread CPU time of each, measured in interleaved pairs (new, old, new, old, ...) so that a slow phase of the machine
+    (a busy sibling hyper-thread, frequency steps, the rest of the suite running in parallel) hits both sides alike instead of one whole series; at least 12 pairs, because with the best of 5
+    run one after the other the same build measured 0.69 to 1.14 for a true 0.72 on a loaded 4 vCPU x86 host. The limits of the callers are unchanged. */
 template <class FnNew, class FnOld>
 double cpuRatio (FnNew&& newer, FnOld&& older, int reps)
 {
-    const double a = sbtest::bestCpuMs (reps, newer);
-    const double b = sbtest::bestCpuMs (reps, older);
+    double a = 1.0e300, b = 1.0e300;
+    for (int i = 0; i < (reps < 12 ? 12 : reps); ++i)
+    {
+        a = std::min (a, sbtest::bestCpuMs (1, newer));
+        b = std::min (b, sbtest::bestCpuMs (1, older));
+    }
     return b > 0.0 ? a / b : 1.0;
 }
 } // namespace fxopt

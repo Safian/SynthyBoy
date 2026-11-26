@@ -236,7 +236,9 @@ TEST (own_makeup_meter_weights_and_constants_equal_the_old_forms)
                 b.accumulate (l, r, period);
                 b.endPeriod (period);
                 const ProgramDesc da = a.desc(), db = b.desc();
-                CHECK (std::memcmp (&da, &db, sizeof (ProgramDesc)) == 0);
+                // member by member: ProgramDesc has three padding bytes after `valid`, which a returned copy leaves indeterminate (a memcmp of the whole object compared them)
+                CHECK (std::memcmp (da.share, db.share, sizeof da.share) == 0 && std::memcmp (&da.wide, &db.wide, sizeof (float)) == 0
+                       && std::memcmp (&da.steady, &db.steady, sizeof (float)) == 0 && da.valid == db.valid);
             }
             ++meters;
         }

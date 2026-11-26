@@ -625,6 +625,16 @@ struct SlotGridResult
     long long cases = 0, skipped = 0, failed = 0;
 };
 
+/** Bit for bit equal, except that any two NaNs are equal: the sign and payload of a NaN that the hardware makes (inf - inf, 0 * inf) are not defined by C++ and differ between the
+    architectures (the x86 default NaN is negative, the ARM one positive), and the two evaluations of V4 reach the same NaN by different operations. */
+bool sameFloatBits (const float* a, const float* b, size_t n)
+{
+    for (size_t i = 0; i < n; ++i)
+        if (!(a[i] != a[i] && b[i] != b[i]) && std::memcmp (a + i, b + i, sizeof (float)) != 0)
+            return false;
+    return true;
+}
+
 /** One slot (slot 1: macro 1, aux macro 2, on `dest`), or with `viaAmount` that slot on the amount of slot 2 (slot 2: Fixed -> osc1.tune at 50 %); every source / aux value of `values`
     in both lanes; the reference evaluation against the one with the skip, delta, deltaRight, the touched list and the slot state compared bit for bit. */
 void slotGrid (SlotGridResult& res, float power, bool bipolar, float rise, bool withAux, float auxPower, float auxOut, float amount, float delayMs, bool viaAmount)
@@ -696,9 +706,9 @@ void slotGrid (SlotGridResult& res, float power, bool bipolar, float rise, bool 
                                            && (!withAux || (std::isfinite (auxPower) && std::fabs (auxPower) <= 80.0f && std::isfinite (auxOut) && al == al && ar == ar));
                     res.skipped += predicted ? 1 : 0;
                     bool same = num[0] == num[1] && std::memcmp (touched[0], touched[1], sizeof touched[0]) == 0
-                                && std::memcmp (dL[0].data(), dL[1].data(), dL[0].size() * 4) == 0 && std::memcmp (dR[0].data(), dR[1].data(), dR[0].size() * 4) == 0;
+                                && sameFloatBits (dL[0].data(), dL[1].data(), dL[0].size()) && sameFloatBits (dR[0].data(), dR[1].data(), dR[0].size());
                     for (int q = 0; q < kNumModSlots && same; ++q)
-                        same = std::memcmp (&state[0][q].heldL, &state[1][q].heldL, 4) == 0 && std::memcmp (&state[0][q].heldR, &state[1][q].heldR, 4) == 0 && state[0][q].init == state[1][q].init;
+                        same = sameFloatBits (&state[0][q].heldL, &state[1][q].heldL, 1) && sameFloatBits (&state[0][q].heldR, &state[1][q].heldR, 1) && state[0][q].init == state[1][q].init;
                     if (!same)
                     {
                         if (res.failed < 5)

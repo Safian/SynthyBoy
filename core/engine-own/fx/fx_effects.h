@@ -864,7 +864,7 @@ private:
                 y = held[c];
                 break;
             }
-            case 6: y = th (v + 0.3f) - th (0.3f); break;
+            case 6: { const float t = v + 0.3f, a = th (t); y = t == 0.3f ? 0.0f : a - th (0.3f); break; } // exactly 0 at v = 0 (see adaa::naive: a folded th (0.3f) is one ulp off the runtime th (t))
             case 7: { const float vp = std::max (v, 0.0f), vn = std::min (v, 0.0f); y = (1.0f - ex (-vp)) - 0.5f * (1.0f - ex (2.0f * vn)); break; }
             case 8: y = ex (std::min (v, 0.0f)) - ex (-std::max (v, 0.0f)); break;
             case 9: y = th (32.0f * v); break;

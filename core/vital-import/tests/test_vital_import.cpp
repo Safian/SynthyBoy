@@ -138,7 +138,9 @@ TEST (vi_table_vs_params)
             ++modulatable;
             CHECK (keys.count (paramTable()[i].key) == 1);
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (270));
+    // 270 = the 269 destinations of version 2 and master.transpose, + the 12 compressor keys that sit in the version 2 table positions but were made modulatable later (their destination numbers are
+    // appended after 1249, test_params.cpp: compressorCount 12)
+    CHECK_EQ (modulatable, static_cast<size_t> (270 + 12));
 }
 
 TEST (vi_effect_order_decoder_bijection)

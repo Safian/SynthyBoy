@@ -1,7 +1,9 @@
 // SynthyBoy - core/fx-serum-b tests: the partition plan of the non-uniform convolution (docs/plans/reverb-convolve.md task C2).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <cstdio>
 
 #include "conv_plan.h"

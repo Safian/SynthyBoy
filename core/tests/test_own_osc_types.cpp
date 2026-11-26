@@ -2126,7 +2126,8 @@ TEST (own_spectral_start_cache_repeated_chord_is_bit_identical_and_second_strike
 {
     spectral::StartCache& cache = spectral::StartCache::instance();
     cache.prepare();
-    constexpr int kStrikeFrames = 30000;
+    constexpr int kStrikeFrames = 235 * 128;   // whole 128 frame blocks: 30000 is not one, and the last block wrote 80 frames past the end of the buffer (heap overflow, ASan)
+    static_assert (kStrikeFrames % 128 == 0, "the loop below renders whole blocks");
     auto run = [&] (bool cacheOn, uint64_t& missesAfter1, uint64_t& hitsAfter1, uint64_t& missesAfter2, uint64_t& hitsAfter2) -> Out
     {
         cache.clearForTest();

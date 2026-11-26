@@ -5,6 +5,7 @@
 #include "synthyboy/granular/granular.h"
 #include "synthyboy/sampleosc/sample_data.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>

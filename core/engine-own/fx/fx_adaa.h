@@ -98,7 +98,9 @@ inline float naive (int type, float t, bool fast) noexcept
     switch (type)
     {
         case 0: case 9: return th (t);
-        case 6: return th (t) - th (0.3f); // the same function twice, so that the law is exactly 0 at x = 0 (the float constant kTanh03 is one ulp off std::tanh (0.3f))
+        // Exactly 0 at x = 0 (t == 0.3f). A bare th (t) - th (0.3f) is not: the compiler folds the constant th (0.3f) with a correctly rounded tanh while th (t) runs the
+        // library's tanhf, and on GCC / glibc x86-64 the two differ by one ulp (-3e-8, which the DC blocker then keeps as a slow decay). The equality test makes the zero a property of the law.
+        case 6: { const float a = th (t); return t == 0.3f ? 0.0f : a - th (0.3f); }
         case 10: return th (std::max (t, 0.0f)) + std::max (std::min (t, 0.0f), -0.5f);
         case 7:
         {
