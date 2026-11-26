@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "own_support.h"
 #include "osc/wavetable_bank.h"
@@ -95,6 +96,59 @@ bool setOwnPadPressureToCutoff (IEngine& engine, float amount01) noexcept
 
 namespace own
 {
+namespace
+{
+/** The consumers of the block snapshot `base` that a changed parameter can reach. A bit is set for a parameter that may change what the consumer derives from it; a consumer is rebuilt only when
+    one of its bits changed (OwnEngine::process, "block snapshot"). The classes only ever over-approximate: when in doubt a parameter carries the bit. */
+enum ParamClassBit : uint8_t
+{
+    kParamSlot = 1,   // ModMatrix::compile () reads it (every field of ModSlotParams of every slot)
+    kParamTuning = 2, // NoteTuning::compute () reads it (the scale, A4 and the MTS-ESP switch)
+    kParamVoice = 4,  // a voice (or the voice side of the engine) may read it: everything except the effect parameters
+};
+
+bool hasPrefix (const char* key, const char* prefix) noexcept
+{
+    return std::strncmp (key, prefix, std::strlen (prefix)) == 0;
+}
+
+/** Keys that only the effect racks read (fx/fx_chain.cpp, fx_modules.cpp, fx_budget.cpp) and never a voice: the effect instances, the modules and the order of the racks. Everything else
+    (the oscillators, filters, envelopes, LFOs, matrix, master, buses, quality ...) is voice visible. Pinned by the bit identity test (test_own_param_snapshot.cpp), which moves every
+    parameter against the full rebuild. */
+bool isEffectOnlyKey (const char* key) noexcept
+{
+    static const char* const prefixes[] = { "fxi", "fx.", "fxfilter.", "compressor.", "reverb.", "eq.", "delay.", "bode.", "convolve.", "chorus.", "phaser.", "utility.", "distortion.",
+                                            "hyperdim.", "flanger.", "splitter_lmh.", "splitter_lh.", "splitter_ms." };
+    for (const char* p : prefixes)
+        if (hasPrefix (key, p))
+            return true;
+    return false;
+}
+
+void classifyParams (std::vector<uint8_t>& out)
+{
+    const size_t n = paramCount();
+    out.assign (n, static_cast<uint8_t> (0));
+    const ParamInfo* table = paramTable();
+    for (size_t i = 0; i < n; ++i)
+        if (! isEffectOnlyKey (table[i].key))
+            out[i] |= kParamVoice;
+    const ParamIndex& pi = paramIndex();
+    auto mark = [&] (int idx, uint8_t bit)
+    {
+        if (idx >= 0 && static_cast<size_t> (idx) < n)
+            out[static_cast<size_t> (idx)] |= bit;
+    };
+    for (const ModSlotParams& sp : pi.slot)
+        for (const int idx : { sp.source, sp.destination, sp.amount, sp.power, sp.bipolar, sp.stereo, sp.bypass, sp.auxSource, sp.auxInv, sp.auxPower, sp.auxOutput, sp.rise, sp.fall, sp.delay,
+                               sp.delayBeats, sp.delaySync })
+            mark (idx, kParamSlot);
+    mark (pi.master.tuningScale, kParamTuning);
+    mark (pi.master.tuningA4, kParamTuning);
+    mark (pi.master.tuningMts, kParamTuning);
+}
+} // namespace
+
 OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing"))), convolveOnIndex (findParamIndex (hashKey ("convolve.on")))
 {
     for (int k = 0; k < 128; ++k)
@@ -473,6 +527,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     }
     sustainPending.assign (voices.size(), static_cast<uint8_t> (0));
     base.assign (paramCount(), 0.0f);
+    classifyParams (paramClass);
     gdelta.assign (paramCount(), 0.0f);
     gdeltaR.assign (paramCount(), 0.0f);
     gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
@@ -1457,18 +1512,56 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     const auto content = ownContent.acquire();
     const bool contentChanged = content.generation != snapContentGen;
     blockDirty = !snapValid || gen != snapGen || contentChanged;
+    // What the changed parameters can reach (kParamSlot / kParamTuning / kParamVoice, see classifyParams): the matrix is compiled again only when a slot parameter or the content changed,
+    // the tuning table only when a tuning parameter or the content changed, the voices drop what they derived from the parameters only when a parameter they can read changed.
+    // kOwnSavingParamDiff off (measurements, the bit identity test): everything is rebuilt on every change, as it was before.
+    bool matrixDirty = true, tuningDirty = true, voicesDirty = true;
     if (blockDirty)
     {
-        for (size_t i = 0; i < base.size(); ++i)
-            base[i] = params[i].load (std::memory_order_relaxed);
+        const bool full = !snapValid || (savingsOff.load (std::memory_order_relaxed) & kOwnSavingParamDiff) != 0 || paramClass.size() != base.size();
+        if (full)
+        {
+            for (size_t i = 0; i < base.size(); ++i)
+                base[i] = params[i].load (std::memory_order_relaxed);
+        }
+        else
+        {
+            uint8_t changed = 0;
+            for (size_t i = 0; i < base.size(); ++i)
+            {
+                const float v = params[i].load (std::memory_order_relaxed);
+                uint32_t a, b;
+                std::memcpy (&a, &v, sizeof a);
+                std::memcpy (&b, &base[i], sizeof b);
+                if (a != b) // bit pattern: a value that is only equal as a float (-0 / +0) counts as changed
+                {
+                    base[i] = v;
+                    changed |= paramClass[i];
+                }
+            }
+            matrixDirty = contentChanged || content.content != snapContentPtr || (changed & kParamSlot) != 0;
+            tuningDirty = contentChanged || (changed & kParamTuning) != 0;
+            voicesDirty = contentChanged || (changed & kParamVoice) != 0;
+        }
         matrix.setContent (content.content);
-        matrix.compile (base.data());
+        statSnapshots.fetch_add (1u, std::memory_order_relaxed);
+        if (matrixDirty)
+        {
+            matrix.compile (base.data());
+            statMatrixCompiles.fetch_add (1u, std::memory_order_relaxed);
+        }
         if (contentChanged)
             morphCache.clear(); // setContent can also replace the user wavetables
+        snapContentPtr = content.content;
         snapGen = gen;
         snapContentGen = content.generation;
         snapValid = true;
-        ++baseEpoch;
+        ++snapEpoch;
+        if (voicesDirty)
+        {
+            ++baseEpoch;
+            statVoiceEpochs.fetch_add (1u, std::memory_order_relaxed);
+        }
     }
     const ParamIndex& pi = paramIndex();
     globals.base = base.data();
@@ -1496,9 +1589,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     }
     for (int m = 0; m < 8; ++m)
         globals.macro[m] = macroOverridden[m] ? macroOverride[m] : (pi.macro[m] >= 0 ? clamp01 (base[static_cast<size_t> (pi.macro[m])] * 0.01f) : 0.0f);
-    if (blockDirty || base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f) // a live MTS-ESP source is asked every block
+    if ((blockDirty && tuningDirty) || base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f) // a live MTS-ESP source is asked every block
+    {
+        statTuningComputes.fetch_add (1u, std::memory_order_relaxed);
         noteTuning.compute (tunedNotes, static_cast<int> (base[static_cast<size_t> (pi.master.tuningScale)] + 0.5f), base[static_cast<size_t> (pi.master.tuningA4)],
                             base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f);
+    }
     globals.noSmoothing = noSmoothingIndex >= 0 && base[static_cast<size_t> (noSmoothingIndex)] >= 0.5f;
     globals.tunedNotes = tunedNotes;
     globals.tuningNoteOnOnly = base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f && pi.master.tuningMtsNoteOnOnly >= 0 && base[static_cast<size_t> (pi.master.tuningMtsNoteOnOnly)] >= 0.5f
@@ -1588,9 +1684,9 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             // the FX budget: admitted again only when the snapshot of the parameters (the effect configuration), the mask or the budget changed; the chains see a changed result like a changed parameter
             const int budgetPct = fxBudgetPct.load (std::memory_order_relaxed);
             bool budgetChanged = false;
-            if (baseEpoch != budgetEpoch || mask != lastFxMask || budgetPct != lastFxBudgetPct)
+            if (snapEpoch != budgetEpoch || mask != lastFxMask || budgetPct != lastFxBudgetPct)
             {
-                budgetEpoch = baseEpoch;
+                budgetEpoch = snapEpoch;
                 lastFxBudgetPct = budgetPct;
                 const own::FxBudgetResult now = own::FxBudget::evaluate (base.data(), mask, budgetPct);
                 budgetChanged = now != fxBudget;

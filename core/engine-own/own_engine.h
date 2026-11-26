@@ -57,6 +57,13 @@ public:
     int lowTierUnisonCap() const noexcept { return lowUnisonCap.load (std::memory_order_relaxed); }
     /** Measurements only (setOwnSavingsOff): the OwnSaving bits that are switched off. Any thread, lock free; read at the start of every block. */
     void setSavingsOff (uint32_t off) noexcept { savingsOff.store (off, std::memory_order_relaxed); }
+    /** Tests and measurements: how often the block snapshot rebuilt each consumer since the engine was made. Any thread, lock free. */
+    struct SnapshotStats { uint32_t snapshots, matrixCompiles, tuningComputes, voiceEpochs; };
+    SnapshotStats snapshotStats() const noexcept
+    {
+        return { statSnapshots.load (std::memory_order_relaxed), statMatrixCompiles.load (std::memory_order_relaxed), statTuningComputes.load (std::memory_order_relaxed),
+                 statVoiceEpochs.load (std::memory_order_relaxed) };
+    }
     void reset() override;
     void setPresetParams (const ParamValues& values) noexcept override;
     void setParam (uint32_t id, float plain) noexcept override;
@@ -221,7 +228,12 @@ private:
     uint32_t snapGen = 0;
     uint64_t snapContentGen = 0;
     bool snapValid = false;
-    uint32_t baseEpoch = 0;        // counts the rebuilds of the snapshot
+    uint32_t baseEpoch = 0;        // counts the rebuilds of the snapshot that a voice can see (a changed parameter a voice reads, new content); a voice keeps what it derived from the parameters while it is the same
+    uint32_t snapEpoch = 0;        // counts every rebuild of the snapshot (any changed parameter or content): the FX budget is evaluated again when it moved
+    /** Per parameter table entry, the bits of the block snapshot classes (kParamSlot ...): which consumers of `base` a changed value can reach. Built in prepare (). */
+    std::vector<uint8_t> paramClass;
+    std::atomic<uint32_t> statSnapshots { 0 }, statMatrixCompiles { 0 }, statTuningComputes { 0 }, statVoiceEpochs { 0 };
+    const OwnContent* snapContentPtr = nullptr;   // the content the matrix was compiled with
     bool blockDirty = true;        // the snapshot of this block differs from the one of the previous block
     bool mixCached = false, latCached = false;
     uint32_t lastFxMask = 0;

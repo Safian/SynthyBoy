@@ -55,3 +55,17 @@ On the installed fix, the repeated 40-tap run ended at its starting RSS (905,796
 ## Parameter key lookup (Mac arm64, 2026-11-25)
 
 Against baseline `c06ac6f3`, an optimized C++17 microbenchmark searched all 2,637 keys 32 times per sample, checking pointer identity. Two alternating baseline/changed pairs with four samples each took 183–240 ms per baseline sample and 1.9–6.1 ms using the existing ID index with a final string comparison. This measures key lookup alone. The parameter suite verifies every table entry and rejects an unknown key with the same hash as a real key.
+
+## Block snapshot after one changed parameter (Mac host, 2026-11-26)
+
+Before, any changed parameter made the next block copy all 2,637 values, compile the modulation matrix, recompute the tuning table and invalidate every voice cache. Now the engine compares the loaded values with its snapshot and rebuilds only what the changed entries reach: the matrix only for a `modNN.*` parameter or new content (`ModMatrix::compile` reads nothing else), the tuning table only for `master.tuning.{scale,a4,mts}` or new content (a live MTS-ESP source is still asked every block), the voice caches (`baseEpoch`) only for a parameter that is not an effect-rack key. The FX budget and the effect update still run on every changed block. `test: core/tests/test_own_param_snapshot.cpp` (every table entry changed alone at tiers low and high, a random walk with content resets and note on/off, a whole-preset load, the rebuild counters) compares each block bit for bit with the full rebuild (`kOwnSavingParamDiff`).
+
+Measured on an x86-64 Linux VM (not a device; the Cortex-A17 / A76 numbers are not measured), tier low, 44.1 kHz, 128 frames, Pad "Bowed MPE Strings" (about 70-90 us per block), pinned to one core, both engines in one process, the order alternating every iteration, 6,000 pairs per run, 3 runs. Paired cost of the changed block over the steady block before it, median of the run medians (range of the three runs):
+
+| Changed parameter | full rebuild (before) | incremental (after) |
+|---|---|---|
+| 1 effect parameter (`reverb.mix`) | 4.8 us (4.7-5.6) | 1.8 us (1.8-2.1) |
+| 1 voice parameter (`filter1.cutoff`) | 5.8 us (5.0-6.0) | 4.5 us (3.8-4.5) |
+| 1 matrix slot parameter (`mod01.amount`) | 4.3 us (4.3-5.4) | 4.3 us (4.3-5.5) |
+
+The gain is 3 us for an effect parameter and 1.3 us for a voice parameter; a slot parameter still compiles the matrix (no change by design). What remains of the 1.8 us for an effect parameter is the 2,637 comparisons, the FX budget evaluation and the effect and master updates, which run on every changed block. Across-process A/B/A runs of the old and the new binary on a 40 us block were dominated by VM noise (steady blocks differed by 10 us) and decide nothing. Bit identity against the old binary: 62 presets x tiers low / medium / high with 1-3 random parameters changed per block and a content reset every 97 blocks, identical hashes; `scripts/compare-renders.sh` on the 34 renders of the Bass presets at tier low: identical.
