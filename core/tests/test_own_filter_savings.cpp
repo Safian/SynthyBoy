@@ -112,7 +112,7 @@ TEST (own_filter_savings_twin_channels_are_bit_identical_to_separate_passes)
                             ra.process (inA.data(), oRA.data(), n, prev, cur, t0);
                             rb.adoptRamp (ra);
                             rb.process (inB.data(), oRB.data(), n, prev, cur, t0);
-                            ClassicFilter::processTwin (ta, tb, inA.data(), oTA.data(), inB.data(), oTB.data(), n, prev, cur, t0);
+                            ClassicFilter::processTwin (ta, tb, inA.data(), oTA.data(), inB.data(), oTB.data(), n, prev, cur, t0, ClassicFilter::sameParams (prev, cur));
                             CHECK (sameBits (oRA, oTA));
                             CHECK (sameBits (oRB, oTB));
                             compared += 2 * n;
@@ -174,4 +174,176 @@ TEST (own_filter_savings_filter_unit_twin_matches_the_scalar_only_passes)
                         CHECK (sameBits (a2, b2));
                     }
                 }
+}
+
+namespace
+{
+/** The classic branch of FilterUnit as it was before the sameParams booleans and the hoisted clean gain (the code of 391febd, with the separate channel passes): the
+    reference of the item 7 test. */
+struct ReferenceClassicUnit
+{
+    ClassicFilter cl[2];
+    ClassicParams prevP, curP, prevPR, curPR;
+    float prevMix = 1.0f, curMix = 1.0f, prevClean = 0.0f, curClean = 0.0f;
+
+    void prepare (double sr)
+    {
+        cl[0].prepare (sr);
+        cl[1].prepare (sr);
+    }
+    void set (const FilterSettings& s)
+    {
+        prevP = curP;
+        prevPR = curPR;
+        curP.model = s.model;
+        curP.style = s.style;
+        curP.cutoffHz = s.cutoffHz;
+        curP.res = s.resonance;
+        curP.driveDb = s.driveDb;
+        curP.blendRaw = s.blend * 2.0f;
+        curP.combOffset = s.combOffset;
+        curP.fx = s.formantX;
+        curP.fy = s.formantY;
+        curP.fres = s.formantRes;
+        curP.fspread = s.formantSpread;
+        curP.ftranspose = s.formantTranspose;
+        curP.fast = s.fast;
+        curPR = curP;
+        if (s.cutoffHzR > 0.0f)
+            curPR.cutoffHz = s.cutoffHzR;
+        cl[0].scalarLoops = cl[1].scalarLoops = s.scalarOnly;
+        prevMix = curMix;
+        curMix = clamp01 (s.mix);
+        prevClean = curClean;
+        curClean = (s.clean && s.model != 5 && s.model != 6) ? 1.0f : 0.0f;
+    }
+    void process (const float* inL, const float* inR, float* outL, float* outR, int n, int t0)
+    {
+        const float invP = 1.0f / static_cast<float> (kControlPeriod);
+        float tmpL[kControlPeriod], tmpR[kControlPeriod];
+        const bool cleaning = curClean > 0.5f || prevClean > 0.5f;
+        const float* srcL = inL;
+        const float* srcR = inR;
+        if (cleaning)
+        {
+            for (int k = 0; k < n; ++k)
+            {
+                const float c = lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP);
+                const float g = dbToGain (-24.0f * c);
+                tmpL[k] = inL[k] * g;
+                tmpR[k] = inR[k] * g;
+            }
+            srcL = tmpL;
+            srcR = tmpR;
+        }
+        if (!ClassicFilter::processPair (cl[0], cl[1], srcL, outL, srcR, outR, n, prevP, curP, prevPR, curPR))
+        {
+            const bool sameLR = ClassicFilter::sameParams (prevP, prevPR) && ClassicFilter::sameParams (curP, curPR);
+            if (sameLR && ClassicFilter::processRampPair (cl[0], cl[1], srcL, outL, srcR, outR, n, prevP, curP, t0))
+            {
+            }
+            else
+            {
+                cl[0].process (srcL, outL, n, prevP, curP, t0);
+                if (ClassicFilter::sameParams (prevP, prevPR) && ClassicFilter::sameParams (curP, curPR))
+                    cl[1].adoptRamp (cl[0]);
+                cl[1].process (srcR, outR, n, prevPR, curPR, t0);
+            }
+        }
+        if (!cleaning && prevMix == 1.0f && curMix == 1.0f)
+        {
+            simd::clampTo (outL, -16.0f, 16.0f, n);
+            simd::clampTo (outR, -16.0f, 16.0f, n);
+            return;
+        }
+        for (int k = 0; k < n; ++k)
+        {
+            const float t = static_cast<float> (t0 + k + 1) * invP;
+            const float c = cleaning ? dbToGain (24.0f * lerp (prevClean, curClean, t)) : 1.0f;
+            const float m = lerp (prevMix, curMix, t);
+            outL[k] = std::clamp (outL[k] * c, -16.0f, 16.0f);
+            outR[k] = std::clamp (outR[k] * c, -16.0f, 16.0f);
+            if (m < 1.0f)
+            {
+                outL[k] = inL[k] + (outL[k] - inL[k]) * m;
+                outR[k] = inR[k] + (outR[k] - inR[k]) * m;
+            }
+        }
+    }
+};
+} // namespace
+
+/** Item 7: the parameter comparisons made once in FilterUnit::set () and the clean gain computed once for a block whose clean setting does not move, against the code before
+    (ReferenceClassicUnit): models 0 .. 7, clean off / on / switching, the pan, parameters held and moving, mix 1 and below, tier low and exact. */
+TEST (own_filter_savings_unit_booleans_and_steady_clean_match_the_reference)
+{
+    for (int model = 0; model <= 7; ++model)
+        for (int fastI = 0; fastI < 2; ++fastI)
+            for (int variant = 0; variant < 6; ++variant)
+            {
+                const int style = variant % styleCount (model);
+                FilterUnit unit;
+                ReferenceClassicUnit ref;
+                unit.prepare (44100.0);
+                ref.prepare (44100.0);
+                sbtest::Rng rng (0xc1ea0ull + static_cast<uint64_t> (model * 131 + fastI * 17 + variant));
+                float cutoff = 900.0f;
+                for (int tick = 0; tick < 80; ++tick)
+                {
+                    // the parameters stay put for a stretch of ticks, then move; the clean setting flips now and then; the pan on and off
+                    if (tick % 10 >= 4)
+                        cutoff = std::clamp (cutoff * (0.9f + 0.2f * static_cast<float> (rng.uniform())), 80.0f, 15000.0f);
+                    FilterSettings s = settingsFor (model, style, fastI != 0, cutoff, (variant & 1) != 0 && tick % 20 >= 10 ? cutoff * 1.25f : -1.0f, 0.3f, 4.0f);
+                    s.clean = variant >= 2 && (tick / 7) % 2 == 1;
+                    s.mix = variant >= 4 && tick % 5 == 0 ? 0.6f : 1.0f;
+                    unit.set (s);
+                    ref.set (s);
+                    const int cuts[2][2] = { { 32, 0 }, { 13, 19 } };
+                    int t0 = 0;
+                    for (int part = 0; part < 2 && cuts[tick % 2][part] > 0; ++part)
+                    {
+                        const int n = cuts[tick % 2][part];
+                        std::vector<float> inL (static_cast<size_t> (n)), inR (static_cast<size_t> (n)), a1 (static_cast<size_t> (n)), a2 (static_cast<size_t> (n)),
+                            b1 (static_cast<size_t> (n)), b2 (static_cast<size_t> (n));
+                        fillInput (rng, inL, 0.5f, tick % 9 == 0);
+                        fillInput (rng, inR, 0.5f, tick % 9 == 0);
+                        unit.process (inL.data(), inR.data(), a1.data(), a2.data(), n, t0);
+                        ref.process (inL.data(), inR.data(), b1.data(), b2.data(), n, t0);
+                        CHECK (sameBits (a1, b1));
+                        CHECK (sameBits (a2, b2));
+                        t0 += n;
+                    }
+                }
+            }
+}
+
+/** Item 7 for the Serum models (the clean gain around the collection's filter): the unit against the one with `scalarOnly`, which keeps the per sample dbToGain loops. */
+TEST (own_filter_savings_serum_clean_steady_matches_the_per_sample_gain)
+{
+    const int models[] = { 8, 9, 12, 20, 26 };
+    for (int model : models)
+        for (int fastI = 0; fastI < 2; ++fastI)
+        {
+            FilterUnit newer, older;
+            newer.prepare (44100.0);
+            older.prepare (44100.0);
+            sbtest::Rng rng (0x5e70ull + static_cast<uint64_t> (model * 3 + fastI));
+            for (int tick = 0; tick < 60; ++tick)
+            {
+                FilterSettings s = settingsFor (model, 0, fastI != 0, 800.0f + 40.0f * static_cast<float> (tick), -1.0f, 0.3f, 3.0f);
+                s.clean = (tick / 8) % 2 == 1;
+                s.drive = 0.3f;
+                s.scalarOnly = false;
+                newer.set (s);
+                s.scalarOnly = true;
+                older.set (s);
+                std::vector<float> inL (32), inR (32), a1 (32), a2 (32), b1 (32), b2 (32);
+                fillInput (rng, inL, 0.4f, false);
+                fillInput (rng, inR, 0.4f, false);
+                newer.process (inL.data(), inR.data(), a1.data(), a2.data(), 32, 0);
+                older.process (inL.data(), inR.data(), b1.data(), b2.data(), 32, 0);
+                CHECK (sameBits (a1, b1));
+                CHECK (sameBits (a2, b2));
+            }
+        }
 }

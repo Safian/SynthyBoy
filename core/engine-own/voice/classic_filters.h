@@ -150,9 +150,10 @@ public:
         followed by `B.process (inB, outB, n, a, b, t0)` (with `B.adoptRamp (A)` between them where the ramp setups apply), with the setup of every piece (the cutoff power,
         the tangents, square roots, exp2 and divisions of the model) computed once for the two channels instead of once for each. The states of the channels stay apart. */
     static void processTwin (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& a, const ClassicParams& b,
-                             int t0) noexcept
+                             int t0, bool steady) noexcept
     {
-        if (sameParams (a, b) && a.cutoffHz >= 1.0f)
+        // `steady`: sameParams (a, b), known to the caller
+        if (steady && a.cutoffHz >= 1.0f)
         {
             A.block (inA, outA, n, b);
             B.adoptMemo (A);
@@ -426,6 +427,11 @@ public:
     {
         if (!(sameParams (aA, bA) && aA.cutoffHz >= 1.0f && sameParams (aB, bB) && aB.cutoffHz >= 1.0f))
             return false;
+        return processPairSteady (A, B, inA, outA, inB, outB, n, bA, bB);
+    }
+    /** processPair () for two channels whose parameters the caller knows to stay put across the period (sameParams (a, b) and a cutoff of at least 1 Hz on both sides). */
+    static bool processPairSteady (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& bA, const ClassicParams& bB) noexcept
+    {
         const int model = bA.model;
         if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 2 || model == 3))
             return false;
