@@ -70,7 +70,7 @@ class OscCScreenTests(unittest.TestCase):
         # No old fallback controls should remain
         for name in comp_names:
             self.assertTrue(
-                name.startswith(("Osc Native", "Overlay Marker", "Overlay Background Sentinel", "Overlay Instance", "Native Modulation", "Host Background")),
+                name.startswith(("Osc Native", "Overlay Marker", "Overlay Background Sentinel", "Overlay Instance", "Native Modulation", "Host Background", "Native Caption oscc")),
                 f"Unexpected fallback component on Osc C tab: {name}",
             )
 

@@ -424,5 +424,70 @@
       "size": 26,
       "colour": "text.value"
     }
+  ],
+  "osca": [
+    {
+      "text": "OSC A",
+      "rect": [
+        10,
+        31,
+        50,
+        24
+      ],
+      "size": 15,
+      "colour": "text.caption"
+    }
+  ],
+  "oscb": [
+    {
+      "text": "OSC B",
+      "rect": [
+        10,
+        31,
+        50,
+        24
+      ],
+      "size": 15,
+      "colour": "text.caption"
+    }
+  ],
+  "oscc": [
+    {
+      "text": "OSC C",
+      "rect": [
+        10,
+        31,
+        50,
+        24
+      ],
+      "size": 15,
+      "colour": "text.caption"
+    }
+  ],
+  "oscsub": [
+    {
+      "text": "SUB",
+      "rect": [
+        10,
+        31,
+        50,
+        24
+      ],
+      "size": 15,
+      "colour": "text.caption"
+    }
+  ],
+  "oscnoise": [
+    {
+      "text": "NOISE",
+      "rect": [
+        10,
+        31,
+        50,
+        24
+      ],
+      "size": 15,
+      "colour": "text.caption"
+    }
   ]
 }
