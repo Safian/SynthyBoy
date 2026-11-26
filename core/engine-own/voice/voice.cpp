@@ -127,7 +127,66 @@ const uint8_t* paramGroups() noexcept
     }();
     return table.data();
 }
+
 } // namespace
+
+/** Per parameter index, the OscField groups its value reaches. 0 for a key of an oscillator that fillOscPart () does not read (the period reads it itself); kOfAll for a key of an
+    oscillator that no group claims, so that a key added later without a group refreshes everything instead of nothing. Built once (Voice::prepare: never on the audio thread). */
+const uint16_t* oscFieldMasks() noexcept
+{
+    static const std::vector<uint16_t> table = []
+    {
+        const ParamIndex& pi = paramIndex();
+        std::vector<uint16_t> assigned (paramCount(), 0), t (paramCount(), 0);
+        auto add = [&assigned] (int idx, uint32_t m)
+        {
+            if (idx >= 0 && static_cast<size_t> (idx) < assigned.size())
+                assigned[static_cast<size_t> (idx)] = static_cast<uint16_t> (assigned[static_cast<size_t> (idx)] | m);
+        };
+        std::vector<int> ignored;
+        for (int o = 0; o < 3; ++o)
+        {
+            const OscIdx& oi = pi.osc[o];
+            const LibKeys& lk = libKeys (o);
+            for (int idx : { oi.destination, oi.filterBlend, oi.bus1Send, oi.bus2Send, oi.env1 })
+                add (idx, kOfRoute);
+            add (oi.wavetable, kOfWt);
+            for (int idx : { oi.pitchTrack, oi.bendTrack, oi.fixedPitch, oi.pitchCoarse, oi.transposeSnap, oi.transpose, oi.tune, lk.idx[lk_pitchMode], lk.idx[lk_ratioSrc] })
+                add (idx, kOfPitch);
+            for (int idx : { oi.frame, oi.frameSpread })
+                add (idx, kOfFrame);
+            for (int idx : { oi.level, oi.pan })
+                add (idx, kOfLevel);
+            for (int idx : { oi.uniVoices, oi.uniDetune, oi.uniRange, oi.uniCurve, oi.uniBlendShape, oi.uniStack, oi.uniStackRepeat, oi.uniMode, oi.uniSpread, oi.uniBlend, oi.uniLaw })
+                add (idx, kOfUni);
+            for (int idx : { oi.warpType, oi.warpAmount, oi.warpPhase, oi.warpSpread, oi.warp2Type, oi.warp2Amount, oi.warp2Phase, oi.warp2Spread })
+                add (idx, kOfWarp);
+            for (int k : { lk_morphType, lk_morphAmount, lk_morphSpread, lk_smooth, lk_remapOn, lk_remapSlot, lk_remapRise, lk_remapFall })
+                add (lk.idx[k], kOfMorph);
+            for (int i = 0; i < kLibKeyCount; ++i)
+                add (lk.idx[i], kOfLib);
+            // the keys the part does not read (the period reads them itself, with the delta of the period)
+            for (int idx : { oi.on, oi.type, oi.phase, oi.randomPhase, oi.keyLow, oi.keyHigh, oi.velLow, oi.velHigh, oi.keyFold, oi.keyWarp, oi.phaseLegato, oi.phaseMemory })
+                ignored.push_back (idx);
+            // every other key of the oscillator: the whole part
+            const int* f = reinterpret_cast<const int*> (&oi);
+            for (size_t i = 0; i < sizeof (OscIdx) / sizeof (int); ++i)
+                if (f[i] >= 0 && static_cast<size_t> (f[i]) < t.size())
+                    t[static_cast<size_t> (f[i])] = static_cast<uint16_t> (kOfAll);
+            for (int i = 0; i < kLibKeyCount; ++i)
+                if (lk.idx[i] >= 0 && static_cast<size_t> (lk.idx[i]) < t.size())
+                    t[static_cast<size_t> (lk.idx[i])] = static_cast<uint16_t> (kOfAll);
+        }
+        for (int idx : ignored)
+            if (idx >= 0 && static_cast<size_t> (idx) < t.size())
+                t[static_cast<size_t> (idx)] = 0;
+        for (size_t i = 0; i < t.size(); ++i)
+            if (assigned[i] != 0)
+                t[i] = assigned[i];
+        return t;
+    }();
+    return table.data();
+}
 
 /** Bit k: some slot of the last evaluation touched a key of group k (the list of touched keys, and the pad pressure layer on the Filter 1 cutoff). A full list (it cannot be: one entry
     per slot) counts as every group. */
@@ -145,6 +204,7 @@ void Voice::prepare (double sampleRate)
 {
     sr = sampleRate;
     groupOf = paramGroups();
+    (void) oscFieldMasks();   // built here, never on the audio thread
     pidx = &paramIndex();
     for (int o = 0; o < 3; ++o)
         libk[o] = &libKeys (o);
@@ -620,65 +680,89 @@ float Voice::lfoValueReference (int l, const TickGlobals& g, float& valueRight, 
     return left;
 }
 
-void Voice::fillOscPart (int o, OscPart& op) noexcept
+void Voice::fillOscPart (int o, OscPart& op, uint32_t fields) noexcept
 {
-    // the expressions of Voice::tick as they were, on the keys of oscillator o (and the stereo spread of the master, a plain value)
+    // the expressions of Voice::tick as they were, on the keys of oscillator o (and the stereo spread of the master, a plain value), one block per OscField group: a field reads only the keys
+    // of its own group (the table of oscFieldMasks () lists them; test_own_voice_opt.cpp touches every key alone and compares with the whole part)
     const OscIdx& oi = pidx->osc[o];
     const LibKeys& lk = *libk[o];
-    op.dest = static_cast<int> (P (oi.destination) + 0.5f);
-    op.blend = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
-    op.send[0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
-    op.send[1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
-    op.env1 = P (oi.env1) >= 0.5f;
-    op.wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
-    op.track = P (oi.pitchTrack) >= 0.5f;
-    op.bendTrack = P (oi.bendTrack) >= 0.5f;
-    op.fixedNote = P (oi.fixedPitch);
-    op.pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
-    const float coarse = P (oi.pitchCoarse);
-    float coarseSemis = coarse;
-    if (op.pmode == 1)
-        coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + ffloor (coarse)));
-    else if (op.pmode == 2)
-        coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
-    op.coarseSemis = coarseSemis;
-    op.ratioSrc = op.pmode == 2 ? static_cast<int> (P (lk.idx[lk_ratioSrc]) + 0.5f) - 1 : -1;
-    op.transposeSnap = static_cast<int> (P (oi.transposeSnap) + 0.5f);
-    op.transpose = P (oi.transpose);
-    op.tune001 = P (oi.tune) * 0.01f;
-    op.frame = clamp01 (P (oi.frame) * 0.01f);
-    op.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
-    op.level = std::max (0.0f, P (oi.level) * 0.01f);
-    op.pan = P (oi.pan) * 0.01f;
-    op.panRight = PR (oi.pan) * 0.01f;
-    op.voicesRaw = static_cast<int> (P (oi.uniVoices) + 0.5f);
-    const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
-    op.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
-    op.curve = P (oi.uniCurve);
-    op.blendShape = std::clamp (P (oi.uniBlendShape) * 0.01f, -1.0f, 1.0f);
-    op.stack = static_cast<int> (P (oi.uniStack) + 0.5f);
-    op.stackRepeat = static_cast<int> (P (oi.uniStackRepeat) + 0.5f);
-    op.mode = static_cast<int> (P (oi.uniMode) + 0.5f);
-    op.spread = clamp01 (P (oi.uniSpread) * 0.01f) * clamp01 (gl->base[pidx->master.stereoSpread] * 0.01f);
-    op.uniBlend = clamp01 (P (oi.uniBlend) * 0.01f);
-    op.law = oi.uniLaw >= 0 ? static_cast<int> (gl->base[oi.uniLaw] + 0.5f) : 0;
-    op.warp[0] = static_cast<int> (P (oi.warpType) + 0.5f);
-    op.warpAmount[0] = clamp01 (P (oi.warpAmount) * 0.01f);
-    op.warpPhase[0] = P (oi.warpPhase) * (1.0f / 360.0f);
-    op.warpSpread[0] = std::clamp (P (oi.warpSpread) * 0.01f, -1.0f, 1.0f);
-    op.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
-    op.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
-    op.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
-    op.warpSpread[1] = std::clamp (P (oi.warp2Spread) * 0.01f, -1.0f, 1.0f);
-    op.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
-    op.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
-    op.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
-    op.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
-    op.remapOn = P (lk.idx[lk_remapOn]) >= 0.5f;
-    op.remapSlot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
-    op.remapRise = P (lk.idx[lk_remapRise]);
-    op.remapFall = P (lk.idx[lk_remapFall]);
-    op.libValid = false;
+    if ((fields & kOfRoute) != 0)
+    {
+        op.dest = static_cast<int> (P (oi.destination) + 0.5f);
+        op.blend = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
+        op.send[0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
+        op.send[1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
+        op.env1 = P (oi.env1) >= 0.5f;
+    }
+    if ((fields & kOfWt) != 0)
+        op.wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
+    if ((fields & kOfPitch) != 0)
+    {
+        op.track = P (oi.pitchTrack) >= 0.5f;
+        op.bendTrack = P (oi.bendTrack) >= 0.5f;
+        op.fixedNote = P (oi.fixedPitch);
+        op.pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
+        const float coarse = P (oi.pitchCoarse);
+        float coarseSemis = coarse;
+        if (op.pmode == 1)
+            coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + ffloor (coarse)));
+        else if (op.pmode == 2)
+            coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
+        op.coarseSemis = coarseSemis;
+        op.ratioSrc = op.pmode == 2 ? static_cast<int> (P (lk.idx[lk_ratioSrc]) + 0.5f) - 1 : -1;
+        op.transposeSnap = static_cast<int> (P (oi.transposeSnap) + 0.5f);
+        op.transpose = P (oi.transpose);
+        op.tune001 = P (oi.tune) * 0.01f;
+    }
+    if ((fields & kOfFrame) != 0)
+    {
+        op.frame = clamp01 (P (oi.frame) * 0.01f);
+        op.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
+    }
+    if ((fields & kOfLevel) != 0)
+    {
+        op.level = std::max (0.0f, P (oi.level) * 0.01f);
+        op.pan = P (oi.pan) * 0.01f;
+        op.panRight = PR (oi.pan) * 0.01f;
+    }
+    if ((fields & kOfUni) != 0)
+    {
+        op.voicesRaw = static_cast<int> (P (oi.uniVoices) + 0.5f);
+        const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
+        op.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
+        op.curve = P (oi.uniCurve);
+        op.blendShape = std::clamp (P (oi.uniBlendShape) * 0.01f, -1.0f, 1.0f);
+        op.stack = static_cast<int> (P (oi.uniStack) + 0.5f);
+        op.stackRepeat = static_cast<int> (P (oi.uniStackRepeat) + 0.5f);
+        op.mode = static_cast<int> (P (oi.uniMode) + 0.5f);
+        op.spread = clamp01 (P (oi.uniSpread) * 0.01f) * clamp01 (gl->base[pidx->master.stereoSpread] * 0.01f);
+        op.uniBlend = clamp01 (P (oi.uniBlend) * 0.01f);
+        op.law = oi.uniLaw >= 0 ? static_cast<int> (gl->base[oi.uniLaw] + 0.5f) : 0;
+    }
+    if ((fields & kOfWarp) != 0)
+    {
+        op.warp[0] = static_cast<int> (P (oi.warpType) + 0.5f);
+        op.warpAmount[0] = clamp01 (P (oi.warpAmount) * 0.01f);
+        op.warpPhase[0] = P (oi.warpPhase) * (1.0f / 360.0f);
+        op.warpSpread[0] = std::clamp (P (oi.warpSpread) * 0.01f, -1.0f, 1.0f);
+        op.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
+        op.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
+        op.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
+        op.warpSpread[1] = std::clamp (P (oi.warp2Spread) * 0.01f, -1.0f, 1.0f);
+    }
+    if ((fields & kOfMorph) != 0)
+    {
+        op.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
+        op.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
+        op.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
+        op.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
+        op.remapOn = P (lk.idx[lk_remapOn]) >= 0.5f;
+        op.remapSlot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+        op.remapRise = P (lk.idx[lk_remapRise]);
+        op.remapFall = P (lk.idx[lk_remapFall]);
+    }
+    if ((fields & kOfLib) != 0)
+        op.libValid = false;
 }
 
 void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
@@ -1152,6 +1236,23 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         sub.start (P (pi.sub.phase) * 0.01f, 0.0f, rng);
     }
+    // the field groups of each oscillator part that a slot touched in this period (V7, refresh by group); the reference reads the whole part and needs none
+    uint32_t oscFieldsNow[3] = {};
+    if (!g.referenceControl && (nowTouched & (7u << kGroupOsc)) != 0)
+    {
+        if (numTouched >= kNumModSlots) // a full list counts as every key
+            oscFieldsNow[0] = oscFieldsNow[1] = oscFieldsNow[2] = kOfAll;
+        else
+        {
+            const uint16_t* masks = oscFieldMasks();
+            for (int i = 0; i < numTouched; ++i)
+            {
+                const int gi = static_cast<int> (groupOf[touched[i]]) - kGroupOsc;
+                if (gi >= 0 && gi < 3)
+                    oscFieldsNow[gi] |= masks[touched[i]];
+            }
+        }
+    }
     // a content set that replaced the one a sample-type player reads stops that player
     for (int o = 0; o < 3; ++o)
     {
@@ -1209,16 +1310,18 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             }
             continue;
         }
-        // V7: the part of the oscillator that depends on its keys alone, kept while the epoch is the same and no slot touched its keys (the reference: read every period)
+        // V7: the part of the oscillator that depends on its keys alone, kept while the epoch is the same. A period in which a slot touched keys of the oscillator reads only the field
+        // groups of those keys, and of the keys touched in the period before (they fall back to their knob); the reference (referenceControl) reads the whole part every period.
         OscPart& op = oscPart[o];
         {
-            const bool untouched = (nowTouched & (1u << (kGroupOsc + o))) == 0;
-            if (!(op.ok && untouched && g.baseEpoch != 0 && op.epoch == g.baseEpoch))
-            {
-                fillOscPart (o, op);
-                op.ok = untouched;
-                op.epoch = g.baseEpoch;
-            }
+            uint32_t fields = kOfAll;
+            if (!g.referenceControl && op.ok && g.baseEpoch != 0 && op.epoch == g.baseEpoch)
+                fields = oscFieldsNow[o] | op.modFields;
+            if (fields != 0)
+                fillOscPart (o, op, fields);
+            op.modFields = oscFieldsNow[o];
+            op.ok = !g.referenceControl;
+            op.epoch = g.baseEpoch;
         }
         oscDest[o] = op.dest;
         oscBlend[o] = op.blend;

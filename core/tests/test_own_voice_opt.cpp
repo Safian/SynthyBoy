@@ -87,6 +87,30 @@ struct VoiceOptTest
         if (!same (a.lastBusL, b.lastBusL, sizeof a.lastBusL) || !same (a.lastBusR, b.lastBusR, sizeof a.lastBusR)) return 27;
         return 0;
     }
+    /** 0 when two parts are the same field for field (the library keys only where both hold them), else the number of the first field that differs. */
+    static int partDiff (const Voice::OscPart& x, const Voice::OscPart& y)
+    {
+        int n = 0;
+#define SB_SAME(f) do { ++n; if (std::memcmp (&x.f, &y.f, sizeof x.f) != 0) return n; } while (0)
+        SB_SAME (dest); SB_SAME (wtChoice); SB_SAME (pmode); SB_SAME (ratioSrc); SB_SAME (transposeSnap); SB_SAME (voicesRaw); SB_SAME (stack); SB_SAME (stackRepeat); SB_SAME (mode);
+        SB_SAME (law); SB_SAME (morphType); SB_SAME (remapSlot); SB_SAME (warp); SB_SAME (blend); SB_SAME (send); SB_SAME (fixedNote); SB_SAME (coarseSemis); SB_SAME (transpose);
+        SB_SAME (tune001); SB_SAME (frame); SB_SAME (frameSpread); SB_SAME (level); SB_SAME (pan); SB_SAME (panRight); SB_SAME (detuneSemis); SB_SAME (curve); SB_SAME (blendShape);
+        SB_SAME (spread); SB_SAME (uniBlend); SB_SAME (morphAmount); SB_SAME (morphSpread); SB_SAME (remapRise); SB_SAME (remapFall); SB_SAME (warpAmount); SB_SAME (warpPhase);
+        SB_SAME (warpSpread); SB_SAME (env1); SB_SAME (track); SB_SAME (bendTrack); SB_SAME (smooth); SB_SAME (remapOn);
+#undef SB_SAME
+        if (x.libValid && y.libValid && std::memcmp (x.libV, y.libV, sizeof x.libV) != 0)
+            return 100;
+        return 0;
+    }
+    /** What `v` kept of oscillator o against the whole part read again from every key now (what the reference reads every period): 0 when the same. */
+    static int oscPartVsWhole (Voice& v, int o)
+    {
+        Voice::OscPart whole;
+        v.fillOscPart (o, whole, kOfAll);
+        return partDiff (v.oscPart[o], whole);
+    }
+    static bool oscPartOk (const Voice& v, int o) { return v.oscPart[o].ok; }
+    static int groupOfKey (const Voice& v, int idx) { return v.groupOf[idx]; }
 };
 } // namespace own
 } // namespace synthyboy
@@ -612,6 +636,137 @@ TEST (voice_opt_voice_state_is_bit_identical)
         }
     }
     std::printf ("%d voice patches, %d differ, %.1f s\n", patches, failed, std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V7 by group: a period in which a slot touched a key of an oscillator reads only the field groups of that key (and of the keys touched in the period before); every key of every
+// oscillator is touched alone, the part the voice keeps is compared field for field with the whole part read again, and the voice with the reference code (which reads the whole part
+// every period) is compared in state and output.
+
+namespace
+{
+/** The keys of oscillator o that its part (or its library keys) reads, with the group they are in. */
+std::vector<int> oscKeys (int o)
+{
+    std::vector<int> keys;
+    const OscIdx& oi = paramIndex().osc[o];
+    const int* f = reinterpret_cast<const int*> (&oi);
+    for (size_t i = 0; i < sizeof (OscIdx) / sizeof (int); ++i)
+        if (f[i] >= 0)
+            keys.push_back (f[i]);
+    for (int i = 0; i < kLibKeyCount; ++i)
+        if (libKeys (o).idx[i] >= 0)
+            keys.push_back (libKeys (o).idx[i]);
+    std::sort (keys.begin(), keys.end());
+    keys.erase (std::unique (keys.begin(), keys.end()), keys.end());
+    return keys;
+}
+} // namespace
+
+TEST (voice_opt_osc_part_refresh_by_group_touches_every_key_alone)
+{
+    ensureAllBuiltinWavetables();
+    float bends[16] = {}, wheel[16] = {}, after[16] = {}, tuned[128];
+    for (int k = 0; k < 128; ++k)
+        tuned[k] = static_cast<float> (k);
+    float lfoPhase[10] = {}, rlfoValue[4] = {};
+    int tested = 0, notModulatable = 0, failed = 0;
+    for (int o = 0; o < 3; ++o)
+        for (const int key : oscKeys (o))
+        {
+            const size_t choice = modDestinationChoiceOf (static_cast<size_t> (key));
+            if (choice == 0)
+            {
+                ++notModulatable;
+                continue;
+            }
+            for (int variant = 0; variant < 3; ++variant)
+            {
+                // the defaults with the three oscillators on, and one slot: macro 1 -> the key (the depth moves it across a large part of its range, the base value is varied by the variant)
+                std::vector<float> base (kMaxParams, 0.0f);
+                for (size_t i = 0; i < paramCount(); ++i)
+                    base[i] = paramTable()[i].def;
+                for (int q = 0; q < 3; ++q)
+                    base[static_cast<size_t> (paramIndex().osc[q].on)] = 1.0f;
+                base[static_cast<size_t> (paramIndex().filter[0].on)] = 1.0f;
+                const ParamInfo& info = paramTable()[key];
+                if (variant == 1)
+                    base[static_cast<size_t> (key)] = info.min + 0.3f * (info.max - info.min);
+                if (variant == 2)
+                    base[static_cast<size_t> (key)] = info.max;
+                const ModSlotParams& sp = paramIndex().slot[0];
+                base[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcMacro1);
+                base[static_cast<size_t> (sp.destination)] = static_cast<float> (choice);
+                base[static_cast<size_t> (sp.amount)] = variant == 2 ? -80.0f : 70.0f;
+                ModMatrix matrix;
+                matrix.compile (base.data());
+                VoiceRig a, b;
+                a.v.prepare (kSr);
+                b.v.prepare (kSr);
+                for (VoiceRig* x : { &a, &b })
+                {
+                    TickGlobals& g = x->g;
+                    g.base = base.data();
+                    g.matrix = &matrix;
+                    g.sampleRate = kSr;
+                    g.bpm = 120.0;
+                    g.channelBendSemis = bends;
+                    g.channelModWheel = wheel;
+                    g.channelAftertouch = after;
+                    g.tunedNotes = tuned;
+                    g.lfoPhase = lfoPhase;
+                    g.rlfoValue = rlfoValue;
+                    g.economy = 0u;
+                    g.usedSources = matrix.sourceMask();
+                    g.baseEpoch = 1;
+                    g.activeVoices = 1;
+                }
+                b.g.referenceControl = true;
+                NoteStart n;
+                n.key = 57 + variant;
+                n.tunedNote = static_cast<float> (n.key);
+                n.velocity = 0.8f;
+                n.serial = 1;
+                n.sequence = 1;
+                a.v.start (n, 0.0f, 0.0f);
+                b.v.start (n, 0.0f, 0.0f);
+                bool touchedOnce = false, untouchedAfterTouched = false, prevTouched = false;
+                for (int t = 0; t < 40; ++t)
+                {
+                    // touched, untouched, touched twice ... : the key returns to its knob while the epoch stays the same
+                    static const float kPattern[] = { 0.0f, 0.0f, 1.0f, 0.0f, 0.6f, 0.6f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f };
+                    const float m = kPattern[t % (sizeof kPattern / sizeof kPattern[0])];
+                    a.g.macro[0] = b.g.macro[0] = m;
+                    a.v.tick (a.g, 0);
+                    b.v.tick (b.g, 0);
+                    int d = VoiceOptTest::diff (a.v, b.v);
+                    for (int q = 0; q < 3 && d == 0; ++q)
+                        d = VoiceOptTest::oscPartVsWhole (a.v, q) != 0 ? 200 + q : 0;
+                    if (d == 0)
+                    {
+                        a.render (kControlPeriod, 0);
+                        b.render (kControlPeriod, 0);
+                        if (std::memcmp (a.mixL, b.mixL, sizeof a.mixL) != 0 || std::memcmp (a.mixR, b.mixR, sizeof a.mixR) != 0)
+                            d = 100;
+                    }
+                    touchedOnce = touchedOnce || m > 0.0f;
+                    untouchedAfterTouched = untouchedAfterTouched || (prevTouched && m == 0.0f);
+                    prevTouched = m > 0.0f;
+                    if (d != 0)
+                    {
+                        std::printf ("osc%d key %s variant %d period %d: field %d differs\n", o + 1, paramTable()[key].key, variant, t, d);
+                        ++failed;
+                        break;
+                    }
+                }
+                if (failed == 0)
+                    CHECK (touchedOnce && untouchedAfterTouched);
+                ++tested;
+            }
+        }
+    std::printf ("%d (osc key, base) cases, %d keys without a modulation destination, %d differ\n", tested, notModulatable, failed);
+    CHECK (tested > 150);
     CHECK_EQ (failed, 0);
 }
 

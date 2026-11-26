@@ -104,6 +104,15 @@ struct MixOut
     float (*meterR)[kControlPeriod] = nullptr;
 };
 
+/** The field groups of Voice::OscPart (V7): every field of the part of an oscillator is a function of the keys of its own group alone, so a period in which a slot touched a key re-reads
+    only the groups of that key (and of the keys touched in the period before, which fall back to their knob). */
+enum OscField : uint32_t { kOfRoute = 1u << 0, kOfWt = 1u << 1, kOfPitch = 1u << 2, kOfFrame = 1u << 3, kOfLevel = 1u << 4, kOfUni = 1u << 5, kOfWarp = 1u << 6, kOfMorph = 1u << 7, kOfLib = 1u << 8,
+                           kOfAll = (1u << 9) - 1u };
+
+/** Per parameter index, the OscField groups its value reaches: 0 for a key of an oscillator that the part does not read (the period reads it itself), kOfAll for a key of an oscillator
+    that no group claims (a key added later without a group refreshes everything instead of nothing). Built once (Voice::prepare); the test walks it. */
+const uint16_t* oscFieldMasks() noexcept;
+
 class Voice
 {
     friend struct VoiceOptTest; // core/tests/test_own_voice_opt.cpp
@@ -257,9 +266,11 @@ private:
         bool libValid = false;
         bool ok = false;
         uint32_t epoch = 0;
+        uint32_t modFields = 0;   // the field groups (OscField) that hold a value read with a modulation delta; the others hold the knob (the delta of the next period must revert them)
     };
     OscPart oscPart[3];
-    void fillOscPart (int o, OscPart& op) noexcept;
+    /** Reads the field groups `fields` (OscField bits) of the part of oscillator o: each field is a function of the keys of its own group alone (CPU-REVIEW-VOICE-MOD.md V7, refresh by group). */
+    void fillOscPart (int o, OscPart& op, uint32_t fields) noexcept;
     /** The same for the sub oscillator (its keys alone). */
     struct SubPart
     {
