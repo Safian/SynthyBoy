@@ -1368,6 +1368,13 @@ void OwnEngine::controlTick() noexcept
     }
     globals.activeVoices = activeCount.load (std::memory_order_relaxed);
     updateLowestNote();
+    {
+        // the voice the display reads (the newest, as writeReadout and the global modulation find it): the other voices skip what only the display of an unused LFO needs
+        globals.lfoDisplaySkip = !globals.referenceControl && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingLfoDisplay) == 0;
+        uint32_t newestSerial = 0;
+        forEachActive ([&] (int i) { newestSerial = std::max (newestSerial, voices[static_cast<size_t> (i)]->serial()); });
+        globals.newestSerial = newestSerial;
+    }
     forEachActive ([&] (int i) { voices[static_cast<size_t> (i)]->tick (globals, i); });
     // the global modulation (sources that do not belong to a voice) of the global parameters
     for (int i = 0; i < gnumTouched; ++i)

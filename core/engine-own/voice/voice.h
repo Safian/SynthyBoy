@@ -61,6 +61,8 @@ struct TickGlobals
     bool scalarContent = false;              // measurements (kOwnSavingContentKernels): the library oscillators run their reference code, not the block kernels
     bool scalarFilters = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): no pair kernels in the voice filters
     bool referenceControl = false;           // measurements (setOwnSavingsOff, kOwnSavingVoiceControl): the control code of the voice as it was before the caches of CPU-REVIEW-VOICE-MOD.md
+    bool lfoDisplaySkip = false;             // an LFO that no slot reads is evaluated (shape, smoothing) only in the newest voice, the one the display reads; the others only advance its clock (off: every voice evaluates it)
+    uint32_t newestSerial = 0;               // the largest serial of the active voices (OwnEngine::controlTick), with lfoDisplaySkip
     uint32_t economy = 0;                    // the economy groups in force (EconomyFlags of quality.h); the three tiers: all at low, none at medium / high
     MorphCache* morphCache = nullptr;        // the engine's cache of morph cycles (may be null)
     float killSeconds = 0.05f;               // the fade of a voice that was stolen (Kill mode); tier low: OwnEngine::setLowTierKillFade
@@ -221,7 +223,9 @@ private:
     }
     float modulatedSlow (int idx, float base, float delta) const noexcept;
     void clearMod() noexcept;
-    float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;
+    /** `advanceOnly`: the clock, the age and the display position of the LFO move as usual, the shape and the smoothing are not evaluated (the output is not made: lfoSkipped remembers it, and the
+        next evaluation starts the smoothing at the value instead of at the stale state). */
+    float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1, bool advanceOnly = false) noexcept;
     float lfoValueReference (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;   // as before the settings cache (TickGlobals::referenceControl)
     /** What an LFO derives from its keys, the tempo, the voice control and the sample rate (CPU-REVIEW-VOICE-MOD.md V3): kept per voice and LFO while those are the same and no slot touched a
         key of the LFO (the key follow rate, sync 4, reads the pitch of the voice and is computed every time from the kept keys). */
@@ -241,6 +245,7 @@ private:
         const LfoCore* monoCore = nullptr;
     };
     LfoSettings lfoSet[10];
+    uint16_t lfoSkipped = 0;   // bit l: the output and the smoothing of LFO l were not evaluated in a period since they were last (lfoDisplaySkip)
     /** The same for a random LFO: its keys and the rate (except the key follow rate). */
     struct RlfoSettings
     {

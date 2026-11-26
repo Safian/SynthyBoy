@@ -235,10 +235,11 @@ bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept;
     kOwnSavingParamDiff also makes a write of the value a parameter already holds move the parameter generation (the reference of the bit identity test of the no-op snapshot).
     kOwnSavingParamDiff also makes a write of the value a parameter already holds move the parameter generation (the reference of the bit identity test of the no-op snapshot).
     kOwnSavingVcgCache = the voice count gain makes its three libm calls every control period (the same samples).
+    kOwnSavingLfoDisplay = every voice evaluates the shape and the smoothing of an LFO that no slot reads (otherwise only the newest voice, which the display reads, does).
     Default 0 (every saving on). False if `engine` is not an own engine. */
 enum OwnSaving : uint32_t { kOwnSavingFxMute = 1u << 0, kOwnSavingVectorFilters = 1u << 1, kOwnSavingVectorWarp = 1u << 2, kOwnSavingContentKernels = 1u << 3,
                             kOwnSavingVoiceControl = 1u << 4, kOwnSavingParamDiff = 1u << 5,
-                            kOwnSavingVcgCache = 1u << 6 };
+                            kOwnSavingVcgCache = 1u << 6, kOwnSavingLfoDisplay = 1u << 7 };
 bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept;
 
 #define SYNTHYBOY_HAS_VOICE_COUNT_GAIN 1

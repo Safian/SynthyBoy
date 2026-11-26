@@ -357,6 +357,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
         ok = false;
     for (auto& ls : lfoSet)
         ls.ok = false;
+    lfoSkipped = 0;
     for (auto& rs : rlfoSet)
         rs.ok = false;
     for (auto& op : oscPart)
@@ -447,7 +448,7 @@ float Voice::customShape (const CompiledShape& cs, float u) noexcept
     return evaluateCustomShape (cs, src, scratchShape, u);
 }
 
-float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
+float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps, bool advanceOnly) noexcept
 {
     // V3: the code of lfoValueReference () with the settings of the LFO kept while their inputs are the same (the same expressions of the same values)
     LfoSettings& st = lfoSet[l];
@@ -540,6 +541,13 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
         lfoReadPos[l] = mono ? g.monoCore[l].offset : lfoCore[l].offset; // display only
     }
     lfoAge[l] += dt;
+    if (advanceOnly)
+    {
+        lfoSkipped = static_cast<uint16_t> (lfoSkipped | (1u << l));
+        return 0.0f;
+    }
+    const bool seedSmooth = ((lfoSkipped >> l) & 1u) != 0; // the smoothing state is the one of an earlier period: it starts at this value
+    lfoSkipped = static_cast<uint16_t> (lfoSkipped & ~(1u << l));
     const bool smooth = st.smooth;
     float fadeAmount = 1.0f;
     if (!smooth)
@@ -568,7 +576,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
         float v = 2.0f * out - 1.0f;
         if (smooth)
         {
-            if (smoothStep)
+            if (smoothStep && !seedSmooth)
                 smoothed += (v - smoothed) * coef;
             else
                 smoothed = v;
@@ -1013,13 +1021,24 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     // Economy group Control (tier low): an LFO that no slot reads only feeds the display, so it is evaluated every fourth period (staggered) over four periods' time
     // instead of every period: the phase and the fade keep their pace, the display gets a value 1.4 ms old at most.
     ++tickCount;
+    // An LFO no slot reads feeds only the display, which reads the newest voice: the other voices advance its clock and its age (the audio of an LFO that is used later starts from the
+    // right phase) and skip the shape and the smoothing; the first evaluation after that starts the smoothing at the value. A voice that starts evaluates everything.
+    const bool displayOnlyNewest = g.lfoDisplaySkip && !g.referenceControl && !fresh && noteSerial != g.newestSerial;
     for (int l = 0; l < 10; ++l)
     {
         if ((g.economy & kEconomyControl) != 0 && !fresh && ((g.usedSources >> srcLfo (l)) & 1u) == 0)
         {
             if (((tickCount + static_cast<uint32_t> (l)) & 3u) != 0u)
                 continue; // lfoOut / lfoOutR keep their last values
-            lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l], 4) : lfoValue (l, g, lfoOutR[l], 4);
+            if (displayOnlyNewest)
+                lfoValue (l, g, lfoOutR[l], 4, true);
+            else
+                lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l], 4) : lfoValue (l, g, lfoOutR[l], 4);
+            continue;
+        }
+        if (displayOnlyNewest && ((g.usedSources >> srcLfo (l)) & 1u) == 0)
+        {
+            lfoValue (l, g, lfoOutR[l], 1, true);
             continue;
         }
         lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l]) : lfoValue (l, g, lfoOutR[l]);
