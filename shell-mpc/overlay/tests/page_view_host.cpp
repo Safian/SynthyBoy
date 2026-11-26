@@ -203,27 +203,27 @@ void testOscNativeBackgrounds()
             return pixels;
         };
         const auto pixelAt = [] (int x, int y) { return static_cast<size_t> (y * page::kW + x); };
-        const ui::Rect selector = view->ui().selectorArea(), power = view->ui().powerArea(), routing = view->ui().routingArea();
+        const ui::Rect power = view->ui().powerArea(), routing = view->ui().routingArea();
         const ui::Rect pan = view->ui().ui().full().panArea(), level = view->ui().ui().full().levelArea();
         check (power == ui::playrows::powerRect (view->ui().ui().full().displayRect()), std::string (source.view) + " shares the packaged POWER bounds");
         const auto hitAt = [&] (ui::Rect area) { return view->ui().covers (area.x + area.w / 2, area.y + area.h / 2); };
         const size_t outside = pixelAt (1, tab.y + tab.h / 2);
         const auto cold = capture();
         check (cold[outside] >> 24 == 255 && cold[pixelAt (power.x + 4, power.y + 8)] == 0
-               && ! hitAt (selector) && ! hitAt (power) && ! hitAt (routing),
+               && ! hitAt (power) && ! hitAt (routing),
                std::string (source.view) + " draws fallback furniture around the three operable native controls");
 
         present (background->sentinelRgb, true);
         const auto foreground = capture();
         check (view->ui().hostBackground() && foreground[outside] >> 24 == 0,
                std::string (source.view) + " reveals the native furniture after the sentinel matches");
-        check (foreground[pixelAt (selector.x + 4, selector.y + 8)] == 0
+        check (view->ui().selectorArea().empty()
                && foreground[pixelAt (routing.x + 4, routing.y + 8)] == 0
                && foreground[pixelAt (power.x + 4, power.y + 8)] == 0
                && foreground[pixelAt (pan.x + 4, pan.y + 8)] == 0
                && foreground[pixelAt (level.x + 4, level.y + 8)] == 0
-               && ! hitAt (selector) && ! hitAt (power) && ! hitAt (routing) && ! hitAt (pan) && ! hitAt (level),
-               std::string (source.view) + " leaves selector, POWER, PAN, LEVEL and routing apertures transparent and clickable");
+               && ! hitAt (power) && ! hitAt (routing) && ! hitAt (pan) && ! hitAt (level),
+               std::string (source.view) + " leaves POWER, PAN, LEVEL and routing apertures transparent and clickable");
 
         const auto& layout = layout::kViews[index];
         check (foreground[pixelAt (sx + 2, sy + 2)] == cold[pixelAt (sx + 2, sy + 2)]
@@ -236,7 +236,7 @@ void testOscNativeBackgrounds()
         for (int y = tab.y; y < tab.bottom(); ++y)
             for (int x = 0; x < tab.right(); ++x)
             {
-                if (selector.contains (x, y) || power.contains (x, y) || routing.contains (x, y) || pan.contains (x, y) || level.contains (x, y))
+                if (power.contains (x, y) || routing.contains (x, y) || pan.contains (x, y) || level.contains (x, y))
                     continue;
                 const size_t pixel = pixelAt (x, y);
                 const auto composed = draw::over (canvas, foreground[pixel], 255);
@@ -256,7 +256,7 @@ void testOscNativeBackgrounds()
             r.run (300);
             const auto modal = capture();
             check (! view->ui().hostBackground() && modal[outside] >> 24 == 255 && modal[pixelAt (power.x + 4, power.y + 8)] >> 24 == 255
-                   && hitAt (selector) && hitAt (power) && hitAt (routing),
+                   && hitAt (power) && hitAt (routing),
                    std::string (source.view) + " draws its own modal ground and claims all three apertures");
             r.ctl->back (r.ctl->slotOf (&r.inst));
             r.run (300);
@@ -268,7 +268,7 @@ void testOscNativeBackgrounds()
         const auto off = capture();
         check (view->ui().hostBackground() && off[outside] == 0
                && off[pixelAt (power.x + 4, power.y + 8)] == 0
-               && ! hitAt (selector) && ! hitAt (power) && hitAt (routing) && r.inst.uiWrites.load() == writes,
+               && ! hitAt (power) && hitAt (routing) && r.inst.uiWrites.load() == writes,
                std::string (source.view) + " keeps the native canvas and preserves host selector and POWER touch when off");
         r.inst.set (source.power, 1.0f);
         r.run (500);

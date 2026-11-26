@@ -488,7 +488,7 @@ void testNativeAbcSettings()
            "a late Osc A TYPE callback cannot write to Osc B’s current field");
     r.inst.set ("osc2.on", 0);
     r.refresh();
-    check (r.inst.settings.layout() != n::SettingsHidden && ! r.page.covers (100, r.page.selectorArea().y + 12),
+    check (r.inst.settings.layout() != n::SettingsHidden,
            "the switched-off ABC root retains settings and source navigation");
 }
 
@@ -667,8 +667,7 @@ static void testNativeSourceSwitch()
         post (n::kSource, static_cast<float> (src - 1) / (n::kLastSource - 1));
         check (r.inst.native.snapshot().source() == src && r.inst.native.snapshot().visibility() == n::kRootOff
                && r.page.display().selection() == src && r.page.display().kind() == synthyboy::OscCycle::Kind::off
-               && r.page.covers (r.page.routingArea().x + 8, r.page.routingArea().y + 8)
-               && ! r.page.covers (r.page.selectorArea().x + 8, r.page.selectorArea().y + 8),
+               && r.page.covers (r.page.routingArea().x + 8, r.page.routingArea().y + 8),
                "OFF source " + std::to_string (src) + " uses its own graph and lets the menu navigate");
         post (n::kRouting, 1.0f);
         check (r.inst.writes == 1, "OFF routing is rejected at the host boundary");
@@ -1475,27 +1474,15 @@ int main (int argc, char** argv)
             check (! r.page.hostBackground(), "the native selector alone does not confirm the host background");
             check (r.page.ui().hasNativeInstanceSelector(), "internal OscUi reflects native selector state");
 
-            const ui::Rect apt = r.page.selectorArea();
-            check (! apt.empty(), "selectorArea is non-empty");
-            check (apt.x == 0 && apt.y == 690 && apt.w == 1280 && apt.h == 48,
-                   "selectorArea matches aperture geometry (0, 690, 1280, 48)");
-
-            // Hit-testing and covers(): touch inside aperture must not be covered by overlay
-            const int cx = apt.x + apt.w / 2, cy = apt.y + apt.h / 2;
-            check (! r.page.covers (apt.x + 10, apt.y + 10), "touch inside aperture is not covered (passes to host)");
-            check (! r.page.covers (cx, cy), "centre of aperture is not covered");
-            check (r.page.covers (500, 300), "normal page area outside aperture is covered by overlay");
-
-            // Touch pass-through
-            check (! r.page.touch (ev (TouchEvent::Down, cx, cy), r.stack, r.inst, 100.0),
-                   "touch down inside aperture returns false (passed through to host)");
+            check (r.page.selectorArea().empty(), "a page of a tab has no in-screen source strip: the hardware sub-tab selects the oscillator");
+            check (r.page.covers (500, 300), "normal page area is covered by overlay");
 
             // Scene drawing with aperture
             gpu::SceneData sd;
             gpu::SceneBuilder sb (sd);
             sb.begin (gpu::kKindPlay, 0, 1280, 800);
             r.page.draw (sb);
-            check (! sb.overflow, "scene with native selector aperture draws without overflow");
+            check (! sb.overflow, "scene of the page without a source strip draws without overflow");
 
             // OFF navigation with native selector active
             const int w0 = r.inst.writes;
@@ -1503,7 +1490,6 @@ int main (int argc, char** argv)
             r.refresh();
 
             check (! OscPageUi::isInstanceOn (r.inst, 2), "Osc A is OFF");
-            check (! r.page.covers (cx, cy), "aperture remains non-covered and operable while oscillator is OFF");
             check (r.page.ui().full().power.enabled() && ! r.page.ui().full().power.inactive(),
                    "POWER toggle remains enabled and active while oscillator is OFF");
             check (! r.page.ui().full().close.inactive(),
@@ -1619,8 +1605,8 @@ int main (int argc, char** argv)
                 check (r.inst.writes == before + 1 && r.inst.lastWritten == Inst::idx (keys[source - 1])
                        && r.inst.get (keys[other - 1]) == unchanged && r.inst.native.snapshot().powerValue (source) == 0.0f
                        && r.page.ui().full().inactive() && ! r.page.covers (x, y)
-                       && ! r.page.covers (100, r.page.selectorArea().y + 12) && ! r.page.isNativeRoutingActive(),
-                       std::string (keys[source - 1]) + " turns OFF once and keeps only POWER and selector native");
+                       && ! r.page.isNativeRoutingActive(),
+                       std::string (keys[source - 1]) + " turns OFF once and keeps only POWER native");
                 r.inst.native.post (n::kRouting, 0.5f);
                 r.inst.native.postPower (source, 0.0f);   // host echo
                 r.refresh();
@@ -1727,22 +1713,23 @@ int main (int argc, char** argv)
             r.page.setHostBackground (true);
             r.refresh();
             check (r.page.hasNativeInstanceSelector() && r.page.hasNativeRouting() && r.page.isNativeRoutingActive(),
-                   "setHostBackground enables both standalone native selector and routing apertures when ON");
+                   "setHostBackground enables the standalone native page layout and routing apertures when ON");
             check (! r.inst.fullOpen, "standalone native base page keeps fullOpen false (host controls visible)");
-            const ui::Rect sApt = r.page.selectorArea();
+            check (r.page.selectorArea().empty(), "the standalone page has no source strip aperture");
+            const ui::Rect sApt = r.page.ui().full().panArea();   // the bottom native row stands in for the former strip: PAN
             const ui::Rect pApt = r.page.powerArea();
             const ui::Rect rApt = r.page.routingArea();
-            check (sApt.x == 0 && sApt.y == 690 && sApt.w == 1280 && sApt.h == 48, "selector aperture stays (0, 690, 1280, 48)");
+            check (sApt.y == 690 && sApt.h == 48, "the bottom native row (PAN, LEVEL) takes the freed bottom 48 px (y 690)");
             check (rApt.x == 1122 && rApt.y == 147 && rApt.w == 150 && rApt.h == 48, "routing aperture placed at (1122, 147, 150, 48)");
             check (! sApt.overlaps (rApt), "selector and routing apertures do not overlap");
 
             const int rcx = rApt.x + rApt.w / 2, rcy = rApt.y + rApt.h / 2;
             const int scx = sApt.x + sApt.w / 2, scy = sApt.y + sApt.h / 2;
-            check (! r.page.covers (scx, scy) && ! r.page.covers (rcx, rcy), "both selector and routing apertures pass through on base page");
+            check (! r.page.covers (scx, scy) && ! r.page.covers (rcx, rcy), "both PAN and routing apertures pass through on base page");
             check (r.page.covers (640, rcy), "region between apertures remains covered by overlay");
             check (! r.page.touch (ev (TouchEvent::Down, rcx, rcy), r.stack, r.inst, r.now), "touch inside routing aperture returns false");
             check (! r.page.wheel (rcx, rcy, 1, r.stack, r.inst, r.now), "wheel inside routing aperture returns false");
-            check (! r.page.wheel (scx, scy, 1, r.stack, r.inst, r.now), "wheel inside selector aperture returns false");
+            check (! r.page.wheel (scx, scy, 1, r.stack, r.inst, r.now), "wheel inside the PAN aperture returns false");
 
             // Cancelling (no host write committed) leaves destination untouched
             const int wBefore = r.inst.writes;
@@ -1770,7 +1757,6 @@ int main (int argc, char** argv)
             r.inst.set ("osc1.on", 0.0f);
             r.refresh();
             check (! r.page.isNativeRoutingActive(), "powering Osc A OFF closes routing aperture");
-            check (! r.page.covers (scx, scy), "selector aperture stays pass-through while OFF");
             check (r.page.covers (rcx, rcy), "routing aperture is covered by overlay while OFF");
             check (r.page.touch (ev (TouchEvent::Down, rcx, rcy), r.stack, r.inst, r.now),
                    "touch inside routing aperture is absorbed by overlay when OFF");
@@ -1778,8 +1764,6 @@ int main (int argc, char** argv)
             r.refresh();
             check (r.inst.writes == wOff0, "tapping closed OFF routing aperture writes zero parameters");
             check (renderPage (r.page, cv), "OFF dual-aperture scene renders cleanly");
-            alphaRange (cv, sApt, minA, maxA);
-            check (maxA == 0u, "selector aperture remains transparent when OFF");
             alphaRange (cv, pApt, minA, maxA);
             check (maxA == 0u, "POWER aperture remains transparent on the fallback OFF root");
             alphaRange (cv, rApt, minA, maxA);
@@ -1792,8 +1776,8 @@ int main (int argc, char** argv)
                 rOff.page.setHostBackground (true);
                 rOff.inst.set (offCase.second, 0.0f);
                 rOff.refresh();
-                check (! rOff.page.isNativeRoutingActive() && rOff.page.covers (rcx, rcy) && ! rOff.page.covers (scx, scy),
-                       std::string (offCase.second) + " OFF closes routing aperture and keeps selector aperture open");
+                check (! rOff.page.isNativeRoutingActive() && rOff.page.covers (rcx, rcy),
+                       std::string (offCase.second) + " OFF closes routing aperture");
             }
 
             // Restore Osc A ON

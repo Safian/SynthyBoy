@@ -1453,9 +1453,10 @@ void testStandaloneNativeRouting()
     r.stack.openFull (OscUi::kElementOsc);
     r.refresh();
 
-    const ui::Rect sel = r.ui.selectorArea();
+    check (r.ui.selectorArea().empty(), "a page of a tab has no in-screen source strip");
+    const ui::Rect sel = r.ui.full().panArea();   // the bottom native row (PAN) took the freed strip row
     const ui::Rect route = r.ui.routingArea();
-    check (sel == ui::Rect ({ 0, 690, 1280, 48 }) && route == ui::Rect ({ 1122, 147, 150, 48 }),
+    check (sel == ui::Rect ({ 864, 690, 202, 48 }) && route == ui::Rect ({ 1122, 147, 150, 48 }),
            "standalone OscUi exposes selector and routing apertures");
     check (! r.ui.covers (sel.x + 10, sel.y + 10) && ! r.ui.covers (route.x + 10, route.y + 10),
            "standalone OscUi leaves selector and ON routing apertures uncovered on base page");

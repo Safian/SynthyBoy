@@ -345,6 +345,8 @@ public:
     {
         setText (pageTitle_, sizeof pageTitle_, title != nullptr ? title : "");
         show (close, pageTitle_[0] == '\0' && ! nativeSelector_);
+        if (rect_.w > 0)
+            layout();   // the strip of the native selector exists only without a page title
     }
     bool isPage() const noexcept { return pageTitle_[0] != '\0'; }
     const char* pageTitle() const noexcept { return pageTitle_; }
@@ -384,8 +386,8 @@ public:
     static constexpr Rect tuneAreaAt (int x, int y) noexcept { return { x + 994, y + 202, 278, 154 }; }
     Rect tuneArea() const noexcept { return tuneAreaAt (rect_.x, rect_.y); }
     Rect routingArea() const noexcept { return routingArea_; }
-    Rect panArea() const noexcept { return { rect_.right() - 416, rect_.bottom() - 96, 202, 48 }; }
-    Rect levelArea() const noexcept { return { rect_.right() - 210, rect_.bottom() - 96, 202, 48 }; }
+    Rect panArea() const noexcept { return { rect_.right() - 416, rect_.bottom() - 48 - (nativeStrip() ? 48 : 0), 202, 48 }; }
+    Rect levelArea() const noexcept { return { rect_.right() - 210, rect_.bottom() - 48 - (nativeStrip() ? 48 : 0), 202, 48 }; }
     bool isNativeRouting (int x, int y) const noexcept
     {
         return isNativeRoutingActive() && (panArea().contains (x, y) || levelArea().contains (x, y) || routingArea_.contains (x, y));
@@ -484,6 +486,7 @@ protected:
         const bool oneRow = inst_ == OscInstance::Sub || inst_ == OscInstance::Noise;
         const bool isTab = H <= 650;
         const int topH = isTab ? 78 : 88;   // 78: the dial of the position knob is as big as the dial of the warp slots (70 px, one size on the page)
+        const int bottomRow = nativeStrip() ? 48 : 0;
         const int bottomH = oneRow ? KnobPanel::kBlockTitleH + KnobPanel::kOneRowH + KnobPanel::kBlockPad : (nativeSelector_ && hasNativeTune() ? 176 : isTab ? 216 : kBottomH);   // the one-row blocks are at their maximum height; the room that frees goes to the display
         const int lane = isTab ? 22 : (m + kQLane + 2);
         const Rect topR { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
@@ -492,7 +495,7 @@ protected:
         layoutRow (topR, fixed, weight, 4, kGap, r);
         selectorArea_ = { r[0].x, topR.y + (topH - 56) / 2, r[0].w, 56 };
         if (nativeSelector_)
-            selectorArea_ = { rect_.x, rect_.bottom() - 48, W, 48 };
+            selectorArea_ = nativeStrip() ? Rect { rect_.x, rect_.bottom() - 48, W, 48 } : Rect {};   // a page of a tab has no strip: the hardware sub-tab names the oscillator
         close.place (selectorArea_);
         const bool column = nativeSelector_ && hasNativeTune();
         top.setNativeColumn (column);
@@ -504,7 +507,7 @@ protected:
         mix.place ({ r[3].x, topR.y + 7, r[3].w, topH - 14 });
         show (mix, ! nativeRouting_);
         const int gap = kGap + 4;
-        const int panelY = rect_.bottom() - (nativeSelector_ ? 96 : isTab ? 0 : m) - bottomH;
+        const int panelY = rect_.bottom() - (nativeSelector_ ? 48 + bottomRow : isTab ? 0 : m) - bottomH;   // the native row (PAN, LEVEL) is the bottom row; the strip, where there is one, is under it
         const int midY = column ? rect_.y + 64 : top.rect().bottom() + gap;
         display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
         if (hasNativeTune())
@@ -588,6 +591,8 @@ protected:
             p.textCentered (close.rect(), pageTitle_, T.fTitle, p.c (T.text, 255), T.fMin);
     }
     Rect display_;
+    /** The in-screen instance strip exists only on a full screen (the Play expansion); a page of a tab (setPageTitle) has none. */
+    bool nativeStrip() const noexcept { return nativeSelector_ && pageTitle_[0] == '\0'; }
     Rect selectorArea_;
     Rect routingArea_;
     OscInstance inst_ = OscInstance::A;
