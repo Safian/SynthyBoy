@@ -30,6 +30,7 @@ struct WtOscSavingsTest
     }
     static void dotRun (const float* x, int stride, int n, const float* taps, float* out) { WtOsc::dot32Run (x, stride, n, taps, out); }
     static float dot (const float* x, const float* taps) { return WtOsc::dot32 (x, taps); }
+    static float dot4x (const float* x, const float* taps) { return WtOsc::dot128 (x, taps); }
     static const float* rev() { return WtOsc::kDecimator2Rev.c; }
     static bool held (const WtOsc& o, int g) { return o.morphHeld[g]; }
     /** sum over the voices of the larger gain of the period, and the largest sample of the cycle buffers (both of each group): the scale of the error bound of the single cycle read. */
@@ -578,6 +579,43 @@ TEST (the_four_output_decimator_run_equals_one_dot_product_per_output)
         bad += sameBitsArr (a, b, n) ? 0 : 1;
     }
     std::printf ("    %lld outputs: %lld runs differ from dot32 one by one\n", values, bad);
+    CHECK_EQ (bad, 0);
+}
+
+/** dot32 () and dot128 () (the decimators of the oversampled path: four interleaved partial sums, lane j takes the taps 4 k + j, added as (s0 + s1) + (s2 + s3)) against those sums written out
+    as scalar code: the NEON form is the vector accumulate and the horizontal add, the other builds (x86, SB_NO_NEON) the scalar form, so this test pins both to the same bits. NaN and infinity
+    in the data are compared as a value (a NaN as a NaN: NEON on 32 bit ARM makes the default NaN). */
+TEST (the_decimator_dot_products_equal_the_scalar_partial_sums)
+{
+    const auto scalarDot = [] (const float* x, const float* taps, int n)
+    {
+        float s0 = taps[0] * x[0], s1 = taps[1] * x[1], s2 = taps[2] * x[2], s3 = taps[3] * x[3];
+        for (int k = 4; k < n; k += 4)
+        {
+            s0 += taps[k] * x[k];
+            s1 += taps[k + 1] * x[k + 1];
+            s2 += taps[k + 2] * x[k + 2];
+            s3 += taps[k + 3] * x[k + 3];
+        }
+        return (s0 + s1) + (s2 + s3);
+    };
+    const auto same = [] (float a, float b) { return (a != a && b != b) || std::memcmp (&a, &b, 4) == 0; };
+    TestRng r (73);
+    long long compared = 0, bad = 0;
+    const float inf = std::numeric_limits<float>::infinity();
+    for (int round = 0; round < 40000; ++round)
+    {
+        float x[160], taps[128];
+        for (float& v : x)
+            v = r.chance (4) ? 0.0f : (r.chance (30) ? (r.chance (2) ? inf : -inf) : (r.chance (40) ? std::numeric_limits<float>::quiet_NaN() : r.bi() * (r.chance (5) ? 1.0e6f : 1.0f)));
+        for (float& v : taps)
+            v = r.chance (6) ? -0.0f : r.bi() * 0.2f;
+        const int off = r.range (0, 3);
+        compared += 2;
+        bad += same (WtOscSavingsTest::dot (x + off, taps), scalarDot (x + off, taps, 32)) ? 0 : 1;
+        bad += same (WtOscSavingsTest::dot4x (x + off, taps), scalarDot (x + off, taps, 128)) ? 0 : 1;
+    }
+    std::printf ("    %lld dot products: %lld differ from the scalar partial sums\n", compared, bad);
     CHECK_EQ (bad, 0);
 }
 

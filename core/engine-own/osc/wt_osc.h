@@ -1318,18 +1318,23 @@ public:
         return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, fr), c2), fr), c1), fr), x0);
     }
 
-    /** ffloor () of dsp/util.h for |x| < 4194304 (the caller sees to that): the truncation, minus one where it went up. */
+    /** ffloor () of dsp/util.h for |x| < 4194304 (the caller sees to that, it is the domain of this function): the truncation, minus one where it went up. The test "went up" is the
+        integer form of x < float (truncation) (neoncmp::belowTruncation: the IEEE compare for all 2^32 bit patterns, one NEON sequence on both architectures; a float compare
+        is scalar code per lane on 32 bit ARM). Domain, besides |x| < 2^22: x is not -0 (ffloor (-0) is -0, this gives +0: a phase is never -0, it is a multiple of 2^-24 or a sum / product with one) and not subnormal: for a negative subnormal x the integer form is true (IEEE), the flush-to-zero float compare was false. */
     static float32x4_t ffloor4 (float32x4_t x) noexcept
     {
         const int32x4_t i = vcvtq_s32_f32 (x);
-        const uint32x4_t less = vcltq_f32 (x, vcvtq_f32_s32 (i));
+        const uint32x4_t less = neoncmp::belowTruncation (x, i);
         return vcvtq_f32_s32 (vaddq_s32 (i, vreinterpretq_s32_u32 (less))); // a true lane is all ones: -1
     }
-    /** fastmath::sinCycles () of four phases: the same truncation, wrap, table position and interpolation. */
+    /** fastmath::sinCycles () of four phases: the same truncation, wrap, table position and interpolation. Domain (kept by the callers, which pass phases of the oscillator in cycles):
+        |c| < 2^23 (sinCycles () returns 0 or the NaN beyond) and c not subnormal (see the wrap compare below). */
     static float32x4_t sinCycles4 (float32x4_t c) noexcept
     {
         float32x4_t w = vsubq_f32 (c, vcvtq_f32_s32 (vcvtq_s32_f32 (c)));
-        w = vbslq_f32 (vcltq_f32 (w, vdupq_n_f32 (0.0f)), vaddq_f32 (w, vdupq_n_f32 (1.0f)), w);
+        // w < 0 as the integer compare (neoncmp::ltZero: the IEEE compare for all 2^32 bit patterns). w is the phase itself or a multiple of its ulp, so it is subnormal only for a
+        // subnormal phase c, which the callers never pass (their phases are multiples of 2^-24 or results of arithmetic on them): the IEEE and the flush-to-zero compare agree then.
+        w = vbslq_f32 (neoncmp::ltZero (w), vaddq_f32 (w, vdupq_n_f32 (1.0f)), w);
         const float32x4_t pos = vmulq_f32 (w, vdupq_n_f32 (1024.0f));
         const int32x4_t i = vminq_s32 (vcvtq_s32_f32 (pos), vdupq_n_s32 (1023));
         const float32x4_t fr = vsubq_f32 (pos, vcvtq_f32_s32 (i));
@@ -1504,6 +1509,7 @@ public:
         const uint32x4_t step4 = vld1q_u32 (stepArr);
         const uint32x4_t adv4 = vshlq_n_u32 (incS, 2);
         const float32x4_t gSl = vaddq_f32 (vpg, vzf), gSr = vaddq_f32 (vpgr, vzf);
+        const bool powerOfTwoN = invN > 0.0f; // the scalar compare once, not in the lane loop
         for (; k + 4 <= n; k += 4)
         {
             uint32x4_t phs;
@@ -1535,7 +1541,7 @@ public:
                 const float* const bB[4] = { cB, cB, cB, cB };
                 const float32x4_t yB = hermite4 (bB, idx, fr);
                 float32x4_t wkv;
-                if (invN > 0.0f)
+                if (powerOfTwoN)
                     wkv = vaddq_f32 (vwb0, vmulq_f32 (vdwb, vmulq_f32 (vcvtq_f32_s32 (vk), vinvN))); // lerp (wB0, wB1, (k + j + 1) / n)
                 else
                 {

@@ -112,6 +112,86 @@ TEST (the_parts_of_the_lane_form_equal_the_scalar_functions)
 #endif
 }
 
+/** ffloor4 () and sinCycles4 () (the lane forms; their compares are the integer forms of dsp/neon_cmp.h) against ffloor () and fastmath::sinCycles () over their whole domain: every normal float of
+    either sign with |x| < 2^22 (ffloor4) or |c| < 2^23 (sinCycles4, the table sine), with SB_TEST_FULL=1 every 1st / 13th such pattern, in the quick run every 4099th, and in both the binade
+    boundaries, the integers and their neighbours. (A subnormal phase is not in the domain: documented at the functions.) */
+TEST (the_lane_floor_and_sine_equal_the_scalar_functions_over_their_whole_domain)
+{
+#if SB_NEON
+    const uint32_t strideFloor = static_cast<uint32_t> (sbtest::quickScaled ("lane floor: sweep of the domain (stride)", 1, 4099));
+    const uint32_t strideSin = static_cast<uint32_t> (sbtest::quickScaled ("lane sine: sweep of the domain (stride)", 13, 4099));
+    const auto fromBits = [] (uint32_t u) { float f; std::memcpy (&f, &u, 4); return f; };
+    std::vector<uint32_t> boundary;
+    for (uint32_t sign = 0; sign < 2; ++sign)
+    {
+        for (uint32_t e = 1; e < 151; ++e)
+            for (uint32_t mant : { 0u, 1u, 2u, 0x3fffffu, 0x400000u, 0x400001u, 0x7ffffeu, 0x7fffffu })
+                boundary.push_back ((sign << 31) | (e << 23) | mant);
+        for (uint32_t k = 0; k < 40; ++k)   // the integers 0 .. 39 and their neighbours
+            for (int d = -3; d <= 3; ++d)
+            {
+                const uint32_t u = [&] { const float f = static_cast<float> (k); uint32_t b; std::memcpy (&b, &f, 4); return b; }();
+                boundary.push_back ((sign << 31) | ((u + static_cast<uint32_t> (d)) & 0x7fffffffu));
+            }
+    }
+    long long badFloor = 0, badSin = 0, valuesFloor = 0, valuesSin = 0;
+    // four patterns at a time through the lane form and the scalar function (the sweep is streamed: all 2^31 patterns would not fit in memory)
+    const auto group = [&] (bool sine, const uint32_t b[4])
+    {
+        float x[4], out[4];
+        for (int l = 0; l < 4; ++l)
+            x[l] = fromBits (b[l]);
+        vst1q_f32 (out, sine ? WtOscLaneTest::sin4 (vld1q_f32 (x)) : WtOscLaneTest::floor4 (vld1q_f32 (x)));
+        for (int l = 0; l < 4; ++l)
+        {
+            // ffloor4 (-0) is +0 where ffloor (-0) is -0 (the truncation makes the zero): a documented difference of the domain, a phase is never -0 (see ffloor4); every other input is bit for bit
+            const bool ok = sameBits (out[l], sine ? fastmath::sinCycles (x[l]) : ffloor (x[l])) || (! sine && x[l] == 0.0f && out[l] == 0.0f);
+            if (! ok && (sine ? badSin : badFloor) < 4)
+            {
+                uint32_t xb, ob;
+                std::memcpy (&xb, &x[l], 4);
+                std::memcpy (&ob, &out[l], 4);
+                std::printf ("    %s: input %08x lane form %08x\n", sine ? "sinCycles4" : "ffloor4", xb, ob);
+            }
+            (sine ? badSin : badFloor) += ok ? 0 : 1;
+            ++(sine ? valuesSin : valuesFloor);
+        }
+    };
+    const auto run = [&] (bool sine, uint32_t limit, uint32_t stride)
+    {
+        uint32_t b[4];
+        int n = 0;
+        const auto push = [&] (uint32_t u)
+        {
+            b[n++] = u;
+            if (n == 4)
+            {
+                group (sine, b);
+                n = 0;
+            }
+        };
+        for (uint64_t m = 0x00800000u; m < limit; m += stride)
+            for (uint32_t sign = 0; sign < 2; ++sign)
+                push ((sign << 31) | static_cast<uint32_t> (m));
+        for (uint32_t bd : boundary)
+            if ((bd & 0x7fffffffu) >= 0x00800000u && (bd & 0x7fffffffu) < limit)
+                push (bd);
+        push (0u);
+        push (0x80000000u);   // +0 and -0
+        while (n != 0)
+            push (0u);
+    };
+    run (false, 0x4a800000u, strideFloor);
+    run (true, 0x4b000000u, strideSin);
+    std::printf ("    ffloor4: %lld values, %lld differ; sinCycles4: %lld values, %lld differ\n", valuesFloor, badFloor, valuesSin, badSin);
+    CHECK_EQ (badFloor, 0);
+    CHECK_EQ (badSin, 0);
+#else
+    std::printf ("    no NEON in this build\n");
+    CHECK (true);
+#endif
+}
+
 TEST (four_warped_samples_at_once_equal_four_scalar_samples)
 {
 #if SB_NEON
