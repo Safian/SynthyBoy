@@ -159,7 +159,6 @@
 - [ ] 21. Zajgenerátorok: 44,1 kHz-re rögzített együtthatók; a zajszűrő és a hangmagasság a 4–8. színt kihagyja; a sample-zaj mindig „high" minőségben fut.
 - [ ] 23. Mip-szint váltás átúsztatás nélkül: hallható ugrás hajlításnál.
 - [ ] Mérd meg a hangfrekvenciás mátrixmoduláció többletköltségét Key 61-en a jelenlegi 32 mintás lépéshez képest, váltott tier_bench futással. A mérés alapján valósítsd meg az XL kijelölt céljain (hangmagasság, vágás), és határozd meg a Key 61-en használható beállítást.
-- [ ] 25. (maradék) A tétlen globális LFO-k 0 hang mellett is lépnek (`core/engine-own/own_engine.cpp:1159-1178`).
 - [ ] 27. Ellenőrizd a skalár és NEON út bitazonosságát a motor összes vektorizált útján. A hullámtábla-oszcillátor (`wt_osc.h`) és a spektrális kernelek (`core/spectral/src/kernels.cpp`) is szerepeljenek a lefedettségben. Az azonos bemenetű összehasonlítás mellett a fordított kódon is ellenőrizd az FMA és a közelítő reciprok hiányát az érintett aritmetikában.
 
 ## Effektek, zengető és kimenet
