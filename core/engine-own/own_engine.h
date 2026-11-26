@@ -233,6 +233,10 @@ private:
     /** Per parameter table entry, the bits of the block snapshot classes (kParamSlot ...): which consumers of `base` a changed value can reach. Built in prepare (). */
     std::vector<uint8_t> paramClass;
     std::atomic<uint32_t> statSnapshots { 0 }, statMatrixCompiles { 0 }, statTuningComputes { 0 }, statVoiceEpochs { 0 };
+    // the voice count gain (updateVcg in process ()): the last results of its libm calls with the bit patterns of their arguments
+    uint32_t vcgKeyNeff = 0, vcgKeyAlpha = 0, vcgKeyDb = 0;
+    float vcgT = 1.0f, vcgTargetDb = 0.0f, vcgDbGain = 1.0f;
+    bool vcgTargetOk = false, vcgGainOk = false;
     const OwnContent* snapContentPtr = nullptr;   // the content the matrix was compiled with
     bool blockDirty = true;        // the snapshot of this block differs from the one of the previous block
     bool mixCached = false, latCached = false;

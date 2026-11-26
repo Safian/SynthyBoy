@@ -267,11 +267,12 @@ struct EnginePair
     std::unique_ptr<IEngine> opt, ref;
     std::vector<int> targets;
 
-    EnginePair (const std::vector<float>& plain, Tier tier, Rand& r)
+    /** `refSavings`: the savings the reference engine has off (the old code of the item under test). */
+    EnginePair (const std::vector<float>& plain, Tier tier, Rand& r, uint32_t refSavings = kOwnSavingVoiceControl)
     {
         opt = createOwnEngine();
         ref = createOwnEngine();
-        CHECK (setOwnSavingsOff (*ref, kOwnSavingVoiceControl));
+        CHECK (setOwnSavingsOff (*ref, refSavings));
         Quality q = qualityForTier (tier);
         q.realtime = false;
         for (IEngine* e : { opt.get(), ref.get() })
@@ -824,6 +825,46 @@ TEST (filter_setup_memo_gives_the_settings_the_calls_give_for_every_kind_of_argu
     std::printf ("%lld filter settings, %lld answered from the memo, %lld differ\n", cases, hits, bad);
     CHECK (hits > cases / 5);
     CHECK_EQ (bad, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The voice count gain keeps the last results of its three libm calls (kOwnSavingVcgCache): the same samples as the engine that calls them every control period
+
+TEST (voice_opt_voice_count_gain_cache_is_bit_identical)
+{
+    ensureAllBuiltinWavetables();
+    const std::vector<std::vector<float>> presets = factoryPresets();
+    int failed = 0, runs = 0;
+    const float alphas[] = { 0.5f, 0.25f, 1.0f, 0.0f, 0.73f };
+    for (size_t i = 0; i < presets.size(); i += sbtest::instrumented() ? 24 : 6)
+    {
+        Rand r (static_cast<uint32_t> (4100 + i));
+        const std::vector<float> plain = randomPatch (r, &presets[i], 0.02f);
+        EnginePair p (plain, i % 4 == 1 ? Tier::high : Tier::low, r, kOwnSavingVcgCache);
+        const float alpha = alphas[i % 5];
+        CHECK (setOwnVoiceCountAlpha (*p.opt, alpha));
+        CHECK (setOwnVoiceCountAlpha (*p.ref, alpha));
+        char what[64];
+        std::snprintf (what, sizeof what, "voice count gain, preset %zu alpha %.2f", i, static_cast<double> (alpha));
+        ++runs;
+        failed += playAndCompare (p, r, 400, what) ? 0 : 1;
+    }
+    for (int s = 0; s < (sbtest::instrumented() ? 4 : 24); ++s)
+    {
+        Rand r (static_cast<uint32_t> (4900 + s));
+        std::vector<float> plain = randomPatch (r, nullptr, 0.2f);
+        plain[static_cast<size_t> (idxOf ("master.polyphony"))] = static_cast<float> (r.range (4, 16));
+        EnginePair p (plain, s % 2 == 0 ? Tier::low : Tier::high, r, kOwnSavingVcgCache);
+        const float alpha = 0.1f + 0.9f * r.uni();
+        CHECK (setOwnVoiceCountAlpha (*p.opt, alpha));
+        CHECK (setOwnVoiceCountAlpha (*p.ref, alpha));
+        char what[64];
+        std::snprintf (what, sizeof what, "voice count gain, random patch %d", s);
+        ++runs;
+        failed += playAndCompare (p, r, 500, what) ? 0 : 1;
+    }
+    std::printf ("%d voice count gain runs, %d differ\n", runs, failed);
+    CHECK_EQ (failed, 0);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1910,6 +1910,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 float T = 1.0f;
                 float targetDb = 0.0f;
+                const bool vcgCache = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVcgCache) == 0;
                 if (n_eff <= 1.0f)
                 {
                     T = 1.0f;
@@ -1917,8 +1918,25 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 else
                 {
-                    T = std::pow (n_eff, -alpha);
-                    targetDb = -alpha * (20.0f * std::log10 (n_eff));
+                    // T and targetDb are functions of n_eff and alpha alone, and those are the same period after period while the voices sound: the two libm calls are made when either changed
+                    uint32_t nBits, aBits;
+                    std::memcpy (&nBits, &n_eff, sizeof nBits);
+                    std::memcpy (&aBits, &alpha, sizeof aBits);
+                    if (vcgCache && vcgTargetOk && vcgKeyNeff == nBits && vcgKeyAlpha == aBits)
+                    {
+                        T = vcgT;
+                        targetDb = vcgTargetDb;
+                    }
+                    else
+                    {
+                        T = std::pow (n_eff, -alpha);
+                        targetDb = -alpha * (20.0f * std::log10 (n_eff));
+                        vcgKeyNeff = nBits;
+                        vcgKeyAlpha = aBits;
+                        vcgT = T;
+                        vcgTargetDb = targetDb;
+                        vcgTargetOk = true;
+                    }
                 }
                 if (soundingBefore == 0)
                 {
@@ -1935,7 +1953,18 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                         voiceCountGainDb = std::max (voiceCountGainDb - maxDownDb, targetDb);
                     else if (targetDb > voiceCountGainDb)
                         voiceCountGainDb = std::min (voiceCountGainDb + maxUpDb, targetDb);
-                    voiceCountGainCur = std::pow (10.0f, voiceCountGainDb * 0.05f);
+                    // the third call: the gain of the stepped level, the same value once the level has reached its target
+                    uint32_t dBits;
+                    std::memcpy (&dBits, &voiceCountGainDb, sizeof dBits);
+                    if (vcgCache && vcgGainOk && vcgKeyDb == dBits)
+                        voiceCountGainCur = vcgDbGain;
+                    else
+                    {
+                        voiceCountGainCur = std::pow (10.0f, voiceCountGainDb * 0.05f);
+                        vcgKeyDb = dBits;
+                        vcgDbGain = voiceCountGainCur;
+                        vcgGainOk = true;
+                    }
                 }
                 if (std::fabs (voiceCountGainCur - T) < 1e-6f)
                 {
