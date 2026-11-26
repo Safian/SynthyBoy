@@ -148,10 +148,15 @@ void sweepEveryParameter (Tier tier)
     for (int i = 0; i < 8; ++i)
         renderBlock (p, {});
     uint64_t rng = 99;
+    // quick run: every 3rd parameter (the random values are drawn for all of them, so a parameter gets the value it gets in the full run); SB_TEST_FULL=1: every parameter
+    const size_t stride = static_cast<size_t> (sbtest::quickScaled (tier == Tier::low ? "own_param_snapshot every parameter alone, low tier, every Nth parameter" : "own_param_snapshot every parameter alone, high tier, every Nth parameter", 1, 3, 0));
     for (size_t i = 0; i < paramCount(); ++i)
     {
         const ParamInfo& info = paramTable()[i];
-        setBothAt (p, info, nextValue (info, rng));
+        const float value = nextValue (info, rng);
+        if (i % stride != 0)
+            continue;
+        setBothAt (p, info, value);
         renderBlock (p, {}); // the block that follows the change
         renderBlock (p, {}); // a steady block after it
         if (p.mismatches != 0)

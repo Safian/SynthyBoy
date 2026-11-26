@@ -158,8 +158,13 @@ TEST (fx_reverb_levels_and_tails_of_the_six_types)
         dryPeak = std::max (dryPeak, static_cast<double> (v));
     if (verbose())
         std::printf ("    dry burst peak %.1f dB (spec +11.4)\n", dryPeak);
+    // quick run: every 3rd row of the table; SB_TEST_FULL=1: all rows
+    const int rowStride = sbtest::quickScaled ("own_fx reverb levels and tails, every Nth row", 1, 3, 400);
+    int rowIndex = 0;
     for (const R3Row& row : kR3)
     {
+        if (rowIndex++ % rowStride != 0)
+            continue;
         std::vector<float> raw;
         reverbBurst (row.decay, row.size, row.type, true, &raw);
         const auto w = sq10ms (raw);
@@ -187,8 +192,13 @@ TEST (fx_reverb_vital_rt60_table_r1)
     struct Row { int decay; int size; double rt; };
     const Row rows[] = { { 500, 20, 1.81 }, { 500, 50, 0.90 }, { 500, 100, 0.54 }, { 1000, 20, 3.21 }, { 1000, 50, 1.59 }, { 1000, 100, 1.06 },
                          { 2000, 20, 6.87 }, { 2000, 50, 2.80 }, { 2000, 100, 2.14 }, { 4000, 50, 7.24 }, { 4000, 100, 4.97 } };
+    // quick run: every 2nd row; SB_TEST_FULL=1: all rows
+    const int rowStride = sbtest::quickScaled ("own_fx reverb Vital RT60 table, every Nth row", 1, 2, 120);
+    int rowIndex = 0;
     for (const Row& row : rows)
     {
+        if (rowIndex++ % rowStride != 0)
+            continue;
         std::vector<float> raw;
         reverbBurst (row.decay, row.size, 0, true, &raw);
         const double rt = rt60 (raw, static_cast<size_t> (0.1 * kSr));
@@ -843,8 +853,13 @@ std::vector<double> filterGain (int model, int style, int res, int blend)
 
 TEST (fx_svf_styles_2_to_5_vectors)
 {
+    // quick run: every 4th row; SB_TEST_FULL=1: all rows
+    const int rowStride = sbtest::quickScaled ("own_fx SVF styles 2 to 5 vectors, every Nth row", 1, 4, 48);
+    int rowIndex = 0;
     for (const SvfRow& row : kSvfRows)
     {
+        if (rowIndex++ % rowStride != 0)
+            continue;
         const auto g = filterGain (row.model, row.style, row.res, row.blend);
         const char* names[4] = { "Analog", "Dirty", "Ladder", "Digital" };
         double worst = 0.0;

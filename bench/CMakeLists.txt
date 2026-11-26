@@ -148,3 +148,9 @@ foreach(line IN LISTS SYNTHYBOY_CLI_SMOKE)
     add_test(NAME synthyboy_tier_bench_${smoke_name} COMMAND synthyboy_tier_bench ${smoke_argv})
     set_tests_properties(synthyboy_tier_bench_${smoke_name} PROPERTIES PASS_REGULAR_EXPRESSION "${smoke_regex}" TIMEOUT 120)
 endforeach()
+# The cold cache run (--evict) paces a real time load and pushes the working set out of the caches before every block: about 24 s alone on the x86 development VM, and it timed out
+# (120 s) under ctest -j4 next to the heavy audio tests. It runs alone (RUN_SERIAL; nothing else competes for the caches it measures) and carries the label slow (more than 5 s alone).
+# The timeout is raised from 120 s to 240 s (10 times the measured single run) because the shared development machines are loaded by other work as well; no check was changed.
+if(TEST synthyboy_tier_bench_evict_flag)
+    set_tests_properties(synthyboy_tier_bench_evict_flag PROPERTIES RUN_SERIAL TRUE LABELS slow TIMEOUT 240)
+endif()

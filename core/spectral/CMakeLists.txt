@@ -25,6 +25,8 @@ if(SYNTHYBOY_BUILD_TESTS)
         target_compile_options(synthyboy_test_spectral PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME synthyboy_test_spectral COMMAND synthyboy_test_spectral)
+    # label `slow` (more than about 5 s alone: `ctest -LE slow` is the quick set, docs/dsp-knowledge/testing.md)
+    set_tests_properties(synthyboy_test_spectral PROPERTIES LABELS slow)
 
     add_executable(synthyboy_test_start_ledger tests/test_start_ledger.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_link_libraries(synthyboy_test_start_ledger PRIVATE synthyboy_spectral synthyboy_core Threads::Threads)

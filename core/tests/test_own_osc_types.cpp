@@ -569,6 +569,8 @@ TEST (own_osc_user_wavetable_plays_and_falls_back_to_the_saw)
 // 02 O11 / O12: Odd/Even and Filter LPF reproduce the stated harmonic levels of the saw
 TEST (own_osc_warps_odd_even_and_filter)
 {
+    if (sbtest::skipInQuick ("own_osc_warps_odd_even_and_filter", 58, "heavy case (several seconds of 48 kHz renders), left to the SB_TEST_FULL=1 run"))
+        return;
     auto run = [] (const char* type, float amount)
     {
         auto e = createOwnEngine();
@@ -614,6 +616,8 @@ TEST (own_osc_warps_odd_even_and_filter)
 // 02 O13 / O14 / O15b: spectral morph low pass, high pass, harmonic stretch on the saw
 TEST (own_osc_spectral_morph_vectors)
 {
+    if (sbtest::skipInQuick ("own_osc_spectral_morph_vectors", 41, "heavy case (2 to 4 seconds of renders), left to the SB_TEST_FULL=1 run"))
+        return;
     auto run = [] (float type, float amount)
     {
         auto e = createOwnEngine();
@@ -799,6 +803,8 @@ TEST (own_lazy_engine_open_close_repeat)
 // Render OSC Warp bakes the warp of the oscillator into a 256 frame table; the table played at the same warp position sounds like the warp
 TEST (own_render_osc_warp_bake_matches_the_live_warp)
 {
+    if (sbtest::skipInQuick ("own_render_osc_warp_bake_matches_the_live_warp", 19, "heavy case (several seconds of 48 kHz renders), left to the SB_TEST_FULL=1 run"))
+        return;
     ParamValues vals = ParamValues::defaults();
     auto setv = [&] (const char* key, float v)
     {
@@ -1056,6 +1062,8 @@ TEST (own_osc_xy_control_level_axis)
 // 07 7a.2: granular X|Y control for every axis (0 = None is ignored, 1..17 change the render)
 TEST (own_osc_xy_control_every_granular_axis)
 {
+    if (sbtest::skipInQuick ("own_osc_xy_control_every_granular_axis", 315, "heavy case (2 to 4 seconds of renders), left to the SB_TEST_FULL=1 run"))
+        return;
     // Buffer difference measure reused from own_wavetable_live_rebuild_swaps_safely (lines 614-617):
     // checks whether any rendered sample in the buffers differs (a[i] != b[i]).
     auto buffersDiffer = [] (const std::vector<float>& a, const std::vector<float>& b)
@@ -1160,6 +1168,8 @@ TEST (own_osc_xy_control_every_spectral_axis)
 // 07 7a.2: granular and spectral X|Y control for the warp axes (granular: 2, 16, 3, 17; spectral: 2, 3)
 TEST (own_osc_xy_control_warp_axes)
 {
+    if (sbtest::skipInQuick ("own_osc_xy_control_warp_axes", 420, "heavy case (2 to 4 seconds of renders), left to the SB_TEST_FULL=1 run"))
+        return;
     auto buffersDiffer = [] (const std::vector<float>& a, const std::vector<float>& b)
     {
         if (a.size() != b.size())

@@ -20,6 +20,17 @@ function(synthyboy_add_test name)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+# Quick / full split (docs/dsp-knowledge/testing.md, "Test suite timing and the quick set"):
+#   ctest -LE slow   the quick development set (a test that takes more than about 5 s alone carries the label `slow`)
+#   ctest            everything
+# A binary with a few heavy cases runs them reduced (or not at all) unless SB_TEST_FULL=1 is in its environment, and says so with "[ SKIP-QUICK ]" lines (test_runner.h, sbtest::quickScaled
+# and sbtest::skipInQuick). synthyboy_add_full_run (name) registers the entry "<name>_full" that runs the same executable with SB_TEST_FULL=1 under the label `slow`: the full coverage
+# stays one `ctest` away.
+function(synthyboy_add_full_run name)
+    add_test(NAME ${name}_full COMMAND ${name})
+    set_tests_properties(${name}_full PROPERTIES ENVIRONMENT "SB_TEST_FULL=1" LABELS "slow;full" TIMEOUT 1800)
+endfunction()
+
 synthyboy_add_test(synthyboy_test_params     test_params.cpp)
 synthyboy_add_test(synthyboy_test_state      test_state.cpp)
 synthyboy_add_test(synthyboy_test_keys       test_new_keys.cpp)
@@ -40,12 +51,15 @@ synthyboy_add_test(synthyboy_test_preset     test_preset.cpp)
 synthyboy_add_test(synthyboy_test_shell_clap test_shell_clap.cpp LINK synthyboy_static)
 synthyboy_add_test(synthyboy_test_engine     test_engine.cpp)
 synthyboy_add_test(synthyboy_test_own_engine test_own_engine.cpp)
+synthyboy_add_full_run(synthyboy_test_own_engine)
 target_include_directories(synthyboy_test_own_engine PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_param_snapshot test_own_param_snapshot.cpp)   # the block snapshot follows only the changed parameters: bit identical to the full rebuild
+synthyboy_add_full_run(synthyboy_test_own_param_snapshot)
 target_include_directories(synthyboy_test_own_param_snapshot PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_voice test_own_voice.cpp)
 target_include_directories(synthyboy_test_own_voice PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_fx test_own_fx.cpp)
+synthyboy_add_full_run(synthyboy_test_own_fx)
 target_include_directories(synthyboy_test_own_fx PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_osc_options test_own_osc_options.cpp)
 synthyboy_add_test(synthyboy_test_own_content_opt test_own_content_opt.cpp)   # the CPU optimisations of the library oscillators change no output sample
@@ -69,6 +83,7 @@ synthyboy_add_test(synthyboy_test_own_fx_worker_race test_own_fx_worker_race.cpp
 synthyboy_add_test(synthyboy_test_own_libkeys_warm test_own_libkeys_warm.cpp)   # libKeys () is built in prepare (), not on the audio thread (a process of its own: built once per process)
 target_include_directories(synthyboy_test_own_libkeys_warm PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
+synthyboy_add_full_run(synthyboy_test_own_osc_types)
 target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_memory test_own_memory_footprint.cpp)   # the heap bytes, allocation count and prepare time of OwnEngine::prepare (replaces global operator new/delete)
 target_include_directories(synthyboy_test_own_memory PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
@@ -76,6 +91,7 @@ synthyboy_add_test(synthyboy_test_own_unison_cap test_own_unison_cap.cpp)
 target_include_directories(synthyboy_test_own_unison_cap PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_own_filter_response test_own_filter_response.cpp)
 synthyboy_add_test(synthyboy_test_own_filter_response_rates test_own_filter_response_rates.cpp)
+synthyboy_add_full_run(synthyboy_test_own_filter_response_rates)
 synthyboy_add_test(synthyboy_test_own_filter_response_review test_own_filter_response_review.cpp)
 synthyboy_add_test(synthyboy_test_own_displays test_own_displays.cpp)
 synthyboy_add_test(synthyboy_test_own_osc_displays test_own_osc_displays.cpp)
@@ -194,6 +210,7 @@ add_test(NAME synthyboy_test_own_wt_osc_shared_decim COMMAND synthyboy_test_own_
 synthyboy_add_test(synthyboy_test_own_voice_legato_env test_own_voice_legato_env.cpp)
 target_include_directories(synthyboy_test_own_voice_legato_env PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_voice_opt test_own_voice_opt.cpp)   # the CPU optimisations of the voice control and the matrix change no sample and no display value
+synthyboy_add_full_run(synthyboy_test_own_voice_opt)
 target_include_directories(synthyboy_test_own_voice_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 target_compile_definitions(synthyboy_test_own_voice_opt PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effect whose mix is exactly 0 is not processed (economy group Control)
@@ -224,6 +241,17 @@ target_include_directories(synthyboy_test_own_profile PRIVATE "${PROJECT_SOURCE_
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
 synthyboy_add_test(synthyboy_test_threads    test_threads.cpp)    # run under ThreadSanitizer in CI
 
+# Tests whose pass / fail depends on a CPU time or wall clock bound: ctest does not run them next to another test (RUN_SERIAL), so `ctest -j N` cannot make them flaky. No limit is loosened.
+#   own_filter_response     one response compute under 5 ms (thread CPU time, best of 5)
+#   own_osc_displays        one display compute under 5 ms (thread CPU time, best of 10)
+#   own_helper_thread       a helper thread joins within 2 s of the wake-up (wall clock)
+#   fxopt_hyper, fxopt_reverb_vintage   CPU time ratios of the live effect against the reference (limits 0.70 / 0.85 and 0.85)
+foreach(timing_test synthyboy_test_own_filter_response synthyboy_test_own_osc_displays synthyboy_test_own_helper_thread synthyboy_test_fxopt_hyper synthyboy_test_fxopt_reverb_vintage)
+    if(TEST ${timing_test})
+        set_tests_properties(${timing_test} PROPERTIES RUN_SERIAL TRUE)
+    endif()
+endforeach()
+
 # Fuzz smoke (garbage / mutated documents into every parser, fixed seeds, bounded; part of the sanitizer jobs). Seeds: the factory presets
 # and the Vital fixtures of the importer's tests. SYNTHYBOY_FUZZ_SCALE=N in the environment multiplies the iterations.
 synthyboy_add_test(synthyboy_fuzz_smoke fuzz_smoke.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp"
@@ -252,6 +280,7 @@ target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_S
 synthyboy_add_test(synthyboy_test_own_diode_probe test_own_diode_probe.cpp)
 target_include_directories(synthyboy_test_own_diode_probe PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
 synthyboy_add_test(synthyboy_test_own_filter_savings test_own_filter_savings.cpp)   # the CPU savings of the classic voice filters against the code they replaced (bit for bit, or within a stated bound)
+synthyboy_add_full_run(synthyboy_test_own_filter_savings)
 target_include_directories(synthyboy_test_own_filter_savings PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
 target_compile_options(synthyboy_test_own_filter_savings PRIVATE -ffp-contract=off)
 synthyboy_add_test(synthyboy_test_own_keys_claimed test_own_keys_claimed.cpp)
@@ -274,4 +303,13 @@ foreach(src ${SYNTHYBOY_PERF_TESTS})
     get_filename_component(perf_test_name ${src} NAME_WE)
     synthyboy_add_test(synthyboy_${perf_test_name} ${src})
     target_include_directories(synthyboy_${perf_test_name} PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+endforeach()
+
+# More than about 5 s alone (measured, docs/dsp-knowledge/testing.md): not part of the quick set (`ctest -LE slow`). The tests that already carry the label are set where they are
+# defined (output_stage_presets, own_voice_count_gain above; the audit and preset_sanity tests in their own directories); the binaries with an SB_TEST_FULL switch stay in the quick set.
+foreach(slow_test synthyboy_test_own_lib_quantize_levels synthyboy_test_rt synthyboy_test_clap_content synthyboy_test_own_note_storm synthyboy_test_own_filter_response
+                  synthyboy_test_fxopt_reverb_vintage)
+    if(TEST ${slow_test})
+        set_property(TEST ${slow_test} APPEND PROPERTY LABELS slow)
+    endif()
 endforeach()

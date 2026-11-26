@@ -118,6 +118,8 @@ TEST (own_source_ids_match_the_table)
 // Random patches, matrix wiring and notes must never produce NaN, Inf or a runaway level.
 TEST (own_engine_is_finite_and_bounded_under_random_patches)
 {
+    // quick run: 300 blocks per seed; SB_TEST_FULL=1: 1500 (the number of checks is the same)
+    const int numBlocks = sbtest::quickScaled ("own_engine random patches, blocks per seed", 1500, 300);
     for (int seed = 1; seed <= 5; ++seed)
     {
         auto e = make();
@@ -125,7 +127,7 @@ TEST (own_engine_is_finite_and_bounded_under_random_patches)
         static float l[128], r[128];
         std::vector<std::string> history;
         bool ok = true;
-        for (int block = 0; block < 1500 && ok; ++block)
+        for (int block = 0; block < numBlocks && ok; ++block)
         {
             if (seed > 3 && block % 100 == 50)
             {
@@ -176,6 +178,8 @@ TEST (own_engine_is_finite_and_bounded_under_random_patches)
 // away for some types at resonance and drive 100 %, see the report).
 TEST (own_filters_stay_bounded)
 {
+    // quick run: 100 noise blocks per combination (two cutoff retunes); SB_TEST_FULL=1: 400 (the number of checks is the same)
+    const int numBlocks = sbtest::quickScaled ("own_engine filters stay bounded, blocks per combination", 400, 100);
     for (int model = 0; model <= 26; ++model)
         for (int style = 0; style < 12; ++style)
             for (const float cutoff : { 20.0f, 300.0f, 5000.0f, 20000.0f })
@@ -197,7 +201,7 @@ TEST (own_filters_stay_bounded)
                     rng.seed (static_cast<uint32_t> (model * 100 + style));
                     float in[32], out[32], dummy[32];
                     float peak = 0.0f;
-                    for (int block = 0; block < 400; ++block)
+                    for (int block = 0; block < numBlocks; ++block)
                     {
                         for (auto& x : in)
                             x = 1.4f * rng.bi();
@@ -221,6 +225,8 @@ TEST (own_filters_stay_bounded)
 // The sequence of test_rt_alloc.cpp (random parameters, matrix wiring, quality changes), checked for NaN with the cause printed.
 TEST (own_engine_rt_sequence_is_finite)
 {
+    // quick run: 300 blocks per tier; SB_TEST_FULL=1: 1500 (the number of checks is the same)
+    const int numBlocks = sbtest::quickScaled ("own_engine rt sequence, blocks per tier", 1500, 300);
     for (const Tier tier : { Tier::low, Tier::high })
     {
         auto e = createOwnEngine();
@@ -231,7 +237,7 @@ TEST (own_engine_rt_sequence_is_finite)
         std::vector<std::string> history;
         Event events[8];
         bool finite = true;
-        for (int block = 0; block < 1500 && finite; ++block)
+        for (int block = 0; block < numBlocks && finite; ++block)
         {
             for (int k = 0; k < 6; ++k)
             {

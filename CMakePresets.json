@@ -1,0 +1,38 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Development: core and tests only (no JUCE plugin, no bitmap GUI)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SYNTHYBOY_BUILD_PLUGIN": "OFF",
+        "SYNTHYBOY_BITMAP_GUI": "OFF",
+        "SYNTHYBOY_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" }
+  ],
+  "testPresets": [
+    {
+      "name": "quick",
+      "displayName": "Quick development set: everything except the label slow (heavy cases of the SB_TEST_FULL binaries run reduced)",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true },
+      "filter": { "exclude": { "label": "slow" } },
+      "execution": { "jobs": 2 }
+    },
+    {
+      "name": "full",
+      "displayName": "Full set: every test, the heavy cases of the SB_TEST_FULL binaries in full (the entries <name>_full)",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true },
+      "execution": { "jobs": 2 }
+    }
+  ]
+}
