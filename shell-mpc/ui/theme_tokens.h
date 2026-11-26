@@ -6,6 +6,24 @@
 
 inline constexpr uint32_t kNativeCanvas = 0x090d19;
 
+/** The dial recipe: the same tokens draw ui::Knob and the native knob filmstrips. */
+namespace knob {
+inline constexpr float kStartDegrees = 135.0f;
+inline constexpr float kSweepDegrees = 270.0f;
+inline constexpr float kStrokeMin = 2.4f;
+inline constexpr float kTrackMin = 2.0f;
+inline constexpr float kRadiusInset = 3.0f;
+inline constexpr float kPointerInner = 0.25f;
+inline constexpr float kPointerOuter = 0.6f;
+inline constexpr float kPointerStroke = 1.6f;
+inline constexpr int kPointerAlpha = 235;
+inline constexpr float kThumbRatio = 0.9f;
+inline constexpr float kThumbMin = 2.5f;
+inline constexpr float kCentreStroke = 1.5f;
+inline constexpr float kCentreOverhang = 2.0f;
+inline constexpr int kCentreAlpha = 200;
+} // namespace knob
+
 inline const Look kLook1 = {
     "neon",
     0x0b1026, // bg0
