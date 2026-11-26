@@ -30,6 +30,27 @@ endif()
 
 project(SynthyBoy VERSION 0.1.0 LANGUAGES C CXX)
 
+# Compiler cache (optional): with ccache installed the compile steps of an unchanged translation unit are served from its cache (a rebuild after a branch switch or in a
+# fresh build directory). ON by default only when ccache is found; a missing ccache is never an error. A launcher the caller set (CMAKE_<LANG>_COMPILER_LAUNCHER) is kept.
+find_program(SYNTHYBOY_CCACHE_PROGRAM ccache)
+if(SYNTHYBOY_CCACHE_PROGRAM)
+    set(SYNTHYBOY_USE_CCACHE_DEFAULT ON)
+else()
+    set(SYNTHYBOY_USE_CCACHE_DEFAULT OFF)
+endif()
+option(SYNTHYBOY_USE_CCACHE "Use ccache as the compiler launcher when it is installed" ${SYNTHYBOY_USE_CCACHE_DEFAULT})
+if(SYNTHYBOY_USE_CCACHE AND SYNTHYBOY_CCACHE_PROGRAM)
+    if(NOT CMAKE_C_COMPILER_LAUNCHER)
+        set(CMAKE_C_COMPILER_LAUNCHER "${SYNTHYBOY_CCACHE_PROGRAM}")
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_LAUNCHER)
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${SYNTHYBOY_CCACHE_PROGRAM}")
+    endif()
+    message(STATUS "ccache: ${SYNTHYBOY_CCACHE_PROGRAM}")
+elseif(SYNTHYBOY_USE_CCACHE)
+    message(STATUS "ccache: not found (SYNTHYBOY_USE_CCACHE has no effect)")
+endif()
+
 set(SYNTHYBOY_BUILD_NUMBER 1)
 math(EXPR SYNTHYBOY_VST2_VERSION "${PROJECT_VERSION_MAJOR} * 1000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH} * 10 + ${SYNTHYBOY_BUILD_NUMBER}")
 

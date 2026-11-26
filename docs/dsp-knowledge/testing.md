@@ -140,3 +140,18 @@ Tests of 2 s or more (seconds; "alone, full" is the time of the coverage as it w
 
 Check counts of these binaries before the split (the printed `N check(s)`): own_voice_opt 2820, own_engine 3337, own_fx 9263, own_osc_types 4389, own_filter_savings 361827,
 own_param_snapshot 81, own_filter_response_rates 5359. With `SB_TEST_FULL=1` they print the same numbers after the split (see "Quick set and full set" below).
+
+## Build time (report, 2026-11-26, same VM, 4 jobs)
+
+- **Full build** of everything `-DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF` (560 steps, Ninja `-j4`): 142 s. The compile steps add up to 552 s of CPU, the
+  link steps to 11 s; linking is not the problem. A change of `core/tests/test_runner.h` (every test includes it) rebuilds 383 steps: 87 s.
+- **ccache**: `SYNTHYBOY_USE_CCACHE` (top level `CMakeLists.txt`; default ON only when ccache is found, a missing ccache is no error, a launcher the caller set is kept) makes it the compiler
+  launcher. Measured with ccache 4.9.1: first build in an empty cache 136 s (33 % of the 402 compiles were hits already inside that build: the same source with the same flags is compiled
+  for several targets), the same build again in a new, empty build directory 3.6 s. Use it when switching branches or build directories; it does not shorten the edit-compile-run loop of a
+  single changed test file.
+- **The 6 slowest translation units** (compiled alone, `-ftime-report`; none is over 11 s, so there is no single file to split): `core/serum-import/tests/test_serum_import.cpp` 11.0 s,
+  `core/engine-own/fx/fx_modules.cpp` 10.1 s, `core/tests/test_own_fx.cpp` 9.7 s, `bench/tier_bench.cpp` 8.6 s, `core/engine-own/voice/voice.cpp` 8.3 s,
+  `tools/param-audit/contexts.cpp` 7.5 s. In the three that were profiled, parsing (headers and templates) is 11 to 18 % of the time, optimisation and code generation 79 to 86 %.
+- **Unity build or precompiled headers would gain at most the parsing share** (10 to 18 % of the compile time of a file), so they are not worth the loss of isolation. Two cheaper facts:
+  `core/tests/test_main.cpp` is compiled once per test executable, 128 times, 28 s of CPU in total (5 % of the compile time; ccache removes it); building it once as an object library would
+  remove it without ccache. Not done: the task was a report.
