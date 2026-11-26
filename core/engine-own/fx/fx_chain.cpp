@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include "fx_chain.h"
 #include "../dsp/section_timing.h"
@@ -208,6 +209,8 @@ void FxChain::reset() noexcept
     for (auto& d : dlLmh) { d.set (0); d.clear(); }
     for (auto& d : dlMs) { d.set (0); d.clear(); }
     idleSettled = 0;
+    derivedSettled = 0;
+    derivedKeyValid = false;
     for (int i = 0; i < 16; ++i)
     {
         levelGain[i] = levelGainPrev[i] = 1.0f;
@@ -248,6 +251,14 @@ void FxChain::configureSlot (int s, const float* base, const float* delta, const
     slotOrder[s] = std::clamp (static_cast<int> (base[keys.order] + 0.5f), 0, kFxOrderMax);
     slotMine[s] = slotRack[s] == rackId;
     if (!slotMine[s])
+    {
+        slotBypassed[s] = false;
+        return;
+    }
+    // a slot without a type that is not running, not fading, has nothing waiting to be taken over and has no makeup state: everything below would find nothing to do (no module to
+    // take over, `want` and `prevRunning` both null, no bypass, the makeup state already at rest), so the atomic exchange and the rest are left out
+    if (typeKey == 0 && sl.running == nullptr && !sl.fading && sl.pending.load (std::memory_order_acquire) == nullptr && (sl.cur == nullptr || sl.curType != typeKey)
+        && !slotMakeupSeen[s] && slotMakeupNow[s] == 1.0f && slotMakeupPrev[s] == 1.0f && !makeup::legacyCaches())
     {
         slotBypassed[s] = false;
         return;
@@ -393,6 +404,34 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         configured = false; // nothing is on, nothing changed, and the bookkeeping below has already reached its fixed point
         return;
     }
+    const bool legacy = makeup::legacyCaches(); // tests: no settled path, everything derived on every period
+    // The derivation below (the order, which modules are on and where, the makeup state of bypassed modules, the pool slots, the splitter settings, the plan of the racks, the latency
+    // delays, the echo scan) is a function of the parameters, the modulation, the mask, the budget and a few fields of the frame, and of state that is quiet when nothing is bypassed,
+    // no pool slot has a type and no splitter is on. After two periods in a row with the same inputs it has reached its fixed point (the level gains' previous value equals the current
+    // one), and it is not redone: only the modules' own update () runs (it reads the song position, the last note and the note counter, which move every period).
+    DerivedKey key;
+    key.mask = fxMask;
+    key.overModules = overModules;
+    key.overSlots = overSlots;
+    key.period = frame.period;
+    key.makeup = frame.makeup;
+    key.noSmoothing = frame.noSmoothing;
+    key.distOs2 = frame.distOs2;
+    key.rate = sr;
+    const bool keySame = derivedKeyValid && key == derivedKey;
+    if (!legacy && inputsSame && keySame && derivedSettled >= 2 && !derivedBusy && (pool == nullptr || !pool->anyPending()))
+    {
+        configured = true; // as before: the engine reads the latency of the racks every period (what the modules report is not part of the derivation)
+        for (int m = 0; m < kNumFxModules; ++m)
+            if (on[m])
+            {
+                FxFrame f = frame;
+                f.sampleRate = sr;
+                inst[m]->update (f, base, delta);
+            }
+        idleSettled = (inputsSame && !active) ? idleSettled + 1 : 0;
+        return;
+    }
     configured = true;
     const FxIndex& f = fxIndex();
     period = frame.period;
@@ -442,7 +481,20 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         if (m >= 13)
         {
             levelGainPrev[m] = levelGain[m];
-            levelGain[m] = f.level[m] >= 0 ? dbToGain (fxValue (base, delta, f.level[m])) : 1.0f;
+            if (f.level[m] >= 0)
+            {
+                // the power of ten is made again only when the dB value changed (the exact bits; a splitter that is off is looked at every period too)
+                const float db = fxValue (base, delta, f.level[m]);
+                if (!levelKeyValid[m] || std::memcmp (&db, &levelDbKey[m], 4) != 0 || makeup::legacyCaches())
+                {
+                    levelGainKey[m] = dbToGain (db);
+                    levelDbKey[m] = db;
+                    levelKeyValid[m] = true;
+                }
+                levelGain[m] = levelGainKey[m];
+            }
+            else
+                levelGain[m] = 1.0f;
         }
         active = active || on[m];
     }
@@ -550,6 +602,21 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         holdSamples = static_cast<int> ((echoes ? 20.0 : 1.0) * sr);
     }
     idleSettled = (inputsSame && !active) ? idleSettled + 1 : 0;
+    // the derivation is settled once it ran twice in a row on the same inputs with nothing in the state that moves on its own: no bypassed module (its makeup follows the program), no
+    // slot that has a type, runs, fades or holds a makeup, no splitter on (its bands' racks and delays)
+    bool busy = on[13] || on[14] || on[15];
+    for (int m = 0; m < kNumFxModules && !busy; ++m)
+        busy = bypassed[m] || makeupSeen[m];
+    if (pool != nullptr)
+        for (int s = 0; s < FxPool::kSlots && !busy; ++s)
+        {
+            const FxPool::Slot& sl = pool->slot (s);
+            busy = slotMine[s] && (slotType[s] > 0 || sl.running != nullptr || sl.fading || slotBypassed[s] || slotMakeupSeen[s]);
+        }
+    derivedBusy = busy;
+    derivedSettled = (!legacy && inputsSame && keySame && !busy) ? derivedSettled + 1 : 0;
+    derivedKey = key;
+    derivedKeyValid = true;
 }
 
 int FxChain::rackLatency (int rack, bool reported) const noexcept

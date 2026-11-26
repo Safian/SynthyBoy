@@ -153,6 +153,22 @@ private:
     int quietRun = 0, holdSamples = 0;   // samples of silence in and out so far, and how many are needed
     void idleRack (int rack, int n, int depth) noexcept;
     int idleSettled = 0;            // consecutive updates with the same inputs that ended with nothing on
+    /** What the derivation of update () reads besides the parameters. */
+    struct DerivedKey
+    {
+        uint32_t mask = 0, overModules = 0, overSlots = 0;
+        int period = 0;
+        bool makeup = false, noSmoothing = false, distOs2 = false;
+        double rate = 0.0;
+        bool operator== (const DerivedKey& o) const noexcept
+        {
+            return mask == o.mask && overModules == o.overModules && overSlots == o.overSlots && period == o.period && makeup == o.makeup && noSmoothing == o.noSmoothing && distOs2 == o.distOs2 && rate == o.rate;
+        }
+    };
+    DerivedKey derivedKey;
+    bool derivedKeyValid = false;
+    bool derivedBusy = true;        // the state the derivation keeps moving (a bypassed module, a pool slot, a splitter) at the end of the last full pass
+    int derivedSettled = 0;         // consecutive full passes on the same inputs and the same key with nothing moving: from 2 the derivation is not redone
     int order[16] = {};
     bool on[16] = {};
     bool prevOn[16] = {};
@@ -162,6 +178,8 @@ private:
     int rackId = 0;
     int moduleRack[16] = {};
     float levelGain[16] = {}, levelGainPrev[16] = {};
+    float levelDbKey[16] = {}, levelGainKey[16] = {};  // dbToGain of the level key of a splitter for the dB value it was made for (the exact bits)
+    bool levelKeyValid[16] = {};
     // the effects that are on in the preset but bypassed by the quality mask, and the gain that stands in for them (module 0 .. 12; the slots of the pool)
     bool bypassed[16] = {}, makeupSeen[16] = {};
     float makeupNow[16] = {}, makeupPrev[16] = {};
