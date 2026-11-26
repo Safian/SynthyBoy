@@ -42,4 +42,5 @@ display path reads the topic files below that touch its work **before** writing 
 | [fx-budget.md](fx-budget.md) | The FX cost budget of a tier: per-instance costs on the Key 61, the budget number, the admission rule |
 | [voice-control.md](voice-control.md) | Voice sequence/random/scaling execution and target-mask scope |
 | [testing.md](testing.md) | Test recipes that catch real defects; bit-identity; checksums |
+| [test-overlap-report.md](test-overlap-report.md) | Which tests appear to check the same thing twice; mutation evidence per candidate; no test was deleted |
 | [sources.md](sources.md) | The opened literature, with what each source is used for |
