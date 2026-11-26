@@ -46,6 +46,8 @@ Notes: the LFO saving is 10 to 11 M of a 42 M `lfoValue`: what stays is the sett
 
 Bit identity of the whole change: `synthyboy_preset_render --engine own --tier all --wav DIR --chord-wav DIR --float32 --hash` of the tree before and after, `scripts/compare-renders.sh`: identical, 552 renders (every factory preset at tiers low, medium and high, the single note and the chord; the 32 bit float WAV and its hash). x86-64 Linux, `-ffp-contract` as the build sets it; the engine pairs in `core/tests/test_own_voice_opt.cpp` compare the same code in one binary.
 
+Wall time on the same VM (not a device, a shared Xeon at 2.1 GHz; across processes, the two binaries alternating before / after x 3, `synthyboy_tier_bench --config low --notes 8 --seconds 6`, the lowest block of a run in percent of the 2.902 ms block): Stretched Glass Choir 5.42, 5.35, 5.42 before and 5.23, 5.27, 5.14 after (every run after below every run before, -3.9 % on the medians of the three); Lorenz Garden 7.35, 7.33, 7.34 before and 7.04, 7.06, 7.00 after (-4.3 %). The medians and the 99th percentiles of those runs spread by more than the difference (one run of each variant had a median of 8.2 to 8.7 %), so only the lowest block is read here; it agrees with the instruction counts above (-3.8 % and -2.9 %).
+
 ## Evidence limits
 
 - Tests are Mac offline source/audio checks, not MPC performance/device measurement.
