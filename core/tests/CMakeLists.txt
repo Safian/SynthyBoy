@@ -241,6 +241,70 @@ target_include_directories(synthyboy_test_own_profile PRIVATE "${PROJECT_SOURCE_
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
 synthyboy_add_test(synthyboy_test_threads    test_threads.cpp)    # run under ThreadSanitizer in CI
 
+# Tests whose pass / fail depends on a CPU time or wall clock bound: ctest does not run them next to another test (RUN_SERIAL), so `ctest -j N` cannot make them flaky. No limit is loosened.
+#   own_filter_response     one response compute under 5 ms (thread CPU time, best of 5)
+#   own_osc_displays        one display compute under 5 ms (thread CPU time, best of 10)
+#   own_helper_thread       a helper thread joins within 2 s of the wake-up (wall clock)
+#   fxopt_hyper, fxopt_reverb_vintage   CPU time ratios of the live effect against the reference (limits 0.70 / 0.85 and 0.85)
+foreach(timing_test synthyboy_test_own_filter_response synthyboy_test_own_osc_displays synthyboy_test_own_helper_thread synthyboy_test_fxopt_hyper synthyboy_test_fxopt_reverb_vintage)
+    if(TEST ${timing_test})
+        set_tests_properties(${timing_test} PROPERTIES RUN_SERIAL TRUE)
+    endif()
+endforeach()
+
+# Fuzz smoke (garbage / mutated documents into every parser, fixed seeds, bounded; part of the sanitizer jobs). Seeds: the factory presets
+# and the Vital fixtures of the importer's tests. SYNTHYBOY_FUZZ_SCALE=N in the environment multiplies the iterations.
+synthyboy_add_test(synthyboy_fuzz_smoke fuzz_smoke.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp"
+    LINK synthyboy_fx_serum_b synthyboy_sampleosc)
+target_include_directories(synthyboy_fuzz_smoke PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests"
+    "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
+target_compile_definitions(synthyboy_fuzz_smoke PRIVATE SYNTHYBOY_FUZZ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# The user content library of the shells (WP-01): store, references, Missing Files logic, library, Vital import inside the plugin (synthetic fixtures)
+synthyboy_add_test(synthyboy_test_wavetable_file test_wavetable_file.cpp)
+synthyboy_add_test(synthyboy_test_wavetable_catalogue test_wavetable_catalogue.cpp)
+synthyboy_add_test(synthyboy_test_user_content test_user_content.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp")
+target_include_directories(synthyboy_test_user_content PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests")
+synthyboy_add_test(synthyboy_test_clap_content test_clap_content.cpp LINK synthyboy_static ${CMAKE_DL_LIBS})
+# GROUPD (WP-14 / 15 / 16): sample -> wavetable, frame <-> LFO shape, WAV of a render, the offline render driver on the own engine
+synthyboy_add_test(synthyboy_test_wave_convert test_wave_convert.cpp)
+synthyboy_add_test(synthyboy_test_own_ladder_range test_own_ladder_range.cpp)
+target_include_directories(synthyboy_test_own_ladder_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_morph_range test_own_morph_range.cpp)
+target_include_directories(synthyboy_test_own_morph_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_comb_pitch test_own_comb_pitch.cpp)
+target_include_directories(synthyboy_test_own_comb_pitch PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_engine_fixes test_own_engine_fixes.cpp)
+synthyboy_add_test(synthyboy_test_own_filter_styles test_own_filter_styles.cpp)
+target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
+synthyboy_add_test(synthyboy_test_own_diode_probe test_own_diode_probe.cpp)
+target_include_directories(synthyboy_test_own_diode_probe PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
+synthyboy_add_test(synthyboy_test_own_filter_savings test_own_filter_savings.cpp)   # the CPU savings of the classic voice filters against the code they replaced (bit for bit, or within a stated bound)
+synthyboy_add_full_run(synthyboy_test_own_filter_savings)
+target_include_directories(synthyboy_test_own_filter_savings PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
+target_compile_options(synthyboy_test_own_filter_savings PRIVATE -ffp-contract=off)
+synthyboy_add_test(synthyboy_test_own_keys_claimed test_own_keys_claimed.cpp)
+synthyboy_add_test(synthyboy_test_own_note_storm test_own_note_storm.cpp)
+synthyboy_add_test(synthyboy_test_own_content_policy test_own_content_policy.cpp)
+synthyboy_add_test(synthyboy_test_own_convolve_bypass test_own_convolve_bypass.cpp)
+target_include_directories(synthyboy_test_own_convolve_bypass PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")   # Convolve is bypassed at tier low (quality.h) also with an impulse loaded
+# The aliasing tests of docs/plans/distortion-antialiasing.md: every core/tests/test_own_alias_<name>.cpp is registered as synthyboy_test_own_alias_<name> (a new task adds no line here).
+file(GLOB SYNTHYBOY_ALIAS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_own_alias_*.cpp")
+foreach(alias_src ${SYNTHYBOY_ALIAS_TEST_SOURCES})
+    get_filename_component(alias_name "${alias_src}" NAME_WE)
+    string(REGEX REPLACE "^test_own_alias_" "" alias_short "${alias_name}")
+    synthyboy_add_test(synthyboy_test_own_alias_${alias_short} "${alias_src}")
+    target_include_directories(synthyboy_test_own_alias_${alias_short} PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+endforeach()
+
+# tests of the measurement helpers (bench/perf/*.h): every core/tests/perf/test_perf_*.cpp is one test executable named synthyboy_<file name>
+file(GLOB SYNTHYBOY_PERF_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/perf/test_perf_*.cpp")
+foreach(src ${SYNTHYBOY_PERF_TESTS})
+    get_filename_component(perf_test_name ${src} NAME_WE)
+    synthyboy_add_test(synthyboy_${perf_test_name} ${src})
+    target_include_directories(synthyboy_${perf_test_name} PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+endforeach()
+
 # More than about 5 s alone (measured, docs/dsp-knowledge/testing.md): not part of the quick set (`ctest -LE slow`). The tests that already carry the label are set where they are
 # defined (output_stage_presets, own_voice_count_gain above; the audit and preset_sanity tests in their own directories); the binaries with an SB_TEST_FULL switch stay in the quick set.
 foreach(slow_test synthyboy_test_own_lib_quantize_levels synthyboy_test_rt synthyboy_test_clap_content synthyboy_test_own_note_storm synthyboy_test_own_filter_response
