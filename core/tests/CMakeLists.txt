@@ -59,6 +59,8 @@ target_include_directories(synthyboy_test_own_param_snapshot PRIVATE "${PROJECT_
 synthyboy_add_test(synthyboy_test_own_content_announce test_own_content_announce.cpp)   # the hand over of the content set to the audio thread: bounded, wait free, never freed under the reader (replaces global operator new/delete)
 synthyboy_add_full_run(synthyboy_test_own_content_announce)
 target_include_directories(synthyboy_test_own_content_announce PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_latency_plan test_own_latency_plan.cpp)   # the latency plan of the racks is derived only when a rack's reported latency moved: bit identical to deriving it every period
+target_include_directories(synthyboy_test_own_latency_plan PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_voice test_own_voice.cpp)
 target_include_directories(synthyboy_test_own_voice PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_fx test_own_fx.cpp)

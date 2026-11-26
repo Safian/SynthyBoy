@@ -62,6 +62,17 @@ A freed set is only marked and kept in a ring of 256 so that the check reads val
 The reclaim of the voice rebind (a voice bound to a set that was replaced twice inside one control period, possible with host blocks below 32 frames) is the open hazard H6a of
 `docs/release/CPU-REVIEW-MEMORY.md`, not changed here.
 
+### Latency plan of the racks
+
+`FxChain::update` reports `configuredNow ()` true in its derivation path and, in its settled path (nothing in the derivation moved), only when the latency of the chain's own rack
+(`rackLatency (rackId, false)` and `(rackId, true)`, read after the modules' own `update`) differs from the one stored by the update before. `OwnEngine::process` derives the latency
+plan, the five compensation delays and the reported latency only when the mixer settings changed or a chain says so. A module latency can change with the content or the quality without a
+parameter changing; the modules that exist today (limiter look-ahead, the 2x oversampled distortion) change theirs only with a parameter or the oversampling key of the derivation, which the full
+pass sees, so the settled comparison is a guard that a future module cannot skip. Test: `core/tests/test_own_latency_plan.cpp`: two engines (`own::kOwnSavingLatencyKey` off derives the plan every
+period, as before) over a patch with a limiter in Main, an oversampled distortion in Bus 1 and a delay in Bus 2, at the three tiers, through parameter, quality, content, mixer, rack and preset
+changes: every block and every `latencySamples ()` is bit identical; 0 derivations in 200 steady blocks against 800 (a derivation per control period); a latency that moves without a
+parameter (`setRackLatencyOffsetForTest`) is picked up in one derivation and reported. Mutation: the settled path ignoring the comparison fails `own_latency_plan_a_latency_that_moves_without_a_parameter_is_picked_up`.
+
 ## Test suite timing
 
 Measured on 2026-11-26, x86-64 Linux VM (4 vCPU Xeon 2.1 GHz, GCC 13.3, Release, `-DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF`, 172 tests), other

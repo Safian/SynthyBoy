@@ -27,6 +27,10 @@ namespace synthyboy
 {
 namespace own
 {
+/** A bit of IEngine::setSavingsOff for the own engine that engine.h does not list yet (it moves into OwnSaving there): the racks report a settled period as one that may have changed the latency, so
+    that the engine derives the latency plan every period, as it did before the latencies of the racks were compared (the bit identity test of test_own_latency_plan.cpp). */
+constexpr uint32_t kOwnSavingLatencyKey = 1u << 30;
+
 /** The default of OwnEngine::setLowTierUnisonCap: the one place of the number. */
 constexpr int kDefaultLowTierUnisonCap = 3;
 /** The default of OwnEngine::setLowTierKillFade: a stolen voice (Kill mode) fades out in 3 ms at tier low instead of 50 ms, so it stops costing a full voice after a few control periods. */
@@ -71,6 +75,10 @@ public:
     {
         return { statContentMaxTries.load (std::memory_order_relaxed), statContentFallbacks.load (std::memory_order_relaxed), statContentAdoptions.load (std::memory_order_relaxed) };
     }
+    /** Tests and measurements: how often the engine derived the latency plan of the racks (the delays that line the paths up) since it was made. Any thread, lock free. */
+    uint32_t latencyPlanComputes() const noexcept { return statLatencyPlans.load (std::memory_order_relaxed); }
+    /** Tests only: rack (0 Main, 1 Bus 1, 2 Bus 2) reports `samples` more latency, as if one of its modules changed it without a parameter changing. */
+    void setRackLatencyOffsetForTest (int rack, int samples) noexcept { if (rack >= 0 && rack < 3) fx[rack].setLatencyOffsetForTest (samples); }
     static constexpr int contentAnnounceTries() noexcept { return kContentAnnounceTries; }
     /** Tests: `hook (arg)` runs on the audio thread between the pin and the check of every attempt of announceContent (where a publication can win), so that a test can publish exactly there. nullptr removes it. */
     void setContentAnnounceHookForTest (void (*hook) (void*), void* arg) noexcept
@@ -216,6 +224,7 @@ private:
     int contentHeldSlot = 0;                 // audio thread only
     std::atomic<void (*) (void*)> announceHook { nullptr };
     std::atomic<void*> announceHookArg { nullptr };
+    std::atomic<uint32_t> statLatencyPlans { 0 };
     std::atomic<uint32_t> statContentMaxTries { 0 }, statContentFallbacks { 0 }, statContentAdoptions { 0 };
     const ContentSet* announceContent() noexcept;
     std::atomic<int> switchKeyAtomic[3];

@@ -211,6 +211,7 @@ void FxChain::reset() noexcept
     idleSettled = 0;
     derivedSettled = 0;
     derivedKeyValid = false;
+    latencyKeyValid = false;
     for (int i = 0; i < 16; ++i)
     {
         levelGain[i] = levelGainPrev[i] = 1.0f;
@@ -421,7 +422,6 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
     const bool keySame = derivedKeyValid && key == derivedKey;
     if (!legacy && inputsSame && keySame && derivedSettled >= 2 && !derivedBusy && (pool == nullptr || !pool->anyPending()))
     {
-        configured = true; // as before: the engine reads the latency of the racks every period (what the modules report is not part of the derivation)
         for (int m = 0; m < kNumFxModules; ++m)
             if (on[m])
             {
@@ -429,6 +429,9 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
                 f.sampleRate = sr;
                 inst[m]->update (f, base, delta);
             }
+        // what the modules report is not part of the derivation (a latency can follow the content or the quality), so it is compared here: the engine derives the latency plan again only when it moved
+        const bool latencyMoved = refreshLatencyKey();
+        configured = latencyMoved || !latencyKeyOn;
         idleSettled = (inputsSame && !active) ? idleSettled + 1 : 0;
         return;
     }
@@ -617,6 +620,17 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
     derivedSettled = (!legacy && inputsSame && keySame && !busy) ? derivedSettled + 1 : 0;
     derivedKey = key;
     derivedKeyValid = true;
+    refreshLatencyKey();
+}
+
+bool FxChain::refreshLatencyKey() noexcept
+{
+    const int now[2] = { rackLatency (rackId, false), rackLatency (rackId, true) };
+    const bool moved = !latencyKeyValid || now[0] != latencyKey[0] || now[1] != latencyKey[1];
+    latencyKey[0] = now[0];
+    latencyKey[1] = now[1];
+    latencyKeyValid = true;
+    return moved;
 }
 
 int FxChain::rackLatency (int rack, bool reported) const noexcept
@@ -649,7 +663,7 @@ int FxChain::rackLatency (int rack, bool reported) const noexcept
         else if (it.index == 15)
             sum += std::max (rackLatency (8, reported), rackLatency (9, reported));
     }
-    return sum;
+    return rack == rackId ? sum + latencyOffsetForTest : sum;
 }
 
 void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) noexcept

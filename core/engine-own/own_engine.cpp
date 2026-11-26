@@ -1830,8 +1830,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.distOs2 = (globals.economy & kEconomyWarp) == 0;
             frame.scalarLoops = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;
             frame.muteSkip = (globals.economy & kEconomyControl) != 0 && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingFxMute) == 0;
+            const bool latencyKey = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingLatencyKey) == 0;
             for (auto& f : fx)
             {
+                f.setLatencyKey (latencyKey);
                 f.setLowCost ((globals.economy & kEconomyControl) != 0);
                 f.update (base.data(), gdelta.data(), frame, mask, inputsSame);
             }
@@ -1866,10 +1868,11 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 mixCached = gnumTouched == 0;
             }
-            // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11): it changes only with the mixer settings or a chain
-            // that was configured in this period
+            // the latency of the racks and the delays that line the paths up (document 06, 11): it changes only with the mixer settings, a chain that was configured in this period, or a latency
+            // that the modules of a settled chain report differently (FxChain::configuredNow compares the reported latencies of the rack)
             if (!(mixSame && latCached && !fx[0].configuredNow() && !fx[1].configuredNow() && !fx[2].configuredNow()))
             {
+                statLatencyPlans.store (statLatencyPlans.load (std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
                 const int dest[2] = { busDest[0], busDest[0] == 2 && busDest[1] == 2 ? 0 : busDest[1] };
                 const int lat[2] = { busBypass[0] ? 0 : fx[1].rackLatency (1, false), busBypass[1] ? 0 : fx[2].rackLatency (2, false) };
                 const int lat0 = mainBypass ? 0 : fx[0].rackLatency (0, false);
