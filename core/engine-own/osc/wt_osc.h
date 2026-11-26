@@ -1024,20 +1024,25 @@ public:
                     return r;
                 };
 #if SB_NEON
-                // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), no filter stage: the oversampled samples are made four
-                // at a time (warpedGroup4: the operations of sampleAt () lane by lane, the same values). The phases and the weights of the second cycle are laid out first,
-                // by the integer steps of the scalar loop.
-                const bool lanes = !tick.scalarWarp && !filt0 && !filt1 && lanePhaseWarp (tick.warp[0]) && lanePhaseWarp (tick.warp[1])
+                // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), or that are sample domain warps (Quantize, the Dist family: their phase map is the identity and
+                // the sample stage follows the table read), no filter stage: the oversampled samples are made four at a time (warpedGroup4: the operations of sampleAt () lane by
+                // lane, the same values; a sample domain warp then runs over the four samples one by one, in order, as sampleAt () does: its ADAA state is a recurrence). The phases and
+                // the weights of the second cycle are laid out first, by the integer steps of the scalar loop. FM alone has its own lane form (fmGroup4) with the modulator terms
+                // t = (m * a0) * 0.3 made one by one first. Not in the reference mode (the code before these forms).
+                const bool sd0 = !reference_ && warpIsSampleDomain (tick.warp[0]), sd1 = !reference_ && warpIsSampleDomain (tick.warp[1]);
+                const bool lanes = !tick.scalarWarp && !filt0 && !filt1 && (lanePhaseWarp (tick.warp[0]) || sd0) && (lanePhaseWarp (tick.warp[1]) || sd1)
                                    && std::fabs (tick.warpPhase[0]) < 1000.0f && std::fabs (tick.warpPhase[1]) < 1000.0f;
+                const bool fmLanes = fmOnly && !tick.scalarWarp;
 #else
-                const bool lanes = false;
+                const bool lanes = false, fmLanes = false;
 #endif
                 const uint32_t ph0 = ph;
-                if (lanes)
+                if (lanes || fmLanes)
                 {
 #if SB_NEON
                     uint32_t phs[kOversample * kControlPeriod + 4];
                     float wbs[kOversample * kControlPeriod + 4];
+                    float tfm[kOversample * kControlPeriod + 4];
                     int total = 0;
                     for (int k = 0; k < n; ++k)
                     {
@@ -1048,15 +1053,42 @@ public:
                         {
                             phs[total] = ph;
                             wbs[total] = wBk;
+                            if (fmLanes)
+                            {
+                                const float fk = static_cast<float> (j + 1) * (1.0f / static_cast<float> (os));
+                                const float m = fmCross != nullptr ? lerp (k > 0 ? fmCross[k - 1] : fmPrev, fmCross[k], fk) : 0.0f;
+                                tfm[total] = m * a0 * 0.3f;
+                            }
                             ++total;
                             ph += incO;
                         }
                     }
+                    // the sample stage of the sample domain slots (the same calls as the end of sampleAt (), in the slot order)
+                    auto sampleStage = [&] (float y) noexcept
+                    {
+                        if (sd0)
+                            y = aaOn ? warpadaa::step (tick.warp[0], warpAa[v][0], y, a0, tick.fastMath) : warpSample (tick.warp[0], y, a0, 0.0f, tick.fastMath);
+                        if (sd1)
+                            y = aaOn ? warpadaa::step (tick.warp[1], warpAa[v][1], y, a1, tick.fastMath) : warpSample (tick.warp[1], y, a1, 0.0f, tick.fastMath);
+                        return y;
+                    };
                     int s4 = 0;
                     for (; s4 + 4 <= total; s4 += 4)
-                        warpedGroup4 (buf + nt - 1 + s4, phs + s4, wbs + s4, cA, cB, fscale, N, a0, a1);
+                    {
+                        float* const dst = buf + nt - 1 + s4;
+                        if (fmLanes)
+                            fmGroup4 (dst, phs + s4, tfm + s4, wbs + s4, cA, cB, fscale, N);
+                        else
+                        {
+                            warpedGroup4 (dst, phs + s4, wbs + s4, cA, cB, fscale, N, a0, a1);
+                            if (sd0 || sd1)
+                                for (int i = 0; i < 4; ++i)
+                                    dst[i] = sampleStage (dst[i]);
+                        }
+                    }
                     for (; s4 < total; ++s4) // an odd count at 2x: the last two samples one by one
-                        buf[nt - 1 + s4] = sampleAt (phs[s4], s4 / os, static_cast<float> (s4 % os + 1) * (1.0f / static_cast<float> (os)), wbs[s4]);
+                        buf[nt - 1 + s4] = fmLanes ? fmSample (phs[s4], s4 / os, static_cast<float> (s4 % os + 1) * (1.0f / static_cast<float> (os)), wbs[s4])
+                                                   : sampleAt (phs[s4], s4 / os, static_cast<float> (s4 % os + 1) * (1.0f / static_cast<float> (os)), wbs[s4]);
 #endif
                 }
                 else
@@ -1316,12 +1348,18 @@ public:
             default: return p;
         }
     }
-    /** Four samples of the oversampled path at the phases phs[0 .. 3] (sampleAt () of render () for two phase warps, no cross signal, no filter stage): the phase
-        through the two warps, the wrap, the table read (and the second cycle with the weights wbs), the window. */
-    void warpedGroup4 (float* dst, const uint32_t* phs, const float* wbs, const float* cA, const float* cB, float fscale, int N, float a0, float a1) const noexcept
+    /** The phase of four 32 bit phases, 0 .. 1 (the first operations of sampleAt ()). */
+    static float32x4_t phaseOf4 (const uint32_t* phs) noexcept
     {
-        const float32x4_t p = vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (vld1q_u32 (phs), 8)), vdupq_n_f32 (1.0f / 16777216.0f));
-        float32x4_t window = vdupq_n_f32 (1.0f), w2 = window, pp = p;
+        return vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (vld1q_u32 (phs), 8)), vdupq_n_f32 (1.0f / 16777216.0f));
+    }
+    /** The phase stage of warpedGroup4 (): the phases p through the two warps (a slot that is not a phase warp of lanePhaseWarp () leaves them as warpPhase () does: the sample domain
+        warps and the modulation ones return p), and the window. */
+    void phaseStage4 (float32x4_t p, float a0, float a1, float32x4_t& pp, float32x4_t& window) const noexcept
+    {
+        window = vdupq_n_f32 (1.0f);
+        float32x4_t w2 = window;
+        pp = p;
         if (tick.warp[0] != 0)
             pp = warpPhase4 (tick.warp[0], pp, a0, tick.warpPhase[0], window, tick.fastMath);
         if (tick.warp[1] != 0)
@@ -1329,6 +1367,11 @@ public:
             pp = warpPhase4 (tick.warp[1], pp, a1, tick.warpPhase[1], w2, tick.fastMath);
             window = vmulq_f32 (window, w2);
         }
+    }
+    /** The table read of four samples at the warped phases pp (the wrap, the Hermite read of the first cycle and the second one with the weights wbs, the window): the rest of
+        sampleAt () for no cross signal and no filter stage. */
+    static void readGroup4 (float* dst, float32x4_t pp, float32x4_t window, const float* wbs, const float* cA, const float* cB, float fscale, int N) noexcept
+    {
         const float32x4_t q = vsubq_f32 (pp, ffloor4 (pp));
         const float32x4_t pos = vmulq_f32 (q, vdupq_n_f32 (fscale));
         const int32x4_t idx = vminq_s32 (vmaxq_s32 (vcvtq_s32_f32 (pos), vdupq_n_s32 (0)), vdupq_n_s32 (N));
@@ -1341,6 +1384,21 @@ public:
             r = vaddq_f32 (r, vmulq_f32 (vsubq_f32 (hermite4 (baseB, idx, fr), r), vld1q_f32 (wbs)));
         }
         vst1q_f32 (dst, vmulq_f32 (r, window));
+    }
+    /** Four samples of the oversampled path at the phases phs[0 .. 3] (sampleAt () of render () for two phase warps, no cross signal, no filter stage): the phase
+        through the two warps, the wrap, the table read (and the second cycle with the weights wbs), the window. */
+    void warpedGroup4 (float* dst, const uint32_t* phs, const float* wbs, const float* cA, const float* cB, float fscale, int N, float a0, float a1) const noexcept
+    {
+        float32x4_t pp, window;
+        phaseStage4 (phaseOf4 (phs), a0, a1, pp, window);
+        readGroup4 (dst, pp, window, wbs, cA, cB, fscale, N);
+    }
+    /** Four samples of FM A / B, Thru-Zero and Linear alone (fmSample () of render ()): the phase p + t with t = (m * a0) * 0.3 made by the caller for each sample (it holds the
+        interpolated modulator), wrapped (warpPhase ()), then the table read; no window, and the sample stage of these warps does nothing. */
+    static void fmGroup4 (float* dst, const uint32_t* phs, const float* tfm, const float* wbs, const float* cA, const float* cB, float fscale, int N) noexcept
+    {
+        const float32x4_t x = vaddq_f32 (phaseOf4 (phs), vld1q_f32 (tfm));
+        readGroup4 (dst, vsubq_f32 (x, ffloor4 (x)), vdupq_n_f32 (1.0f), wbs, cA, cB, fscale, N);
     }
 #endif
 

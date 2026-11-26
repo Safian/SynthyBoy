@@ -11,6 +11,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "osc/wt_osc.h"
@@ -432,4 +433,121 @@ TEST (tier_low_reads_one_morph_cycle_where_the_weight_is_one_within_3_ulp_of_the
                  over);
     CHECK (differing > chunks / 10); // the single cycle read does happen
     CHECK_EQ (over, 0);
+}
+
+namespace
+{
+/** Two non reference oscillators on the same patch and cross signals: one with the lane forms of the oversampled samples (the default), one with tick.scalarWarp set (the sample by sample code
+    of sampleAt () and fmSample ()); the output of every chunk is compared bit for bit. Chunks of every length 1 .. 32 (the groups of four and the tails), tier low (2x, fast math) and not (4x). */
+struct LaneRun
+{
+    long long chunks = 0, mismatches = 0, loud = 0;
+};
+
+LaneRun runLanes (const std::vector<std::unique_ptr<Wavetable>>& tables, int w0, int w1, bool low, int voices, int seed, bool aaOff)
+{
+    LaneRun out;
+    TestRng r (static_cast<uint64_t> (seed) * 31u + 7u);
+    WtOsc lane, scalar;
+    lane.prepareMorph();
+    scalar.prepareMorph();
+    Rng rl, rs;
+    OscTick t;
+    t.active = true;
+    t.wt = tables[1].get();
+    t.semis = 36.0f + static_cast<float> ((seed * 5) % 40);
+    t.level = 0.7f;
+    t.voices = voices;
+    t.detuneSemis = 0.25f;
+    t.spread = 0.5f;
+    t.warp[0] = w0;
+    t.warp[1] = w1;
+    t.warpSrc[0] = warpCrossSource (w0);
+    t.warpSrc[1] = warpCrossSource (w1);
+    t.warpAmount[0] = 0.2f + 0.6f * r.uni();
+    t.warpAmount[1] = 0.2f + 0.6f * r.uni();
+    t.warpPhase[0] = r.bi() * 0.5f;
+    t.warpPhase[1] = r.bi() * 0.5f;
+    t.lowWarp = low;
+    t.fastMath = low;
+    OscTick ts = t;
+    ts.scalarWarp = true;
+    const uint32_t savedOff = synthyboy::aa::off();
+    if (aaOff)
+        synthyboy::aa::setOff (savedOff | synthyboy::aa::kWarpAdaa);
+    lane.start (0.0f, 0.5f, rl);
+    scalar.start (0.0f, 0.5f, rs);
+    for (int per = 0; per < 48; ++per)
+    {
+        t.frame = 0.05f + 0.017f * static_cast<float> (per % 50); // the frame steps: second cycles with weights
+        ts.frame = t.frame;
+        lane.update (t, 44100.0, rl);
+        scalar.update (ts, 44100.0, rs);
+        lane.updateMorph (44100.0, per == 0);
+        scalar.updateMorph (44100.0, per == 0);
+        float cross[6][kControlPeriod];
+        for (auto& c : cross)
+            for (float& x : c)
+                x = r.bi();
+        const float* cr[6] = { cross[0], cross[1], cross[2], cross[3], cross[4], cross[5] };
+        int t0 = 0;
+        while (t0 < kControlPeriod)
+        {
+            const int n = std::min (kControlPeriod - t0, r.range (1, 32));
+            float Ll[32], Rl[32], Ls[32], Rs[32];
+            lane.render (t0, n, Ll, Rl, cr, 44100.0);
+            scalar.render (t0, n, Ls, Rs, cr, 44100.0);
+            ++out.chunks;
+            if (!sameBitsArr (Ll, Ls, n) || !sameBitsArr (Rl, Rs, n))
+                ++out.mismatches;
+            for (int i = 0; i < n; ++i)
+                if (Ll[i] != 0.0f)
+                {
+                    ++out.loud;
+                    break;
+                }
+            t0 += n;
+        }
+    }
+    synthyboy::aa::setOff (savedOff);
+    return out;
+}
+} // namespace
+
+TEST (the_lane_forms_of_fm_quantize_and_the_dist_family_equal_the_sample_by_sample_code)
+{
+    // Quantize (3) and the Dist family (27 .. 40) are sample domain warps (phase map = identity, ADAA state in order), FM A / B, Thru-Zero and Linear (7, 8, 41, 42, 45, 46) are the FM only form;
+    // pairs with the phase warps Sync / Formant / Bend (the lane form that existed) and with a second sample domain slot are covered as well.
+    TestRng r (51);
+    const auto tables = makeTables (r);
+    std::vector<std::pair<int, int>> pairs;
+    for (int fm : { kWarpFmA, kWarpFmB, kWarpFmTzA, kWarpFmTzB, kWarpFmLinA, kWarpFmLinB })
+        pairs.push_back ({ fm, 0 });
+    std::vector<int> sd = { kWarpQuantize };
+    for (int d = kWarpDistTube; d <= kWarpDistSoftSat; ++d)
+        sd.push_back (d);
+    const int others[] = { 0, kWarpSync, kWarpFormant, kWarpBend, kWarpQuantize, kWarpDistTube, kWarpDistLinearFold };
+    int pick = 0;
+    for (int w : sd)
+        for (int o : others)
+        {
+            pairs.push_back ({ w, o });
+            pairs.push_back ({ o, w });
+            ++pick;
+        }
+    long long chunks = 0, bad = 0, loud = 0;
+    int configs = 0;
+    for (size_t i = 0; i < pairs.size(); ++i)
+        for (int low = 0; low < 2; ++low)
+        {
+            const int voices = 1 + static_cast<int> ((i + static_cast<size_t> (low)) % 3);
+            const LaneRun h = runLanes (tables, pairs[i].first, pairs[i].second, low != 0, voices, static_cast<int> (i) + 1, (i % 5) == 4);
+            chunks += h.chunks;
+            bad += h.mismatches;
+            loud += h.loud;
+            ++configs;
+        }
+    std::printf ("    %d warp pairs x tier low / not = %d configurations, %lld chunks (%lld loud): %lld chunks whose bits differ from the sample by sample code\n", static_cast<int> (pairs.size()), configs, chunks, loud, bad);
+    CHECK (loud > chunks / 2);
+    CHECK_EQ (bad, 0);
 }
