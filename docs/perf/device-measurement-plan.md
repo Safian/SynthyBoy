@@ -137,10 +137,41 @@ Decision rule (from `docs/perf/README.md` section 5): a variant counts as a gain
 
 Until then F1-F3 results are "faster, audio identity unverified". Do not install a flag variant as the release build on that basis.
 
-## 4. Order on the day
+## 4. In-host measurement with the native overlay package
+
+`synthyboy_tier_bench` renders the engine alone. The release plugin runs with the SynthyBoy native editor and the display layer (overlay) enabled (CLAUDE.md, "Release packaging"). The overlay thread and its helper compete for the same cores as the host's audio threads: measured on the Key 61 the overlay costs about 8 points of one core idle and about 15 under a chord, the `sb-overlay` thread 5.4-9.7 % of a core and the helper 5-7 % (`measurement.md`, "Overlay thread split"). A gain in the engine-only bench is therefore necessary but not sufficient: confirm it in the installed package with the native skin.
+
+Rules for the in-host runs:
+
+- Build ONLY the architecture of the device being measured (Key 61: `arm32`, XL: `arm64`). Both are built together only for a release or release candidate.
+- Package A and package B are built from the same source state except for the change under test, with the same production skin layout (`scripts/overlay-skin/mpc-ui-pages-overlay.json`, the `build-mpc.sh` default), the same `MPC_SDK`, and the same options. Do not pass `--skins`, `--no-validate` or a different `--skin-layout`: a missing or broken native skin must fail the build and the install before the working package is replaced.
+- Build each package from its own worktree (section 0) with its own `--out` and `--build-dir`. Add `--bench` so the note-on bench of the same code is built in the same run.
+- Install with the checked installer (`scripts/k61-install.sh PACKAGE_DIR` / `scripts/xl-install.sh PACKAGE_DIR`, see `.agents/skills/akai-mpc-ssh-deploy`). Record the package identity (sha256 of `synthyboy-<arch>.so`, of the overlay helper, and of `Plugin Skins/TUI.json`) with the evidence.
+- Keep the accepted package installed between tasks. On the XL leave the package the current task needs. Reinstall the accepted package after the run.
+
+```bash
+export MPC_SDK=/path/to/mpc-sdk                       # required by build-mpc.sh
+cd ../sb-A && scripts/build-mpc.sh --arch arm32 --bench --out ~/sb-pkg/A --build-dir ~/sb-build/mpc-A
+cd ../sb-H && scripts/build-mpc.sh --arch arm32 --bench --out ~/sb-pkg/H --build-dir ~/sb-build/mpc-H
+# on the Key 61, order A, H, A: install, let the host start, run the load, collect, then the next package
+scripts/k61-install.sh ~/sb-pkg/A      # then the measurement below, then:
+scripts/k61-install.sh ~/sb-pkg/H      # ... then A again for the second A leg
+```
+
+What to measure in the host (per leg; record start and end temperature of every thermal zone):
+
+1. **Overlay active and inactive.** Run each load once with the overlay on (the page of the native editor open, a visible page that animates, e.g. Macros or an LFO page) and once with it off or the plugin page hidden (host draws 0 frames when idle, `mpc-display.md`). Per-thread CPU from `/proc/<pid>/task/*/stat` for the MPC main thread, the audio worker threads, `sb-overlay` and the helper, sampled over a fixed window (the method of `.hw-local/mpc-perf/key61-voice-master-resources-20261125/`). Process-level samples give shares and cannot separate allocations inside host widgets: state that limit with the numbers.
+2. **Engine under that load.** `run-noteon-burst.sh LABEL BASELINE_BINARY CANDIDATE_BINARY` (private, in `.hw-local/mpc-perf/noteon-burst/`) with the `synthyboy_noteon_bench` from `~/sb-pkg/A/bench-arm32/` and `~/sb-pkg/H/bench-arm32/`: baseline, candidate, baseline again, same four presets, two chord sizes, two voice policies. It reports every combination in passes 1, 2 and 3; compare the two baseline legs before attributing a change to the candidate.
+3. **Knob-move spikes (block snapshot change).** With the native editor open and the overlay on, move one Q-Link continuously for a fixed time on a voice parameter and on an effect parameter, and record the worst-block statistics (3-5 runs per package, worst-block noise is about +-1 ms). This is the only place the snapshot change shows its benefit; `tier_bench` cannot.
+4. **Display path.** The two engine changes do not touch the display path, so no display acceptance is needed for them. For any later change that does touch it, additionally check the active and the inactive state on the requested MPC, and what the host shows while the overlay is off and after it returns (CLAUDE.md). Screen captures in `docs/screens/` are refreshed from the deployed hardware by the owner after a Mac build (`mpc-screen-photo` skill); nothing in this plan writes there.
+
+Save everything under `.hw-local/mpc-perf/<label>/`: raw samples, package identity, the exact commands, and the sampling limits. If an earlier derived result is disproved by a later one, delete it and link the replacement.
+
+## 5. Order on the day
 
 1. Baseline (section 1) on the Key 61 and E2 noise floor.
 2. A/B/A of the engine changes (section 2).
 3. Flag variants F1, F2, F3 (section 3); F4 only if all three gain.
-4. XL repeats of sections 1-3 when the XL is free; keep the accepted package installed afterwards.
-5. Commit the three docs tables, update `docs/dsp-knowledge/measurement.md` with the method and spread, delete finished items in `TODO.md`.
+4. In-host confirmation with the native overlay package (section 4) for everything that showed a gain; a result that exists only in the engine bench is not accepted.
+5. XL repeats of sections 1-4 when the XL is free; keep the accepted package installed afterwards.
+6. Commit the three docs tables, update `docs/dsp-knowledge/measurement.md` with the method and spread, delete finished items in `TODO.md`.
