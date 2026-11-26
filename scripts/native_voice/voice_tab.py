@@ -21,6 +21,7 @@ from components.native.button.button import entry
 from components.native.level.level import bare_dial_definition, stacked_dial_definition
 from components.native.name_value.name_value import build_name_value_definition
 from components.native.radio_button.radio_button import titled_radio_grid
+from components.native.panel.panel import panel_definitions, panel_entry
 from components.native.selector.selector import build_titled_selector, selector_definition
 from scripts.native_ui_params import VOICE_SEQUENCE, mixer_peek_index
 from .sequence_readouts import SEQUENCE_READOUT_NAMES, sequence_readout_definitions, sequence_readout_entries
@@ -70,6 +71,10 @@ VOICE_NATIVE_CONTROL_NAMES = (
     | set(SEQUENCE_READOUT_NAMES)
     | {"Voice Target Scope"}
 )
+# The titled cards the controls lie on (listed first in the tab, under every control and marker).
+VOICE_PANELS = tuple(dict(p, rect=tuple(p["rect"])) for p in _LAYOUT["panels"])
+VOICE_PANEL_NAMES = frozenset(f"Voice Block {p['title']}" for p in VOICE_PANELS)
+VOICE_NATIVE_CONTROL_NAMES = VOICE_NATIVE_CONTROL_NAMES | VOICE_PANEL_NAMES
 
 
 def sequence_base(ctx):
@@ -80,7 +85,7 @@ def sequence_base(ctx):
 UNCONVERTED_CONTROLS = [{
     "name": "Voice Step Grid",
     "component": "VoiceGrid",
-    "rect": tuple(style.size("screen.voice_tab.rect.rect")),
+    "rect": tuple(_LAYOUT["steps"]["rect"]),
     "reason": "The overlay animates the currently sounding steps from LiveValues::voiceStep.",
 }]
 
@@ -111,10 +116,12 @@ def voice_definitions(skins_dir=None):
             None, "fx editor choice menu", style.size("screen.voice_tab.voicenativestepselect.size"), skins),
         "voiceNativeStepValue": build_name_value_definition(
             rect=style.size("screen.voice_tab.voicenativestepvalue.rect"), skins_dir=skins,
-            box_width=style.size("voice.controls.step_value_box_width"), caption_kind="Value"),
+            box_width=style.size("voice.controls.step_value_box_width"), caption_kind="Value",
+            label_size=style.size("font.caption"), value_size=style.size("font.value")),
         "voiceNativeNumber": build_name_value_definition(
             rect=style.size("screen.voice_tab.voicenativenumber.rect"), skins_dir=skins,
-            box_width=style.size("voice.controls.number_box_width")),
+            box_width=style.size("voice.controls.number_box_width"),
+            label_size=style.size("font.caption"), value_size=style.size("font.value")),
         "voiceNativeDial": stacked("voice.controls.dial_size"),
         "voiceNativeScaleDial": stacked("voice.controls.scale_dial_size", ("TimeCaption", "RateCaption", "LFO RATE")),
         "voiceNativeScaleEnv": stacked("voice.controls.scale_dial_size"),
@@ -137,6 +144,8 @@ def voice_definitions(skins_dir=None):
     toggle = next(c for c in VOICE_STANDALONE_CONTROLS if c["key"] == "voicectl.rand.detune10x")
     definitions[toggle["type"]] = build_active_text_toggle(
         skins, toggle["type"], toggle["caption"], toggle["rect"][2:], font_size=style.size("font.selector"))
+    definitions.update(panel_definitions([(f"voiceNativeBlock_{p['name']}", p["rect"][2:], p["title"], None)
+                                          for p in VOICE_PANELS], keyline="voiceNativeBlockKeyline"))
     return definitions
 
 
@@ -183,5 +192,7 @@ def populate_voice_tab(tab, ctx, root_gate, include_step_knobs=True):
         VOICE_TARGET_GROUP_BOUNDS, [("Data", target_mappings[0][1]), *target_mappings],
         gates=[root_gate], focus="Children",
     ))
-    components[:] = native + retained
+    panels = [panel_entry(f"Voice Block {p['title']}", f"voiceNativeBlock_{p['name']}", p["rect"], gates=[root_gate])
+              for p in VOICE_PANELS]
+    components[:] = panels + native + retained
     return components

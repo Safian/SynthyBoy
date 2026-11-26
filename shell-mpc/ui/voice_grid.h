@@ -39,7 +39,7 @@ public:
 
     VoiceGrid() = default;
 
-    Size minSize() const override { return { 800, 236 }; }
+    Size minSize() const override { return { 800, 200 }; }
 
     Rect gridArea() const noexcept
     {

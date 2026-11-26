@@ -24,7 +24,7 @@ namespace synthyboy_mpc { namespace ui {
 class VoiceScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 4, kHeaderH = 80, kGridH = 236, kStripH = 40, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8, kRowBlockW = 252;
+    static constexpr int kMaxGroups = 4;   // geometry: scripts/native_voice/voice_layout.json through voice_native_layout.h (redesign 2026-11-26)
 
     // Header
     NumberField length;       // voicectl.length (1..8)
@@ -135,10 +135,10 @@ public:
     {
         if (!enabled_ || !rect_.contains (x, y) || isNativeControl (x, y))
             return Change::none();
-        if (rowBlockRect().contains (x, y) || stripRect().contains (x, y))
+        if (sequenceRect().contains (x, y))
             setActiveGroup (0);
         else if (blockRect (0).contains (x, y))
-            setActiveGroup (x >= randDetune10x.rect().x - 6 ? 2 : 1);
+            setActiveGroup (y >= randDetune10x.rect().y - 4 ? 2 : 1);   // the 10x switch under the knobs is the first member of SCALING's group
         else if (blockRect (1).contains (x, y))
             setActiveGroup (2);
         else if (blockRect (2).contains (x, y))
@@ -152,21 +152,27 @@ public:
         groups[activeGroup_].draw (sb);
     }
 
-    /** The block at the left of the grid with the list of the rows. */
-    Rect rowBlockRect() const noexcept { return { rect_.x + 8, rect_.y + kHeaderH + 4, kRowBlockW, kGridH }; }
-    Rect stripRect() const noexcept { return { rect_.x + 8, grid.rect().bottom() + 6, rect_.w - 16, kStripH }; }
+    /** A rectangle of voice_native_layout.h (tab coordinates) on the page. */
+    Rect at (Rect r) const noexcept { return { rect_.x + r.x, rect_.y + r.y, r.w, r.h }; }
+    /** The SEQUENCE panel (the list of the rows, the step grid, the strip of the selected step). */
+    Rect sequenceRect() const noexcept { return at (voicelayout::kBlockSequence); }
+    /** The part of the SEQUENCE panel at the left of the grid, with the list of the rows. */
+    Rect rowBlockRect() const noexcept
+    {
+        const Rect s = sequenceRect();
+        return { s.x, s.y, grid.rect().x - s.x, stripRect().y - s.y };
+    }
+    Rect stripRect() const noexcept { return at (voicelayout::kStrip); }
+    /** The titled panels under the sequence: 0 RANDOM, 1 SCALING, 2 TARGETS (what the skin draws). */
     Rect blockRect (int b) const noexcept
     {
-        const int m = kBlockGap, y0 = stripRect().bottom() + 8, h = rect_.bottom() - 8 - y0, totalW = rect_.w - 2 * m;
-        const int w0 = 520, w1 = 380, w2 = totalW - w0 - w1 - 2 * m;
-        if (b == 0) return { rect_.x + m, y0, w0, h };
-        if (b == 1) return { rect_.x + m + w0 + m, y0, w1, h };
-        return { rect_.x + m + w0 + m + w1 + m, y0, w2, h };
+        return at (b == 0 ? voicelayout::kBlockRandom : b == 1 ? voicelayout::kBlockScaling : voicelayout::kBlockTargets);
     }
     Rect inner (int b) const noexcept
     {
         const Rect r = blockRect (b);
-        return { r.x + kBlockPad, r.y + kBlockTitleH, std::max (0, r.w - 2 * kBlockPad), std::max (0, r.h - kBlockTitleH - kBlockPad) };
+        constexpr int title = 32, pad = 8;   // the title strip of the native panel, its inner margin
+        return { r.x + pad, r.y + title, std::max (0, r.w - 2 * pad), std::max (0, r.h - title - pad) };
     }
 
 protected:
