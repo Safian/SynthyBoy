@@ -21,6 +21,10 @@ struct FxLayout
     int lines[4] = {};
 };
 constexpr int kFxSideX = 644, kFxSideStride = 318, kFxSideLane = 16, kFxSideLine = 72, kFxSideCellW = 310;
+/** The height of a cell of a STACKED layout of rows `rowH` apart: the row under its 16 px Q lane, at least 72 and at most kFxCellMaxH px (FX screen review 2026-11-26: a page of one or two rows
+    no longer stretches a switch into a box of 190 px; the rows keep their pitch, the cell stands at the top of its row). The skin reads the cap from the contract ("cell_max_h"). */
+constexpr int kFxCellMaxH = 104;
+constexpr int fxStackedCellH (int rowH) noexcept { return rowH - kFxSideLane < 72 ? 72 : (rowH - kFxSideLane > kFxCellMaxH ? kFxCellMaxH : rowH - kFxSideLane); }
 /** Tab y of the first cell line of `row` of a side layout. */
 constexpr int fxSideRowY (const FxLayout& g, int row) noexcept
 {
@@ -34,6 +38,13 @@ constexpr FxLayout kFxLayouts[] = {
     { 344, 2 }, { 344, 3 }, { 390, 1 }, { 424, 2 },
     { 208, 3 }, { 272, 2 }, { 272, 3 }, { 408, 2 }, { 424, 3 }, { 272, 1 },
     { 208, 3, 1, { 2, 2, 1, 0 } },   // Distortion: the waveshaper at the left, TYPE / DRIVE / MIX / LEVEL, FILTER ORDER / CUTOFF / RESONANCE, BLEND / KEYTRACK at the right
+    // the side layouts of the FX screen review (2026-11-26): a side layout is named by the lines of the rows on the panel now (FxSlotEditor::nativeLayout)
+    { 208, 2, 1, { 2, 2, 0, 0 } },   // Distortion without its filter (the FILTER SHAPE row is gone)
+    { 272, 2, 1, { 2, 2, 0, 0 } },   // under the tabs, two blocks of four: Compressor MAIN / BANDS, Delay MAIN, EQ MAIN / TONE, FX Filter MAIN
+    { 272, 2, 1, { 2, 1, 0, 0 } },   // Compressor UPWARD (multiband), FX Filter TONE (every model but Formant)
+    { 272, 2, 1, { 1, 1, 0, 0 } },   // Delay OUTPUT (LEVEL / HQ, OFFSET L / R)
+    { 272, 1, 1, { 2, 0, 0, 0 } },   // EQ MID 2, Compressor UPWARD of a single band
+    { 408, 1 },                      // EQ MID 2 stacked (the docked Mixer peek)
 };
 static_assert (sizeof kFxLayouts / sizeof *kFxLayouts == kFxLayoutLast);
 

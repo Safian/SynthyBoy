@@ -27,7 +27,7 @@ constexpr int kFxValueBase = kEnvSelectorBase + kEnvSelectorCells;
 constexpr int kFxCells = 16;
 constexpr int kFxKindBase = kFxValueBase + kFxCells;
 constexpr int kFxLayout = kFxKindBase + kFxCells;
-constexpr int kFxLayoutLast = 15;
+constexpr int kFxLayoutLast = 21;
 constexpr int kFxDomainBase = kFxLayout + 1;
 constexpr int kFxStyleModels = 27;
 constexpr int kFxHidden = 0, kFxDial = 1, kFxToggle = 2, kFxFirstDomain = 3;

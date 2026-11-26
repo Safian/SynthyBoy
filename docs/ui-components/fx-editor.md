@@ -5,22 +5,25 @@ Small effects show all applicable controls in one panel. Larger effects use the
 shared native segmented radio component for explicitly named tabs; there is no
 MORE/LESS action. Tabs select UI state and do not write an engine parameter.
 
-| Effect | Panels | Assignment of the existing rows |
-| --- | --- | --- |
-| Chorus | MAIN | Rate/sync/depth/feedback; voices/mix/delay1/delay2; filter cutoff/spread/level (11 live cells) |
-| Compressor | MAIN / BANDS / UPWARD | Global + selected upper threshold/ratio; output/crossovers/gains; lower pairs |
-| Delay | MAIN / TONE | Timing/style/feedback/cutoff/mix; quality/spread/offsets/output |
-| Distortion | MAIN | Distortion and every applicable filter/shape control |
-| EQ | MAIN / TONE | Band cutoff/gain/output; modes/law/resonance/mid band2 |
-| FX Filter | MAIN / TONE | Model/style/basic response; formant/shape/output |
-| Flanger | MAIN | All modulation, feedback, phase and output controls |
-| Phaser | MAIN | All modulation, feedback, sweep and output controls |
-| Reverb | MAIN / TONE / MOD | Algorithm/size/decay/predelay/width/room/feedback/output; prefilters/shelves; early size/diffusion/chorus |
-| Hyper/Dimension | MAIN | Hyper, Dimension, retrigger and output |
-| Utility | MAIN | Stereo, filters, mono bass, polarity and output |
-| Bode | MAIN / TIMING | Shift/direction/balance/feedback/mix; delay/sync/blur/stereo/output |
-| Convolve | MAIN / TAIL | Impulse/size/tone/predelay/envelope/mix; sync/phase/damping/gain/law/output |
-| Splitter L/H, L/M/H, M/S | MAIN | Existing crossover/band/output controls and band-rack display |
+| Effect | Layout | Panels | Rows (= Q groups, in Q order) |
+| --- | --- | --- | --- |
+| Chorus | stacked | MAIN | MODULATION rate/sync/depth/feedback; VOICES, DELAYS AND MIX voices/delay 1/delay 2/mix; FILTER AND OUTPUT cutoff/spread/level |
+| Compressor | side | MAIN / BANDS / UPWARD | COMPRESSOR mix/attack/release/bands, BAND mode/threshold/ratio of the selected band + BAND; OUTPUT AND CROSSOVERS, GAINS; the two lower (upward) rows |
+| Delay | side | MAIN / OUTPUT | TIME style/sync/time L/time R (or the divisions), FEEDBACK AND MIX feedback/filter cutoff/filter spread/mix; OUTPUT AND QUALITY level/HQ, TIME OFFSETS offset L/offset R |
+| Distortion | side | MAIN | DISTORTION type/drive/mix/level, FILTER order/cutoff/resonance, FILTER SHAPE blend/key track |
+| EQ | side | MAIN / TONE / MID 2 | LOW AND MID BANDS, HIGH BAND AND OUTPUT (cutoff/gain, level); MODES (+ band shape), RESONANCE; MID BAND 2 |
+| FX Filter | side (TONE of the Formant model: stacked) | MAIN / TONE | FILTER model/style/cutoff/resonance, MODEL drive/mix/comb offset or formant X/formant Y; FORMANT, SHAPE, OUTPUT |
+| Flanger | stacked | MAIN | MODULATION rate/sync/depth/center; FEEDBACK AND OUTPUT feedback/phase offset/mix/level |
+| Phaser | stacked | MAIN | MODULATION; FEEDBACK AND OUTPUT feedback/phase offset/mix/level (as the Flanger); SWEEP depth 2/blend |
+| Reverb | stacked | MAIN / TONE / MOD | Algorithm/size/decay/predelay/width/room/feedback/output; prefilters/shelves; early size/diffusion/chorus |
+| Hyper/Dimension | stacked | MAIN | HYPER rate/unison/detune/retrigger; DIMENSION AND OUTPUT size/mix/mix/level |
+| Utility | stacked | MAIN | Stereo, filters, mono bass, polarity and output |
+| Bode | stacked | MAIN | SHIFT; FEEDBACK AND OUTPUT; DELAY (with its sync); STEREO AND OUTPUT (four rows, one page) |
+| Convolve | stacked | MAIN | IMPULSE (with the pre-delay); ENVELOPE AND OUTPUT; TAIL (with the sync of the pre-delay); LAW AND OUTPUT (four rows, one page) |
+| Splitter L/H, L/M/H, M/S | stacked | MAIN | Existing crossover/band/output controls and band-rack display |
+
+The reasons of every grouping (and what changed on 2026-11-26) are in [the FX screen review](../review/FX-SCREEN-REVIEW-2026-11-26.md).
+A GAIN of the EQ is live only in its band's gain mode (shelf, peak): the high pass, the notch and the low pass of the engine do not read it, so it is hidden there like every control that is not live.
 
 `fxl::panelsOf()` in `shell-mpc/ui/fx_layout.h` owns the row-to-panel mapping.
 Rows retain their Q groups, condition predicates and canonical parameter keys.
@@ -52,8 +55,10 @@ atomically saves the one canonical [current FX image](../screens/fx.jpg).
 It is a1280x628 synthetic offline fixture, **not a hardware capture**.
 The old reference was removed after the functional native panel implementation was integrated.
 
-To inspect all nine states (Chorus Gen1/Gen2, three Reverb tabs, three Compressor
-tabs and Limit), explicitly export outside the checkout:
+To inspect every effect and every panel (Chorus Gen1/Gen2, the three Reverb, Compressor
+and EQ panels, Limit, Distortion with and without drive, the Delay styles, the FX Filter
+with the Formant TONE, Flanger, Phaser, Hyper/Dimension, Utility, Bode, Convolve),
+explicitly export outside the checkout:
 
 ```sh
 python3 scripts/render_ui_screen_fx_preview.py --out-dir /tmp/synthyboy-fx-fixtures
@@ -80,7 +85,9 @@ THE RULE: every control that is not live is hidden. Remaining cells compact left
 `FxFullScreen`: `chainBar`, `slotEditor`, `gallery`; `assignIds (chainBaseId, editorBaseId)` (editor: power `+100`, rack `+101`, page `+102`, remove `+103`), `setEditorShown (bool)`, `galleryShown()`, `groupName (g)`, `activeGroup()`, `setActiveGroup (g)`, `turnQ`.
 
 ## Size
-SIDE LAYOUT (`fxl::Layout::side`, Distortion): display left (x 8, width 628, y 208 to 620), controls right in two columns of 310 px (x 644 and 962), two cells to a line of 72 px, a 16 px Q lane above each row; a row has ceil (cells of its table row / 2) lines, so the four cells of DISTORTION are a 2 x 2 block (TYPE, DRIVE / MIX, LEVEL), the Q frame is the union. Only on the full page: with a Mixer-peek inset the stacked layout applies (`FxSlotEditor::sideMode ()`). Native cells: `nativeui::FxLayout::side / lines` (`shell-mpc/native_fx_cells.h`), the skin places them with the same formula (`scripts/mpc-skin-extras/20_fx.py` `_side_cell_rect`); regenerate `fx-native-contract.json` with `fx_native_ui_host --skin-contract` (it also lists the stacked variant for the peek).
+SIDE LAYOUT (`fxl::Layout::side`: Compressor, Delay, Distortion, EQ, FX Filter, every effect with a display): display left (x 8, width 628, from under the header or the tabs to y 620), controls right in two columns of 310 px (x 644 and 962), two cells to a line of 72 px, a 16 px Q lane above each row; a row has ceil (cells of its table row / 2) lines, so a row of four cells is a 2 x 2 block (DISTORTION: TYPE, DRIVE / MIX, LEVEL), the Q frame is the union. A panel is a side page when its visible rows fit the height at the right (412 px without tabs, 348 px under the tabs: two rows of four cells, or one of four and two of two); a panel that does not fit (FX Filter TONE of the Formant model: 2 + 2 + 1 lines) and every page with a Mixer-peek inset use the stacked layout (`FxSlotEditor::sideMode ()`, `sideFits ()`). Native cells: `nativeui::FxLayout::side / lines` (`shell-mpc/native_fx_cells.h`); a side layout is named by the top and the lines of the rows on the panel NOW (a row that is gone moves the ones below it up), so `nativeLayout ()` matches all of them. The skin places them with the same formula (`scripts/mpc-skin-extras/20_fx.py` `_side_cell_rect`); regenerate `fx-native-contract.json` with `fx_native_ui_host --skin-contract` (it also lists the stacked variant for the peek and the stacked place of the compressor's BAND selector, `band_stacked`).
+
+STACKED LAYOUT: rows of four cells (x 8, 326, 644, 962; 310 px), the rows share the height of the panel; a cell is its row minus the 16 px Q lane, at least 72 and at most 104 px (`nativeui::fxStackedCellH`, the contract's `cell_max_h`), at the top of its row, so a page of one or two rows does not stretch a switch into a box of 190 px.
 
 `FxSlotEditor::minSize()` 1200 x 400, `kHeaderH` 56, `kDisplayH` 176. `FxFullScreen::minSize()` 1280 x 628, `kBarH` 88.
 

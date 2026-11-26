@@ -136,7 +136,7 @@ inline auto widgets (bool& consistent)
                                     consistent = false;
                             }
                             else if (rect.x != 8 + 318 * col || rect.w != 310
-                                || rect.y != 110 + g.top + 16 + row * rowH || rect.h != std::max (72, rowH - 16))
+                                || rect.y != 110 + g.top + 16 + row * rowH || rect.h != nativeui::fxStackedCellH (rowH))
                                 consistent = false;
                             if (! nativeui::fxCellProxy (widget))
                             {
@@ -229,7 +229,7 @@ inline bool exportManifest ()
     const auto headers = headerRects (consistent);
     if (! consistent)
         return false;
-    std::printf ("{\n  \"kind_last\": %d,\n  \"layouts\": [", nativeui::kFxKindLast);
+    std::printf ("{\n  \"kind_last\": %d,\n  \"cell_max_h\": %d,\n  \"layouts\": [", nativeui::kFxKindLast, nativeui::kFxCellMaxH);
     for (int i = 0; i < nativeui::kFxLayoutLast; ++i)
     {
         const auto& g = nativeui::kFxLayouts[i];
@@ -300,22 +300,30 @@ inline bool exportManifest ()
     auto& ed = screen.slotEditor;
     ed.setType (synthyboy::kFxTypeCompressor, true);
     ed.setModuleEnabled (true);
-    ui::Rect band;
-    for (int bandMode = 0; bandMode < 3; ++bandMode)
-        for (int dynamics = 0; dynamics < 3; ++dynamics)
-        {
-            ed.setState ([&] (const char* key) {
-                if (std::strcmp (key, "compressor.bands") == 0) return static_cast<float> (bandMode);
-                if (std::strcmp (key, "compressor.limit") == 0) return static_cast<float> (dynamics);
-                const auto* p = synthyboy::findParamByKey (key);
-                return p != nullptr ? p->def : 0.0f;
-            });
-            const auto actual = ed.nativeBandRect();
-            consistent &= ! actual.empty() && (band.empty() || band == actual);
-            band = actual;
-        }
+    // the BAND selector of the full page (the compressor's side layout) and of the stacked layout the docked Mixer peek shows (the skin moves that one up by the peek's offset)
+    ui::Rect bands[2];
+    for (int stacked = 0; stacked < 2; ++stacked)
+    {
+        ed.setSideAllowed (stacked == 0);
+        for (int bandMode = 0; bandMode < 3; ++bandMode)
+            for (int dynamics = 0; dynamics < 3; ++dynamics)
+            {
+                ed.setState ([&] (const char* key) {
+                    if (std::strcmp (key, "compressor.bands") == 0) return static_cast<float> (bandMode);
+                    if (std::strcmp (key, "compressor.limit") == 0) return static_cast<float> (dynamics);
+                    const auto* p = synthyboy::findParamByKey (key);
+                    return p != nullptr ? p->def : 0.0f;
+                });
+                const auto actual = ed.nativeBandRect();
+                consistent &= ! actual.empty() && (bands[stacked].empty() || bands[stacked] == actual);
+                bands[stacked] = actual;
+            }
+    }
+    ed.setSideAllowed (true);
     std::printf ("    \"band\": ");
-    rect (band);
+    rect (bands[0]);
+    std::printf (",\n    \"band_stacked\": ");
+    rect (bands[1]);
     std::printf (",\n");
     std::printf ("    \"add\": ");
     rect (screen.chainBar.nativeAddRect());

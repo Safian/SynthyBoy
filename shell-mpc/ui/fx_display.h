@@ -1,8 +1,10 @@
 // SynthyBoy - MPC UI component library: the FX DISPLAY component (FxDisplay): the picture of what an effect does, drawn from the parameters of the selected slot with thin smooth lines:
-//   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass: the textbook biquads of the settings), with a dot at the centre of each band
-//   COMPRESSOR  the transfer curve (input level to output level) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): below the lower
-//               threshold the lower ratio, between the thresholds 1 : 1, above the upper threshold the upper ratio, and the make-up gain of the band
-//   DELAY       the echoes in time: the two taps (left above the line, right under it), the repeats with the feedback, the time axis in milliseconds (a tempo sync is turned into milliseconds by the owner)
+//   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass) as the engine's equalizer makes it in either law (state variable or
+//               cookbook biquads, with the engine's Q of the resonance; ui_fx_editor_host compares it with the engine's impulse response), with a dot at the centre of each band
+//   COMPRESSOR  the transfer curve (the peak level of a steady tone in, out) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): the
+//               upward stage under the lower threshold, the downward stage above the upper one (Limit: the ceiling), the make-up gain and the mix, as the engine's gain computer sets them
+//   DELAY       the echoes of a click in time (left above the line, right under it) by the network of the engine's style, with the offsets of the two times, the time axis in milliseconds (a tempo sync is
+//               turned into milliseconds by the owner)
 //   FX FILTER   the response of the filter (the owner computes it with the engine's own filter, the same as the filter page), a line with a faint fill
 //   DISTORTION  the transfer curve of the waveshaper (the type and the drive) over the whole plot, with the grid, the scales, the identity as a reference and the present signal level as a dot
 // The other effects (and the splitters, whose page shows the racks of their bands instead: fx_band_board.h) have no display (the editor gives their knobs the room). Same contract as every component (core.h): a state in, no touch.
@@ -26,10 +28,11 @@ public:
 
     /** One band of the EQ: mode 0 = the band's first mode (low: shelf, mid: peak, high: shelf), 1 = the second (high pass, notch, low pass); `used` false: the band is off (the second mid band). */
     struct EqBand { bool used = true; int mode = 0; float freq = 1000.0f, gainDb = 0.0f, resonance = 30.0f; };
-    struct EqState { EqBand low, mid, mid2, high; };
+    struct EqState { EqBand low, mid, mid2, high; int law = 0; float sampleRate = 48000.0f; };   // law (eq.law): 0 state variable, 1 cookbook biquads
     struct CompBand { float lowerThr = -40.0f, upperThr = -20.0f, lowerRatio = 0.0f, upperRatio = 0.5f, gainDb = 0.0f; };   // dB, ratios -1 .. +1 and 0 .. 1 (the percent / 100)
-    struct CompState { CompBand band[3]; int bands = 0; int activeBand = 1; };   // bands: 0 multiband, 1 low only, 2 high only, 3 one band
-    struct DelayState { float timeMs1 = 300.0f, timeMs2 = 300.0f, feedback = 0.4f; int style = 1; };   // style: 0 mono, 1 stereo, 2 ping pong, 3 mid ping pong, 4 tap -> delay
+    struct CompState { CompBand band[3]; int bands = 0; int activeBand = 1; int mode = 0; float mix = 1.0f; };   // bands: 0 multiband, 1 low only, 2 high only, 3 one band; mode (compressor.limit): 0 Compress, 1 Limit, 2 peak compressor; mix 0 .. 1
+    /** style: 0 mono, 1 stereo, 2 ping pong, 3 mid ping pong, 4 tap -> delay; offsetL / offsetR the factors of the two times (delay.offset_left, delay.offset). */
+    struct DelayState { float timeMs1 = 300.0f, timeMs2 = 300.0f, feedback = 0.4f; int style = 1; float offsetL = 1.0f, offsetR = 1.0f; };
     struct FilterState { const float* db = nullptr; int n = 0; float cutoffHz = 1000.0f; };   // dB at 20 Hz .. 20 kHz (log axis), the cutoff for the mark
     struct DistState { int type = 0; float driveDb = 0.0f; float mix = 1.0f; float inLevel = -1.0f; };   // inLevel: the present peak level of the signal at the input (0 .. 1 of full scale; < 0: not known)
 
@@ -77,15 +80,45 @@ public:
     }
 
     static constexpr int kPoints = 192;
-    /** The gain in dB of one EQ band at `f` Hz: the biquads of the Audio EQ Cookbook (shelf, peak, notch, high pass, low pass) at 48 kHz; the resonance 0 .. 100 % is the Q 0.5 .. 10. */
-    static float bandDb (int bandIndex, const EqBand& b, float f) noexcept
+    /** The gain in dB of one EQ band at `f` Hz, as the engine's equalizer makes it (core/engine-own/fx/fx_eq.h; ui_fx_editor_host compares the two):
+          law 0, STATE VARIABLE: the trapezoidal state variable section, whose response is the analog section (wh s^2 + wb s + wl) / (s^2 + R s + 1) at s = j tan (pi f / fs) / tan (pi fc / fs), with
+                 Q = 0.5 + 15.5 r^3 (R = 1 / Q, r the resonance 0 .. 1) and the output weights of the shelves and the bell from the amplitude A = 10^(gain / 20)
+          law 1, COOKBOOK: the biquads of the Audio EQ Cookbook with Q = 0.4 + 1.7417 r^3 for a shelf and 0.1 + 18.9053 r^4 for the others.
+        bandIndex 0 low (shelf / high pass), 1 mid and 2 mid 2 (peak / notch), 3 high (shelf / low pass). */
+    static float bandDb (int bandIndex, const EqBand& b, float f, int law = 0, float fs = 48000.0f) noexcept
     {
         if (! b.used)
             return 0.0f;
-        const float fs = 48000.0f, w0 = 2.0f * kPi * std::clamp (b.freq, 20.0f, 20000.0f) / fs, cw = std::cos (w0), sw = std::sin (w0);
-        const float q = 0.5f * std::pow (20.0f, std::clamp (b.resonance, 0.0f, 100.0f) * 0.01f), a = std::pow (10.0f, b.gainDb / 40.0f), alpha = sw / (2.0f * q);
-        float b0, b1, b2, a0, a1, a2;
         const bool low = bandIndex == 0, high = bandIndex == 3;
+        const float r = std::clamp (b.resonance * 0.01f, 0.0f, 1.0f), gainDb = std::clamp (b.gainDb, -24.0f, 24.0f);
+        if (law == 0)
+        {
+            const float q = 0.5f + 15.5f * r * r * r, R = 1.0f / q, A = std::pow (10.0f, gainDb * 0.05f);
+            float wl = 1.0f, wb = 0.0f, wh = 0.0f;   // the low pass, band pass and high pass weights of the engine's design
+            if ((low || high) && b.mode == 1)
+            {
+                wl = high ? 1.0f : 0.0f;   // high: low pass; low: high pass
+                wh = high ? 0.0f : 1.0f;
+            }
+            else if (! low && ! high && b.mode == 1)   // notch
+                wh = 1.0f;
+            else
+            {
+                const float blend = low ? -1.0f : (high ? 1.0f : 0.0f);   // low shelf, bell, high shelf
+                wl = A + (1.0f - A) * std::clamp (blend + 1.0f, 0.0f, 1.0f);
+                wh = 1.0f + (A - 1.0f) * std::clamp (blend, 0.0f, 1.0f);
+                wb = R * std::sqrt (A) * (1.0f + (std::sqrt (A) - 1.0f) * (1.0f - blend * blend));
+            }
+            const float g = std::tan (kPi * std::min (std::max (b.freq, 1.0f) / fs, 0.499f));
+            const float w = std::tan (kPi * std::min (f / fs, 0.4999f)) / g;   // the frequency of the analog section
+            const float nr = wl - wh * w * w, ni = wb * w, dr = 1.0f - w * w, di = R * w;
+            return 10.0f * std::log10 (std::max (1.0e-12f, (nr * nr + ni * ni) / std::max (1.0e-12f, dr * dr + di * di)));
+        }
+        const bool shelf = (low || high) && b.mode == 0;
+        const float w0 = 2.0f * kPi * std::clamp (b.freq, 10.0f, fs * 0.499f) / fs, cw = std::cos (w0), sw = std::sin (w0);
+        const float q = shelf ? 0.4f + 1.7417f * r * r * r : 0.1f + 18.9053f * r * r * r * r;
+        const float a = std::pow (10.0f, gainDb / 40.0f), alpha = sw / (2.0f * std::max (q, 0.05f));
+        float b0, b1, b2, a0, a1, a2;
         if (low && b.mode == 0)   // low shelf
         {
             const float s = 2.0f * std::sqrt (a) * alpha;
@@ -118,15 +151,23 @@ public:
         const float nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2), dr = a0 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
         return 10.0f * std::log10 (std::max (1.0e-12f, (nr * nr + ni * ni) / std::max (1.0e-12f, dr * dr + di * di)));
     }
-    /** One transfer curve of the compressor: the output level in dB for the input level x (dB). */
-    static float compOut (const CompBand& b, float x) noexcept
+    /** One transfer curve of the compressor: the output level in dB for the steady input level x (dB), as the gain computer of the engine sets it (core/engine-own/fx/fx_compressor.h): the upward stage
+        lifts a level under the lower threshold by lowerRatio of the distance (a negative ratio pushes it down), the downward stage takes upperRatio of the distance above the upper threshold away (both act
+        at once where the thresholds cross), mode 1 (Limit) replaces the downward stage with a ceiling at the upper threshold, then the make-up gain, then the dry / wet mix (linear, like the engine). */
+    static float compOut (const CompBand& b, float x, int mode = 0, float mix = 1.0f) noexcept
     {
-        float y = x;
-        if (x > b.upperThr)
-            y = b.upperThr + (x - b.upperThr) * (1.0f - std::clamp (b.upperRatio, 0.0f, 1.0f));
-        else if (x < b.lowerThr)
-            y = b.lowerThr + (x - b.lowerThr) * (1.0f - std::clamp (b.lowerRatio, -1.0f, 1.0f));
-        return y + b.gainDb;
+        const float lowerThr = std::clamp (b.lowerThr, -120.0f, 12.0f), upperThr = std::clamp (b.upperThr, -120.0f, 12.0f);
+        float y = x + std::clamp (b.lowerRatio, -1.0f, 1.0f) * std::max (lowerThr - x, 0.0f);
+        if (mode == 1)
+            y = std::min (y, upperThr);
+        else
+            y -= std::clamp (b.upperRatio, 0.0f, 1.0f) * std::max (x - upperThr, 0.0f);
+        y += b.gainDb;
+        mix = std::clamp (mix, 0.0f, 1.0f);
+        if (mix >= 1.0f)
+            return y;
+        const float amp = std::pow (10.0f, x / 20.0f) * (1.0f - mix) + std::pow (10.0f, y / 20.0f) * mix;
+        return 20.0f * std::log10 (std::max (amp, 1.0e-9f));
     }
     /** The waveshaper: output for the input x (-1 .. +1) with the gain of the drive. */
     static float shape (int type, float driveDb, float x) noexcept
@@ -222,7 +263,7 @@ private:
             p.textCentered ({ static_cast<int> (x) - 24, plot.bottom() + 3, 48, 16 }, d.name, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
         p.textLeft ({ plot.x, plot.bottom() + 3, 46, 16 }, "20 Hz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
-        p.textRight ({ plot.right() - 50, plot.bottom() + 3, 50, 16 }, "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.textRight ({ plot.right() - 50, plot.bottom() + 3, 50, 16 }, plot.w < 800 ? "20k" : "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);   // the short name beside the 10k of a narrow plot
     }
     /** A horizontal line of a level scale with its label at the left of the plot. */
     void levelLine (Pen& p, const Rect& plot, float y, const char* label, bool strong) const
@@ -256,15 +297,22 @@ private:
             const float f = 20.0f * std::pow (1000.0f, static_cast<float> (i) / static_cast<float> (kPoints - 1));
             float db = 0.0f;
             for (int b = 0; b < 4; ++b)
-                db += bandDb (b, *bands[b], f);
+                db += bandDb (b, *bands[b], f, eq.law, eq.sampleRate);
             rows[i] = yOf (db);
         }
         curveLine (p, sb, plot, rows, kPoints, T.flow[0], 0.8f, 30, yOf (0.0f));
-        for (int b = 0; b < 4; ++b)   // the centre of every band that is on
+        for (int b = 0; b < 4; ++b)   // the centre of every band that is on: at its gain where the mode has one (shelf, peak), else on the curve (high pass, notch, low pass do not read the gain)
             if (bands[b]->used)
             {
-                const float x = xOfHz (bands[b]->freq, plot);
-                p.disc (x, yOf (bands[b]->gainDb), 4.0f, p.c (T.flow[b == 3 ? 3 : (b == 0 ? 1 : 2)], 255));
+                const float hz = std::clamp (bands[b]->freq, 20.0f, 20000.0f), x = xOfHz (hz, plot);
+                float db = bands[b]->gainDb;
+                if (bands[b]->mode != 0)
+                {
+                    db = 0.0f;
+                    for (int o = 0; o < 4; ++o)
+                        db += bandDb (o, *bands[o], hz, eq.law, eq.sampleRate);
+                }
+                p.disc (x, yOf (db), 4.0f, p.c (T.flow[b == 3 ? 3 : (b == 0 ? 1 : 2)], 255));
             }
     }
 
@@ -299,17 +347,18 @@ private:
             p.textLeft ({ sq.x, plot.y + 1, std::max (0, cellW), labelH }, head, T.fLabel - 1.0f, p.c (kCol[b], 255), T.fMin);
             float rows[kPoints];
             for (int i = 0; i < kPoints; ++i)
-                rows[i] = yOf (compOut (comp.band[b], lo + (hi - lo) * static_cast<float> (i) / static_cast<float> (kPoints - 1)));
+                rows[i] = yOf (compOut (comp.band[b], lo + (hi - lo) * static_cast<float> (i) / static_cast<float> (kPoints - 1), comp.mode, comp.mix));
             sb.curve (rows, kPoints, sq.x, sq.w);
             sb.stroke (b == comp.activeBand ? 1.0f : 0.8f, p.c (kCol[b], 255));
-            p.disc (xOf (comp.band[b].upperThr), yOf (compOut (comp.band[b], comp.band[b].upperThr)), 3.5f, p.c (kCol[b], 255));
-            p.disc (xOf (comp.band[b].lowerThr), yOf (compOut (comp.band[b], comp.band[b].lowerThr)), 3.5f, p.c (kCol[b], 255));
+            p.disc (xOf (comp.band[b].upperThr), yOf (compOut (comp.band[b], comp.band[b].upperThr, comp.mode, comp.mix)), 3.5f, p.c (kCol[b], 255));
+            p.disc (xOf (comp.band[b].lowerThr), yOf (compOut (comp.band[b], comp.band[b].lowerThr, comp.mode, comp.mix)), 3.5f, p.c (kCol[b], 255));
         }
     }
 
     void drawCompressor (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
     {
-        if (comp.bands == 0 && plot.w >= 3 * 150)
+        // a wide strip (the stacked page) has one plot per band; a block that is not much wider than high (the side page) one square plot with the bands in their colours and their numbers beside it
+        if (comp.bands == 0 && plot.w >= 3 * 150 && plot.w >= 2 * plot.h)
         {
             drawCompressorBands (p, sb, plot);
             return;
@@ -353,9 +402,33 @@ private:
                 p.textLeft ({ tx, y, 120, 26 }, kName[b], T.fLabel, p.c (kCol[b], 255), T.fMin);
                 std::snprintf (t, sizeof t, "%.0f / %.0f dB", static_cast<double> (comp.band[b].lowerThr), static_cast<double> (comp.band[b].upperThr));
                 p.textLeft ({ tx + 130, y, 130, 26 }, t, T.fLabel, p.c (T.text, 255), T.fMin);
-                std::snprintf (t, sizeof t, "%+.0f / %.0f%%", static_cast<double> (comp.band[b].lowerRatio * 100.0f), static_cast<double> (comp.band[b].upperRatio * 100.0f));
+                if (comp.mode == 1)
+                    std::snprintf (t, sizeof t, "%+.0f%% / CEIL", static_cast<double> (comp.band[b].lowerRatio * 100.0f));
+                else
+                    std::snprintf (t, sizeof t, "%+.0f / %.0f%%", static_cast<double> (comp.band[b].lowerRatio * 100.0f), static_cast<double> (comp.band[b].upperRatio * 100.0f));
                 p.textLeft ({ tx + 260, y, 110, 26 }, t, T.fLabel, p.c (T.text, 255), T.fMin);
                 ++row;
+            }
+        }
+        else if (sq.x - plot.x >= 100)
+        {
+            // the side page: every band's name and its numbers in the room at the left of the square (thresholds lower / upper; ratios lower / upper, or the ceiling of the limiter)
+            const int tx = plot.x - 36, tw = sq.x - tx - 10;
+            int y = plot.y + 26;
+            for (int b = 0; b < 3; ++b)
+            {
+                if (! shown[b])
+                    continue;
+                char t[48];
+                p.textLeft ({ tx, y, tw, 20 }, kName[b], T.fLabel, p.c (kCol[b], 255), T.fMin);
+                std::snprintf (t, sizeof t, "%.0f / %.0f dB", static_cast<double> (comp.band[b].lowerThr), static_cast<double> (comp.band[b].upperThr));
+                p.textLeft ({ tx, y + 20, tw, 18 }, t, T.fSmall + 1.0f, p.c (T.text, 255), T.fMin);
+                if (comp.mode == 1)
+                    std::snprintf (t, sizeof t, "%+.0f%%  CEILING", static_cast<double> (comp.band[b].lowerRatio * 100.0f));
+                else
+                    std::snprintf (t, sizeof t, "%+.0f / %.0f%%", static_cast<double> (comp.band[b].lowerRatio * 100.0f), static_cast<double> (comp.band[b].upperRatio * 100.0f));
+                p.textLeft ({ tx, y + 38, tw, 18 }, t, T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
+                y += 66;
             }
         }
         for (int b = 0; b < 3; ++b)
@@ -364,12 +437,12 @@ private:
                 continue;
             float rows[kPoints];
             for (int i = 0; i < kPoints; ++i)
-                rows[i] = yOf (compOut (comp.band[b], lo + (hi - lo) * static_cast<float> (i) / static_cast<float> (kPoints - 1)));
+                rows[i] = yOf (compOut (comp.band[b], lo + (hi - lo) * static_cast<float> (i) / static_cast<float> (kPoints - 1), comp.mode, comp.mix));
             sb.curve (rows, kPoints, sq.x, sq.w);
             sb.stroke (b == comp.activeBand ? 1.0f : 0.7f, p.c (kCol[b], 255));
-            p.disc (xOf (comp.band[b].upperThr), yOf (compOut (comp.band[b], comp.band[b].upperThr)), 3.5f, p.c (kCol[b], 255));
-            p.disc (xOf (comp.band[b].lowerThr), yOf (compOut (comp.band[b], comp.band[b].lowerThr)), 3.5f, p.c (kCol[b], 255));
-            if (comp.bands == 0 && sq.x - plot.x <= 360)
+            p.disc (xOf (comp.band[b].upperThr), yOf (compOut (comp.band[b], comp.band[b].upperThr, comp.mode, comp.mix)), 3.5f, p.c (kCol[b], 255));
+            p.disc (xOf (comp.band[b].lowerThr), yOf (compOut (comp.band[b], comp.band[b].lowerThr, comp.mode, comp.mix)), 3.5f, p.c (kCol[b], 255));
+            if (comp.bands == 0 && sq.x - plot.x < 100)
             {
                 p.line (static_cast<float> (lx), static_cast<float> (plot.y + 8), static_cast<float> (lx + 18), static_cast<float> (plot.y + 8), 2.0f, p.c (kCol[b], 255));
                 p.textLeft ({ lx + 24, plot.y, 50, 16 }, kName[b], T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
@@ -378,10 +451,89 @@ private:
         }
     }
 
+public:
+    /** One echo of the delay: when (ms), on which side (0 left, 1 right) and how strong (the signed amplitude for a click of 1 on both inputs). */
+    struct Echo { float ms = 0.0f; int side = 0; float amp = 0.0f; };
+    static constexpr int kMaxEchoes = 48;
+    /** The two delay times of the engine (ms): the left / right line of core/engine-own/fx/fx_effects.h Delay (the offsets scale the times, Mono reads the left time on both sides, Mid ping pong adds the
+        right time to the left line), clamped like the engine (3 samples at 48 kHz .. 4 s). */
+    static void delayLines (const DelayState& d, float& left, float& right) noexcept
+    {
+        left = d.timeMs1 * d.offsetL;
+        right = (d.style == 0 ? d.timeMs1 : d.timeMs2) * d.offsetR;
+        if (d.style == 3)
+            left += right;
+        left = std::clamp (left, 0.0625f, 4000.0f);
+        right = std::clamp (right, 0.0625f, 4000.0f);
+    }
+    /** The echoes of a click on both inputs, up to `spanMs`, by the network of the engine's style (the loop filter and the limiter are left out): Mono / Stereo feed each line back into itself; Ping pong
+        writes the right input and the right line into the left line, the left input and the fed back left line into the right line; Mid ping pong writes the mono sum into the right line and the right line
+        into the left one; Tap -> delay is a tap of the mono sum (the left line) feeding a delay that repeats itself (the right line), both lines on both outputs. Echoes at the same time on the same side
+        add up. Returns the number of echoes (at most kMaxEchoes, in time order; echoes under 2 % of the click are left out). */
+    static int delayEchoes (const DelayState& d, float spanMs, Echo* out) noexcept
+    {
+        float tl = 0.0f, tr = 0.0f;
+        delayLines (d, tl, tr);
+        const float fb = std::clamp (d.feedback, -1.0f, 1.0f), len[2] = { tl, tr };
+        // a pending read of a line: (time it comes out, line, amplitude); a small queue in time order
+        struct Ev { float t; int line; float a; };
+        Ev q[kMaxEchoes * 2];
+        int nq = 0, n = 0;
+        auto push = [&] (float t, int line, float a)
+        {
+            if (std::fabs (a) < 0.02f || t > spanMs || nq >= kMaxEchoes * 2)
+                return;
+            q[nq++] = { t, line, a };
+        };
+        auto emit = [&] (float t, int side, float a)
+        {
+            for (int i = 0; i < n; ++i)
+                if (out[i].side == side && std::fabs (out[i].ms - t) < 0.01f)
+                {
+                    out[i].amp += a;
+                    return;
+                }
+            if (n < kMaxEchoes)
+                out[n++] = { t, side, a };
+        };
+        const float mono = 1.41421356f;   // 0.7071 (left + right) of a click of 1 on both sides
+        switch (d.style)
+        {
+            case 2: push (len[0], 0, 1.0f); push (len[1], 1, 1.0f); break;   // ping pong: the right input into the left line, the left input into the right line
+            case 3: push (len[1], 1, mono); break;                           // mid ping pong: the mono sum into the right line
+            case 4: push (len[0], 0, mono); break;                           // tap -> delay: the mono sum into the tap
+            default: push (len[0], 0, 1.0f); push (len[1], 1, 1.0f); break;  // mono, stereo
+        }
+        for (int guard = 0; nq > 0 && guard < 4 * kMaxEchoes; ++guard)
+        {
+            int k = 0;   // the earliest pending read
+            for (int i = 1; i < nq; ++i)
+                if (q[i].t < q[k].t)
+                    k = i;
+            const Ev e = q[k];
+            q[k] = q[--nq];
+            if (d.style == 4)
+            {
+                emit (e.t, 0, e.a);   // both lines are on both outputs
+                emit (e.t, 1, e.a);
+                push (e.t + len[1], 1, e.line == 0 ? e.a : fb * e.a);   // the tap feeds the delay, the delay feeds itself
+                continue;
+            }
+            emit (e.t, e.line, e.a);
+            if (d.style == 2 || d.style == 3)
+                push (e.t + len[1 - e.line], 1 - e.line, e.line == 0 ? fb * e.a : e.a);   // the left line goes back through the feedback into the right line, the right line straight into the left one
+            else
+                push (e.t + len[e.line], e.line, fb * e.a);
+        }
+        return n;
+    }
+
+private:
     void drawDelay (Pen& p, gpu::SceneBuilder&, const Rect& plot) const
     {
         const theme::Look& T = theme::L();
-        const float t1 = std::max (1.0f, delay.timeMs1), t2 = std::max (1.0f, delay.style == 0 ? delay.timeMs1 : delay.timeMs2);
+        float t1 = 0.0f, t2 = 0.0f;
+        delayLines (delay, t1, t2);
         const float span = std::clamp (std::max (t1, t2) * 6.0f, 600.0f, 8000.0f);
         auto xOf = [&] (float ms) { return static_cast<float> (plot.x) + ms / span * static_cast<float> (plot.w); };
         const float midY = static_cast<float> (plot.y + plot.h / 2), half = static_cast<float> (plot.h) * 0.42f;
@@ -398,35 +550,23 @@ private:
         }
         p.textLeft ({ plot.x + 4, plot.y + 2, 20, 16 }, "L", T.fSmall + 1.0f, p.c (T.flow[0], 255), T.fMin);
         p.textLeft ({ plot.x + 4, plot.bottom() - 18, 20, 16 }, "R", T.fSmall + 1.0f, p.c (T.flow[3], 255), T.fMin);
-        // the dry hit at 0, then the repeats: stereo = left at the time, right at the second time, each with its own feedback; ping pong = the repeats alternate; mono = both lanes together
-        const float fb = std::clamp (std::fabs (delay.feedback), 0.0f, 0.98f);
+        // the dry click at 0 (on both sides), then the echoes of the engine's network (delayEchoes): left up, right down, the height against the click (a sum above it fills the lane)
         p.line (xOf (0.0f), midY - half, xOf (0.0f), midY + half, 2.0f, p.c (T.textDim, 255));
-        for (int lane = 0; lane < 2; ++lane)
+        Echo echoes[kMaxEchoes];
+        const int n = delayEchoes (delay, span, echoes);
+        float scale = 1.0f;
+        for (int i = 0; i < n; ++i)
+            scale = std::max (scale, std::fabs (echoes[i].amp));
+        for (int i = 0; i < n; ++i)
         {
-            const float sign = lane == 0 ? -1.0f : 1.0f;   // left up, right down
-            const uint32_t col = lane == 0 ? T.flow[0] : T.flow[3];
-            float level = 1.0f;
-            for (int k = 1; k <= 12; ++k)
-            {
-                float t = 0.0f;
-                if (delay.style == 2 || delay.style == 3)   // ping pong: the repeats alternate between the lanes
-                {
-                    if ((k % 2 == 1) != (lane == 0))
-                        continue;
-                    t = t1 * static_cast<float> (k);
-                }
-                else
-                    t = (lane == 0 ? t1 : t2) * static_cast<float> (k);
-                level = std::pow (fb, static_cast<float> (delay.style == 2 || delay.style == 3 ? k - 1 : k));
-                if (delay.style != 2 && delay.style != 3 && delay.style != 1 && lane == 1)
-                    break;
-                if (t >= span || level < 0.03f)
-                    break;
-                const float firstEcho = (delay.style == 2 || delay.style == 3) ? 1.0f : std::max (0.05f, fb);   // the first echo fills the height of the plot, the later ones are drawn against it (the decay is what the feedback says)
-                const float x = xOf (t), h = half * std::clamp (level / firstEcho, 0.08f, 1.0f);
-                p.line (x, midY, x, midY + sign * h, 2.0f, p.c (col, 255));
-                p.disc (x, midY + sign * h, 3.0f, p.c (col, 255));
-            }
+            const Echo& e = echoes[i];
+            if (e.ms >= span || std::fabs (e.amp) < 0.02f)
+                continue;
+            const float sign = e.side == 0 ? -1.0f : 1.0f;
+            const uint32_t col = e.side == 0 ? T.flow[0] : T.flow[3];
+            const float x = xOf (e.ms), h = half * std::clamp (std::fabs (e.amp) / scale, 0.08f, 1.0f);
+            p.line (x, midY, x, midY + sign * h, 2.0f, p.c (col, 255));
+            p.disc (x, midY + sign * h, 3.0f, p.c (col, e.amp < 0.0f ? 150 : 255));   // an echo of a negative feedback comes back inverted: a dimmer dot
         }
     }
 
