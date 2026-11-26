@@ -1617,13 +1617,14 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     SB_SECTION (sections::engineRest);
     if (left == nullptr || numFrames <= 0)
         return;
-    std::fill (left, left + numFrames, 0.0f);
     if (!prepared)
     {
+        std::fill (left, left + numFrames, 0.0f);
         if (right != nullptr)
             std::fill (right, right + numFrames, 0.0f);
         return;
     }
+    // (left is not cleared here: every 32 frame chunk below copies the Main mix over its frames, so a cleared output would be overwritten before anything reads it)
     // right may be null (mono output): every 32 frame chunk below renders its right channel into a small stack buffer and folds it into left (no allocation, any block size). A given right is written chunk by chunk.
     std::fill (std::begin (stripBlockPeak), std::end (stripBlockPeak), 0.0f);   // the meters of this block start from nothing
     masterBlockPeakL = masterBlockPeakR = 0.0f;

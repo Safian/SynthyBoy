@@ -135,7 +135,7 @@
 - [ ] 7. Egyetlen paraméter mozdítása minden blokkban újramásolja mind a 2637 paramétert, újrafordítja a mátrixot és újraszámolja a hangolást (Q-Link tekerésnél tüske).
 - [ ] 8. Ellenőrizd az MPC-n futó motor denormális-védelmét a két ARM célon.
 - [ ] 11. Az importált presetek 4x túlmintavételezés-kapcsolója a „low" szinten nincs korlátozva; a „low" szint 5 effektet teljesen kihagy 31+ gyári presetnél, takarékos pótlék nélkül.
-- [ ] 12. `process()`: fölösleges nullázás és felülírás, néma buszok feldolgozása, egy `assign()`, ami túlméretes mono blokknál foglalhat.
+- [ ] 12. `process()`: a néma busz és a néma effektrack a `low` szint fölött teljes költséggel fut nulla bemeneten (x86 VM, medium szint: 2,1 µs üres motor helyett 49,8 µs blokkonként Bus 1 reverb + Bus 2 delay mellett, `docs/dsp-knowledge/measurement.md`). Kész, ha a kihagyás bitazonos: modulonként bizonyított pontosan nulla állapot (reverb- és delay-farok, szűrőállapot, `IntDelay` vonalak) és a kihagyott rack ugyanazt a kimenetet és állapotot adja, mint az eddigi út; vagy a tulajdonos elfogadja a `low` szint -120 dBFS szabályát fölötte is.
 - [ ] 13. MPC shell: az eseménysor pörgő zárat használ. A kötegelt presetbetöltés után Key 61-en mérendő a hangfolytonosság és a koppintástól az első új hangig eltelt idő.
 - [ ] 14. Nulla hangerejű, de még aktív hangok teljes költséggel futnak; a kijelző-visszaolvasás `exp` / `log10` hívásokat végez a hangszálon.
 - [ ] 16. A saját motor SIMD-puffereinél mérd meg, melyik forró ciklus költsége függ az igazítástól. A `fastmath::log2` pozitív normál számot vár. Ellenőrizd a hívókat, beleértve a kompresszor `powG` útját, és a ténylegesen elérhető szélső értékekhez adj regressziót.

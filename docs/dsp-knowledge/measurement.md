@@ -69,3 +69,14 @@ Measured on an x86-64 Linux VM (not a device; the Cortex-A17 / A76 numbers are n
 | 1 matrix slot parameter (`mod01.amount`) | 4.3 us (4.3-5.4) | 4.3 us (4.3-5.5) |
 
 The gain is 3 us for an effect parameter and 1.3 us for a voice parameter; a slot parameter still compiles the matrix (no change by design). What remains of the 1.8 us for an effect parameter is the 2,637 comparisons, the FX budget evaluation and the effect and master updates, which run on every changed block. Across-process A/B/A runs of the old and the new binary on a 40 us block were dominated by VM noise (steady blocks differed by 10 us) and decide nothing. Bit identity against the old binary: 62 presets x tiers low / medium / high with 1-3 random parameters changed per block and a content reset every 97 blocks, identical hashes; `scripts/compare-renders.sh` on the 34 renders of the Bass presets at tier low: identical.
+
+## The idle engine and silent racks (x86-64 Linux VM, 2026-11-26)
+
+measured: GCC 13.3 Release, 4 vCPU Xeon 2.1 GHz shared with other builds, `OwnEngine::process`, 48 kHz, 128 frame blocks, tier medium, no note, CPU time of the thread, minimum of 15 runs of 4000 blocks
+(a scratch program, not in the repo; every number has tens of percent of noise).
+
+- An engine with the default patch costs 2.0 to 2.1 us per block (four control periods).
+- The same engine with oscillator 1 on, a Reverb in the Bus 1 rack and a Delay in the Bus 2 rack and no note (silent inputs) costs 49.8 us per block: the racks run on zeros at tier medium and high
+  (at tier low `FxChain::process` skips a rack whose input was exactly zero and whose output stayed below -120 dBFS, which is not bit identical and is the accepted low tier rule). A skip that is bit
+  identical needs a proof that the state of every module of the rack is exactly zero and stays so (a reverb or delay tail only decays towards zero, and the latency delays `IntDelay` still hold their
+  last input): not available, see TODO.md.
