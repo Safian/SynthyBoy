@@ -101,3 +101,7 @@ skin_def_40 = nnv.build_name_value_definition(
 # 3. Fül elem példányosítása:
 tab_entry_40 = nnv.create_name_value_entry("Osc Semi", "oscTuneSemi40", (100, 200, 125, 40), param=3320)
 ```
+
+## 6. Egymás alatti (stacked) változat (2026-11-26)
+
+`build_name_value_definition(..., stacked=True, caption_height=24, box_height=56, box_top=None, box_width=132)`: a név középre igazítva a mező FÖLÖTT áll (a mellette lévő tárcsa vagy címkézett választó feliratsorával egy vonalban), alatta a keretes érték `box_width` szélesen, középen, `font.value.large` betűvel. A doboz legalább 56 px magas (érintési cél); `box_top` a dobozt lejjebb teszi (a Master tárcsasorában a tárcsa középvonalára). Az alapértelmezett, oldalsó elrendezés és a meglévő képek nem változtak. Használja: Master minden számmezője (TRANSPOSE, BEND, POLY, VEL TRACK, PAD %, A4 HZ, MPE BEND), lásd [master-screen.md](master-screen.md).
