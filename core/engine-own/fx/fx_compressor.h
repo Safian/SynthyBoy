@@ -43,7 +43,7 @@ public:
     void reset() noexcept
     {
         for (auto& c : lr) for (auto& b : c) b.reset();
-        for (auto& c : ap) for (auto& b : c) b.reset();
+        for (auto& b : lowAp) b.reset();
         for (auto& e : envHi) e = 0.0f;
         for (auto& e : envLo) e = 1.0f;
         for (auto& b : lim) b.reset();
@@ -56,22 +56,22 @@ public:
         p = np;
         // one split (two bands) for the Low / High band modes, two splits for Multiband
         const float f1 = p.bands == 2 ? p.crossHigh : p.crossLow, f2 = p.crossHigh;
-        for (int c = 0; c < 2; ++c)
-        {
-            lr[c][0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][1].copyCoefficients (lr[c][0]);
-            lr[c][2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][3].copyCoefficients (lr[c][2]);
-            lr[c][4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][5].copyCoefficients (lr[c][4]);
-            lr[c][6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
-            lr[c][7].copyCoefficients (lr[c][6]);
-            // the low band passes an all pass of the upper crossover (LP + HP of it) so the three bands sum flat
-            ap[c][0].copyCoefficients (lr[c][4]);
-            ap[c][1].copyCoefficients (lr[c][4]);
-            ap[c][2].copyCoefficients (lr[c][6]);
-            ap[c][3].copyCoefficients (lr[c][6]);
-        }
+        // designed once, for the left channel; the right channel copies the coefficients (the states stay apart)
+        lr[0][0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
+        lr[0][1].copyCoefficients (lr[0][0]);
+        lr[0][2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sampleRate, 0.499f);
+        lr[0][3].copyCoefficients (lr[0][2]);
+        lr[0][4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
+        lr[0][5].copyCoefficients (lr[0][4]);
+        lr[0][6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
+        lr[0][7].copyCoefficients (lr[0][6]);
+        // the low band passes an all pass of the upper crossover so the three bands sum flat: one second order all pass with the poles of the crossover filters. It replaces
+        // LP (f2)^2 + HP (f2)^2 (four biquads), which is this all pass for the exact Butterworth Q of 1 / sqrt (2); the Q of 0.7071 here makes the two differ by about -92 dB
+        // (CPU review item 2, 2026-11-26; docs/MPC.md "Sound differences")
+        lowAp[0].design (Biquad::allpass, f2, 0.7071f, 0.0f, sampleRate, 0.499f);
+        for (int k = 0; k < 8; ++k)
+            lr[1][k].copyCoefficients (lr[0][k]);
+        lowAp[1].copyCoefficients (lowAp[0]);
     }
     /** Test only: run the limiter as it was before the CPU review item M1. */
     void setReferenceLimiter (bool on) noexcept { for (auto& b : lim) b.reference = on; }
@@ -137,7 +137,7 @@ public:
                     {
                         midS = lr[c][5].process (lr[c][4].process (restS));
                         highS = lr[c][7].process (lr[c][6].process (restS));
-                        lowS = ap[c][1].process (ap[c][0].process (lowS)) + ap[c][3].process (ap[c][2].process (lowS));
+                        lowS = lowAp[c].process (lowS);
                     }
                     else midS = restS;
                     sig[0][c] = lowS; sig[1][c] = midS; sig[2][c] = highS;
@@ -463,7 +463,7 @@ private:
     Params p;
     double sampleRate = 48000.0;
     int lookAhead = 72;
-    Biquad lr[2][8], ap[2][4];
+    Biquad lr[2][8], lowAp[2];
     float envHi[3] = {}, envLo[3] = { 1.0f, 1.0f, 1.0f }, serumPeak[3] = {}, serumGr[3] = {};
     Limiter lim[3];
     DelayLine dry[2];

@@ -397,6 +397,160 @@ TEST (compressor_reset_and_reprepare)
     CHECK (ok);
 }
 
+// CPU review item 2 (2026-11-26): Biquad::design computes the power of ten of the gain only for the types that use it, and the Compressor's low band (the all pass of the upper
+// crossover) is one all pass biquad instead of LP (f2)^2 + HP (f2)^2. The design change is bit identical (a local copy of the old design is compared); the all pass is not (bound below).
+namespace
+{
+/** Biquad::design as it was before item 2 (the power of ten for every type), for the bit comparison. */
+void designBefore (Biquad& b, Biquad::Type type, float hz, float q, float gainDb, double sr, float maxFrac)
+{
+    const float w0 = kTwoPif * std::clamp (hz, 10.0f, static_cast<float> (sr) * maxFrac) / static_cast<float> (sr);
+    const float cs = std::cos (w0), sn = std::sin (w0);
+    const float alpha = sn / (2.0f * std::max (q, 0.05f));
+    const float A = std::pow (10.0f, gainDb / 40.0f);
+    switch (type)
+    {
+        case Biquad::lowpass: b.set ((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + alpha, -2 * cs, 1 - alpha); break;
+        case Biquad::highpass: b.set ((1 + cs) / 2, -(1 + cs), (1 + cs) / 2, 1 + alpha, -2 * cs, 1 - alpha); break;
+        case Biquad::peak: b.set (1 + alpha * A, -2 * cs, 1 - alpha * A, 1 + alpha / A, -2 * cs, 1 - alpha / A); break;
+        case Biquad::notch: b.set (1, -2 * cs, 1, 1 + alpha, -2 * cs, 1 - alpha); break;
+        case Biquad::lowShelf:
+        {
+            const float sq = 2.0f * std::sqrt (A) * alpha;
+            b.set (A * ((A + 1) - (A - 1) * cs + sq), 2 * A * ((A - 1) - (A + 1) * cs), A * ((A + 1) - (A - 1) * cs - sq),
+                   (A + 1) + (A - 1) * cs + sq, -2 * ((A - 1) + (A + 1) * cs), (A + 1) + (A - 1) * cs - sq);
+            break;
+        }
+        case Biquad::highShelf:
+        {
+            const float sq = 2.0f * std::sqrt (A) * alpha;
+            b.set (A * ((A + 1) + (A - 1) * cs + sq), -2 * A * ((A - 1) + (A + 1) * cs), A * ((A + 1) + (A - 1) * cs - sq),
+                   (A + 1) - (A - 1) * cs + sq, 2 * ((A - 1) - (A + 1) * cs), (A + 1) - (A - 1) * cs - sq);
+            break;
+        }
+        default: break;
+    }
+}
+bool sameCoefficients (const Biquad& a, const Biquad& b)
+{
+    const float x[5] = { a.b0, a.b1, a.b2, a.a1, a.a2 }, y[5] = { b.b0, b.b1, b.b2, b.a1, b.a2 };
+    return std::memcmp (x, y, sizeof x) == 0;
+}
+} // namespace
+
+TEST (biquad_design_without_the_unused_power_is_bit_identical)
+{
+    std::mt19937 rng (31);
+    int compared = 0;
+    for (double sr : { 22050.0, 44100.0, 48000.0, 96000.0 })
+        for (int ty = 0; ty <= 5; ++ty)
+            for (int i = 0; i < 2000; ++i)
+            {
+                const float hz = 5.0f + static_cast<float> (rng() % 2000000) / 100.0f, q = 0.05f + static_cast<float> (rng() % 5000) / 250.0f;
+                const float gain = static_cast<float> (static_cast<int> (rng() % 4801) - 2400) / 100.0f; // -24 .. +24 dB, also 0
+                const float maxFrac = (i & 1) != 0 ? 0.45f : 0.499f;
+                Biquad now, before;
+                now.design (static_cast<Biquad::Type> (ty), hz, q, gain, sr, maxFrac);
+                designBefore (before, static_cast<Biquad::Type> (ty), hz, q, gain, sr, maxFrac);
+                CHECK (sameCoefficients (now, before));
+                ++compared;
+            }
+    std::printf ("biquad designs compared: %d\n", compared);
+}
+
+TEST (compressor_low_band_all_pass_merge_stays_below_minus_80_db)
+{
+    // the old structure of the multiband path (bands = 0), as set () and process () had it: per channel LP / HP (f1), LP / HP (f2), and the low band through LP (f2)^2 + HP (f2)^2
+    struct Old
+    {
+        Biquad lr[8], ap[4];
+        void design (float f1, float f2, double sr)
+        {
+            lr[0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sr, 0.499f); lr[1].copyCoefficients (lr[0]);
+            lr[2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sr, 0.499f); lr[3].copyCoefficients (lr[2]);
+            lr[4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sr, 0.499f); lr[5].copyCoefficients (lr[4]);
+            lr[6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sr, 0.499f); lr[7].copyCoefficients (lr[6]);
+            ap[0].copyCoefficients (lr[4]); ap[1].copyCoefficients (lr[4]); ap[2].copyCoefficients (lr[6]); ap[3].copyCoefficients (lr[6]);
+        }
+        /** low + mid + high of one sample, added in the order of Compressor::process (out = 0 + low, + mid, + high). */
+        float sum (float x)
+        {
+            float low = lr[1].process (lr[0].process (x));
+            const float rest = lr[3].process (lr[2].process (x));
+            const float mid = lr[5].process (lr[4].process (rest)), high = lr[7].process (lr[6].process (rest));
+            low = ap[1].process (ap[0].process (low)) + ap[3].process (ap[2].process (low));
+            float out = 0.0f;
+            out += low;
+            out += mid;
+            out += high;
+            return out;
+        }
+    };
+    std::mt19937 rng (77);
+    double worstDb = -400.0;
+    for (double sr : { 44100.0, 48000.0 })
+        for (float f1 : { 60.0f, 160.0f, 400.0f })
+            for (float f2 : { 1000.0f, 2500.0f, 6000.0f })
+              for (float tone : { 0.0f, 0.25f, 0.7f, 0.95f, 1.0f, 1.05f, 1.4f, 3.0f }) // 0: noise and a sweep, else a sine at that multiple of the upper crossover
+            {
+                Compressor c;
+                c.prepare (sr);
+                Compressor::Params p; // unity: the thresholds above anything the input reaches, no ratio, no makeup, mix 1, so the output is the flat sum of the three bands
+                p.bands = 0;
+                p.mode = 0;
+                p.mix = 1.0f;
+                p.crossLow = f1;
+                p.crossHigh = f2;
+                for (auto& bd : p.band)
+                {
+                    bd.upperDb = 12.0f;
+                    bd.lowerDb = -120.0f;
+                    bd.upperRatio = 0.5f;
+                    bd.lowerRatio = 0.0f;
+                    bd.gainDb = 0.0f;
+                }
+                c.set (p);
+                Old o[2];
+                for (auto& x : o)
+                    x.design (f1, f2, sr);
+                const int n = 30000;
+                std::vector<float> l (static_cast<size_t> (n)), r (static_cast<size_t> (n));
+                for (int i = 0; i < n; ++i)
+                {
+                    // noise with a swept sine on top: every frequency, around both crossovers
+                    const float sweep = 0.3f * std::sin (6.2831853f * (20.0f + 0.5f * static_cast<float> (i) * (static_cast<float> (sr) * 0.4f) / static_cast<float> (n)) * static_cast<float> (i) / static_cast<float> (sr));
+                    l[static_cast<size_t> (i)] = 0.3f * (static_cast<float> (rng() % 20001) / 10000.0f - 1.0f) + sweep;
+                    r[static_cast<size_t> (i)] = 0.3f * (static_cast<float> (rng() % 20001) / 10000.0f - 1.0f) - sweep;
+                }
+                if (tone > 0.0f)
+                    for (int i = 0; i < n; ++i)
+                    {
+                        // a pure tone relative to the upper crossover: the error of the all pass is narrow band, around f2
+                        const float s = 0.5f * std::sin (6.2831853f * tone * f2 * static_cast<float> (i) / static_cast<float> (sr));
+                        l[static_cast<size_t> (i)] = s;
+                        r[static_cast<size_t> (i)] = -0.7f * s;
+                    }
+                std::vector<float> refL (static_cast<size_t> (n)), refR (static_cast<size_t> (n));
+                for (int i = 0; i < n; ++i)
+                {
+                    refL[static_cast<size_t> (i)] = o[0].sum (l[static_cast<size_t> (i)]);
+                    refR[static_cast<size_t> (i)] = o[1].sum (r[static_cast<size_t> (i)]);
+                }
+                c.process (l.data(), r.data(), n);
+                double errSq = 0.0, refSq = 0.0;
+                for (int i = 2000; i < n; ++i) // after the start of the filters
+                {
+                    const double dl = static_cast<double> (l[static_cast<size_t> (i)]) - static_cast<double> (refL[static_cast<size_t> (i)]), dr = static_cast<double> (r[static_cast<size_t> (i)]) - static_cast<double> (refR[static_cast<size_t> (i)]);
+                    errSq += dl * dl + dr * dr;
+                    refSq += static_cast<double> (refL[static_cast<size_t> (i)]) * static_cast<double> (refL[static_cast<size_t> (i)]) + static_cast<double> (refR[static_cast<size_t> (i)]) * static_cast<double> (refR[static_cast<size_t> (i)]);
+                }
+                const double db = 10.0 * std::log10 (std::max (errSq, 1.0e-300) / refSq);
+                worstDb = std::max (worstDb, db);
+                CHECK (db < -80.0);
+            }
+    std::printf ("compressor low band all pass merge: worst difference to the four biquad form %.1f dB (bound -80 dB)\n", worstDb);
+}
+
 // Timing (printed, not asserted): the limit mode of one band over 128 sample blocks at 48 kHz, old against new.
 TEST (compressor_limiter_timing_report)
 {

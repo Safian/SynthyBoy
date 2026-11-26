@@ -226,19 +226,21 @@ struct Biquad
     {
         b0 = nb0 / na0; b1 = nb1 / na0; b2 = nb2 / na0; a1 = na1 / na0; a2 = na2 / na0;
     }
-    enum Type { lowpass, highpass, peak, notch, lowShelf, highShelf };
+    enum Type { lowpass, highpass, peak, notch, lowShelf, highShelf, allpass };
     void design (Type type, float hz, float q, float gainDb, double sr, float maxFrac = 0.45f) noexcept
     {
         const float w0 = kTwoPif * std::clamp (hz, 10.0f, static_cast<float> (sr) * maxFrac) / static_cast<float> (sr);
         const float cs = std::cos (w0), sn = std::sin (w0);
         const float alpha = sn / (2.0f * std::max (q, 0.05f));
-        const float A = std::pow (10.0f, gainDb / 40.0f);
+        // the amplitude of the gain types only (the power of ten of a low pass, high pass, notch or all pass was computed and not used)
+        const float A = (type == peak || type == lowShelf || type == highShelf) ? std::pow (10.0f, gainDb / 40.0f) : 1.0f;
         switch (type)
         {
             case lowpass: set ((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + alpha, -2 * cs, 1 - alpha); break;
             case highpass: set ((1 + cs) / 2, -(1 + cs), (1 + cs) / 2, 1 + alpha, -2 * cs, 1 - alpha); break;
             case peak: set (1 + alpha * A, -2 * cs, 1 - alpha * A, 1 + alpha / A, -2 * cs, 1 - alpha / A); break;
             case notch: set (1, -2 * cs, 1, 1 + alpha, -2 * cs, 1 - alpha); break;
+            case allpass: set (1 - alpha, -2 * cs, 1 + alpha, 1 + alpha, -2 * cs, 1 - alpha); break;
             case lowShelf:
             {
                 const float sq = 2.0f * std::sqrt (A) * alpha;
