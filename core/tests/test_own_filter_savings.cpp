@@ -521,6 +521,13 @@ SweepResult sweepAll (bool hardtanhExact, uint64_t stride = 1)
                            });
     for (auto& th : pool)
         th.join();
+    if (stride > 1)
+    {
+        // the strided quick run also sweeps every pattern within 4096 of the constants the integer forms carry (the places an off by one decides), for both signs
+        for (const uint32_t c : { 0x219392efu, 0x3f28f5c3u, 0x409f1aa0u, 0x7f800000u, 0x00800000u, 0x3f800000u })
+            for (const uint32_t sign : { 0u, 0x80000000u })
+                results.push_back (sweep (static_cast<uint64_t> ((c | sign) - 4096u), static_cast<uint64_t> ((c | sign) + 4096u), hardtanhExact));
+    }
     SweepResult sum;
     for (const auto& r : results)
     {
