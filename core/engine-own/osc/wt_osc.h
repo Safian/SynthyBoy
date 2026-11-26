@@ -163,6 +163,36 @@ public:
     /** sum of taps[i] * x[i] over the 32 taps of the low cost decimator, as four interleaved partial sums (lane j takes the taps 4k + j) added as (s0 + s1) + (s2 + s3): the
         NEON and the scalar version do the same additions in the same order. */
     static float dot32 (const float* x, const float* taps) noexcept { return dotLanes (x, taps, kTapsLow); }
+    /** out[k] = dot32 (x + k * stride, taps) for k = 0 .. n - 1: the NEON version does four outputs at a time, so each tap vector is loaded once for four windows and the four horizontal
+        sums are one transposed reduction (vpadd: (s0 + s1), (s2 + s3), then their sum, the very additions of dot32 (), in the same order). The same bits as n calls of dot32 (). */
+    static void dot32Run (const float* x, int stride, int n, const float* taps, float* out) noexcept
+    {
+        int k = 0;
+#if SB_NEON
+        for (; k + 4 <= n; k += 4)
+        {
+            const float* const x0 = x + k * stride;
+            const float* const x1 = x0 + stride;
+            const float* const x2 = x1 + stride;
+            const float* const x3 = x2 + stride;
+            float32x4_t t = vld1q_f32 (taps);
+            float32x4_t a0 = vmulq_f32 (vld1q_f32 (x0), t), a1 = vmulq_f32 (vld1q_f32 (x1), t), a2 = vmulq_f32 (vld1q_f32 (x2), t), a3 = vmulq_f32 (vld1q_f32 (x3), t);
+            for (int i = 4; i < kTapsLow; i += 4)
+            {
+                t = vld1q_f32 (taps + i);
+                a0 = vaddq_f32 (a0, vmulq_f32 (vld1q_f32 (x0 + i), t));
+                a1 = vaddq_f32 (a1, vmulq_f32 (vld1q_f32 (x1 + i), t));
+                a2 = vaddq_f32 (a2, vmulq_f32 (vld1q_f32 (x2 + i), t));
+                a3 = vaddq_f32 (a3, vmulq_f32 (vld1q_f32 (x3 + i), t));
+            }
+            const float32x2_t r0 = vpadd_f32 (vget_low_f32 (a0), vget_high_f32 (a0)), r1 = vpadd_f32 (vget_low_f32 (a1), vget_high_f32 (a1));
+            const float32x2_t r2 = vpadd_f32 (vget_low_f32 (a2), vget_high_f32 (a2)), r3 = vpadd_f32 (vget_low_f32 (a3), vget_high_f32 (a3));
+            vst1q_f32 (out + k, vcombine_f32 (vpadd_f32 (r0, r1), vpadd_f32 (r2, r3)));
+        }
+#endif
+        for (; k < n; ++k)
+            out[k] = dot32 (x + k * stride, taps);
+    }
     /** The same four partial sums over the 128 taps of the 4x decimator (the Math economy group with the 4x warp: rounding differs from the sequential sum of the
         medium / high tiers by about 1e-7 relative, as at 2x). */
     static float dot128 (const float* x, const float* taps) noexcept { return dotLanes (x, taps, kTaps); }
@@ -744,6 +774,15 @@ public:
                     acc += taps[i] * x[nt - 1 - i];
             return acc;
         };
+        // the decimated samples of a run of n output samples whose windows start at x + 1 + k * os (the 2x low cost decimator: four outputs at a time, dot32Run (), the same bits as one by one)
+        auto decimateRun = [&] (const float* x, int count, float* out) noexcept
+        {
+            if (tick.lowWarp && !reference_)
+                dot32Run (x + 1, os, count, kDecimator2Rev.c, out);
+            else
+                for (int k = 0; k < count; ++k)
+                    out[k] = decimate (x + k * os + 1);
+        };
         // Shared decimation: the decimator is linear and the same for every voice, so the voices whose gain does not change inside this call (previous gain == current gain in both
         // channels: out = g * dec (x)) are summed at the oversampled rate, weighted by their gains, and decimated once per channel instead of once per voice. A voice whose gain
         // ramps keeps its own decimator: the gain is applied after the decimation, and a gain ramp does not commute with the filter. The sum is formed over the whole window
@@ -1228,24 +1267,33 @@ public:
                         }
                 }
                 else
+                {
+                    float accs[kControlPeriod];
+                    decimateRun (buf, n, accs); // the newest sample of the group k is x[nt - 1] (window buf + k * os + 1)
                     for (int k = 0; k < n; ++k)
                     {
                         const float t = static_cast<float> (t0 + k + 1) * invP;
-                        const float acc = decimate (buf + k * os + 1); // the newest sample of the group is x[nt - 1]
+                        const float acc = accs[k];
                         L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
                         R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
                     }
+                }
                 std::copy (buf + n * os, buf + n * os + nt - 1, hist);
                 historyDirty = true;
             }
             phase[v] = ph;
         }
         if (sumInit)
+        {
+            float accL[kControlPeriod], accR[kControlPeriod];
+            decimateRun (sumL, n, accL);
+            decimateRun (sumR, n, accR);
             for (int k = 0; k < n; ++k)
             {
-                L[k] += decimate (sumL + k * os + 1);
-                R[k] += decimate (sumR + k * os + 1);
+                L[k] += accL[k];
+                R[k] += accR[k];
             }
+        }
         if (cross != nullptr)
             for (int c = 0; c < 6; ++c)
                 if (cross[c] != nullptr)

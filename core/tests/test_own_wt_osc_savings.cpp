@@ -28,6 +28,9 @@ struct WtOscSavingsTest
     {
         WtOsc::renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, pg, cgl, pgr, cgr, pinc, cinc, invP, invN, steadyAllowed);
     }
+    static void dotRun (const float* x, int stride, int n, const float* taps, float* out) { WtOsc::dot32Run (x, stride, n, taps, out); }
+    static float dot (const float* x, const float* taps) { return WtOsc::dot32 (x, taps); }
+    static const float* rev() { return WtOsc::kDecimator2Rev.c; }
     static bool held (const WtOsc& o, int g) { return o.morphHeld[g]; }
     /** sum over the voices of the larger gain of the period, and the largest sample of the cycle buffers (both of each group): the scale of the error bound of the single cycle read. */
     static void scale (WtOsc& o, float& gainSum, float& cyclePeak)
@@ -549,5 +552,31 @@ TEST (the_lane_forms_of_fm_quantize_and_the_dist_family_equal_the_sample_by_samp
         }
     std::printf ("    %d warp pairs x tier low / not = %d configurations, %lld chunks (%lld loud): %lld chunks whose bits differ from the sample by sample code\n", static_cast<int> (pairs.size()), configs, chunks, loud, bad);
     CHECK (loud > chunks / 2);
+    CHECK_EQ (bad, 0);
+}
+
+TEST (the_four_output_decimator_run_equals_one_dot_product_per_output)
+{
+    // dot32Run (the 2x low cost decimator, four outputs at a time with a transposed vpadd reduction) against dot32 per output, on random data, special values included.
+    TestRng r (61);
+    long long values = 0, bad = 0;
+    for (int round = 0; round < 60000; ++round)
+    {
+        float x[192], taps[32], a[40], b[40];
+        for (float& v : x)
+            v = r.chance (3) ? 0.0f : (r.chance (3) ? r.bi() * 1.0e-30f : r.bi() * (r.chance (5) ? 1.0e6f : 1.0f));
+        for (float& v : taps)
+            v = r.bi() * 0.2f;
+        const float* t = r.chance (50) ? taps : WtOscSavingsTest::rev();
+        const int stride = r.chance (60) ? 2 : r.range (1, 4);
+        const int n = r.chance (50) ? 32 : r.range (1, 32);
+        const int off = r.range (0, 3);
+        WtOscSavingsTest::dotRun (x + off, stride, n, t, a);
+        for (int k = 0; k < n; ++k)
+            b[k] = WtOscSavingsTest::dot (x + off + k * stride, t);
+        values += n;
+        bad += sameBitsArr (a, b, n) ? 0 : 1;
+    }
+    std::printf ("    %lld outputs: %lld runs differ from dot32 one by one\n", values, bad);
     CHECK_EQ (bad, 0);
 }
