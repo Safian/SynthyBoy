@@ -13,13 +13,15 @@ namespace own
 {
 namespace fastmath
 {
-/** tanh: [7/6] Pade approximant, absolute error below 1e-4 on the whole line (it is clamped to +-1 beyond |x| = 4.972, where it reaches 1). */
+/** tanh: [7/6] Pade approximant, absolute error below 1e-4 on the whole line (it is clamped to +-1 beyond |x| = 4.972, where it reaches 1). The clamp is one integer compare on the
+    magnitude bits (0x409f1aa0 is 4.972f, 0x7f800000 infinity: |x| from 4.972 up to and including infinity, a NaN is above and falls through), the same result as the two float
+    compares `x >= 4.972f` / `x <= -4.972f` for all 2^32 bit patterns (test_own_filter_savings.cpp, exhaustive). */
 inline float tanh (float x) noexcept
 {
-    if (x >= 4.972f)
-        return 1.0f;
-    if (x <= -4.972f)
-        return -1.0f;
+    uint32_t bits;
+    std::memcpy (&bits, &x, sizeof bits);
+    if ((bits & 0x7fffffffu) - 0x409f1aa0u <= 0x7f800000u - 0x409f1aa0u)
+        return (bits >> 31) != 0u ? -1.0f : 1.0f;
     const float x2 = x * x;
     return x * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2))) / (135135.0f + x2 * (62370.0f + x2 * (3150.0f + 28.0f * x2)));
 }

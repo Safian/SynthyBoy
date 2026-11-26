@@ -89,6 +89,11 @@ public:
      * caller then calls process () twice. The four buffers must not overlap, except in with its own out.
      */
     static bool processPair (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept;
+    /**
+     * `a.process (inA, outA, n); b.process (inB, outB, n);` to the last bit, with b reading and writing a's cache of tangents and powers for the call: the two sides of a stereo
+     * pair with the same cutoff (the pan of the filter is 0) ask for the same arguments, so b finds what a just computed. For the types the pair kernel does not cover.
+     */
+    static void processBoth (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept;
     /** Tests: the pair kernel in its reference form (two plain floats per value, any platform), and whether processPair () has a kernel in this build. */
     static bool processPairReference (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept;
     static bool pairKernelAvailable() noexcept;

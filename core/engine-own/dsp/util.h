@@ -20,10 +20,14 @@ constexpr float kPif = 3.14159265358979323846f;
     (independent of how the host splits the stream into blocks); audio rate values are interpolated linearly across the step. */
 constexpr int kControlPeriod = 32;
 
-/** Flushes values that would become denormal in a recursion. */
+/** Flushes values that would become denormal in a recursion: |v| < 1e-18 gives +0 (NaN and infinity pass). The compare is made on the bit pattern (the magnitude bits of a
+    float order like the floats: 0x219392ef is 1e-18f), an integer compare, where the float compare of the form `std::fabs (v) < 1.0e-18f` costs a flag transfer from the VFP
+    on 32 bit ARM. The same result as that form for all 2^32 bit patterns, with and without flush-to-zero (test_own_filter_savings.cpp, exhaustive). */
 inline float flushDenormal (float v) noexcept
 {
-    return std::fabs (v) < 1.0e-18f ? 0.0f : v;
+    uint32_t u;
+    std::memcpy (&u, &v, sizeof u);
+    return (u & 0x7fffffffu) < 0x219392efu ? 0.0f : v;
 }
 
 inline float dbToGain (float db) noexcept
