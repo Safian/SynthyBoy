@@ -74,7 +74,7 @@
     {
       "name": "fx",
       "title": "FX",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 d7bda6a435b3",
+      "status": "Szintetikus előnézet (nem hardverfotó) · Distortion, display bal / vezérlők jobb · scripts/render_ui_screen_fx_preview.py",
       "migration_current_source": "docs/ui-map/fx-native-screen-preview.png",
       "migration_current_source_commit": "4c7c9c02"
     },

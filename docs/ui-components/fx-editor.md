@@ -80,6 +80,8 @@ THE RULE: every control that is not live is hidden. Remaining cells compact left
 `FxFullScreen`: `chainBar`, `slotEditor`, `gallery`; `assignIds (chainBaseId, editorBaseId)` (editor: power `+100`, rack `+101`, page `+102`, remove `+103`), `setEditorShown (bool)`, `galleryShown()`, `groupName (g)`, `activeGroup()`, `setActiveGroup (g)`, `turnQ`.
 
 ## Size
+SIDE LAYOUT (`fxl::Layout::side`, Distortion): display left (x 8, width 628, y 208 to 620), controls right in two columns of 310 px (x 644 and 962), two cells to a line of 72 px, a 16 px Q lane above each row; a row has ceil (cells of its table row / 2) lines, so the four cells of DISTORTION are a 2 x 2 block (TYPE, DRIVE / MIX, LEVEL), the Q frame is the union. Only on the full page: with a Mixer-peek inset the stacked layout applies (`FxSlotEditor::sideMode ()`). Native cells: `nativeui::FxLayout::side / lines` (`shell-mpc/native_fx_cells.h`), the skin places them with the same formula (`scripts/mpc-skin-extras/20_fx.py` `_side_cell_rect`); regenerate `fx-native-contract.json` with `fx_native_ui_host --skin-contract` (it also lists the stacked variant for the peek).
+
 `FxSlotEditor::minSize()` 1200 x 400, `kHeaderH` 56, `kDisplayH` 176. `FxFullScreen::minSize()` 1280 x 628, `kBarH` 88.
 
 ## Touch and knob behaviour

@@ -3,7 +3,7 @@
 > Bound to SynthyBoy's effect types: `fx_display.h` includes `synthyboy/fx_types.h` (`kFxTypeEq`, `kFxTypeCompressor`, `kFxTypeDelay`, `kFxTypeFilter`, `kFxTypeDistortion` ...). To reuse it, replace `kindOfType()` (the map from your effect type to a `Kind`) and the types the models know; the five models themselves (`bandDb`, `compOut`, `shape` ...) are plain functions.
 
 ## What it is
-The picture of what an effect does, from the parameters of the selected slot, drawn with thin smooth lines: the EQ frequency response, the compressor transfer curves, the echoes of a delay, the response of an FX filter, the waveshaper curve of a distortion. Effects without a display (and the splitters) get none: the editor gives their knobs the room.
+The picture of what an effect does, from the parameters of the selected slot, drawn with thin smooth lines: the EQ frequency response, the compressor transfer curves, the echoes of a delay, the response of an FX filter, the waveshaper curve of a distortion (thick curve, dashed faint identity diagonal, and the area between them with a faint fill, so a curve at 0 dB drive still shows what it does). Effects without a display (and the splitters) get none: the editor gives their knobs the room.
 
 ## Header and types
 `shell-mpc/ui/fx_display.h`: `FxDisplay`, `FxDisplay::Kind { None, Eq, Compressor, Delay, Filter, Distortion }`, `EqBand`, `EqState`, `CompBand`, `CompState`, `DelayState`, `FilterState`, `DistState`.
@@ -22,7 +22,7 @@ Public members of `FxDisplay`:
 Set the kind with `setKind (kind, name)` or `setKindFromType (fxType)` (uses `kindOfType`). Static helpers: `bandDb (band, EqBand, f)`, `compOut (CompBand, x)`, `shape (type, driveDb, x)`; `kPoints` 192.
 
 ## Size
-`minSize()` 200 x 120; the editor gives it `fxl::Layout::displayH` (160, 176 or 220 px; `FxSlotEditor::kDisplayH` = 176) under the header. Larger: more plot room.
+`minSize()` 200 x 120; the editor gives it `fxl::Layout::displayH` (160, 176 or 220 px; `FxSlotEditor::kDisplayH` = 176) under the header. Larger: more plot room. A table with `fxl::Layout::side` (now the Distortion only) puts the display at the LEFT over the whole page height (628 x 412 px on the full page) and the controls at the right; the Mixer peek keeps the stacked layout (see `fx-editor.md`).
 
 ## Touch and knob behaviour
 None (a state in, a picture out). The knobs around it edit the values.
