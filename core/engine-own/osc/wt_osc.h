@@ -774,15 +774,6 @@ public:
                     acc += taps[i] * x[nt - 1 - i];
             return acc;
         };
-        // the decimated samples of a run of n output samples whose windows start at x + 1 + k * os (the 2x low cost decimator: four outputs at a time, dot32Run (), the same bits as one by one)
-        auto decimateRun = [&] (const float* x, int count, float* out) noexcept
-        {
-            if (tick.lowWarp && !reference_)
-                dot32Run (x + 1, os, count, kDecimator2Rev.c, out);
-            else
-                for (int k = 0; k < count; ++k)
-                    out[k] = decimate (x + k * os + 1);
-        };
         // Shared decimation: the decimator is linear and the same for every voice, so the voices whose gain does not change inside this call (previous gain == current gain in both
         // channels: out = g * dec (x)) are summed at the oversampled rate, weighted by their gains, and decimated once per channel instead of once per voice. A voice whose gain
         // ramps keeps its own decimator: the gain is applied after the decimation, and a gain ramp does not commute with the filter. The sum is formed over the whole window
@@ -1266,34 +1257,36 @@ public:
                             sumR[i] += buf[i] * gR;
                         }
                 }
-                else
+                else if (tick.lowWarp && !reference_)
                 {
                     float accs[kControlPeriod];
-                    decimateRun (buf, n, accs); // the newest sample of the group k is x[nt - 1] (window buf + k * os + 1)
+                    dot32Run (buf + 1, os, n, kDecimator2Rev.c, accs); // the newest sample of the group k is x[nt - 1] (window buf + k * os + 1): four outputs at a time, the same bits
                     for (int k = 0; k < n; ++k)
                     {
                         const float t = static_cast<float> (t0 + k + 1) * invP;
-                        const float acc = accs[k];
+                        L[k] += accs[k] * lerp (prevGainL[v], curGainL[v], t);
+                        R[k] += accs[k] * lerp (prevGainR[v], curGainR[v], t);
+                    }
+                }
+                else
+                    for (int k = 0; k < n; ++k)
+                    {
+                        const float t = static_cast<float> (t0 + k + 1) * invP;
+                        const float acc = decimate (buf + k * os + 1); // the newest sample of the group is x[nt - 1]
                         L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
                         R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
                     }
-                }
                 std::copy (buf + n * os, buf + n * os + nt - 1, hist);
                 historyDirty = true;
             }
             phase[v] = ph;
         }
         if (sumInit)
-        {
-            float accL[kControlPeriod], accR[kControlPeriod];
-            decimateRun (sumL, n, accL);
-            decimateRun (sumR, n, accR);
             for (int k = 0; k < n; ++k)
             {
-                L[k] += accL[k];
-                R[k] += accR[k];
+                L[k] += decimate (sumL + k * os + 1);
+                R[k] += decimate (sumR + k * os + 1);
             }
-        }
         if (cross != nullptr)
             for (int c = 0; c < 6; ++c)
                 if (cross[c] != nullptr)
