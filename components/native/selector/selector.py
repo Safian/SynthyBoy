@@ -709,7 +709,8 @@ def build_native_list_overlay(name):
 
 
 def filter_chain_definition(skins_dir, popup):
-    """One native tap target with an edited-filter strip and two independent power lamps."""
+    """One native tap target that opens the filter routing menu (Parallel, F1 to F2, F2 to F1), with two independent power lamps. The face names the routing ("CHAIN"), not the filter: the edited
+    filter is the hardware sub-tab (the page title says which), so nothing on the chip looks like a filter selector."""
     geometry = _style_size("filter.chain")
     w, h = geometry["width"], geometry["height"]
     face_y, gap = geometry["face_y"], geometry["lamp_gap"]
@@ -717,8 +718,11 @@ def filter_chain_definition(skins_dir, popup):
     faces = Image.new("RGBA", (w, size[1] * 4))
     for n in range(2):
         face = render_dropdown_face(*size, chevron=False)
-        ImageDraw.Draw(face).text((w / 2, size[1] / 2), f"F{n + 1}", font=semibold(_style_size("selector.dropdown.preview_font")),
-                                  fill=_style_color("theme.neon.text"), anchor="mm")
+        draw = ImageDraw.Draw(face)
+        font_size = _style_size("selector.dropdown.preview_font")
+        while font_size > 8 and draw.textlength("CHAIN", font=semibold(font_size)) > w - 8:   # the label must fit the 56 px chip
+            font_size -= 1
+        draw.text((w / 2, size[1] / 2), "CHAIN", font=semibold(font_size), fill=_style_color("theme.neon.text"), anchor="mm")
         for frame in (2 * n, 2 * n + 1):
             faces.paste(face, (0, frame * size[1]))
     filename = "filter_chain_selected.png"

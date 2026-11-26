@@ -3773,6 +3773,22 @@ struct PluginInstance
 // Helper: get instance from AEffect
 // ---------------------------------------------------------------------------
 
+#if SYNTHYBOY_MPC_OVERLAY
+/** True for the value dials of the two filters (filter1.* / filter2.*: cutoff, resonance, drive, mix, keytrack, var, comb offset, blend, the formant fields) and of the OUT readouts (bus sends, level, pan): the parameters the passive native controls of the Filter pages read. */
+static bool isPassiveFilterDial (const synthyboy::ParamInfo& info) noexcept
+{
+    const char* key = info.key;
+    if (std::strncmp (key, "filter", 6) != 0 || (key[6] != '1' && key[6] != '2') || key[7] != '.')
+        return false;
+    for (const char* name : { "cutoff", "resonance", "drive", "mix", "keytrack", "var", "comb_offset", "blend",
+                              "formant.x", "formant.y", "formant.transpose", "formant.resonance", "formant.spread",
+                              "bus1_send", "bus2_send", "level", "pan" })
+        if (std::strcmp (key + 8, name) == 0)
+            return true;
+    return false;
+}
+#endif
+
 static PluginInstance* getInstance(AEffect* e) noexcept
 {
     return static_cast<PluginInstance*>(e->object);
@@ -5239,6 +5255,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         else if (opcode == effGetParamLabel)
         {
             const char* unit = synthyboy::unitLabel(info->unit);
+#if SYNTHYBOY_MPC_OVERLAY
+            if (isPassiveFilterDial (*info))
+                unit = "";   // the display text carries the unit
+#endif
             synthyboy_mpc::putBounded (buf, kCap, unit);
         }
         else // effGetParamDisplay
@@ -5266,6 +5286,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 const auto* names = synthyboy_mpc::ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
                 synthyboy_mpc::putBounded (buf, kCap, count > 0 && names != nullptr
                     ? names[std::clamp (static_cast<int> (std::lround (plain)), 0, count - 1)] : "");
+                return 1;
+            }
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+            // The passive (filter off) dials of the Filter pages read the raw handle of the filter, which the skin shows as it is: the value carries its unit, like the active native dials
+            // (the host label of these parameters is empty, see effGetParamLabel).
+            if (isPassiveFilterDial (*info))
+            {
+                synthyboy_mpc::overlay::uibind::formatValue (*info, plain, buf, kCap);
                 return 1;
             }
 #endif
