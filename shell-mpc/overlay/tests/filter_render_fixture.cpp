@@ -298,7 +298,7 @@ int main (int argc, char** argv)
             knobs = std::atoi (argv[++i]);
         else if (arg == "--help" || arg == "-h")
         {
-            std::printf ("Usage: %s [--state <init_f1|init_f2|f2_velo|f1_off_f2_on|both_off|formant|comb|expanded_filter|expanded_curve|dual_parallel>] [--dump-png <path>] [--dump-json <path>]\n", argv[0]);
+            std::printf ("Usage: %s [--state <init_f1|init_f2|subtab_f1|subtab_f2|subtab_note|subtab_velo|f2_velo|f1_off_f2_on|both_off|formant|comb|expanded_filter|expanded_curve|dual_parallel>] [--dump-png <path>] [--dump-json <path>]\n", argv[0]);
             return 0;
         }
     }
@@ -314,6 +314,7 @@ int main (int argc, char** argv)
     const int domainBase = nativeBase + nativeui::kFxDomainBase;
 
     int activeView = 0; // 0 = F1
+    int subTabInstance = 0; // 1 .. 4 on the page of a hardware sub-tab (the "subtab_*" states), else 0
     bool dualView = false;
 
     auto initDefaults = [&] (int f)
@@ -396,6 +397,14 @@ int main (int argc, char** argv)
         activeView = 2;
         inst.currentView = tabview::encodeFilterSplit (0, 0, tabview::kFilterExpandedCurve);
     }
+    else if (stateName == "subtab_f1" || stateName == "subtab_f2" || stateName == "subtab_note" || stateName == "subtab_velo")
+    {
+        // the page of a hardware sub-tab: the state is the view's instance number (1 F1, 2 F2, 3 NOTE, 4 VELO), nothing from the chunk view state
+        subTabInstance = stateName == "subtab_f1" ? 1 : stateName == "subtab_f2" ? 2 : stateName == "subtab_note" ? 3 : 4;
+        activeView = subTabInstance == 2 ? 1 : subTabInstance >= 3 ? 2 : 0;
+        if (subTabInstance == 2)
+            inst.set ("filter2.on", 0.0f);
+    }
     else if (stateName == "dual_parallel")
     {
         activeView = 0;
@@ -412,8 +421,11 @@ int main (int argc, char** argv)
         return 2;
     }
 
-    PageView<FilterUi> page ("filter1", 1, pages::filterTargets());
+    PageView<FilterUi> page (subTabInstance == 3 ? "filternote" : subTabInstance == 4 ? "filtervelo" : subTabInstance == 2 ? "filter2" : "filter1",
+                             subTabInstance > 0 ? subTabInstance : 1, pages::filterTargets());
     page.ui().setHostBackground (true);
+    if (subTabInstance > 0)
+        page.ui().setSubTab (true);
 
     UiStack stack;
     stack.openFull (FilterUi::kElementFilter);

@@ -363,7 +363,7 @@ class FilterSkinSketch(NativeTabSketch):
                 draw.rounded_rectangle([(x, y), (x + bar_w, y + h)], radius=4, fill=val_col)
             return
 
-    def render_tab(self, tab_name: str = "Filter") -> Image.Image:
+    def render_tab(self, tab_name: str = "Filter 1") -> Image.Image:
         return super().render_tab(tab_name)
 
 
@@ -571,13 +571,17 @@ def render_preview(state_name: str = "init_f1",
 
     print("Rendering native host skin tab via FilterSkinSketch...")
     fsk = FilterSkinSketch(skins_dir, state_data)
-    tab_native = fsk.render_tab("Filter")
+    tab_native = fsk.render_tab({"subtab_f2": "Filter 2", "subtab_note": "Note", "subtab_velo": "Velo"}.get(state_name, "Filter 1"))
 
     print("Compositing C++ overlay onto native host tab...")
     tab_overlay = Image.open(overlay_png).convert("RGBA")
 
     commit = get_commit_hash()
     state_labels = {
+        "subtab_f1": "SUB-TAB FILTER 1 (VIEW INDEX 1)",
+        "subtab_f2": "SUB-TAB FILTER 2 (VIEW INDEX 2)",
+        "subtab_note": "SUB-TAB NOTE (VIEW INDEX 3): CURVE EDITOR USES THE WHOLE PAGE",
+        "subtab_velo": "SUB-TAB VELO (VIEW INDEX 4)",
         "init_f1": "SPLIT F1 + NOTE · DIGITAL 12dB · PARALLEL",
         "init_f2": "SPLIT F2 + NOTE · DIGITAL 12dB · PARALLEL",
         "f2_velo": "SPLIT F2 + VELO · DIGITAL 12dB · PARALLEL",
@@ -613,7 +617,7 @@ def main():
     parser.add_argument("--compare", default=None, help="Optional external output before/after comparison path")
     parser.add_argument("--historical-after", type=Path, default=None, help="Optional explicit historical reference image for 3-panel compare")
     parser.add_argument("--state-json", default=str(DEFAULT_STATE_JSON), help="Output fixture state JSON path")
-    parser.add_argument("--state", default="init_f1", help="Fixture state (init_f1, init_f2, f2_velo, f1_off_f2_on, both_off, formant, comb, expanded_filter, expanded_curve, dual_parallel)")
+    parser.add_argument("--state", default="init_f1", help="Fixture state (init_f1, init_f2, subtab_f1, subtab_f2, subtab_note, subtab_velo, f2_velo, f1_off_f2_on, both_off, formant, comb, expanded_filter, expanded_curve, dual_parallel)")
     parser.add_argument("--ui-gen", type=int, default=2, choices=[1, 2], help="UI Generation (1: Gen1 with Q frames, 2: Gen2 without Q frames)")
     parser.add_argument("--knobs", type=int, default=16, choices=[4, 16], help="Number of physical Q-Link knobs")
     parser.add_argument("--work-dir", type=Path, default=None, help="Working directory for skin generation and fixture binary")

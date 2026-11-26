@@ -1570,8 +1570,12 @@ static void exportNativeFilterContract ()
         all (full.nativeRects());
         std::printf (kind < 2 ? ",\n    " : "\n");
     }
+    ui::FilterFullScreen noteFull;   // the page of the NOTE / VELO sub-tab: the body is the whole page (no top bar to leave room for)
+    noteFull.place ({ 0, FilterUi::kTabY, FilterUi::kCanvasW, FilterUi::kTabH });
+    noteFull.setPageMode (true);
+    noteFull.setSubTabPage (true);
     ui::ScalarCurveEditor curve;
-    curve.place (full.bodyRect());
+    curve.place (noteFull.bodyRect());
     std::printf ("  ],\n  \"curve\": ");
     all (curve.nativeRects());
     std::printf (",\n  \"glide\": ");

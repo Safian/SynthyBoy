@@ -616,7 +616,7 @@ public:
     static constexpr int kMaxGroups = 4;   // MAIN, TRACK, OUT, FORMANT
     static constexpr int kRoutingW = 150;  // the ROUTING list: dot, "Series 1 to 2", padding
     static constexpr int kSplitHeaderY = 12, kSplitHeaderH = 48;
-    static constexpr int kTopH = 56, kTopBarH = kQLane + kTopH, kBandH = 214, kBlockTitleH = 34, kBlockPad = 2, kBlockGap = 4, kSlotGap = 0, kBandMargin = 4;   // the top bar: the lane of the chips of MODEL and STYLE, then the 56 px row
+    static constexpr int kTopH = 56, kTopBarH = kQLane + kTopH, kMarkerBandH = 8, kBandH = 214, kBlockTitleH = 34, kBlockPad = 2, kBlockGap = 4, kSlotGap = 0, kBandMargin = 4;   // the top bar: the lane of the chips of MODEL and STYLE, then the 56 px row
     static constexpr int kViewF1 = 0, kViewF2 = 1, kViewNote = 2, kViewVelo = 3, kViewCellW = 72;   // the states of the page (the selector's candidate id is the state + 1)
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     MenuButton expand { "", MenuButton::Icon::Expand };
@@ -770,8 +770,15 @@ public:
     }
     int viewState() const noexcept { return view_; }
     bool curveView() const noexcept { return view_ >= kViewNote; }
-    /** What the body of NOTE and VELO is drawn in: everything below the top bar (1280 x 556 on the page). */
-    Rect bodyRect() const noexcept { return { rect_.x, rect_.y + kTopBarH, rect_.w, std::max (0, rect_.h - kTopBarH) }; }
+    /** What the body of NOTE and VELO is drawn in: everything below the top bar (1280 x 556 on the page). On the page of a hardware sub-tab the top bar has nothing to hold (no selector: the sub-tab names the
+        state, the chain, MODEL and STYLE belong to the filter pages), so the body is the page under the strip of the three page markers (kMarkerBandH: the markers of the detector are at the top edge, no
+        control may touch them). */
+    Rect bodyRect() const noexcept
+    {
+        if (subTabPage_)
+            return { rect_.x, rect_.y + kMarkerBandH, rect_.w, std::max (0, rect_.h - kMarkerBandH) };
+        return { rect_.x, rect_.y + kTopBarH, rect_.w, std::max (0, rect_.h - kTopBarH) };
+    }
     Rect topBarRect() const noexcept { return { rect_.x, rect_.y, rect_.w, kTopBarH }; }
 
     /** The page of a hardware sub-tab (Filter 1, Filter 2, Note, Velo): there is no VIEW selector and no NOTE | VELO selector, the sub-tab names the state. The top bar keeps its geometry: the place of the
