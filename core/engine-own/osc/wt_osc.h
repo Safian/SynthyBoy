@@ -115,11 +115,13 @@ struct DecimatorTaps
 
 struct WtOscLaneTest; // core/tests/test_own_warp_lanes.cpp
 struct WtOscOptTest;  // core/tests/test_own_wt_osc_opt.cpp
+struct WtOscSavingsTest; // core/tests/test_own_wt_osc_savings.cpp
 
 class WtOsc
 {
     friend struct WtOscLaneTest;
     friend struct WtOscOptTest; // core/tests/test_own_wt_osc_opt.cpp
+    friend struct WtOscSavingsTest; // core/tests/test_own_wt_osc_savings.cpp
     friend struct WtOscSharedDecimTest; // core/tests/test_own_wt_osc_shared_decim.cpp
 
 public:
@@ -1302,13 +1304,46 @@ public:
 #endif
 
     /** The plain table read of one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
-        of the scalar loop (the phases come from an integer prefix sum of the increments, kept in registers, the four table reads are four loads transposed into lanes). */
+        of the scalar loop (the phases come from an integer prefix sum of the increments, kept in registers, the four table reads are four loads transposed into lanes).
+        A steady voice (the increment and both gains of the previous and the current period are bit equal and finite: lerp (a, a, t) = a + 0 * t = a + 0) takes the steady
+        form: the four phases are vph + {0, inc, 2 inc, 3 inc}, the gains are constants, and the ramp t and the increment ramp are not computed (bit identical: the same
+        integer phase progression modulo 2^32 and the same gains). `allowSteady` false: the general form always (tests). */
     static void renderPlain (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
-                             float pgr, float cgr, float pinc, float cinc, float invP, float invN) noexcept
+                             float pgr, float cgr, float pinc, float cinc, float invP, float invN, bool allowSteady = true) noexcept
     {
         // invN: 1 / n when n is a power of two (then (k + 1) / n = (k + 1) * invN exactly), else 0 and the weights are divided
         int k = 0;
 #if SB_NEON
+        const bool steady = allowSteady && sameBits (pinc, cinc) && sameBits (pg, cgl) && sameBits (pgr, cgr) && std::isfinite (pinc) && std::isfinite (pg) && std::isfinite (pgr);
+        if (steady)
+            k = renderPlainLanes<true> (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, pg, cgl, pgr, cgr, pinc, cinc, invP, invN);
+        else
+            k = renderPlainLanes<false> (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, pg, cgl, pgr, cgr, pinc, cinc, invP, invN);
+#else
+        (void) allowSteady;
+#endif
+        for (; k < n; ++k)
+        {
+            const float t = static_cast<float> (t0 + k + 1) * invP;
+            const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
+            const float pos = p * fscale;
+            const int idx = std::clamp (static_cast<int> (pos), 0, N);
+            const float fr = pos - static_cast<float> (idx);
+            float y = hermite (cA + idx, fr);
+            if (cB != nullptr)
+                y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, invN > 0.0f ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n)));
+            L[k] += y * lerp (pg, cgl, t);
+            R[k] += y * lerp (pgr, cgr, t);
+            ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
+        }
+    }
+#if SB_NEON
+    /** The four sample groups of renderPlain (): returns the number of samples done (a multiple of 4), `ph` is advanced past them. Steady: see renderPlain (). */
+    template <bool Steady>
+    static int renderPlainLanes (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
+                                 float pgr, float cgr, float pinc, float cinc, float invP, float invN) noexcept
+    {
+        int k = 0;
         const float32x4_t vwb0 = vdupq_n_f32 (wB0), vdwb = vdupq_n_f32 (wB1 - wB0), vinvN = vdupq_n_f32 (invN);
         const int32_t kfirst[4] = { 1, 2, 3, 4 };
         int32x4_t vk = vld1q_s32 (kfirst); // k + j + 1
@@ -1321,16 +1356,34 @@ public:
         const int32_t first[4] = { t0 + 1, t0 + 2, t0 + 3, t0 + 4 };
         int32x4_t vidx = vld1q_s32 (first); // t0 + k + 1 + lane (simd::ramp4 (t0, k, invP) = this times invP)
         uint32x4_t vph = vdupq_n_u32 (ph);
+        // steady: the increment (vinc + vdinc * t with vdinc = 0 and t >= 0 is vinc + 0, the same vector operations here), its multiples for the four lanes and the gains
+        const float32x4_t vzf = vdupq_n_f32 (0.0f);
+        const uint32x4_t incS = vcvtq_u32_f32 (vmulq_f32 (vaddq_f32 (vpinc, vzf), vtwo32));
+        const uint32_t incScalar = vgetq_lane_u32 (incS, 0);
+        const uint32_t stepArr[4] = { 0u, incScalar, 2u * incScalar, 3u * incScalar };
+        const uint32x4_t step4 = vld1q_u32 (stepArr);
+        const uint32x4_t adv4 = vshlq_n_u32 (incS, 2);
+        const float32x4_t gSl = vaddq_f32 (vpg, vzf), gSr = vaddq_f32 (vpgr, vzf);
         for (; k + 4 <= n; k += 4)
         {
-            const float32x4_t t = vmulq_f32 (vcvtq_f32_s32 (vidx), vinvP);
-            vidx = vaddq_s32 (vidx, vfour);
-            // the increments of the four samples, the phase before each of them (an exclusive prefix sum modulo 2^32) and the phase after the last
-            const uint32x4_t inc = vcvtq_u32_f32 (vmulq_f32 (vaddq_f32 (vpinc, vmulq_f32 (vdinc, t)), vtwo32));
-            const uint32x4_t s1 = vaddq_u32 (inc, vextq_u32 (uzero, inc, 3));
-            const uint32x4_t s2 = vaddq_u32 (s1, vextq_u32 (uzero, s1, 2));
-            const uint32x4_t phs = vaddq_u32 (vph, vextq_u32 (uzero, s2, 3));
-            vph = vaddq_u32 (vph, vdupq_lane_u32 (vget_high_u32 (s2), 1));
+            uint32x4_t phs;
+            float32x4_t t = vzf;
+            if (Steady)
+            {
+                phs = vaddq_u32 (vph, step4);
+                vph = vaddq_u32 (vph, adv4);
+            }
+            else
+            {
+                t = vmulq_f32 (vcvtq_f32_s32 (vidx), vinvP);
+                vidx = vaddq_s32 (vidx, vfour);
+                // the increments of the four samples, the phase before each of them (an exclusive prefix sum modulo 2^32) and the phase after the last
+                const uint32x4_t inc = vcvtq_u32_f32 (vmulq_f32 (vaddq_f32 (vpinc, vmulq_f32 (vdinc, t)), vtwo32));
+                const uint32x4_t s1 = vaddq_u32 (inc, vextq_u32 (uzero, inc, 3));
+                const uint32x4_t s2 = vaddq_u32 (s1, vextq_u32 (uzero, s1, 2));
+                phs = vaddq_u32 (vph, vextq_u32 (uzero, s2, 3));
+                vph = vaddq_u32 (vph, vdupq_lane_u32 (vget_high_u32 (s2), 1));
+            }
             const float32x4_t p = vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (phs, 8)), vinv);
             const float32x4_t pos = vmulq_f32 (p, vscale);
             const int32x4_t idx = vminq_s32 (vmaxq_s32 (vcvtq_s32_f32 (pos), vzero), vN);
@@ -1354,26 +1407,15 @@ public:
                 y = simd::lerp4 (y, yB, wkv);
             }
             vk = vaddq_s32 (vk, vfour);
-            vst1q_f32 (L + k, vaddq_f32 (vld1q_f32 (L + k), vmulq_f32 (y, vaddq_f32 (vpg, vmulq_f32 (vdgl, t)))));
-            vst1q_f32 (R + k, vaddq_f32 (vld1q_f32 (R + k), vmulq_f32 (y, vaddq_f32 (vpgr, vmulq_f32 (vdgr, t)))));
+            const float32x4_t gl = Steady ? gSl : vaddq_f32 (vpg, vmulq_f32 (vdgl, t));
+            const float32x4_t gr = Steady ? gSr : vaddq_f32 (vpgr, vmulq_f32 (vdgr, t));
+            vst1q_f32 (L + k, vaddq_f32 (vld1q_f32 (L + k), vmulq_f32 (y, gl)));
+            vst1q_f32 (R + k, vaddq_f32 (vld1q_f32 (R + k), vmulq_f32 (y, gr)));
         }
         ph = vgetq_lane_u32 (vph, 0);
-#endif
-        for (; k < n; ++k)
-        {
-            const float t = static_cast<float> (t0 + k + 1) * invP;
-            const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
-            const float pos = p * fscale;
-            const int idx = std::clamp (static_cast<int> (pos), 0, N);
-            const float fr = pos - static_cast<float> (idx);
-            float y = hermite (cA + idx, fr);
-            if (cB != nullptr)
-                y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, invN > 0.0f ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n)));
-            L[k] += y * lerp (pg, cgl, t);
-            R[k] += y * lerp (pgr, cgr, t);
-            ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
-        }
+        return k;
     }
+#endif
 
     /** The plain table read as it was before the work of docs/release/CPU-REVIEW-OSC.md (kept for the tests): one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
         of the scalar loop (the phases come from an integer prefix sum of the increments, the four table reads are four loads transposed into lanes). */

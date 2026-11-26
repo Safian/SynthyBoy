@@ -163,6 +163,19 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_link_libraries(synthyboy_test_own_wt_osc_opt PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_wt_osc_opt COMMAND synthyboy_test_own_wt_osc_opt)
 endif()
+# The second round of oscillator savings (docs/release/CPU-REVIEW-OSC.md) against the code paths they replaced: bit for bit where the saving is bit identical, within a stated bound
+# where it is not; the NEON forms on (also on Apple's arm64) and no fused multiply-add; the morph and wavetable sources only.
+add_executable(synthyboy_test_own_wt_osc_savings test_own_wt_osc_savings.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
+    "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+target_include_directories(synthyboy_test_own_wt_osc_savings PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+    "${PROJECT_SOURCE_DIR}/core/src")
+target_compile_features(synthyboy_test_own_wt_osc_savings PRIVATE cxx_std_17)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    target_compile_definitions(synthyboy_test_own_wt_osc_savings PRIVATE SB_TEST_NEON=1)
+endif()
+target_compile_options(synthyboy_test_own_wt_osc_savings PRIVATE $<IF:$<BOOL:${MSVC}>,/W4,-Wall -Wextra -Wpedantic -ffp-contract=off>)
+target_link_libraries(synthyboy_test_own_wt_osc_savings PRIVATE Threads::Threads)
+add_test(NAME synthyboy_test_own_wt_osc_savings COMMAND synthyboy_test_own_wt_osc_savings)
 # The shared decimation of the oversampled oscillator path against the decimator per unison voice (bounded float difference); portable, links only the morph and wavetable sources.
 add_executable(synthyboy_test_own_wt_osc_shared_decim test_own_wt_osc_shared_decim.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
     "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
