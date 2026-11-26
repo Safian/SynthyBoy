@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -571,4 +572,141 @@ TEST (own_filter_savings_integer_compares_match_the_float_forms_on_all_bit_patte
     CHECK (r.tanhNanPayload == 0);
     CHECK (r.kneeDiff == 0);
     CHECK (r.hardDiff == 0);
+}
+
+// ---- Item 4: the dead terms of the Diode loop (w = 1) ----
+
+namespace
+{
+/** The classic Diode as it was before the dead terms went (the setup of remember () and diode () and the sample loop of 391febd), in a struct of its own: the reference for the
+    item 4 test. Everything but the four right hand side lines is the code of ClassicFilter. */
+struct ReferenceDiode
+{
+    double sr = 44100.0;
+    float dv[4] = {}, dHp[2] = {}, dFb = 0.0f, dU = 0.0f;
+    bool quick = false;
+
+    float th (float x) const
+    {
+        return quick ? fastmath::tanh (x) : std::tanh (x);
+    }
+    void block (const float* in, float* out, int n, const ClassicParams& p)
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float d = std::pow (10.0f, p.driveDb * 0.05f);
+        const float r = clamp01 (p.res);
+        constexpr float kDiodeCorner = SB_DIODE_CORNER, kDiodeGain = SB_DIODE_GAIN, kDiodePre = 100.0f, kDiodeFb = SB_DIODE_FB, kDiodeW = 1.0f;
+        (void) kDiodePre;
+        const float k = 0.7f + 16.3f * r * r * r;
+        const float dIn = (0.5f * k + 1.0f) * d;
+        const float post = 1.0f / std::sqrt (d);
+        const float fc = std::clamp (f * kDiodeCorner, 5.0f, static_cast<float> (sr) * 0.45f);
+        const float g = std::tan (kPif * std::min (fc / static_cast<float> (sr), 0.499f));
+        const float brawS = clamp01 (p.blendRaw * 0.5f);
+        const bool style12S = p.style == 0;
+        const float hpHz = f * std::exp2 (style12S ? -1.0f : -9.0f + 8.0f * brawS);
+        const float amount = style12S ? brawS * brawS * 0.25f : 1.0f;
+        const float gh = std::tan (kPif * std::clamp (hpHz, 1.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+        const float gf = std::tan (kPif * 20.0f / static_cast<float> (sr));
+        const float wS = kDiodeW, upS = 0.5f * wS, loS = 1.0f - 0.5f * wS;
+        const float bb = 1.0f + g;
+        float cp[4];
+        cp[0] = -g * upS / bb;
+        for (int j = 1; j < 4; ++j)
+            cp[j] = (j < 3 ? -g * upS : 0.0f) / (bb + g * loS * cp[j - 1]);
+        const float invBb = 1.0f / bb, hpA = gh / (1.0f + gh), hfA = gf / (1.0f + gf);
+        float invD[4];
+        invD[0] = 0.0f;
+        for (int j = 1; j < 4; ++j)
+            invD[j] = 1.0f / (bb + g * loS * cp[j - 1]);
+        const float w = kDiodeW, up = 0.5f * w, lo = 1.0f - 0.5f * w;
+        for (int i = 0; i < n; ++i)
+        {
+            const float x = in[i];
+            float h = x;
+            for (int j = 0; j < 2; ++j)
+            {
+                const float v = quick ? (h - dHp[j]) * hpA : (h - dHp[j]) * gh / (1.0f + gh);
+                const float lp = v + dHp[j];
+                dHp[j] = flushDenormal (lp + v);
+                h = h - lp;
+            }
+            const float xin = lerp (x, h, amount);
+            const float vf = quick ? (dv[3] - dFb) * hfA : (dv[3] - dFb) * gf / (1.0f + gf);
+            const float lpf = vf + dFb;
+            dFb = flushDenormal (lpf + vf);
+            const float fb = dv[3] - lpf;
+            const float xp = xin; // (kDiodePre = 100 is above 50: the optional extra pole is off)
+            const float u = th (0.5f * (dIn * xp - k * kDiodeFb * fb)) * kDiodeGain;
+            const float s0 = ClassicFilter::sat (dv[0]), s1 = ClassicFilter::sat (dv[1]), s2 = ClassicFilter::sat (dv[2]), s3 = ClassicFilter::sat (dv[3]);
+            const float in0 = up * (dU + s1) + (1.0f - w) * dU, in1 = up * (s0 + s2) + (1.0f - w) * s0, in2 = up * (s1 + s3) + (1.0f - w) * s1,
+                        in3 = up * 0.0f + lo * s2;
+            float rhs[4] = { (1.0f - g) * dv[0] + g * in0 + g * lo * u, (1.0f - g) * dv[1] + g * in1, (1.0f - g) * dv[2] + g * in2, (1.0f - g) * dv[3] + g * in3 };
+            dU = u;
+            float dp[4];
+            dp[0] = quick ? rhs[0] * invBb : rhs[0] / bb;
+            for (int j = 1; j < 4; ++j)
+                dp[j] = quick ? (rhs[j] + g * lo * dp[j - 1]) * invD[j] : (rhs[j] + g * lo * dp[j - 1]) / (bb + g * lo * cp[j - 1]);
+            float v[4];
+            v[3] = dp[3];
+            for (int j = 2; j >= 0; --j)
+                v[j] = dp[j] - cp[j] * v[j + 1];
+            for (int j = 0; j < 4; ++j)
+                dv[j] = flushDenormal (v[j]);
+            out[i] = dv[3] * post;
+        }
+    }
+};
+} // namespace
+
+/** The right hand side without the zero terms against the form with them: every finite output compares equal as a float (only the sign of an exact zero may differ), over noise, the
+    specials of a recursion (denormals, signed zeros, huge values) and both tiers. Non-finite outputs are counted and printed: they are where the old zero terms made a NaN of an
+    infinite state. */
+TEST (own_filter_savings_diode_dead_terms_are_equal_as_floats)
+{
+    long samples = 0, zeroSign = 0, nonFinite = 0;
+    const float cutoffs[] = { 80.0f, 420.0f, 3100.0f, 12000.0f };
+    const float resonances[] = { 0.0f, 0.2f, 0.45f, 1.0f };
+    for (int fastI = 0; fastI < 2; ++fastI)
+        for (int style = 0; style < 2; ++style)
+            for (float cutoff : cutoffs)
+                for (float res : resonances)
+                    for (int special = 0; special < 3; ++special) // 2: an infinity and a NaN in the input
+                    {
+                        ClassicFilter now;
+                        now.prepare (44100.0);
+                        ReferenceDiode ref;
+                        ref.quick = fastI != 0;
+                        ClassicParams p = makeParams (4, style, fastI != 0, cutoff, res, 20.0f, special != 0 ? 0.6f : 0.0f);
+                        sbtest::Rng rng (0xd1ede0ull + static_cast<uint64_t> (fastI * 5000 + style * 1000 + static_cast<int> (cutoff) + static_cast<int> (res * 100) + special));
+                        for (int blockNo = 0; blockNo < 40; ++blockNo)
+                        {
+                            std::vector<float> in (32), a (32), b (32);
+                            // loud noise (the saturators and the loop clip), quiet noise, and with `special` the values of a recursion's edge cases
+                            fillInput (rng, in, blockNo % 3 == 0 ? 8.0f : (blockNo % 3 == 1 ? 0.3f : 1.0e-3f), special != 0);
+                            if (special == 2 && blockNo == 7)
+                            {
+                                in[3] = std::numeric_limits<float>::infinity();
+                                in[20] = std::numeric_limits<float>::quiet_NaN();
+                            }
+                            now.block (in.data(), a.data(), 32, p);
+                            ref.block (in.data(), b.data(), 32, p);
+                            for (size_t i = 0; i < 32; ++i)
+                            {
+                                ++samples;
+                                if (std::isfinite (a[i]) && std::isfinite (b[i]))
+                                {
+                                    CHECK (a[i] == b[i]);
+                                    if (bitsOf (a[i]) != bitsOf (b[i]))
+                                        ++zeroSign;
+                                }
+                                else
+                                {
+                                    ++nonFinite;
+                                    CHECK (!std::isfinite (b[i]) || std::isfinite (a[i])); // (the old zero terms make a NaN of an infinite state; the new form is never the less finite one)
+                                }
+                            }
+                        }
+                    }
+    std::printf ("SAVINGS-DIODE %ld samples: equal as floats, sign of a zero differs in %ld, a non-finite output in one of the two in %ld\n", samples, zeroSign, nonFinite);
 }

@@ -868,7 +868,11 @@ private:
             dioValid = true;
         }
         const float k = dio.k, dIn = dio.dIn, post = dio.post, g = dio.g, amount = dio.amount, gh = dio.gh, gf = dio.gf, gp = dio.gp, bb = dio.bb;
-        const float w = kDiodeW, up = 0.5f * w, lo = 1.0f - 0.5f * w;
+        // w = kDiodeW = 1: every stage averages its two neighbours (up = lo = 1/2) and nothing of the stage itself is added back, so the terms (1 - w) * x of the right hand side
+        // below are +-0 and the neighbour of stage 4 above it is 0: they are not computed. The result differs from the form with the zero terms only in the sign of an exact
+        // zero (x + (+-0) = x for every other finite x) and where a state is not finite (0 * inf = NaN there); test_own_filter_savings.cpp (diode_dead_terms).
+        static_assert (kDiodeW == 1.0f, "the right hand side below is written for w = 1");
+        constexpr float up = 0.5f, lo = 0.5f;
         const float* const cp = dio.cp;
         const float* const invD = dio.invD;
         const bool quick = fastMath;
@@ -900,8 +904,7 @@ private:
             const float u = th (0.5f * (dIn * xp - k * kDiodeFb * fb)) * kDiodeGain;
             // right hand side with the old states (the neighbours through the algebraic saturator)
             const float s0 = sat (dv[0]), s1 = sat (dv[1]), s2 = sat (dv[2]), s3 = sat (dv[3]);
-            const float in0 = up * (dU + s1) + (1.0f - w) * dU, in1 = up * (s0 + s2) + (1.0f - w) * s0, in2 = up * (s1 + s3) + (1.0f - w) * s1,
-                        in3 = up * 0.0f + lo * s2;
+            const float in0 = up * (dU + s1), in1 = up * (s0 + s2), in2 = up * (s1 + s3), in3 = lo * s2;
             float rhs[4] = { (1.0f - g) * dv[0] + g * in0 + g * lo * u, (1.0f - g) * dv[1] + g * in1, (1.0f - g) * dv[2] + g * in2, (1.0f - g) * dv[3] + g * in3 };
             dU = u;
             float dp[4];
