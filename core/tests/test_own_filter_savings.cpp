@@ -710,3 +710,120 @@ TEST (own_filter_savings_diode_dead_terms_are_equal_as_floats)
                     }
     std::printf ("SAVINGS-DIODE %ld samples: equal as floats, sign of a zero differs in %ld, a non-finite output in one of the two in %ld\n", samples, zeroSign, nonFinite);
 }
+
+// ---- Item 6: the reciprocal of the SVF denominator at tier low (not bit identical: a stated bound) ----
+
+namespace synthyboy
+{
+namespace own
+{
+/** Test access to the private setup and loop of the state variable models (friend of ClassicFilter). */
+struct ClassicFilterTestAccess
+{
+    static ClassicFilter::SvfSetup setup (const ClassicFilter& f, const ClassicParams& p) { return f.svfSetupFor (p); }
+    static void run (ClassicFilter& f, const ClassicFilter::SvfSetup& z, const float* in, float* out, int n, int model, bool reciprocal)
+    {
+        f.fastMath = reciprocal; // svfRun () multiplies by the reciprocal denominators exactly when fastMath is set (the saturators are not reached at these levels)
+        f.satLoop = false;
+        f.svfRun (z, in, out, n, model, model == 3);
+    }
+};
+} // namespace own
+} // namespace synthyboy
+
+/** The Digital (3) and Analog (0) state variable models, run by the exact division and by the reciprocal over the same setup and the same quiet noise (below the knee of the limiter
+    and the saturators, so the only difference is the division): the largest difference and the RMS difference relative to the input RMS. The bound documented in docs/MPC.md is
+    the one asserted here. */
+TEST (own_filter_savings_svf_reciprocal_stays_within_the_stated_bound)
+{
+    double worstRelDb = -1000.0, worstAbs = 0.0;
+    long different = 0, total = 0;
+    const float cutoffs[] = { 60.0f, 420.0f, 1500.0f, 6000.0f, 14000.0f, 19000.0f };
+    const float resonances[] = { 0.0f, 0.3f, 0.6f, 0.9f, 1.0f };
+    for (int model : { 3, 0 })
+        for (int style = 0; style < (model == 3 ? 5 : 2); ++style)
+            for (float cutoff : cutoffs)
+                for (float res : resonances)
+                {
+                    ClassicFilter exact, quick;
+                    exact.prepare (44100.0);
+                    quick.prepare (44100.0);
+                    const ClassicParams p = makeParams (model, style, false, cutoff, res, 0.0f, 0.4f);
+                    const ClassicFilter::SvfSetup z = ClassicFilterTestAccess::setup (exact, p);
+                    sbtest::Rng rng (0x5f0ull + static_cast<uint64_t> (model * 100000 + style * 10000 + static_cast<int> (cutoff) + static_cast<int> (res * 10)));
+                    double errSq = 0.0, refSq = 0.0, inSq = 0.0;
+                    float maxAbs = 0.0f, peak = 0.0f;
+                    for (int block = 0; block < 128; ++block)
+                    {
+                        std::vector<float> in (32), a (32), b (32);
+                        fillInput (rng, in, 0.05f, false);
+                        ClassicFilterTestAccess::run (exact, z, in.data(), a.data(), 32, model, false);
+                        ClassicFilterTestAccess::run (quick, z, in.data(), b.data(), 32, model, true);
+                        for (size_t i = 0; i < 32; ++i)
+                        {
+                            const double d = static_cast<double> (a[i]) - static_cast<double> (b[i]);
+                            errSq += d * d;
+                            refSq += static_cast<double> (a[i]) * static_cast<double> (a[i]);
+                            inSq += static_cast<double> (in[i]) * static_cast<double> (in[i]);
+                            maxAbs = std::max (maxAbs, static_cast<float> (std::fabs (d)));
+                            peak = std::max (peak, std::fabs (a[i]));
+                            different += a[i] != b[i] ? 1 : 0;
+                            ++total;
+                        }
+                    }
+                    CHECK (peak < 0.6f); // below the knee of hardtanh (0.66): the division is the only difference
+                    if (refSq > 0.0)
+                    {
+                        // relative to the INPUT RMS (the filter is linear here, so this is level independent): the output of a 60 Hz resonant filter is small and made of large cancelling
+                        // terms, so a difference of the order of the float rounding looks large against the output and small against what the filter was given
+                        const double relDb = 10.0 * std::log10 (std::max (errSq, 1.0e-300) / inSq);
+                        worstRelDb = std::max (worstRelDb, relDb);
+                    }
+                    worstAbs = std::max (worstAbs, static_cast<double> (maxAbs));
+                }
+    std::printf ("SAVINGS-SVF-RECIPROCAL %ld samples, %ld differ; worst RMS difference %.1f dB (re the input RMS), worst single difference %.3g (input peak 0.05)\n", total, different, worstRelDb, worstAbs);
+    CHECK (worstRelDb < -100.0);
+    CHECK (worstAbs < 1.0e-6);
+}
+
+/** The pair loop and the single channel loop of the state variable models give the same samples at both tiers (on x86 and wherever the pair loop is the scalar one; the NEON Digital loop
+    keeps the true division at tier low until it is verified on ARM, so that case is left out of an SB_NEON build). */
+TEST (own_filter_savings_svf_pair_loop_equals_the_single_channel_loop)
+{
+    for (int model : { 0, 1, 3 })
+        for (int style = 0; style < 5; ++style)
+            for (int fastI = 0; fastI < 2; ++fastI)
+            {
+#if SB_NEON
+                if (model == 3 && fastI != 0)
+                    continue;
+#endif
+                ClassicFilter pa, pb, sa, sb;
+                for (ClassicFilter* f : { &pa, &pb, &sa, &sb })
+                    f->prepare (44100.0);
+                sbtest::Rng rng (0x9a1full + static_cast<uint64_t> (model * 100 + style * 10 + fastI));
+                const ClassicParams p = makeParams (model, style, fastI != 0, 700.0f, 0.5f, 4.0f, 0.8f);
+                const ClassicParams q = makeParams (model, style, fastI != 0, 2600.0f, 0.8f, 4.0f, 0.8f);
+                for (int block = 0; block < 60; ++block)
+                {
+                    const ClassicParams& use = block % 2 == 0 ? p : q;
+                    std::vector<float> inA (32), inB (32), a1 (32), a2 (32), b1 (32), b2 (32);
+                    fillInput (rng, inA, 0.5f, block % 11 == 0);
+                    fillInput (rng, inB, 0.5f, block % 11 == 0);
+                    const bool did = ClassicFilter::processPairSteady (pa, pb, inA.data(), a1.data(), inB.data(), a2.data(), 32, use, use);
+                    sa.block (inA.data(), b1.data(), 32, use);
+                    sb.block (inB.data(), b2.data(), 32, use);
+                    if (did)
+                    {
+                        CHECK (sameBits (a1, b1));
+                        CHECK (sameBits (a2, b2));
+                    }
+                    else
+                    {
+                        // (the shelving mode has no pair loop: nothing to compare)
+                        pa.block (inA.data(), a1.data(), 32, use);
+                        pb.block (inB.data(), a2.data(), 32, use);
+                    }
+                }
+            }
+}

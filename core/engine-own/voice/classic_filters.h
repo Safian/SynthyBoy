@@ -51,6 +51,7 @@ struct ClassicParams
 /** One channel of a classic model. process () takes the block's start and end parameters and interpolates the coefficients every 8 samples. */
 class ClassicFilter
 {
+    friend struct ClassicFilterTestAccess; // tests: the private setups and loops of the models, to compare them with a reference
 public:
     /** The weights of the sections for a style and the blend `b` in -1 .. 1 (document 05, 2.1). */
     struct Wt { float lp, bp, hp; };
@@ -369,22 +370,31 @@ public:
         const bool linearHard = model == 3;
         const bool two = za.two;
         const bool sat = A.satLoop;
+        // tier low: the reciprocals of the denominators of tpt () once for the call, as in svfRun (). Not for the Digital model where its NEON loop (true division) exists: the
+        // scalar loop is that loop's reference (scalarLoops, the tests), and the NEON loop has to give the same samples; it takes the reciprocals once it has been verified on ARM.
+#if SB_NEON
+        const bool recip = A.fastMath && B.fastMath && model != 3;
+#else
+        const bool recip = A.fastMath && B.fastMath;
+#endif
+        const float inva1 = recip && two ? 1.0f / (1.0f + za.g * za.R1 + za.g * za.g) : 1.0f, invb1 = recip && two ? 1.0f / (1.0f + zb.g * zb.R1 + zb.g * zb.g) : 1.0f;
+        const float inva2 = recip ? 1.0f / (1.0f + za.g * za.R + za.g * za.g) : 1.0f, invb2 = recip ? 1.0f / (1.0f + zb.g * zb.R + zb.g * zb.g) : 1.0f;
         for (int i = 0; i < n; ++i)
         {
             float ua = inA[i] * za.dEff, ub = inB[i] * zb.dEff;
             if (two)
             {
                 float lpa, bpa, hpa, lpb, bpb, hpb;
-                A.tpt (0, ua, za.g, za.R1, model == 3 ? za.R : za.R1, lpa, bpa, hpa, false);
-                B.tpt (0, ub, zb.g, zb.R1, model == 3 ? zb.R : zb.R1, lpb, bpb, hpb, false);
+                A.tpt (0, ua, za.g, za.R1, model == 3 ? za.R : za.R1, lpa, bpa, hpa, false, recip, inva1);
+                B.tpt (0, ub, zb.g, zb.R1, model == 3 ? zb.R : zb.R1, lpb, bpb, hpb, false, recip, invb1);
                 const float y1a = za.wa.lp * lpa + za.wa.bp * bpa + za.wa.hp * hpa;
                 const float y1b = zb.wa.lp * lpb + zb.wa.bp * bpb + zb.wa.hp * hpb;
                 ua = linearHard ? A.hardtanh (y1a) : (model == 1 ? y1a : A.th (y1a * kMidSat) / kMidSat);
                 ub = linearHard ? B.hardtanh (y1b) : (model == 1 ? y1b : B.th (y1b * kMidSat) / kMidSat);
             }
             float lpa, bpa, hpa, lpb, bpb, hpb;
-            A.tpt (two ? 3 : 0, ua, za.g, za.R, za.R, lpa, bpa, hpa, sat);
-            B.tpt (two ? 3 : 0, ub, zb.g, zb.R, zb.R, lpb, bpb, hpb, sat);
+            A.tpt (two ? 3 : 0, ua, za.g, za.R, za.R, lpa, bpa, hpa, sat, recip, inva2);
+            B.tpt (two ? 3 : 0, ub, zb.g, zb.R, zb.R, lpb, bpb, hpb, sat, recip, invb2);
             float ya = za.wb.lp * lpa + za.wb.bp * bpa + za.wb.hp * hpa;
             float yb = zb.wb.lp * lpb + zb.wb.bp * bpb + zb.wb.hp * hpb;
             ya = linearHard ? A.hardtanh (ya) : ya;
@@ -491,6 +501,9 @@ private:
         const float g = z.g, R = z.R, R1 = z.R1, dEff = z.dEff, post = z.post;
         const Wt wa = z.wa, wb = z.wb;
         const bool two = z.two;
+        // tier low: the denominators of tpt () are functions of the setup alone, so their reciprocals are made once for the call and tpt () multiplies (see tpt)
+        const bool recip = fastMath;
+        const float inv1 = recip && two ? 1.0f / (1.0f + g * R1 + g * g) : 1.0f, inv2 = recip ? 1.0f / (1.0f + g * R + g * g) : 1.0f;
         for (int i = 0; i < n; ++i)
         {
             float u = in[i] * dEff;
@@ -498,12 +511,12 @@ private:
             {
                 // the first section: R = 1 in the loop, the weights with the true R inside the high pass
                 float lp, bp, hp;
-                tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false);
+                tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false, recip, inv1);
                 float y1 = wa.lp * lp + wa.bp * bp + wa.hp * hp;
                 u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : th (y1 * kMidSat) / kMidSat);
             }
             float lp, bp, hp;
-            tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop);
+            tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop, recip, inv2);
             float y = wb.lp * lp + wb.bp * bp + wb.hp * hp;
             y = linearHard ? hardtanh (y) : y;
             out[i] = y * post;
@@ -624,12 +637,15 @@ private:
     static constexpr float kMidSat = SB_MID_SAT;
     static constexpr float kDirtyQ1 = SB_DIRTY_Q1, kDirtySat = SB_DIRTY_SAT;
     bool satLoop = false;
-    void tpt (int k, float u, float g, float Rloop, float Rhp, float& lp, float& bp, float& hp, bool saturate) noexcept
+    /** One sample of a state variable section. With `recip` (tier low) the division by 1 + g Rloop + g g is the multiplication by `inv`, the caller's reciprocal of that
+        denominator: the result differs from the quotient by at most one unit in the last place per step (the quotient is rounded once, the reciprocal and the product twice;
+        the state recursion contracts, so the difference stays at that level: the bound is measured in test_own_filter_savings.cpp, svf_reciprocal). The exact tier keeps the division. */
+    void tpt (int k, float u, float g, float Rloop, float Rhp, float& lp, float& bp, float& hp, bool saturate, bool recip, float inv) noexcept
     {
         float& ic1 = s[k];
         float& ic2 = s[k + 1];
         const float v3 = u - ic2;
-        const float v1 = (ic1 + g * v3) / (1.0f + g * Rloop + g * g);
+        const float v1 = recip ? (ic1 + g * v3) * inv : (ic1 + g * v3) / (1.0f + g * Rloop + g * g);
         const float v2 = ic2 + g * v1;
         ic1 = flushDenormal (2.0f * (saturate ? th (v1 * kDirtySat) / kDirtySat : v1) - ic1);
         ic2 = flushDenormal (2.0f * v2 - ic2);
