@@ -71,33 +71,45 @@ def format_fader_value(raw: float, scale_mode: str) -> str:
 def render_fader_cap(
     width: Optional[int] = None,
     height: Optional[int] = None,
-    radius: Optional[int] = None,
-    notch_width: Optional[int] = None,
-    notch_height: Optional[int] = None,
 ) -> Any:
-    """Renders hardware-style textured fader cap PNG using central style tokens."""
+    """The fader thumb exactly as ui::Fader draws it, from the shared theme tokens.
+
+    Pen::block (hi): the panel0 -> panel1 vertical gradient in a block-rounded shape with the
+    keylineHi outline, the keylineHi control outline (radius mixer_strip.fader.cap_radius) and
+    the centre index line in the text colour.
+    """
     if Image is None:
         raise RuntimeError("Pillow is required for render_fader_cap")
+    from components.style import theme_colors
 
     w = _style_size("mixer_strip.fader.cap_width") if width is None else width
     h = _style_size("mixer_strip.fader.cap_height") if height is None else height
-    r = _style_size("mixer_strip.fader.cap_radius") if radius is None else radius
-    outline_th = _style_size("mixer_strip.fader.cap_outline")
-    nw = _style_size("mixer_strip.fader.cap_notch_width") if notch_width is None else notch_width
-    nh = _style_size("mixer_strip.fader.cap_notch_height") if notch_height is None else notch_height
-
-    image = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    pen = ImageDraw.Draw(image)
-
-    bg = _style_rgb("fader.cap.surface")
-    border = _style_rgb("fader.cap.border")
-    notch = _style_rgb("fader.cap.notch")
-
-    pen.rounded_rectangle([0, 0, w - 1, h - 1], radius=r, fill=bg, outline=border, width=outline_th)
-    nx0 = (w - nw) // 2
-    ny0 = (h - nh) // 2
-    pen.rectangle([nx0, ny0, nx0 + nw - 1, ny0 + nh - 1], fill=notch)
-    return image
+    look = _style_size("theme.neon")
+    palette = theme_colors("neon")
+    hex_rgb = lambda value: tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+    ss = _style_size("knob.supersample")
+    big = Image.new("RGBA", (w * ss, h * ss), (0, 0, 0, 0))
+    top, bottom = hex_rgb(palette["panel0"]), hex_rgb(palette["panel1"])
+    gradient = Image.new("RGBA", big.size)
+    for y in range(big.height):
+        u = y / max(1, big.height - 1)
+        gradient.paste(tuple(round(a + (b - a) * u) for a, b in zip(top, bottom)) + (255,), (0, y, big.width, y + 1))
+    block_radius = min(look["rBlock"], h / 2) * ss
+    mask = Image.new("L", big.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, big.width - 1, big.height - 1), radius=block_radius, fill=255)
+    big.paste(gradient, (0, 0), mask)
+    pen = ImageDraw.Draw(big)
+    outline = hex_rgb(palette["keylineHi"])
+    pen.rounded_rectangle((0, 0, big.width - 1, big.height - 1), radius=block_radius, outline=outline,
+                          width=round(look["frame"] * ss))
+    pen.rounded_rectangle((0, 0, big.width - 1, big.height - 1), radius=_style_size("mixer_strip.fader.cap_radius") * ss,
+                          outline=outline, width=round(_style_size("mixer_strip.fader.cap_outline") * ss))
+    inset = _style_size("mixer_strip.fader.cap_line_inset") * ss
+    line = _style_size("mixer_strip.fader.cap_line") * ss
+    mid = big.height / 2
+    pen.rectangle((inset, mid - line / 2, big.width - inset, mid + line / 2),
+                  fill=hex_rgb(palette["text"]) + (_style_size("mixer_strip.fader.cap_line_alpha"),))
+    return big.resize((w, h), Image.Resampling.LANCZOS)
 
 
 def write_fader_assets(directory: Path) -> None:

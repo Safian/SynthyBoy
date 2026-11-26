@@ -14,6 +14,16 @@ from components.style import color, size, theme_colors
 OUTPUT = ROOT / "shell-mpc/ui/theme_tokens.h"
 COLOR_FIELDS = "bg0 bg1 panel0 panel1 keyline keylineHi track grid text textDim textFaint onBright q flow inst src env lfo filter negative".split()
 METRIC_FIELDS = "curve curveHi curveBack hair arcTrack arcValue arcMod frame backGlow afterglow fTitle fValue fLabel fItem fSmall fMin rBlock rControl rChip gap pad".split()
+# The dial recipe shared by ui::Knob (GPU) and the native filmstrips (components/native/level/level.py).
+KNOB_FIELDS = (
+    ("kStartDegrees", "knob.start.degrees"), ("kSweepDegrees", "knob.sweep.degrees"),
+    ("kStrokeMin", "knob.stroke.min"), ("kTrackMin", "knob.track.min"), ("kRadiusInset", "knob.radius.inset"),
+    ("kPointerInner", "knob.pointer.inner"), ("kPointerOuter", "knob.pointer.outer"),
+    ("kPointerStroke", "knob.pointer.stroke"), ("kPointerAlpha", "knob.pointer.alpha"),
+    ("kThumbRatio", "knob.thumb.ratio"), ("kThumbMin", "knob.thumb.min"),
+    ("kCentreStroke", "knob.centre.stroke"), ("kCentreOverhang", "knob.centre.overhang"),
+    ("kCentreAlpha", "knob.centre.alpha"),
+)
 
 
 def render_header():
@@ -21,6 +31,13 @@ def render_header():
              "// Copyright (C) 2026 Safian Szabolcs", "// SPDX-License-Identifier: AGPL-3.0-or-later",
              "// Included by theme.h inside its namespace, after the Look structure.", "#pragma once", ""]
     lines += [f"inline constexpr uint32_t kNativeCanvas = 0x{color('surface.canvas')[1:]};", ""]
+    lines += ["/** The dial recipe: the same tokens draw ui::Knob and the native knob filmstrips. */", "namespace knob {"]
+    for constant, token in KNOB_FIELDS:
+        value = size(token)
+        literal = str(int(value)) if constant.endswith("Alpha") else repr(float(value)) + "f"
+        kind = "int" if constant.endswith("Alpha") else "float"
+        lines.append(f"inline constexpr {kind} {constant} = {literal};")
+    lines += ["} // namespace knob", ""]
     for index, name in enumerate(("neon", "aurora", "plasma"), 1):
         palette, metrics = theme_colors(name), size("theme." + name)
         lines += [f"inline const Look kLook{index} = {{", f'    "{name}",']

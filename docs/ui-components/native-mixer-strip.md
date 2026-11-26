@@ -78,7 +78,7 @@ Following explicit owner directive, the normal Mixer tab is rendered **100% by t
 Conforms to Auto MPC SDK Section 6.1 Slider (`sliderType: "TrackAndThumb"`, `direction: "Vertical"`):
 - **Below-Track Value Readout**:
   The physical slider track groove is bounded to $168\text{ px}$ height on SOURCE strips and $384\text{ px}$ on BUS/MASTER strips. The dynamic value label is placed strictly **BENEATH** the slider track ($y: 172..196\text{ px}$ for source, $y: 388..412\text{ px}$ for bus/master). The fader thumb travels only within the track and **never clips or obscures the value readout**.
-- Uses procedural fader cap asset `mixer_fader_cap.png` ($48 \times 26\text{ px}$) with grip notches, center indicator, and drop shadow.
+- Uses the fader cap asset `mixer_fader_cap.png` ($48 \times 26\text{ px}$), rendered by `fader.render_fader_cap` as the drawn `ui::Fader` thumb: the theme panel gradient, the keylineHi outlines and the centre index line, from the shared theme tokens.
 - Background groove and scale markings remain static on the background; only the thumb moves with the parameter.
 
 ## Compact Native Dials (PAN, B1, B2)

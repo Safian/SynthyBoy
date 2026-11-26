@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Native MPC LEVEL dial component and generator with Smooth and CompactDial variants."""
 import copy
+import functools
 import math
 from pathlib import Path
 
@@ -72,7 +73,7 @@ def value_label(name, rect, height=_style_size('level._value_label.geometry')):
                 "textStyle": {
                     "version": 1,
                     "font": {"version": 1, "name": _style_size('font.family'), "style": _style_size('font.style.semibold'), "height": float(height)},
-                    "colour": _style_argb("text.icon"),
+                    "colour": _style_argb("text.value"),
                     "justification": "horizontallyCentred verticallyCentred",
                     "case": "Original",
                 },
@@ -145,7 +146,7 @@ def default_level_template():
                             },
                             "colour": _style_argb("text.caption"),
                             "justification": "left verticallyCentred",
-                            "case": "Original",
+                            "case": "Upper Case",
                         },
                     },
                 },
@@ -163,52 +164,142 @@ def default_level_template():
     }
 
 
+# The look whose tokens the native artwork follows (the GPU overlay's default look 1).
+DIAL_LOOK = "neon"
+
+
+def dial_caption_style(text_style):
+    """The name of a dial as ui::Knob writes it: upper case in the dim text colour (theme textDim)."""
+    text_style["colour"] = _style_argb("text.caption")
+    text_style["case"] = "Upper Case"
+    return text_style
+
+
+def _inactive_grey(rgb):
+    """ui::Pen::inactiveGrey: the luma, darkened to knob.inactive.percent (the drawn off look)."""
+    r, g, b = rgb
+    value = (r * 30 + g * 59 + b * 11) // 100 * int(_style_size("knob.inactive.percent")) // 100
+    return (value, value, value)
+
+
+def dial_geometry(diameter):
+    """ui::Knob::geom for a dial of `diameter` px: (radius, value stroke, track stroke) in px."""
+    metrics = _style_size("theme." + DIAL_LOOK)
+    stroke = max(_style_size("knob.stroke.min"), diameter * metrics["arcValue"])
+    track = max(_style_size("knob.track.min"), diameter * metrics["arcTrack"])
+    radius = diameter / 2 - stroke / 2 - _style_size("knob.radius.inset")
+    return radius, stroke, track
+
+
+def render_dial_frame(diameter, value, *, bipolar=False, active=True):
+    """One dial picture exactly as ui::Knob draws it (drawStatic + drawLive), from the shared tokens.
+
+    The track arc, the value arc in the four-stop flow gradient along the drawn piece, the
+    bipolar centre tick, the pointer and the white thumb on the arc. Supersampled, then reduced.
+    """
+    import numpy as np
+    from components.style import theme_colors
+
+    palette = theme_colors(DIAL_LOOK)
+    to_rgb = (lambda name: _inactive_grey(tuple(int(name[i:i + 2], 16) for i in (1, 3, 5)))) if not active \
+        else (lambda name: tuple(int(name[i:i + 2], 16) for i in (1, 3, 5)))
+    track_rgb, text_rgb, dim_rgb = to_rgb(palette["track"]), to_rgb(palette["text"]), to_rgb(palette["textDim"])
+    flow = np.array([to_rgb(c) for c in palette["flow"]], dtype=np.float64)
+
+    ss = int(_style_size("knob.supersample"))
+    side = diameter * ss
+    radius, stroke, track = (v * ss for v in dial_geometry(diameter))
+    centre = side / 2
+    start = math.radians(_style_size("knob.start.degrees"))
+    sweep = math.radians(_style_size("knob.sweep.degrees"))
+    angle_of = lambda v: start + min(max(v, 0.0), 1.0) * sweep
+
+    ys, xs = np.mgrid[0:side, 0:side].astype(np.float64) + 0.5
+    dx, dy = xs - centre, ys - centre
+    dist = np.hypot(dx, dy)
+    theta = np.mod(np.arctan2(dy, dx) - start, 2 * math.pi)   # 0 .. 2 pi from the start angle, clockwise on screen
+    rgba = np.zeros((side, side, 4), dtype=np.float64)
+
+    def over(mask_alpha, colour):
+        alpha = np.clip(mask_alpha, 0.0, 1.0)[..., None]
+        col = np.broadcast_to(np.asarray(colour, dtype=np.float64), rgba.shape[:2] + (3,)) if np.ndim(colour) == 1 else colour
+        rgba[..., :3] = col * alpha + rgba[..., :3] * (1 - alpha)
+        rgba[..., 3:] = alpha + rgba[..., 3:] * (1 - alpha)
+
+    def arc_mask(a0, a1, width):
+        """A round-capped arc from angle a0 to a1 (a0 <= a1, relative to the start), anti-aliased by the supersampling."""
+        rel = theta
+        inside = (rel >= a0) & (rel <= a1) & (np.abs(dist - radius) <= width / 2)
+        mask = inside.astype(np.float64)
+        for a in (a0, a1):
+            ex, ey = centre + radius * math.cos(start + a), centre + radius * math.sin(start + a)
+            mask = np.maximum(mask, (np.hypot(xs - ex, ys - ey) <= width / 2).astype(np.float64))
+        return mask
+
+    def segment_mask(r0, r1, a, width):
+        ax, ay = centre + r0 * math.cos(a), centre + r0 * math.sin(a)
+        bx, by = centre + r1 * math.cos(a), centre + r1 * math.sin(a)
+        vx, vy = bx - ax, by - ay
+        length2 = vx * vx + vy * vy
+        u = np.clip(((xs - ax) * vx + (ys - ay) * vy) / length2, 0.0, 1.0)
+        return (np.hypot(xs - (ax + u * vx), ys - (ay + u * vy)) <= width / 2).astype(np.float64)
+
+    # drawStatic: the track over the whole sweep, the centre tick of a bipolar dial
+    over(arc_mask(0.0, sweep, track), track_rgb)
+    mid = sweep / 2
+    if bipolar:
+        overhang = _style_size("knob.centre.overhang") * ss
+        tick = segment_mask(radius - stroke / 2 - overhang, radius + stroke / 2 + overhang, start + mid,
+                            _style_size("knob.centre.stroke") * ss)
+        over(tick * _style_size("knob.centre.alpha") / 255, dim_rgb)
+    # drawLive: the value arc in the flow gradient along the drawn piece (from the start, or from the middle)
+    av = angle_of(value) - start
+    origin = mid if bipolar else 0.0
+    lo, hi = min(origin, av), max(origin, av)
+    if hi - lo > 0.004:
+        t = np.clip((theta - lo) / (hi - lo), 0.0, 1.0)
+        s = t * 3.0
+        index = np.minimum(s.astype(int), 2)
+        u = (s - index)[..., None]
+        gradient = flow[index] * (1 - u) + flow[index + 1] * u
+        # the round caps take the colour of their own end
+        gradient = np.where((theta < lo)[..., None] | (theta > 2 * math.pi - 0.5)[..., None], flow[0], gradient)
+        gradient = np.where(((theta > hi) & (theta <= 2 * math.pi - 0.5))[..., None], flow[3], gradient)
+        over(arc_mask(lo, hi, stroke), gradient)
+    # the pointer and the thumb
+    a = start + av
+    pointer = segment_mask(radius * _style_size("knob.pointer.inner"), radius * _style_size("knob.pointer.outer"), a,
+                           _style_size("knob.pointer.stroke") * ss)
+    over(pointer * _style_size("knob.pointer.alpha") / 255, text_rgb)
+    thumb = max(_style_size("knob.thumb.min") * ss, stroke * _style_size("knob.thumb.ratio"))
+    tx, ty = centre + radius * math.cos(a), centre + radius * math.sin(a)
+    over((np.hypot(xs - tx, ys - ty) <= thumb).astype(np.float64), text_rgb)
+
+    # reduce the supersampled picture with premultiplied box averaging
+    premultiplied = np.concatenate([rgba[..., :3] * rgba[..., 3:], rgba[..., 3:]], axis=2)
+    small = premultiplied.reshape(diameter, ss, diameter, ss, 4).mean(axis=(1, 3))
+    alpha = small[..., 3:]
+    colour = np.where(alpha > 0, small[..., :3] / np.maximum(alpha, 1e-9), 0.0)
+    out = np.concatenate([colour, alpha * 255], axis=2)
+    return Image.fromarray(np.clip(np.rint(out), 0, 255).astype(np.uint8), "RGBA")
+
+
+@functools.lru_cache(maxsize=32)
+def _strip_png(frame_size, bipolar, active):
+    import io
+    strip = Image.new("RGBA", (frame_size, frame_size * FRAMES))
+    for i in range(FRAMES):
+        strip.paste(render_dial_frame(frame_size, i / (FRAMES - 1), bipolar=bipolar, active=active), (0, i * frame_size))
+    buffer = io.BytesIO()
+    strip.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def write_strip(path, frame_size=SIZE, bipolar=False, active=True):
+    """The native knob filmstrip: FRAMES pictures of render_dial_frame, minimum at the top."""
     if Image is None:
         raise RuntimeError("Pillow is required to generate dial filmstrips")
-    scale = _style_size('level.write_strip.scale')
-    center = (SIZE - _style_size('level.write_strip.center')) * scale / 2
-    radius = _style_size('level.write_strip.radius') * scale
-
-    def point(angle, r):
-        return (
-            center + r * math.cos(math.radians(angle)),
-            center + r * math.sin(math.radians(angle)),
-        )
-
-    strip = Image.new("RGBA", (frame_size, frame_size * FRAMES))
-    bounds = (center - radius, center - radius, center + radius, center + radius)
-    track_col = _style_color("dial.native.track") if active else _style_color("smooth.track.off")
-    arc_col = _style_color("dial.native.value") if active else _style_color("smooth.arc.off")
-    val_col = _style_color("dial.native.pointer") if active else _style_color("smooth.pointer.off")
-
-    for i in range(FRAMES):
-        frame = Image.new("RGBA", (SIZE * scale, SIZE * scale))
-        draw = ImageDraw.Draw(frame)
-        angle = _style_size('level.write_strip.angle') + _style_size('level.write_strip.angle.offset1') * i / (FRAMES - _style_size('level.write_strip.angle.offset2'))
-        draw.arc(bounds, _style_size('level.write_strip.arc'), _style_size('level.write_strip.arc.offset1'), fill=track_col, width=_style_size('stroke.arc') * scale)
-        if bipolar:
-            draw.line(
-                (point(_style_size('level.write_strip.point'), radius - _style_size('level.write_strip.point.offset1') * scale), point(_style_size('level.write_strip.point'), radius + _style_size('level.write_strip.point.offset2') * scale)),
-                fill=_style_color("text.caption") if active else _style_color("smooth.pointer.off"),
-                width=round(_style_size('level.write_strip.round.offset1') * scale),
-            )
-        start = _style_size('level.write_strip.start') if bipolar else _style_size('level.write_strip.start.offset1')
-        if angle != start:
-            draw.arc(bounds, min(angle, start), max(angle, start), fill=arc_col, width=_style_size('stroke.arc.active') * scale)
-        draw.line(
-            (point(angle, radius * 0.25), point(angle, radius * 0.6)),
-            fill=val_col,
-            width=round(_style_size('dial.native.pointer.stroke' if active else 'level.write_strip.round') * scale),
-        )
-        x, y = point(angle, radius - _style_size('level.write_strip.x.y') * scale)
-        dot = _style_size('level.write_strip.dot') * scale
-        draw.ellipse((x - dot, y - dot, x + dot, y + dot), fill=val_col)
-        strip.paste(
-            frame.resize((frame_size, frame_size), Image.Resampling.LANCZOS),
-            (0, i * frame_size),
-        )
-    strip.save(path)
+    Path(path).write_bytes(_strip_png(int(frame_size), bool(bipolar), bool(active)))
 
 
 def synthyboy_dial_data(skins_dir, *, frame_size=SIZE, bipolar=False, active=True):
@@ -305,7 +396,7 @@ def compact_level_definition(template=None, skins_dir=None):
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.compact_level_definition.font.height')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.icon")
+            dial_caption_style(control["data"]["textStyle"])
         elif name == "value":
             control["data"]["handleName"] = "Data"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
@@ -371,7 +462,7 @@ def compact_dial_definition(template, rects=None, polarity="UniPolar", height=No
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.compact_dial_definition.font.height') if is_compact else _style_size('level.compact_dial_definition.font.height.offset1')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.icon")
+            dial_caption_style(control["data"]["textStyle"])
         elif name == "value":
             control["data"]["handleName"] = "Data"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
@@ -799,6 +890,7 @@ def blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_r
     name = _label_component("name", "Text" if caption_text is not None else "Name",
                             "Data" if caption_text is not None else "Caption", rects["name"],
                             caption_height, _style_argb("text.caption"), "left verticallyCentred")
+    dial_caption_style(name["componentData"]["data"]["textStyle"])
     if caption_text is not None:
         name["componentData"]["data"]["text"] = caption_text
     value = _label_component("value", "Value", "Data", rects["value"], value_height,
@@ -841,7 +933,8 @@ def stacked_dial_definition(skins_dir, size, *, diameter, caption_height,
     knob["bounds"]["bounds"] = " ".join(map(str, rects["knob"]))
     centre = "horizontallyCentred verticallyCentred"
     caption = _label_component("name", "Name", "Caption", rects["name"],
-                               _style_size("font.caption"), _style_argb("text.icon"), centre)
+                               _style_size("font.caption"), _style_argb("text.caption"), centre)
+    dial_caption_style(caption["componentData"]["data"]["textStyle"])
     value = _label_component("value", "Value", "Data", rects["value"],
                              _style_size("font.value"), _style_argb("text.value"), centre)
     definition["componentsData"].extend([caption, value])
