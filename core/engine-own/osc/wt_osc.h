@@ -120,11 +120,16 @@ class WtOsc
 {
     friend struct WtOscLaneTest;
     friend struct WtOscOptTest; // core/tests/test_own_wt_osc_opt.cpp
+    friend struct WtOscSharedDecimTest; // core/tests/test_own_wt_osc_shared_decim.cpp
 
 public:
     static constexpr int kMaxVoices = 16;
     /** Tests only: run the code as it was before the optimisations of docs/release/CPU-REVIEW-OSC.md (the same output, slower). */
     void setReference (bool on) noexcept { reference_ = on; }
+    /** Tests only: off = every unison voice of the oversampled (warped) path runs its own decimator, the code before the shared decimation (docs/dsp-knowledge/antialiasing.md). */
+    void setSharedDecimator (bool on) noexcept { sharedDecimator_ = on; }
+    /** The shared decimation of a warped render call pays from this many voices with a constant gain (two decimations replace one per voice). */
+    static constexpr int kSharedDecimatorMin = 3;
     static constexpr int kOversample = 4, kTaps = 128;
     static constexpr int kOversampleLow = 2, kTapsLow = 32;
     static inline const DecimatorTaps<128> kDecimator4 { 0.105, 7.5 }; // cycles per sample of the 4x signal
@@ -697,6 +702,39 @@ public:
             bw = std::max (bw, warpBandwidthFactor (tick.warp[w], std::clamp (tick.warpAmount[w] + std::max (0.0f, tick.warpSpread[w]), 0.0f, 1.0f)));
         const int os = tick.lowWarp ? kOversampleLow : kOversample, nt = tick.lowWarp ? kTapsLow : kTaps;
         const double rateI = sampleRate * (warped ? os : 1);
+        // the decimator of the oversampled path: the 4x (or 2x) signal -> the output rate, for the window x of nt - 1 + os * n samples: acc of group k is the dot product with the taps
+        const float* const taps = tick.lowWarp ? decimatorTaps2() : decimatorTaps();
+        auto decimate = [&] (const float* x) noexcept
+        {
+            float acc = 0.0f;
+            if (tick.lowWarp)
+                acc = dot32 (x, kDecimator2Rev.c); // tier low: the same taps, four partial sums (rounding differs from the sequential sum by about 1e-7 relative)
+            else if (tick.fastMath)
+                acc = dot128 (x, kDecimator4Rev.c); // the 4x warp of a profile that keeps the Math economy group: the 128 taps in four partial sums, the same bound
+            else
+                for (int i = 0; i < nt; ++i)
+                    acc += taps[i] * x[nt - 1 - i];
+            return acc;
+        };
+        // Shared decimation: the decimator is linear and the same for every voice, so the voices whose gain does not change inside this call (previous gain == current gain in both
+        // channels: out = g * dec (x)) are summed at the oversampled rate, weighted by their gains, and decimated once per channel instead of once per voice. A voice whose gain
+        // ramps keeps its own decimator: the gain is applied after the decimation, and a gain ramp does not commute with the filter. The sum is formed over the whole window
+        // (the per voice history and this period), so the per voice history stays as it was. Not bit identical to the per voice form: the float sums are in another order (about 1e-7 relative).
+        auto steadyGain = [&] (int v) noexcept { return curGainL[v] == prevGainL[v] && curGainR[v] == prevGainR[v]; };
+        bool shareDec = false;
+        // only the 4x decimator with the sequential 128 tap sum (tiers medium / high / XL): the 32 tap 2x decimator and the four partial sum dot product of the Math economy group are
+        // already cheap against the two accumulations (host A/B/A, no gain), so tier low keeps its bits
+        if (warped && sharedDecimator_ && !tick.lowWarp && !tick.fastMath && !history.empty())
+        {
+            int steady = 0;
+            for (int v = 0; v < count; ++v)
+                if (steadyGain (v) && (curGainL[v] != 0.0f || curGainR[v] != 0.0f))
+                    ++steady;
+            shareDec = steady >= kSharedDecimatorMin;
+        }
+        constexpr int kWindowMax = kTaps - 1 + kOversample * kControlPeriod;
+        float sumL[kWindowMax], sumR[kWindowMax]; // written by the first shared voice, read only after it
+        bool sumInit = false;
         for (int v = 0; v < count; ++v)
         {
             const float a0 = curWarpA[0][v], a1 = curWarpA[1][v];
@@ -898,7 +936,6 @@ public:
             {
                 if (history.empty() || v >= historyVoices)
                     continue;
-                const float* taps = tick.lowWarp ? decimatorTaps2() : decimatorTaps();
                 float* hist = history.data() + static_cast<size_t> (v) * (kTaps - 1); // the last nt - 1 samples of the os x signal, then this period's
                 float buf[kTaps - 1 + kOversample * kControlPeriod];
                 std::copy (hist, hist + nt - 1, buf);
@@ -1095,26 +1132,45 @@ public:
                         }
                     }
                 }
-                for (int k = 0; k < n; ++k)
+                if (shareDec && steadyGain (v))
                 {
-                    const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const float* x = buf + k * os + 1; // the newest sample of the group is x[nt - 1]
-                    float acc = 0.0f;
-                    if (tick.lowWarp)
-                        acc = dot32 (x, kDecimator2Rev.c); // tier low: the same taps, four partial sums (rounding differs from the sequential sum by about 1e-7 relative)
-                    else if (tick.fastMath)
-                        acc = dot128 (x, kDecimator4Rev.c); // the 4x warp of a profile that keeps the Math economy group: the 128 taps in four partial sums, the same bound
+                    const int len = nt - 1 + n * os;
+                    const float gL = curGainL[v], gR = curGainR[v];
+                    if (!sumInit)
+                    {
+                        for (int i = 0; i < len; ++i)
+                        {
+                            sumL[i] = buf[i] * gL;
+                            sumR[i] = buf[i] * gR;
+                        }
+                        sumInit = true;
+                    }
                     else
-                        for (int i = 0; i < nt; ++i)
-                            acc += taps[i] * x[nt - 1 - i];
-                    L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
-                    R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
+                        for (int i = 0; i < len; ++i)
+                        {
+                            sumL[i] += buf[i] * gL;
+                            sumR[i] += buf[i] * gR;
+                        }
                 }
+                else
+                    for (int k = 0; k < n; ++k)
+                    {
+                        const float t = static_cast<float> (t0 + k + 1) * invP;
+                        const float acc = decimate (buf + k * os + 1); // the newest sample of the group is x[nt - 1]
+                        L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
+                        R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
+                    }
                 std::copy (buf + n * os, buf + n * os + nt - 1, hist);
                 historyDirty = true;
             }
             phase[v] = ph;
         }
+        if (sumInit)
+            for (int k = 0; k < n; ++k)
+            {
+                L[k] += decimate (sumL + k * os + 1);
+                R[k] += decimate (sumR + k * os + 1);
+            }
         if (cross != nullptr)
             for (int c = 0; c < 6; ++c)
                 if (cross[c] != nullptr)
@@ -1401,6 +1457,7 @@ private:
     MorphScratch* morphScratchPtr = nullptr;
     std::unique_ptr<MorphScratch> ownedMorphScratch;
     int historyVoices = 0;
+    bool sharedDecimator_ = true;                // setSharedDecimator (): tests only
     int morphAge = 0, morphGroups = 1;
     uint32_t morphStagger = 0;                   // setMorphStagger ()
     bool morphActive = false;
