@@ -93,7 +93,6 @@ public:
             full_.setSide (side);
             qSlots_.forget();
         }
-        const auto view = nativeView();
         if (nativeView() == nativeui::master::Tuning && inst.masterScaleInputActive())
         {
             const int root = inst.takeMasterScaleRoot();
