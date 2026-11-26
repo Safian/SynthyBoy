@@ -16,5 +16,8 @@ steps=contract['steps']
 lines.append('constexpr Rect kSequenceGrid { '+', '.join(map(str,steps['rect']))+' };')
 for key in ('pad','gap','diameter','top','value_gap'):
     lines.append('constexpr int kStep'+''.join(p.title() for p in key.split('_'))+' = '+str(steps[key])+';')
+lines.append('constexpr Rect kStrip { '+', '.join(map(str,contract['strip']))+' };')
+for panel in contract['panels']:
+    lines.append('constexpr Rect kBlock'+panel['name'].title()+' { '+', '.join(map(str,panel['rect']))+' };')
 lines.append('}\n')
 (ROOT/'shell-mpc/ui/voice_native_layout.h').write_text('\n'.join(lines))

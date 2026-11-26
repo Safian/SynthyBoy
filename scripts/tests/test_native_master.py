@@ -15,7 +15,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from native_master.master_controls import (
     MASTER_SPECS,
+    MASTER_BLOCKS,
     MASTER_INTEGER_FIELDS,
+    MASTER_NUMBER_FIELDS,
     MASTER_LINKED_BEND,
     UNCONVERTED_CONTROLS,
     apply_master_native_controls,
@@ -64,6 +66,12 @@ class MasterNativeControlsTests(unittest.TestCase):
                 f"Parameter key {spec['key']} must be an engine or pad pressure setting",
             )
 
+    def test_cpp_layout_header_is_generated_from_the_skin_layout(self):
+        """MasterScreen places its Q/state adapters from the same master_layout.json the skin uses."""
+        import subprocess
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/gen-master-native-layout.py"), "--check"])
+        self.assertEqual(result.returncode, 0, "run scripts/gen-master-native-layout.py: master_native_layout.h is stale")
+
     def test_unconverted_controls_inventory(self):
         unconverted = get_unconverted_controls()
         names = {u["name"] for u in unconverted}
@@ -75,9 +83,13 @@ class MasterNativeControlsTests(unittest.TestCase):
         for spec in specs:
             x, y, w, h = spec["rect"]
             self.assertGreaterEqual(x, 0, f"{spec['name']}: x must be non-negative")
-            self.assertGreaterEqual(y, 110, f"{spec['name']}: y must be within tab area (>= 110)")
+            self.assertGreaterEqual(y, 64, f"{spec['name']}: tab coordinates, under the header (>= 64)")
             self.assertLessEqual(x + w, 1280, f"{spec['name']}: right edge must fit within canvas 1280")
-            self.assertLessEqual(y + h, 738, f"{spec['name']}: bottom edge must fit within tab height")
+            self.assertLessEqual(y + h, 628, f"{spec['name']}: bottom edge must fit within the tab (628)")
+            # every control lies on the titled block panel of its side (master_layout.json)
+            self.assertTrue(any(b["side"] == spec["side"] and b["rect"][0] <= x and b["rect"][1] <= y
+                                and x + w <= b["rect"][0] + b["rect"][2] and y + h <= b["rect"][1] + b["rect"][3]
+                                for b in MASTER_BLOCKS), f"{spec['name']}: inside a block panel of its side")
             self.assertGreaterEqual(h, 56, f"{spec['name']}: height must be at least 56px for touch target")
             self.assertGreaterEqual(w, 56, f"{spec['name']}: width must be at least 56px for touch target")
 
@@ -103,20 +115,22 @@ class MasterNativeControlsTests(unittest.TestCase):
         }
         ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         created = apply_master_native_controls(tui, {}, ctx)
-        self.assertEqual(created, 46, "All standard native controls, output widgets and panel buttons created")
+        self.assertEqual(created, 47, "All standard native controls, output widgets, the QUALITY caption and panel buttons created")
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
-        self.assertEqual(len(tab_components), 47, "Marker plus native editor, output and navigation widgets")
+        self.assertEqual(len(tab_components), 55, "Seven block panels, the marker, native editor, output and navigation widgets")
+        self.assertEqual([c["componentData"]["name"] for c in tab_components[:7]], [f"Master Block {b['title']}" for b in MASTER_BLOCKS],
+                         "the block panels are listed first: every control and marker lies above them")
 
         # Verify specific remappings
         vol = next(c for c in tab_components if c["componentData"]["name"] == "Master Volume")
-        self.assertEqual(vol["componentData"]["type"], "masterNative_dial_bi_119x124")
+        self.assertEqual(vol["componentData"]["type"], "masterNative_dial_bi_150x152")
         # The dial is a local component definition; the instance carries only
         # its Data handle. The shared child provides the bipolar filmstrip.
         self.assertEqual(vol["componentData"]["data"], {"version": 1, "handleName": "Data"})
         self.assertEqual(vol["bounds"]["acceptsHWFocus"], "Yes")
         self.assertEqual(vol["bounds"]["whenVisible"], "Always")
         # Verify bounds are tab-relative (0..628), not raw screen coordinates
-        self.assertEqual(vol["bounds"]["bounds"], "122 110 119 124")
+        self.assertEqual(vol["bounds"]["bounds"], "132 98 150 152")
         param_idx = ctx.param_index("master.volume")
         self.assertEqual(vol["handle remapping"]["map"][0]["value"], f"Parameter {param_idx}")
         self.assertEqual(vol["handle remapping"]["map"][1]["value"], f"WithName[VOLUME]/Parameter {param_idx}")
@@ -130,7 +144,7 @@ class MasterNativeControlsTests(unittest.TestCase):
             self.assertLessEqual(y + h, 628, f"{c['componentData']['name']}: tab-relative y+h must fit in tab (<= 628)")
 
         legato = next(c for c in tab_components if c["componentData"]["name"] == "Master Legato")
-        self.assertEqual(legato["componentData"]["type"], "masterNativeActiveText_LEGATO_189x56")
+        self.assertEqual(legato["componentData"]["type"], "masterNativeActiveText_LEGATO_176x56")
 
         # Second apply is idempotent
         second_created = apply_master_native_controls(tui, {}, ctx)
@@ -172,13 +186,13 @@ class MasterNativeControlsTests(unittest.TestCase):
         }
         ctx = DummyContext(tui, self.params_doc, self.skins_dir)
         created = apply_master_native_controls(tui, {}, ctx)
-        self.assertEqual(created, 46, "All standard native controls, output widgets and panel buttons created after purge")
+        self.assertEqual(created, 47, "All standard native controls, output widgets, the QUALITY caption and panel buttons created after purge")
         tab_components = tui["pageData"]["tabs"][0]["componentDefinition"]["componentsData"]
-        self.assertEqual(len(tab_components), 47, "Marker plus native editor, output and navigation widgets")
+        self.assertEqual(len(tab_components), 55, "Seven block panels, the marker, native editor, output and navigation widgets")
 
-        # Verify Master Transpose now has correct geometry (856 110 134 112 in tab space), not legacy 23 45 278 107
+        # Verify Master Transpose now has the layout geometry (904 98 116 152 in tab space), not legacy 23 45 278 107
         transpose = next(c for c in tab_components if c["componentData"]["name"] == "Master Transpose")
-        self.assertEqual(transpose["bounds"]["bounds"], "856 110 134 112")
+        self.assertEqual(transpose["bounds"]["bounds"], "904 98 116 152")
 
     def test_subpage_exclusivity_metadata(self):
         specs = get_master_control_specs()
@@ -325,9 +339,9 @@ class MasterNativeControlsTests(unittest.TestCase):
             tui = json.loads((skins / "TUI.json").read_text())
             from PIL import Image
             with Image.open(skins / "master_peak_scale.png") as plate:
-                self.assertEqual(plate.size, (100, 128))
-                for box in ((0, 3, 36, 17), (0, 19, 36, 33), (0, 38, 36, 52), (0, 77, 36, 91),
-                            (38, 102, 64, 124), (68, 102, 94, 124)):
+                self.assertEqual(plate.size, (100, 154))
+                for box in ((0, 3, 36, 17), (0, 24, 36, 38), (0, 49, 36, 63), (0, 98, 36, 112),
+                            (38, 129, 64, 151), (68, 129, 94, 151)):
                     self.assertGreater(len(plate.crop(box).getcolors()), 1)
         master = next(tab for tab in tui["pageData"]["tabs"] if tab["tabName"] == "Master")
         widgets = master["componentDefinition"]["componentsData"]
@@ -347,7 +361,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                 self.assertEqual(gates, expected_gates)
                 self.assertEqual(widget["bounds"]["showWhenDataModelInvalid"], "Hide")
                 x, y, width, height = spec["rect"]
-                self.assertEqual(widget["bounds"]["bounds"], f"{x} {y - 110} {width} {height}")
+                self.assertEqual(widget["bounds"]["bounds"], f"{x} {y} {width} {height}")
                 binding = {link["key"]: link["value"] for link in widget["handle remapping"]["map"]}
                 self.assertEqual(binding["Data"], f"Parameter {indices[spec['key']]}")
                 if spec["widget"] != "toggle":
@@ -370,7 +384,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                     self.assertGreaterEqual(min(cx, cy), 0)
                     self.assertLessEqual(cx + cw, width)
                     self.assertLessEqual(cy + ch, height)
-                if spec["widget"].startswith("dial_") and spec["key"] not in MASTER_INTEGER_FIELDS:
+                if spec["widget"].startswith("dial_") and spec["key"] not in MASTER_NUMBER_FIELDS:
                     knob = next(c for c in definition["componentsData"] if c["componentData"]["type"] == "Knob")
                     _, _, kw, kh = map(int, knob["bounds"]["bounds"].split())
                     self.assertEqual(kw, kh)
@@ -383,7 +397,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                     self.assertNotEqual(data["offImage"], data["onImage"])
                 else:
                     popup = "fx editor choice menu" if spec["widget"] == "selector" else "fx editor number menu"
-                    trigger = "Mouse Down" if spec["widget"] in ("selector", "number") or spec["key"] in MASTER_INTEGER_FIELDS else "Double Click"
+                    trigger = "Mouse Down" if spec["widget"] in ("selector", "number") or spec["key"] in MASTER_NUMBER_FIELDS else "Double Click"
                     self.assertEqual({(a["onAction"], a["handler"], a["handleName"], a["additionalData"]) for a in actions},
                                      {(trigger, "Show Overlay", "Data", popup),
                                       ("Enter Pressed", "Show Overlay", "Data", popup)})
@@ -409,7 +423,7 @@ class MasterNativeControlsTests(unittest.TestCase):
             self.assertEqual({m["key"]: m["value"] for m in item["handle remapping"]["map"]}, links)
             return definitions.get(item["componentData"]["type"], item)
 
-        peaks = output("Master Peak Meters", "14 166 100 128", {
+        peaks = output("Master Peak Meters", "20 158 100 154", {
             "Data": "Parameter 2977", "PeakL": "Parameter 2977", "PeakR": "Parameter 2978",
             "HoldL": "Parameter 2979", "HoldR": "Parameter 2980",
         })
@@ -418,15 +432,15 @@ class MasterNativeControlsTests(unittest.TestCase):
         meters = [c["componentData"]["data"] for c in peaks["componentsData"] if c["componentData"]["type"] == "Meter"]
         self.assertEqual([(m["direction"], m["peakHandle"], m["peakHoldHandle"]) for m in meters],
                          [("Up", "PeakL", "HoldL"), ("Up", "PeakR", "HoldR")])
-        voice = output("Master Voice Meter", "400 552 382 44", {
+        voice = output("Master Voice Meter", "388 550 364 44", {
             "Peak": "Parameter 2981", "Data": "Parameter 2982",
         })
         self.assertEqual([skin.leaf_model(c, definitions)["type"] for c in voice["componentsData"]], ["Meter", "Label"])
         self.assertEqual(voice["componentsData"][0]["componentData"]["data"]["direction"], "Right")
-        limiter = output("Master Output Limiter", "122 238 96 56", {
+        limiter = output("Master Output Limiter", "132 256 140 56", {
             "Data": "Parameter 2983",
         }, focus=True)
-        clips = [output("Master Clip " + label, "14 110 100 56", {"Data": "Parameter 2985"},
+        clips = [output("Master Clip " + label, "20 98 100 56", {"Data": "Parameter 2985"},
                         (f"IndexedEnabling/{state}/2/Parameter 2984",), focus=True)
                  for state, label in enumerate(("Off", "On"))]
         self.assertEqual(limiter["componentsData"][0]["componentData"]["type"], "Button")

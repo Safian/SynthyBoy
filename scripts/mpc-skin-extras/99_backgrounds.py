@@ -30,8 +30,10 @@ KNOWN = {
     "lfo1": ("LFO", CANVAS_ASSET, 900, 2, "0b1029"),
     "mod": ("Mod", CANVAS_ASSET, 900, 20, "0b1022"),
     "filter1": ("Filter", CANVAS_ASSET, 900, 95, "171c35"),
-    "master": ("Master", CANVAS_ASSET, 960, 386, "141a38"),
-    "voice": ("Voice", CANVAS_ASSET, 792, 574, "0c1023"),
+    # Master: in the title strip of a block panel right of its title, on both sides (the colour is close to the panel fill); Voice: in the gutter between RANDOM and SCALING
+    # (close to the canvas). No control lies there (master_layout.json, voice_layout.json).
+    "master": ("Master", CANVAS_ASSET, 600, 74, "141a38"),
+    "voice": ("Voice", CANVAS_ASSET, 509, 500, "0c1023"),
     "mixer": ("Mix", CANVAS_ASSET, 900, 18, "141a35"),
     "fx": ("FX", CANVAS_ASSET, 900, 2, "0c1032"),
     "macros": ("Macros", CANVAS_ASSET, 900, 20, "0b1028"),
@@ -107,8 +109,7 @@ def apply(tui, qlinks, ctx):
                 import native_ui_params
                 master_view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
                 children.extend(caption_entries("master_header", prefix="Native Caption master header"))
-                children.extend(caption_entries("master_tuning", prefix="Native Caption master tuning",
-                                                gates=(f"IndexedEnabling/2/3/Parameter {master_view}",)))
+                # The block titles of both sides are part of their native panels (native_master).
                 gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)
             children.extend(caption_entries(view, prefix="Native Caption " + view, gates=gates))
         bg = root["backgroundData"]

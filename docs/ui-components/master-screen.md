@@ -3,18 +3,27 @@
 ## What it is
 The Master page: two sides switched by MAIN / TUNING & MPE buttons. MAIN: OUTPUT (volume, peak meters, spread, stereo knob, voice override list), PITCH (tune, transpose, bend up and down, link), VOICES (polyphony, legato switches, same-note and steal lists, velocity tracking, voice meter, pad pressure), GLIDE (time, slope, always, scaled, the curve display). TUNING: SCALE (type, key, mode), TUNING (A4, scale, MTS options), MPE (on, bend range, macro, Y options).
 
+![Master MAIN, synthetic preview](../screens/master.jpg)
+
+Synthetic preview of the 2026-11-26 layout (`scripts/render_ui_screen_master_preview.py`, `--out-dir` also renders TUNING & MPE and the Key 61 generation), not a hardware capture. Design record: [MASTER-VOICE-UI-REDESIGN-2026-11-26](../review/MASTER-VOICE-UI-REDESIGN-2026-11-26.md).
+
+## Layout (2026-11-26)
+Every block is a titled native panel ([`components/native/panel`](../../components/native/panel/panel.py)) and one Q group. MAIN is a 2 x 2 grid in Q-Link order: OUTPUT (CLIP over the meter column; VOLUME, SPREAD, STEREO, VOICE OVERRIDE in one row; the touch-only strip LIMIT, QUALITY: NO SMOOTHING, OVERSAMPLE 4X), PITCH (TUNE, TRANSPOSE, BEND UP, BEND DOWN; LINK under the bend fields), VOICES (POLY, LEGATO, POLY LEG, PHASE LEG; VEL TRACK, SAME NOTE, STEAL; PAD PRESS, PAD %, voice meter), GLIDE (the curve left, TIME and SLOPE over ALWAYS and SCALED right). TUNING & MPE is three full-width rows: SCALE, TUNING, MPE (two rows). Numbers are stacked name / value boxes, lists titled selectors, switches ActiveText at 19 px.
+
+Geometry: [`scripts/native_master/master_layout.json`](../../scripts/native_master/master_layout.json) (tab coordinates) is the only source. The skin reads it; [`scripts/gen-master-native-layout.py`](../../scripts/gen-master-native-layout.py) generates [`master_native_layout.h`](../../shell-mpc/ui/master_native_layout.h) for `MasterScreen::layout()` (`at (r)` offsets a layout rectangle onto the page); `test_native_master.py` fails on a stale header.
+
 ## Header and types
 `shell-mpc/ui/voice_master.h`: `MasterScreen : Composite`, `MasterScreen::Side { SideMain = 0, SideTuning = 1 }`; displays in [voice-displays.md](voice-displays.md).
 
 ## State
 Members: `sideMain`, `sideTuning` (`MenuButton`); OUTPUT: `clip` (`ClipReadout`), `volume`, `spread`, `stereoRouting` (`Knob`), `meters`, `voiceOverride` (`LedList`), `outputLimiter`, `noSmoothing`, `oversample4x` (`LedToggle`); PITCH: `tune` (`Knob`), `transpose`, `bendUp`, `bendDown` (`NumberField`), `bendLink`; VOICES: `polyphony`, `velocityTrack`, `padAmount` (`NumberField`), `legato`, `polyLegato`, `phaseLegato`, `padPressure` (`LedToggle`), `sameNote`, `stealPriority` (`LedList`), `voiceMeter`; GLIDE: `portaTime`, `portaSlope` (`Knob`), `portaAlways`, `portaScaled`, `portaCurve`; SCALE: `scaleType`, `scaleKey` (`Stepper`: 20 scales, 12 keys), `scaleMode` (`LedList`), the KEY input activation button; TUNING: `tuningA4` (`NumberField`), `tuningScale` (`LedList`), `mtsEsp`, `mtsNoteOn`; MPE: `mpeOn`, `mpeYModwheel`, `mpeBendToX`, `mpeYBipolar`, `mpeBend`, `mpeMacro`; `groups[kMaxGroups = 9]`.
-API: `side()`, `setSide (s)`, static `sideOfGroup (g)`, `numGroups()`, `activeGroup()`, `setActiveGroup (g)`, static `groupName (g)` (OUTPUT, PITCH, VOICES, VOICE OPTS, GLIDE, SCALE, TUNING, MPE, MPE Y), `setBendLinked (bool)` (LINK on: BEND DOWN hidden, BEND UP reads BEND), `setMpeOn (bool)` (MPE off: MPE BEND and BEND TO X hidden), constant `kFirstTuningGroup` 5, static `blockName (b)`, `turnQ`. Constants `kBlocks` 7, `kHeaderH` 64, `kTopBlockH` 228, `kTopLeftW` 640, `kBottomLeftW` 780.
+API: `side()`, `setSide (s)`, static `sideOfGroup (g)`, `numGroups()`, `activeGroup()`, `setActiveGroup (g)`, static `groupName (g)` (OUTPUT, PITCH, VOICES, VOICE OPTS, GLIDE, SCALE, TUNING, MPE, MPE Y), `setBendLinked (bool)` (LINK on: BEND DOWN hidden, BEND UP reads BEND), `setMpeOn (bool)` (MPE off: MPE BEND and BEND TO X hidden), constant `kFirstTuningGroup` 5, static `blockName (b)`, `blockRect (b)` (the panel of `masterlayout::kBlock`), `at (r)`, `turnQ`. Constants `kBlocks` 7, `kBlockTitleH` 32.
 
 ## Size
 `minSize()` 1280 x 628.
 
 ## Touch and knob behaviour
-The MPC host owns the knobs, fields, lists, toggles, meters, CLIP and both side selectors. Their C++ objects retain geometry, formatting and Q/state data outside the overlay children. Native labels supply the page title and section names on both panels. The overlay draws the glide curve and hardware Q-Link group indicators. Native panel callbacks select MAIN or TUNING; parameter callbacks use their original engine indices. A touch on a native aperture can select its four-knob Q group without editing the value.
+The MPC host owns the knobs, fields, lists, toggles, meters, CLIP and both side selectors. Their C++ objects retain geometry, formatting and Q/state data outside the overlay children. Native titled panels supply the section cards and names on both sides; a native label supplies the page title. The overlay draws the glide curve and hardware Q-Link group indicators. Native panel callbacks select MAIN or TUNING; parameter callbacks use their original engine indices. A touch on a native aperture can select its four-knob Q group without editing the value.
 
 Parent enabled/inactive state explicitly propagates to the adapters. Disabled MPE and linked BEND parameters leave their Q groups; their stored values remain intact.
 
@@ -42,7 +51,7 @@ if (c.kind == ChangeKind::Value && c.id == 700) volNorm = c.value;
 ```
 
 ## Used on
-`shell-mpc/overlay/master_ui.h` (`MasterUi`, `kElementPage` 9; `T::Knob, Number, Toggle, Stepper, List, Inert`). [Current Master hardware capture](../screens/master.jpg).
+`shell-mpc/overlay/master_ui.h` (`MasterUi`, `kElementPage` 9; `T::Knob, Number, Toggle, Stepper, List, Inert`). [Synthetic preview of MAIN](../screens/master.jpg).
 
 ## Limits and pitfalls
 - The pad pressure layer (`padPressure`, `padAmount`), the output limiter (`outputLimiter`) and the quality switches (`noSmoothing`, `oversample4x`) are not Q members.

@@ -17,6 +17,7 @@
 #include "core.h"
 #include "led_list.h"
 #include "led_toggle.h"
+#include "master_native_layout.h"
 #include "native_apertures.h"
 #include "qgroup.h"
 #include "theme.h"
@@ -109,8 +110,10 @@ struct VoiceMeterReadout : NativeReadoutArea
 };
 
 // ===============================================================================================================================
-/** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER, and the two sides MAIN and TUNING & MPE) and the blocks of the side that is on, each ONE Q group (VOICES and the last block of the second
-    side two):  side MAIN: OUTPUT, PITCH (top row), VOICES, GLIDE (bottom row);  side TUNING & MPE: SCALE, TUNING, MPE (a group of at most three in each of its two rows).
+/** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER, and the two sides MAIN and TUNING & MPE) and the titled block panels of the side that is on, each ONE Q group (VOICES and the last
+    block of the second side two):  side MAIN: OUTPUT, PITCH (top row), VOICES, GLIDE (bottom row), so the Q-Links 1 .. 16 run in reading order;  side TUNING & MPE: the rows SCALE, TUNING, MPE (MPE and MPE Y).
+    Every rectangle comes from scripts/native_master/master_layout.json through the generated master_native_layout.h, the data the skin places the native controls and panels with (redesign 2026-11-26,
+    docs/review/MASTER-VOICE-UI-REDESIGN-2026-11-26.md). The skin draws the panels, their titles, the controls and the meters; the overlay draws the glide curve and the Q frames.
     Bold cut (owner 2026-11-21): LINK is a touch-only toggle inside the PITCH block (no Q slot, no group of its own: five groups on MAIN); what does not apply is HIDDEN, not dimmed: BEND DOWN while LINK is on
     (the engine then uses the BEND UP range for both directions, own_engine.cpp PitchBend), MPE BEND and BEND TO X while MPE is off (the engine reads them only for a member channel of MPE). The cells of a row and
     the members of its Q group close up from the left, so the chips are always 1, 2, 3 in the order of the live controls (setBendLinked / setMpeOn, called by the page from the instance).
@@ -119,9 +122,7 @@ struct VoiceMeterReadout : NativeReadoutArea
 class MasterScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 9, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8;   // the title strip: the name of the block, then the lane of the index chips with a gap to the name
-    static constexpr int kTopBlockH = 228, kTopLeftW = 640, kBottomLeftW = 780;   // the first row of MAIN: OUTPUT (the knobs) and PITCH; the second: VOICES (the widest) and GLIDE
-    static constexpr int kScaleRowH = 64;
+    static constexpr int kMaxGroups = 9, kBlocks = masterlayout::kBlocks, kBlockTitleH = 32;   // the title strip of a block panel; a touch there selects the block's group
     enum Side : int { SideMain = 0, SideTuning = 1 };
 
     MenuButton sideMain { "MAIN", MenuButton::Icon::None };
@@ -377,7 +378,7 @@ public:
         }
         else
         {
-            areas = { Rect { rect_.x + 704, rect_.y + 4, 520, 56 }, scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
+            areas = { at (masterlayout::kScaleInput), scaleType.rect(), scaleKey.rect(), scaleMode.rect(), tuningA4.rect(), tuningScale.rect(),
                       mtsEsp.rect(), mtsNoteOn.rect(), mpeOn.rect(), mpeMacro.rect(), mpeYModwheel.rect(),
                       mpeYBipolar.rect(), mpeOn_ ? mpeBend.rect() : Rect {}, mpeOn_ ? mpeBendToX.rect() : Rect {} };
         }
@@ -408,29 +409,11 @@ public:
                 groups[i].drawIdle (sb);
     }
 
-    bool blockVisible (int b) const noexcept { return side_ == SideMain ? b < 4 : b >= 4; }
-    /** The rectangle of block b (0 .. 6) on its side. */
-    Rect blockRect (int b) const noexcept
-    {
-        const int m = kBlockGap, y0 = rect_.y + kHeaderH + 8, h = rect_.bottom() - 8 - y0, w = rect_.w - 2 * m;
-        if (b < 4)
-        {
-            const int topH = kTopBlockH, botH = h - m - topH, lw = b < 2 ? kTopLeftW : kBottomLeftW;
-            const int y = b < 2 ? y0 : y0 + topH + m, bh = b < 2 ? topH : botH;
-            return b % 2 == 0 ? Rect { rect_.x + m, y, lw, bh } : Rect { rect_.x + m + lw + m, y, w - lw - m, bh };
-        }
-        const int topH = kBlockTitleH + kScaleRowH + kBlockPad;
-        const int botH = std::min (260, h - m - topH);
-        if (b == 4)
-            return { rect_.x + m, y0, w, topH };
-        const int bw = (w - m) / 2;
-        return b == 5 ? Rect { rect_.x + m, y0 + topH + m, bw, botH } : Rect { rect_.x + m + bw + m, y0 + topH + m, rect_.right() - m - (rect_.x + m + bw + m), botH };
-    }
-    Rect inner (int b) const noexcept
-    {
-        const Rect r = blockRect (b);
-        return { r.x + kBlockPad, r.y + kBlockTitleH, std::max (0, r.w - 2 * kBlockPad), std::max (0, r.h - kBlockTitleH - kBlockPad) };
-    }
+    bool blockVisible (int b) const noexcept { return b >= 0 && b < kBlocks && masterlayout::kBlockOnTuning[b] == (side_ == SideTuning); }
+    /** The rectangle of block b (0 .. 6: the titled panel the skin draws) on its side. */
+    Rect blockRect (int b) const noexcept { return b >= 0 && b < kBlocks ? at (masterlayout::kBlock[b]) : Rect {}; }
+    /** A rectangle of master_native_layout.h (tab coordinates) on the page. */
+    Rect at (Rect r) const noexcept { return { rect_.x + r.x, rect_.y + r.y, r.w, r.h }; }
 
 protected:
     std::vector<Component*> sideMainComponents()
@@ -445,103 +428,62 @@ protected:
 
     void layout() override
     {
-        const int g = kGap, lane = kQLane, th = led::kRowH;
-        sideMain.place ({ rect_.x + 300, rect_.y + 4, 160, 56 });
-        sideTuning.place ({ rect_.x + 468, rect_.y + 4, 220, 56 });
-
-        // ---- side MAIN
-        {   // OUTPUT: the meters (the scale in a column of its own) at the left; at the right the Q group of four on one line (the three knobs VOLUME, SPREAD, STEREO, one size, and the voice override as a LED list) over a strip of three LED switches
-            // that are outside the Q frame (touch only): LIMIT (the plugin's output limiter) and the QUALITY pair NO SMOOTHING, OVERSAMPLE 4X (quality.* of the engine; the caption QUALITY stands in front of the pair)
-            const Rect in = inner (0);
-            const int mw = 100, stripH = th, upperH = std::max (th, in.h - stripH - 4);
-            const int clipH = 56;
-            clip.place ({ in.x, in.y, mw, clipH });
-            meters.place ({ in.x, in.y + clipH, mw, in.h - clipH });
-            const int lw = 150, kx = in.x + mw + 8, kw = (in.right() - lw - g - kx - 2 * g) / 3;
-            volume.place ({ kx, in.y, kw, upperH });
-            spread.place ({ kx + kw + g, in.y, kw, upperH });
-            stereoRouting.place ({ kx + 2 * (kw + g), in.y, kw, upperH });
-            voiceOverride.place ({ in.right() - lw, in.y, lw, std::min (upperH, 2 * 64) });
-            const int sy = in.bottom() - stripH;
-            const int w0 = std::max (LedToggle::widthFor (outputLimiter.state.label), 96), w1 = LedToggle::widthFor (noSmoothing.state.label), w2 = LedToggle::widthFor (oversample4x.state.label);
-            outputLimiter.place ({ kx, sy, w0, stripH });
-            qualityCaption_ = { kx + w0 + 3 * g, sy, 70, stripH };
-            noSmoothing.place ({ qualityCaption_.right(), sy, w1, stripH });
-            oversample4x.place ({ qualityCaption_.right() + w1 + g, sy, std::min (w2, std::max (0, in.right() - (qualityCaption_.right() + w1 + g))), stripH });
-        }
-        {   // PITCH: one row of four cells at one height (TUNE as a medium knob with its text beside it, TRANSPOSE, BEND UP, BEND DOWN: the PITCH Q group; BEND DOWN hidden while LINK is on), LINK as a touch-only LED toggle under the bend fields (no Q slot)
-            const Rect in = inner (1);
-            const int tw = 190, cw = (in.w - tw - 3 * g) / 3, rowH = std::max (th, in.h - lane - th);
-            tune.place ({ in.x, in.y, tw, rowH });
-            transpose.place ({ in.x + tw + g, in.y, cw, rowH });
-            const int bx = in.x + tw + g + 2 * (cw + g);
-            const int ux = in.x + tw + g + cw + g;
-            bendUp.place ({ ux, in.y, bendLinked_ ? in.right() - ux : cw, rowH });
-            bendDown.place (bendLinked_ ? Rect {} : Rect { bx, in.y, in.right() - bx, rowH });
-            bendLink.place ({ bendUp.rect().x, in.y + rowH + lane, LedToggle::widthFor (bendLink.state.label), th });
-        }
-        {   // VOICES: row 1 four cells (POLY, LEGATO, POLY LEG, PHASE LEG: VOICES 1 Q group); row 2 VEL TRACK, SAME NOTE, STEAL (VOICES 2): the two lists each as wide as their options need (rows of 56 px under the title in the chip lane);
-            // row 3 the pad pressure layer (PAD PRESS, PAD %) and the voice meter across the rest
-            const Rect in = inner (2);
-            const int cw = (in.w - 3 * g) / 4, r2H = 2 * th;
-            auto col = [&] (int c) { return in.x + c * (cw + g); };
-            const int y1 = in.y, y2 = y1 + th + lane, y3 = y2 + r2H + lane;
-            polyphony.place ({ col (0), y1, cw, th });
-            legato.place ({ col (1), y1, cw, th });
-            polyLegato.place ({ col (2), y1, cw, th });
-            phaseLegato.place ({ col (3), y1, in.right() - col (3), th });
-            const int stealW = 345, sameW = in.w - cw - stealW - 2 * g;   // STEAL: five options in three columns of two rows; SAME NOTE: three in two columns
-            velocityTrack.place ({ in.x, y2, cw, r2H });
-            sameNote.place ({ in.x + cw + g, y2, sameW, r2H });
-            stealPriority.place ({ in.right() - stealW, y2, stealW, r2H });
-            padPressure.place ({ col (0), y3, cw, th });
-            padAmount.place (padOn_ ? Rect { col (1), y3, cw, th } : Rect { 0, 0, 0, 0 });   // hidden while PAD PRESS is off
-            voiceMeter.place ({ col (2), y3 + (th - 44) / 2, in.right() - col (2), 44 });
-        }
-        {   // GLIDE: the two knobs over ALWAYS and SCALED (the four cells of the Q group in the left half), the curve display tall at the right
-            const Rect in = inner (3);
-            const int lw = (in.w - g) / 2 - 16, cw = (lw - g) / 2, rowH = std::max (th, in.h - lane - th);
-            portaTime.place ({ in.x, in.y, cw, rowH });
-            portaSlope.place ({ in.x + cw + g, in.y, lw - cw - g, rowH });
-            portaAlways.place ({ in.x, in.y + rowH + lane, cw, th });
-            portaScaled.place ({ in.x + cw + g, in.y + rowH + lane, lw - cw - g, th });
-            portaCurve.place ({ in.x + lw + g, in.y, in.w - lw - g, in.h });
-        }
-        // ---- side TUNING & MPE
-        {   // SCALE: the two long lists as steppers and MODE as a LED list in a row spanning the width
-            const Rect in = inner (4);
-            const int rowH = kScaleRowH, typeW = in.w * 36 / 100, keyW = in.w * 26 / 100;
-            scaleType.place ({ in.x, in.y, typeW, rowH });
-            scaleKey.place ({ in.x + typeW + g, in.y, keyW, rowH });
-            scaleMode.place ({ in.x + typeW + keyW + 2 * g, in.y, in.right() - (in.x + typeW + keyW + 2 * g), rowH });
-        }
-        {   // TUNING: A4 and the tuning list (four options, all visible) in the first row, the two MTS switches under them
-            const Rect in = inner (5);
-            const int rowH = std::max (2 * th, in.h - lane - th), a4W = 200;
-            tuningA4.place ({ in.x, in.y, a4W, rowH });
-            tuningScale.place ({ in.x + a4W + g, in.y, in.w - a4W - g, rowH });
-            const int cw = (in.w - g) / 2;
-            mtsEsp.place ({ in.x, in.y + rowH + lane, cw, th });
-            mtsNoteOn.place ({ in.x + cw + g, in.y + rowH + lane, in.right() - (in.x + cw + g), th });
-        }
-        {   // MPE: MPE, MPE BEND (MPE on only), XYZ TO MACROS (three options side by side); Y TO WHEEL, BEND TO X (MPE on only), Y BIPOLAR under them
-            const Rect in = inner (6);
-            const int rowH = std::max (th, in.h - lane - th), cw = (in.w - 2 * g) / 3;   // the first row takes the room, the three switches stand at the bottom (no empty strip under them)
-            const int y2 = in.y + rowH + lane;
-            // Keep native cells fixed while MPE-dependent bindings are inactive.
-            mpeOn.place ({ in.x, in.y, cw, rowH });
-            mpeBend.place ({ in.x + cw + g, in.y, cw, rowH });
-            mpeMacro.place ({ in.x + 2 * (cw + g), in.y, in.right() - (in.x + 2 * (cw + g)), std::min (rowH, 2 * th - 8) });
-            mpeYModwheel.place ({ in.x, y2, cw, th });
-            mpeBendToX.place ({ in.x + cw + g, y2, cw, th });
-            mpeYBipolar.place ({ in.x + 2 * (cw + g), y2, in.right() - (in.x + 2 * (cw + g)), th });
-        }
+        namespace L = masterlayout;
+        sideMain.place (at (L::kSideMain));
+        sideTuning.place (at (L::kSideTuning));
+        // ---- side MAIN. OUTPUT: CLIP over the meters at the left, the Q group VOLUME, SPREAD, STEREO, VOICE OVERRIDE in one row, under it the touch-only strip LIMIT, QUALITY: NO SMOOTHING, OVERSAMPLE 4X
+        clip.place (at (L::kOutputClip));
+        meters.place (at (L::kOutputMeters));
+        volume.place (at (L::kVolume));
+        spread.place (at (L::kStereoSpread));
+        stereoRouting.place (at (L::kStereoRouting));
+        voiceOverride.place (at (L::kVoiceOverride));
+        outputLimiter.place (at (L::kOutputLimiter));
+        noSmoothing.place (at (L::kQualityNoSmoothing));
+        oversample4x.place (at (L::kQualityOversample4x));
+        // PITCH: TUNE, TRANSPOSE, BEND UP, BEND DOWN in one row (LINK on: BEND takes both bend cells), LINK under the bend fields
+        tune.place (at (L::kTune));
+        transpose.place (at (L::kTranspose));
+        bendUp.place (at (bendLinked_ ? L::kLinkedBend : L::kBendRange));
+        bendDown.place (bendLinked_ ? Rect {} : at (L::kBendDownRange));
+        bendLink.place (at (L::kBendDownLink));
+        // VOICES: POLY, LEGATO, POLY LEG, PHASE LEG (the Q group); VEL TRACK, SAME NOTE, STEAL; PAD PRESS, PAD % (hidden while PAD PRESS is off) and the voice meter
+        polyphony.place (at (L::kPolyphony));
+        legato.place (at (L::kLegato));
+        polyLegato.place (at (L::kPolyLegato));
+        phaseLegato.place (at (L::kVoicePhaseLegato));
+        velocityTrack.place (at (L::kVelocityTrack));
+        sameNote.place (at (L::kVoiceSameNote));
+        stealPriority.place (at (L::kVoiceStealPriority));
+        padPressure.place (at (L::kShellPadPressure));
+        padAmount.place (padOn_ ? at (L::kShellPadPressureAmount) : Rect {});
+        voiceMeter.place (at (L::kOutputVoiceMeter));
+        // GLIDE: the curve at the left (display left, controls right), TIME and SLOPE over ALWAYS and SCALED at the right
+        portaCurve.place (at (L::kGlideCurve));
+        portaTime.place (at (L::kPortamentoTime));
+        portaSlope.place (at (L::kPortamentoSlope));
+        portaAlways.place (at (L::kPortamentoAlways));
+        portaScaled.place (at (L::kPortamentoScaled));
+        // ---- side TUNING & MPE: the rows SCALE (SCALE, KEY, MODE), TUNING (A4, TUNING, MTS-ESP, NOTE-ON), MPE (MPE, MPE BEND, XYZ TO MACROS; Y TO WHEEL, BEND TO X, Y BIPOLAR)
+        scaleType.place (at (L::kScaleType));
+        scaleKey.place (at (L::kScaleKey));
+        scaleMode.place (at (L::kScaleMode));
+        tuningA4.place (at (L::kTuningA4));
+        tuningScale.place (at (L::kTuningScale));
+        mtsEsp.place (at (L::kTuningMtsEsp));
+        mtsNoteOn.place (at (L::kTuningMtsNoteOnOnly));
+        // Keep native cells fixed while MPE-dependent bindings are inactive.
+        mpeOn.place (at (L::kMpeOn));
+        mpeBend.place (at (L::kMpeBendRange));
+        mpeMacro.place (at (L::kMpeXyzMacro));
+        mpeYModwheel.place (at (L::kMpeYModwheel));
+        mpeBendToX.place (at (L::kMpeBendToX));
+        mpeYBipolar.place (at (L::kMpeYBipolar));
     }
 
 private:
     int side_ = SideMain, activeGroup_ = 0;
     bool bendLinked_ = false, mpeOn_ = true, padOn_ = true;   // what the page has read from the instance (the first picture of a bare screen shows every cell)
-    Rect qualityCaption_;   // the small caption of the QUALITY pair in the OUTPUT block
 
     /** Hides what does not apply (hidden, not dimmed), closes the Q groups up and lays the blocks out again. */
     void applyConditions()

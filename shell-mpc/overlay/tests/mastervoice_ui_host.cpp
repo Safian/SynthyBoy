@@ -133,7 +133,7 @@ void testVoiceLayout()
             inside = inside && v.blockRect (kVoiceGroupBlock[g]).contains (v.groups[g].rect());
     }
     check (inside, "the Q groups lie in their blocks and nothing else is in their frames");
-    check (v.grid.rect().h >= 230 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
+    check (v.grid.rect().h >= 200 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
     check (v.stripRect().y >= v.grid.rect().bottom() && v.blockRect (0).y >= v.stripRect().bottom(), "the strip of the step lies between the grid and the blocks");
     check (v.randDetune10x.rect().bottom() <= v.blockRect (0).bottom(), "the blocks hold their controls");
     {   // the targets: five LED toggles in two columns, the fifth across the block; none lower than 56 px, none overlapping, all inside the TARGETS block
@@ -401,7 +401,7 @@ void testVoiceNativeControls()
     }
     check (converted == 14 && r.inst.writes == before && ! r.inst.fullOpen,
            "the standalone Voice owns fourteen native apertures and no overlay parameter writes from them");
-    check (r.ui.covers (140, VoiceUi::kTabY + 455) && r.ui.covers (1180, VoiceUi::kTabY + 580),
+    check (r.ui.covers (138, VoiceUi::kTabY + 455) && r.ui.covers (1180, VoiceUi::kTabY + 580),
            "RAND gutter and the empty sixth TARGETS cell have no host aperture");
 
     const ui::Rect rPanR = v.randPan.rect();
@@ -459,18 +459,18 @@ void testVoiceNativeControls()
 
     // 7. Offline regression evidence for failed XL contact geometry:
     // Slot centers and bounds on screen (rPanR and rDetR are already in screen coordinates since tab origin Y = 110 is applied in place())
-    const int panCenterX = rPanR.x + rPanR.w / 2;         // 14 + 62 = 76
-    const int panCenterY = rPanR.y + rPanR.h / 2;         // 518 + 65 = 583
-    check (panCenterX == 76 && panCenterY == 583, "Voice Rand Pan screen center is (76, 583) matching native-input probe");
+    const int panCenterX = rPanR.x + rPanR.w / 2;         // 20 + 58 = 78 (redesign 2026-11-26; the probe was at 76, 583)
+    const int panCenterY = rPanR.y + rPanR.h / 2;         // 516 + 73 = 589
+    check (panCenterX == 78 && panCenterY == 589, "Voice Rand Pan screen center is (78, 589), the voice_layout.json cell");
     check (! r.ui.covers (panCenterX, panCenterY), "overlay leaves Voice Rand Pan center transparent for host touch");
 
-    // Detune slot: x = 142, w = 124, center X = 204
+    // Detune slot: x = 140, w = 116, center X = 198
     const ui::Rect rDetR = v.randDetune.rect();
-    const int detCenterX = rDetR.x + rDetR.w / 2;         // 142 + 62 = 204
-    check (detCenterX == 204, "Voice Rand Detune center X is 204");
+    const int detCenterX = rDetR.x + rDetR.w / 2;         // 140 + 58 = 198
+    check (detCenterX == 198, "Voice Rand Detune center X is 198");
 
     // The failed XL contact at (160, 519):
-    // x = 160 falls in Rand Detune (142..266), NOT Rand Pan (14..138)
+    // x = 160 falls in Rand Detune (140..256), NOT Rand Pan (20..136)
     check (rDetR.contains (160, 519), "targeted.py point (160, 519) falls inside Rand Detune slot");
     check (! rPanR.contains (160, 519), "targeted.py point (160, 519) is outside Rand Pan slot (proves missed target)");
 }
@@ -836,8 +836,8 @@ void testStandaloneMasterNativeControls()
     check (! m.outputLimiter.state.on, "the overlay LIMIT gesture cannot write the shell setting");
 
     // The active cells belong to the host. A hidden cell neither cuts an aperture nor edits the shell.
-    const ui::Rect pressureBounds { 14, 656, 189, 56 };
-    const ui::Rect amountBounds { 207, 656, 189, 56 };
+    const ui::Rect pressureBounds = m.at (ui::masterlayout::kShellPadPressure);         // the rectangles the skin packages (master_layout.json)
+    const ui::Rect amountBounds = m.at (ui::masterlayout::kShellPadPressureAmount);
     const int pressureX = pressureBounds.x + pressureBounds.w / 2;
     const int amountX = amountBounds.x + amountBounds.w / 2;
     const int padsY = amountBounds.y + amountBounds.h / 2;
