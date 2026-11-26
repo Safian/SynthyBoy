@@ -168,6 +168,11 @@ public:
                 {
                     // done: the two channels ran in one loop with one setup
                 }
+                else if (sameLR && !scalarOnly)
+                {
+                    // both channels with the same parameters: one setup per piece for the two (scalarOnly keeps the separate passes below, for the measurements and the tests)
+                    ClassicFilter::processTwin (cl[0], cl[1], srcL, outL, srcR, outR, n, prevP, curP, t0);
+                }
                 else
                 {
                 cl[0].process (srcL, outL, n, prevP, curP, t0);

@@ -120,11 +120,7 @@ public:
             const int pos = t0 + i;
             const int m = std::min (8 - (pos % 8), n - i);
             const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
-            ClassicParams p = b;
-            p.cutoffHz = a.cutoffHz * std::pow (b.cutoffHz / std::max (a.cutoffHz, 1.0f), t);
-            p.res = lerp (a.res, b.res, t);
-            p.driveDb = lerp (a.driveDb, b.driveDb, t);
-            p.blendRaw = lerp (a.blendRaw, b.blendRaw, t);
+            const ClassicParams p = pieceParams (a, b, t);
             block (in + i, out + i, m, p);
             i += m;
         }
@@ -136,6 +132,61 @@ public:
     {
         rampA = o.rampA; rampB = o.rampB; rampP = o.rampP; rampPa = o.rampPa; rampPb = o.rampPb; rampValid = o.rampValid; rampKey = o.rampKey;
         svfRampA = o.svfRampA; svfRampB = o.svfRampB; svfRampP = o.svfRampP; svfRampPa = o.svfRampPa; svfRampPb = o.svfRampPb; svfRampValid = o.svfRampValid; svfKey = o.svfKey;
+    }
+    /** The memo of another channel with the same parameters (what remember (), ensureSvf (), the Ladder, Diode and Formant setups derived from them): the right channel of a
+        filter whose two cutoffs are equal finds the setup the left one just computed instead of computing the same values again. States are not touched. */
+    void adoptMemo (const ClassicFilter& o) noexcept
+    {
+        memoP = o.memoP; memoValid = o.memoValid; fastMath = o.fastMath;
+        mf = o.mf; md = o.md; mr = o.mr; mbraw = o.mbraw;
+        svf = o.svf; svfValid = o.svfValid;
+        lad = o.lad; ladValid = o.ladValid;
+        dio = o.dio; dioValid = o.dioValid;
+        fmt = o.fmt; fmtValid = o.fmtValid;
+        for (int k = 0; k < 4; ++k)
+            fmtCf[k] = o.fmtCf[k];
+    }
+    /** Two channels whose start parameters are equal and whose end parameters are equal (the pan of the filter is 0): the same samples as `A.process (inA, outA, n, a, b, t0)`
+        followed by `B.process (inB, outB, n, a, b, t0)` (with `B.adoptRamp (A)` between them where the ramp setups apply), with the setup of every piece (the cutoff power,
+        the tangents, square roots, exp2 and divisions of the model) computed once for the two channels instead of once for each. The states of the channels stay apart. */
+    static void processTwin (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& a, const ClassicParams& b,
+                             int t0) noexcept
+    {
+        if (sameParams (a, b) && a.cutoffHz >= 1.0f)
+        {
+            A.block (inA, outA, n, b);
+            B.adoptMemo (A);
+            B.block (inB, outB, n, b);
+            return;
+        }
+        if (b.fast && a.fast && a.model == b.model && a.style == b.style && (b.model == 2 || b.model == 0 || b.model == 1 || b.model == 3))
+        {
+            A.process (inA, outA, n, a, b, t0);
+            B.adoptRamp (A);
+            B.process (inB, outB, n, a, b, t0);
+            return;
+        }
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            const ClassicParams p = pieceParams (a, b, t);
+            A.block (inA + i, outA + i, m, p);
+            B.adoptMemo (A);
+            B.block (inB + i, outB + i, m, p);
+            i += m;
+        }
+    }
+    /** The parameters of the piece that ends at t (0 .. 1) of the period: the cutoff by a power, the rest linearly. */
+    static ClassicParams pieceParams (const ClassicParams& a, const ClassicParams& b, float t) noexcept
+    {
+        ClassicParams p = b;
+        p.cutoffHz = a.cutoffHz * std::pow (b.cutoffHz / std::max (a.cutoffHz, 1.0f), t);
+        p.res = lerp (a.res, b.res, t);
+        p.driveDb = lerp (a.driveDb, b.driveDb, t);
+        p.blendRaw = lerp (a.blendRaw, b.blendRaw, t);
+        return p;
     }
     static bool sameParams (const ClassicParams& a, const ClassicParams& b) noexcept
     {
