@@ -68,7 +68,7 @@ def build_fixture(work, generation):
     libraries = [build / "core/libsynthyboy_core.a", *sorted((build / "core").glob("*/*.a"))]
     command = ["c++", "-std=c++17", "-O1", "-Wall", "-Wextra", "-Wpedantic", "-Werror", f"-DSYNTHYBOY_MPC_UI_GEN={generation}",
                "-I", str(ROOT), "-I", str(ROOT / "core/include"), "-I", str(ROOT / "core/filters-serum/include"),
-               "-I", str(ROOT / "core/shapes/include"), str(FIXTURE), *map(str, libraries), *map(str, libraries),
+               "-I", str(ROOT / "core/shapes/include"), str(FIXTURE), *map(str, libraries),
                "-lpthread", "-o", str(binary)]
     subprocess.run(command, check=True)
     return binary

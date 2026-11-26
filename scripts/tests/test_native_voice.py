@@ -149,25 +149,25 @@ class TestNativeVoiceTab(unittest.TestCase):
             self.assertTrue(len(u["reason"]) > 20, f"{u['name']} must have detailed justification")
 
     def test_voice_dial_definition(self):
-        """voice_dial_definition centers the 90x90 knob inside 124x130 slot at x=17, center=62."""
+        """voice_dial_definition centers the 90x90 knob inside the 116x146 slot at x=13, center=58."""
         dial_def = voice_definitions()["voiceNativeDial"]
         child_bounds = {c["componentData"]["name"]: c["bounds"]["bounds"] for c in dial_def["componentsData"]}
-        self.assertEqual(child_bounds["knob"], "17 18 90 90")
-        self.assertEqual(child_bounds["value"], "0 108 124 22")
-        self.assertEqual(child_bounds["name"], "0 0 124 18")
+        self.assertEqual(child_bounds["knob"], "13 18 90 90")
+        self.assertEqual(child_bounds["value"], "0 108 116 38")
+        self.assertEqual(child_bounds["name"], "0 0 116 18")
 
-        # Knob horizontal center inside slot: 17 + 45 = 62 (exact center of 124)
+        # Knob horizontal center inside slot: 13 + 45 = 58 (exact center of 116)
         knob_rect = [int(v) for v in child_bounds["knob"].split()]
         center_x = knob_rect[0] + knob_rect[2] / 2
-        self.assertEqual(center_x, 62.0)
+        self.assertEqual(center_x, 58.0)
 
     def test_voice_scale_dial_definition(self):
-        """voice_scale_dial_definition places an80px own dial below the LFO mode selector."""
+        """voice_scale_dial_definition places a 90 px dial below the LFO mode selector."""
         scale_def = voice_definitions()["voiceNativeScaleDial"]
         child_bounds = {c["componentData"]["name"]: c["bounds"]["bounds"] for c in scale_def["componentsData"]}
-        self.assertEqual(child_bounds["knob"], "50 18 80 80")
-        self.assertEqual(child_bounds["name"], "0 0 180 18")
-        self.assertEqual(child_bounds["value"], "0 98 180 22")
+        self.assertEqual(child_bounds["knob"], "40 18 90 90")
+        self.assertEqual(child_bounds["name"], "0 0 170 18")
+        self.assertEqual(child_bounds["value"], "0 108 170 24")
 
     def test_approved_components_and_mode_contract(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -300,7 +300,7 @@ class TestNativeVoiceTab(unittest.TestCase):
         # Assert Voice Target Scope group component
         scope_comp = components["Voice Target Scope"]
         self.assertEqual(scope_comp["componentData"]["type"], "voiceNativeTargets")
-        self.assertEqual(tuple(map(int, scope_comp["bounds"]["bounds"].split())), (930, 388, 336, 226))
+        self.assertEqual(tuple(map(int, scope_comp["bounds"]["bounds"].split())), (908, 372, 352, 234))
         self.assertEqual(scope_comp["bounds"]["additionalInvalidatingHandles"], [ROOT_GATE])
         self.assertEqual(scope_comp["bounds"]["acceptsHWFocus"], "Children")
         self.assertEqual(scope_comp["bounds"]["showWhenDataModelInvalid"], "Hide")
@@ -322,7 +322,7 @@ class TestNativeVoiceTab(unittest.TestCase):
         self.assertTrue(targets_def["ignoreMousePresses"])
         title_label = next(c for c in targets_def["componentsData"] if c["componentData"]["name"] == "title")
         self.assertEqual(title_label["componentData"]["data"].get("text"), "PAN / DETUNE")
-        self.assertEqual(title_label["bounds"]["bounds"], "0 0 336 18")
+        self.assertEqual(title_label["bounds"]["bounds"], "152 0 200 28")   # right of the TARGETS panel title, in its title strip
         target_buttons = [c for c in targets_def["componentsData"] if c["componentData"]["type"] == "Button"]
         self.assertEqual(len(target_buttons), 5)
         for tb, item in zip(target_buttons, VOICE_TARGET_ITEMS):
@@ -469,41 +469,41 @@ class TestNativeVoiceTab(unittest.TestCase):
 
         px, py, pw, ph = pan_ctrl["rect"]
         pan_screen_rect = (px, py + kTabY, pw, ph)
-        self.assertEqual(pan_screen_rect, (14, 518, 124, 130))
+        self.assertEqual(pan_screen_rect, (20, 516, 116, 146))
 
         dx, dy, dw, dh = det_ctrl["rect"]
         det_screen_rect = (dx, dy + kTabY, dw, dh)
-        self.assertEqual(det_screen_rect, (142, 518, 124, 130))
+        self.assertEqual(det_screen_rect, (140, 516, 116, 146))
 
         # Proof 1: targeted.py point (160, 519) missed Pan and hit Detune horizontal slot
         targeted_x, targeted_y = 160, 519
         self.assertFalse(
             pan_screen_rect[0] <= targeted_x < pan_screen_rect[0] + pan_screen_rect[2],
-            "Point x=160 must not fall inside Rand Pan width 14..138"
+            "Point x=160 must not fall inside Rand Pan width 20..136"
         )
         self.assertTrue(
             det_screen_rect[0] <= targeted_x < det_screen_rect[0] + det_screen_rect[2],
-            "Point x=160 falls inside Rand Detune width 142..266"
+            "Point x=160 falls inside Rand Detune width 140..256"
         )
 
-        # Proof 2: native-input.py center (76, 583) aligns with voiceNativeDial knob center
+        # Proof 2: the slot center (the probe of native-input.py, redone for the 2026-11-26 layout) is the knob center
         probe_cx = pan_screen_rect[0] + pan_screen_rect[2] // 2
         probe_cy = pan_screen_rect[1] + pan_screen_rect[3] // 2
-        self.assertEqual(probe_cx, 76)
-        self.assertEqual(probe_cy, 583)
+        self.assertEqual(probe_cx, 78)
+        self.assertEqual(probe_cy, 589)
 
-        # Old knobUni knob position on screen:
-        old_knob_x = pan_screen_rect[0] + 94  # 108
-        self.assertLess(probe_cx, old_knob_x, "Probe cx=76 missed old knobUni knob (108..198) by 32px")
+        # Old knobUni knob position on screen (it missed the probe):
+        old_knob_x = pan_screen_rect[0] + 94  # 114
+        self.assertLess(probe_cx, old_knob_x, "Probe cx=78 would miss an old knobUni knob (114..204)")
 
-        # New voiceNativeDial knob position on screen:
-        new_knob_x = pan_screen_rect[0] + 17  # 31
+        # voiceNativeDial knob position on screen:
+        new_knob_x = pan_screen_rect[0] + 13  # 33
         new_knob_w = 90
-        new_knob_center_x = new_knob_x + new_knob_w // 2  # 31 + 45 = 76
-        self.assertEqual(probe_cx, new_knob_center_x, "Probe cx=76 matches new voiceNativeDial knob center")
+        new_knob_center_x = new_knob_x + new_knob_w // 2  # 33 + 45 = 78
+        self.assertEqual(probe_cx, new_knob_center_x, "Probe cx=78 matches the voiceNativeDial knob center")
         self.assertTrue(
             new_knob_x <= probe_cx < new_knob_x + new_knob_w,
-            "Probe cx=76 lands dead-center inside new knob bounds [31..121]"
+            "Probe cx=78 lands dead-center inside the knob bounds [33..123]"
         )
 
     def test_voice_dial_definition_no_internal_overlap(self):
@@ -524,7 +524,7 @@ class TestNativeVoiceTab(unittest.TestCase):
                 self.assertFalse(overlaps, f"{k1} [{x1},{y1},{w1},{h1}] overlaps {k2} [{x2},{y2},{w2},{h2}] in voiceNativeDial")
 
     def test_voice_number_definition(self):
-        """voice_number_definition produces 180x56 number component without rotary knob."""
+        """voice_number_definition produces a 200x56 number component without rotary knob."""
         num_def = voice_definitions()["voiceNativeNumber"]
         self.assertFalse(num_def["ignoreMousePresses"])
         self.assertEqual({(a["onAction"], a["handler"], a["handleName"], a["additionalData"]) for a in num_def["actions"]},
@@ -536,55 +536,38 @@ class TestNativeVoiceTab(unittest.TestCase):
         self.assertNotIn("knob", names)
 
         bounds = {c["componentData"]["name"]: [int(v) for v in c["bounds"]["bounds"].split()] for c in num_def["componentsData"]}
-        self.assertEqual(bounds["focus"], [100, 0, 80, 56])
+        self.assertEqual(bounds["focus"], [120, 0, 80, 56])
         for cname in ("name", "value"):
             x, y, w, h = bounds[cname]
             self.assertGreaterEqual(x, 0)
             self.assertGreaterEqual(y, 0)
-            self.assertLessEqual(x + w, 180)
+            self.assertLessEqual(x + w, 200)
             self.assertLessEqual(y + h, 56)
 
     def test_voice_screen_apertures_correspondence(self):
         """All converted controls and unconverted regions correspond strictly to VoiceScreen geometry."""
         # Header apertures
         length_ctrl = next(c for c in VOICE_NATIVE_CONTROLS if c["name"] == "Voice Length")
-        self.assertEqual(length_ctrl["rect"], (836, 20, 180, 56))
+        self.assertEqual(length_ctrl["rect"], (788, 4, 200, 56))
 
-        # Block 0 (RANDOM) inner rect: (14, 408, 508, 206)
-        block0_ctrls = [c for c in VOICE_NATIVE_CONTROLS if c["block"] == 0]
-        self.assertEqual(len(block0_ctrls), 5)
-        for c in block0_ctrls:
-            x, y, w, h = c["rect"]
-            self.assertGreaterEqual(x, 14)
-            self.assertGreaterEqual(y, 408)
-            self.assertLessEqual(x + w, 14 + 508)
-            self.assertLessEqual(y + h, 408 + 206)
-
-        # Block 1 (SCALING) inner rect: (542, 408, 368, 206)
-        block1_ctrls = [c for c in VOICE_NATIVE_CONTROLS if c["block"] == 1]
-        self.assertEqual(len(block1_ctrls), 3)
-        for c in block1_ctrls:
-            x, y, w, h = c["rect"]
-            self.assertGreaterEqual(x, 542)
-            self.assertGreaterEqual(y, 408)
-            self.assertLessEqual(x + w, 542 + 368)
-            self.assertLessEqual(y + h, 408 + 206)
-
-        # Block 2 (TARGETS) inner rect: (930, 408, 336, 206)
-        block2_ctrls = [c for c in VOICE_NATIVE_CONTROLS if c["block"] == 2]
-        self.assertEqual(len(block2_ctrls), 5)
-        for c in block2_ctrls:
-            x, y, w, h = c["rect"]
-            self.assertGreaterEqual(x, 930)
-            self.assertGreaterEqual(y, 408)
-            self.assertLessEqual(x + w, 930 + 336)
-            self.assertLessEqual(y + h, 408 + 206)
+        # Every block control lies on its titled panel, under the title strip (voice_layout.json)
+        panels = {p["name"]: p["rect"] for p in json.loads((ROOT / "scripts/native_voice/voice_layout.json").read_text())["panels"]}
+        for block, name, count in ((0, "random", 5), (1, "scaling", 3), (2, "targets", 5)):
+            ctrls = [c for c in VOICE_NATIVE_CONTROLS if c["block"] == block]
+            self.assertEqual(len(ctrls), count)
+            px, py, pw, ph = panels[name]
+            for c in ctrls:
+                x, y, w, h = c["rect"]
+                self.assertGreaterEqual(x, px + 8)
+                self.assertGreaterEqual(y, py + 30)
+                self.assertLessEqual(x + w, px + pw - 8)
+                self.assertLessEqual(y + h, py + ph - 2)
 
         # Unconverted regions
         grid_unc = next(u for u in UNCONVERTED_CONTROLS if u["name"] == "Voice Step Grid")
-        self.assertEqual(grid_unc["rect"], (268, 84, 1004, 236))
+        self.assertEqual(grid_unc["rect"], (268, 94, 996, 206))
         row = next(c for c in VOICE_SEQUENCE_CONTROLS if c[0] == "Voice Row List")
-        self.assertEqual(row[2], (14, 106, 240, 208))
+        self.assertEqual(row[2], (20, 98, 240, 208))
 
     def test_sequence_uses_shared_existing_native_knobs(self):
         from native_voice.step_controls import build_voice_step_knobs, voice_step_knob_rect

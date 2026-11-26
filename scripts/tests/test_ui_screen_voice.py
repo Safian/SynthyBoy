@@ -176,8 +176,8 @@ class TestUiScreenVoice(unittest.TestCase):
                 self.assertGreaterEqual(h, 56)
                 self.assertEqual(w, 90)
                 self.assertEqual(h, 90)
-                self.assertEqual(x, 286 + (step - 1) * 125)
-                self.assertEqual(y, 120)
+                self.assertEqual(x, 286 + (step - 1) * 124)
+                self.assertEqual(y, 130)
                 gates = bounds["additionalInvalidatingHandles"]
                 self.assertEqual(len(gates), 2)
                 self.assertEqual(gates[1], expected_row_gate)
