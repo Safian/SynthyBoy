@@ -65,6 +65,17 @@ def size(name):
     return resolve(_token("sizes.json", "sizes", name), {name})
 
 
+def native_font_em(height):
+    """The em size in px the MPC host draws for a TUI font `height`.
+
+    The host is JUCE: a Font height is ascent + descent (Titillium Web: 1133 + 388 per 1000
+    em = font.host.height.per.em), so a TUI height of 15 draws 9.9 px em glyphs. The GPU
+    overlay and Pillow take the size as the em. Previews of native labels use this to show
+    the device size; measured on the Key 61 (docs/review/NATIVE-COMPONENT-FIDELITY-2026-11-26.md).
+    """
+    return float(height) / size("font.host.height.per.em")
+
+
 def palette():
     return copy.deepcopy(_data("colors.json")["palette"])
 

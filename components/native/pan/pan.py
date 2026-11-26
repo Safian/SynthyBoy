@@ -4,7 +4,7 @@
 import copy
 from pathlib import Path
 
-from components.native.level.level import value_label, write_strip as write_dial_strip
+from components.native.level.level import dial_caption_style, value_label, write_strip as write_dial_strip
 from components.style import (
     focus_ring_data,
     argb as _style_argb,
@@ -84,7 +84,7 @@ def default_pan_template():
                             },
                             "colour": _style_argb("text.caption"),
                             "justification": "left verticallyCentred",
-                            "case": "Original",
+                            "case": "Upper Case",
                         },
                     },
                 },
@@ -200,7 +200,7 @@ def compact_pan_definition(template=None, skins_dir=None):
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('pan.compact_pan_definition.font.height')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.icon")
+            dial_caption_style(control["data"]["textStyle"])
         elif name == "value":
             control["data"]["handleName"] = "Data"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})

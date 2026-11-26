@@ -74,7 +74,7 @@
     {
       "name": "fx",
       "title": "FX",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 d7bda6a435b3",
+      "status": "Szintetikus előnézet (nem hardverfotó) · Distortion, display bal / vezérlők jobb · scripts/render_ui_screen_fx_preview.py",
       "migration_current_source": "docs/ui-map/fx-native-screen-preview.png",
       "migration_current_source_commit": "4c7c9c02"
     },
@@ -108,7 +108,7 @@
     {
       "name": "master",
       "title": "Master",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 466df9a0e8fd · TUI be4b5924cbe3",
+      "status": "Szintetikus előnézet (nem hardverfotó) · MAIN, blokkpanelek (2026-11-26 újratervezés) · scripts/render_ui_screen_master_preview.py",
       "migration_current_source": "docs/user-guide/img/master-main.png",
       "migration_current_source_commit": "e1cc61d6",
       "migration_reference_source": "docs/ui-map/mixer-master-bold-cut/before/Init_master_main.png",
@@ -117,7 +117,7 @@
     {
       "name": "voice",
       "title": "Voice",
-      "status": "MPC Key 61 hardverfelvétel · Acid Saw Reso · ARMv7 466df9a0e8fd · TUI be4b5924cbe3",
+      "status": "Szintetikus előnézet (nem hardverfotó) · SEQUENCE / RANDOM / SCALING / TARGETS panelek (2026-11-26 újratervezés) · scripts/render_voice_screen_preview.py",
       "migration_current_source": "docs/ui-map/voice-preview-host-render.png",
       "migration_current_source_commit": "594ac6dd"
     }

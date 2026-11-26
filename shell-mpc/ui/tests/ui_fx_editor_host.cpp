@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "ui_test.h"
+#include "../../../core/engine-own/fx/fx_effects.h"      // the engine's effects: the displays are compared with them (testDisplayModels)
+#include "../../../core/engine-own/fx/fx_compressor.h"   // (after fx_effects.h: it uses dsp/fastmath.h without including it)
 
 using namespace uit;
 using namespace synthyboy_mpc::ui;
@@ -588,6 +590,217 @@ void testNativeControlsLayoutAndHitTesting()
     ed.setPath ("BUS 2 CHAIN");
     check (ed.nativeControls(), "Bus 2 chain retains native controls");
 }
+/** THE SIDE LAYOUT (display left, controls right) of every effect with a display (FX screen review 2026-11-26): on the full page every panel whose rows fit shows the display at the left and the cells at the right,
+    nothing overlaps, everything stays in the tab; a panel whose rows do not fit (the FX Filter's TONE of the Formant model) and the Mixer peek fall back to the stacked layout. */
+void testSideLayout()
+{
+    namespace native = synthyboy_mpc::nativeui;
+    const int sideKinds[] = { synthyboy::kFxTypeCompressor, synthyboy::kFxTypeDelay, synthyboy::kFxTypeDistortion, synthyboy::kFxTypeEq, synthyboy::kFxTypeFilter };
+    for (int kind = 1; kind < fxl::kNumKinds; ++kind)
+    {
+        const bool side = std::find (std::begin (sideKinds), std::end (sideKinds), kind) != std::end (sideKinds);
+        check (fxl::layoutOf (kind).side == side, std::string (fxl::layoutOf (kind).name) + ": the side flag is set exactly on the effects with a display");
+    }
+    for (int kind : sideKinds)
+    {
+        FxFullScreen fs;
+        fs.place ({ 0, 110, 1280, 628 });
+        fs.setEditorShown (true);
+        fs.setNativeControls (true);
+        FxSlotEditor& ed = fs.slotEditor;
+        ed.setType (kind, true);
+        State s;
+        ed.setState (s);
+        const std::string name = fxl::layoutOf (kind).name;
+        bool ok = true;
+        std::string why;
+        for (int pg = 0; pg < ed.numPages(); ++pg)
+        {
+            ed.setPage (pg);
+            const Rect d = ed.display.rect();
+            bool cellsOk = ed.sideMode() && ed.hasDisplay() && ed.nativeLayout() > 0 && d.x == 8 && d.right() <= native::kFxSideX && d.bottom() <= 110 + 628;
+            for (int r = 0; r < ed.rowsOnPage(); ++r)
+                for (int c = 0; c < 4; ++c)
+                {
+                    if (ed.controlInCell (ed.firstRowOfPage() + r, c) < 0)
+                        continue;
+                    const Rect cell = ed.cellRect (r, c);
+                    cellsOk = cellsOk && cell.x >= native::kFxSideX && cell.right() <= 1280 && cell.y >= d.y && cell.bottom() <= 110 + 620 && cell.h >= 56 && ! cell.overlaps (d);
+                }
+            if (! cellsOk && why.empty())
+                why = std::string (" (panel ") + ed.panelName (pg) + ")";
+            ok = ok && cellsOk;
+        }
+        check (ok, name + ": every panel shows the display at the left and its cells at the right, in the tab, apart" + why);
+        fs.setPeekInset (64);
+        ed.setPage (0);
+        check (! ed.sideMode() && ed.cellRect (0, 0).x == 8, name + ": the Mixer peek shows the stacked layout");
+    }
+    {   // the Formant model's TONE panel has three rows (2 + 2 + 1 lines): they do not fit under the tabs, so it is stacked, without the display; every other model's TONE is a side page
+        FxFullScreen fs;
+        fs.place ({ 0, 110, 1280, 628 });
+        fs.setNativeControls (true);
+        FxSlotEditor& ed = fs.slotEditor;
+        ed.setType (synthyboy::kFxTypeFilter, true);
+        State s;
+        s.v["fxfilter.model"] = 5.0f;   // Formant
+        ed.setState (s);
+        ed.setPage (1);
+        check (ed.rowsOnPage() == 3 && ! ed.sideMode() && ! ed.hasDisplay() && ed.nativeLayout() > 0, "FX Filter: the Formant TONE panel falls back to the stacked layout without the display");
+        s.v["fxfilter.model"] = 0.0f;
+        ed.setState (s);
+        check (ed.rowsOnPage() == 2 && ed.sideMode() && ed.hasDisplay() && ed.nativeLayout() > 0, "FX Filter: the TONE panel of another model is a side page with the response");
+    }
+}
+
+/** THE DISPLAYS SHOW WHAT THE ENGINE DOES: the EQ curve against the impulse response of the engine's equalizer (both laws, every mode), the compressor's static curve against a steady sine through the
+    engine's compressor (Compress: RMS levels; Limit: the ceiling of the peak), the echoes of the delay against an impulse through the engine's delay (every style). */
+void testDisplayModels()
+{
+    const double sr = 48000.0;
+    {   // EQ
+        struct Cfg { int law; synthyboy::own::Equalizer::Params p; };
+        auto band = [] (int mode, float hz, float gain, float res) { synthyboy::own::Equalizer::Band b; b.mode = mode; b.hz = hz; b.gainDb = gain; b.res = res; return b; };
+        std::vector<Cfg> cfgs;
+        for (int law = 0; law < 2; ++law)
+        {
+            synthyboy::own::Equalizer::Params a;   // shelves and a bell
+            a.low = band (0, 200.0f, 6.0f, 0.3f); a.mid = band (0, 1000.0f, -8.0f, 0.6f); a.mid2 = band (0, 1000.0f, 0.0f, 0.3f); a.high = band (0, 6000.0f, 4.0f, 0.2f); a.law = law;
+            synthyboy::own::Equalizer::Params b;   // high pass, notch, the second band's peak, low pass
+            b.low = band (1, 150.0f, 9.0f, 0.5f); b.mid = band (1, 2000.0f, 5.0f, 0.4f); b.mid2 = band (1, 500.0f, 5.0f, 0.8f); b.high = band (1, 9000.0f, -3.0f, 0.1f); b.law = law;
+            synthyboy::own::Equalizer::Params c;   // the second band's notch, a sharp bell, steep resonances
+            c.low = band (0, 60.0f, -10.0f, 1.0f); c.mid = band (0, 300.0f, 12.0f, 0.9f); c.mid2 = band (2, 4000.0f, 0.0f, 0.5f); c.high = band (0, 12000.0f, -6.0f, 0.7f); c.law = law;
+            cfgs.push_back ({ law, a });
+            cfgs.push_back ({ law, b });
+            cfgs.push_back ({ law, c });
+        }
+        float worst = 0.0f;
+        for (const Cfg& cfg : cfgs)
+        {
+            synthyboy::own::Equalizer eq;
+            eq.prepare (sr);
+            eq.set (cfg.p);
+            const int n = 1 << 15;
+            std::vector<float> l (n, 0.0f), r (n, 0.0f);
+            l[0] = r[0] = 1.0f;
+            eq.process (l.data(), r.data(), n, 0, n);
+            auto shown = [&] (const synthyboy::own::Equalizer::Band& b, bool optional)
+            {
+                FxDisplay::EqBand d;
+                d.used = ! optional || b.mode > 0;
+                d.mode = optional ? std::max (0, b.mode - 1) : b.mode;
+                d.freq = b.hz; d.gainDb = b.gainDb; d.resonance = b.res * 100.0f;
+                return d;
+            };
+            const FxDisplay::EqBand bands[4] = { shown (cfg.p.low, false), shown (cfg.p.mid, false), shown (cfg.p.mid2, true), shown (cfg.p.high, false) };
+            for (float f : { 30.0f, 70.0f, 130.0f, 260.0f, 450.0f, 700.0f, 1300.0f, 2600.0f, 3500.0f, 5000.0f, 7500.0f, 11000.0f, 16000.0f })
+            {
+                double re = 0.0, im = 0.0;
+                for (int i = 0; i < n; ++i)
+                {
+                    const double w = 2.0 * 3.14159265358979 * f / sr * i;
+                    re += l[i] * std::cos (w);
+                    im -= l[i] * std::sin (w);
+                }
+                const float engine = static_cast<float> (10.0 * std::log10 (std::max (1.0e-12, re * re + im * im)));
+                float model = 0.0f;
+                for (int b = 0; b < 4; ++b)
+                    model += FxDisplay::bandDb (b, bands[b], f, cfg.law, static_cast<float> (sr));
+                if (engine > -40.0f)   // (the depth of a notch or a stop band is not a number the curve can show)
+                    worst = std::max (worst, std::fabs (engine - model));
+            }
+        }
+        check (worst < 0.05f, "EQ: the curve is the engine's response for both laws and every mode within 0.05 dB (worst " + std::to_string (worst) + " dB)");
+    }
+    {   // compressor: one band (the single band mode), the steady level of a 1 kHz sine
+        float worst = 0.0f;
+        for (int mode = 0; mode < 2; ++mode)
+            for (float inDb : { -60.0f, -45.0f, -30.0f, -12.0f, -3.0f })
+            {
+                synthyboy::own::Compressor c;
+                c.prepare (sr);
+                synthyboy::own::Compressor::Params p;
+                p.bands = 3;
+                p.mode = mode;
+                p.band[1] = { -40.0f, -20.0f, 0.3f, 0.6f, 2.0f };
+                c.set (p);
+                const int n = static_cast<int> (sr * 2.0), tail = static_cast<int> (sr * 0.5);
+                std::vector<float> l (n), r (n);
+                // the level of the axis is the PEAK of the tone: the limiter holds the peak at its ceiling, and the envelope of the Compress mode (a mean square with a faster attack than
+                // release) holds a 1 kHz sine at the default times 2.4 dB above its RMS, 0.6 dB under its peak (measured here: the RMS reading was 0.7 to 1.5 dB off the curve)
+                const float amp = std::pow (10.0f, inDb / 20.0f);
+                for (int i = 0; i < n; ++i)
+                    l[i] = r[i] = amp * static_cast<float> (std::sin (2.0 * 3.14159265358979 * 1000.0 * i / sr));
+                c.process (l.data(), r.data(), n);
+                double sq = 0.0, peak = 0.0;
+                for (int i = n - tail; i < n; ++i)
+                {
+                    sq += static_cast<double> (l[i]) * l[i];
+                    peak = std::max (peak, static_cast<double> (std::fabs (l[i])));
+                }
+                // the output as a peak: the RMS + 3.01 dB of the (gently gain-modulated) sine in Compress, the true peak of the limited one
+                const float outDb = static_cast<float> (mode == 0 ? 10.0 * std::log10 (2.0 * sq / tail) : 20.0 * std::log10 (peak));
+                FxDisplay::CompBand b;
+                b.lowerThr = -40.0f; b.upperThr = -20.0f; b.lowerRatio = 0.3f; b.upperRatio = 0.6f; b.gainDb = 2.0f;
+                worst = std::max (worst, std::fabs (outDb - FxDisplay::compOut (b, inDb, mode)));
+                if (std::getenv ("FX_DISPLAY_DEBUG") != nullptr)
+                    std::printf ("compressor mode %d in %.1f: engine %.2f model %.2f\n", mode, static_cast<double> (inDb), static_cast<double> (outDb), static_cast<double> (FxDisplay::compOut (b, inDb, mode)));
+            }
+        check (worst < 0.5f, "Compressor: the static curve (Compress and the Limit's ceiling) is the engine's steady level within 0.5 dB (worst " + std::to_string (worst) + " dB)");
+    }
+    {   // delay: an impulse on both inputs, wet only, the loop band wide open; every echo of the model is in the engine's output and nothing else is
+        bool ok = true;
+        std::string why;
+        for (int style = 0; style < 5; ++style)
+        {
+            synthyboy::own::Delay dl;
+            dl.prepare (sr);
+            synthyboy::own::Delay::Params p;
+            p.mix = 1.0f; p.feedback = 0.6f; p.timeL = 0.1f; p.timeR = 0.15f; p.cutoff = 260.0f; p.spread = 1.0f; p.offsetL = 1.0f; p.offsetR = 1.25f; p.style = style;
+            dl.set (p);
+            const int n = static_cast<int> (sr * 1.2);
+            std::vector<float> l (n, 0.0f), r (n, 0.0f);
+            l[0] = r[0] = 1.0f;
+            dl.process (l.data(), r.data(), n);
+            FxDisplay::DelayState d;
+            d.timeMs1 = 100.0f; d.timeMs2 = 150.0f; d.feedback = 0.6f; d.style = style; d.offsetL = 1.0f; d.offsetR = 1.25f;
+            FxDisplay::Echo echoes[FxDisplay::kMaxEchoes];
+            const int count = FxDisplay::delayEchoes (d, 1100.0f, echoes);
+            std::vector<bool> covered[2] = { std::vector<bool> (n, false), std::vector<bool> (n, false) };
+            const int win = static_cast<int> (sr * 0.001);
+            for (int e = 0; e < count; ++e)
+            {
+                const int at = static_cast<int> (std::lround (echoes[e].ms * 0.001 * sr));
+                const std::vector<float>& y = echoes[e].side == 0 ? l : r;
+                double sum = 0.0;
+                for (int i = std::max (0, at - win); i <= std::min (n - 1, at + win); ++i)
+                {
+                    sum += y[i];
+                    covered[echoes[e].side][i] = true;
+                }
+                if (std::fabs (echoes[e].amp) >= 0.05f && std::fabs (sum - echoes[e].amp) > 0.05 + 0.1 * std::fabs (echoes[e].amp))
+                {
+                    ok = false;
+                    if (why.empty())
+                        why = " (style " + std::to_string (style) + ": echo at " + std::to_string (echoes[e].ms) + " ms, side " + std::to_string (echoes[e].side) + ", model " + std::to_string (echoes[e].amp) + ", engine " + std::to_string (sum) + ")";
+                }
+            }
+            for (int side = 0; side < 2; ++side)
+                for (int i = win; i < static_cast<int> (sr * 1.0); ++i)
+                {
+                    const float v = side == 0 ? l[i] : r[i];
+                    if (! covered[side][i] && std::fabs (v) > 0.05f)
+                    {
+                        ok = false;
+                        if (why.empty())
+                            why = " (style " + std::to_string (style) + ": an echo the model has not, at " + std::to_string (1000.0 * i / sr) + " ms, side " + std::to_string (side) + ")";
+                        break;
+                    }
+                }
+        }
+        check (ok, "Delay: the echoes of the display are the engine's, in time, side and strength, for every style" + why);
+    }
+}
 } // namespace
 
 int main()
@@ -599,6 +812,8 @@ int main()
     testBandBoard();
     testSlotCardStoresNoTruth();
     testNativeControlsLayoutAndHitTesting();
+    testSideLayout();
+    testDisplayModels();
     std::printf ("%s\n", g_fails == 0 ? "ALL PASSED" : "FAILED");
     return g_fails == 0 ? 0 : 1;
 }

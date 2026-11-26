@@ -54,6 +54,12 @@ if [[ -e "$package/VST" && ! -s "$package/VST/synthyboy-$arch.so" ]]; then
     echo "Missing VST/synthyboy-$arch.so in $package." >&2
     exit 2
 fi
+# The pages are drawn by the native editor through the overlay GPU helper (no host fallback widgets, owner decision 2026-11-21):
+# a package without it would leave the pages empty and would delete the helper that is installed. Build with -DSYNTHYBOY_MPC_OVERLAY=ON.
+if [[ -e "$package/VST" && ! -x "$package/VST/synthyboy-overlay-gpu-$arch" ]]; then
+    echo "Missing VST/synthyboy-overlay-gpu-$arch in $package (build with --cmake-arg -DSYNTHYBOY_MPC_OVERLAY=ON); the pages would stay empty." >&2
+    exit 2
+fi
 
 # Complete the local archive before the remote side can activate anything.
 python3 "$(dirname "$0")/validate_synthyboy_skin.py" "$package"

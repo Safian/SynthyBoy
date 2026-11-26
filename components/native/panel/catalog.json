@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 150,
+  "title": "Panel",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "catalog-panel.png",
+          "alt": "Panel"
+        }
+      ]
+    }
+  ]
+}

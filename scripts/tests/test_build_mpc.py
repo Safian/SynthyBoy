@@ -328,6 +328,10 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("WITH_BENCH=1", self.runs()[0])
         self.assertIn(str(self.tree / "arm64-bench") + ":/build-bench", self.runs()[0])
 
+    def test_the_overlay_option_is_not_a_cmake_arg(self):
+        r = self.build("--no-validate", "--cmake-arg", "-DSYNTHYBOY_MPC_OVERLAY=OFF")
+        self.assertEqual(r.returncode, 2)
+
     def test_cmake_args_reach_every_container(self):
         r = self.build("--no-validate", "--cmake-arg", "-DSYNTHYBOY_MPC_CALLBACK_STATS=ON", "--cmake-arg", "-DSYNTHYBOY_MPC_LFO_LIVE_HZ=25")
         self.assertEqual(r.returncode, 0, r.stderr)

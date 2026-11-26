@@ -8,6 +8,10 @@ from components.native.selector.selector import passive_layer
 from components.native.radio_button.radio_button import segmented_radio_entry
 from .step_controls import _LAYOUT, VOICE_STEP_ROWS, VOICE_STEP_ROW_KEYS
 
+import json
+from pathlib import Path
+_STRIP_RECT = tuple(json.loads(Path(__file__).with_name("voice_layout.json").read_text())["strip"])
+
 _STEPS = range(1, 9)
 _HEADERS = "Voice Step Buttons"
 _FOOTERS = "Voice Step Value Buttons"
@@ -46,7 +50,7 @@ def sequence_readout_definitions(skins):
     hit_art = write_transparent_hit(skins)
     footers = [button(str(s), ((s - 1) * pitch, 0, width, _footer_height()), hit_art,
                       index=s - 1, count=len(_STEPS)) for s in _STEPS]
-    _, _, w, h = style.size("screen.voice_tab.rect.rect.2")
+    _, _, w, h = _STRIP_RECT
     step_width = w // 10
     cell_width = (w - step_width) // len(VOICE_STEP_ROWS)
     strip = [_label("Step", (0, 0, step_width, h))]
@@ -85,5 +89,5 @@ def sequence_readout_entries(ctx, root_gate, row_handle, step_handle):
         for i, (row, key) in enumerate(zip(VOICE_STEP_ROWS, VOICE_STEP_ROW_KEYS)):
             handle = model(s, key)
             mappings.extend(((f"Name{i}", f"WithName[{row}]/{handle}"), (key, handle)))
-        yield group(f"{_STRIP} {s}", "voiceSelectedValues", style.size("screen.voice_tab.rect.rect.2"),
+        yield group(f"{_STRIP} {s}", "voiceSelectedValues", _STRIP_RECT,
                     mappings, f"IndexedEnabling/{s-1}/8/{step_handle}")

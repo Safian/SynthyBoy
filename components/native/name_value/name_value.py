@@ -210,6 +210,9 @@ def build_name_value_definition(
     pad_x=None,
     radius=None,
     with_face_art=True,
+    stacked=False,
+    caption_height=None,
+    box_top=None,
 ):
     """Build the Akai MPC native component definition dictionary for a name-value field.
 
@@ -222,10 +225,20 @@ def build_name_value_definition(
        on Mouse Down and Enter Pressed across the entire control footprint.
     6. Hardware Q-Link and data wheel editing enabled (disableCoarseDataWheel=False).
     7. SDK Focus ring child included for hardware navigation, focused on the number box.
+    8. stacked=True: the name centred ABOVE the box (caption_height tall, the caption of a dial
+       or a titled selector beside it), the box centred under it at box_top (default: right under
+       the name), box_width wide at most.
     """
     w, h = rect[2], rect[3]
-    bh = h if box_height is None else min(h, box_height)
-    by = (h - bh) // 2
+    if stacked:
+        caption_h = _style_size('active_text.default.height') if caption_height is None else caption_height
+        bh = min(h - caption_h, _style_size('height.high') if box_height is None else box_height)
+        by = caption_h if box_top is None else box_top
+        if bh < _style_size('height.high') or by < caption_h or by + bh > h:
+            raise ValueError("A stacked name-value field needs its name and a box of at least 56 px")
+    else:
+        bh = h if box_height is None else min(h, box_height)
+        by = (h - bh) // 2
     preset = get_height_preset(bh)
 
     r = radius if radius is not None else preset["radius"]
@@ -233,8 +246,14 @@ def build_name_value_definition(
     lbl_sz = label_size if label_size is not None else preset["label_size"]
     val_sz = value_size if value_size is not None else preset["value_size"]
 
-    bw = min(box_width, w - _style_size('name_value.build_name_value_definition.bw'))
-    bx = w - bw
+    if stacked:
+        bw = min(box_width, w)
+        bx = (w - bw) // 2
+        lbl_sz = label_size if label_size is not None else _style_size('font.caption')
+        val_sz = value_size if value_size is not None else _style_size('font.value.large')
+    else:
+        bw = min(box_width, w - _style_size('name_value.build_name_value_definition.bw'))
+        bx = w - bw
 
     triggers = ("Mouse Down", "Enter Pressed")
 
@@ -295,9 +314,11 @@ def build_name_value_definition(
         }
         children.append(decor)
 
-    # Left: Parameter name outside the frame
-    name_w = bx - px
-    label_rect = (px, 0, name_w, h)
+    # Left (or above, when stacked): parameter name outside the frame
+    if stacked:
+        label_rect, justification = (0, 0, w, caption_h), "horizontallyCentred verticallyCentred"
+    else:
+        label_rect, justification = (px, 0, bx - px, h), "left verticallyCentred"
     label_comp = _label_component(
         "name",
         caption_kind,
@@ -305,7 +326,7 @@ def build_name_value_definition(
         label_rect,
         lbl_sz,
         label_colour,
-        "left verticallyCentred",
+        justification,
     )
 
     # Right: Value centered inside the framed number box

@@ -71,6 +71,24 @@ int main (int argc, char** argv)
         set ("compressor.mid.upper_threshold", -20); set ("compressor.mid.upper_ratio", 50);
         set ("compressor.mid.lower_ratio", 25);
     }
+    if (kind == synthyboy::kFxTypeDistortion && limit != 0)   // the third argument is the drive in dB; with it the filter is on, to show its controls
+    {
+        set ("distortion.drive", static_cast<float> (limit)); set ("distortion.mix", 100); set ("distortion.filter_order", 2);
+    }
+    if (kind == synthyboy::kFxTypeEq)   // a curve with all three bands at work; the third argument 1: the second mid band on (a notch)
+    {
+        set ("eq.low.gain", 4.0f); set ("eq.mid.cutoff", 800.0f); set ("eq.mid.gain", -6.0f); set ("eq.mid.resonance", 50.0f); set ("eq.high.gain", 3.0f);
+        if (limit != 0) { set ("eq.mid2.mode", 2.0f); set ("eq.mid2.cutoff", 3000.0f); set ("eq.mid2.resonance", 70.0f); }
+    }
+    if (kind == synthyboy::kFxTypeDelay)   // free times of the two sides; the third argument: the style (0 stereo, else that style)
+    {
+        set ("delay.sync", 0.0f); set ("delay.time", 250.0f); set ("delay.time2", 375.0f); set ("delay.feedback", 55.0f);
+        set ("delay.style", limit != 0 ? static_cast<float> (limit) : 1.0f);
+    }
+    if (kind == synthyboy::kFxTypeFilter)   // a resonant low pass; the third argument 1: the Formant model (its TONE panel has three rows)
+    {
+        set ("fxfilter.model", limit != 0 ? 5.0f : 0.0f); set ("fxfilter.cutoff", 1200.0f); set ("fxfilter.resonance", 60.0f);
+    }
     r.refresh (2);
     r.ui.screen().slotEditor.setPage (panel);
     r.refresh (2);

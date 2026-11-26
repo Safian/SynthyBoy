@@ -26,7 +26,18 @@ STATES = {
     "reverb-main": (9, 0, 0), "reverb-tone": (9, 1, 0), "reverb-mod": (9, 2, 0),
     "compressor-main": (2, 0, 0), "compressor-bands": (2, 1, 0), "compressor-upward": (2, 2, 0),
     "compressor-limit": (2, 0, 1),
+    "distortion": (4, 0, 0), "distortion-drive": (4, 0, 12),   # the third value is the drive in dB, with the filter on
+    # every other effect and every one of its panels (the third value: a variant of the fixture's demo values, fx_render_fixture.cpp)
+    "delay-main": (3, 0, 0), "delay-output": (3, 1, 0), "delay-pingpong": (3, 0, 2), "delay-tap": (3, 0, 4),
+    "eq-main": (5, 0, 0), "eq-tone": (5, 1, 0), "eq-mid2": (5, 2, 1),
+    "filter-main": (6, 0, 0), "filter-tone": (6, 1, 0), "filter-formant-tone": (6, 1, 1),
+    "flanger": (7, 0, 0), "phaser": (8, 0, 0), "hyperdim": (10, 0, 0), "utility": (11, 0, 0),
+    "bode": (12, 0, 0), "convolve": (13, 0, 0),
+    "compressor-main-gen1": (2, 0, 0), "delay-main-gen1": (3, 0, 0),   # the Key 61 look: the Q frames of the side layout's 2 x 2 blocks
 }
+
+
+CANONICAL = "distortion-drive"   # the state of docs/screens/fx.jpg: the Distortion page, side layout, drive up, filter on
 
 
 class FxSkinSketch(OscSkinSketch):
@@ -131,7 +142,7 @@ def render_all(out_dir, work, states=None):
     metadata["tui_bytes"] = (skins / "TUI.json").stat().st_size
     metadata["png_bytes"] = sum(p.stat().st_size for p in skins.glob("*.png"))
     (out_dir / "manifest.json").write_text(json.dumps(metadata, indent=2)+"\n")
-    return out_dir / "chorus.png"
+    return out_dir / f"{next(iter(states))}.png"
 
 
 def main():
@@ -147,8 +158,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="synthyboy-fx-preview-") as folder:
         work = Path(folder)
         variants = args.out_dir if args.out_dir is not None else work / "fixtures"
-        chorus = render_all(variants, work, STATES if args.out_dir is not None else {"chorus": STATES["chorus"]})
-        with Image.open(chorus) as current:
+        chorus = render_all(variants, work, STATES if args.out_dir is not None else {CANONICAL: STATES[CANONICAL]})
+        with Image.open(chorus if args.out_dir is None else (args.out_dir / f"{CANONICAL}.png")) as current:
             save_screen(current, output)
     print(f"Rendered actual TUI + C++ FX composite to {output}")
     if args.out_dir is not None:

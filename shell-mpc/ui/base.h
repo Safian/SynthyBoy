@@ -42,7 +42,7 @@ public:
     State state;
     static constexpr double kDragPx = 200.0, kLongPressMs = 600.0;
     static constexpr int kLedW = 22;   // the room of the LED in front of the name
-    static constexpr float kStartAngle = 0.75f * kPi, kSweep = 1.5f * kPi;   // 135 degrees (bottom left) clockwise over 270 degrees to the bottom right
+    static constexpr float kStartAngle = theme::knob::kStartDegrees / 180.0f * kPi, kSweep = theme::knob::kSweepDegrees / 180.0f * kPi;   // 135 degrees (bottom left) clockwise over 270 degrees to the bottom right (the shared dial tokens)
 
     Knob() = default;
     explicit Knob (const char* label, bool small = false) { setText (state.label, sizeof state.label, label); state.small = small; }
@@ -84,9 +84,9 @@ public:
         if (state.side)
         {
             const float d = std::max (6.0f, std::min (static_cast<float> (rect_.h - 8), state.dialMax > 0 ? static_cast<float> (state.dialMax) : 120.0f));
-            g.stroke = std::max (2.4f, d * T.arcValue);
-            g.track = std::max (2.0f, d * T.arcTrack);
-            g.radius = d * 0.5f - g.stroke * 0.5f - 3.0f;
+            g.stroke = std::max (theme::knob::kStrokeMin, d * T.arcValue);
+            g.track = std::max (theme::knob::kTrackMin, d * T.arcTrack);
+            g.radius = d * 0.5f - g.stroke * 0.5f - theme::knob::kRadiusInset;
             g.cx = static_cast<float> (rect_.x) + 4.0f + d * 0.5f;
             g.cy = static_cast<float> (rect_.y) + static_cast<float> (rect_.h) * 0.5f;
             const int tx = rect_.x + static_cast<int> (d) + 10, tw = std::max (0, rect_.right() - tx - 2);
@@ -112,9 +112,9 @@ public:
             d *= 0.8f;
         d = std::min (d, state.large ? 190.0f : 140.0f);
         d = std::max (d, 6.0f);
-        g.stroke = std::max (2.4f, d * T.arcValue);
-        g.track = std::max (2.0f, d * T.arcTrack);
-        g.radius = d * 0.5f - g.stroke * 0.5f - 3.0f;
+        g.stroke = std::max (theme::knob::kStrokeMin, d * T.arcValue);
+        g.track = std::max (theme::knob::kTrackMin, d * T.arcTrack);
+        g.radius = d * 0.5f - g.stroke * 0.5f - theme::knob::kRadiusInset;
         g.cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f;
         g.cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f;
         g.labelBox = { rect_.x + 2, rect_.bottom() - valueH - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
@@ -276,7 +276,10 @@ public:
         p.style (1.0f, true);
         p.arc (cx, cy, R, a0, a1, g.track, p.c (T.track, 255));
         if (state.bipolar)
-            p.line (cx + (R - tw * 0.5f - 2.0f) * std::cos (am), cy + (R - tw * 0.5f - 2.0f) * std::sin (am), cx + (R + tw * 0.5f + 2.0f) * std::cos (am), cy + (R + tw * 0.5f + 2.0f) * std::sin (am), 1.5f, p.c (T.textDim, 200));
+        {
+            const float in = R - tw * 0.5f - theme::knob::kCentreOverhang, out = R + tw * 0.5f + theme::knob::kCentreOverhang;
+            p.line (cx + in * std::cos (am), cy + in * std::sin (am), cx + out * std::cos (am), cy + out * std::sin (am), theme::knob::kCentreStroke, p.c (T.textDim, theme::knob::kCentreAlpha));
+        }
         if (state.small)
             p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (T.flow[2], 255));
         p.plain();
@@ -322,11 +325,11 @@ public:
             p.disc (mx, my, std::max (2.0f, tw * 0.7f), p.c (T.text, 255));
         }
         p.style (1.0f, true);
-        p.line (cx + R * 0.25f * std::cos (av), cy + R * 0.25f * std::sin (av), cx + R * 0.6f * std::cos (av), cy + R * 0.6f * std::sin (av), 1.6f, p.c (T.text, 235));
+        p.line (cx + R * theme::knob::kPointerInner * std::cos (av), cy + R * theme::knob::kPointerInner * std::sin (av), cx + R * theme::knob::kPointerOuter * std::cos (av), cy + R * theme::knob::kPointerOuter * std::sin (av), theme::knob::kPointerStroke, p.c (T.text, theme::knob::kPointerAlpha));
         p.plain();
         float vx, vy;
         valuePoint (vx, vy);
-        p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.text, 255));
+        p.disc (vx, vy, std::max (theme::knob::kThumbMin, tw * theme::knob::kThumbRatio), p.c (T.text, 255));
         if (showSourceBadge && ! hasStatus())
         {
             if (! g.tabBox.empty())

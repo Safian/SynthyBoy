@@ -6,10 +6,10 @@
       "kind": "dial",
       "type": "voiceNativeDial",
       "rect": [
-        14,
-        408,
-        124,
-        130
+        20,
+        406,
+        116,
+        146
       ],
       "caption": "PAN",
       "block": 0
@@ -20,10 +20,10 @@
       "kind": "dial",
       "type": "voiceNativeDial",
       "rect": [
-        142,
-        408,
-        124,
-        130
+        140,
+        406,
+        116,
+        146
       ],
       "caption": "DETUNE",
       "block": 0
@@ -34,10 +34,10 @@
       "kind": "dial",
       "type": "voiceNativeDial",
       "rect": [
-        270,
-        408,
-        124,
-        130
+        260,
+        406,
+        116,
+        146
       ],
       "caption": "CUTOFF",
       "block": 0
@@ -48,10 +48,10 @@
       "kind": "dial",
       "type": "voiceNativeDial",
       "rect": [
-        398,
-        408,
-        124,
-        130
+        380,
+        406,
+        116,
+        146
       ],
       "caption": "ENV",
       "block": 0
@@ -62,9 +62,9 @@
       "kind": "toggle",
       "type": "voiceActive_detune10x",
       "rect": [
-        14,
+        20,
         558,
-        172,
+        236,
         56
       ],
       "caption": "10x DETUNE",
@@ -76,10 +76,10 @@
       "kind": "dial",
       "type": "voiceNativeScaleEnv",
       "rect": [
-        542,
-        494,
-        180,
-        120
+        528,
+        484,
+        170,
+        132
       ],
       "caption": "ENV TIME",
       "block": 1
@@ -90,10 +90,10 @@
       "kind": "dial",
       "type": "voiceNativeScaleDial",
       "rect": [
-        730,
-        494,
-        180,
-        120
+        706,
+        484,
+        170,
+        132
       ],
       "caption": "LFO TIME",
       "block": 1
@@ -104,9 +104,9 @@
       "kind": "choice",
       "type": "voiceNativeChoice",
       "rect": [
-        542,
-        408,
-        368,
+        528,
+        400,
+        348,
         80
       ],
       "caption": "LFO MODE",
@@ -118,10 +118,10 @@
       "kind": "toggle",
       "type": "voiceActive_a",
       "rect": [
-        930,
-        408,
-        166,
-        58
+        908,
+        402,
+        172,
+        64
       ],
       "caption": "OSC A",
       "block": 2
@@ -132,10 +132,10 @@
       "kind": "toggle",
       "type": "voiceActive_b",
       "rect": [
-        1100,
-        408,
-        166,
-        58
+        1088,
+        402,
+        172,
+        64
       ],
       "caption": "OSC B",
       "block": 2
@@ -146,10 +146,10 @@
       "kind": "toggle",
       "type": "voiceActive_c",
       "rect": [
-        930,
-        482,
-        166,
-        58
+        908,
+        472,
+        172,
+        64
       ],
       "caption": "OSC C",
       "block": 2
@@ -160,10 +160,10 @@
       "kind": "toggle",
       "type": "voiceActive_sub",
       "rect": [
-        1100,
-        482,
-        166,
-        58
+        1088,
+        472,
+        172,
+        64
       ],
       "caption": "SUB",
       "block": 2
@@ -174,10 +174,10 @@
       "kind": "toggle",
       "type": "voiceActive_noise",
       "rect": [
-        930,
-        556,
-        166,
-        58
+        908,
+        542,
+        172,
+        64
       ],
       "caption": "NOISE",
       "block": 2
@@ -188,9 +188,9 @@
       "kind": "number",
       "type": "voiceNativeNumber",
       "rect": [
-        836,
-        20,
-        180,
+        788,
+        4,
+        200,
         56
       ],
       "caption": "LENGTH",
@@ -202,8 +202,8 @@
       "Voice Row List",
       "voiceNativeRowList",
       [
-        14,
-        106,
+        20,
+        98,
         240,
         208
       ],
@@ -214,9 +214,9 @@
       "Voice Step Select",
       "voiceNativeStepSelect",
       [
-        620,
-        20,
-        208,
+        560,
+        4,
+        220,
         56
       ],
       "STEP",
@@ -226,9 +226,9 @@
       "Voice Step Value",
       "voiceNativeStepValue",
       [
-        1024,
-        20,
-        200,
+        996,
+        4,
+        228,
         56
       ],
       "VALUE",
@@ -238,9 +238,9 @@
   "steps": {
     "rect": [
       268,
-      84,
-      1004,
-      236
+      94,
+      996,
+      206
     ],
     "pad": 4,
     "gap": 6,
@@ -251,10 +251,58 @@
   "scope": {
     "title": "PAN / DETUNE",
     "rect": [
-      930,
-      388,
-      336,
-      18
+      1060,
+      372,
+      200,
+      28
     ]
-  }
+  },
+  "strip": [
+    20,
+    306,
+    1240,
+    48
+  ],
+  "panels": [
+    {
+      "name": "sequence",
+      "title": "SEQUENCE",
+      "rect": [
+        8,
+        66,
+        1264,
+        296
+      ]
+    },
+    {
+      "name": "random",
+      "title": "RANDOM",
+      "rect": [
+        8,
+        368,
+        500,
+        252
+      ]
+    },
+    {
+      "name": "scaling",
+      "title": "SCALING",
+      "rect": [
+        516,
+        368,
+        372,
+        252
+      ]
+    },
+    {
+      "name": "targets",
+      "title": "TARGETS",
+      "rect": [
+        896,
+        368,
+        376,
+        252
+      ]
+    }
+  ]
 }

@@ -1,95 +1,6 @@
 {
-  "master": [
-    {
-      "text": "OUTPUT",
-      "rect": [
-        20,
-        73,
-        50,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "PITCH",
-      "rect": [
-        668,
-        73,
-        37,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "VOICES",
-      "rect": [
-        20,
-        309,
-        45,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "GLIDE",
-      "rect": [
-        808,
-        309,
-        37,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "QUALITY",
-      "rect": [
-        230,
-        256,
-        52,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    }
-  ],
+  "master": [],
   "voice": [
-    {
-      "text": "RANDOM",
-      "rect": [
-        20,
-        375,
-        56,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "SCALING",
-      "rect": [
-        548,
-        375,
-        52,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "TARGETS",
-      "rect": [
-        936,
-        375,
-        55,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
     {
       "text": "VOICE CONTROL",
       "rect": [
@@ -268,41 +179,6 @@
       ],
       "size": 26,
       "colour": "text.value"
-    }
-  ],
-  "master_tuning": [
-    {
-      "text": "SCALE",
-      "rect": [
-        20,
-        73,
-        120,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "TUNING",
-      "rect": [
-        20,
-        189,
-        120,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
-    },
-    {
-      "text": "MPE",
-      "rect": [
-        656,
-        189,
-        120,
-        20
-      ],
-      "size": 13,
-      "colour": "text.caption"
     }
   ]
 }

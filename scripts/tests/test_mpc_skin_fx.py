@@ -303,13 +303,19 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
             self.assertEqual(c["bounds"]["acceptsHWFocus"], "No" if widget == "ReadOnly" else "Yes")
             self.assertEqual(c["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {target}"}], key)
 
-            top, rows = self.manifest["layouts"][layout - 1]
+            top, rows, *side = self.manifest["layouts"][layout - 1]
             row, col = divmod(slot, 4)
             row_h = (620 - top) // rows
             x, y, w, h = _rect(c)
             x += layer_x
             y += layer_y
-            self.assertEqual((x, y, w, h), (8 + col * 318, top + 16 + row * row_h, 310, max(72, row_h - 16)))
+            if side and side[0]:   # display left, controls right: two cells to a line at x 644, a 16 px lane above each row
+                lines = side[1:5]
+                row_y = top + sum(16 + 72 * lines[r] for r in range(row)) + 16
+                self.assertEqual((x, y, w, h), (644 + (col % 2) * 318, row_y + 72 * (col // 2), 310, 72))
+                self.assertLessEqual(y + h, 620)
+            else:
+                self.assertEqual((x, y, w, h), (8 + col * 318, top + 16 + row * row_h, 310, min(max(72, row_h - 16), self.manifest["cell_max_h"])))
             self.assertTrue(0 <= x < x + w <= 1280 and 176 <= y < y + h <= 628 and min(w, h) >= 56)
             observed[key] = _rect(c)
         live = {tuple(row) for row in self.manifest["widgets"]}
