@@ -57,6 +57,8 @@ int main (int argc, char** argv)
 
     const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
     std::printf ("%d test case(s), %ld check(s), %d failed case(s), %.2f s\n", run, s.checks, failedCases, seconds);
+    if (s.quickReductions != 0)
+        std::printf ("quick run: %d heavy case part(s) reduced or skipped, %ld check(s) not run; SB_TEST_FULL=1 runs them all\n", s.quickReductions, s.quickSkippedChecks);
     std::fflush (stdout);
     sbtest::runShutdowns (s.startups);
     return (failedCases != 0 || run == 0) ? 1 : 0;

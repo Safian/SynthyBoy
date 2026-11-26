@@ -233,6 +233,8 @@ TEST (own_filter_response_every_model_at_96000_is_finite_and_fast)
     constexpr double kMaxFftRatio = 12.0; // measured below 10x on the Mac with four concurrent Release runs
     const size_t n = static_cast<size_t> (fr.impulseLength());
     std::vector<float> re (measureSpeed ? n : 0), im (re.size());
+    // quick run: styles 0 and 6 of the 12 of every model; SB_TEST_FULL=1: all 12
+    const int styleStride = sbtest::quickScaled ("own_filter_response_rates 96 kHz every model, every Nth style", 1, 6, 3780);
     double worstMs = 0.0, sumMs = 0.0;
     double worstRatio = 0.0;
     int worstModel = -1, worstStyle = -1, runs = 0;
@@ -253,7 +255,7 @@ TEST (own_filter_response_every_model_at_96000_is_finite_and_fast)
             }) / kReferenceFfts;
             CHECK (fftMs > 0.0);
         }
-        for (int st = 0; st < 12; ++st)
+        for (int st = 0; st < 12; st += styleStride)
             for (float res : { 20.0f, 100.0f })
             {
                 const ParamValues v = patch (m, st, 1500.0f, res);

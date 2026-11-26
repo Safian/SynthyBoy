@@ -108,6 +108,18 @@ inline void unsetEnv (const char* name)
 }
 
 
+/** The quick / full split of the heavy test cases. Default (SB_TEST_FULL unset, empty or 0): the quick development run, in which a heavy case may use a smaller amount of work or skip a
+    multi minute sweep, but only through skipInQuick () / quickScaled () below, which print a "[ SKIP-QUICK ]" line each and are counted in the summary of main (never silently).
+    SB_TEST_FULL=1: every case runs exactly as it always did. The ctest entries "<name>_full" run the binaries that have such cases with SB_TEST_FULL=1 (label slow). */
+inline bool full()
+{
+    static const bool value = [] {
+        const char* env = std::getenv ("SB_TEST_FULL");
+        return env != nullptr && env[0] != '\0' && env[0] != '0';
+    }();
+    return value;
+}
+
 struct Case
 {
     const char* name;
@@ -132,6 +144,8 @@ struct State
     Case* tail = nullptr;
     long checks = 0;
     long failures = 0;
+    int quickReductions = 0;   // heavy cases that ran reduced or not at all in the quick run (always 0 with SB_TEST_FULL=1)
+    long quickSkippedChecks = 0; // the checks those reductions did not run, as declared by the test (measured with SB_TEST_FULL=1 against the quick run)
     const char* context = ""; // shown with every failure (e.g. the engine under test)
 };
 
@@ -184,6 +198,34 @@ inline void runShutdowns (Startup* u)
     runShutdowns (u->next);
     if (u->stop != nullptr)
         u->stop();
+}
+
+/** Quick run only: true (after printing the "[ SKIP-QUICK ]" line) when the caller has to skip the heavy part; `skippedChecks` is the number of CHECKs that part would have recorded
+    (declared by the test, verified against the full run). Always false with SB_TEST_FULL=1. */
+inline bool skipInQuick (const char* what, long skippedChecks, const char* reason)
+{
+    if (full())
+        return false;
+    auto& s = state();
+    ++s.quickReductions;
+    s.quickSkippedChecks += skippedChecks;
+    std::printf ("[ SKIP-QUICK ] %s: %s (%ld check(s) not run), run with SB_TEST_FULL=1\n", what, reason, skippedChecks);
+    std::fflush (stdout);
+    return true;
+}
+
+/** The amount of work of a heavy case: `fullValue` with SB_TEST_FULL=1, `quickValue` in the quick run (printed as a "[ SKIP-QUICK ]" line). `skippedChecks` is the number of CHECKs the
+    quick run records fewer than the full run (0 when the number of checks does not depend on the amount of work). */
+inline int quickScaled (const char* what, int fullValue, int quickValue, long skippedChecks = 0)
+{
+    if (full())
+        return fullValue;
+    auto& s = state();
+    ++s.quickReductions;
+    s.quickSkippedChecks += skippedChecks;
+    std::printf ("[ SKIP-QUICK ] %s: reduced from %d to %d (%ld check(s) not run), run with SB_TEST_FULL=1\n", what, fullValue, quickValue, skippedChecks);
+    std::fflush (stdout);
+    return quickValue;
 }
 
 inline bool check (bool ok, const char* expr, const char* file, int line)

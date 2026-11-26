@@ -464,13 +464,13 @@ struct SweepResult
 
 /** Every bit pattern u in [from, to) through the old and the new forms. A result differs when its bits differ; two NaNs of another payload are counted apart (tanhNanPayload):
     both forms are the same expression on a NaN, so the payload follows the hardware's rule for it. */
-SweepResult sweep (uint64_t from, uint64_t to, bool hardtanhExact)
+SweepResult sweep (uint64_t from, uint64_t to, bool hardtanhExact, uint64_t stride = 1)
 {
     SweepResult r;
     ClassicFilter fast, exact;
     fast.fastMath = true;
     exact.fastMath = false;
-    for (uint64_t u = from; u < to; ++u)
+    for (uint64_t u = from; u < to; u += stride)
     {
         const uint32_t b = static_cast<uint32_t> (u);
         const float x = floatFrom (b);
@@ -508,7 +508,7 @@ SweepResult sweep (uint64_t from, uint64_t to, bool hardtanhExact)
     return r;
 }
 
-SweepResult sweepAll (bool hardtanhExact)
+SweepResult sweepAll (bool hardtanhExact, uint64_t stride = 1)
 {
     const unsigned threads = std::clamp (std::thread::hardware_concurrency(), 1u, 16u);
     std::vector<SweepResult> results (threads);
@@ -517,7 +517,7 @@ SweepResult sweepAll (bool hardtanhExact)
     for (unsigned t = 0; t < threads; ++t)
         pool.emplace_back ([&, t]
                            {
-                               results[t] = sweep (total * t / threads, total * (t + 1) / threads, hardtanhExact);
+                               results[t] = sweep (total * t / threads, total * (t + 1) / threads, hardtanhExact, stride);
                            });
     for (auto& th : pool)
         th.join();
@@ -563,7 +563,9 @@ TEST (own_filter_savings_integer_compares_match_the_float_forms_on_all_bit_patte
     CHECK (bitsOf (4.972f) == 0x409f1aa0u);
     CHECK (bitsOf (0.66f) == 0x3f28f5c3u);
     CHECK (std::isinf (floatFrom (0x7f800000u)) && !std::isinf (floatFrom (0x7f7fffffu)));
-    const SweepResult r = sweepAll (true);
+    // quick run: every 257th pattern (257 is coprime to the 16 and 97 of the hardtanh strides); SB_TEST_FULL=1: all 2^32 patterns
+    const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("filter_savings 2^32 pattern sweep (stride)", 1, 257));
+    const SweepResult r = sweepAll (true, stride);
     std::printf ("SAVINGS-SWEEP 2^32 patterns: flushDenormal differences %llu, tanh clamp differences %llu (NaN payload only: %llu), knee test differences %llu, hardtanh differences %llu of %llu\n",
                  static_cast<unsigned long long> (r.flushDiff), static_cast<unsigned long long> (r.tanhDiff), static_cast<unsigned long long> (r.tanhNanPayload),
                  static_cast<unsigned long long> (r.kneeDiff), static_cast<unsigned long long> (r.hardDiff), static_cast<unsigned long long> (r.hardChecked));
@@ -1044,7 +1046,11 @@ RampResult rampAgainstExact (const DiodeCase& c, int style, float step, int what
     the generic piece loop it replaced. The criterion is that of docs/plans/diode-ladder.md: the peak of the response within 0.5 dB (and, stricter, every bin within 30 dB of the peak). Asserted up to 4 semitones of cutoff per control period; the table also lists 8 and 12. */
 TEST (own_filter_savings_diode_ramp_stays_within_half_a_db_of_the_piece_loop)
 {
-    const float steps[] = { 0.5f, 2.0f, 4.0f, 8.0f, 12.0f };
+    // the quick run takes the steps 0.5 and 4 semitones per period (the 4 semitone step is where the asserted worst case sits) and leaves out 2, 8 and 12 (8 and 12 are only listed); SB_TEST_FULL=1 runs all five
+    const float allSteps[] = { 0.5f, 2.0f, 4.0f, 8.0f, 12.0f };
+    const bool listAll = sbtest::quickScaled ("filter_savings Diode ramp steps (1 = all five steps, 0 = the steps 0.5 and 4 only)", 1, 0) != 0;
+    const float* const steps = allSteps;
+    const int numSteps = 5;
     double worstPeak = 0.0, worstBand = 0.0, worstRms = -1000.0;
     for (const DiodeCase& c : kDiodePresets)
         for (int style = 0; style < 2; ++style)
@@ -1052,8 +1058,11 @@ TEST (own_filter_savings_diode_ramp_stays_within_half_a_db_of_the_piece_loop)
             {
                 if (what == 3 && style == 0)
                     continue;
-                for (float step : steps)
+                for (int si = 0; si < numSteps; ++si)
                 {
+                    const float step = steps[si];
+                    if (!listAll && step != 0.5f && step != 4.0f)
+                        continue;
                     if ((what == 2) && step != steps[0])
                         continue; // (the drive moves by a fixed 0.5 dB per period: one line)
                     const RampResult r = rampAgainstExact (c, style, step, what);

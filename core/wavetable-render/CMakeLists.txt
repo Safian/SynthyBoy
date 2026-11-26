@@ -8,4 +8,6 @@ target_sources(synthyboy_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/wavetable_ren
 if(SYNTHYBOY_BUILD_TESTS)
     find_package(Threads REQUIRED)
     synthyboy_add_test(synthyboy_test_wavetable_render tests/test_wavetable_render.cpp)
+    # label `slow` (more than about 5 s alone: `ctest -LE slow` is the quick set, docs/dsp-knowledge/testing.md)
+    set_tests_properties(synthyboy_test_wavetable_render PROPERTIES LABELS slow)
 endif()

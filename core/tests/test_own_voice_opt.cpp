@@ -448,7 +448,7 @@ bool playAndCompare (EnginePair& p, Rand& r, int blocks, const char* what, bool 
 TEST (voice_opt_engine_random_patches_are_bit_identical)
 {
     ensureAllBuiltinWavetables();
-    const int patches = sbtest::instrumented() ? 12 : 80;
+    const int patches = sbtest::instrumented() ? 12 : sbtest::quickScaled ("voice_opt random patches", 80, 10, 140);
     int failed = 0;
     const auto t0 = std::chrono::steady_clock::now();
     for (int s = 0; s < patches; ++s)
@@ -473,7 +473,7 @@ TEST (voice_opt_engine_factory_presets_are_bit_identical)
     CHECK (presets.size() >= 100);
     int failed = 0, runs = 0;
     const auto t0 = std::chrono::steady_clock::now();
-    const size_t step = sbtest::instrumented() ? 8 : 1;
+    const size_t step = sbtest::instrumented() ? 8 : static_cast<size_t> (sbtest::quickScaled ("voice_opt factory presets (every Nth preset, both the stored and the edited kind)", 1, 7, 314));
     for (size_t i = 0; i < presets.size(); i += step)
     {
         Rand r (static_cast<uint32_t> (77 + i));
@@ -521,7 +521,7 @@ struct VoiceRig
 TEST (voice_opt_voice_state_is_bit_identical)
 {
     ensureAllBuiltinWavetables();
-    const int patches = sbtest::instrumented() ? 10 : 120;
+    const int patches = sbtest::instrumented() ? 10 : sbtest::quickScaled ("voice_opt voice state patches", 120, 20, 0);
     int failed = 0;
     float bends[16] = {}, wheel[16] = {}, after[16] = {}, tuned[128];
     for (int k = 0; k < 128; ++k)
@@ -861,7 +861,9 @@ TEST (voice_opt_voice_count_gain_cache_is_bit_identical)
     const std::vector<std::vector<float>> presets = factoryPresets();
     int failed = 0, runs = 0;
     const float alphas[] = { 0.5f, 0.25f, 1.0f, 0.0f, 0.73f };
-    for (size_t i = 0; i < presets.size(); i += sbtest::instrumented() ? 24 : 6)
+    const size_t presetStep = sbtest::instrumented() ? 24 : static_cast<size_t> (sbtest::quickScaled ("voice_opt voice count gain cache, every Nth preset (the 164 checks are those of this and the next reduction together)", 6, 24, 164));
+    const int extraPatches = sbtest::instrumented() ? 4 : sbtest::quickScaled ("voice_opt voice count gain cache, random patches", 24, 6, 0);
+    for (size_t i = 0; i < presets.size(); i += presetStep)
     {
         Rand r (static_cast<uint32_t> (4100 + i));
         const std::vector<float> plain = randomPatch (r, &presets[i], 0.02f);
@@ -874,7 +876,7 @@ TEST (voice_opt_voice_count_gain_cache_is_bit_identical)
         ++runs;
         failed += playAndCompare (p, r, 400, what) ? 0 : 1;
     }
-    for (int s = 0; s < (sbtest::instrumented() ? 4 : 24); ++s)
+    for (int s = 0; s < extraPatches; ++s)
     {
         Rand r (static_cast<uint32_t> (4900 + s));
         std::vector<float> plain = randomPatch (r, nullptr, 0.2f);
@@ -899,7 +901,7 @@ TEST (voice_opt_voice_count_gain_cache_is_bit_identical)
 TEST (voice_opt_unused_lfo_display_skip_keeps_the_sound_and_the_clocks)
 {
     ensureAllBuiltinWavetables();
-    const int patches = sbtest::instrumented() ? 10 : 100;
+    const int patches = sbtest::instrumented() ? 10 : sbtest::quickScaled ("voice_opt unused LFO display skip patches", 100, 15, 0);
     int failed = 0;
     long long skippedPeriods = 0;
     float bends[16] = {}, wheel[16] = {}, after[16] = {}, tuned[128];
@@ -1031,7 +1033,8 @@ TEST (voice_opt_engine_unused_lfo_display_skip_sounds_the_same)
     ensureAllBuiltinWavetables();
     const std::vector<std::vector<float>> presets = factoryPresets();
     int failed = 0, runs = 0;
-    for (int s = 0; s < (sbtest::instrumented() ? 6 : 48); ++s)
+    const int numPatches = sbtest::instrumented() ? 6 : sbtest::quickScaled ("voice_opt engine unused LFO display skip, patches", 48, 8, 80);
+    for (int s = 0; s < numPatches; ++s)
     {
         Rand r (static_cast<uint32_t> (6100 + s));
         std::vector<float> plain = s % 3 == 2 ? presets[static_cast<size_t> (s) % presets.size()] : randomPatch (r, nullptr, 0.2f);
@@ -1469,6 +1472,9 @@ TEST (matrix_zero_skip_gives_the_same_deltas_for_every_special_value)
 {
     SlotGridResult res;
     const auto t0 = std::chrono::steady_clock::now();
+    // quick run: every 29th combination of the grid below (a stride that divides none of the loop sizes: the sample is spread over every axis); SB_TEST_FULL=1: the whole grid
+    const int gridStride = sbtest::quickScaled ("voice_opt matrix zero skip grid (every Nth combination)", 1, 29);
+    long long combination = 0;
     for (float power : { 0.0f, 5.0e-5f, 1.0f, -12.0f, 100.0f, -100.0f, INFINITY, NAN })
         for (bool bipolar : { false, true })
             for (float rise : { 0.0f, 5.0f, NAN })
@@ -1478,14 +1484,16 @@ TEST (matrix_zero_skip_gives_the_same_deltas_for_every_special_value)
                         {
                             if ((bipolar || rise != 0.0f) && power != 0.0f && power != 100.0f)
                                 continue; // (a bipolar or slewed slot is never skipped: two powers of them are enough)
-                            slotGrid (res, power, bipolar, rise, false, 0.0f, 1.0f, amount, delayMs, viaAmount);
+                            if (combination++ % gridStride == 0)
+                                slotGrid (res, power, bipolar, rise, false, 0.0f, 1.0f, amount, delayMs, viaAmount);
                             for (float auxPower : { 0.0f, 2.0f, -85.0f, -95.0f, 95.0f, 80.0f, INFINITY, NAN })
                                 for (float auxOut : { 1.0f, 0.0f, INFINITY })
-                                    slotGrid (res, power, bipolar, rise, true, auxPower, auxOut, amount, delayMs, viaAmount);
+                                    if (combination++ % gridStride == 0)
+                                        slotGrid (res, power, bipolar, rise, true, auxPower, auxOut, amount, delayMs, viaAmount);
                         }
     std::printf ("%lld slot evaluations, %lld with the skip, %lld differ, %.1f s\n", res.cases, res.skipped, res.failed,
                  std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
-    CHECK (res.skipped > 100000);
+    CHECK (res.skipped > 100000 / gridStride);   // (the quick run has 1 / gridStride of the evaluations: the same share is required)
     CHECK_EQ (res.failed, 0);
 }
 
@@ -1495,7 +1503,9 @@ TEST (matrix_zero_skip_gives_the_same_deltas_for_every_special_value)
 TEST (voice_param_read_zero_test_on_the_bits_is_the_float_compare_for_every_pattern)
 {
     uint64_t mismatches = 0, zeros = 0;
-    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    // quick run: every 257th pattern (0x80000000, the negative zero, is added by hand: 257 does not divide it); SB_TEST_FULL=1: all 2^32 patterns
+    const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("voice_opt 2^32 pattern sweep of the zero test (stride)", 1, 257));
+    auto visit = [&] (uint64_t i)
     {
         const uint32_t u = static_cast<uint32_t> (i);
         float f;
@@ -1504,7 +1514,11 @@ TEST (voice_param_read_zero_test_on_the_bits_is_the_float_compare_for_every_patt
         const bool byFloat = vf == 0.0f, byBits = (u << 1) == 0u;
         mismatches += byFloat != byBits ? 1 : 0;
         zeros += byBits ? 1 : 0;
-    }
+    };
+    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
+        visit (i);
+    if (stride > 1)
+        visit (0x80000000ull);
     CHECK_EQ (zeros, uint64_t (2));
     CHECK_EQ (mismatches, uint64_t (0));
 }
@@ -1551,7 +1565,8 @@ TEST (ffloor_on_the_bits_is_the_form_before_for_every_pattern_with_flush_to_zero
         return;
     FlushToZero ftz;
     uint64_t differBefore = 0;
-    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("voice_opt 2^32 pattern sweep of ffloor with flush-to-zero (stride)", 1, 257));
+    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
     {
         const uint32_t u = static_cast<uint32_t> (i);
         float x;
@@ -1566,7 +1581,8 @@ TEST (ffloor_on_the_bits_is_the_form_before_for_every_pattern_with_flush_to_zero
 TEST (ffloor_on_the_bits_is_std_floor_for_every_pattern)
 {
     uint64_t differFloor = 0, differBefore = 0, nans = 0;
-    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    const uint64_t stride = static_cast<uint64_t> (sbtest::quickScaled ("voice_opt 2^32 pattern sweep of ffloor against std::floor (stride)", 1, 257));
+    for (uint64_t i = 0; i <= 0xffffffffull; i += stride)
     {
         const uint32_t u = static_cast<uint32_t> (i);
         float x;
@@ -1598,7 +1614,9 @@ TEST (voice_opt_engine_with_flush_to_zero_is_bit_identical)
     const std::vector<std::vector<float>> presets = factoryPresets();
     FlushToZero ftz;
     int failed = 0, runs = 0;
-    for (int s = 0; s < (sbtest::instrumented() ? 6 : 40); ++s)
+    const int numPatches = sbtest::instrumented() ? 6 : sbtest::quickScaled ("voice_opt flush-to-zero random patches (the 132 checks are those of this and the next reduction together)", 40, 8, 132);
+    const size_t presetStep = sbtest::instrumented() ? 16 : static_cast<size_t> (sbtest::quickScaled ("voice_opt flush-to-zero factory presets, every Nth", 4, 16, 0));
+    for (int s = 0; s < numPatches; ++s)
     {
         Rand r (static_cast<uint32_t> (9000 + s));
         const std::vector<float> plain = randomPatch (r, nullptr, 0.25f);
@@ -1608,7 +1626,7 @@ TEST (voice_opt_engine_with_flush_to_zero_is_bit_identical)
         ++runs;
         failed += playAndCompare (p, r, 400, what) ? 0 : 1;
     }
-    for (size_t i = 0; i < presets.size(); i += sbtest::instrumented() ? 16 : 4)
+    for (size_t i = 0; i < presets.size(); i += presetStep)
     {
         Rand r (static_cast<uint32_t> (300 + i));
         const std::vector<float> plain = randomPatch (r, &presets[i], 0.03f);
@@ -1698,8 +1716,9 @@ TEST (voice_opt_engine_library_oscillators_are_bit_identical)
     ref.name = "tone";
     attachSample (content, 1, ref, 44100, 44100, 1);
     int failed = 0, runs = 0;
+    const int perType = sbtest::instrumented() ? 2 : sbtest::quickScaled ("voice_opt library oscillators, patches per type", 8, 2, 36);
     for (int type = 1; type <= 3; ++type)
-        for (int s = 0; s < (sbtest::instrumented() ? 2 : 8); ++s)
+        for (int s = 0; s < perType; ++s)
         {
             Rand r (static_cast<uint32_t> (700 + 31 * type + s));
             std::vector<float> plain = randomPatch (r, nullptr, 0.15f);
