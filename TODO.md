@@ -167,7 +167,7 @@
 - [ ] 10. Szinte minden effekt 32 mintánként lépteti a paramétereit (lépcsőzaj); a „low" szinten a chorus 4, a phaser 8 mintáig tartja az értéket.
 - [ ] 12. Hyper / Dimension: 11 puffer ugyanazzal a jellel, mintánként akár 23 `sin` / `cos`; a Dimension 0% mixnél is fut.
 - [ ] 14. (maradék) Torzító: a szűrő Q-ja nem a specifikáció szerinti (lineáris `k = 2 - 1.9r` a `Q = 0.5 + 15.5 r^3` helyett: `core/engine-own/fx/fx_effects.h`, `Distortion`).
-- [ ] 15. EQ: osztás mintánként sávonként; mind a 4 sáv együtthatói 32 mintánként újraszámolódnak akkor is, ha nem változnak; torzulás a Nyquist közelében.
+- [ ] 15. EQ (remainder): a division per sample per band in law 0 (`svfProcess`; a reciprocal is not bit identical and was left out on purpose, see the Diode lesson in `docs/release/CPU-REVIEW-FILTER-FX.md` F14); distortion near Nyquist. (The band designs are cached on the exact parameter bits and a band whose coefficients stand still skips the interpolation: done, bit identical, `test_fxopt_cpu_eq.cpp`.)
 - [ ] 16. (maradék) Effektlánc: bekapcsoláskor 0,73 ms-os felúsztatás, kikapcsoláskor nincs leúsztatás (kattanás, levágott lecsengés); sorrendváltásnál nincs átúsztatás; a 255 mintánál hosszabb késleltetés csendben csonkul; a némított splitter-sávok effektjei is futnak.
 - [ ] 17. Chorus: rögzített nedves szint a hangszámtól függetlenül (1 és 4 hang között szintugrás); phaser: nincs denormális-védelem a visszacsatolásban; a szinkronizált LFO-k nem igazodnak az ütemhez.
 - [ ] 18. Öt effekt (kompresszor, Hyper, Utility, Bode, konvolúció) 0% mixnél sem marad ki a „low" szinten; a lecsengés-tartás 20 másodperc minden típusra.
