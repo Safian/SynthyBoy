@@ -842,16 +842,34 @@ void OwnEngine::addGhosts (int n) noexcept
         if (!g.used)
             continue;
         const float inv = 1.0f / static_cast<float> (g.total);
+        // the gain of each sample is the same for the four buses: made once (the same expression of the same values), not once per bus (the reference, kOwnSavingVoiceControl, makes it per bus)
+        float gains[kControlPeriod];
+        bool gainsMade = false;
         for (int t = 0; t < 4; ++t)
         {
             const float l = g.v[t][0], r = g.v[t][1];
             if (l == 0.0f && r == 0.0f)
                 continue;
+            if (globals.referenceControl)
+            {
+                for (int k = 0; k < n; ++k)
+                {
+                    const float gain = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
+                    mixL[t][k] += l * gain;
+                    mixR[t][k] += r * gain;
+                }
+                continue;
+            }
+            if (!gainsMade)
+            {
+                for (int k = 0; k < n; ++k)
+                    gains[k] = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
+                gainsMade = true;
+            }
             for (int k = 0; k < n; ++k)
             {
-                const float gain = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
-                mixL[t][k] += l * gain;
-                mixR[t][k] += r * gain;
+                mixL[t][k] += l * gains[k];
+                mixR[t][k] += r * gains[k];
             }
         }
         g.age += n;

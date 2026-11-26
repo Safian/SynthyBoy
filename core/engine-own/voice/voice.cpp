@@ -1759,7 +1759,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     const bool f1Solo = (effectiveSolo & (1u << 5)) != 0;
     const bool f2Solo = (effectiveSolo & (1u << 6)) != 0;
 
-    const ParamIndex& pIdx = paramIndex();
+    const ParamIndex& pIdx = *pidx; // (the member set by prepare (): paramIndex () is a guarded static, tested on every call)
     const int b1Dest = (gl != nullptr && gl->base != nullptr && pIdx.bus1Dest >= 0) ? static_cast<int> (gl->base[static_cast<size_t> (pIdx.bus1Dest)] + 0.5f) : 0;
     const int b2Dest = (gl != nullptr && gl->base != nullptr && pIdx.bus2Dest >= 0) ? static_cast<int> (gl->base[static_cast<size_t> (pIdx.bus2Dest)] + 0.5f) : 0;
 
@@ -2019,6 +2019,9 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             std::copy (fin_L[f], fin_L[f] + n, fout_L[f]);
             std::copy (fin_R[f], fin_R[f] + n, fout_R[f]);
         }
+        // a level of exactly 1 in both periods: the ramp a + (b - a) * t is 1 + 0 * t = 1 for every sample and x * 1 is x (only a denormal x would differ, and every reader below
+        // takes a denormal as 0 where the multiply would have: flush-to-zero on the device and in the flush-to-zero tests). The reference multiplies.
+        if (ref || filtLevelPrev[f] != 1.0f || filtLevel[f] != 1.0f)
         {
             float gk[kControlPeriod];
             simd::rampLerp (gk, filtLevelPrev[f], filtLevel[f], t0, n, invP);
@@ -2162,8 +2165,16 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             lastL = ml[n - 1];
             lastR = mr[n - 1];
         }
-        simd::addScaled (out.l[tg], ml, 1.0f, n); // d += m * 1.0f is d += m exactly
-        simd::addScaled (out.r[tg], mr, 1.0f, n);
+        if (ref)
+        {
+            simd::addScaled (out.l[tg], ml, 1.0f, n);
+            simd::addScaled (out.r[tg], mr, 1.0f, n);
+        }
+        else
+        {
+            simd::addTo (out.l[tg], ml, n); // d += m * 1.0f is d += m exactly
+            simd::addTo (out.r[tg], mr, n);
+        }
     }
     declickPos = std::max (0, declickPos - n);
     outL = lastL;
