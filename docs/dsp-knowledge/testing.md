@@ -155,3 +155,64 @@ own_param_snapshot 81, own_filter_response_rates 5359. With `SB_TEST_FULL=1` the
 - **Unity build or precompiled headers would gain at most the parsing share** (10 to 18 % of the compile time of a file), so they are not worth the loss of isolation. Two cheaper facts:
   `core/tests/test_main.cpp` is compiled once per test executable, 128 times, 28 s of CPU in total (5 % of the compile time; ccache removes it); building it once as an object library would
   remove it without ccache. Not done: the task was a report.
+
+## Quick set and full set (workflow)
+
+The development loop runs the quick set; the full set is one `ctest` away and runs everything that ran before the split.
+
+```sh
+# once: a development build (core and tests only; ccache is used when it is installed, SYNTHYBOY_USE_CCACHE=OFF turns it off)
+cmake --preset dev && cmake --build --preset dev          # build-dev/ ; or: cmake -S . -B build -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF
+
+# quick set: everything without the label slow, the heavy cases of seven binaries reduced (85 s wall at -j2 on the x86 VM; 153 tests)
+ctest --preset quick                                       # or: ctest --test-dir build -j2 -LE slow --output-on-failure
+
+# full set: every test, the heavy cases in full (the entries <name>_full, label slow), the audits
+ctest --preset full                                        # or: ctest --test-dir build -j2 --output-on-failure
+```
+
+- **`slow`** is on every test that takes more than about 5 s alone (26 tests, listed by `ctest -N -L slow`). `ctest -L slow` runs only those.
+- **`SB_TEST_FULL`** (environment, read by `sbtest::full ()` in `core/tests/test_runner.h`): unset, empty or `0` is the quick run, `1` the full run, for the seven binaries
+  `own_voice_opt`, `own_filter_savings`, `own_osc_types`, `own_fx`, `own_engine`, `own_param_snapshot`, `own_filter_response_rates`. A heavy case that runs reduced or not at all prints one line
+  per reduction, never silently, and the summary counts them:
+  ```
+  [ SKIP-QUICK ] voice_opt random patches: reduced from 80 to 10 (140 check(s) not run), run with SB_TEST_FULL=1
+  quick run: 14 heavy case part(s) reduced or skipped, 866 check(s) not run; SB_TEST_FULL=1 runs them all
+  ```
+  Each of the seven has a ctest entry `<name>_full` (labels `slow;full`) that runs the same executable with `SB_TEST_FULL=1`; `ctest` runs both, the quick entry first.
+  Check counts (`N check(s)` of the last line), identical in full mode to the ones before the split, and quick plus "not run" equals full:
+
+  | binary | before the split | `SB_TEST_FULL=1` | quick run | "not run" in the quick run | alone, full / quick (s) |
+  |---|---|---|---|---|---|
+  | own_voice_opt | 2820 | 2820 | 1954 | 866 | 328 / 20 |
+  | own_engine | 3337 | 3337 | 3337 | 0 (the blocks per case are fewer) | 21 / 5.8 |
+  | own_fx | 9263 | 9263 | 8695 | 568 | 25 / 15 |
+  | own_osc_types | 4389 | 4389 | 3536 | 853 | 36 / 10.8 |
+  | own_filter_savings | 361827 | 361827 | 361827 | 0 (a strided 2^32 sweep) | 72 / 3.8 |
+  | own_param_snapshot | 81 | 81 | 81 | 0 (every 3rd parameter) | 13 / 2.2 |
+  | own_filter_response_rates | 5359 | 5359 | 1579 | 3780 | 15 / 5.8 |
+
+  What the quick run does: a strided sample of the exhaustive 2^32 float sweeps (every 257th pattern and, as no stride may skip an off by one, the neighbourhood of the constants of the code
+  under test and of every binade boundary; the one pattern mutation of `flushDenormal` and the one pattern mutation of `ffloorBits` of the overlap report are caught in the quick run), every
+  29th combination of the matrix grid, fewer random patches / presets / blocks, every Nth row of the reference tables, and five whole cases of `own_osc_types` left out. The quick run is a
+  development check, not a release gate: before a commit that changes DSP, run the area's full entries (below); a release runs `ctest` completely.
+- **A new heavy case**: use `sbtest::quickScaled (what, fullValue, quickValue, skippedChecks)` for an amount of work (it returns `fullValue` with `SB_TEST_FULL=1`, otherwise `quickValue`, and
+  prints the line) or `if (sbtest::skipInQuick (what, skippedChecks, reason)) return;` at the top of a case; register the binary with `synthyboy_add_full_run (<target>)` in
+  `core/tests/CMakeLists.txt`. `skippedChecks` is `full - quick` measured with `./<binary> <case>` with and without `SB_TEST_FULL=1`; the two sums must stay equal to the full count.
+  Under a sanitizer or `SBTEST_INSTRUMENTED=1` the existing `sbtest::instrumented ()` reduction is still used first.
+- **Only the tests of a changed area**: `ctest --test-dir build -R <regex>`, with `-j2`. The quick entry only: anchor it, `-R '^synthyboy_test_own_voice_opt$'`; both entries: `-R own_voice_opt`.
+  Examples: filters `-R 'own_filter|own_diode|filters_serum|filter_pair'`, oscillators `-R 'own_osc|wt_osc|own_content_opt|own_lib_'`, effects `-R 'own_fx|fxopt|own_alias|own_compressor'`,
+  voice and matrix `-R 'own_voice|own_param_snapshot|own_engine'`. One case of one binary: `build/core/tests/synthyboy_test_own_voice_opt <part of the case name>` (add `SB_TEST_FULL=1` for the
+  full case).
+- **Timing-sensitive tests** (`own_filter_response`, `own_osc_displays`, `own_helper_thread`, `fxopt_hyper`, `fxopt_reverb_vintage`, `tier_bench_evict_flag`) have `RUN_SERIAL`: ctest never
+  runs them next to another test, so `-j N` cannot make them fail; no limit was loosened. `tier_bench_evict_flag` has TIMEOUT 240 s (single run 24 s; it timed out at 120 s under `-j4`).
+  `-j2` is the right width on the 4 vCPU development VM; `-j4` is what made tests of 5 to 25 s take 2 to 3 times longer.
+- **ASan / UBSan, separately** (the CI job `core-sanitizers` does the same; the instrumented binaries are 5 to 20 times slower and set `sbtest::instrumented ()`, which reduces the work of the
+  thread and engine tests by itself):
+  ```sh
+  cmake -S . -B build-asan -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+  cmake --build build-asan && ctest --test-dir build-asan -j2 -LE slow --output-on-failure
+  ```
+  Run it on the changed area (`-R`), not on the whole set, while developing; the `_full` entries of the split binaries are the ones to run there before a release (they carry the label slow).
+  TSan: the same with `-fsanitize=thread`, `-R 'threads|own_fx_worker_race|own_helper_thread'`. On a Linux host with a high ASLR entropy the runtime needs `sudo sysctl vm.mmap_rnd_bits=28`.
