@@ -133,17 +133,17 @@ class TestUiScreenOscB(unittest.TestCase):
     def test_osc_b_bindings_isolation(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
 
-        # Power button for Osc B: osc2.on -> Parameter 2974
+        # Power button for Osc B: osc2.on -> Parameter 2973
         power_layer = defs["oscNativePowerLayer"]
         power_b = next((c for c in power_layer["componentsData"] if c["componentData"]["name"] == "Osc Native Osc B Power"), None)
         self.assertIsNotNone(power_b)
-        self.assertEqual(power_b["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 2974"}])
+        self.assertEqual(power_b["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 2973"}])
 
-        # Routing dropdown for Osc B: osc2.destination -> Parameter 3008
+        # Routing dropdown for Osc B: osc2.destination -> Parameter 3007
         routing_layer = defs["oscNativeRoutingLayer"]
         routing_b = next((c for c in routing_layer["componentsData"] if c["componentData"]["name"] == "Osc Native Routing Osc B"), None)
         self.assertIsNotNone(routing_b)
-        self.assertEqual(routing_b["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 3008"}])
+        self.assertEqual(routing_b["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 3007"}])
 
         # Pan dial for Osc B: osc2.pan -> Parameter 37
         pan_layer = defs["oscNativePanLayer"]
@@ -165,13 +165,13 @@ class TestUiScreenOscB(unittest.TestCase):
         self.assertIsNotNone(settings_b)
         remap = {m["key"]: m["value"] for m in settings_b["handle remapping"]["map"]}
         for slot in range(18):
-            self.assertEqual(remap[f"OscAbc{slot}"], f"Parameter {3030 + slot}")
+            self.assertEqual(remap[f"OscAbc{slot}"], f"Parameter {3029 + slot}")
 
-        # Detail loader: LOAD B bound to Parameter 3499
+        # Detail loader: LOAD B bound to Parameter 3497
         detail_layer = defs["oscNativeDetail"]
         load_b = next((c for c in detail_layer["componentsData"] if c["componentData"]["name"] == "LOAD B"), None)
         self.assertIsNotNone(load_b)
-        self.assertEqual(load_b["handle remapping"]["map"][0]["value"], "FromGesture/Parameter 3499")
+        self.assertEqual(load_b["handle remapping"]["map"][0]["value"], "FromGesture/Parameter 3497")
 
     def test_osc_b_qlinks_mapping(self):
         entries = self.qlinks["Screen Mode Q-Links"]["map"]

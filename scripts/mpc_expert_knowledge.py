@@ -27,7 +27,7 @@ import zipfile
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_ROOT = Path('/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge')
 EXCLUDED = {'private-do-not-publish', '.runtime', '.git', '.claude', '.agents', 'node_modules', 'thirdparty', 'third_party', 'vendor', 'userxpl', 'assets', 'vital', 'serum', 'synth-knowledge'}
-TOPICS = {'README.md', 'mpc-display.md', 'mpc-host-scripting.md', 'native-text-entry.md', 'platform-key61.md', 'sources.md', 'xl-main-fx-peek-acceptance.md', 'mpc-expert-runtime.md'}
+TOPICS = {'README.md', 'mpc-display.md', 'mpc-host-scripting.md', 'native-text-entry.md', 'platform-key61.md', 'sources.md', 'mpc-expert-runtime.md'}
 
 def atomic(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)

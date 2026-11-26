@@ -7,8 +7,8 @@
 Composes every element strictly from the actual native component definitions
 (`build_mixer_strip_definitions`, `solo_mute`, `fader`, `meter_block`) and central
 `components/sizes.json` + `components/colors.json` style tokens so the rendered preview
-and the native TUI skin JSON match pixel-for-pixel (including LEVEL above PAN/B1/B2 and the
-persistent 6-tab bottom bar).
+and the native TUI skin JSON match pixel-for-pixel (including LEVEL above PAN/B1/B2). The Mixer is one
+screen of ten strips: no peek tab bar.
 """
 
 import argparse
@@ -22,7 +22,6 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from screen_images import require_external_output, save_screen, screen_path
-from components.native.tab_bar.tab_bar import render_tab_bar
 from components.native.mixer_strip.mixer_strip import (
     build_mixer_strip_definitions,
     render_mixer_full_screen_background,
@@ -47,7 +46,7 @@ from components.style import color as _style_color, rgb as _style_rgb, size as _
 CHROME_REF = ROOT / "docs" / "screens" / "mixer_old.jpg"
 
 
-def _render_mixer_tab_canvas(active_tab: int = 0, meter_readout=None) -> Image.Image:
+def _render_mixer_tab_canvas(meter_readout=None) -> Image.Image:
     """Renders the 1280x628 native Mixer tab image directly from component definitions."""
     defs = build_mixer_strip_definitions()
     assert "mixerStripSource" in defs and "mixerStripBus" in defs and "mixerStripMaster" in defs
@@ -100,11 +99,6 @@ def _render_mixer_tab_canvas(active_tab: int = 0, meter_readout=None) -> Image.I
                       ClipL=0, ClipR=0)
         strip_img = render_mixer_strip(st["variant"], st)
         tab_bg.alpha_composite(strip_img, (start_x + stride * i, strip_y))
-
-    labels = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
-    bar = render_tab_bar(labels, active_tab, _style_size("mixer_strip.tab.width"), _style_size("mixer_strip.tab.height"))
-    y = strip_y + _style_size("mixer_strip.height") + _style_size("mixer_strip.tab.gap_y")
-    tab_bg.alpha_composite(bar, (_style_size("mixer_strip.tab.start_x"), y))
 
     return tab_bg
 
@@ -164,7 +158,7 @@ def render_preview(states_out: Path = None, meter_readout=None):
     else:
         screen = Image.new("RGBA", (1280, 800), _style_rgb("surface.canvas"))
 
-    tab_bg = _render_mixer_tab_canvas(active_tab=0, meter_readout=meter_readout)
+    tab_bg = _render_mixer_tab_canvas(meter_readout=meter_readout)
     screen.alpha_composite(tab_bg, (0, 110))
 
     canonical = screen_path("mixer")

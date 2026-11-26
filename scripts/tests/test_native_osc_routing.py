@@ -24,7 +24,7 @@ RUN_GEN_UI = ROOT / "scripts" / "run-gen-ui.py"
 SDK = Path(os.environ.get("MPC_SDK") or Path.home() / ".local/share/local-worker/ext/mpc-sdk")
 
 from scripts.native_ui_params import (OSC_DETAIL, OSC_DETAIL_CELLS, OSC_ROUTING_BY_SOURCE, OSC_SOURCE,
-                                      OSC_VISIBILITY, mixer_peek_index)
+                                      OSC_VISIBILITY, native_base_index)
 from components.native.selector.selector import (
     OSC_COMPACT_LEVEL_COMPONENT_TYPE,
     OSC_COMPACT_PAN_COMPONENT_TYPE,
@@ -269,7 +269,7 @@ class TestNativeOscRouting(unittest.TestCase):
             self.assertIn(OSC_ROUTING_OVERLAY_NAME, defs)
 
             replacements = {r["key"]: r["value"] for r in tui["pageData"]["replacementStrings"]}
-            base = mixer_peek_index(ctx.param_count)
+            base = native_base_index(ctx.param_count)
             route_base, view_idx = base + OSC_ROUTING_BY_SOURCE, base + OSC_VISIBILITY
             routing_layer = defs["oscNativeRoutingLayer"]
             self.assertTrue(routing_layer["ignoreMousePresses"])
@@ -413,7 +413,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 self.assertTrue(all(c["componentData"]["name"].startswith("Overlay ") for c in children[pos + 1:]))
             play = next(t for t in tui["pageData"]["tabs"] if t["tabName"] == "Play")
             dock, = [c for c in play["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "oscNativeSurface"]
-            self.assertEqual(dock["bounds"]["additionalInvalidatingHandles"], ["RangedEnabling/1/2/7/Parameter 3537"])
+            self.assertEqual(dock["bounds"]["additionalInvalidatingHandles"], ["RangedEnabling/1/2/7/Parameter 3535"])
             self.assertEqual(dock["bounds"]["bounds"], "0 0 1280 628")
             self.assertNotIn("Osc Native Source Tabs", widgets)
             self.assertIn(OSC_PAN_LAYER, widgets["Osc Native Pan"]["componentData"]["type"])
@@ -424,13 +424,13 @@ class TestNativeOscRouting(unittest.TestCase):
             self.assertEqual(widgets[OSC_ROUTING_CONTROL_NAME]["bounds"]["bounds"], "%d %d %d %d" % STANDALONE_COMPACT_OSC_ROUTING_RECT)
             self.assertEqual(widgets["Osc Native Power"]["componentData"]["type"], "oscNativePowerLayer")
             self.assertEqual(widgets["Osc Native Power"]["bounds"]["bounds"], "12 8 106 164")
-            self.assertEqual(widgets["Osc Native Power"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2886"])
-            self.assertEqual(widgets["Osc Native Settings"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2986"])
+            self.assertEqual(widgets["Osc Native Power"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2885"])
+            self.assertEqual(widgets["Osc Native Settings"]["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2985"])
 
             detail = json.loads((EXTRAS_DIR / "osc-native-detail.json").read_text(encoding="utf-8"))
             viewport = defs["oscNativeDetail"]["componentsData"]
             base = 2719 + OSC_DETAIL
-            self.assertEqual(base, 3350)
+            self.assertEqual(base, 3348)
             self.assertEqual(widgets["Osc Native Detail"]["bounds"]["additionalInvalidatingHandles"], [f"NonZero/Parameter {base}"])
             for frame, grids, gate in (("plain", viewport[0], f"IndexedEnabling/3/6/Parameter {base}"),
                                        ("graph", viewport[1], f"RangedEnabling/4/5/6/Parameter {base}")):
@@ -439,7 +439,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 self.assertEqual((grid["version"], grid["repeats"], len(grid["componentsData"])), (3, 8, rows))
                 self.assertEqual(_rect_tuple(grids["bounds"]["bounds"]), (x, y, 8 * w, (rows - 1) * stride + h))
                 self.assertEqual(grids["bounds"]["additionalInvalidatingHandles"], [gate] if frame == "plain" else
-                                 [gate, "RangedEnabling/0/13/17/Parameter 3419"])
+                                 [gate, "RangedEnabling/0/13/17/Parameter 3417"])
                 self.assertLessEqual(x + 8 * w, 1280)
                 self.assertLessEqual(y + stride * (rows - 1) + h, 628)
                 for row, child in enumerate(grid["componentsData"]):
@@ -461,9 +461,9 @@ class TestNativeOscRouting(unittest.TestCase):
                     self.assertEqual(button["componentData"]["type"], "oscNativeSetting_action")
                     self.assertEqual(_rect_tuple(button["bounds"]["bounds"]), tuple(detail["root_load"]))
                     self.assertEqual(button["bounds"]["additionalInvalidatingHandles"],
-                                     [f"IndexedEnabling/{i + 1}/4/Parameter 3501"])
+                                     [f"IndexedEnabling/{i + 1}/4/Parameter 3499"])
                     self.assertEqual(button["bounds"]["acceptsHWFocus"], "Yes")
-                    index = 3498 + i
+                    index = 3496 + i
                     self.assertEqual(button["handle remapping"]["map"],
                                      [{"key": "Data", "value": f"FromGesture/Parameter {index}"},
                                       {"key": "Caption", "value": f"Parameter {index}"}])
@@ -471,15 +471,15 @@ class TestNativeOscRouting(unittest.TestCase):
             self.assertEqual(len(unison), 9)
             for control in unison:
                 self.assertEqual(control["bounds"]["additionalInvalidatingHandles"][:2], [
-                    "RangedEnabling/4/5/6/Parameter 3350", "IndexedEnabling/14/17/Parameter 3419"])
+                    "RangedEnabling/4/5/6/Parameter 3348", "IndexedEnabling/14/17/Parameter 3417"])
             mode, stack, *dials = unison
             self.assertEqual(mode["handle remapping"]["map"], [
-                {"key": "Data", "value": "Parameter 3351"}, {"key": "Step", "value": "FromGesture/Parameter 3383"}])
+                {"key": "Data", "value": "Parameter 3349"}, {"key": "Step", "value": "FromGesture/Parameter 3381"}])
             buttons = [c["componentData"]["data"] for c in defs[mode["componentData"]["type"]]["componentsData"]
                        if c["componentData"]["type"] == "Button"]
             self.assertEqual([(b["buttonId"], b["handleName"]) for b in buttons], [(1, "Step"), (3, "Step")])
             self.assertEqual(stack["componentData"]["type"], "oscNativeSetting_menu")
-            self.assertEqual(stack["handle remapping"]["map"][0], {"key": "Data", "value": "Parameter 3457"})
+            self.assertEqual(stack["handle remapping"]["map"][0], {"key": "Data", "value": "Parameter 3455"})
             for kinds in ((1, 1, 2, 2, 2), (1, 1, 2, 2, 0), (1, 1, 1, 1, 0)):
                 visible = []
                 for control in dials:
@@ -488,8 +488,8 @@ class TestNativeOscRouting(unittest.TestCase):
                     self.assertEqual((cx, cy, cw, ch), (x + column * w, y, w, h))
                     gate = control["bounds"]["additionalInvalidatingHandles"][2]
                     polarity = 2 if control["componentData"]["type"].endswith("_bi") else 1
-                    self.assertEqual(gate, f"IndexedEnabling/{polarity}/17/Parameter {3415 + column * 4}")
-                    self.assertEqual(control["handle remapping"]["map"][0]["value"], f"Parameter {3351 + column * 4}")
+                    self.assertEqual(gate, f"IndexedEnabling/{polarity}/17/Parameter {3413 + column * 4}")
+                    self.assertEqual(control["handle remapping"]["map"][0]["value"], f"Parameter {3349 + column * 4}")
                     if polarity == kinds[column - 2]:
                         visible.append(column)
                 self.assertEqual(visible, [i for i, k in enumerate(kinds, 2) if k])
@@ -503,8 +503,8 @@ class TestNativeOscRouting(unittest.TestCase):
             long_menus = tile[7:]
             self.assertEqual(len(long_menus), len(detail["menus"]))
             all_replacements = {x["key"]: x["value"] for x in tui["pageData"]["replacementStrings"]}
-            self.assertEqual(all_replacements["Parameter 3458"], all_replacements["Parameter 3022"])
-            self.assertEqual(len(all_replacements["Parameter 3458"]), 99)
+            self.assertEqual(all_replacements["Parameter 3456"], all_replacements["Parameter 3021"])
+            self.assertEqual(len(all_replacements["Parameter 3456"]), 99)
             for i, child in enumerate(long_menus):
                 index = base + 4 + 3 * OSC_DETAIL_CELLS + i
                 original = "oscNativeSettingWarpChoice" if detail["menus"][i] in ("warp.type", "warp2.type") else "oscNativeSetting_menu"
@@ -533,7 +533,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 self.assertEqual(route["componentData"]["name"], f"{OSC_ROUTING_CONTROL_NAME} {source}")
                 self.assertEqual(route["bounds"]["bounds"], "0 0 150 48")
                 self.assertEqual(route["componentData"]["type"], OSC_COMPACT_ROUTING_COMPONENT_TYPE)
-                self.assertEqual(route["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {3006 + i}"}])
+                self.assertEqual(route["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {3005 + i}"}])
                 self.assertEqual(pan["componentData"]["name"], f"{OSC_PAN_CONTROL_NAME} {source}")
                 self.assertEqual(pan["bounds"]["bounds"], "0 0 202 48")
                 self.assertEqual(pan["componentData"]["type"], OSC_COMPACT_PAN_COMPONENT_TYPE)
@@ -544,9 +544,9 @@ class TestNativeOscRouting(unittest.TestCase):
                 self.assertEqual(power["componentData"]["type"], "Button")
                 data = power["componentData"]["data"]
                 self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]), (1, 1, "Instant"))
-                self.assertEqual(power["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {2972 + i}"}])
+                self.assertEqual(power["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {2971 + i}"}])
                 self.assertEqual(power["bounds"]["bounds"], ("42 0 64 56" if i in (1, 2, 3) else "0 108 64 56"))
-                self.assertEqual(power["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{i}/5/Parameter 2884"])
+                self.assertEqual(power["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{i}/5/Parameter 2883"])
                 with Image.open(skins / data["onImage"]) as on, Image.open(skins / data["offImage"]) as off:
                     self.assertEqual((on.size, off.size), ((64, 56), (64, 56)))
                     self.assertEqual((on.getpixel((32, 16)), off.getpixel((32, 16))),
@@ -561,12 +561,12 @@ class TestNativeOscRouting(unittest.TestCase):
             replacements = {item["key"]: item["value"] for item in tui["pageData"]["replacementStrings"]}
             for i, wrapper in enumerate(root["componentsData"][-6::2]):
                 self.assertEqual(wrapper["componentData"]["type"], "oscNativeAbcSettings")
-                self.assertEqual(wrapper["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{i + 1}/5/Parameter 2884", f"IndexedEnabling/1/2/Parameter {2973 + i}"])
+                self.assertEqual(wrapper["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{i + 1}/5/Parameter 2883", f"IndexedEnabling/1/2/Parameter {2972 + i}"])
                 handles = {item["key"]: item["value"] for item in wrapper["handle remapping"]["map"]}
                 self.assertEqual([handles[f"OscAbc{slot}"] for slot in range(18)],
-                                 [f"Parameter {3012 + i * 18 + slot}" for slot in range(18)])
+                                 [f"Parameter {3011 + i * 18 + slot}" for slot in range(18)])
             def active(widget, variant):
-                frames = {2986: variant["layout"], 3011: variant["warp"]}
+                frames = {2985: variant["layout"], 3010: variant["warp"]}
                 for gate in widget["bounds"]["additionalInvalidatingHandles"]:
                     kind, lo, *tail = gate.split("/")
                     hi, _, parameter = (lo, *tail) if kind == "IndexedEnabling" else tail
@@ -575,7 +575,7 @@ class TestNativeOscRouting(unittest.TestCase):
                 return True
 
             for variant in source:
-                gate = f"IndexedEnabling/{variant['layout']}/9/Parameter 2986"
+                gate = f"IndexedEnabling/{variant['layout']}/9/Parameter 2985"
                 if "warp" in variant:
                     widgets = [widget for widget in abc if active(widget, variant)]
                 else:
@@ -585,12 +585,12 @@ class TestNativeOscRouting(unittest.TestCase):
                 by_handle = {widget["handle remapping"]["map"][0]["value"]: widget for widget in widgets}
                 for field in expected_fields:
                     slot = field["slot"]
-                    parameter = f"OscAbc{slot}" if "warp" in variant else f"Parameter {2987 + slot}"
+                    parameter = f"OscAbc{slot}" if "warp" in variant else f"Parameter {2986 + slot}"
                     widget = by_handle[parameter]
                     self.assertEqual(_rect_tuple(widget["bounds"]["bounds"]), tuple(field["rect"]))
                     definition = defs[widget["componentData"]["type"]]
                     if field["kind"] == "menu":
-                        targets = [f"Parameter {3012 + i * 18 + slot}" for i in range(3)] if "warp" in variant else [parameter]
+                        targets = [f"Parameter {3011 + i * 18 + slot}" for i in range(3)] if "warp" in variant else [parameter]
                         for target in targets:
                             self.assertEqual(replacements[target], field["choices"])
                         drawer = "fx editor choice menu"

@@ -57,7 +57,7 @@ def visible(gate, values):
 def expected_key(control, engine, context, vst=None):
     path = control["id"]
     parts = path.split("/")
-    base = native.mixer_peek_index(len(engine))
+    base = native.native_base_index(len(engine))
     def frame(offset, last):
         value = (vst or {}).get(base + offset)
         if value is None:

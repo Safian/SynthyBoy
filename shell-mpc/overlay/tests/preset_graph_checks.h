@@ -18,7 +18,7 @@ using ovt::check;
 
 struct Instance : demo::Inst
 {
-    int peek = -1, filterAction = -1, storedCurveWrites = 0;
+    int filterAction = -1, storedCurveWrites = 0;
     nativeui::fxheader::Bank fxHeader;
     void setNativeFxHeader (const nativeui::fxheader::State& state) noexcept override
     {
@@ -30,7 +30,6 @@ struct Instance : demo::Inst
     }
     void setLfoShape (int, const synthyboy::ContentLfoShape&) override { ++storedCurveWrites; }
     void setFilterCurve (int, const std::vector<synthyboy::ContentFilterCurvePoint>&, uint64_t) override { ++storedCurveWrites; }
-    int takeNativeMixerPeek() noexcept override { return std::exchange (peek, -1); }
     bool takeNativeFilterSlot (int slot, const nativeui::FxCell&, float& value) noexcept override
     {
         if (slot != nativeui::FilterAction || filterAction < 0)
@@ -128,13 +127,6 @@ struct Page
         view->onTouch ({ TouchEvent::Up, x, y }, stack, inst, input.nowMs + 40.0);
         check (owned && ! r.empty(), std::string (view->name()) + " owns the editor opener");
         update();
-    }
-
-    void openPeek (int target)
-    {
-        inst.peek = target;
-        update();
-        check (stack.top() == MixerUi::kPagePeek, "the native Mixer PEEK mailbox opens the requested panel");
     }
 
     void openFxMore()
@@ -273,12 +265,6 @@ inline void runFilter (Preset& a, Preset& b)
         const std::string label = "Filter " + std::to_string (f) + " response";
         roundTrip (label.c_str(), f == 1 ? "filter1" : "filter2", a, b, root,   // the hardware sub-tabs Filter and Filter 2
                    [&] (Page& p) { return filter (p).full().display.rect().inset (12); }, 1, 1, 0);
-        roundTrip (("Mixer PEEK " + label).c_str(), "mixer", a, b,
-                   [f] (Page& p) { p.openPeek (f - 1); },
-                   [] (Page& p) {
-                       auto* u = dynamic_cast<ui::FilterFullScreen*> (p.as<pages::MixerPage>().ui().peekRoot());
-                       return u ? u->display.rect().inset (12) : ui::Rect {};
-                   });
     }
     roundTrip ("Filter F1+F2 result", "filter1", a, b,
                [] (Page& p) {
@@ -607,46 +593,13 @@ inline void run()
             return ui::Rect { r.x + 44, r.y + 22, r.w - 60, r.h - 46 };
         };
         auto standalone = [] (Page& p) -> ui::FxSlotEditor& { return p.as<pages::FxPage>().ui().screen().slotEditor; };
-        const auto peek = [] (Page& p) -> ui::FxSlotEditor* {
-            auto* screen = dynamic_cast<ui::FxFullScreen*> (p.as<pages::MixerPage>().ui().peekRoot());
-            return screen ? &screen->slotEditor : nullptr;
-        };
         const std::string label = std::string ("FX ") + fx.name;
         roundTrip (label.c_str(), "fx", a, b, root, [&] (Page& p) { return plot (standalone (p), false); });
         if (fx.moreGraph)
             roundTrip ((label + " MORE").c_str(), "fx", a, b,
                        [] (Page& p) { p.openFxMore(); },
                        [&] (Page& p) { return plot (standalone (p), true); });
-        for (int rack = 0; rack < 3; ++rack)
-        {
-            a.set ((prefix + ".rack").c_str(), static_cast<float> (rack));
-            b.set ((prefix + ".rack").c_str(), static_cast<float> (rack));
-            const auto rootName = rack == 0 ? "MAIN PEEK " : rack == 1 ? "BUS 1 PEEK " : "BUS 2 PEEK ";
-            const std::string peekLabel = rootName + label;
-            roundTrip (peekLabel.c_str(), "mixer", a, b, [rack] (Page& p) { p.openPeek (rack + 2); },
-                       [&] (Page& p) { const auto* ed = peek (p); return ed ? plot (*ed, false) : ui::Rect {}; });
-            if (fx.moreGraph)
-                roundTrip ((peekLabel + " MORE").c_str(), "mixer", a, b, [&] (Page& p) {
-                    p.openPeek (rack + 2);
-                    p.openFxMore();
-                }, [&] (Page& p) { const auto* ed = peek (p); return ed ? plot (*ed, true) : ui::Rect {}; });
-        }
     }
-
-    a = {}; b = {};
-    a.set ("eq.on", 1);
-    a.set ("eq.mid.gain", -10);
-    b.set ("distortion.on", 1);
-    b.set ("distortion.drive", 23);
-    roundTrip ("MAIN PEEK changes module EQ to Distortion", "mixer", a, b,
-               [] (Page& p) { p.openPeek (2); },
-               [] (Page& p) {
-                   const auto* fx = dynamic_cast<ui::FxFullScreen*> (p.as<pages::MixerPage>().ui().peekRoot());
-                   const int type = p.inst.get ("eq.on") > 0.5f ? synthyboy::kFxTypeEq : synthyboy::kFxTypeDistortion;
-                   if (! fx || ! fx->slotEditor.hasDisplay() || fx->slotEditor.currentType() != type)
-                       return ui::Rect {};
-                   return fx->slotEditor.display.rect().inset (44);
-               });
 
     a = {};
     a.set ("chorus.on", 1);

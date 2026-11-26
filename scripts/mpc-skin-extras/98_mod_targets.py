@@ -24,7 +24,7 @@ from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
 from components.native.mod_row.mod_row import build_cell_definition, write_route_button_art, write_route_pagination_art
 from native_ui_params import (ENV_TAB_NAMES, MOD_TARGETS, MOD_TARGETS_PAGE_GATE, MOD_TARGETS_ROW_FIELDS,
                               MOD_TARGETS_ROW_GATE, MOD_TARGETS_ROWS, MOD_TARGETS_VIEW,
-                              mixer_peek_index)
+                              native_base_index)
 
 CONTRACT = Path(__file__).with_name("mod-targets-native-contract.json")
 
@@ -92,7 +92,7 @@ def apply(tui, qlinks, ctx):
     if (ctx.meta or {}).get("variant") != "overlay":
         return
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     view = f"Parameter {base + MOD_TARGETS_VIEW}"
     row_type = "nativeModulationRoute"
     ctx.add_component_definition(row_type, passive_layer(_rows(ctx, contract["row"])))
@@ -117,9 +117,9 @@ def apply(tui, qlinks, ctx):
     kind = "nativeModulationEditor"
     ctx.add_component_definition(kind, passive_layer(items))
     pages = {"Macros": 1, **dict.fromkeys(ENV_TAB_NAMES, 2), "LFO": 3, **dict.fromkeys(("Filter", "Filter 2", "Note", "Velo"), 4), "Mod": 5, "Play": 6,
-             **dict.fromkeys((*OSC_TAB_NAMES, "Osc"), 7), **dict.fromkeys(("Mix", "Mixer"), 8)}
+             **dict.fromkeys((*OSC_TAB_NAMES, "Osc"), 7)}
     for tab in tui["pageData"]["tabs"]:
         if (frame := pages.get(tab["tabName"])) is not None:
             entries = tab["componentDefinition"]["componentsData"]
             entries.insert(0, _custom("Native Modulation Editor", kind, tuple(_ui_style.size('screen.mod_targets.apply.rect')),
-                                      (("Data", view),), f"IndexedEnabling/{frame}/9/{view}"))
+                                      (("Data", view),), f"IndexedEnabling/{frame}/8/{view}"))

@@ -316,12 +316,12 @@ class MasterNativeControlsTests(unittest.TestCase):
         self.assertEqual(bend_down["bounds"]["showWhenDataModelInvalid"], "Hide")
         handles = bend_down["bounds"]["additionalInvalidatingHandles"]
         self.assertIn(f"IndexedEnabling/0/2/Parameter {link_idx}", handles)
-        self.assertIn("IndexedEnabling/1/3/Parameter 2887", handles)
+        self.assertIn("IndexedEnabling/1/3/Parameter 2886", handles)
 
         # Inactive MPE controls stay visible and retain their readouts.
         for name in ("Master MPE Bend Range", "Master MPE Bend to X"):
             widget = next(c for c in tab_components if c["componentData"]["name"] == name)
-            self.assertEqual(widget["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/2/3/Parameter 2887"])
+            self.assertEqual(widget["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/2/3/Parameter 2886"])
             self.assertEqual(widget["bounds"]["acceptsHWFocus"], "Children")
             mapping = {m["key"]: m["value"] for m in widget["handle remapping"]["map"]}
             for state in (0, 1):
@@ -357,7 +357,7 @@ class MasterNativeControlsTests(unittest.TestCase):
                 self.assertEqual(len(matches), 1)
                 widget = matches[0]
                 gates = widget["bounds"]["additionalInvalidatingHandles"]
-                expected_gates = [f"IndexedEnabling/{frames[spec['side']]}/3/Parameter 2887"]
+                expected_gates = [f"IndexedEnabling/{frames[spec['side']]}/3/Parameter 2886"]
                 if condition := spec.get("condition"):
                     expected_gates.append(f"IndexedEnabling/{condition['choice']}/{condition['numChoices']}/Parameter {indices[condition['param']]}")
                 self.assertEqual(gates, expected_gates)
@@ -411,7 +411,7 @@ class MasterNativeControlsTests(unittest.TestCase):
         self.assertFalse([w for w in tuning_widgets if w["componentData"]["name"].startswith("Master Panel ")])
         self.assertIn("Master Scale Input", {w["componentData"]["name"] for w in tuning_widgets})
         self.assertNotIn("Master Scale Input", by_name)
-        main_gate = "IndexedEnabling/1/3/Parameter 2887"
+        main_gate = "IndexedEnabling/1/3/Parameter 2886"
 
         def output(name, rect, links, gates=(), focus=False):
             item = by_name[name]
@@ -422,8 +422,8 @@ class MasterNativeControlsTests(unittest.TestCase):
             return definitions.get(item["componentData"]["type"], item)
 
         peaks = output("Master Peak Meters", "20 158 100 154", {
-            "Data": "Parameter 2977", "PeakL": "Parameter 2977", "PeakR": "Parameter 2978",
-            "HoldL": "Parameter 2979", "HoldR": "Parameter 2980",
+            "Data": "Parameter 2976", "PeakL": "Parameter 2976", "PeakR": "Parameter 2977",
+            "HoldL": "Parameter 2978", "HoldR": "Parameter 2979",
         })
         for side in ("focussed", "unfocussed"):
             self.assertEqual(peaks["backgroundData"][side]["image"], "master_peak_scale.png")
@@ -431,15 +431,15 @@ class MasterNativeControlsTests(unittest.TestCase):
         self.assertEqual([(m["direction"], m["peakHandle"], m["peakHoldHandle"]) for m in meters],
                          [("Up", "PeakL", "HoldL"), ("Up", "PeakR", "HoldR")])
         voice = output("Master Voice Meter", "388 550 364 44", {
-            "Peak": "Parameter 2981", "Data": "Parameter 2982",
+            "Peak": "Parameter 2980", "Data": "Parameter 2981",
         })
         self.assertEqual([skin.leaf_model(c, definitions)["type"] for c in voice["componentsData"]], ["Meter", "Label"])
         self.assertEqual(voice["componentsData"][0]["componentData"]["data"]["direction"], "Right")
         limiter = output("Master Output Limiter", "132 256 140 56", {
-            "Data": "Parameter 2983",
+            "Data": "Parameter 2982",
         }, focus=True)
-        clips = [output("Master Clip " + label, "20 98 100 56", {"Data": "Parameter 2985"},
-                        (f"IndexedEnabling/{state}/2/Parameter 2984",), focus=True)
+        clips = [output("Master Clip " + label, "20 98 100 56", {"Data": "Parameter 2984"},
+                        (f"IndexedEnabling/{state}/2/Parameter 2983",), focus=True)
                  for state, label in enumerate(("Off", "On"))]
         self.assertEqual(limiter["componentsData"][0]["componentData"]["type"], "Button")
         self.assertNotEqual(clips[0]["componentData"]["data"]["onImage"], clips[1]["componentData"]["data"]["onImage"])

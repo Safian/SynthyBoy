@@ -27,7 +27,7 @@ Public members of `FxDisplay`:
 Set the kind with `setKind (kind, name)` or `setKindFromType (fxType)` (uses `kindOfType`). Static helpers: `bandDb (band, EqBand, f, law, fs)`, `compOut (CompBand, x, mode, mix)`, `delayLines (DelayState, left, right)`, `delayEchoes (DelayState, spanMs, Echo*)`, `shape (type, driveDb, x)`; `kPoints` 192, `kMaxEchoes` 48.
 
 ## Size
-`minSize()` 200 x 120; in the stacked layout the editor gives it `fxl::Layout::displayH` (160, 176 or 220 px; `FxSlotEditor::kDisplayH` = 176) under the header. Larger: more plot room. Every effect with a display has `fxl::Layout::side`: the display stands at the LEFT over the whole page height (628 x 412 px on the full page, 628 x 348 under the panel tabs) and the controls at the right; the Mixer peek and a panel whose rows do not fit keep the stacked layout (see `fx-editor.md`). The compressor draws one plot per band on a wide strip and one square plot with the bands' numbers at its left on the side page.
+`minSize()` 200 x 120; in the stacked layout the editor gives it `fxl::Layout::displayH` (160, 176 or 220 px; `FxSlotEditor::kDisplayH` = 176) under the header. Larger: more plot room. Every effect with a display has `fxl::Layout::side`: the display stands at the LEFT over the whole page height (628 x 412 px on the full page, 628 x 348 under the panel tabs) and the controls at the right; a panel whose rows do not fit keeps the stacked layout (see `fx-editor.md`). The compressor draws one plot per band on a wide strip and one square plot with the bands' numbers at its left on the side page.
 
 ## Touch and knob behaviour
 None (a state in, a picture out). The knobs around it edit the values.

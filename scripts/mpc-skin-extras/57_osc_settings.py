@@ -30,7 +30,7 @@ from components.native.selector.selector import OSC_TAB_NAMES, labelled_choice_d
 import native_warp_picker
 from native_ui_params import (
     OSC_ABC_SETTINGS, OSC_ABC_SETTINGS_FIELDS, OSC_POWER, OSC_SETTINGS, OSC_SETTINGS_FIELDS, OSC_SETTINGS_LAYOUTS,
-    OSC_SETTINGS_VIEW, OSC_SOURCE, OSC_WARP_LAYOUT, mixer_peek_index,
+    OSC_SETTINGS_VIEW, OSC_SOURCE, OSC_WARP_LAYOUT, native_base_index,
 )
 
 CONTRACT = Path(__file__).with_name("osc-native-settings.json")
@@ -163,7 +163,7 @@ def apply(tui, qlinks, ctx):
     if not tabs:
         return
     variants = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     view = f"Parameter {base + OSC_SETTINGS_VIEW}"
     warp_layout = f"Parameter {base + OSC_WARP_LAYOUT}"
     definitions, drawers, menus, cells, abc_cells, abc_cells_off = set(), set(), {}, [], [], []

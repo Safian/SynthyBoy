@@ -17,7 +17,7 @@ from components.native.selector.selector import (
     build_standalone_osc_source_overlay,
     sanitize_osc_tab_navigation,
 )
-from native_ui_params import OSC_SOURCE, mixer_peek_index
+from native_ui_params import OSC_SOURCE, native_base_index
 
 
 def apply(tui, qlinks, ctx):
@@ -26,7 +26,7 @@ def apply(tui, qlinks, ctx):
     tabs = [tab for tab in tui["pageData"]["tabs"] if tab.get("tabName") in {"Osc", *OSC_INSTANCE_NAMES}]
     if not tabs:
         return
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     selector_idx = base + OSC_SOURCE
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     power_params = {k: ctx.param_index(k) for k in OSC_POWER_PARAM_KEYS}

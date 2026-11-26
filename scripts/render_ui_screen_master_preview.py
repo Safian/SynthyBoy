@@ -48,7 +48,7 @@ class MasterSkinSketch(OscSkinSketch):
 
 def virtual_state(param_count, side):
     """The plugin's native handles after the engine parameters, as the page publishes them."""
-    base = n.mixer_peek_index(param_count)
+    base = n.native_base_index(param_count)
     rows = {
         base + n.MASTER_VIEW: ((side + 1) / 2, "MAIN" if side == 0 else "TUNING"),
         base + n.MASTER_PEAK_L: (0.78, ""), base + n.MASTER_PEAK_R: (0.70, ""),
@@ -83,7 +83,7 @@ def render_all(out, work, states=STATES):
         raw, state_file = work / f"{name}.rgba", out / f"{name}.json"
         subprocess.run([str(binaries[generation]), str(side), str(raw), str(state_file)], check=True)
         state = json.loads(state_file.read_text())
-        state.update(virtual=virtual_state(state["param_count"], side), base=n.mixer_peek_index(state["param_count"]),
+        state.update(virtual=virtual_state(state["param_count"], side), base=n.native_base_index(state["param_count"]),
                      settings_view=0)
         host = MasterSkinSketch(skins, state).render_tab("Master" if side == 0 else "Tuning").convert("RGBA")
         overlay = Image.frombytes("RGBA", (1280, 628), raw.read_bytes())

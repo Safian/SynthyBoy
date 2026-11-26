@@ -1271,7 +1271,6 @@ private:
         in.live = haveLive ? liveBuf_.data() : nullptr;
         const int base = targetBase_[current_];
         in.targets = haveLive ? factory_.viewTargets (liveBuf_.data(), base, targetCount_[current_]) : nullptr;
-        v->observeHostWidgetGate (instanceSeen_ == pages_.instanceColours().blank);
         view.setHostBackground (hostBgOn_);   // (host_background.h: transparent only while the sentinel of the host's background is read)
         in.nowMs = nowMs;
         in.frames = &frames_;

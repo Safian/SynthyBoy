@@ -25,7 +25,7 @@ ame = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ame)
 
 filter_overlay_extra = importlib.import_module("mpc-skin-extras.50_filter_overlay")
-from native_ui_params import MACRO_TARGET, mixer_peek_index
+from native_ui_params import MACRO_TARGET, native_base_index
 screen_macros_99 = importlib.import_module("mpc-skin-extras.99_ui_screen_macros")
 
 
@@ -127,7 +127,7 @@ class TestUiScreenMacros(unittest.TestCase):
             param_idx = self.ctx.param_index(param_key)
             self.assertEqual(remap["Data"], f"Parameter {param_idx}")
             self.assertEqual(remap["Caption"], f"WithName[Macro {i+1}]/Parameter {param_idx}")
-            self.assertEqual(remap["Target"], f"FromGesture/Parameter {mixer_peek_index(self.ctx.param_count) + MACRO_TARGET + i}")
+            self.assertEqual(remap["Target"], f"FromGesture/Parameter {native_base_index(self.ctx.param_count) + MACRO_TARGET + i}")
             self.assertNotEqual(remap["Target"], remap["Data"], "Target button must not write to macro parameter")
 
     def test_screen_macros_idempotent_and_non_duplicating(self):

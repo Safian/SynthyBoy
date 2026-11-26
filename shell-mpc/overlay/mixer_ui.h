@@ -1,5 +1,5 @@
-// SynthyBoy - MPC overlay: the MIXER UI, the page of the Mixer tab (the plugin draws the whole tab, page_view.h): ten channel strips (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) over a routing
-// bar (shell-mpc/ui/mixer_screen.h, mixer_strip.h) wired to the engine's parameters: the switch, the destination, the pan, the two sends, the level (the fader with its meter). One object per (page view, plugin
+// SynthyBoy - MPC overlay: the MIXER UI, the page of the Mixer tab (the plugin draws the whole tab, page_view.h): ten channel strips (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) over the whole
+// tab (shell-mpc/ui/mixer_screen.h, mixer_strip.h; one screen: the Filter and FX pages are tabs of their own) wired to the engine's parameters: the switch, the destination, the pan, the two sends, the level (the fader with its meter). One object per (page view, plugin
 // instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Mixer and FX UI".
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -14,7 +14,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -23,8 +22,6 @@
 #include "../ui/mixer_screen.h"
 #include "../ui/native_apertures.h"
 #include "../ui/ui.h"
-#include "filter_ui.h"
-#include "fx_ui.h"
 #include "instance_view.h"
 #include "native_marker_covers.h"
 #include "page_view.h"
@@ -43,16 +40,15 @@ class MixerUi
 public:
     static constexpr int kElementPage = 5;          // the page of the Mixer tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
     static constexpr int kElementMixer = kElementPage;
-    static constexpr int kPageList = 25, kPagePeek = 26;
+    static constexpr int kPageList = 25;
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
-    static constexpr int kTabBarH = 64, kEditorH = kTabH - kTabBarH;   // 564 px docked editor above persistent 6-tab bar (y=566..622)
 
     enum IdBase : int
     {
         kStripBase = 1000,
         kList = 2000,
-        kListBackdrop = 2001, kPeekTarget, kPeekClose
+        kListBackdrop = 2001
     };
 
     enum class DrawPass : uint8_t { All, LiveOnly };
@@ -82,8 +78,6 @@ public:
             }
         }
         screen_.assignIds (kStripBase);
-        screen_.routingBar.setId (kPeekTarget);
-        peekClose_.setId (kPeekClose);
         setCanvas (kCanvasW, kCanvasH);
     }
 
@@ -95,7 +89,6 @@ public:
         list_.setPopup (tab);
         list_.setId (kList);
         list_.setBackdropId (kListBackdrop);
-        placePeek();
     }
 
     ui::MixerFullScreen& screen() noexcept { return screen_; }
@@ -103,15 +96,6 @@ public:
     ui::ListPopup& list() noexcept { return list_; }
     const ui::ListPopup& list() const noexcept { return list_; }
     const StripBinding& binding (int strip) const noexcept { return bindings_[strip]; }
-    int activeTab() const noexcept { return activeTab_; }
-    ui::Rect peekPanelRect() const noexcept
-    {
-        return nativePeek_ ? ui::Rect { 0, kTabY, w_, kEditorH }
-                           : ui::Rect { 8, kTabY + 24, w_ - 16, kTabH - 48 };
-    }
-    ui::Rect peekCloseRect() const noexcept { return peekClose_.rect(); }
-    ui::MenuButton& peekClose() noexcept { return peekClose_; }
-    ui::Component* peekRoot() noexcept { return peek_ ? &peek_->peekRoot() : nullptr; }
 
     bool nativeWidgetsEnabled() const noexcept { return nativeWidgetsEnabled_; }
     void setNativeWidgetsEnabled (bool on) noexcept { nativeWidgetsEnabled_ = on; syncNativeGround(); }
@@ -121,7 +105,7 @@ public:
         return &ui::theme::L() == &ui::theme::kLook1 && drawPass_ == DrawPass::LiveOnly;
     }
 
-    bool nativeBase() const noexcept { return useNativeWidgets() && ! peek_ && ! listOpen_; }
+    bool nativeBase() const noexcept { return useNativeWidgets() && ! listOpen_; }
 
     bool isNativeOwned (int strip, int controlType) const noexcept
     {
@@ -133,22 +117,17 @@ public:
             && (controlType == 0 || b.powerInverted || screen_.strips[strip].power.state.on);
     }
 
-    int topPage() const noexcept
-    {
-        if (peek_)
-            return peek_->topPage() ? peek_->topPage() : kPagePeek;
-        return listOpen_ ? kPageList : 0;
-    }
-    const int* qTargets() const noexcept { return peek_ ? peek_->qTargets() : qSlots_.data(); }
+    int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
-    const char* qGroupName() const noexcept { return peek_ ? peek_->qGroupName() : screen_.groupName (screen_.activeGroup()); }
+    const char* qGroupName() const noexcept { return screen_.groupName (screen_.activeGroup()); }
 
     void setHostBackground (bool on) noexcept
     {
         drawPass_ = on ? DrawPass::LiveOnly : DrawPass::All;
         syncNativeGround();
     }
-    bool hostBackground() const noexcept { return hostConfirmed() && ! peek_ && ! listOpen_; }
+    bool hostBackground() const noexcept { return hostConfirmed() && ! listOpen_; }
 
     /** Reads the instance: every value of every strip, the meters, the pages of the stack, the Q group. */
     void update (IInstanceView& inst, UiStack& stack, double nowMs, const page::Input& in)
@@ -158,15 +137,6 @@ public:
         {
             nativeWidgetsAvailable_ = available;
             dropGesture();
-        }
-        if (peek_)
-        {
-            if (stack.id (1) == kPagePeek)
-            {
-                updatePeek (inst, stack, nowMs, in);
-                return;
-            }
-            dismissPeek (inst); // hardware Back or a new host tab discarded the detail
         }
         inst.requestMeters();   // the source strips of this page: the engine measures them only while a page asks (every update of the page)
         if (listOpen_ && ! (stack.depth() >= 2 && stack.top() == kPageList))
@@ -231,13 +201,11 @@ public:
             {
                 const synthyboy::ParamInfo& pi = uibind::info (b.destParam);
                 const int choice = std::clamp (static_cast<int> (inst.param (b.destParam) + 0.5f), 0, std::max (0, pi.numChoices - 1));
-                screen_.routingBar.setDestination (s, choice);
                 if (pi.choices != nullptr && choice < pi.numChoices)
                     strip.destButton.setLabel (pi.choices[choice]);
                 strip.destButton.setEnabled (true);
             }
-            else   // the MASTER: no destination (its output is the plugin output): no button at all, not a greyed-out dummy
-                screen_.routingBar.setDestination (s, 4);   // master out
+            // the MASTER has no destination (its output is the plugin output): no button at all, not a greyed-out dummy
 
             auto send = [&] (ui::SliderBar& bar, int param)
             {
@@ -296,114 +264,52 @@ public:
         inst.setUiFullOpen (true);
         syncNativeGround();
         publishStripVisuals (inst);
-        inst.setNativeMixerActiveTab (0);
-        inst.setNativeMixerPeekEnabled (nativeBase() && ! listOpen_);
-        if (nativeBase())
-        {
-            const int request = inst.takeNativeMixerPeek();
-            if (request >= 0 && request < nativeui::kMixerTabs)
-            {
-                handleTabRequest (request, stack, inst);
-                if (peek_)
-                    return;
-            }
-        }
+        inst.setNativeMixerActive (nativeBase());
         publishQGroup (inst);
     }
 
-    // The Mixer paints its own ground with native cut-outs or a PEEK backdrop.
+    // The Mixer paints its own ground with native cut-outs.
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (peek_)
+        if (! nativeBase())
         {
-            if (nativePeek_ && peek_->topPage() == 0)
-            {
-                const ui::Rect editor = peekPanelRect();
-                ui::Cell clip (sb, editor);
-                ui::Pen pen (sb, true);
-                const ui::theme::Look& t = ui::theme::L();
-                pen.rect (editor, pen.c (t.bg0, 255));
-                peek_->clearNativePeekApertures (sb);
-                if (peek_->peekCloseVisible())
-                    peekClose_.draw (sb);
-                peek_->draw (sb);
-                return;
-            }
-            {
-                const ui::Rect tab = screen_.rect();
-                ui::Cell backdrop (sb, tab, 0);
-                sb.rect (tab.x, tab.y, tab.right(), tab.bottom(), gpu::rgba8 (0, 0, 0, 255));
-                sb.backdropBegin();
-                page::ground (sb);
-                screen_.draw (sb);
-                sb.backdropEnd (tab.x, tab.y, tab.right(), tab.bottom());
-            }
-            // Keep the frozen backdrop in its own cache layer. Changes to the panel
-            // then redraw its controls without repainting the Mixer or repeating the blur.
-            ui::Pen pen (sb, true);
-            const ui::theme::Look& t = ui::theme::L();
-            pen.rect (peekPanelRect(), pen.c (t.bg0, 255));
-            peek_->clearNativePeekApertures (sb);
-            {
-                ui::Cell frame (sb, peekPanelRect());
-                pen.rrect (peekPanelRect(), t.rBlock, pen.c (t.keylineHi, 255), t.frame);
-            }
-            if (peek_->peekCloseVisible())
-                peekClose_.draw (sb);
-            peek_->draw (sb);
+            page::ground (sb);
+            screen_.draw (sb);
         }
-        else
+        else if (! hostBackground())
         {
-            if (! nativeBase())
-            {
-                page::ground (sb);
-                screen_.draw (sb);
-            }
-            else if (! hostBackground())
-            {
-                // A native channel strip includes its header, meters and controls.
-                std::array<ui::Rect, ui::MixerFullScreen::kStrips + 1> holes;
-                for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
-                    holes[s] = screen_.strips[s].rect();
-                holes.back() = { 10, kTabY + 566, kCanvasW - 20, 56 };
-                ui::drawNativeCanvas (sb, screen_.rect(), holes);
-            }
-            if (nativeBase())
-                drawNativeMarkerCovers (sb, "mixer");
-            if (listOpen_)
-                list_.draw (sb);
+            // A native channel strip includes its header, meters and controls.
+            std::array<ui::Rect, ui::MixerFullScreen::kStrips> holes;
+            for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
+                holes[s] = screen_.strips[s].rect();
+            ui::drawNativeCanvas (sb, screen_.rect(), holes);
         }
+        if (nativeBase())
+            drawNativeMarkerCovers (sb, "mixer");
+        if (listOpen_)
+            list_.draw (sb);
     }
 
     /** Native strip widgets must be left to the host at the page router too.
         Returning true here used to let the overlay claim the whole Mixer tab;
         the direct touch method then yielded the event, but the host never got
-        the event through the normal page-view path. Modal PEEK and destination
-        popups reclaim the full tab so inputs never leak to underlying native controls. */
+        the event through the normal page-view path. The destination popup
+        reclaims the full tab so inputs never leak to underlying native controls. */
     bool covers (int x, int y) const noexcept
     {
         if (! ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y))
             return false;
-        if (peek_)
-        {
-            if (nativePeek_ && peek_->topPage() == 0 && ! peekPanelRect().contains (x, y))
-                return false;
-            return ! nativePeek_ || ! peekPanelRect().contains (x, y) || (peek_->peekCloseVisible() && peekCloseRect().contains (x, y))
-                || peek_->covers (x, y);
-        }
         if (listOpen_)
             return true;
         if (nativeBase())
             return false;
-        return ! nativeControlAt (x, y) && ! nativePeekAt (x, y);
+        return ! nativeControlAt (x, y);
     }
 
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
-        if (peek_)
-            return touchPeek (ev, stack, inst, nowMs);
         if (listOpen_)
         {
             ui::Component* top = &list_;
@@ -441,16 +347,7 @@ public:
             if (! covers (ev.x, ev.y) && ! nativeControlAt (ev.x, ev.y))
                 return false;
 
-            // 1. Taps on the routing bar
-            if (screen_.routingBar.rect().contains (ev.x, ev.y))
-            {
-                gesture_ = &screen_.routingBar;
-                gestureDown_ = true;
-                handle (screen_.routingBar.touchDown (ev.x, ev.y, nowMs), stack, inst);
-                return true;
-            }
-
-            // 2. Taps on channel strips: selection and single input ownership
+            // Taps on channel strips: selection and single input ownership
             for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
             {
                 ui::MixerStrip& st = screen_.strips[s];
@@ -497,24 +394,9 @@ public:
         return found;
     }
 
-    bool nativePeekAt (int x, int y) const noexcept
-    {
-        if (nativeBase())
-            for (int i = 0; i < nativeui::kMixerPeekTargets; ++i)
-                if (screen_.routingBar.peekRect (i).contains (x, y))
-                    return true;
-        return false;
-    }
-
     void leftTab (IInstanceView& inst) noexcept
     {
-        (void) inst.takeNativeMixerPeek();
-        activeTab_ = 0;
-        inst.setNativeMixerActiveTab (0);
-        inst.setNativeMixerPeekEnabled (false);
-        inst.setNativeMixerPeekView (nativeui::MixerBase);
-        if (peek_)
-            peek_->leftTab (inst);
+        inst.setNativeMixerActive (false);
         for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
         {
             inst.setNativeMixerMeter (s, 0.0f, 0.0f);
@@ -523,21 +405,8 @@ public:
         }
     }
 
-    void setNativeActionPopup (IInstanceView& inst, int action) noexcept
-    {
-        if (nativePeek_ && peek_)
-            peek_->setNativeActionPopup (inst, action);
-    }
-
     void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
-        if (peek_)
-        {
-            peek_->tick (nowMs, stack, inst);
-            if (! peek_->nativePeekReady())
-                inst.setNativeMixerPeekView (nativeui::MixerBase);
-            return;
-        }
         if (gesture_ && gestureDown_)
             handle (gesture_->tick (nowMs), stack, inst);
     }
@@ -546,14 +415,6 @@ public:
         list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
     bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
     {
-        if (peek_)
-        {
-            if (! covers (x, y) || fingerDown())
-                return false;
-            if (peek_->topPage() || ((! peek_->peekCloseVisible() || ! peekCloseRect().contains (x, y)) && peekPanelRect().contains (x, y)))
-                peek_->wheel (x, y, notches, stack, inst, nowMs);
-            return true; // the backdrop also consumes the wheel
-        }
         ui::Component* top = listOpen_ ? static_cast<ui::Component*> (&list_) : static_cast<ui::Component*> (&screen_);
         if (gestureDown_ || ! top || ! covers (x, y))
             return false;
@@ -566,28 +427,18 @@ public:
         return true;
     }
 
-    bool fingerDown() const noexcept { return gestureDown_ || (peek_ && peek_->fingerDown()); }
+    bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept
     {
         if (gesture_)
             gesture_->touchUp (-1, -1);
         gesture_ = nullptr;
         gestureDown_ = false;
-        if (peek_)
-            peek_->dropGesture();
     }
-    void forgetQGroup() noexcept
-    {
-        qSlots_.forget();
-        if (peek_)
-            peek_->forgetQGroup();
-    }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
-        if (peek_)
-            peek_->turnQ (knobIndex, delta, stack, inst);
-        else
-            handle (screen_.turnQ (knobIndex, delta), stack, inst);
+        handle (screen_.turnQ (knobIndex, delta), stack, inst);
     }
     bool listOpen() const noexcept { return listOpen_; }
 
@@ -605,13 +456,6 @@ private:
     bool gestureDown_ = false;
     QSlots qSlots_;
     double lastMs_ = 0.0;
-
-    std::unique_ptr<PeekModule> peek_;
-    int peekTarget_ = -1;
-    int activeTab_ = 0;
-    bool nativePeek_ = false;
-    ui::TapGesture backdropTap_;
-    ui::MenuButton peekClose_ { "CLOSE", ui::MenuButton::Icon::None };
 
     bool useNativeWidgets() const noexcept
     {
@@ -638,26 +482,8 @@ private:
     void syncNativeGround() noexcept
     {
         const bool hostBg = hostBackground();
-        screen_.routingBar.nativeGround = hostBg || nativeBase();
-        screen_.routingBar.nativePeek = nativeBase();
         for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
             screen_.strips[s].nativeGround = hostBg;
-    }
-
-    void placePeek()
-    {
-        const auto panel = peekPanelRect();
-        if (peek_)
-            peek_->placePeek (panel);
-        const auto close = nativePeek_ && peek_ ? peek_->nativePeekCloseRect()
-            : ui::Rect { panel.x + 8, panel.y + ui::kQLane, PeekModule::kCloseWidth, 56 };
-        peekClose_.place (close);
-    }
-
-    void updatePeekTitle()
-    {
-        static const char* const titles[] { "FLT 1", "FLT 2", "MAIN FX", "BUS 1 FX", "BUS 2 FX" };
-        peekClose_.setValue (nativePeek_ && peekTarget_ >= 2 ? "" : titles[peekTarget_]);
     }
 
     void publishStripVisuals (IInstanceView& inst) noexcept
@@ -673,160 +499,6 @@ private:
         });
         for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
             inst.setNativeMixerStripVisuals (s, route.soloVisual[s], route.muteVisual[s]);
-    }
-
-    void handleTabRequest (int tab, UiStack& stack, IInstanceView& inst)
-    {
-        if (tab < 0 || tab >= nativeui::kMixerTabs || tab == activeTab_)
-            return;
-        if (tab == 0)
-        {
-            if (peek_)
-            {
-                if (stack.id (1) == kPagePeek)
-                    stack.back();
-                dismissPeek (inst);
-            }
-            else
-            {
-                activeTab_ = 0;
-                inst.setNativeMixerActiveTab (0);
-                inst.setNativeMixerPeekEnabled (nativeBase() && ! listOpen_);
-            }
-            publishQGroup (inst);
-            return;
-        }
-        const int target = tab - 1;
-        if (! peek_)
-        {
-            if (! stack.openDetail (kPagePeek))
-                return;
-        }
-        else
-        {
-            peek_->leftTab (inst);
-            qSlots_.forget();
-        }
-        peek_ = target >= 2 ? std::unique_ptr<PeekModule> (std::make_unique<FxUi> (target - 2))
-                            : std::unique_ptr<PeekModule> (std::make_unique<FilterUi> (target));
-        peekTarget_ = target;
-        activeTab_ = tab;
-        nativePeek_ = useNativeWidgets();
-        peek_->setNativePeek (nativePeek_);
-        updatePeekTitle();
-        placePeek();
-        syncNativeGround();
-        inst.setNativeMixerActiveTab (activeTab_);
-        inst.setNativeMixerPeekEnabled (nativePeek_ && peek_->topPage() == 0);
-        updatePeek (inst, stack, lastMs_, page::Input{});
-    }
-
-    void updatePeek (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
-    {
-        publishStripVisuals (inst);
-        const bool native = useNativeWidgets();
-        const bool modeChanged = native != nativePeek_;
-        if (modeChanged)
-        {
-            if (! native)
-                peek_->leftTab (inst);
-            nativePeek_ = native;
-            peek_->setNativePeek (native);
-            placePeek();
-        }
-        if (nativePeek_ && peek_->topPage() == 0)
-        {
-            const int request = inst.takeNativeMixerPeek();
-            if (request >= 0 && request < nativeui::kMixerTabs && request != activeTab_)
-            {
-                handleTabRequest (request, const_cast<UiStack&> (stack), inst);
-                return;
-            }
-        }
-        peek_->update (inst, stack, nowMs, in);
-        if (nativePeek_)
-            peekClose_.place (peek_->nativePeekCloseRect());   // keep close aligned with FX chain bar across rack switches
-        if (modeChanged)
-            updatePeekTitle();
-        inst.setNativeMixerActiveTab (activeTab_);
-        inst.setNativeMixerPeekEnabled (nativePeek_ && peek_->topPage() == 0);
-        inst.setNativeMixerPeekView (peek_->nativePeekReady()
-            ? (peekTarget_ < 2 ? nativeui::MixerPeekFilter : nativeui::MixerPeekFx) : nativeui::MixerBase);
-        inst.setUiFullOpen (true);
-    }
-
-    void dismissPeek (IInstanceView& inst)
-    {
-        (void) inst.takeNativeMixerPeek();
-        inst.setNativeMixerPeekView (nativeui::MixerBase);
-        peek_->leftTab (inst);
-        peek_.reset();
-        peekTarget_ = -1;
-        activeTab_ = 0;
-        nativePeek_ = false;
-        backdropTap_.reset();
-        gesture_ = nullptr;
-        gestureDown_ = false;
-        qSlots_.forget(); // another page published its own group
-        syncNativeGround();
-        inst.setNativeMixerActiveTab (0);
-        inst.setNativeMixerPeekEnabled (nativeBase() && ! listOpen_);
-    }
-
-    bool touchPeek (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
-    {
-        if (ev.kind == TouchEvent::Down)
-        {
-            gesture_ = nullptr;
-            gestureDown_ = false;
-            if (! screen_.rect().contains (ev.x, ev.y))
-                return false;
-            if (nativePeek_ && ! peek_->topPage() && ! peekPanelRect().contains (ev.x, ev.y))
-                return false;
-            if (peek_->peekCloseVisible() && peekCloseRect().contains (ev.x, ev.y))
-            {
-                gesture_ = &peekClose_;
-                gestureDown_ = true;
-                peekClose_.touchDown (ev.x, ev.y, nowMs);
-                return true;
-            }
-            if (! peek_->topPage() && ! peekPanelRect().contains (ev.x, ev.y))
-            {
-                backdropTap_.down (ev.x, ev.y, nowMs);
-                gestureDown_ = true; // never pass the dismissing gesture to a Mixer control
-                return true;
-            }
-        }
-        if (gestureDown_)
-        {
-            if (ev.kind == TouchEvent::Move)
-            {
-                if (gesture_)
-                    gesture_->touchMove (ev.x, ev.y);
-                else
-                    backdropTap_.move (ev.x, ev.y);
-            }
-            if (ev.kind == TouchEvent::Up)
-            {
-                if (! gesture_)
-                    backdropTap_.move (ev.x, ev.y); // an input device may report a new coordinate only on Up
-                const bool close = gesture_ ? gesture_->touchUp (ev.x, ev.y) && peekCloseRect().contains (ev.x, ev.y)
-                                            : backdropTap_.up() && covers (ev.x, ev.y) && ! peekPanelRect().contains (ev.x, ev.y);
-                gesture_ = nullptr;
-                gestureDown_ = false;
-                if (close)
-                {
-                    stack.back();
-                    dismissPeek (inst);
-                    publishQGroup (inst);
-                }
-            }
-            return true;
-        }
-        // The child still observes a native Filter down for its modulation long-
-        // press and generation guard. Empty or disabled areas remain modal.
-        const bool owned = covers (ev.x, ev.y);
-        return peek_->touch (ev, stack, inst, nowMs) || (ev.kind == TouchEvent::Down && owned);
     }
 
     /** The scale beside a fader from the parameter's own range: in dB the marks 0, -12, -24, -48 that lie in the range (0 is the stronger one), else a mark every 25 %.
@@ -916,12 +588,6 @@ private:
     {
         if (! c)
             return;
-        if (c.id == kPeekTarget && c.kind == ui::ChangeKind::Index
-            && c.index >= 0 && c.index < nativeui::kMixerPeekTargets)
-        {
-            handleTabRequest (c.index + 1, stack, inst);
-            return;
-        }
         // the list of the destinations
         if (listOpen_)
         {

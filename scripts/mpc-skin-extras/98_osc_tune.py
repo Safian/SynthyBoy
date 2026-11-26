@@ -24,7 +24,7 @@ from native_ui_params import (
     OSC_POWER,
     OSC_SETTINGS_VIEW,
     OSC_SOURCE,
-    mixer_peek_index,
+    native_base_index,
 )
 
 OSC_SOURCES = (
@@ -50,7 +50,7 @@ def apply(tui, qlinks, ctx):
             ctx.add_component_definition(name, definition)
             existing_keys.add(name)
 
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     view_gate = f"NonZero/Parameter {base + OSC_SETTINGS_VIEW}"
     source_param = f"Parameter {base + OSC_SOURCE}"
 

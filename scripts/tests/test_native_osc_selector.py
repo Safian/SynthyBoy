@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from scripts.native_ui_params import OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
+from scripts.native_ui_params import OSC_SOURCE, OSC_VISIBILITY, native_base_index
 from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
     OSC_POWER_PARAM_KEYS,
@@ -115,8 +115,8 @@ class TestNativeOscSelector(unittest.TestCase):
 
         extra.apply(tui, {}, MockCtx())
 
-        source_idx = mixer_peek_index(MockCtx.param_count) + OSC_SOURCE
-        visibility_idx = mixer_peek_index(MockCtx.param_count) + OSC_VISIBILITY
+        source_idx = native_base_index(MockCtx.param_count) + OSC_SOURCE
+        visibility_idx = native_base_index(MockCtx.param_count) + OSC_VISIBILITY
 
         # Check definition created with Show Overlay intact
         defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}

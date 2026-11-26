@@ -54,8 +54,8 @@ def apply(tui: dict, qlinks: dict, ctx) -> None:
     if not has_surface:
         # Ensure the surface component entry is linked to the tab
         base = ctx.param_count + 64  # standard native param offset
-        from native_ui_params import FX_CHAIN, mixer_peek_index
-        base = mixer_peek_index(ctx.param_count)
+        from native_ui_params import FX_CHAIN, native_base_index
+        base = native_base_index(ctx.param_count)
         surface_entry = {
             "version": 2,
             "componentData": {

@@ -41,7 +41,7 @@ from components.native.selector.selector import (
     passive_layer,
     write_routing_assets,
 )
-from native_ui_params import OSC_ROUTING_BY_SOURCE, OSC_SOURCE, OSC_VISIBILITY, mixer_peek_index
+from native_ui_params import OSC_ROUTING_BY_SOURCE, OSC_SOURCE, OSC_VISIBILITY, native_base_index
 
 
 def apply(tui, qlinks, ctx):
@@ -52,7 +52,7 @@ def apply(tui, qlinks, ctx):
     tabs = [tab for tab in tui["pageData"]["tabs"] if tab.get("tabName") in OSC_ROUTING_TAB_SPECS]
     if not tabs:
         return
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     routing_indices = range(base + OSC_ROUTING_BY_SOURCE, base + OSC_ROUTING_BY_SOURCE + len(OSC_INSTANCE_NAMES))
     visibility_idx = base + OSC_VISIBILITY
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]

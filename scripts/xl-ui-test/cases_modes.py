@@ -20,7 +20,7 @@ def point(x, y):
 @lru_cache(maxsize=1)
 def native_base():
     manifest = json.loads((HERE.parents[1] / "docs/params.json").read_text())
-    return layout.mixer_peek_index(len(manifest["params"]))
+    return layout.native_base_index(len(manifest["params"]))
 
 
 def vst(offset, value):
@@ -39,21 +39,6 @@ def case(name, view, actions, cleanup=()):
 
 
 def cases():
-    tabs = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
-
-    def select(tab):
-        index = tabs.index(tab)
-        return [tap(f"mixer/Mixer Native {tab} Peek"), vst(layout.MIXER_ACTIVE_TAB, index / 5),
-                top("mixer", 26 if index else 0)]
-
-    # Check every direction. Returning to Mixer does not exercise a dock-to-dock transition.
-    for start in tabs:
-        for end in tabs:
-            if start == end:
-                continue
-            name = f"mixer.{start}.{end}".lower().replace(" ", "-")
-            yield case(name, "mixer", [*select(start), *select(end)], select("MIXER"))
-
     modes = ("ALL", "BY SOURCE", "BY DEST")
     def mode(name):
         return [tap(f"mod/Mod Native Mode {name}/mode"), vst(layout.MOD_NAVIGATION, (modes.index(name) + 1) / 3)]

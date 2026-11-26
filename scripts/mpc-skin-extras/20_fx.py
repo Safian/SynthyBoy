@@ -27,8 +27,8 @@ from components.native.button.button import action_button, action_art, in_slot, 
 from native_ui_params import (FX_CELL_COUNT, FX_DOMAIN_COUNT, FX_DOMAIN_OFFSET,
                               FX_BAND_BASE, FX_BAND_MODE, FX_EDITOR_POWER, FX_HEADER, FX_HEADER_FIELDS, FX_HEADER_ITEMS,
                               FX_KIND_OFFSET, FX_LAYOUT_OFFSET, FX_VALUE_OFFSET,
-                              FX_CHAIN, MIXER_PEEK_VIEW,
-                              mixer_peek_index)
+                              FX_CHAIN,
+                              native_base_index)
 
 CONTRACT = Path(__file__).with_name("fx-native-contract.json")
 FX_DIAL, FX_TOGGLE, FX_FIRST_DOMAIN = 1, 2, 3
@@ -718,7 +718,7 @@ def _apply_native_editor(tui, tab, ctx):
         ctx.add_component_definition(name, definition)
     _add_native_popups(tui, ctx, manifest["chain"]["gallery"])
 
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     replacements = tui["pageData"].setdefault("replacementStrings", [])
     for i, choices in enumerate(domains):
         replacements.append({"key": f"Parameter {base + FX_DOMAIN_OFFSET + i}", "value": choices})
@@ -800,89 +800,6 @@ def _apply_native_editor(tui, tab, ctx):
     surface = _native_entry("FX Native Surface", kind, data, rect, base + FX_CHAIN)
     surface["bounds"]["acceptsHWFocus"] = "Children"
     items[:] = [surface]
-    mixer = next((t for t in tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer")), None)
-    if mixer is not None:
-        # Docked Mixer PEEK FX editor occupies (0, 0, 1280, 564) above the persistent bottom 6-tab bar.
-        docked_h = style.size("fx.apply_native_editor.docked_h.564")
-        docked_bottom = docked_h - style.size("fx.apply_native_editor.docked_bottom.8")  # 556
-        # Build docked copy of surface children fitted cleanly into 0..564 while preserving FX cell identity
-        import copy as _copy
-        dock_children = _copy.deepcopy(definition["componentsData"])
-        dock_cell_rects = {}
-        for layout_id, slot, cell_kind in manifest["widgets"]:
-            top, rows, *side = layouts[layout_id - 1]
-            row, col = divmod(slot, 4)
-            if side and side[0]:
-                # A side layout is a full-height page: the docked Mixer peek uses the stacked layout, so none of its cells is placed there.
-                dock_cell_rects[f"FX Cell {layout_id}.{slot + 1}.{cell_kind}"] = _side_cell_rect(top, side, row, col)
-                continue
-            dock_top = top - style.size("fx.apply_native_editor.dock_top.64") if top >= style.size("fx.apply_native_editor.dock_top.344") else top
-            row_h = (docked_bottom - dock_top) // rows
-            cell_top = dock_top + style.size("fx.apply_native_editor.cell_top.16") + row_h * row
-            cell_h = min(max(style.size("fx.apply_native_editor.cell_h.72"), row_h - style.size("fx.apply_native_editor.cell_h.16")), max(style.size("fx.apply_native_editor.cell_h.56"), docked_bottom - cell_top), manifest["cell_max_h"])
-            dock_cell_rects[f"FX Cell {layout_id}.{slot + 1}.{cell_kind}"] = (
-                8 + 318 * col, cell_top, 310, cell_h
-            )
-        dock_cells_kind = "mixerPeekFxParameterCells"
-        dock_cells_definition = _copy.deepcopy(cells_definition)
-        for child in dock_cells_definition["componentsData"]:
-            name = child["componentData"]["name"]
-            child["bounds"]["bounds"] = " ".join(map(str, dock_cell_rects[name]))
-        dock_cells_definition, dock_rect = cell_layer(dock_cells_definition["componentsData"])
-        ctx.add_component_definition(dock_cells_kind, dock_cells_definition)
-        for index, child in enumerate(dock_children):
-            if child["componentData"]["name"] != "FX parameter cells":
-                continue
-            dock_cells = _native_entry("FX parameter cells", dock_cells_kind,
-                                       {"version": 1, "handleName": "Data"}, dock_rect, base + FX_EDITOR_POWER)
-            style.bind_control_active(dock_cells, f"Parameter {base + FX_EDITOR_POWER}", ctx, definitions)
-            dock_cells["bounds"]["acceptsHWFocus"] = "Children"
-            dock_children[index] = dock_cells
-
-        # Fit gallery rows cleanly in docked 564px space reusing the same fxNativeGalleryCard
-        cards = manifest["chain"]["gallery"]
-        columns = len(cards) // 2
-        if columns > 0:
-            for r_idx in (0, 1):
-                row_y = style.size("fx.apply_native_editor.row_y.182") if r_idx == 0 else style.size("fx.apply_native_editor.row_y.372")
-                row_def = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
-                row_key = f"fxNativeGalleryRow{r_idx + 1}"
-                src_row_def = next((d["value"] for d in row_def if d["key"] == row_key), None)
-                if src_row_def is not None:
-                    dock_row_key = f"mixerPeekGalleryRow{r_idx + 1}"
-                    dock_row_def = _copy.deepcopy(src_row_def)
-                    for child in dock_row_def.get("componentsData", []):
-                        cx, cy, cw, _ = map(int, child["bounds"]["bounds"].split())
-                        child["bounds"]["bounds"] = f"{cx} {cy} {cw} 182"
-                    ctx.add_component_definition(dock_row_key, dock_row_def)
-                    for c in dock_children:
-                        if c["componentData"]["type"] == row_key:
-                            cx, _, cw, _ = map(int, c["bounds"]["bounds"].split())
-                            c["componentData"]["type"] = dock_row_key
-                            c["bounds"]["bounds"] = f"{cx} {row_y} {cw} 182"
-
-        # the docked peek shows the stacked layout (the full page of the compressor is a side layout): its BAND selector stands where the stacked one does
-        band_dock = manifest["chain"].get("band_stacked", manifest["chain"]["band"])
-        dock_band_rect = (band_dock[0], band_dock[1] - style.size("fx.apply_native_editor.dock_band_rect.64"), band_dock[2], band_dock[3])
-        for c in dock_children:
-            cname = c["componentData"]["name"]
-            if cname in dock_cell_rects:
-                c["bounds"]["bounds"] = "%d %d %d %d" % dock_cell_rects[cname]
-            elif c["componentData"]["type"] == "fxNativeChainBand":
-                c["bounds"]["bounds"] = "%d %d %d %d" % dock_band_rect
-            elif cname.startswith("FX Native Header "):
-                hx, hy, hw, hh = map(int, c["bounds"]["bounds"].split())
-                c["bounds"]["bounds"] = f"{hx} {hy} {hw} {docked_h - hy}"
-
-        dock_kind = "mixerPeekFxEditorSurface"
-        dock_def = _native_definition(dock_children, read_only=True)
-        dock_def["backgroundData"] = _empty_bg()
-        ctx.add_component_definition(dock_kind, dock_def)
-        view = base + MIXER_PEEK_VIEW
-        peek = _native_entry("Mixer Native Peek FX", dock_kind, data, (0, 0, style.size("fx.apply_native_editor.native_entry.1280"), docked_h), view,
-                             (f"IndexedEnabling/2/3/Parameter {view}",))
-        peek["bounds"]["acceptsHWFocus"] = "Children"
-        mixer["componentDefinition"]["componentsData"].append(peek)
 
 
 def apply(tui: dict, qlinks: dict, ctx) -> None:

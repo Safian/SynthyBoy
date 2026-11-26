@@ -10,7 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components.native.selector.selector import OSC_TAB_NAMES, passive_layer
-from native_ui_params import ENV_TAB_NAMES, ENV_VIEW, LFO_OFFSET, PLAY_EXPANDED, PLAY_EXPANDED_CLOSE, mixer_peek_index
+from native_ui_params import ENV_TAB_NAMES, ENV_VIEW, LFO_OFFSET, PLAY_EXPANDED, PLAY_EXPANDED_CLOSE, native_base_index
 
 
 def _entry(name, kind, rect, data, gate=None, focus="Children", caption=None):
@@ -65,7 +65,7 @@ def apply(tui, qlinks, ctx):
     if "Play" not in names:
         return
     play = ctx.tab("Play")
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
     view = f"Parameter {base + PLAY_EXPANDED}"
     close = base + PLAY_EXPANDED_CLOSE
 

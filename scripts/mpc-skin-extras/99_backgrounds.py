@@ -118,7 +118,7 @@ def apply(tui, qlinks, ctx):
                 children.extend(caption_entries("tuning_header", prefix="Native Caption tuning header"))
             if view == "master":
                 import native_ui_params
-                master_view = native_ui_params.mixer_peek_index(ctx.param_count) + native_ui_params.MASTER_VIEW
+                master_view = native_ui_params.native_base_index(ctx.param_count) + native_ui_params.MASTER_VIEW
                 children.extend(caption_entries("master_header", prefix="Native Caption master header"))
                 # The block titles of both sides are part of their native panels (native_master).
                 gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)

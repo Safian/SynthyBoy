@@ -1,25 +1,21 @@
 # UI Map: Mixer Page
-Refreshed 2026-11-23 against the native Mixer skin, overlay and PEEK routing.
+Refreshed 2026-11-26: the Mixer is one screen of ten strips; the routing bar with its five PEEK buttons and the docked Filter and FX editors are gone (the Filter and the FX editors are tabs of their own).
 
 ## Purpose
 
 The Mixer page is the full-screen MPC overlay view for the "Mixer" tab (view kind `mixer`, registered as page element `MixerUi::kElementPage = 5` in `shell-mpc/overlay/mixer_ui.h:36`). It presents a complete 10-channel mixing console spanning the entire tab canvas:
 - 10 channel strips side by side: Sub oscillator (`SUB`), Oscillator A (`A`), Oscillator B (`B`), Oscillator C (`C`), Noise generator (`NOISE`), Filter 1 (`F1`), Filter 2 (`F2`), Effect Bus 1 (`BUS1`), Effect Bus 2 (`BUS2`), and Master output (`MASTER`).
-- A top routing overview bar (`MixerRoutingBar`, `shell-mpc/ui/mixer_screen.h:18`) displaying destination nodes and drawing animated signal flow lines from the currently selected channel strip.
+- No routing bar and no tab bar: the ten strips take the whole tab. The destination of a strip is its dropdown; a tap on a strip selects it and makes the Q group of its level fader the active one.
 - Channel controls include power or rack bypass, destination, level and a peak/hold meter. Sources and filters also have bipolar PAN and sends to BUS 1 and BUS 2.
-- With the factory host background active, the MPC owns all 50 strip controls, the 10 meters, and the five PEEK buttons. The overlay draws routing, Q-Link chips, the PEEK backdrop and live curves. In PEEK, the host draws the selected standalone Filter or FX editor’s controls and the FX chain and gallery. It also supplies the complete Mixer when the native background is unavailable. [Mixer skin](../../scripts/mpc-skin-extras/84_mixer.py), [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
+- With the factory host background active, the MPC owns all 50 strip controls and the 10 meters. The overlay draws the Q-Link chips and the destination popup list. It also supplies the complete Mixer when the native background is unavailable. [Mixer skin](../../scripts/mpc-skin-extras/84_mixer.py), [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
 - Turning a source or filter off leaves its power switch available and displays its other controls in grey. Those fields and the corresponding LEVEL Q-Link slot stop accepting edits until the strip is switched back on. On BUS 1, BUS 2, and MASTER, the switch bypasses the FX rack and the dry level, metering, and available routing stay active.
 
 ## Layout
 
 The page occupies the full MPC overlay tab region of 1280 x 628 pixels, starting below the MPC host header at vertical coordinate y = 110 (`shell-mpc/overlay/overlay_layout.json:639-648`, `shell-mpc/overlay/mixer_ui.h:40,72`):
 - Canvas bounds: width 1280 px, height 628 px (placed at x = 0, y = 110, w = 1280, h = 628).
-- Signal Routing Bar (`MixerRoutingBar`, `shell-mpc/ui/mixer_screen.h:256`):
-  - Placed at x = 6, y = 114, w = 1268, h = 56.
-  - FLT 1, FLT 2, MAIN FX, BUS 1 and BUS 2 open the shared module controls in a PEEK panel. Each button has a 96 × 56 px touch area on the XL. DIRECT and MASTER are read-only routing labels. CLOSE restores the Mixer Q-Link slots.
-  - Renders a routing line from the bottom midpoint of the selected channel strip up to its target node or neighbouring bus strip.
 - Channel Strips (`MixerStrip strips[10]`, `shell-mpc/ui/mixer_screen.h:258-268`):
-  - Placed below the routing bar at topY = 176, height = 558 px.
+  - Placed from y = 10 to 12 px above the tab bottom (topY = 120, height = 606 px; the skin tokens `mixer_strip.start_y` and `mixer_strip.height`).
   - 10 strips with gap = 4 px, each strip width = 123 px (`(1268 - 9 * 4) / 10 = 123`).
   - Vertical section dividing keylines (1.5 px wide, `shell-mpc/ui/mixer_screen.h:271-283`) are drawn after strip 4 (`NOISE`), strip 6 (`F2`), and strip 8 (`BUS2`), grouping the console into Generator sources (Sub, A, B, C, Noise), Filter sources (F1, F2), FX Buses (BUS1, BUS2), and Final output (MASTER).
 - Strip Internal Structure (`MixerStrip::layout()`, `shell-mpc/ui/mixer_strip.h:470-500`):
@@ -29,13 +25,13 @@ The page occupies the full MPC overlay tab region of 1280 x 628 pixels, starting
   - Q-Link Area:
     - Starts below the destination button with a lane reserved for Q-Link index chips (`kQLane`, `shell-mpc/ui/mixer_strip.h:479`). Only mapped LEVEL faders can carry chips; the lanes over PAN, B1 and B2 stay as spacing (the chips are not drawn there, see Q-Link groups).
     - Strips 0 to 6 (`SUB`, `A`, `B`, `C`, `NOISE`, `F1`, `F2`):
-      - Vertical LEVEL control: 198 px high, with its value below and a peak/hold meter alongside.
+      - Vertical LEVEL control: 254 px high, with its value below and a peak/hold meter alongside.
       - PAN slider: 56 px high, with a bipolar track and the current pan value.
       - Bus 1 Send slider (`SliderBar send1`, `shell-mpc/ui/mixer_strip.h:417,489`): height 56 px, unipolar track, label `B1` and percentage readout.
       - Bus 2 Send slider (`SliderBar send2`, `shell-mpc/ui/mixer_strip.h:418,491`): height 56 px, unipolar track, label `B2` and percentage readout.
     - Strips 7 to 9 (`BUS1`, `BUS2`, `MASTER`):
       - Have no Pan, Send 1, or Send 2 controls (`shell-mpc/overlay/mixer_ui.h:63-67`, `shell-mpc/ui/mixer_strip.h:437-443`).
-      - Vertical LEVEL control: 414 px high, with a dB readout and a peak/hold meter alongside.
+      - Vertical LEVEL control: 470 px high, with a dB readout and a peak/hold meter alongside.
 
 ## Controls
 
@@ -97,7 +93,7 @@ The page occupies the full MPC overlay tab region of 1280 x 628 pixels, starting
 
 The destination button opens the MPC host menu on the native Mixer. The overlay fallback opens a modal list with the same engine choices. A selection writes the destination parameter of that strip. [Mixer skin](../../scripts/mpc-skin-extras/84_mixer.py), [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
 
-The native strip and PEEK controls stay active if the background sentinel is unavailable. The foreground fills the background around their transparent cells. The standalone overlay fallback supplies the controls when running without the native host widgets.
+The native strip controls stay active if the background sentinel is unavailable. The foreground fills the background around their transparent cells. The standalone overlay fallback supplies the controls when running without the native host widgets.
 
 - SUB, A, B, C and NOISE offer Filter 1, Filter 2, Filters 1+2, Effects only, Direct out, Filter blend, and None.
 - F1 and F2 offer Effects only, Direct out, and None.
@@ -116,8 +112,8 @@ Levels-only layout (Q-Link mapping extension, merged 2026-11-21; `docs/ui-map/q-
 | G3 `LEVELS BUS 1 2` | `bus1.level` | `bus2.level` | - | - | framed, two slots empty |
 
 - The LEVEL targets come from `MixerUi::publishQGroup`. Each slot holds the LEVEL parameter of its active strip or is empty if the strip is off. Both `publishQGroup` and `setupGroups` (`shell-mpc/ui/mixer_screen.h:288-294`) use the same table. Group of a strip: `groupOfStrip` / `slotOfStrip` (`shell-mpc/ui/mixer_screen.h:133-134`).
-- Overlay-handled touches on a strip select it and activate its level bank. The routing bar follows the strip, and `MixerUi::touch` publishes the selection immediately. Native widget gestures reach the host through the aperture. The published XL slots stay fixed. `setActiveGroup` keeps the selected strip when it belongs to the group and otherwise selects the first strip. Sources: `shell-mpc/overlay/mixer_ui.h` and `shell-mpc/ui/mixer_screen.h`.
-- All ten strips have LEVEL parameters. The slots of inactive source and filter strips stay empty in place. The bus and master slots stay active during FX rack bypass. PEEK publishes the open filter or FX editor targets until CLOSE restores the Mixer slots. [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
+- Overlay-handled touches on a strip select it and activate its level bank. `MixerUi::touch` publishes the selection immediately. Native widget gestures reach the host through the aperture. The published XL slots stay fixed. `setActiveGroup` keeps the selected strip when it belongs to the group and otherwise selects the first strip. Sources: `shell-mpc/overlay/mixer_ui.h` and `shell-mpc/ui/mixer_screen.h`.
+- All ten strips have LEVEL parameters. The slots of inactive source and filter strips stay empty in place. The bus and master slots stay active during FX rack bypass. [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
 
 **MPC XL (16 knobs).** No active group: with at most four groups, group g sits on Q 4g+1 .. 4g+4 (`QRouter::blockOfGroup`, `shell-mpc/q_router.h:71-79`: `wide () && nGroups <= kGroups` forces the active group to 0). So Q1 SUB, Q2 A, Q3 B, Q4 C; Q5 NOISE, Q6 F1, Q7 F2, Q8 BUS 1, Q9 BUS 2, Q10 MAIN (`master.volume`); Q11 .. Q16 have no target. The native draw path can draw mapped LEVEL chips at their absolute slots. `drawStripMapped` draws the later blocks, while the active group draws through `QGroup` (`shell-mpc/ui/mixer_screen.h`, `shell-mpc/overlay/mixer_ui.h`).
 
@@ -128,7 +124,7 @@ Host coverage for both layouts is in `shell-mpc/overlay/tests/qslots_host.cpp` (
 ## Live parts
 
 - All ten meters read `stripPeak` from the engine. Each has a peak bar and a 2 px hold marker. The hold falls at 0.5 of the display range per second while a peak stays below it. The shell reports changed peak and hold values to the host. [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h), [MPC shell](../../shell-mpc/synthyboy_mpc.cpp)
-- The routing bar draws the selected strip's signal path to its destination or neighboring bus. The five native PEEK buttons open the shared filter and FX editors through a transient action. Closing the panel restores the native strip controls and their Q-Link mapping. A host drawer disarms the panel’s input bindings while preserving the editor for return. [Mixer screen](../../shell-mpc/ui/mixer_screen.h), [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
+- There is no peek: the Mixer publishes only its own level groups, and the Filter and FX editors are reached by their own tabs. A host drawer needs no panel handling. [Mixer screen](../../shell-mpc/ui/mixer_screen.h), [Mixer runtime](../../shell-mpc/overlay/mixer_ui.h)
 
 ## Duplicates
 
@@ -180,8 +176,8 @@ Judgements based on code inspection:
    - Strips 0 to 6 cram a fader (height ~190 px) and three 56 px slider cells (`pan`, `send1`, `send2`) into the strip.
    - Strips 7 to 9 completely omit pan and sends, so their faders stretch to the entire height of the strip (~390 px, `shell-mpc/ui/mixer_strip.h:497`).
    - This gives secondary bus returns and master volume double the physical fader travel and precision of the 7 primary sound sources (oscillators and filters), where fine level balancing is most critical.
-4. The routing bar opens PEEK for FLT 1, FLT 2, MAIN FX, BUS 1 and BUS 2. To change the signal path, use the destination dropdown on the channel strip. DIRECT and MASTER are read-only labels.
+4. To change the signal path, use the destination dropdown on the channel strip.
 5. "None" destination choice creates a silent dead end (`docs/params.json`, `shell-mpc/ui/mixer_screen.h:116-117`):
-   - All oscillator and filter destination choice lists include `None` (`docs/params.json`). When selected, audio is simply dropped. In `MixerRoutingBar::drawBody` (`shell-mpc/ui/mixer_screen.h:116-117`), selecting `None` draws an awkward 16 px horizontal dead-end stub line. Since every strip already has a dedicated power toggle to silence it, having `None` as a routing target is confusing and redundant.
+   - All oscillator and filter destination choice lists include `None` (`docs/params.json`). When selected, audio is simply dropped. Since every strip already has a dedicated power toggle to silence it, having `None` as a routing target is confusing and redundant.
 6. Extreme parameter redundancy across tabs (`shell-mpc/overlay/mixer_ui.h:321-330` vs `shell-mpc/overlay/osc_ui.h` and `shell-mpc/overlay/filter_ui.h`):
    - 86% of all controls on the Mixer page (43 out of 50 parameters; the old text said 42 and 84%: 30 source + 12 filter + `master.volume`) are identical duplicates of controls on the dedicated Osc, Filter, and Master tabs. Changing a send or destination can be done either in a channel strip or deep inside a popup modal on the source tab, causing confusion about which screen is the primary mixing location.

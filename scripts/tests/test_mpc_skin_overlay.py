@@ -18,7 +18,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-from native_ui_params import PLAY_LFO_STANDARD, PLAY_OSC, mixer_peek_index
+from native_ui_params import PLAY_LFO_STANDARD, PLAY_OSC, native_base_index
 from test_mpc_backgrounds import bg_mod
 from test_mpc_skin_extras import PARAMS_JSON, REAL_EXTRAS, ROOT, SDK, extras_with_manifest, generate_skins, run_apply, standalone_editor_entries
 
@@ -374,9 +374,6 @@ class OverlaySkinTests(unittest.TestCase):
                     or c["componentData"]["type"].startswith(("compactNative", "macroCard", "voiceNative", "masterNative", "modNative", "fxNative", "oscNative", "nativeModulationEditor"))
                 self.assertTrue(cname.startswith(("Overlay Marker", "Overlay Instance")) or native, "%s on %s is a host widget" % (cname, name))
                 gates = c["bounds"].get("additionalInvalidatingHandles", [])
-                if cname.startswith("Mixer Native Peek "):
-                    self.assertNotIn(hide, gates, cname)
-                    continue
                 if cname.startswith("Mixer Native ") or c["componentData"]["type"] == "macroCard" \
                         or name == "Voice" and c["componentData"]["type"].startswith("voiceNative"):
                     self.assertIn(hide, gates, cname)
@@ -549,7 +546,7 @@ class OverlaySkinTests(unittest.TestCase):
             # The graph and Q controls are plugin-owned; the three compact
             # instance selectors remain named host component instances so the
             # normal Play page has a real native touch owner.
-            sub_level = mixer_peek_index(len(self.params)) + PLAY_OSC + 7
+            sub_level = native_base_index(len(self.params)) + PLAY_OSC + 7
             expected_slots = sel + [prox[1][0], prox[1][2], prox[1][3], prox[1][4],
                                     prox[2][1], prox[2][3], prox[2][4], sub_level]
             self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(expected_slots),
@@ -634,7 +631,7 @@ class OverlaySkinTests(unittest.TestCase):
         osc_power = [param[prefix + ".on"] for prefix in osc_sources]
         smooth_names = ("Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off")
         lfo_layers = {name: items[name] for name in smooth_names}
-        lfo_standard = mixer_peek_index(len(self.params)) + PLAY_LFO_STANDARD
+        lfo_standard = native_base_index(len(self.params)) + PLAY_LFO_STANDARD
         lfo_smooth = first + 3 + 2 * 8 + 4
 
         def visible(component, values):

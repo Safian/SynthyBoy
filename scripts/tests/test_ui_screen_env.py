@@ -21,7 +21,7 @@ from native_ui_params import (
     ENV_SELECTION,
     ENV_TARGETS,
     ENV_VIEW,
-    mixer_peek_index,
+    native_base_index,
 )
 
 
@@ -37,7 +37,7 @@ class UiScreenEnvTest(unittest.TestCase):
         cls.qlinks = json.loads((cls.skins / "Q-Links.json").read_text(encoding="utf-8"))
         params = json.loads(base.PARAMS_JSON.read_text(encoding="utf-8"))["params"]
         cls.param_count = len(params)
-        cls.base = mixer_peek_index(cls.param_count)
+        cls.base = native_base_index(cls.param_count)
 
     @classmethod
     def tearDownClass(cls):

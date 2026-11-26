@@ -253,7 +253,7 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
     def test_every_live_cell_matches_the_contract_and_has_one_input_owner(self):
         self.assertEqual(self.assert_apply, (0, ""))
         items = self.definitions["fxNativeParameterCells"]["componentsData"]
-        for surface in ("fxNativeEditorSurface", "mixerPeekFxEditorSurface"):
+        for surface in ("fxNativeEditorSurface",):
             controls = {c["componentData"]["name"]: c for c in self.definitions[surface]["componentsData"]}
             _, add_y, _, add_h = _rect(controls["FX Chain Add Menu"])
             cells = controls["FX parameter cells"]
@@ -261,6 +261,7 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
             self.assertEqual(len(states), 2, "active and bypassed editors each own one cell subtree")
             bounds = _rect(cells)
             self.assertGreaterEqual(bounds[1], add_y + add_h)
+        self.assertNotIn("mixerPeekFxEditorSurface", self.definitions, "the Mixer peek surface is gone")
         cells = next(c for c in self.definitions["fxNativeEditorSurface"]["componentsData"]
                      if c["componentData"]["name"] == "FX parameter cells")
         layer_x, layer_y, _, _ = _rect(cells)
@@ -278,8 +279,8 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         self.assertEqual(len(self.params), 2637)
         self.assertEqual(len(self.manifest["domains"]), 48)
-        self.assertEqual({f"Parameter {d}": replacements[f"Parameter {d}"] for d in range(2779, 2827)},
-                         {f"Parameter {2779 + i}": choices for i, choices in enumerate(self.manifest["domains"])})
+        self.assertEqual({f"Parameter {d}": replacements[f"Parameter {d}"] for d in range(2778, 2826)},
+                         {f"Parameter {2778 + i}": choices for i, choices in enumerate(self.manifest["domains"])})
         observed = {}
         for c in native:
             data = c["componentData"]
@@ -288,7 +289,7 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
             key = (layout, slot, kind)
             self.assertNotIn(key, observed, "two native hit targets for one state")
             self.assertEqual(c["bounds"]["additionalInvalidatingHandles"],
-                             [f"IndexedEnabling/{layout}/{len(self.manifest['layouts'])+1}/Parameter 2778", f"IndexedEnabling/{kind}/52/Parameter {2762 + slot}"])
+                             [f"IndexedEnabling/{layout}/{len(self.manifest['layouts'])+1}/Parameter 2777", f"IndexedEnabling/{kind}/52/Parameter {2761 + slot}"])
             self.assertEqual(c["bounds"]["showWhenDataModelInvalid"], "Hide")
 
             widget = {1: "Uni", 2: "Switch", 51: "Bi"}.get(kind)
@@ -296,9 +297,9 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
                 domain = kind - 3
                 choices = self.manifest["domains"][domain]
                 widget = "ReadOnly" if len(choices) == 1 else "Number" if domain in (18, 19) else "Choice"
-                target = 2779 + domain
+                target = 2778 + domain
             else:
-                target = 2746 + slot
+                target = 2745 + slot
             self.assertEqual(data["type"], "fxNativeCell" + widget, key)
             self.assertEqual(c["bounds"]["acceptsHWFocus"], "No" if widget == "ReadOnly" else "Yes")
             self.assertEqual(c["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {target}"}], key)

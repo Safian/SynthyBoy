@@ -28,13 +28,13 @@ class NativeFxHeaderTests(unittest.TestCase):
         self.assertEqual(len(headers), 32)
         for item, header in enumerate(headers):
             with self.subTest(item=item):
-                start = 3068 + 4 * item
+                start = 3067 + 4 * item
                 self.assertEqual(header["bounds"]["additionalInvalidatingHandles"],
-                                 [f"IndexedEnabling/{item + 1}/33/Parameter 3066"])
+                                 [f"IndexedEnabling/{item + 1}/33/Parameter 3065"])
                 self.assertEqual(header["handle remapping"]["map"],
                                  [{"key": field, "value": f"Parameter {start + i}"} for i, field in
                                   enumerate(("Power", "Rack", "Page", "Remove"))]
-                                 + ([{"key": "Band", "value": f"Parameter {3461 + item}"}] if item == 1 or item >= 16 else []))
+                                 + ([{"key": "Band", "value": f"Parameter {3459 + item}"}] if item == 1 or item >= 16 else []))
                 racks = ["MAIN", "BUS 1", "BUS 2"]
                 if item < 13:
                     racks.extend(("L/H LOW", "L/H HIGH", "L/M/H LOW", "L/M/H MID", "L/M/H HIGH", "M/S MID", "M/S SIDE"))
@@ -53,9 +53,9 @@ class NativeFxHeaderTests(unittest.TestCase):
                 active = []
                 for child in header["componentsData"]:
                     gates = [g.split("/") for g in child["bounds"]["additionalInvalidatingHandles"]]
-                    if any(g[-1] == "Parameter 3493" for g in gates):
+                    if any(g[-1] == "Parameter 3491" for g in gates):
                         continue  # compressor band frames are exercised independently
-                    frames = {"Power": int(on), "Parameter 3066": 1, "Parameter 3067": layout}
+                    frames = {"Power": int(on), "Parameter 3065": 1, "Parameter 3066": layout}
                     visible = True
                     for expr in gates:
                         frame = frames[expr[-1]]
@@ -119,7 +119,7 @@ class NativeFxHeaderTests(unittest.TestCase):
         header = self.definitions["fxNativeHeader"]["componentsData"]
         for name, choices, span in (("rack", full, (1,13)), ("rack pool",full[:3], (14,32))):
             row = next(c for c in header if c["componentData"]["name"] == name)
-            self.assertIn(f"RangedEnabling/{span[0]}/{span[1]}/33/Parameter 3066", row["bounds"]["additionalInvalidatingHandles"])
+            self.assertIn(f"RangedEnabling/{span[0]}/{span[1]}/33/Parameter 3065", row["bounds"]["additionalInvalidatingHandles"])
             trigger = self.definitions[row["componentData"]["type"]]
             popup = self.definitions[trigger["actions"][0]["additionalData"]]["componentsData"]
             self.assert_drawer(popup, choices, 0, len(choices))
@@ -137,7 +137,7 @@ class NativeFxHeaderTests(unittest.TestCase):
             for item in band:
                 gate, = item["bounds"]["additionalInvalidatingHandles"]
                 kind, *values, parameter = gate.split("/")
-                self.assertEqual(parameter, "Parameter 3493")
+                self.assertEqual(parameter, "Parameter 3491")
                 if kind == "NonZero":
                     enabled = mode > 0
                 elif kind == "IndexedEnabling":
@@ -194,11 +194,11 @@ class NativeFxHeaderTests(unittest.TestCase):
             roots.append(rect(tile)[:2])
             bindings = {entry["key"]: entry["value"] for entry in tile["handle remapping"]["map"]}
             self.assertEqual(tile["bounds"]["additionalInvalidatingHandles"], ["Present"])
-            self.assertEqual(bindings["Present"], f"RangedEnabling/{slot + 1}/16/17/Parameter 3232")
-            self.assertEqual(bindings["Select"], f"Parameter {3233 + slot}")
-            self.assertEqual(bindings["Power"], f"Parameter {3249 + slot}")
+            self.assertEqual(bindings["Present"], f"RangedEnabling/{slot + 1}/16/17/Parameter 3231")
+            self.assertEqual(bindings["Select"], f"Parameter {3232 + slot}")
+            self.assertEqual(bindings["Power"], f"Parameter {3248 + slot}")
             for enabled, name in enumerate(("Bypassed", "Powered")):
-                self.assertEqual(bindings[name], f"IndexedEnabling/{enabled}/2/Parameter {3249 + slot}")
+                self.assertEqual(bindings[name], f"IndexedEnabling/{enabled}/2/Parameter {3248 + slot}")
         card = definitions["fxNativeChainCard"]["componentsData"]
         power = card[0]
         self.assertEqual(power["componentData"]["type"], "Button")
@@ -215,7 +215,7 @@ class NativeFxHeaderTests(unittest.TestCase):
                           if c["componentData"]["name"] == "Selection face"},
                          {(power, state) for power in ("Powered", "Bypassed") for state in ("Selected", "Unselected")})
         for row in range(2):
-            first = 3265 + row * 8
+            first = 3264 + row * 8
             gallery = repeated(f"fxNativeGalleryRow{row + 1}", 8, [("Data", first)],
                                [f"IndexedEnabling/1/2/Parameter {{Increment:Base={first}}}"])
             tile, name = definitions["fxNativeGalleryCard"]["componentsData"]
@@ -223,8 +223,8 @@ class NativeFxHeaderTests(unittest.TestCase):
             for i, (x, y) in enumerate(gallery):
                 _, _, w, h = rect(tile)
                 self.assertEqual([x, y, w, h], geometry["gallery"][row * 8 + i][1])
-        nav = [("FX Chain Back", "back", 3283), ("FX Chain Add Menu", "add", 3281),
-               ("FX Chain Filtered Add", "add", 3282), ("FX Chain Page 1", "page", 3284), ("FX Chain Page 2", "page", 3284)]
+        nav = [("FX Chain Back", "back", 3282), ("FX Chain Add Menu", "add", 3280),
+               ("FX Chain Filtered Add", "add", 3281), ("FX Chain Page 1", "page", 3283), ("FX Chain Page 2", "page", 3283)]
         for label, pos, target in nav:
             self.assertEqual(rect(items[label]), geometry[pos])
             self.assertEqual(items[label]["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {target}"}])
@@ -260,7 +260,7 @@ class NativeFxHeaderTests(unittest.TestCase):
         self.assert_drawer(popup, names, 1, len(names)+1)
         self.assertEqual(len({int(c["bounds"]["bounds"].split()[0]) for c in popup
                               if c["componentData"]["type"] == "Button"}), 2)
-        self.assertEqual(replacements["Parameter 3281"], ["Select an effect"] + [name for name, _ in manifest["chain"]["gallery"]])
+        self.assertEqual(replacements["Parameter 3280"], ["Select an effect"] + [name for name, _ in manifest["chain"]["gallery"]])
 
 
 if __name__ == "__main__":

@@ -59,11 +59,11 @@ class TestPlayNativeSmoothActiveText(unittest.TestCase):
         self.assertEqual(active["bounds"]["acceptsHWFocus"], "Yes")
         self.assertEqual(passive["bounds"]["acceptsHWFocus"], "No")
 
-        # Gating: smooth switch parameter (2699) and standard LFO parameter (2943)
+        # Gating: smooth switch parameter (2699) and standard LFO parameter (2942)
         self.assertIn("IndexedEnabling/1/2/Parameter 2699", active["bounds"]["additionalInvalidatingHandles"])
         self.assertIn("IndexedEnabling/0/2/Parameter 2699", passive["bounds"]["additionalInvalidatingHandles"])
-        self.assertIn("IndexedEnabling/1/2/Parameter 2943", active["bounds"]["additionalInvalidatingHandles"])
-        self.assertIn("IndexedEnabling/1/2/Parameter 2943", passive["bounds"]["additionalInvalidatingHandles"])
+        self.assertIn("IndexedEnabling/1/2/Parameter 2942", active["bounds"]["additionalInvalidatingHandles"])
+        self.assertIn("IndexedEnabling/1/2/Parameter 2942", passive["bounds"]["additionalInvalidatingHandles"])
 
         # Handle remapping
         active_remap = {m["key"]: m["value"] for m in active["handle remapping"]["map"]}
@@ -193,13 +193,13 @@ class TestPlayNativeSmoothActiveText(unittest.TestCase):
                         return False
             return True
 
-        # Scenario 1: Standard LFO 1 with Smooth ON (param 2943=1, param 2699=1)
-        state_on = {"Parameter 2943": 1, "Parameter 2699": 1}
+        # Scenario 1: Standard LFO 1 with Smooth ON (param 2942=1, param 2699=1)
+        state_on = {"Parameter 2942": 1, "Parameter 2699": 1}
         self.assertTrue(is_comp_visible(active, state_on), "Active Smooth must be visible when standard LFO smooth is ON")
         self.assertFalse(is_comp_visible(passive, state_on), "Passive Smooth must be hidden when standard LFO smooth is ON")
 
         # Scenario 2: Tap caption button -> switches to Smooth OFF (param 2699=0)
-        state_off = {"Parameter 2943": 1, "Parameter 2699": 0}
+        state_off = {"Parameter 2942": 1, "Parameter 2699": 0}
         self.assertFalse(is_comp_visible(active, state_off), "Active Smooth must be hidden when standard LFO smooth is OFF")
         self.assertTrue(is_comp_visible(passive, state_off), "Passive Smooth must be visible when standard LFO smooth is OFF")
         # While OFF, passive component rejects HW focus and knob has dragOrientation None
@@ -213,7 +213,7 @@ class TestPlayNativeSmoothActiveText(unittest.TestCase):
         self.assertFalse(is_comp_visible(passive, state_on))
 
         # Scenario 4: Switch LFO instance to RND 1 (LFO 11): standard_lfo becomes 0
-        state_rnd = {"Parameter 2943": 0, "Parameter 2699": 1}
+        state_rnd = {"Parameter 2942": 0, "Parameter 2699": 1}
         self.assertFalse(is_comp_visible(active, state_rnd), "Active Smooth must be hidden for Random LFO")
         self.assertFalse(is_comp_visible(passive, state_rnd), "Passive Smooth must be hidden for Random LFO")
         self.assertFalse(is_smooth_applicable("RND 1"))

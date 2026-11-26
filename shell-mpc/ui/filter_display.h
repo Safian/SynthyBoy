@@ -732,10 +732,10 @@ public:
     }
     int scalarViewState() const noexcept { return scalarSel_; }
 
-    /** Enables the 60/40 Split layout on the left 751 px column (suppressed in Mixer PEEK). */
+    /** Enables the 60/40 Split layout on the left 751 px column. */
     void setSplitMode (bool split)
     {
-        const bool effective = split && peekHeader_ == 0 && ! nativePeekGeometry_;
+        const bool effective = split;
         if (splitMode_ == effective)
             return;
         splitMode_ = effective;
@@ -773,29 +773,6 @@ public:
     /** What the body of NOTE and VELO is drawn in: everything below the top bar (1280 x 556 on the page). */
     Rect bodyRect() const noexcept { return { rect_.x, rect_.y + kTopBarH, rect_.w, std::max (0, rect_.h - kTopBarH) }; }
     Rect topBarRect() const noexcept { return { rect_.x, rect_.y, rect_.w, kTopBarH }; }
-
-    /** A mixer panel has a fixed filter. Its parent puts CLOSE at the left of this row. */
-    void setPeekHeader (int reservedWidth)
-    {
-        peekHeader_ = reservedWidth;
-        if (peekHeader_ > 0)
-            setSplitMode (false);
-        show (view, false);
-        applyVisibility();
-        layout();
-    }
-
-    /** A native PEEK uses the same host-layout coordinates as the full tab.
-        Its parent owns CLOSE at the start of the hidden VIEW selector. */
-    void setNativePeekGeometry (bool enabled)
-    {
-        if (nativePeekGeometry_ == enabled)
-            return;
-        nativePeekGeometry_ = enabled;
-        if (enabled)
-            setSplitMode (false);
-        layout();
-    }
 
     /** The page of a hardware sub-tab (Filter 1, Filter 2, Note, Velo): there is no VIEW selector and no NOTE | VELO selector, the sub-tab names the state. The top bar keeps its geometry: the place of the
         selector is the filter chain of the skin. */
@@ -950,7 +927,7 @@ protected:
 
     void layout() override
     {
-        if (splitMode_ && peekHeader_ == 0 && ! nativePeekGeometry_ && ! curveView())
+        if (splitMode_ && ! curveView())
         {
             layoutSplit();
             return;
@@ -958,13 +935,10 @@ protected:
         const int m = 8, W = rect_.w;
         scalarView.place ({});
 
-        // Keep the selector and model positions common to the native page and Mixer dock.
-        const int peekSpace = nativePeekGeometry_ ? 0 : peekHeader_;
-        const bool isPeek = peekHeader_ > 0 || nativePeekGeometry_;
-        const bool isExpCurve = curveView() && ! isPeek;
+        const bool isExpCurve = curveView();
         const Rect top { rect_.x + m, rect_.y + kQLane, W - 2 * m - (isExpCurve ? 62 : 0), kTopH };
         Rect r[7];
-        const int fixed[7] = { peekSpace ? peekSpace : (pageMode_ ? 0 : 84), isExpCurve ? 0 : 56, peekSpace ? 0 : 4 * kViewCellW, peekSpace ? 0 : LedToggle::widthFor ("F1+F2"), 0, 0, LedToggle::widthFor ("CLEAN") }, weight[7] = { 0, 0, 0, 0, 5, 4, 0 };
+        const int fixed[7] = { pageMode_ ? 0 : 84, isExpCurve ? 0 : 56, 4 * kViewCellW, LedToggle::widthFor ("F1+F2"), 0, 0, LedToggle::widthFor ("CLEAN") }, weight[7] = { 0, 0, 0, 0, 5, 4, 0 };
         layoutRow (top, fixed, weight, 7, kGap, r);
         close.place (r[0]);
         view.place (r[2]);
@@ -1038,7 +1012,7 @@ protected:
         const int gw = isFormant_ ? (W - 2 * m - fw - kBlockGap) : (W - 2 * m);
         graphRect_ = { rect_.x + m, midY, gw, midH };
         power.place ({ graphRect_.x + 8, graphRect_.y + 4, 56, 56 });
-        expand.place (isPeek ? Rect {} : Rect { graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
+        expand.place ({ graphRect_.right() - 8 - 56, graphRect_.y + 4, 56, 56 });
         display.placeGraph (graphRect_, power.rect(), expand.rect());
         if (isFormant_)
         {
@@ -1057,8 +1031,6 @@ protected:
     }
 
     /** Which parts are shown: NOTE / VELO hide the filter; hidden, not dimmed, what does not apply (VAR with the Formant model, COMB without the Comb model, the FORMANT block and its RESONANCE without the Formant model). */
-    int peekHeader_ = 0;
-    bool nativePeekGeometry_ = false;
 public:
     std::array<const Component*, nativeui::FilterPoint> nativeControls() const noexcept
     {
@@ -1111,11 +1083,11 @@ public:
     }
     Rect nativeExpandFilterRect() const noexcept
     {
-        return ! peekHeader_ && ! nativePeekGeometry_ ? expand.rect() : Rect {};
+        return expand.rect();
     }
     Rect nativeScalarViewRect() const noexcept
     {
-        return splitMode_ && ! curveView() && ! peekHeader_ && ! nativePeekGeometry_ ? scalarView.rect() : Rect {};
+        return splitMode_ && ! curveView() ? scalarView.rect() : Rect {};
     }
 
     void applyVisibility()

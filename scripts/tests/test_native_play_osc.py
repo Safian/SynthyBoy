@@ -38,7 +38,7 @@ class NativePlayOscTests(unittest.TestCase):
             group = ("sub", "abc", "abc", "abc", "noise")[ordinal]
             prefix = f"Play Native OSC {source} "
             controls = [w for w in self.widgets if w["componentData"]["name"].startswith(prefix)]
-            start = 3313 + 7 * ordinal
+            start = 3312 + 7 * ordinal
             modes = (2 * ordinal, 2 * ordinal + 1) if group == "abc" else (1 if group == "sub" else 8,)
             for mode in modes:
                 with self.subTest(source=source, mode=mode):
@@ -48,14 +48,14 @@ class NativePlayOscTests(unittest.TestCase):
                         gates = item["bounds"]["additionalInvalidatingHandles"]
                         self.assertIn(f"IndexedEnabling/{ordinal}/5/Parameter 2676", gates)
                         self.assertIn("RangedEnabling/0/18/33/Parameter 2675", gates)
-                        source_gate = (f"RangedEnabling/{modes[0]}/{modes[-1]}/9/Parameter 3312" if group == "abc"
-                                       else f"IndexedEnabling/{mode}/9/Parameter 3312")
+                        source_gate = (f"RangedEnabling/{modes[0]}/{modes[-1]}/9/Parameter 3311" if group == "abc"
+                                       else f"IndexedEnabling/{mode}/9/Parameter 3311")
                         self.assertIn(source_gate, gates)
                         if group == "abc" and field == "second":
                             kind = item["componentData"]["type"]
                             slot = {"NativeActive playOscTableField": modes[0],
                                     "NativeActive playOscContentField": modes[1]}[kind]
-                            self.assertIn(f"IndexedEnabling/{slot}/9/Parameter 3312", gates)
+                            self.assertIn(f"IndexedEnabling/{slot}/9/Parameter 3311", gates)
                             if slot != mode:
                                 continue
                         bindings = self.remaps(item)
@@ -92,8 +92,8 @@ class NativePlayOscTests(unittest.TestCase):
                if w["componentData"]["name"].startswith("Play Native OSC Sub ")}
         self.assertEqual(set(sub), {"power", "expand", "first", "second", "pan", "level"})
         for field, index, caption, enabled_kind in (
-                ("first", 3316, "WAVE", "playSubWaveField"), ("second", 3317, "OCT", "playOscNumberField"),
-                ("pan", 3318, "PAN", "playSubPan"), ("level", 3319, "LEVEL", "playSubLevel")):
+                ("first", 3315, "WAVE", "playSubWaveField"), ("second", 3316, "OCT", "playOscNumberField"),
+                ("pan", 3317, "PAN", "playSubPan"), ("level", 3318, "LEVEL", "playSubLevel")):
             item = sub[field]
             self.assertEqual(self.remaps(item)["Caption"], f"WithName[{caption}]/Parameter {index}")
             states = self.definitions[item["componentData"]["type"]]["componentsData"]
@@ -171,7 +171,7 @@ class NativePlayOscTests(unittest.TestCase):
         expand, = self.definitions[active["componentData"]["type"]]["componentsData"]
         for image in ("onImage", "offImage"):
             self.assertTrue(expand["componentData"]["data"][image].startswith("native_action_"))
-        self.assertEqual(self.replacements["Parameter 3323"],
+        self.assertEqual(self.replacements["Parameter 3322"],
                          ["Wavetable", "Multisample", "Sample", "Granular", "Spectral"])
         for name, marker_x, marker_rgb, stock_type in (
             ("play osc routing", 52, "e5a44f", "MenuOverlay"),
@@ -187,7 +187,7 @@ class NativePlayOscTests(unittest.TestCase):
             art = fallback.NoFallbackTests.skins / marker["componentData"]["data"]["image"]
             with Image.open(art) as image:
                 self.assertEqual(image.tobytes(), bytes.fromhex(marker_rgb) * 36)
-        for menu, labels in (("play sub waveform", self.replacements["Parameter 3316"]),
+        for menu, labels in (("play sub waveform", self.replacements["Parameter 3315"]),
                              ("play osc octave", [str(i) for i in range(-4, 5)])):
             hint, = [child for child in self.definitions[menu]["componentsData"]
                      if child["componentData"]["name"] == "Apply hint"]

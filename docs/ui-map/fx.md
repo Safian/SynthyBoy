@@ -13,7 +13,7 @@ The FX page provides complete visual control over SynthyBoy's effect rack and ro
 
 ## Layout
 
-The FX tab uses the 1280 × 628 canvas in `shell-mpc/overlay/overlay_layout.json`. On the standalone tab, the host skin draws and handles the live parameter cells. The host also owns the chain's card selection, power, pagination, Add, Back and gallery buttons. The host owns the Compressor BAND selector on MAIN; unavailable bands are passive. The overlay draws the effect and gallery plots and handles MOVE. Mixer PEEK uses the same native controls and chain in the selected rack. The overlay keeps the curves and supplies the complete fallback editor when the host background is unavailable.
+The FX tab uses the 1280 × 628 canvas in `shell-mpc/overlay/overlay_layout.json`. On the standalone tab, the host skin draws and handles the live parameter cells. The host also owns the chain's card selection, power, pagination, Add, Back and gallery buttons. The host owns the Compressor BAND selector on MAIN; unavailable bands are passive. The overlay draws the effect and gallery plots and handles MOVE. The overlay keeps the curves and supplies the complete fallback editor when the host background is unavailable.
 
 The screen layout (`shell-mpc/ui/fx_screen.h:63-70`) consists of two main vertical regions plus a modal popup layer:
 
@@ -31,7 +31,7 @@ The screen layout (`shell-mpc/ui/fx_screen.h:63-70`) consists of two main vertic
        - `FxBandBoard` (`shell-mpc/ui/fx_band_board.h:77-192`): 206 to 240 px high for Splitter modules (L/H, L/M/H, M/S). Displays 2 or 3 band lanes with band tiles (`FxBandTile`), band effect slot cards, and band `+ ADD` cards.
      - **Parameter cells.** The functional panels use the same four-column grid; `fxl::panelsOf()` assigns every row exactly once. For each visible cell the editor publishes its geometry, control type and target on the selected effect instance. The generated skin exposes the matching dial, toggle, named choice or whole-number selector. For Filter STYLE the current MODEL determines the names. Delay can expose both left and right divisions at once, with a separate target for each.
 
-3. **Popups.** Standalone parameter choices use the host menu. MAIN uses the MPC menu to add an effect while a pool slot is free. The filtered gallery handles additions to bands and splitter additions when the pool is full. Mixer PEEK uses the original overlay controls. The final XL pass checks the host popup composition, selection and cancellation on the physical display.
+3. **Popups.** Standalone parameter choices use the host menu. MAIN uses the MPC menu to add an effect while a pool slot is free. The filtered gallery handles additions to bands and splitter additions when the pool is full. The final XL pass checks the host popup composition, selection and cancellation on the physical display.
 
 ## Controls
 

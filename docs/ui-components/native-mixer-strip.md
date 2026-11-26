@@ -46,7 +46,7 @@ Following owner feedback, the header toggle switch is replaced with authentic mi
 Understated blue/white SynthyBoy console styling places all static furniture onto the background image once:
 - **Static Background Canvas**:
   - Tab background: `overlay_canvas.png` ($1280 \times 628\text{ px}$).
-  - Variant backgrounds: `mixer_strip_source_bg.png`, `mixer_strip_bus_bg.png`, `mixer_strip_master_bg.png` ($115 \times 550\text{ px}$).
+  - Variant backgrounds: `mixer_strip_source_bg.png`, `mixer_strip_bus_bg.png`, `mixer_strip_master_bg.png` ($115 \times 606\text{ px}$).
   - Retains the required DRM plane sentinel at $(900, 18)$ with color `#141a35`.
 - **Fader Scale Marks strictly follow `param_table.cpp`**:
   - **SOURCE generators (SUB, A, B, C, NOISE)**:
@@ -58,7 +58,7 @@ Understated blue/white SynthyBoy console styling places all static furniture ont
     - Major ticks: $-60, -36, -24, -12, -6, 0, +6, +12\text{ dB}$.
     - **Unity reference**: Highlighted $0\text{ dB}$ tick at proportion $60/72 \approx 0.8333$ travel.
   - **BUS & MASTER (BUS 1, BUS 2, MAIN)**:
-    - Tall 414 px fader with exponential skew ($2.5$) over $-60\text{ dB} \dots +6\text{ dB}$.
+    - Tall 470 px fader with exponential skew ($2.5$) over $-60\text{ dB} \dots +6\text{ dB}$.
     - $\text{norm} = \left(\frac{\text{dB} + 60}{66}\right)^{2.5}$.
     - Major ticks: $-60\text{ (-inf)}, -48, -36, -24, -18, -12, -6, 0, +6\text{ dB}$.
     - **Unity reference**: Highlighted $0\text{ dB}$ tick at $\text{norm} = (60/66)^{2.5} \approx 0.7885$ (thicker tick, brighter `#ffffff`, bold label "0").
@@ -70,8 +70,8 @@ Following explicit owner directive, the normal Mixer tab is rendered **100% by t
   In `shell-mpc/overlay/mixer_ui.h`, when `nativeBase()` and `hostBackground()` are active, overlay rendering (`drawNativeMarkerCovers`, `drawStaticFurniture`, `drawNativeBaseScreen`) is completely disabled. The normal Mixer tab overlay scene contains 0 draw commands, 0 vertices, and 0 overlay pixels.
 - **Direct Touch Routing**:
   `covers(x, y)` returns `false` on the normal mixer tab, so 100% of touch and wheel events pass directly to host native widgets without overlay interception or touch stealing.
-- **Modal Popup & PEEK Isolation Preserved**:
-  Transient destination dropdown lists (`listOpen_`) and Filter/FX PEEK modal editors (`peekOpen_`) retain full overlay coverage, preventing touch leakage to underlying base widgets.
+- **Modal Popup Isolation Preserved**:
+  Transient destination dropdown lists (`listOpen_`) retain full overlay coverage, preventing touch leakage to underlying base widgets.
 
 ## Real Native Vertical Fader & Below-Track Value
 
@@ -114,9 +114,9 @@ Offline sample preview card for catalog:
 
 | Variant | Target Strips | Included Child Controls | Level Fader Height | Omitted Controls | Remapped Logical Handles |
 |---|---|---|---|---|---|
-| **SOURCE** | SUB, OSC A, OSC B, OSC C, NOISE, F1, F2 | Strip name plate, S/M buttons, Destination selector, Level fader, Peak/Hold meter, Pan slider, Send 1 slider, Send 2 slider | 198 px | None | `Solo`, `Mute`, `Destination`, `Level`, `Peak`, `Hold`, `Pan`, `Send1`, `Send2` |
-| **BUS** | BUS 1, BUS 2 | Strip name plate, S/M buttons, Destination selector, Level fader, Peak/Hold meter | 414 px | Pan, Send 1, Send 2 | `Solo`, `Mute`, `Destination`, `Level`, `Peak`, `Hold` |
-| **MASTER** | MAIN / MASTER | Strip name plate, FX Enable button, Mute button, Level fader, Peak/Hold meter | 414 px | Destination, Pan, Send 1, Send 2 | `FxEnable`, `Mute`, `Level`, `Peak`, `Hold` |
+| **SOURCE** | SUB, OSC A, OSC B, OSC C, NOISE, F1, F2 | Strip name plate, S/M buttons, Destination selector, Level fader, Peak/Hold meter, Pan slider, Send 1 slider, Send 2 slider | 254 px | None | `Solo`, `Mute`, `Destination`, `Level`, `Peak`, `Hold`, `Pan`, `Send1`, `Send2` |
+| **BUS** | BUS 1, BUS 2 | Strip name plate, S/M buttons, Destination selector, Level fader, Peak/Hold meter | 470 px | Pan, Send 1, Send 2 | `Solo`, `Mute`, `Destination`, `Level`, `Peak`, `Hold` |
+| **MASTER** | MAIN / MASTER | Strip name plate, FX Enable button, Mute button, Level fader, Peak/Hold meter | 470 px | Destination, Pan, Send 1, Send 2 | `FxEnable`, `Mute`, `Level`, `Peak`, `Hold` |
 
 ### Gating Semantics & Decoupled Muting
 - **SOURCE strips**: Power (`source.on`) gates routing destinations, pan, and sends (`power_gate`).
@@ -143,25 +143,24 @@ The engine defines dedicated non-mutating atomic solo and mute bitmasks (`mixerS
   - Linear dB scale ($-60\text{ dB} \dots +12\text{ dB}$, skew 1.0, 0 dB unity highlight).
   - Explicit "-60" bottom label (no "-inf" since minimum gain is finite -60 dB).
 - **BUS & MASTER (BUS 1, BUS 2, MAIN)**:
-  - Tall 414 px fader with exponential skew ($2.5$) over $-60\text{ dB} \dots +6\text{ dB}$ (0 dB unity highlight).
+  - Tall 470 px fader with exponential skew ($2.5$) over $-60\text{ dB} \dots +6\text{ dB}$ (0 dB unity highlight).
   - Bottom labels thinned to `(-60, -30, -18, -6, 0, 6)` with `-48` as unlabelled minor tick mark, eliminating text collision.
 
-## Layout & PEEK Action Row
+## Layout
 
-- **Channel Strips**: Start cleanly at top (`topY = 10`, `height = 550`).
-- **PEEK Action Row**: Dedicated bottom row (`y = 566..622`, `h = 56`) above the host footer bar for `FLT 1`, `FLT 2`, `MAIN FX`, `BUS 1`, `BUS 2` buttons.
+- **Channel Strips**: Start cleanly at top (`topY = 10`, `height = 606`: the strips take the whole tab; the Mixer is one screen, the peek action row that took the bottom 56 px is gone).
 - **Shared Tokens**: All geometry reads strictly from `components/sizes.json` (`mixer_strip.*`). S/M button colors read from named tokens in `components/colors.json` (`dial.value`, `accent.cyan`, `focus.field`, `accent.red`, `button.surface`). Zero hardcoded hex colors or fallback styles.
 
 ## Host-Only Normal Mixer & Overlay Gating
 
-- **Normal Mixer Screen**: Completely host-only when `nativeBase()` is active (`useNativeWidgets() && hostConfirmed() && ! peek_ && ! listOpen_`). Emits 0 ops, 0 vertices, and empty scene. `covers(x, y)` returns `false` so the host receives 100% of input events.
-- **Modal PEEK & Popup Isolation**: When PEEK is opened or destination list is active, `nativeBase()` becomes false, overlay claims full coverage (`covers()` returns true for backdrop), and native apertures are cleared cleanly. In fallback mode (`hostConfirmed() == false`), PEEK renders fully opaque.
+- **Normal Mixer Screen**: Completely host-only when `nativeBase()` is active (`useNativeWidgets() && hostConfirmed() && ! listOpen_`). Emits 0 ops, 0 vertices, and empty scene. `covers(x, y)` returns `false` so the host receives 100% of input events.
+- **Popup Isolation**: When the destination list is active, `nativeBase()` becomes false, overlay claims full coverage (`covers()` returns true for backdrop), and native apertures are cleared cleanly.
 
 ## Verification & Test Results
 
 All targeted tests and offline previews pass cleanly:
 - `synthyboy_test_own_engine_fixes`: 17 test cases, 828 checks, 0 failed (0.18s) - verifies `own_mixer_solo_routing_and_suppression`, `own_mixer_solo_filter_preserves_feeders`, `own_mixer_mute_silences_without_mutating_params`, `own_mixer_master_mute_independent_of_fx_bypass`, and `own_mixer_disabled_source_no_false_solo`.
-- `mixer_native_ui_host`: All assertions passed - verifies native base handoff, opaque fallback, 0-op overlay scene, modal PEEK isolation, filter native apertures, and destination popups.
+- `mixer_native_ui_host`: All assertions passed - verifies native base handoff, opaque fallback, 0-op overlay scene, and destination popups.
 - `python3 scripts/tests/test_ui_screen_mixer.py`: 6 tests, OK (5.2s).
 - `python3 scripts/tests/test_native_component_isolation.py mixer_strip`: 2 tests, OK (0.18s).
 - Offline design preview generation: Regenerated `catalog-mixer-strip.png`, `source_strip_before_after.png`, `variants_comparison.png`, `overlay_bg_mixer.png`, and `mixer-preview.png`.

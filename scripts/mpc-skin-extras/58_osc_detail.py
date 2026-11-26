@@ -21,7 +21,7 @@ from components.native.selector.selector import (OSC_TAB_NAMES, command_stepper_
                                                   write_source_navigation_assets)
 from native_warp_picker import CONTROL as WARP_CONTROL
 from native_ui_params import (OSC_ABC_SETTINGS, OSC_DETAIL, OSC_DETAIL_CELLS, OSC_ROOT_LOAD,
-                              OSC_ROOT_LOAD_VIEW, OSC_SETTINGS_VIEW, OSC_SETTINGS_LAYOUTS, mixer_peek_index)
+                              OSC_ROOT_LOAD_VIEW, OSC_SETTINGS_VIEW, OSC_SETTINGS_LAYOUTS, native_base_index)
 
 CONTRACT = Path(__file__).with_name("osc-native-detail.json")
 
@@ -63,7 +63,7 @@ def apply(tui, qlinks, ctx):
     if not tabs:
         return
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    native_base = mixer_peek_index(ctx.param_count)
+    native_base = native_base_index(ctx.param_count)
     base = native_base + OSC_DETAIL
     count = OSC_DETAIL_CELLS
     view = f"Parameter {base}"

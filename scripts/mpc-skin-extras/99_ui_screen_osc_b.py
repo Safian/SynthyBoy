@@ -30,7 +30,7 @@ from native_ui_params import (
     OSC_SETTINGS_VIEW,
     OSC_SOURCE,
     OSC_VISIBILITY,
-    mixer_peek_index,
+    native_base_index,
 )
 _REPO_ROOT = _SCRIPTS.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -129,7 +129,7 @@ def verify_osc_b_screen(tui, qlinks, ctx):
         return False, f"oscNativeSurface missing children: {expected_surface_children - surface_children!r}"
 
     # Rule 5: Verify Osc B specific bindings
-    base = mixer_peek_index(ctx.param_count)
+    base = native_base_index(ctx.param_count)
 
     # 5a. Power button for Osc B: bound to base + OSC_POWER + 2
     power_layer = defs.get("oscNativePowerLayer")

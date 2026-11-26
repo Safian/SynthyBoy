@@ -90,7 +90,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(set(im.crop((x, y, x + w, y + h)).getdata()), {(9, 13, 25)})
 
     def test_off_navigation_and_model_permissions_are_explicit(self):
-        state = len(self.params) + 213
+        state = len(self.params) + 212
         action = state + 28
         by_name = {c["componentData"]["name"]: c for c in self.native}
         self.assertEqual(len(by_name), len(self.native))
@@ -115,7 +115,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         self.assertEqual(self.curve_surface["bounds"]["additionalInvalidatingHandles"], [f"RangedEnabling/3/4/5/Parameter {state}"])
 
     def test_active_widgets_follow_all_four_views_and_filter_models(self):
-        state = len(self.params) + 213
+        state = len(self.params) + 212
 
         def current_names(view, model, power_frame):
             args = {state: view, state + 18: model, state + 33: power_frame}
@@ -178,24 +178,24 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                              [(event, "Show Overlay", "Data", "fx editor choice menu") for event in ("Mouse Down", "Enter Pressed")])
         self.assertEqual(sum(c["componentData"]["type"] == "MenuOverlay"
                              for c in definitions["fx editor choice menu"]["componentsData"]), 1)
-        self.assertEqual(handle(named["Model"]), 2779)
+        self.assertEqual(handle(named["Model"]), 2778)
         fx = json.loads((base.REAL_EXTRAS / "fx-native-contract.json").read_text())["domains"]
         filter_contract = json.loads((base.REAL_EXTRAS / "filter-native-contract.json").read_text())
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
-        self.assertEqual(replacements["Parameter 2779"], fx[0])
+        self.assertEqual(replacements["Parameter 2778"], fx[0])
         for model in range(27):
             control = named.get(f"Style {model}")
             if model in filter_contract["one_style"]:
                 self.assertIsNone(control)
                 continue
             self.assertIsNotNone(control)
-            self.assertEqual(handle(control), 2800 + model)
-            self.assertIn(f"IndexedEnabling/{model}/27/Parameter 2868", control["bounds"]["additionalInvalidatingHandles"])
-            self.assertEqual(replacements[f"Parameter {2800 + model}"], fx[21 + model])
+            self.assertEqual(handle(control), 2799 + model)
+            self.assertIn(f"IndexedEnabling/{model}/27/Parameter 2867", control["bounds"]["additionalInvalidatingHandles"])
+            self.assertEqual(replacements[f"Parameter {2799 + model}"], fx[21 + model])
 
     def test_readouts_and_scalar_controls_use_the_exact_visible_owner(self):
         ids = {p["key"]: i for i, p in enumerate(self.params)}
-        state = len(self.params) + 213
+        state = len(self.params) + 212
         items = {c["componentData"]["name"].removeprefix("Filter Native "): c for c in self.native}
         definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         manifest = json.loads((base.REAL_EXTRAS / "filter-native-contract.json").read_text())
@@ -261,7 +261,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             self.assertEqual(nv["bounds"]["acceptsHWFocus"], "Yes")
 
     def test_pz_launcher_uses_the_shared_graph_corner_icon_and_named_focus(self):
-        state = len(self.params) + 213
+        state = len(self.params) + 212
         items = {c["componentData"]["name"].removeprefix("Filter Native "): c for c in self.native}
         manifest = json.loads((base.REAL_EXTRAS / "filter-native-contract.json").read_text())
         for model in manifest["one_style"]:
@@ -290,14 +290,14 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         for f, parent in enumerate(self.toolbar, 1):
             self.assertEqual(rect(parent), (0, 0, 1280, 72))
             self.assertEqual(parent["bounds"]["acceptsHWFocus"], "Children")
-            self.assertEqual(handle(parent), 3493 + f)
+            self.assertEqual(handle(parent), 3491 + f)
             self.assertEqual(parent["bounds"]["additionalInvalidatingHandles"],
-                             [f"IndexedEnabling/{f}/3/Parameter 3496"])
+                             [f"IndexedEnabling/{f}/3/Parameter 3494"])
         manifest = json.loads((base.REAL_EXTRAS / "filter-native-contract.json").read_text())
         by_name = {c["componentData"]["name"].removeprefix("Filter Native PZ "): c for c in self.tools}
         self.assertEqual(len(by_name), 5)
         art = by_name["draft state"]
-        self.assertEqual(handle(art), 3497)
+        self.assertEqual(handle(art), 3495)
         self.assertEqual(art["bounds"]["acceptsHWFocus"], "No")
         self.assertEqual(art["bounds"].get("additionalInvalidatingHandles", []), [])
         image = art["componentData"]["data"]
@@ -313,7 +313,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             data = button["componentData"]["data"]
             self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]), (i, 5, "Instant"))
             self.assertEqual(button["handle remapping"]["map"], [{"key": "Data", "value": f"WithName[{label}]/FromGesture/Data"}])
-            gates = [] if i < 3 else [f"RangedEnabling/{i - 2}/{i - 1}/4/Parameter 3497"]
+            gates = [] if i < 3 else [f"RangedEnabling/{i - 2}/{i - 1}/4/Parameter 3495"]
             self.assertEqual(button["bounds"].get("additionalInvalidatingHandles", []), gates)
             if i < 3:
                 continue
@@ -364,9 +364,8 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
 
     def test_compact_filter_chain_shares_native_menu_and_actual_power(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        instances = [item for item in (*self.top_native, *defs["mixerPeekFilterEditorSurface"]["componentsData"])
-                     if item["componentData"]["type"] == "filterNativeChain"]
-        self.assertEqual(len(instances), 6)
+        instances = [item for item in self.top_native if item["componentData"]["type"] == "filterNativeChain"]
+        self.assertEqual(len(instances), 3)
         params = {p["key"]: i for i, p in enumerate(self.params)}
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
         for instance in instances:
@@ -375,11 +374,11 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(bindings[f"Power{f}"], "Parameter " + str(params[f"filter{f}.on"]))
             labels = replacements[bindings["Data"]]
             self.assertEqual([label.removesuffix(" ✓") for label in labels],
-                             ["F1", "F2", "Parallel", "F1 to F2", "F2 to F1"])
-            route, = [i - 2 for i, text in enumerate(labels) if text.endswith(" ✓")]
+                             ["Parallel", "F1 to F2", "F2 to F1"])
+            route, = [i for i, text in enumerate(labels) if text.endswith(" ✓")]
             self.assertIn(f"IndexedEnabling/{route}/3/Parameter {params['filter.routing']}",
                           instance["bounds"]["additionalInvalidatingHandles"])
-            self.assertEqual(bindings["Edited"], "Parameter 2880")
+            self.assertEqual(bindings["Edited"], "Parameter 2879")
         definition = defs["filterNativeChain"]
         face = definition["componentsData"][0]["componentData"]["data"]
         self.assertEqual((face["imageType"], face["numFrames"], face["handleName"]), ("FilmStrip", 4, "Edited"))
@@ -389,7 +388,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         self.assertEqual(sum(c["componentData"]["type"] == "MenuOverlay"
                              for c in defs["filterNativeChainChoices"]["componentsData"]), 1)
         rows = [c for c in defs["filterNativeChainChoices"]["componentsData"] if c["componentData"]["type"] == "Button"]
-        self.assertEqual([r["componentData"]["data"]["buttonId"] for r in rows], list(range(5)))
+        self.assertEqual([r["componentData"]["data"]["buttonId"] for r in rows], list(range(3)))
         for pool in (self.controls,):
             self.assertFalse(any("Routing " in c["componentData"]["name"] for c in pool))
 

@@ -34,7 +34,6 @@
 #include "instance_view.h"
 #include "native_marker_covers.h"
 #include "page_view.h"
-#include "peek_module.h"
 #include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
@@ -48,7 +47,7 @@
 
 namespace synthyboy_mpc { namespace overlay {
 
-class FxUi : public PeekModule
+class FxUi
 {
 public:
     static constexpr int kElementPage = 6;        // the page of the FX tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
@@ -70,7 +69,7 @@ public:
 
     enum class DrawPass : uint8_t { All, LiveOnly };
 
-    explicit FxUi (int rackOnly = -1) : rackOnly_ (rackOnly)
+    FxUi()
     {
         plain_.assign (synthyboy::paramCount(), 0.0f);
         cardItems_.reserve (2 * ui::FxChainBar::kMaxSlots);
@@ -86,31 +85,7 @@ public:
         screen_.gallery.setTypes (galleryTypes, typeNames_, ui::fxl::kNumKinds - 1);
         screen_.gallery.setId (kGallery);
         screen_.setEditorShown (false);
-        if (rackOnly_ < 0)
-        {
-            setNativeControls (true);
-        }
-    }
-
-    ui::Component& peekRoot() noexcept override { return screen_; }
-    void placePeek (ui::Rect panel) override
-    {
-        screen_.setHeaderInset (nativePeek_ ? 0 : kCloseWidth + ui::kGap);
-        screen_.setPeekInset (nativePeek_ && panel.h < kTabH ? (kTabH - panel.h) : 0);
-        screen_.place (panel);
-    }
-
-    void setNativePeek (bool enabled) noexcept override { nativePeek_ = enabled; }
-    bool nativePeekReady() const noexcept override { return nativePeek_ && screen_.nativeControls(); }
-    bool peekCloseVisible() const noexcept override
-    {
-        return ! topPage() && (! nativePeekReady() || (scope_ == 0 && ! galleryOpen_));
-    }
-    ui::Rect nativePeekCloseRect() const noexcept override { return screen_.chainBar.nativeBackRect(); }
-    void clearNativePeekApertures (gpu::SceneBuilder& sb) const override
-    {
-        if (nativePeekReady())
-            clearNativeApertures (sb);
+        setNativeControls (true);
     }
 
     void setCanvas (int w, int h)
@@ -131,33 +106,30 @@ public:
     int selectedSlot() const noexcept { return selectedSlot_; }
     int numCards() const noexcept { return static_cast<int> (cardItems_.size()); }
     const synthyboy::FxRackItem& cardItem (int i) const noexcept { return cardItems_[static_cast<size_t> (i)]; }
-    const int* qTargets() const noexcept override { return qSlots_.data(); }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
-    const char* qGroupName() const noexcept override { return qName_; }
-    void setHostBackground (bool on) noexcept { drawPass_ = (on && rackOnly_ < 0) ? DrawPass::LiveOnly : DrawPass::All; }
-    bool hostBackground() const noexcept { return &ui::theme::L() == &ui::theme::kLook1 && rackOnly_ < 0 && drawPass_ == DrawPass::LiveOnly; }
+    const char* qGroupName() const noexcept { return qName_; }
+    void setHostBackground (bool on) noexcept { drawPass_ = on ? DrawPass::LiveOnly : DrawPass::All; }
+    bool hostBackground() const noexcept { return &ui::theme::L() == &ui::theme::kLook1 && drawPass_ == DrawPass::LiveOnly; }
     void setNativeControls (bool on) noexcept
     {
         nativeControls_ = on;
         screen_.setNativeControls (on);
         setHostBackground (on);
     }
-    bool nativeControls() const noexcept { return rackOnly_ < 0 ? nativeControls_ : nativePeek_; }
-    void leftTab (IInstanceView& inst) noexcept override
+    bool nativeControls() const noexcept { return nativeControls_; }
+    void leftTab (IInstanceView& inst) noexcept
     {
-        if (rackOnly_ < 0 || nativePeek_)
-        {
-            inst.setNativeFxCells (0, nullptr);
-            inst.setNativeFxHeader ({});
-            inst.setNativeFxChain ({});
-        }
+        inst.setNativeFxCells (0, nullptr);
+        inst.setNativeFxHeader ({});
+        inst.setNativeFxChain ({});
     }
-    void setNativeActionPopup (IInstanceView& inst, int action) noexcept override
+    void setNativeActionPopup (IInstanceView& inst, int action) noexcept
     {
         inst.setNativeFxRackPopup (action == 0);
         inst.setNativeFxAddPopup (action == 1);
     }
-    int topPage() const noexcept override { return listOpen_ ? kPageList : 0; }
+    int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
     /** The chain on the page: 0 the Main / Bus chain, 3 .. 9 the chain of that band rack (fxl::bandOfRack). */
     int scope() const noexcept { return scope_; }
     /** The modules of a band rack (3 .. 9) in processing order, as of the last update. */
@@ -165,7 +137,7 @@ public:
     const synthyboy::FxRackItem& selectedItem() const noexcept { return selectedItem_; }
 
     /** Reads the instance: the chain (only when its structure changed), the selected effect with its knobs, display data and Q group. */
-    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in) override
+    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
         live_ = in.live;
@@ -222,30 +194,26 @@ public:
         if (! effectiveNative)
             galleryOpen_ = false;
         refreshEditor (inst, sig);
-        // The standalone native editor uses the regular instance marker. Only an
-        // embedded rack or a plugin-drawn page needs to mask the underlying tab.
-        inst.setUiFullOpen (rackOnly_ >= 0 || ! effectiveNative || listOpen_);
-        if (rackOnly_ < 0 || nativePeek_)
+        // The native editor uses the regular instance marker. Only a plugin-drawn page needs to mask the underlying tab.
+        inst.setUiFullOpen (! effectiveNative || listOpen_);
+        if (syncNativeChain (inst)
+            || syncNativeHeader (inst, const_cast<UiStack&> (stack)))
         {
-            if (syncNativeChain (inst)
-                || syncNativeHeader (inst, const_cast<UiStack&> (stack)))
-            {
-                readRackStructure (inst);
-                refreshEditor (inst, structureSignature());
-            }
-            inst.setNativeFxChain (nativeChain());
-            inst.setNativeFxHeader (nativeHeader());
-            syncNativeCells (inst);
+            readRackStructure (inst);
+            refreshEditor (inst, structureSignature());
         }
+        inst.setNativeFxChain (nativeChain());
+        inst.setNativeFxHeader (nativeHeader());
+        syncNativeCells (inst);
         publishQGroup (inst);
     }
 
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
-    void draw (gpu::SceneBuilder& sb) const override
+    void draw (gpu::SceneBuilder& sb) const
     {
         const bool native = screen_.nativeControls();
-        if (! hostBackground() && rackOnly_ < 0)
+        if (! hostBackground())
         {
             page::ground (sb);
             if (native && ! listOpen_)
@@ -268,9 +236,9 @@ public:
             list_.draw (sb);
     }
 
-    bool covers (int x, int y) const noexcept override
+    bool covers (int x, int y) const noexcept
     {
-        const ui::Rect bounds = nativePeek_ ? screen_.rect() : ui::Rect { 0, kTabY, w_, kTabH };
+        const ui::Rect bounds { 0, kTabY, w_, kTabH };
         const bool inTab = bounds.contains (x, y);
         if (! inTab || ! screen_.nativeControls() || listOpen_)
             return inTab;
@@ -279,7 +247,7 @@ public:
         return ! found;
     }
 
-    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs) override
+    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         if (inst.stateGeneration() != stateGeneration_)
         {
@@ -345,7 +313,7 @@ public:
         return true;
     }
 
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst) override
+    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
         if (gesture_ && gestureDown_)
             handle (gesture_->tick (nowMs), stack, inst);
@@ -353,7 +321,7 @@ public:
 
     /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
         list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs) override
+    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         ui::Component* top = listOpen_ ? static_cast<ui::Component*> (&list_) : static_cast<ui::Component*> (&screen_);
         if (gestureDown_ || ! top || ! covers (x, y))
@@ -366,15 +334,15 @@ public:
         return true;
     }
 
-    bool fingerDown() const noexcept override { return gestureDown_; }
-    void dropGesture() noexcept override
+    bool fingerDown() const noexcept { return gestureDown_; }
+    void dropGesture() noexcept
     {
         gesture_ = nullptr;
         gestureDown_ = false;
         draggedItem_ = { false, -1 };
     }
-    void forgetQGroup() noexcept override { qSlots_.forget(); }
-    void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst) override
+    void forgetQGroup() noexcept { qSlots_.forget(); }
+    void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
         if (screen_.editorShown())
             handle (screen_.turnQ (knobIndex, delta), stack, inst);
@@ -434,10 +402,8 @@ private:
             for (const synthyboy::FxRackItem& item : racks.rack[static_cast<size_t> (scope_)])
                 if (static_cast<int> (cardItems_.size()) < kMaxItems)
                     cardItems_.push_back (item);
-        const int firstRack = rackOnly_ >= 0 ? rackOnly_ : 0;
-        const int lastRack = rackOnly_ >= 0 ? rackOnly_ + 1 : synthyboy::kNumPoolRacks;
         const int maxItems = screen_.nativeControls() ? 2 * kMaxItems : kMaxItems;
-        for (int r = firstRack; scope_ == 0 && r < lastRack && r < synthyboy::kNumPoolRacks && numCards() < maxItems; ++r)
+        for (int r = 0; scope_ == 0 && r < synthyboy::kNumPoolRacks && numCards() < maxItems; ++r)
             for (const synthyboy::FxRackItem& item : racks.rack[static_cast<size_t> (r)])
             {
                 if (numCards() >= maxItems)
@@ -502,12 +468,6 @@ private:
                 offered = k < ui::fxl::kKindSplitterLh && moduleFree (k - 1);
             else if (limited)
                 offered = k >= ui::fxl::kKindSplitterLh && ! synthyboy::fxItemOn (plain_.data(), { false, k - 1 });
-            else if (rackOnly_ >= 0 && k >= ui::fxl::kKindSplitterLh)
-            {
-                const Item splitter { false, 13 + k - ui::fxl::kKindSplitterLh };
-                offered = ! synthyboy::fxItemOn (plain_.data(), splitter)
-                       || synthyboy::fxItemRack (plain_.data(), splitter) == rackOnly_;
-            }
             if (offered)
                 out[n++] = k;
         }
@@ -678,7 +638,7 @@ private:
         const bool add = offered > 0;
         if (galleryOpen_)
             state.mode = c::FilteredGallery;
-        else if (scope_ == 0 && ! poolFull() && (rackOnly_ < 0 || offered == c::kTypes))
+        else if (scope_ == 0 && ! poolFull())
             state.mode = gallery ? c::MainGallery : add ? c::MainAdd : c::MainLocked;
         else if (scope_ == 0)
             state.mode = add ? c::FilteredAdd : c::MainLocked;
@@ -955,8 +915,7 @@ private:
                         const int clamped = choiceCount - 1;
                         const int idx = paramIndexOf (item, p);
                         if (idx >= 0)
-                            if (rackOnly_ < 0)
-                                inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (clamped))));
+                            inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (clamped))));
                     }
                 }
                 stepper.state.count = choiceCount;
@@ -1429,10 +1388,9 @@ private:
                 synthyboy::fxSetOn (plain_.data(), item, true, writes);
                 int inMain = 0;
                 const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
-                const int targetRack = rackOnly_ >= 0 ? rackOnly_ : 0;
-                for (const Item& o : racks.rack[static_cast<size_t> (targetRack)])
+                for (const Item& o : racks.rack[0])
                     inMain += ! (o == item);
-                synthyboy::fxMove (plain_.data(), item, targetRack, inMain, writes);
+                synthyboy::fxMove (plain_.data(), item, 0, inMain, writes);
                 applyWrites (inst, writes);
             }
             selectedItem_ = item;
@@ -1443,7 +1401,7 @@ private:
         if (freeSlot < 0)
             return false;
         readSlotParameters (inst, freeSlot);
-        const int newSlot = synthyboy::fxAddModule (plain_.data(), kind, rackOnly_ >= 0 ? rackOnly_ : 0, writes);
+        const int newSlot = synthyboy::fxAddModule (plain_.data(), kind, 0, writes);
         if (newSlot < 0)
             return false;
         selectedItem_ = { true, newSlot };
@@ -1819,8 +1777,6 @@ private:
     Item selectedItem_ { false, -1 }, renderedItem_ { false, -1 };
     std::vector<Item> cardItems_;
     std::vector<Item> bandItems_[ui::fxl::kNumBandRacks];   // the modules of the band racks 3 .. 9 (the lanes of the page of a splitter)
-    bool nativePeek_ = false;
-    int rackOnly_ = -1; // embedded FX PEEK: restrict the chain and ADD target to Bus 1/2
     bool nativeControls_ = false;
     int nativeFxPage_ = -1, nativeFxRack_ = -1, nativeFxLayout_ = 0;
     bool nativeFxPower_ = false;

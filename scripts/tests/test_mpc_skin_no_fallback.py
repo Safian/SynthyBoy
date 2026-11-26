@@ -215,8 +215,8 @@ class NoFallbackTests(unittest.TestCase):
 
         for view in ("env1", "mod", "voice"):
             check(view, f"Native Caption {view}")
-        from native_ui_params import MASTER_VIEW, mixer_peek_index
-        handle = mixer_peek_index(len(self.params)) + MASTER_VIEW
+        from native_ui_params import MASTER_VIEW, native_base_index
+        handle = native_base_index(len(self.params)) + MASTER_VIEW
         check("master_header", "Native Caption master header")
         check("master", "Native Caption master", (f"IndexedEnabling/1/3/Parameter {handle}",))
         check("master_tuning", "Native Caption master tuning", (f"IndexedEnabling/2/3/Parameter {handle}",))
@@ -235,7 +235,7 @@ class NoFallbackTests(unittest.TestCase):
                     # The overlay covers one extra pixel around every marker.
                     self.assertTrue(x > mx + mw or mx > x + w or y > my + mh or my > y + h, name)
         for layout, view in enumerate(("lfo1", "lfo1", "lfo3", "lfo4", "lfo4", "lfo6"), 1):
-            check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2833",))
+            check(view, f"LFO 1 Native Group {layout}", (f"IndexedEnabling/{layout}/7/Parameter 2832",))
 
     def test_the_q_proxies_are_on_all_24_tabs(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
@@ -253,20 +253,13 @@ class NoFallbackTests(unittest.TestCase):
             for c in base.standalone_editor_entries(tab, self.definitions):
                 name = c["componentData"]["name"]
                 if name.startswith("Play Expanded "):
-                    self.assertTrue(c["bounds"]["additionalInvalidatingHandles"][0].endswith("/7/Parameter 3537"), name)
+                    self.assertTrue(c["bounds"]["additionalInvalidatingHandles"][0].endswith("/7/Parameter 3535"), name)
                     continue
                 if name.startswith("Play ") and (name.startswith("Play Native EnvLfo ") or name.endswith(" Select") or name.startswith("Play Native OSC ") or name in ("Play Env Attack", "Play Env Decay", "Play Env Sustain", "Play Env Release", "Play LFO Rise", "Play LFO Smooth", "Play LFO Smooth Off")):
                     self.assertIn("RangedEnabling/0/18/33/Parameter %d" % (index), json.dumps(c["bounds"]))
                     continue
                 if c["componentData"]["type"] == "nativeModulationEditor":
-                    self.assertIn("/9/Parameter 3529", c["bounds"]["additionalInvalidatingHandles"][0])
-                    continue
-                if name.startswith("Mixer Native Peek "):
-                    view = 1 if name.endswith("Filter") else 2
-                    gates = [f"IndexedEnabling/{view}/3/Parameter 3349"]
-                    if view == 1:
-                        gates.append("RangedEnabling/1/2/5/Parameter 2850")
-                    self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], gates)
+                    self.assertIn("/8/Parameter 3527", c["bounds"]["additionalInvalidatingHandles"][0])
                     continue
                 if name.startswith("Mixer Native ") or c["componentData"]["type"] == "macroCard" \
                         or tab["tabName"] == "Voice" and c["componentData"]["type"].startswith("voiceNative"):
@@ -274,18 +267,18 @@ class NoFallbackTests(unittest.TestCase):
                     continue
                 if name.startswith("LFO 1 Native "):
                     if name.startswith("LFO 1 Native Detail "):
-                        expected = 3285
+                        expected = 3284
                     else:
-                        expected = 3196 if name.startswith("LFO 1 Native Editor ") else 2833
+                        expected = 3195 if name.startswith("LFO 1 Native Editor ") else 2832
                     self.assertTrue(any(gate.endswith(f"/Parameter {expected}") for gate in c["bounds"]["additionalInvalidatingHandles"]), name)
                     continue
                 if name.startswith("Filter Native "):
-                    gate = 3496 if name.startswith("Filter Native PZ Toolbar ") else 2850
+                    gate = 3494 if name.startswith("Filter Native PZ Toolbar ") else 2849
                     self.assertIn(f"Parameter {gate}", c["bounds"]["additionalInvalidatingHandles"][0])
                     continue
                 if name.startswith("Mod Native "):
                     gate = c["bounds"]["additionalInvalidatingHandles"][0]
-                    expected = 2944 if name.startswith("Mod Native Mode ") or name.endswith((" Group", " ADD")) else 2888
+                    expected = 2943 if name.startswith("Mod Native Mode ") or name.endswith((" Group", " ADD")) else 2887
                     self.assertTrue(gate.endswith(f"/Parameter {expected}"), name)
                     continue
                 if name.startswith("Env Native "):
@@ -318,8 +311,7 @@ class NoFallbackTests(unittest.TestCase):
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] == "Mix")
         native = {c["componentData"]["name"].removeprefix("Mixer Native "): c
                   for c in tab["componentDefinition"]["componentsData"]
-                  if c["componentData"]["name"].startswith("Mixer Native ")
-                  and not c["componentData"]["name"].startswith("Mixer Native Peek ")}
+                  if c["componentData"]["name"].startswith("Mixer Native ")}
         handles = {p["key"]: f"Parameter {i}" for i, p in enumerate(self.params)}
         choices = {f"Parameter {i}": p["choices"] for i, p in enumerate(self.params) if "choices" in p}
         replacements = {r["key"]: r["value"] for r in self.tui["pageData"]["replacementStrings"]}
@@ -337,9 +329,9 @@ class NoFallbackTests(unittest.TestCase):
         for i, (caption, source) in enumerate(strips):
             c = native[f"{caption} Strip"]
             self.assertEqual(c["componentData"]["type"], strip_kinds[i] + "Frame")
-            self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], [modal, f"IndexedEnabling/0/6/Parameter {native_base + 856}"])
+            self.assertEqual(c["bounds"]["additionalInvalidatingHandles"], [modal])
             self.assertEqual(c["bounds"]["showWhenDataModelInvalid"], "Hide")
-            self.assertEqual(tuple(map(int, c["bounds"]["bounds"].split())), (10 + 127 * i, 10, 115, 550))
+            self.assertEqual(tuple(map(int, c["bounds"]["bounds"].split())), (10 + 127 * i, 10, 115, 606))
             rm = remap(c)
             for field, handle in enumerate(("PeakL", "PeakR", "HoldL", "HoldR", "ClipL", "ClipR")):
                 param = f"Parameter {native_base + MIXER_STEREO_BASE + 10 * field + i}"
@@ -348,17 +340,17 @@ class NoFallbackTests(unittest.TestCase):
                 self.assertEqual(remap(native[f"{caption} Strip {leaf}"])[handle], param)
             self.assertEqual(rm["Level"], handles[f"{source}.level" if i < 9 else "master.volume"])
             self.assertEqual(rm["Name"], handles[f"{source}.level" if i < 9 else "master.volume"])
-            self.assertEqual(rm["Mute"], f"Parameter {native_base + 840 + i}")
+            self.assertEqual(rm["Mute"], f"Parameter {native_base + 838 + i}")
             if i < 9:
                 destination = handles[f"{source}.destination"]
                 self.assertEqual(rm["Destination"], destination)
                 self.assertEqual(replacements[destination], choices[destination])
-                self.assertEqual(rm["Solo"], f"Parameter {native_base + 830 + i}")
-                self.assertEqual(rm["SoloVisual"], f"Parameter {native_base + 857 + i}")
+                self.assertEqual(rm["Solo"], f"Parameter {native_base + 828 + i}")
+                self.assertEqual(rm["SoloVisual"], f"Parameter {native_base + 854 + i}")
             else:
                 self.assertEqual(rm["FxEnable"], handles["main.fx_bypass"])
-                self.assertEqual(rm["FxVisual"], f"Parameter {native_base + 866}")
-            self.assertEqual(rm["MuteVisual"], f"Parameter {native_base + 867 + i}")
+                self.assertEqual(rm["FxVisual"], f"Parameter {native_base + 863}")
+            self.assertEqual(rm["MuteVisual"], f"Parameter {native_base + 864 + i}")
             pairs = (("FX Enable", "FxVisual", "FxEnable"), ("Master Mute", "MuteVisual", "Mute")) if i == 9 else (
                 ("Solo", "SoloVisual", "Solo"), ("Mute", "MuteVisual", "Mute"))
             for title, state_key, action_key in pairs:
@@ -374,62 +366,18 @@ class NoFallbackTests(unittest.TestCase):
                 self.assertEqual(face["bounds"]["bounds"], action["bounds"]["bounds"])
 
 
-        # Persistent 6-tab bar (MIXER, FLT 1, FLT 2, MAIN FX, BUS 1, BUS 2) gated together during full-screen dialogs
-        all_tabs = ("MIXER", "FLT 1", "FLT 2", "MAIN FX", "BUS 1", "BUS 2")
-        for i, caption in enumerate(all_tabs):
-            btn = native[f"{caption} Peek"]
-            self.assertEqual(btn["componentData"]["type"], "Button")
-            data = btn["componentData"]["data"]
-            self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["gestureBehaviour"]), (i, 6, "Instant"))
-            self.assertEqual(remap(btn), {"Data": f"Parameter {native_base}"})
-            self.assertEqual(btn["bounds"]["additionalInvalidatingHandles"], [modal])
-            self.assertEqual(btn["bounds"]["bounds"], f"{10 + 210 * i} 566 210 56")
-        vis = native["Tabs"]
-        self.assertEqual(vis["componentData"]["type"], "Image")
-        self.assertEqual(vis["bounds"]["bounds"], "10 566 1260 56")
-        self.assertEqual(vis["componentData"]["data"]["numFrames"], 6)
-        self.assertEqual(remap(vis), {"Data": f"Parameter {native_base + 856}"})
-        self.assertEqual(vis["bounds"]["additionalInvalidatingHandles"], [modal])
+        # the Mixer is one screen: no peek tab bar (the strips take the whole tab)
+        self.assertFalse([name for name in native if name.endswith(" Peek") or name == "Tabs"])
 
         menu = definitions["mixerDestination56"]["actions"]
         self.assertEqual([(a["onAction"], a["handler"], a["additionalData"]) for a in menu],
                          [(trigger, "Show Overlay", "fx editor choice menu") for trigger in ("Mouse Down", "Enter Pressed")])
 
-    def test_mixer_peek_reuses_the_complete_standalone_editor_trees(self):
+    def test_mixer_has_no_peek_surfaces(self):
         tabs = {t["tabName"]: t["componentDefinition"]["componentsData"] for t in self.tui["pageData"]["tabs"]}
-        definitions = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-        mixer = {c["componentData"]["name"]: c for c in tabs["Mix"]}
-        for title, index, kind, dock_kind in (
-            ("Filter", 1, "filterNativeEditorSurface", "mixerPeekFilterEditorSurface"),
-            ("FX", 2, "fxNativeEditorSurface", "mixerPeekFxEditorSurface"),
-        ):
-            dock = mixer[f"Mixer Native Peek {title}"]
-            standalone, = [c for c in tabs[title] if c["componentData"]["type"] == kind]
-            self.assertEqual(dock["componentData"]["type"], dock_kind)
-            self.assertEqual(standalone["bounds"]["bounds"], "0 0 1280 628")
-            self.assertEqual(dock["bounds"]["bounds"], "0 0 1280 564")
-            self.assertEqual(dock["bounds"]["acceptsHWFocus"], "Children")
-            gates = [f"IndexedEnabling/{index}/3/Parameter 3349"]
-            if title == "Filter":
-                gates.append("RangedEnabling/1/2/5/Parameter 2850")
-            self.assertEqual(dock["bounds"]["additionalInvalidatingHandles"], gates)
-            root = 2850 if index == 1 else 3231
-            self.assertEqual(standalone["handle remapping"]["map"], [{"key": "Data", "value": f"Parameter {root}"}])
-            self.assertEqual(dock["handle remapping"]["map"], [{"key": "Data", "value": "Parameter 3349"}])
-            self.assertTrue(definitions[kind]["ignoreMousePresses"])
-            self.assertTrue(definitions[dock_kind]["ignoreMousePresses"])
-        f = {c["componentData"]["name"] for c in definitions["mixerPeekFilterEditorSurface"]["componentsData"]}
-        self.assertTrue({"Filter Native Power", "Filter Native Model", "Filter Native Cutoff 0"} <= f)
-        self.assertTrue({"Filter Native F1", "Filter Native F2", "Filter Native dual", "Filter Native NOTE",
-                         "Filter Native VELO", "Filter Native Edit PZ Curve"}.isdisjoint(f))
-        fx = {c["componentData"]["type"] for c in definitions["mixerPeekFxEditorSurface"]["componentsData"]}
-        self.assertTrue({"fxNativeChainRow", "fxNativeHeader", "mixerPeekGalleryRow1"} <= fx)
-        cell_group, = [entry for entry in definitions["mixerPeekFxEditorSurface"]["componentsData"]
-                       if entry["componentData"]["name"] == "FX parameter cells"]
-        states = definitions[cell_group["componentData"]["type"]]["componentsData"]
-        self.assertIn("mixerPeekFxParameterCells", {state["componentData"]["type"] for state in states})
-        self.assertIn("fxNativeCellChoice", {child["componentData"]["type"]
-                                             for child in definitions["mixerPeekFxParameterCells"]["componentsData"]})
+        definitions = {d["key"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        self.assertFalse([c["componentData"]["name"] for c in tabs["Mix"] if "Peek" in c["componentData"]["name"]])
+        self.assertFalse({d for d in definitions if d.startswith("mixerPeek")})
 
     def test_expanded_play_mounts_the_same_editor_trees_and_three_independent_close_actions(self):
         tabs = {t["tabName"]: t["componentDefinition"]["componentsData"] for t in self.tui["pageData"]["tabs"]}
@@ -448,17 +396,17 @@ class NoFallbackTests(unittest.TestCase):
             # the selector strip belongs to the Play page's expanded editor only: no Env sub-tab has one (the hardware sub-tab names the envelope)
             self.assertEqual(len([c for c in tabs[tab] if c["componentData"]["type"] == kind]), 0 if kind == "envNativeSelectorStrip" else 1)
             self.assertEqual(entry["bounds"]["bounds"], rect)
-            self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], [f"{gate}/7/Parameter 3537"])
+            self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], [f"{gate}/7/Parameter 3535"])
             self.assertLess(list(play).index(name), first_marker)
             self.assertTrue(self.definitions[kind]["ignoreMousePresses"])
-        for label, root, action, rect in (("Oscillator", 1, 3538, "1148 116 120 56"),
-                                          ("Envelope", 3, 3539, "58 12 96 56"),
-                                          ("LFO", 5, 3540, "968 210 96 56")):
+        for label, root, action, rect in (("Oscillator", 1, 3536, "1148 116 120 56"),
+                                          ("Envelope", 3, 3537, "58 12 96 56"),
+                                          ("LFO", 5, 3538, "968 210 96 56")):
             entry = play[f"Play Expanded {label} Close"]
             self.assertEqual(entry["componentData"]["type"], "oscNativeSetting_action")
             self.assertEqual(entry["bounds"]["bounds"], rect)
             self.assertEqual(entry["bounds"]["acceptsHWFocus"], "Yes")
-            self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{root}/7/Parameter 3537"])
+            self.assertEqual(entry["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{root}/7/Parameter 3535"])
             self.assertEqual({b["key"]: b["value"] for b in entry["handle remapping"]["map"]},
                              {"Data": f"FromGesture/Parameter {action}", "Caption": f"Parameter {action}"})
 
@@ -471,9 +419,9 @@ class NoFallbackTests(unittest.TestCase):
         specs = ("Attack", "Decay", "Sustain", "Release", "Attack Curve", "Decay Curve", "Release Curve", "Delay", "Hold", "Beats", "Retrig")
         expected_x = (14, 125, 236, 347, 474, 584, 694, 821, 933, 1045, 1157)
         self.assertEqual(set(scalars), set(specs) | {"Targets"})
-        for caption, parameter, x in zip((*specs, "Targets"), (*range(2930, 2941), 2942), (*expected_x, 1072)):
+        for caption, parameter, x in zip((*specs, "Targets"), (*range(2929, 2940), 2941), (*expected_x, 1072)):
             control = scalars[caption]
-            self.assertEqual(control["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2929"])
+            self.assertEqual(control["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2928"])
             self.assertEqual(control["bounds"]["showWhenDataModelInvalid"], "Hide")
             remap = {h["key"]: h["value"] for h in control["handle remapping"]["map"]}
             self.assertEqual(remap["Data"], f"Parameter {parameter}")
@@ -536,14 +484,14 @@ class NoFallbackTests(unittest.TestCase):
 
         buttons = children[1:]
         self.assertEqual(len(buttons), 6)
-        frame_base = len(self.params) + 82 + 21   # append only, after the entire Mixer block
+        frame_base = len(self.params) + 82 + 20   # append only, after the entire Mixer block
         for slot, cell in enumerate(cells):
             self.assertEqual(cell["bounds"]["bounds"], f"{88 * slot} 0 88 56")
             remap = {item["key"]: item["value"] for item in cell["handle remapping"]["map"]}
             frame_handle = f"Parameter {frame_base + slot}"
-            self.assertEqual(remap["Data"], "Parameter 2941")
+            self.assertEqual(remap["Data"], "Parameter 2940")
             self.assertEqual(remap["Frame"], frame_handle)
-            self.assertEqual(cell["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2929", f"NonZero/{frame_handle}"])
+            self.assertEqual(cell["bounds"]["additionalInvalidatingHandles"], ["NonZero/Parameter 2928", f"NonZero/{frame_handle}"])
             available = {}
             for env, c in enumerate(buttons, 1):
                 payload = c["componentData"]["data"]

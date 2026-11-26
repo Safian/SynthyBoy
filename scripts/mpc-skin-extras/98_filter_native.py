@@ -22,7 +22,7 @@ from components.native.pan import pan as ui_pan
 from components.native.radio_button import radio_button as ui_radio
 from components.native.selector import selector as ui_selector
 from native_skin_font import semibold
-from native_ui_params import (FILTER_CHAIN_MENU, FILTER_STATE_OFFSET, FX_DOMAIN_OFFSET, LEGACY_EXTRAS, MIXER_PEEK_VIEW,
+from native_ui_params import (FILTER_CHAIN_MENU, FILTER_STATE_OFFSET, FX_DOMAIN_OFFSET, LEGACY_EXTRAS,
                               PZ_ACTIONS, PZ_AVAILABILITY, PZ_SOURCE)
 
 
@@ -37,7 +37,7 @@ FIELDS = (
 )
 SELECT = ("F1", "F2", "NOTE", "VELO")
 CURVE_ACTIONS = ("Init", "Undo", "Delete Point", "Targets")
-CHAIN_CHOICES = ("F1", "F2", "Parallel", "F1 to F2", "F2 to F1")
+CHAIN_CHOICES = ("Parallel", "F1 to F2", "F2 to F1")   # the routing only: the edited filter is the hardware sub-tab
 POWER = 0
 ROUTE = 10
 MODEL, STYLE = 17, 18
@@ -371,8 +371,7 @@ def _register_filter_chain(ctx, tui, f2_state):
     definitions = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     menu = copy.deepcopy(next(d["value"] for d in definitions if d["key"] == "fx editor choice menu"))
     popup = "filterNativeChainChoices"
-    marks = [(f2_state, (True, True, False, False)), (f2_state, (False, False, True, True))]
-    marks.extend((route, tuple(frame == index for frame in range(3))) for index in range(3))
+    marks = [(route, tuple(frame == index for frame in range(3))) for index in range(3)]
     ui_selector.append_choice_rows(ctx, menu, CHAIN_CHOICES, "filter_chain", header_title="FILTER CHAIN", marks=marks)
     ctx.add_component_definition(popup, menu)
     ctx.add_component_definition(kind, ui_selector.filter_chain_definition(ctx.skins_dir, popup))
@@ -380,7 +379,7 @@ def _register_filter_chain(ctx, tui, f2_state):
     shared.extend((f"Power{f}", f"Parameter {ctx.param_index(f'filter{f}.on')}") for f in (1, 2))
     first = ctx.param_count + LEGACY_EXTRAS + FILTER_CHAIN_MENU
     for index in range(3):
-        labels = [label + (" ✓" if row == index + 2 else "") for row, label in enumerate(CHAIN_CHOICES)]
+        labels = [label + (" ✓" if row == index else "") for row, label in enumerate(CHAIN_CHOICES)]
         ui_selector.ensure_routing_replacement_strings(tui, [first + index], labels)
 
     def instances(name, x, y, height, gates=()):
@@ -596,48 +595,6 @@ def apply(tui, qlinks, ctx):
     surface = _entry("Editor Surface", kind, data, (0, 0, style.size("filter.apply.entry.1280"), style.size("filter.apply.entry.628")), state, expanded_filter_gates)
     surface["bounds"]["acceptsHWFocus"] = "Children"
     items.insert(0, surface)
-
-    mixer = next((t for t in tui["pageData"]["tabs"] if t["tabName"] in ("Mix", "Mixer")), None)
-    if mixer is not None:
-        # Docked Mixer PEEK editor occupies 0..564 above the persistent bottom 6-tab bar (y=566..622).
-        import copy as _copy
-        docked_items = []
-        docked_h = style.size("filter.apply.docked_h.564")
-        middle_start, bottom_start, middle_height, second_row = style.size("filter.dock.thresholds")
-        tab_shift = style.size("filter.apply.tab_shift.628") - docked_h
-        for comp in filter_items:
-            c = _copy.deepcopy(comp)
-            cx, cy, cw, ch = map(int, c["bounds"]["bounds"].split())
-            if cy >= bottom_start:
-                cy -= tab_shift
-            elif middle_start <= cy < bottom_start and ch >= middle_height:
-                # Formant 2x2 middle block shrinks vertically to match FilterDisplay::layout() at 564px
-                mid_y = style.size("filter.apply.mid_y.76")
-                band_top = style.size("filter.apply.band_top.384") - style.size("filter.apply.band_top.8")
-                block_top = mid_y + style.size("filter.apply.block_top.18") + style.size("filter.apply.block_top.6")
-                cell_h = max(style.size("filter.apply.cell_h.48"), (band_top - mid_y - style.size("filter.apply.cell_h.30") - style.size("filter.apply.cell_h.6")) // 2)
-                row_idx = 0 if cy < second_row else 1
-                cy = block_top + row_idx * (cell_h + 6)
-                ch = min(ch, cell_h)
-            c["bounds"]["bounds"] = f"{cx} {cy} {cw} {ch}"
-            docked_items.append(c)
-        vx, vy, _, vh = manifest["view"]
-        docked_items.extend(chain("Peek Chain", vx + style.size("filter.chain")["peek_offset"], vy, vh))
-        dock_kind = "mixerPeekFilterEditorSurface"
-        ctx.add_component_definition(dock_kind, {
-            "version": 2, "actions": [], "ignoreMousePresses": True, "disableCoarseDataWheel": True,
-            "backgroundData": {"version": 1, "focussed": transparent, "unfocussed": transparent},
-            "componentsData": docked_items,
-        })
-        view = ctx.param_count + LEGACY_EXTRAS + MIXER_PEEK_VIEW
-        peek = _entry("Peek Filter", dock_kind, data, (0, 0, style.size("filter.apply.entry.1280"), docked_h),
-                      view, (f"IndexedEnabling/1/3/Parameter {view}", *_state_gates(state, (1, 2))))
-        peek["componentData"]["name"] = "Mixer Native Peek Filter"
-        peek["bounds"]["acceptsHWFocus"] = "Children"
-        mix_items = mixer["componentDefinition"]["componentsData"]
-        first_marker = next((i for i, item in enumerate(mix_items)
-                            if item["componentData"]["name"].startswith("Overlay ")), len(mix_items))
-        mix_items.insert(first_marker, peek)
 
     # Expanded top bar, graph corner Expand and PZ Edit
     vx, vy, vw, vh = manifest["view"]

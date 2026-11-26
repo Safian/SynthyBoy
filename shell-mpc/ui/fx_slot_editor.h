@@ -174,18 +174,11 @@ public:
         return found;
     }
 
-    void setPeekInset (int px) noexcept { peekInset_ = std::max (0, px); }
-    int displayShrink() const noexcept
-    {
-        const int baseH = lay_->displayH > 0 ? std::max (0, lay_->displayH - chainInset_) : 0;
-        return baseH > 0 && peekInset_ > 0 ? std::min (peekInset_, std::max (0, baseH - 60)) : 0;
-    }
-
     int nativeLayout() const noexcept
     {
         if (! nativeControls_)
             return 0;
-        const int top = knobArea_.y - 110 + displayShrink();
+        const int top = knobArea_.y - 110;
         const bool side = sideMode();
         for (int i = 0; i < nativeui::kFxLayoutLast; ++i)
         {
@@ -221,11 +214,11 @@ public:
         }
     }
 
-    /** DISPLAY LEFT, CONTROLS RIGHT (the table's `side` flag): not while a Mixer peek shrinks the page, and only when the rows that are on the panel now fit the height at the right (otherwise the
+    /** DISPLAY LEFT, CONTROLS RIGHT (the table's `side` flag): only when the rows that are on the panel now fit the height at the right (otherwise the
         stacked layout applies, as for the FX Filter's TONE panel of the Formant model: three rows of 2 + 2 + 1 lines do not fit under the tabs). */
     bool sideMode() const noexcept
     {
-        return lay_->side && sideAllowed_ && peekInset_ == 0 && lay_->displayH > 0 && display.kind != FxDisplay::Kind::None && sideFits();
+        return lay_->side && lay_->displayH > 0 && display.kind != FxDisplay::Kind::None && sideFits();
     }
     /** The height the rows on the panel take in the side layout: a Q lane and the lines of every row. */
     int sideHeight() const noexcept
@@ -239,16 +232,6 @@ public:
     {
         const int top = rect_.y + 8 + kHeaderH + 8 + (numPages() > 1 ? 64 : 0);   // under the header and the tabs (layout())
         return rect_.h > 0 && rowsOnPage() > 0 && sideHeight() <= rect_.bottom() - 8 - top;
-    }
-    /** The skin contract exporter asks for the stacked variant of a side page too (the docked Mixer peek shows it). */
-    void setSideAllowed (bool on)
-    {
-        if (on != sideAllowed_)
-        {
-            sideAllowed_ = on;
-            if (rect_.w > 0)
-                layout();
-        }
     }
     /** The lines of a row of a side page: two cells to a line, by the cells of its table row (stable while controls hide). */
     int sideLines (int visRow) const noexcept
@@ -563,7 +546,7 @@ protected:
             layoutCells();
             return;
         }
-        const int displayH = lay_->displayH > 0 ? std::max (0, lay_->displayH - chainInset_ - displayShrink()) : 0;
+        const int displayH = lay_->displayH > 0 ? std::max (0, lay_->displayH - chainInset_) : 0;
         if (displayH > 0 && display.kind != FxDisplay::Kind::None && displayShown())
         {
             display.place ({ rect_.x + m, y, rect_.w - 2 * m, displayH });
@@ -845,9 +828,7 @@ private:
     Rect knobArea_;
     bool nativeControls_ = true, moduleEnabled_ = true;
     int chainInset_ = 0;
-    int peekInset_ = 0;
     int styleModel_ = 0;
-    bool sideAllowed_ = true;
 };
 
 }} // namespace synthyboy_mpc::ui

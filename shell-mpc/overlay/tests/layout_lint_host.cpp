@@ -951,25 +951,6 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
         }
         case layout::kKindMixer:
             sub ("main", [&] { Rig<MixerUi> r (base, v.index); r.refresh(); lintRig (run, r, pg, "main", { &r.ui.screen() }); });
-            for (int target = 0; target < 3; ++target)
-            {
-                static const char* const names[] = { "peek-filter1", "peek-filter2", "peek-main-fx" };
-                sub (names[target], [&] {
-                    Rig<MixerUi> r (base, v.index);
-                    if (target == 2)
-                    {
-                        r.inst.set ("chorus.on", 1.0f);
-                        r.inst.set ("chorus.rack", 0.0f);
-                    }
-                    r.refresh();
-                    const ui::Rect button = r.ui.screen().routingBar.peekRect (target);
-                    r.tapAt (button.x + button.w / 2, button.y + button.h / 2);
-                    if (auto* root = r.ui.peekRoot())
-                        lintRig (run, r, pg, names[target], { root, &r.ui.peekClose() }, true);
-                    else
-                        run.problems.push_back (pg + "/" + names[target] + ": Mixer tap did not open the panel");
-                });
-            }
             break;
         case layout::kKindFilterUi:
         {
