@@ -50,6 +50,8 @@ target_include_directories(synthyboy_test_own_fx PRIVATE "${PROJECT_SOURCE_DIR}/
 synthyboy_add_test(synthyboy_test_own_osc_options test_own_osc_options.cpp)
 synthyboy_add_test(synthyboy_test_own_content_opt test_own_content_opt.cpp)   # the CPU optimisations of the library oscillators change no output sample
 target_include_directories(synthyboy_test_own_content_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_lib_quantize_levels test_own_lib_quantize_levels.cpp)   # the Quantize level count of the library oscillators made once per call: the same bits as once per sample
+target_include_directories(synthyboy_test_own_lib_quantize_levels PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_compressor_opt test_own_compressor_opt.cpp)   # the CPU optimisation of the Compressor limiter changes no output sample
 target_include_directories(synthyboy_test_own_compressor_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 # The tests of the effect optimisation (docs/plans/reverb-convolve.md): every core/tests/test_fxopt_<name>.cpp is the executable synthyboy_test_fxopt_<name> (a new task adds no line here).

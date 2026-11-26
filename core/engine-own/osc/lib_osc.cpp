@@ -960,6 +960,14 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
         }
         rm = rateBuf.data();
     }
+    // the Quantize level count depends on the warp amount only, so it is made once per call (the same exp2 of the same float as the per sample call it replaces)
+    float quantizeLevels[2] = { 0.0f, 0.0f };
+    for (int s = 0; s < 2; ++s)
+        if (tick.warp[s] == kWarpQuantize)
+        {
+            const float a = tick.warpAmount[s];
+            quantizeLevels[s] = std::exp2 (1.0f + 14.0f * (1.0f - a) * (1.0f - a) * (1.0f - a));
+        }
     auto postWarp = [&] (float y, int k, int u, int ch) noexcept
     {
         for (int s = 0; s < 2; ++s)
@@ -982,7 +990,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             }
             else if (w == kWarpQuantize)
             {
-                const float levels = std::exp2 (1.0f + 14.0f * (1.0f - a) * (1.0f - a) * (1.0f - a));
+                const float levels = legacyCaches () ? std::exp2 (1.0f + 14.0f * (1.0f - a) * (1.0f - a) * (1.0f - a)) : quantizeLevels[s];
                 if ((aa::off () & aa::kLibWarp) == 0)
                     y = warpadaa::stepQuantize (postAa[u][ch][s], y, levels);
                 else
