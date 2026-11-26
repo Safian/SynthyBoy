@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-tier-bench.sh [--arch arm32|arm64|all] [--out DIR] [--build-dir DIR] [--jobs N] [--sections] [--dynamic] [--dry-run]
+# Usage: scripts/build-tier-bench.sh [--arch arm32|arm64|all] [--out DIR] [--build-dir DIR] [--jobs N] [--sections] [--dynamic] [--cxx-flags FLAGS] [--dry-run]
 #
 #   --arch       arm32 (ARMv7 hard-float with NEON: the MPC Key 61), arm64 (AArch64: the MPC XL) or all (default)
 #   --out        output directory (default: <temporary checkout directory>/build-tier-bench/out); the binaries are <out>/tier-bench-arm32/synthyboy_tier_bench and
@@ -16,6 +16,8 @@
 #   --dynamic    also build the variant linked like the plugin: dynamic glibc (the libm of the device through the PLT), static libstdc++ / libgcc
 #                (-DSYNTHYBOY_TIER_BENCH_STATIC=OFF -DSYNTHYBOY_TIER_BENCH_STATIC_LIBCXX=ON) into <out>/tier-bench-<arch>-dyn/. Checked: it needs libm.so.6,
 #                not libstdc++, and no GLIBC symbol newer than 2.39 (the device's glibc).
+#   --cxx-flags  extra C++ flags appended to CMAKE_CXX_FLAGS_RELEASE (default "-O3 -DNDEBUG" + FLAGS), e.g. "-mtune=cortex-a17" or "-flto" for a flag A/B/A (docs/perf/compiler-flags-ab.md); the
+#                architecture flags of the toolchain file stay. Use a separate --out and --build-dir per variant so no tree or binary is reused
 #   --dry-run    print one DRY-RUN line per architecture and variant and exit (no Docker, no directory is made)
 # Every output directory also holds synthyboy_libm_probe and synthyboy_pmu_probe when the tree has these targets.
 #
@@ -33,6 +35,7 @@ arch="all"
 sections=0
 dynamic=0
 dry_run=0
+cxx_flags=""
 out_dir=""
 build_dir=""
 jobs="$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
@@ -44,6 +47,7 @@ while [[ $# -gt 0 ]]; do
         --jobs) jobs="$2"; shift 2 ;;
         --sections) sections=1; shift ;;
         --dynamic) dynamic=1; shift ;;
+        --cxx-flags) cxx_flags="$2"; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
         -h|--help) sed -n '7,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "$me: unknown option $1 (see --help)" >&2; exit 2 ;;
@@ -67,7 +71,7 @@ if [[ "$dry_run" == 1 ]]; then
             v_static=ON; v_libcxx=OFF; v_sections=OFF
             [[ "$variant" == "-sections" ]] && v_sections=ON
             [[ "$variant" == "-dyn" ]] && { v_static=OFF; v_libcxx=ON; }
-            echo "DRY-RUN arch=$a variant=$variant static=$v_static libcxx_static=$v_libcxx section_timing=$v_sections targets=synthyboy_tier_bench,synthyboy_libm_probe,synthyboy_pmu_probe out=$out_dir/tier-bench-$a$variant"
+            echo "DRY-RUN arch=$a variant=$variant static=$v_static libcxx_static=$v_libcxx section_timing=$v_sections cxx_flags_extra="$cxx_flags" targets=synthyboy_tier_bench,synthyboy_libm_probe,synthyboy_pmu_probe out=$out_dir/tier-bench-$a$variant"
         done
     done
     exit 0
@@ -81,7 +85,7 @@ for a in "${archs[@]}"; do
     mkdir -p "$build_dir/$a$variant"
     tree="$(cd "$build_dir/$a$variant" && pwd)"
     echo "$me: === $a$variant (image $image) ==="
-    docker run --rm -v "$repo_root":/src:ro -v "$tree":/build -v "$out_dir":/out -e ARCH="$a" -e VARIANT="$variant" -e JOBS="$jobs" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" "$image" bash -c '
+    docker run --rm -v "$repo_root":/src:ro -v "$tree":/build -v "$out_dir":/out -e ARCH="$a" -e VARIANT="$variant" -e JOBS="$jobs" -e CXX_EXTRA="$cxx_flags" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" "$image" bash -c '
         set -euo pipefail
         case "$ARCH" in
             arm32) TRIPLE=arm-linux-gnueabihf; TOOLCHAIN=/src/cmake/toolchains/armv7-linux-gnueabihf.cmake; PKGS="g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf" ;;
@@ -102,7 +106,7 @@ for a in "${archs[@]}"; do
             -sections) STATIC=ON; LIBCXX=OFF; SECTIONS=ON ;;
             *) STATIC=ON; LIBCXX=OFF; SECTIONS=OFF ;;
         esac
-        cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+        cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG $CXX_EXTRA" \
             -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF \
             -DSYNTHYBOY_TIER_BENCH_STATIC=$STATIC -DSYNTHYBOY_TIER_BENCH_STATIC_LIBCXX=$LIBCXX -DSYNTHYBOY_SECTION_TIMING=$SECTIONS
         # the probes only when the tree has them (the script works before and after they exist)
