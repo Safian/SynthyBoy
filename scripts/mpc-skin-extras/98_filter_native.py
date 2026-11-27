@@ -172,10 +172,15 @@ def _choice_definition(tui, ctx, name, width, height, *, active=True):
     ctx.add_component_definition(name, definition)
 
 
+STATIC_HANDLE = "Static"
+
+
 def _readout_label(name, text, rect, handle="", colour=None, align="horizontallyCentred"):
     label = _label(name, text, rect, 0, (), height=style.size("filter.readout.font"), colour=colour or style.argb("text.icon"), align=align)
     label["handle remapping"]["map"] = []
-    label["componentData"]["data"]["handleName"] = handle
+    # A constant caption needs a valid data model to be drawn (the host hides a label whose handle does not resolve: Key 61 and XL showed the
+    # OUT column and the GLIDE display without their captions); the instance binds STATIC_HANDLE to a real parameter.
+    label["componentData"]["data"]["handleName"] = handle or STATIC_HANDLE
     return label
 
 
@@ -217,7 +222,7 @@ def _readouts(ctx, manifest, state, power_frame):
             item["handle remapping"]["map"] = [
                 {"key": f"Readout{i}", "value": f"Parameter {ctx.param_index(f'filter{f}.{key}')}"}
                 for i, (_, key, _) in enumerate(rows)
-            ]
+            ] + [{"key": STATIC_HANDLE, "value": "Parameter 0"}]
             yield item
 
     glide = manifest["glide"]
@@ -230,8 +235,10 @@ def _readouts(ctx, manifest, state, power_frame):
     for frame, source in ((3, "note"), (4, "velocity")):
         legato = ctx.param_index(f"curve.{source}.legato")
         gates = _state_gates(state, (frame, frame)) + [f"IndexedEnabling/1/2/Parameter {legato}"]
-        yield _entry(f"Glide {source}", kind, {"version": 1, "handleName": "Data"}, glide,
-                     ctx.param_index("master.portamento.time"), gates)
+        item = _entry(f"Glide {source}", kind, {"version": 1, "handleName": "Data"}, glide,
+                      ctx.param_index("master.portamento.time"), gates)
+        item["handle remapping"]["map"].append({"key": STATIC_HANDLE, "value": "Parameter 0"})
+        yield item
 
 
 def _pz_toolbar(ctx, rects):
