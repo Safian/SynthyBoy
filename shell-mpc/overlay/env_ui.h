@@ -1,15 +1,16 @@
-// SynthyBoy - MPC overlay: the envelope UI of the Play page, the plugin-drawn pages built from the UI library (shell-mpc/ui/env_*.h, mod_targets.h) and wired to the real engine parameters (envN.* of the table).
-// One object per (Play view, plugin instance), like OscUi (osc_ui.h). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw*, with the instance as IInstanceView.
+// SynthyBoy - MPC overlay: the envelope UI of the Env tab and of the Play page's expansion: the parameter binding rows of the six envelopes (binding::Row, one table per envelope), the Q-Link banks (binding::QTable), the geometry of
+// the native cells of the host skin, the native bridge, the envelope graph (a display with its handles) and the detail pages (the targets of the envelope, the modulations of one control: ModRowsPage data). The page holds no
+// control (owner decision 2026-11-27: the C++ layer has no UI elements); one object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw*,
+// with the instance as IInstanceView.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementEnv, the pages above it are ours): main = the compact view in the middle third of the Play page (EnvCompact); full = the full screen
-// (EnvFullScreen) over the whole plugin area of the Play page; detail pages above it: the targets of the envelope (ModTargetsPage, the modulation matrix seen from the source), the list that picks a new target
-// (groups, then the parameters of a group), the modulations of one control (ModulationsPage, a long press on a knob).
-// What it does with a touch: the library component gives a Change { id, kind, value }; the id says which control it was, the binding of the id (a key of the engine table and a type) says which parameter and how
-// the UI value converts; the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). The graph's handles give an Edit (EnvGraph::edit) that is written the same way. Every update ()
-// reads every parameter back, so host automation, presets and the host's own widgets show on the next frame.
-// Units: the time knobs, the number fields and the graph follow `envN.units`: milliseconds (envN.attack ..) or beats (envN.attack_beats ..); the sustain and the three curves have one parameter each.
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementEnv, the pages above it are ours): main = the compact view in the middle third of the Play page (the graph; the four ADSR dials, the selector and the
+// full screen button are native cells of the Play skin); full = the full screen (the graph; every control is a native cell); detail pages above it: the targets of the envelope (the modulation matrix seen from the source), the list that
+// picks a new target (groups, then the parameters of a group; the host list is the only list: ListPopup), the modulations of one control (a long press on a dial).
+// What it does with a touch: the graph gives a Change { id, kind, value } (a handle moved); a native cell of the skin writes its value through the native bridge (consumeNativeEditor) into the row it stands for (row.key, the
+// engine table); the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back, so host automation, presets and the host's own widgets show on the next frame.
+// Units: the time dials and the graph follow `envN.units`: milliseconds (envN.attack ..) or beats (envN.attack_beats ..); the sustain and the three curves have one parameter each.
 // Live: the running dots come from LiveValues::envVoiceStage / envVoiceFraction (one per sounding voice, the newest first); an engine that fills only envFineStage / envFineFraction gives the one dot.
 #pragma once
 
@@ -21,21 +22,24 @@
 #include <string>
 #include <vector>
 
-#include "../ui/env_screen.h"
-#include "../ui/list.h"
-#include "../ui/mod_targets.h"
 #include "../native_ui_params.h"
-#include "../ui/native_apertures.h"
 #include "../q_router.h"
+#include "../ui/binding.h"
+#include "../ui/env_graph.h"
+#include "../ui/list.h"
+#include "../ui/native_apertures.h"
+#include "../ui/play_rows.h"
+#include "instance_view.h"
+#include "mod_rows_page.h"
+#include "modulation_window.h"
+#include "native_marker_covers.h"
+#include "native_mod_targets_ui.h"
+#include "page_layout.h"
+#include "page_view.h"
 #include "q_publish.h"
 #include "q_publish_mod.h"
-#include "instance_view.h"
-#include "native_marker_covers.h"
 #include "touch_decoder.h"
-#include "page_view.h"
 #include "ui_bind.h"
-#include "native_mod_targets_ui.h"
-#include "modulation_window.h"
 #include "ui_stack.h"
 #include "synthyboy/readout.h"
 
@@ -49,44 +53,79 @@ public:
     static constexpr int kElementPage = kElementEnv;   // the page of an Env tab is the full screen of the element (page_view.h)
     enum Page { kPageTargets = 30, kPageList = 31, kPageMods = 32 };
 
-    // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
+    // ---- the id spaces (a Change comes out with the id the owner gave)
     enum Id : int
     {
-        kClose = 1, kFullButton, kInstances, kGraph, kTargets, kCompactInstances,   // kInstances: the selector of the full screen / tab (Index = the envelope number); kCompactInstances: the carousel of the compact view (Index = the position)
-        kKnob = 100,                        // 100 + Knob: the knobs (the compact view and the full screen share the ids)
+        kClose = 1, kFullButton, kInstances, kGraph, kTargets, kCompactInstances,
+        kKnob = 100,                        // 100 + Knob: the dials (the compact view and the full screen share the ids)
         kBeats = 130, kLegato,
+        kKnobBeats = 140,                   // 140 + Knob: the rows of the time dials in beats
         kTargetsBack = 150, kTargetsPage, kTargetsAdd, kTargetsRow = 160,    // 160 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsBack = 600, kModsRow = 610, kModsAddStep = 660, kModsAdd, kModsPage,
         kList = 700, kListBackdrop, kListHeader
     };
     enum KnobId : int { kAttack = 0, kDecay, kSustain, kRelease, kACurve, kDCurve, kRCurve, kDelay, kHold, kNumKnobs };
 
-    /** What a value is and how it converts to the engine's plain value. */
-    enum class T : uint8_t { Knob, Toggle, Select, Pick, Graph, Inert };   // Select: the selector of the full screen (a UsedSelector, filled by pullSelector); Pick: the stepper with a list of the compact view
-
-    struct Item
+    // ---- the parameter rows: sixteen per envelope (row index = kRowsPerEnv * (envelope - 1) + slot)
+    /** The slots of an envelope's rows: the nine dials (KnobId), the units switch (BEATS), the retrigger switch (the engine's `legato_inverted`), then the beats versions of the five time dials. */
+    enum Slot : int { kSlotUnits = kNumKnobs, kSlotLegato, kSlotAttackBeats, kSlotDecayBeats, kSlotReleaseBeats, kSlotDelayBeats, kSlotHoldBeats, kRowsPerEnv };
+    static constexpr int kEnvs = 6;
+    /** Q-Link: three groups, ADSR [attack, decay, sustain, release], SHAPE [A curve, D curve, R curve], TIME [delay, hold, BEATS, RETRIG]; the beats rows share the slot of their dial (the engine parameter in force is chosen by the units). */
+#define SB_ENV_C(ID, N, KEY, QG, QS) binding::Row { ID, "env" #N "." KEY, binding::Kind::Continuous, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, QG, QS, false }
+#define SB_ENV_T(ID, N, KEY, QG, QS) binding::Row { ID, "env" #N "." KEY, binding::Kind::Toggle, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, QG, QS, false }
+#define SB_ENV(N) \
+    SB_ENV_C (100, N, "attack", 0, 0), SB_ENV_C (101, N, "decay", 0, 1), SB_ENV_C (102, N, "sustain", 0, 2), SB_ENV_C (103, N, "release", 0, 3), \
+    SB_ENV_C (104, N, "attack_curve", 1, 0), SB_ENV_C (105, N, "decay_curve", 1, 1), SB_ENV_C (106, N, "release_curve", 1, 2), \
+    SB_ENV_C (107, N, "delay", 2, 0), SB_ENV_C (108, N, "hold", 2, 1), SB_ENV_T (130, N, "units", 2, 2), SB_ENV_T (131, N, "legato_inverted", 2, 3), \
+    SB_ENV_C (140, N, "attack_beats", 0, 0), SB_ENV_C (141, N, "decay_beats", 0, 1), SB_ENV_C (143, N, "release_beats", 0, 3), \
+    SB_ENV_C (147, N, "delay_beats", 2, 0), SB_ENV_C (148, N, "hold_beats", 2, 1)
+    static constexpr binding::Row kRows[kEnvs * kRowsPerEnv] = { SB_ENV (1), SB_ENV (2), SB_ENV (3), SB_ENV (4), SB_ENV (5), SB_ENV (6) };
+#undef SB_ENV
+#undef SB_ENV_T
+#undef SB_ENV_C
+    static constexpr int kGroups = 3;
+    /** The Q banks as slot numbers of one envelope (add kRowsPerEnv * (envelope - 1) for the row index). */
+    static constexpr binding::QTable<kGroups> kQ { { { kAttack, kDecay, kSustain, kRelease }, { kACurve, kDCurve, kRCurve, -1 }, { kDelay, kHold, kSlotUnits, kSlotLegato } } };
+    static const char* groupName (int g) noexcept { static const char* const n[kGroups] = { "ADSR", "SHAPE", "TIME" }; return g >= 0 && g < kGroups ? n[g] : ""; }
+    /** The row slot of the beats version of a time dial (-1: the dial has none). */
+    static constexpr int beatsSlotOf (int slot) noexcept
     {
-        int id = 0;
-        ui::ControlModel* c = nullptr;
-        T type = T::Inert;
-        int param = -1;        // the table index (milliseconds / the only one)
-        int paramBeats = -1;   // the table index in beats (-1: the value has no beats version)
-        int slot = -1;         // Knob: kAttack ..
-        int active (bool beats) const noexcept { return beats && paramBeats >= 0 ? paramBeats : param; }
-    };
+        return slot == kAttack ? kSlotAttackBeats : slot == kDecay ? kSlotDecayBeats : slot == kRelease ? kSlotReleaseBeats : slot == kDelay ? kSlotDelayBeats : slot == kHold ? kSlotHoldBeats : -1;
+    }
+    static constexpr const binding::Row& rowOf (int env, int slot) noexcept { return kRows[(env - 1) * kRowsPerEnv + slot]; }
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     static constexpr int kCompactX = 440, kCompactW = 400;       // the middle third of the Play page
     static constexpr double kModsRefreshMs = 100.0;
 
-    EnvUi() { setCanvas (kCanvasW, kCanvasH); compact_.setNativeInstanceSelector (false); compact_.setNativeDials(); configure (1); }
+    // ---- the geometry of the native cells
+    static constexpr int kTopH = 72, kBottomH = 176, kBlockGap = 8, kCaptionW = 56, kPageCaptionW = 96, kSelectorCellW = 88, kBlockTitleH = 38, kBlockPad = 6, kKnobH = 84;
+    /** The cells of the full screen / page: the nine dials, BEATS, RETRIG, the selector (Play expansion only), the TARGETS cell, CLOSE (Play expansion only), the graph, the blocks. */
+    struct FullGeometry
+    {
+        ui::Rect knob[kNumKnobs], beats, legato, selector, targets, close, graph, tags, caption, block[kGroups];
+    };
+    /** The compact view of the Play page: the graph, the host-painted full screen cell and the four ADSR dial cells. */
+    struct CompactView
+    {
+        struct FullCell
+        {
+            ui::Rect r;
+            bool hostPainted = false;
+            const ui::Rect& rect() const noexcept { return r; }
+            void setHostPainted (bool on) noexcept { hostPainted = on; }
+        };
+        FullCell full;
+        ui::Rect graph, plot, knob[4];
+    };
 
-    void setNativeADSR (bool on) { full_.setNativeADSR (on); }
-    bool nativeADSR() const noexcept { return full_.nativeADSR(); }
-    bool nativeShape() const noexcept { return full_.nativeShape(); }
-    bool nativeTime() const noexcept { return full_.nativeTime(); }
-    bool nativeInstanceSelector() const noexcept { return full_.nativeInstanceSelector(); }
-    bool nativeTargets() const noexcept { return full_.nativeTargets(); }
+    EnvUi() { setCanvas (kCanvasW, kCanvasH); configure (1); }
+
+    bool nativeADSR() const noexcept { return native(); }
+    bool nativeShape() const noexcept { return native(); }
+    bool nativeTime() const noexcept { return native(); }
+    bool nativeInstanceSelector() const noexcept { return nativePlayEditor_ && ! page_; }
+    bool nativeTargets() const noexcept { return native(); }
 
     void setHostBackground (bool on) noexcept { nativeGround_ = on; }
     bool hostBackground() const noexcept
@@ -96,9 +135,7 @@ public:
     }
 
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
-    bool isNativeControl (int x, int y) const noexcept { return full_.isNativeControl (x, y); }
-
-    static constexpr int kEnvs = 6;
+    bool isNativeControl (int x, int y) const noexcept { return nativeCellAt (x, y); }
 
     // ---- standalone native instance choice and navigation helpers
     static const char* const* instanceNames() noexcept
@@ -135,8 +172,8 @@ public:
     {
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
-        compact_.place ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 });
-        full_.place (tab);
+        layoutCompact();
+        layoutFull();
         list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kList);
@@ -144,9 +181,20 @@ public:
         list_.setHeaderId (kListHeader);
         targets_.place (tab);
         mods_.place (tab);
+        targets_.back.setId (kTargetsBack);
+        targets_.page.setId (kTargetsPage);
+        targets_.add.setId (kTargetsAdd);
+        mods_.page.setId (kModsPage);
+        mods_.back.setId (kModsBack);
+        mods_.add.setId (kModsAdd);
+        for (int r = 0; r < ModRowsPage::kPerPage; ++r)
+        {
+            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
+            mods_.setRowIds (r, kModsRow + 4 * r, kModsRow + 4 * r + 1, kModsRow + 4 * r + 2, kModsRow + 4 * r + 3);
+        }
     }
 
-    /** Reads the instance: the selected envelope, every value of the visible controls, the modulations of the knobs, the pages of the stack, the dots of the voices, the Q group. */
+    /** Reads the instance: the selected envelope, every value of the visible controls, the modulations of the dials, the pages of the stack, the dots of the voices, the Q group. */
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
         highlight_ = highlight;
@@ -161,27 +209,24 @@ public:
         if (sel != sel_ || ! configured_)
             configure (sel);
         selectedSource_ = uibind::envSource (sel_);
-        const int unitsIdx = uibind::indexOfKey (prefix_ + "units");
+        const int unitsIdx = param_[kSlotUnits];
         beats_ = unitsIdx >= 0 && inst.param (unitsIdx) >= 0.5f;
         const bool open = stack.depth() > 0 && stack.element() == kElementEnv;
         if (open && stack.top() == kPageMods)
         {
-            const auto* control = item (modsTarget_);
-            const int parameter = control != nullptr ? control->active (beats_) : -1;
+            const int parameter = paramOfId (modsTarget_);
             const uint64_t preset = inst.stateGeneration();
             if (modsPreset_ != preset || modsTargetParam_ != parameter)
             {
                 dropGesture();
                 modsPreset_ = preset;
                 modsDirty_ = true;
-                mods_.setPickingSource (false);
+                pickingSource_ = false;
             }
         }
         if (open && stackDepth_ == 0)
-            full_.setActiveGroup (0);
+            activeGroup_ = 0;
         stackDepth_ = open ? stack.depth() : 0;
-        if (stackDepth_ > 0 && instPopup_)
-            closeInstanceList();
         otherOpen_ = stack.depth() > 0 && ! open;
         syncPages (open ? stack : idle_, inst);
         if (nowMs - modsAtMs_ >= kModsRefreshMs || modsDirty_)
@@ -190,8 +235,7 @@ public:
             modsAtMs_ = nowMs;
             modsDirty_ = false;
         }
-        pullSelector (inst);   // (before pull: the carousel of the compact view takes the cells of THIS selector)
-        pull (inst, items_);
+        pullSelector (inst);
         pullGraph (inst, live);
         if (open)
             inst.setUiFullOpen (! page_ || stack.depth() > 1);
@@ -206,10 +250,10 @@ public:
         if (! page_)
         {
             page_ = true;
-            full_.setPageMode (true);
+            layoutFull();
         }
         pageEnv_ = std::clamp (in.instance, 1, kEnvs);
-        full_.setPageCaption (pageEnv_);
+        std::snprintf (captionText_, sizeof captionText_, "ENV %d", pageEnv_);
         if (selectorInstance_ != &inst || selectorGeneration_ != inst.stateGeneration())
         {
             inst.setNativeEnvEditor (false, nullptr);
@@ -245,7 +289,7 @@ public:
     int selection() const noexcept { return sel_; }
     bool beats() const noexcept { return beats_; }
     int topPage() const noexcept { return pageTop_; }
-    int activeQ() const noexcept { return full_.activeGroup(); }
+    int activeQ() const noexcept { return activeGroup_; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
@@ -265,10 +309,10 @@ public:
             sb.gradientRect (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
         };
         ground (kGroundX0, kTabY, kGroundX1, kTabY + 10);
-        const ui::Rect atk = compact_.attack.rect();
-        const ui::Rect dec = compact_.decay.rect();
-        const ui::Rect sus = compact_.sustain.rect();
-        const ui::Rect rel = compact_.release.rect();
+        const ui::Rect atk = compactView_.knob[0];
+        const ui::Rect dec = compactView_.knob[1];
+        const ui::Rect sus = compactView_.knob[2];
+        const ui::Rect rel = compactView_.knob[3];
         ground (kGroundX0, kTabY + 66, kGroundX1, atk.y);
         ground (kGroundX0, atk.y, atk.x, atk.bottom());
         ground (atk.right(), atk.y, dec.x, atk.bottom());
@@ -278,9 +322,9 @@ public:
         ground (sus.right(), sus.y, rel.x, sus.bottom());
         ground (rel.right(), sus.y, kGroundX1, sus.bottom());
         ground (kGroundX0, sus.bottom(), kGroundX1, kTabY + kTabH);
-        compact_.draw (sb);
-        if (instPopup_)
-            list_.draw (sb);   // the list of the selector lies over the third (drawLive paints no dots then)
+        compactGraph_.draw (sb);
+        if (highlight_ == 2 && ! ui::QGroup::wideDevice())
+            drawBank (sb, ui::Rect::unite (ui::Rect::unite (atk, dec), ui::Rect::unite (sus, rel)));
     }
     /** The opaque ground of the whole tab and the page of the stack (the full screen, the targets, the modulations of a control). */
     void drawPage (gpu::SceneBuilder& sb) const
@@ -288,13 +332,13 @@ public:
         if (hostBackground())
         {
             drawNativeMarkerCovers (sb, "env1");
-            full_.drawPage (sb, ui::EnvFullScreen::Ground::Host);
+            drawFull (sb, false);
             return;
         }
-        if (pageTop_ == 0 && (page_ || nativePlayEditor_))
+        if (pageTop_ == 0)
         {
-            full_.drawNativeGround (sb);
-            full_.drawPage (sb, ui::EnvFullScreen::Ground::Apertures);
+            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());
+            drawFull (sb, true);
             return;
         }
         page::ground (sb);
@@ -303,7 +347,10 @@ public:
         else if (pageTop_ == kPageMods)
             mods_.draw (sb);
         else
-            full_.draw (sb);
+        {
+            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());
+            drawFull (sb, true);
+        }
     }
     void drawPopup (gpu::SceneBuilder& sb) const
     {
@@ -314,12 +361,9 @@ public:
     void drawLive (gpu::SceneBuilder& sb) const
     {
         if (stackDepth_ == 0)
-        {
-            if (! instPopup_)
-                compact_.drawLive (sb);
-        }
+            compactGraph_.drawLive (sb);
         else if (pageTop_ == 0)
-            full_.drawLive (sb);
+            fullGraph_.drawLive (sb);
     }
     /** What the current state draws, as one number (the picture changes when it does): a scene of everything, the live dots included. */
     uint32_t drawHash (gpu::SceneData& scratch) const
@@ -342,15 +386,17 @@ public:
             return false;
         if (stackDepth_ > 0)
         {
-            if (pageTop_ == 0 && full_.isNativeControl (x, y))
+            if (pageTop_ == 0 && nativeCellAt (x, y))
                 return false;
             return ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y);
         }
         if (! ui::Rect { kCompactX, kTabY + 4, kCompactW, kTabH - 8 }.contains (x, y))
             return false;
-        if (compact_.attack.rect().contains (x, y) || compact_.decay.rect().contains (x, y)
-            || compact_.sustain.rect().contains (x, y) || compact_.release.rect().contains (x, y))
+        if (compactView_.full.rect().contains (x, y))
             return false;
+        for (const ui::Rect& k : compactView_.knob)
+            if (k.contains (x, y))
+                return false;
         return true;
     }
 
@@ -359,7 +405,6 @@ public:
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         const int x = ev.x, y = ev.y;
-        ui::Component* top = topComponent();
         if (ev.kind == TouchEvent::Down)
         {
             int targetRow = -1;
@@ -390,21 +435,31 @@ public:
                 nativeDownY_ = y;
                 nativeDownMs_ = nowMs;
             }
-            if (! covers (x, y) || ! top)
+            if (! covers (x, y))
             {
                 if (pageTop_ == 0 && stackDepth_ > 0 && ! ui::QGroup::wideDevice())
                 {
-                    const int group = full_.isNativeADSR (x, y) ? 0
-                                    : full_.isNativeShape (x, y) ? 1
-                                    : full_.isNativeTime (x, y) ? 2 : -1;
+                    const int group = groupAt (x, y);
                     if (group >= 0)
                     {
-                        full_.setActiveGroup (group);
+                        activeGroup_ = group;
                         publishQGroup (inst);
                     }
                 }
                 return false;
             }
+            if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
+            {
+                // a touch on a row of the page makes it the active row (the Q group of the page); the cells themselves are the skin's
+                ModRowsPage& pg = pageTop_ == kPageMods ? mods_ : targets_;
+                if (const int row = pg.rowAt (x, y); row >= 0)
+                    pg.selectRow (row);
+                publishQGroup (inst);
+                return true;
+            }
+            ui::Component* top = topComponent();
+            if (! top)
+                return false;
             gesture_ = top;
             gestureDown_ = true;
             handle (top->touchDown (x, y, nowMs), stack, inst);
@@ -435,7 +490,7 @@ public:
     }
     void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
-        if (nativeHold_ && ! nativeGestureBlocked_ && nowMs - nativeDownMs_ >= ui::Knob::kLongPressMs)
+        if (nativeHold_ && ! nativeGestureBlocked_ && nowMs - nativeDownMs_ >= ui::KnobModel::kLongPressMs)
         {
             const int field = nativeGestureField_;
             nativeHold_ = false;
@@ -447,16 +502,18 @@ public:
         if (gesture_ && gestureDown_)
             handle (gesture_->tick (nowMs), stack, inst);
     }
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
-        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the graph or the list under the pointer takes it as steps of its own; the selector of the Play expansion steps the envelope. false: nothing of
+        this page lies there, or a finger is down on it. */
     bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         ui::Component* top = topComponent();
         if (gestureDown_)
             return false;
-        if (pageTop_ == 0 && stackDepth_ > 0 && full_.isNativeSelector (x, y))
+        if (pageTop_ == 0 && stackDepth_ > 0 && nativeSelectorAt (x, y))
         {
-            handle (full_.selector.turn (notches), stack, inst);
+            const int id = selectorStep (selector_, notches);
+            if (id > 0)
+                uibind::chooseEnv (inst, id);
             return true;
         }
         if (! top || ! covers (x, y))
@@ -480,15 +537,16 @@ public:
         nativeGestureBlocked_ = false;
         nativeHold_ = false;
     }
-    /** The page went off the screen: the open list of the compact view closes. */
-    void closePopups() { if (instPopup_) closeInstanceList(); }
+    /** The page went off the screen: nothing of this page stays open on the compact view (the list of the selector is the host's). */
+    void closePopups() {}
 
-    // ---- access for the tests
-    ui::EnvCompact& compact() noexcept { return compact_; }
-    const ui::EnvCompact& compact() const noexcept { return compact_; }
+    // ---- access
+    CompactView& compact() noexcept { return compactView_; }
+    const CompactView& compact() const noexcept { return compactView_; }
+    const FullGeometry& geometry() const noexcept { return geo_; }
     /** The handle of the graph shown as selected (the view state of the graph is this page's: the next update gives it to the graph; the full screen graph, or the compact one in the main state). */
     void selectGraphHandle (int handle) noexcept { graphView_[stackDepth_ == 0 ? 0 : 1].selected = handle; }
-    ui::EnvFullScreen& full() noexcept { return full_; }
+    ui::EnvGraph& graph() noexcept { return stackDepth_ == 0 ? compactGraph_ : fullGraph_; }
     void syncNativePlayEditor (IInstanceView& inst, UiStack& stack, int highlight, double nowMs,
                                const synthyboy::LiveValues* live, bool enable)
     {
@@ -505,8 +563,11 @@ public:
             nativeGestureBlocked_ = nativeGestureField_ >= 0;
         }
         nativePlayPreset_ = preset;
-        nativePlayEditor_ = true;
-        full_.setNativePlayEditor (true);
+        if (! nativePlayEditor_)
+        {
+            nativePlayEditor_ = true;
+            layoutFull();
+        }
         publishNativeSelector (inst);
         publishNativeEditor (inst);
         if (consumeNativeEditor (inst, stack))
@@ -527,7 +588,7 @@ public:
         if (! nativePlayEditor_)
             return;
         nativePlayEditor_ = false;
-        full_.setNativePlayEditor (false);
+        layoutFull();
         inst.setNativeEnvEditor (false, nullptr);
         const int frames[nativeui::kEnvSelectorCells] = {};
         inst.setNativeEnvSelector (frames);
@@ -541,7 +602,7 @@ public:
         nativeTargets_.update (inst, targets_, pageTop_ == kPageTargets, fromPlay ? PlayEnv : Env,
                                selectedSource_, targetRows_, [&] (ui::Change change) { handle (change, stack, inst); });
         const auto destination = synthyboy::modDestinationChoiceOf (static_cast<size_t> (modsTargetParam_));
-        nativeModulations_.update (inst, mods_, ! mods_.boardShown() && modsContextValid (inst),
+        nativeModulations_.update (inst, mods_, ! pickingSource_ && modsContextValid (inst),
             fromPlay ? PlayEnv : Env, static_cast<int> (destination), modRows_,
             [&] (ui::Change change) { handle (change, stack, inst); }, Modulations);
         if (stack.changes() != before)
@@ -556,20 +617,51 @@ public:
     {
         nativeTargets_.hide (inst, targets_);
         nativeModulations_.hide (inst, mods_);
+        targets_.setNativeControls (false);
+        mods_.setNativeControls (false);
     }
-    ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
-    ui::ModulationsPage& modsPage() noexcept { return mods_; }
+    ModRowsPage& targetsPage() noexcept { return targets_; }
+    ModRowsPage& modsPage() noexcept { return mods_; }
     ui::ListPopup& list() noexcept { return list_; }
-    const std::vector<Item>& items() const noexcept { return items_; }
-    const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
-    int timeParam (int stage, bool beats) const noexcept { return stage >= 0 && stage < 5 ? (beats && timeBeats_[stage] >= 0 ? timeBeats_[stage] : timeMs_[stage]) : -1; }
-    int sustainParam() const noexcept { return sustainP_; }
-    int curveParam (int i) const noexcept { return i >= 0 && i < 3 ? curveP_[i] : -1; }
-    /** The envelope that has a table index the transition of which the UI shows now (the number of the target rows etc.). */
+    /** The engine parameter behind a slot of the shown envelope (the milliseconds / beats version chosen by the units; -1: none). */
+    int paramOfSlot (int slot) const noexcept
+    {
+        if (slot < 0 || slot >= kSlotUnits + 2)
+            return -1;
+        const int b = beatsSlotOf (slot);
+        return beats_ && b >= 0 && param_[b] >= 0 ? param_[b] : param_[slot];
+    }
+    int timeParam (int stage, bool beats) const noexcept
+    {
+        static const int kStage[5] = { kDelay, kAttack, kHold, kDecay, kRelease };
+        if (stage < 0 || stage >= 5)
+            return -1;
+        const int s = kStage[stage], b = beatsSlotOf (s);
+        return beats && b >= 0 && param_[b] >= 0 ? param_[b] : param_[s];
+    }
+    int sustainParam() const noexcept { return param_[kSustain]; }
+    int curveParam (int i) const noexcept { return i >= 0 && i < 3 ? param_[kACurve + i] : -1; }
+    /** The number of the targets of the shown envelope. */
     int numTargets() const noexcept { return numTargets_; }
-    uint8_t targetMask() const noexcept { return compact_.instances.targetMask(); }
-    /** The selector of the full screen (tests). */
-    const ui::UsedSelector& selector() const noexcept { return full_.selector; }
+    uint8_t targetMask() const noexcept { return targetMask_; }
+    /** The selector of the full screen (the used candidates, the selected one, one free). */
+    const binding::SelectorSet& selector() const noexcept { return selector_; }
+    const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
+    const binding::SelectorSet& tabSelector() const noexcept { return selector_; }
+    /** The Env tab was left (page_view_base.h): a selected envelope that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
+    void leftTab (IInstanceView& v)
+    {
+        hideNativeTargets (v);
+        selectorInstance_ = nullptr;
+        if (page_)
+            v.setNativeEnvEditor (false, nullptr);   // the sub-tab's envelope is its own: no shared selection to fall back (no leaveSelector)
+        else
+            uibind::leaveSelector (uibind::SelKind::Env, v);
+    }
+    /** The four targets of the ADSR group of the compact view (the Play view maps the groups of the three thirds together) and its block of knobs. */
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfSlot (i); }
+    void setCompactBlock (int block) noexcept { compactBlock_ = block; }
+    int compactBlock() const noexcept { return compactBlock_; }
 
 private:
     using ModRow = uibind::ModRow;
@@ -579,15 +671,215 @@ private:
         kKnob + kACurve, kKnob + kDCurve, kKnob + kRCurve, kKnob + kDelay, kKnob + kHold, kBeats, kLegato,
     };
     static_assert (std::size (kNativeScalarIds) == nativeui::env::Selection);
+    static constexpr int kGroundX0 = 434, kGroundX1 = 848;
 
+    bool native() const noexcept { return page_ || nativePlayEditor_; }
+    /** The slot of a control id (-1: none): the dials 100 .. 108, BEATS 130, RETRIG 131. */
+    static constexpr int slotOfId (int id) noexcept
+    {
+        return id >= kKnob && id < kKnob + kNumKnobs ? id - kKnob : id == kBeats ? kSlotUnits : id == kLegato ? kSlotLegato : -1;
+    }
+    int paramOfId (int id) const noexcept { return paramOfSlot (slotOfId (id)); }
+    static const char* labelOfSlot (int slot) noexcept
+    {
+        static const char* const n[kNumKnobs] = { "ATTACK", "DECAY", "SUSTAIN", "RELEASE", "A CURVE", "D CURVE", "R CURVE", "DELAY", "HOLD" };
+        return slot >= 0 && slot < kNumKnobs ? n[slot] : "MODULATIONS";
+    }
+    /** The colour of envelope n (0 .. 5): the orange to red of the look, a step further along it for every envelope. */
+    static uint32_t envColour (int n) noexcept
+    {
+        const ui::theme::Look& T = ui::theme::L();
+        return ui::theme::mix (T.env[0], T.env[1], static_cast<float> (((n % kEnvs) + kEnvs) % kEnvs) / 5.0f);
+    }
+
+    // ---- the geometry
+    void layoutCompact()
+    {
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        const int m = 6, W = third.w - 2 * m;
+        const ui::Rect gr = ui::playrows::displayRect (third);
+        compactGraph_.place (gr);
+        compactGraph_.plotArea = ui::playrows::plotRect (gr);   // the curve and the handles lie below the header band; the full screen cell stands in the band, the same place as the oscillator's and the LFO's
+        compactGraph_.setId (kGraph);
+        compactView_.graph = gr;
+        compactView_.plot = compactGraph_.plotArea;
+        compactView_.full.r = ui::playrows::fullRect (gr);
+        const int by = ui::playrows::controlsLine (third), kh = std::max (kKnobH, (third.bottom() - m - by - ui::kQLane) / 2);
+        const int cw = (W - pagegeo::kGap) / 2;
+        compactView_.knob[0] = { third.x + m, by, cw, kh };
+        compactView_.knob[1] = { third.x + m + cw + pagegeo::kGap, by, W - cw - pagegeo::kGap, kh };
+        compactView_.knob[2] = { third.x + m, by + kh + ui::kQLane, cw, kh };
+        compactView_.knob[3] = { third.x + m + cw + pagegeo::kGap, by + kh + ui::kQLane, W - cw - pagegeo::kGap, kh };
+    }
+    void layoutFull()
+    {
+        const ui::Rect tab { 0, kTabY, w_, kTabH };
+        const int m = 8, W = tab.w - 2 * m;
+        FullGeometry g;
+        // ---- the top bar: close, the selector, the targets cell
+        const ui::Rect top { tab.x + m, tab.y + m, W, kTopH - m };
+        ui::Rect r[3];
+        const int fixed[3] = { page_ ? 0 : 96, 0, 200 }, weight[3] = { 0, 1, 0 };
+        pagegeo::layoutRow (top, fixed, weight, 3, pagegeo::kGap, r);
+        const int cy = top.y + (top.h - 56) / 2;
+        g.close = { nativePlayEditor_ ? tab.x + 58 : r[0].x, cy, r[0].w, 56 };
+        laidCells_ = selector_.numCells();
+        const int captionW = page_ ? kPageCaptionW : kCaptionW;
+        g.caption = nativePlayEditor_ ? ui::Rect {} : ui::Rect { r[1].x, cy, captionW, 56 };
+        const int selW = page_ ? 0 : std::min (std::max (0, r[1].w - kCaptionW), std::max (1, laidCells_) * kSelectorCellW);
+        g.selector = { r[1].x + (page_ ? captionW : kCaptionW), cy, selW, 56 };
+        g.targets = { r[2].x, cy, page_ || nativePlayEditor_ ? 160 : r[2].w, 56 };
+        const int selRight = g.selector.right();
+        g.tags = { selRight + 16, cy, std::max (0, g.targets.x - 12 - (selRight + 16)), 56 };
+        // ---- the bottom band: three blocks (a Q group each), in proportion to the members
+        const int bandY = tab.bottom() - m - kBottomH;
+        const int unit = (W - 2 * kBlockGap) / 11;
+        const int bw[3] = { 4 * unit, 3 * unit, W - 2 * kBlockGap - 7 * unit };
+        int bx = tab.x + m;
+        for (int i = 0; i < 3; ++i)
+        {
+            g.block[i] = { bx, bandY, bw[i], kBottomH };
+            bx += bw[i] + kBlockGap;
+        }
+        ui::Rect c[4];
+        pagegeo::blockCells (g.block[0], kBlockTitleH, kBlockPad, 4, pagegeo::kGap, c);
+        for (int i = 0; i < 4; ++i)
+            g.knob[kAttack + i] = c[i];
+        pagegeo::blockCells (g.block[1], kBlockTitleH, kBlockPad, 3, pagegeo::kGap, c);
+        for (int i = 0; i < 3; ++i)
+            g.knob[kACurve + i] = c[i];
+        pagegeo::blockCells (g.block[2], kBlockTitleH, kBlockPad, 4, pagegeo::kGap, c);
+        g.knob[kDelay] = c[0];
+        g.knob[kHold] = c[1];
+        g.beats = c[2];
+        g.legato = c[3];
+        // ---- the middle: the graph (the whole width)
+        const int midY = top.bottom() + m, midH = bandY - m - midY;
+        g.graph = { tab.x + m, midY, W, std::max (0, midH) };
+        geo_ = g;
+        fullGraph_.place (g.graph);
+        fullGraph_.setId (kGraph);
+    }
+    /** The rectangle of native field `field` (nativeui::env::Field): a dial, BEATS, RETRIG, the selector, TARGETS. */
+    ui::Rect cellOf (int field) const noexcept
+    {
+        namespace n = nativeui::env;
+        if (field >= 0 && field < kNumKnobs)
+            return geo_.knob[field];
+        switch (field)
+        {
+            case n::Beats: return geo_.beats;
+            case n::Retrig: return geo_.legato;
+            case n::Selection: return nativeInstanceSelector() ? geo_.selector : ui::Rect {};
+            case n::Targets: return nativeTargets() ? geo_.targets : ui::Rect {};
+            default: return {};
+        }
+    }
+    bool nativeSelectorAt (int x, int y) const noexcept { return nativeInstanceSelector() && geo_.selector.contains (x, y); }
+    bool nativeCellAt (int x, int y) const noexcept
+    {
+        if (! native())
+            return false;
+        for (int f = 0; f < nativeui::env::kFields; ++f)
+            if (cellOf (f).contains (x, y))
+                return true;
+        return nativePlayEditor_ && geo_.close.contains (x, y);
+    }
+    /** The group whose native cells hold (x, y): ADSR 0, SHAPE 1, TIME 2 (-1: none). */
+    int groupAt (int x, int y) const noexcept
+    {
+        for (int g = 0; g < kGroups; ++g)
+            for (int k = 0; k < 4; ++k)
+            {
+                const int s = kQ.row (g, k);
+                if (s >= 0 && slotCell (s).contains (x, y))
+                    return g;
+            }
+        return -1;
+    }
+    ui::Rect slotCell (int slot) const noexcept { return slot == kSlotUnits ? geo_.beats : slot == kSlotLegato ? geo_.legato : slot >= 0 && slot < kNumKnobs ? geo_.knob[slot] : ui::Rect {}; }
+    std::array<ui::Rect, nativeui::env::kFields + 1> nativeApertures() const noexcept
+    {
+        std::array<ui::Rect, nativeui::env::kFields + 1> areas {};
+        if (! native())
+            return areas;
+        for (int f = 0; f < nativeui::env::kFields; ++f)
+            areas[f] = cellOf (f);
+        if (nativePlayEditor_)
+            areas[nativeui::env::kFields] = geo_.close;
+        return areas;
+    }
+    static void drawBank (gpu::SceneBuilder& sb, const ui::Rect& frame)
+    {
+        if (frame.empty())
+            return;
+        ui::Pen pen (sb, true, false);
+        ui::Cell cell (sb, ui::Rect::unite (frame, ui::Pen::qMarkerRect (frame)));
+        pen.qFocus (frame);
+    }
+
+    // ---- the picture of the full screen
+    void drawFull (gpu::SceneBuilder& sb, bool fixedLabels) const
+    {
+        fullGraph_.draw (sb);
+        ui::Pen p (sb, true, false);
+        ui::Cell cell (sb, ui::Rect { 0, kTabY, w_, kTabH });
+        if (fixedLabels)
+            drawFixedLabels (p);
+        drawLiveLabels (p);
+    }
+    void drawFixedLabels (ui::Pen& p) const
+    {
+        const ui::theme::Look& T = ui::theme::L();
+        p.textLeft (geo_.caption, page_ && captionText_[0] != '\0' ? captionText_ : "ENV", page_ ? ui::theme::kPageTitleSize : T.fLabel + 2.0f, p.c (page_ ? T.text : T.textDim, 255), T.fMin);   // the page title in page mode
+        for (int i = 0; i < kGroups; ++i)
+            p.textLeft ({ geo_.block[i].x + kBlockPad + 4, geo_.block[i].y + 3, std::max (0, geo_.block[i].w - 16), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+    }
+    void drawLiveLabels (ui::Pen& p) const
+    {
+        const ui::theme::Look& T = ui::theme::L();
+        // what the envelope modulates: tags in the top bar (text, no outline: they are not touch targets; the TARGETS cell opens the list), as many as fit, then "+n"
+        const ui::Rect t = geo_.tags;
+        if (t.w < 60 || numTargets_ <= 0)
+            return;
+        const float sz = T.fLabel;
+        int x = t.x, drawn = 0;
+        for (int i = 0; i < std::min (numTargetLines_, numTargets_); ++i)
+        {
+            char rest[12];
+            std::snprintf (rest, sizeof rest, "+%d", numTargets_ - (i + 1));
+            const int reserve = numTargets_ > i + 1 ? static_cast<int> (std::ceil (ui::Pen::textWidth (rest, sz))) + 16 : 0;
+            int w = static_cast<int> (std::ceil (ui::Pen::textWidth (targetLines_[i], sz))) + 22;
+            if (x + w + reserve > t.right())
+            {
+                if (i > 0)
+                    break;
+                w = t.right() - x - reserve;   // the first one is cut with an ellipsis rather than left out
+            }
+            if (w < 60)
+                break;
+            p.disc (static_cast<float> (x + 5), static_cast<float> (t.y + t.h / 2), 3.0f, p.c (T.flow[0], 255));
+            p.textLeft ({ x + 14, t.y, w - 14, t.h }, targetLines_[i], sz, p.c (T.text, 255), T.fMin);
+            x += w + 6;
+            ++drawn;
+        }
+        if (drawn < numTargets_)
+        {
+            char rest[12];
+            std::snprintf (rest, sizeof rest, "+%d", numTargets_ - drawn);
+            p.textLeft ({ x, t.y, std::max (0, t.right() - x), t.h }, rest, sz, p.c (T.textDim, 255), T.fMin);
+        }
+    }
+
+    // ---- the native bridge
     int nativeFieldAt (int x, int y) const noexcept
     {
-        if (full_.isNativeSelector (x, y))
+        if (nativeSelectorAt (x, y))
             return nativeui::env::Selection;
-        if (full_.isNativeTargets (x, y))
+        if (nativeTargets() && geo_.targets.contains (x, y))
             return nativeui::env::Targets;
         for (int field = 0; field < nativeui::env::Selection; ++field)
-            if (const auto* it = item (kNativeScalarIds[field]); it && full_.isNativeComponent (it->c) && it->c->rect().contains (x, y))
+            if (cellOf (field).contains (x, y))
                 return field;
         return -1;
     }
@@ -602,18 +894,18 @@ private:
         if (visible)
         {
             for (int field = 0; field < n::Selection; ++field)
-                if (const auto* it = item (kNativeScalarIds[field]); it && full_.isNativeComponent (it->c))
-                {
-                    const int target = it->active (beats_);
-                    const int kind = it->type == T::Toggle ? nativeui::kFxToggle : nativeui::kFxDial;
-                    nativeCells_[field] = { target, target, kind };
-                }
+            {
+                const int slot = slotOfId (kNativeScalarIds[field]);
+                const int target = paramOfSlot (slot);
+                const int kind = rowOf (sel_, slot).kind == binding::Kind::Toggle ? nativeui::kFxToggle : nativeui::kFxDial;
+                nativeCells_[field] = { target, target, kind };
+            }
             // Actions identify the selected envelope via its sustain index.
             // They never write that engine parameter.
-            if (full_.nativeInstanceSelector())
-                nativeCells_[n::Selection] = { sustainP_, sustainP_, nativeui::kFxToggle };
-            if (full_.nativeTargets())
-                nativeCells_[n::Targets] = { sustainP_, sustainP_, nativeui::kFxToggle };
+            if (nativeInstanceSelector())
+                nativeCells_[n::Selection] = { param_[kSustain], param_[kSustain], nativeui::kFxToggle };
+            if (nativeTargets())
+                nativeCells_[n::Targets] = { param_[kSustain], param_[kSustain], nativeui::kFxToggle };
         }
         if (nativeGestureField_ >= 0)
         {
@@ -641,7 +933,7 @@ private:
         {
             const int choice = 1 + static_cast<int> (std::lround (value * (n::kInstances - 1)));
             for (int pos = 0; pos < playCells_.n; ++pos)
-                if (uibind::cellChoice (full_.selector, playCells_, pos) == choice && choice != sel_)
+                if (uibind::cellChoice (selector_, playCells_, pos) == choice && choice != sel_)
                 {
                     uibind::chooseEnv (inst, choice);
                     return true;
@@ -663,163 +955,6 @@ private:
                 uibind::writeNorm (inst, nativeCells_[field].target, value);
         return false;
     }
-    static constexpr int kGroundX0 = 434, kGroundX1 = 848;
-    // ======================================================================================================================================================================
-    // building: the selected envelope decides the parameters behind the ids
-    void bind (int id, ui::ControlModel* c, T type, const std::string& suffix, const std::string& suffixBeats = std::string(), int slot = -1)
-    {
-        Item it;
-        it.id = id; it.c = c; it.type = type; it.slot = slot;
-        it.param = suffix.empty() ? -1 : uibind::indexOfKey (prefix_ + suffix);
-        it.paramBeats = suffixBeats.empty() ? -1 : uibind::indexOfKey (prefix_ + suffixBeats);
-        if (c != nullptr)
-        {
-            c->setId (id);
-            c->setParam (it.param);
-        }
-        items_.push_back (it);
-    }
-    void configure (int sel)
-    {
-        sel_ = sel;
-        configured_ = true;
-        prefix_ = "env" + std::to_string (sel) + ".";
-        items_.clear();
-        static const char* const kTime[5] = { "delay", "attack", "hold", "decay", "release" };
-        for (int i = 0; i < 5; ++i)
-        {
-            timeMs_[i] = uibind::indexOfKey (prefix_ + kTime[i]);
-            timeBeats_[i] = uibind::indexOfKey (prefix_ + kTime[i] + "_beats");
-        }
-        sustainP_ = uibind::indexOfKey (prefix_ + "sustain");
-        static const char* const kCurve[3] = { "attack_curve", "decay_curve", "release_curve" };
-        for (int i = 0; i < 3; ++i)
-            curveP_[i] = uibind::indexOfKey (prefix_ + kCurve[i]);
-        bind (kClose, &full_.close, T::Inert, "");
-        bind (kFullButton, &compact_.full, T::Inert, "");
-        bind (kTargets, &full_.targets, T::Inert, "");
-        bind (kCompactInstances, &compact_.instances, T::Pick, "");
-        bind (kInstances, &full_.selector, T::Select, "");
-        bind (kGraph, &compact_.graph, T::Graph, "");
-        bind (kGraph, &full_.graph, T::Graph, "");
-        struct K { int knob; const char* key; const char* beats; };
-        const K ks[kNumKnobs] = { { kAttack, "attack", "attack_beats" }, { kDecay, "decay", "decay_beats" }, { kSustain, "sustain", "" }, { kRelease, "release", "release_beats" },
-                                  { kACurve, "attack_curve", "" }, { kDCurve, "decay_curve", "" }, { kRCurve, "release_curve", "" }, { kDelay, "delay", "delay_beats" }, { kHold, "hold", "hold_beats" } };
-        ui::Knob* fk[kNumKnobs] = { &full_.attack, &full_.decay, &full_.sustain, &full_.release, &full_.aCurve, &full_.dCurve, &full_.rCurve, &full_.delay, &full_.hold };
-        ui::Knob* ck[kNumKnobs] = { &compact_.attack, &compact_.decay, &compact_.sustain, &compact_.release, nullptr, nullptr, nullptr, nullptr, nullptr };
-        for (const K& k : ks)
-        {
-            bind (kKnob + k.knob, fk[k.knob], T::Knob, k.key, k.beats, k.knob);
-            if (ck[k.knob] != nullptr)
-                bind (kKnob + k.knob, ck[k.knob], T::Knob, k.key, k.beats, k.knob);
-        }
-        bind (kBeats, &full_.beats, T::Toggle, "units");
-        bind (kLegato, &full_.legato, T::Toggle, "legato_inverted");
-        pageTop_ = 0;
-        underList_ = 0;
-        modsDirty_ = true;
-        qSlots_.clear();
-        qSlots_.forget();
-        gesture_ = nullptr; gestureDown_ = false;
-        compact_.group.setActive (highlight_ == 2);
-        full_.setActiveGroup (0);
-    }
-
-    // ======================================================================================================================================================================
-    // reading: the states of the components from the parameters
-    void pull (IInstanceView& v, std::vector<Item>& list)
-    {
-        for (Item& it : list)
-        {
-            if (it.c == nullptr)
-                continue;
-            if (it.type == T::Pick)
-            {
-                // the carousel of the compact view steps over the SAME cells as the tab's selector (used + the selected one + one "+": uibind::cellsFromSelector of the UsedSelector pullSelector filled), not over all six
-                auto* st = static_cast<ui::EnvCarousel*> (it.c);
-                st->state.count = playCells_.n; st->state.index = playCells_.selectedPos; st->state.wrap = true;
-                st->state.names = playCells_.names;
-                st->setItem (playCells_.n > 0 ? playCells_.names[playCells_.selectedPos] : kEnvNames[std::clamp (sel_, 1, kEnvs) - 1]);
-                st->state.dotMask = cellDots_; st->state.dotColours = cellColours_;
-                // Navigation is independent of the selected envelope's controls: a previous
-                // page-level disable must never leave the Play selector dead or grey.
-                it.c->setEnabled (true);
-                it.c->setInactive (false);
-                continue;
-            }
-            if (it.type == T::Select)
-            {
-                // The full-screen selector is navigation-only as well; it does not own a
-                // parameter and must remain usable even when the selected envelope is empty.
-                it.c->setEnabled (true);
-                it.c->setInactive (false);
-                continue;   // the selector: pullSelector
-            }
-            const int p = it.active (beats_);
-            if (it.type == T::Inert || it.type == T::Graph)
-            {
-                if (it.id == kTargets)
-                {
-                    char t[8];
-                    std::snprintf (t, sizeof t, "%d", numTargets_);
-                    full_.targets.setValue (t);
-                    it.c->setEnabled (true);
-                    it.c->setInactive (false);
-                }
-                continue;
-            }
-            if (p < 0)
-            {
-                it.c->setEnabled (false);
-                continue;
-            }
-            if (full_.isNativeComponent (it.c))
-            {
-                it.c->setEnabled (false);
-                it.c->setInactive (true);
-            }
-            else
-            {
-                it.c->setEnabled (true);
-                it.c->setInactive (false);
-            }
-            const float plain = v.param (p);
-            const synthyboy::ParamInfo& pi = uibind::info (p);
-            switch (it.type)
-            {
-                case T::Knob:
-                {
-                    auto* k = static_cast<ui::Knob*> (it.c);
-                    k->state.value = k->state.modValue = uibind::normOf (p, plain);
-                    k->state.defaultValue = uibind::normOf (p, pi.def);
-                    k->state.bipolar = pi.min < 0.0f && pi.max > 0.0f;
-                    valueText (pi, plain, k->state.valueText, sizeof k->state.valueText);
-                    break;
-                }
-                case T::Toggle:
-                    static_cast<ui::ToggleIcon*> (it.c)->state.on = plain >= 0.5f;
-                    break;
-                default: break;
-            }
-        }
-    }
-    /** The selector: ENV 1 .. 6, the used ones, the selected one and one free (`+`); the scan is the one of the last refreshMods (never per frame). */
-    void pullSelector (IInstanceView& v)
-    {
-        if (page_)
-            return;   // the page of a tab has no selector: the hardware sub-tab names the envelope
-        uibind::fillSelector (uibind::SelKind::Env, scan_, v, full_.selector);
-        full_.syncSelectorLayout();
-        uibind::cellsFromSelector (uibind::SelKind::Env, full_.selector, playCells_);   // the Play page's carousel: the same list
-        cellDots_ = 0;
-        for (int k = 0; k < playCells_.n; ++k)
-        {
-            const int id = playCells_.id[k];
-            cellColours_[k] = id > 0 ? ui::envColour (id - 1) : 0u;
-            if (id > 0 && (compact_.instances.targetMask() & (1u << (id - 1))) != 0)
-                cellDots_ |= 1u << k;   // the dot of an envelope that has targets
-        }
-    }
 
     /** The skin gates a native button on each candidate's five contiguous frames.
         Frame 0 is blank, then each candidate has plain, used, selected,
@@ -831,49 +966,71 @@ private:
         int frames[nativeui::kEnvSelectorCells] = {};
         if (stackDepth_ == 1 && pageTop_ == 0)
         {
-            const ui::UsedSelector& selector = full_.selector;
             int cells[nativeui::kEnvSelectorCells];
-            const int n = selector.cells (cells, nativeui::kEnvSelectorCells);
+            const int n = selector_.cells (cells, nativeui::kEnvSelectorCells);
             for (int slot = 0; slot < n; ++slot)
             {
-                const int choice = uibind::cellChoice (selector, playCells_, slot);
+                const int choice = uibind::cellChoice (selector_, playCells_, slot);
                 if (choice <= 0)
                     continue;
                 const int index = cells[slot];
-                const int variant = index == ui::UsedSelector::kPlus ? 4
-                    : (selector.state.selected == choice ? 2 : 0) + (selector.state.items[index].used ? 1 : 0);
+                const int variant = index == binding::SelectorSet::kPlus ? 4
+                    : (selector_.state.selected == choice ? 2 : 0) + (selector_.state.items[index].used ? 1 : 0);
                 frames[slot] = 1 + (choice - 1) * kVariants + variant;
             }
         }
         v.setNativeEnvSelector (frames);
     }
-    uibind::SelectorCells playCells_;                  // the cells of the compact view's carousel and list (pullSelector)
-    unsigned cellDots_ = 0;
-    uint32_t cellColours_[uibind::SelectorCells::kMax] = {};
-    /** A tap on cell `pos` of the compact view's carousel or list: select its envelope (the `+` cell: the lowest free one). View state only. */
-    void chooseCell (IInstanceView& v, int pos) { const int id = uibind::cellChoice (full_.selector, playCells_, pos); if (id > 0) uibind::chooseEnv (v, id); }
-public:
-    const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
-    const ui::UsedSelector& tabSelector() const noexcept { return full_.selector; }
-    /** The Env tab was left (page_view_base.h): a selected envelope that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
-    void leftTab (IInstanceView& v)
+
+    /** One detent of the wheel on the selector: the id of the next (delta > 0) or previous shown candidate, without wrapping; 0: nothing changes. */
+    static int selectorStep (const binding::SelectorSet& sel, int delta) noexcept
     {
-        hideNativeTargets (v);
-        selectorInstance_ = nullptr;
+        if (delta == 0)
+            return 0;
+        int shown[binding::SelectorSet::kMaxCandidates], ns = 0, at = -1;
+        for (int i = 0; i < std::min (sel.state.count, binding::SelectorSet::kMaxCandidates); ++i)
+            if (binding::SelectorSet::isShown (sel.state, i))
+            {
+                if (sel.state.items[i].id == sel.state.selected)
+                    at = ns;
+                shown[ns++] = i;
+            }
+        if (ns == 0)
+            return 0;
+        const int to = at < 0 ? (delta > 0 ? 0 : ns - 1) : std::clamp (at + delta, 0, ns - 1);
+        return to == at ? 0 : sel.state.items[shown[to]].id;
+    }
+
+    // ======================================================================================================================================================================
+    // building: the selected envelope decides the parameters behind the rows
+    void configure (int sel)
+    {
+        sel_ = sel;
+        configured_ = true;
+        for (int s = 0; s < kRowsPerEnv; ++s)
+            param_[s] = rowOf (sel, s).hasParam() ? uibind::indexOfKey (rowOf (sel, s).key) : -1;
+        pageTop_ = 0;
+        underList_ = 0;
+        modsDirty_ = true;
+        qSlots_.clear();
+        qSlots_.forget();
+        gesture_ = nullptr; gestureDown_ = false;
+        activeGroup_ = 0;
+    }
+
+    // ======================================================================================================================================================================
+    // reading
+    /** The selector: ENV 1 .. 6, the used ones, the selected one and one free (`+`); the scan is the one of the last refreshMods (never per frame). */
+    void pullSelector (IInstanceView& v)
+    {
         if (page_)
-            v.setNativeEnvEditor (false, nullptr);   // the sub-tab's envelope is its own: no shared selection to fall back (no leaveSelector)
-        else
-            uibind::leaveSelector (uibind::SelKind::Env, v);
+            return;   // the page of a tab has no selector: the hardware sub-tab names the envelope
+        uibind::fillSelector (uibind::SelKind::Env, scan_, v, selector_);
+        if (selector_.numCells() != laidCells_)
+            layoutFull();
+        uibind::cellsFromSelector (uibind::SelKind::Env, selector_, playCells_);   // the Play page's selector: the same list
     }
-private:
-    /** The text under a knob: the value with its unit. */
-    static void valueText (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
-    {
-        if (pi.unit == synthyboy::Unit::none)
-            std::snprintf (out, cap, "%+.1f", static_cast<double> (plain));
-        else
-            uibind::formatValue (pi, plain, out, cap);
-    }
+
     /** The shape of envelope `n` (1 .. 6) from the parameters: normalised times, the sustain level, the curves; false when the table has none of it. */
     bool shapeOf (const IInstanceView& v, int n, bool beats, ui::envgraph::Shape& s, ui::envgraph::Shape* def) const
     {
@@ -916,7 +1073,7 @@ private:
     {
         for (int gi = 0; gi < 2; ++gi)
         {
-            ui::EnvGraph::State& st = (gi == 0 ? compact_.graph : full_.graph).state;
+            ui::EnvGraph::State& st = (gi == 0 ? compactGraph_ : fullGraph_).state;
             st.selected = graphView_[gi].selected;   // the view state of the graph is the page's: the graph stores none of it
             st.locked = graphView_[gi].locked;
             st.zoom = graphView_[gi].zoom;
@@ -925,7 +1082,7 @@ private:
                 continue;
             st.shape = s;
             st.defaults = d;
-            st.colour = ui::envColour (sel_ - 1);
+            st.colour = envColour (sel_ - 1);
             st.beats = beats_;
             st.ghost = false;
             if (sel_ != 1)
@@ -956,18 +1113,18 @@ private:
                 if (p >= 0)
                     uibind::formatValue (uibind::info (p), v.param (p), st.text[i], sizeof st.text[i]);
             }
-            if (sustainP_ >= 0 && timeParam (3, beats_) >= 0)
+            if (param_[kSustain] >= 0 && timeParam (3, beats_) >= 0)
             {
                 char t[16], u[24];
                 uibind::formatValue (uibind::info (timeParam (3, beats_)), v.param (timeParam (3, beats_)), t, sizeof t);
-                std::snprintf (u, sizeof u, "%s %.0f%%", t, static_cast<double> (v.param (sustainP_)));
+                std::snprintf (u, sizeof u, "%s %.0f%%", t, static_cast<double> (v.param (param_[kSustain])));
                 std::snprintf (st.text[ui::envgraph::Decay], sizeof st.text[ui::envgraph::Decay], "%.15s", u);
                 std::snprintf (st.decayTime, sizeof st.decayTime, "%.15s", t);   // under the axis: the time under DECAY, the level under SUSTAIN
-                std::snprintf (st.sustainText, sizeof st.sustainText, "%.0f%%", static_cast<double> (v.param (sustainP_)));
+                std::snprintf (st.sustainText, sizeof st.sustainText, "%.0f%%", static_cast<double> (v.param (param_[kSustain])));
             }
             for (int i = 0; i < 3; ++i)
-                if (curveP_[i] >= 0)
-                    std::snprintf (st.text[ui::envgraph::CurveA + i], sizeof st.text[0], "%+.1f", static_cast<double> (v.param (curveP_[i])));
+                if (param_[kACurve + i] >= 0)
+                    std::snprintf (st.text[ui::envgraph::CurveA + i], sizeof st.text[0], "%+.1f", static_cast<double> (v.param (param_[kACurve + i])));
             // the dots: one per sounding voice (newest first); an engine without them gives the one the fine read-out has
             st.numDots = 0;
             if (live != nullptr)
@@ -990,32 +1147,24 @@ private:
     }
     static float quantise (float f) noexcept { return std::round (std::clamp (f, 0.0f, 1.0f) * 256.0f) / 256.0f; }
 
-    // ---- the modulations of the controls (the arcs of the knobs, the chips of the fields) and of the envelope itself
+    // ---- what the envelope drives and which envelopes have targets
     void refreshMods (IInstanceView& v)
     {
         scan_ = uibind::scanUsed (v);   // which envelopes the selector shows
-        for (Item& it : items_)
-        {
-            const int p = it.active (beats_);
-            if (it.c == nullptr || p < 0 || it.type != T::Knob)
-                continue;
-            static_cast<ui::ModInput&> (static_cast<ui::Knob*> (it.c)->state) = uibind::modsOf (v, p, selectedSource_, nullptr);
-        }
         // what the envelope drives: the slots of the matrix with this source
         int slots[uibind::kMaxTargetSlots];
         numTargets_ = uibind::slotsOfSource (v, selectedSource_, slots, uibind::kMaxTargetSlots);
         for (int i = 0; i < 3; ++i)
-            full_.targetLines[i].text[0] = '\0';
-        full_.setNumTargets (numTargets_);
-        full_.numTargetLines = std::min (3, numTargets_);
-        for (int i = 0; i < full_.numTargetLines; ++i)
+            targetLines_[i][0] = '\0';
+        numTargetLines_ = std::min (3, numTargets_);
+        for (int i = 0; i < numTargetLines_; ++i)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slots[i]);
             char name[40];
             targetName (static_cast<size_t> (std::lround (v.param (sp.destination))), name, sizeof name);
-            std::snprintf (full_.targetLines[i].text, sizeof full_.targetLines[i].text, "%.28s  %+.0f%%", name, static_cast<double> (v.param (sp.amount)));
+            std::snprintf (targetLines_[i], sizeof targetLines_[i], "%.28s  %+.0f%%", name, static_cast<double> (v.param (sp.amount)));
         }
-        uint8_t targetMask = 0;
+        uint8_t mask = 0;
         for (int s = 0; s < synthyboy::kNumModSlots; ++s)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
@@ -1025,10 +1174,10 @@ private:
             {
                 const int src = static_cast<int> (std::lround (v.param (sp.source)));
                 if (src >= 1 && src <= kEnvs)
-                    targetMask |= static_cast<uint8_t> (1u << (src - 1));
+                    mask |= static_cast<uint8_t> (1u << (src - 1));
             }
         }
-        compact_.instances.setTargetMask (targetMask);
+        targetMask_ = mask;
         if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
             loadTargets (v, false);
         else if (pageTop_ == kPageMods && modsTargetParam_ >= 0)
@@ -1062,53 +1211,41 @@ private:
             case kPageTargets: if (! fromTargetsList) targetsPageIndex_ = 0; loadTargets (inst, true); break;
             case kPageMods: loadMods (inst); break;
             case kPageList: openGroupList(); break;
-            default: full_.setActiveGroup (0); break;
+            default: activeGroup_ = 0; break;
         }
     }
 
     // ---- the targets page: the rows of the matrix whose source is this envelope
-    ModRow targetRows_[ui::ModTargetsPage::kPerPage];
+    ModRow targetRows_[ModRowsPage::kPerPage];
     int targetTotal_ = 0;
     void loadTargets (const IInstanceView& v, bool fresh)
     {
+        (void) fresh;
+        constexpr int kPer = ModRowsPage::kPerPage;
         int slots[uibind::kMaxTargetSlots];
         const int total = uibind::slotsOfSource (v, selectedSource_, slots, uibind::kMaxTargetSlots);
-        const int pages = std::max (1, (total + ui::ModTargetsPage::kPerPage - 1) / ui::ModTargetsPage::kPerPage);
+        const int pages = std::max (1, (total + kPer - 1) / kPer);
         targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
-        const int first = targetsPageIndex_ * ui::ModTargetsPage::kPerPage, n = std::clamp (total - first, 0, ui::ModTargetsPage::kPerPage);
-        ui::ModTargetsPage::Entry e[ui::ModTargetsPage::kPerPage];
+        const int first = targetsPageIndex_ * kPer, n = std::clamp (total - first, 0, kPer);
+        ModRowsPage::Entry e[kPer];
         for (int i = 0; i < n; ++i)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slots[first + i]);
             targetName (static_cast<size_t> (std::lround (v.param (sp.destination))), e[i].name, sizeof e[i].name);
-            e[i].depth = std::clamp (static_cast<double> (v.param (sp.amount)) / 100.0, -1.0, 1.0);
-            e[i].bidirectional = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
-            e[i].bypassed = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
             targetRows_[i] = { slots[first + i], selectedSource_ };
         }
-        // only a change of the rows is loaded again (a reload resets the touch of a row that is being dragged)
-        bool same = ! fresh && n == targets_.numRows() && total == targetTotal_;
-        for (int i = 0; same && i < n; ++i)
-        {
-            const ui::ModTargetsPage::Row& r = targets_.rows[i];
-            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth.state.value - (e[i].depth + 1.0) * 0.5) < 1.0e-9 && r.polarity.state.on == e[i].bidirectional && r.bypass.state.on == ! e[i].bypassed;
-        }
-        if (same)
-            return;
+        for (int i = n; i < kPer; ++i)
+            targetRows_[i] = {};
         targetTotal_ = total;
         char title[16];
         std::snprintf (title, sizeof title, "ENV %d", sel_);
-        targets_.load (e, n, title, ui::theme::sourceColour ("ENV"), total, targetsPageIndex_);   // the colour of the source on the depth arcs of the knobs
-        targets_.back.setId (kTargetsBack);
-        targets_.page.setId (kTargetsPage);
-        targets_.add.setId (kTargetsAdd);
-        for (int r = 0; r < ui::ModTargetsPage::kPerPage; ++r)
-            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
+        targets_.load (e, n, title, ui::theme::sourceColour ("ENV"), total, targetsPageIndex_);   // the colour of the source on the depth arcs of the dials
     }
 
-    // ---- the list that picks a new target: the groups of the destinations, then the parameters of a group
+    // ---- the list that picks a new target: the groups of the destinations, then the parameters of a group (the host list, as it is)
     using DestIndex = uibind::DestIndex;
     std::vector<const char*> listNames_;
+    std::vector<std::string> listText_;
     int listGroup_ = -1;   // -1: the list shows the groups; else the group whose parameters it shows
     void openGroupList()
     {
@@ -1139,112 +1276,95 @@ private:
         list_.showCurrent();
     }
 
-    // ---- the list of the selector of the compact view: ENV 1 .. 6, a popup over the third (not a page of the stack), a dot on the rows of the envelopes that have targets
-    static constexpr const char* kEnvNames[kEnvs] = { "ENV 1", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6" };
-    void openInstanceList()
-    {
-        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
-        list_.state.header = nullptr;
-        list_.state.headerBack = false;
-        list_.state.items = playCells_.names;   // the same cells as the carousel
-        list_.state.count = playCells_.n;
-        list_.state.current = playCells_.selectedPos;
-        list_.state.dotMask = cellDots_;
-        list_.state.dotColours = cellColours_;
-        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, playCells_.n * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (third);
-        list_.showCurrent();
-        instPopup_ = true;
-    }
-    void closeInstanceList()
-    {
-        instPopup_ = false;
-        list_.state.dotMask = 0;
-        list_.state.dotColours = nullptr;
-        list_.state.current = -1;
-        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup ({ 0, kTabY, w_, kTabH });
-    }
-
-    // ---- the modulations page of one control (a long press on a knob or a field)
-    ModRow modRows_[ui::ModulationsPage::kPerPage];
+    // ---- the modulations page of one control (a long press on a dial or a switch)
+    ModRow modRows_[ModRowsPage::kPerPage];
     NativeModTargets nativeModulations_;
     int modsPageIndex_ = 0;
     uint64_t modsPreset_ = 0;
-    int modsTarget_ = 0, modsTargetParam_ = -1, modsAddOffer_ = 0;
+    int modsTarget_ = 0, modsTargetParam_ = -1;
+    bool pickingSource_ = false;          // the add-source choice of the modulations page is open (the plugin list of sources)
     bool modsContextValid (const IInstanceView& inst) const noexcept
     {
         if (pageTop_ != kPageMods || modsTargetParam_ < 0 || modsPreset_ != inst.stateGeneration() || shownEnv (inst) != sel_)
             return false;
-        const auto* control = item (modsTarget_);
-        const int units = uibind::indexOfKey (prefix_ + "units");
-        return control != nullptr && control->active (units >= 0 && inst.param (units) >= 0.5f) == modsTargetParam_;
+        const int units = param_[kSlotUnits];
+        const bool beats = units >= 0 && inst.param (units) >= 0.5f;
+        const int slot = slotOfId (modsTarget_);
+        const int b = beatsSlotOf (slot);
+        const int p = slot < 0 ? -1 : (beats && b >= 0 && param_[b] >= 0 ? param_[b] : param_[slot]);
+        return p == modsTargetParam_;
     }
 
     void loadMods (const IInstanceView& v, int focusSlot = -1)
     {
-        const Item* t = item (modsTarget_);
+        const int target = paramOfId (modsTarget_);
         char title[13] = "MODULATIONS";
-        const int target = t != nullptr ? t->active (beats_) : -1;
         if (modsTargetParam_ != target)
         {
             modsPageIndex_ = 0;
             modsTargetParam_ = target;
         }
-        if (t != nullptr && modsTargetParam_ >= 0)
-        {
-            if (t->c != nullptr && t->type == T::Knob)
-                std::snprintf (title, sizeof title, "%.12s", static_cast<ui::Knob*> (t->c)->state.label);
-        }
+        const int slotId = slotOfId (modsTarget_);
+        if (modsTargetParam_ >= 0 && slotId >= 0 && slotId < kNumKnobs)
+            std::snprintf (title, sizeof title, "%.12s", labelOfSlot (slotId));
         const auto window = uibind::modulationWindow (v, modsTargetParam_, selectedSource_, modsPageIndex_, modRows_, focusSlot);
         modsPageIndex_ = window.page;
-        if (window.total == 0)
-            uibind::fillSourceBoard (mods_.board);
-        mods_.load (window.entries, title, window.total, window.page);
+        ModRowsPage::Entry e[ModRowsPage::kPerPage];
+        const int n = std::clamp (window.entries.numMods, 0, ModRowsPage::kPerPage);
+        for (int i = 0; i < n; ++i)
+        {
+            std::snprintf (e[i].name, sizeof e[i].name, "%s", window.entries.mods[i].name);
+            e[i].source = window.entries.mods[i].source;
+            e[i].macro = window.entries.mods[i].macro;
+        }
+        mods_.load (e, n, title, 0xffffff, window.total, window.page);
         if (window.focusRow >= 0)
             mods_.selectRow (window.focusRow);
-        mods_.page.setId (kModsPage);
-        mods_.back.setId (kModsBack);
-        mods_.addSource.setId (kModsAddStep);
-        mods_.add.setId (kModsAdd);
-        for (int r = 0; r < ui::ModulationsPage::kPerPage; ++r)
-            mods_.setRowIds (r, kModsRow + 4 * r, kModsRow + 4 * r + 1, kModsRow + 4 * r + 2, kModsRow + 4 * r + 3);
-        // what "add source" offers: this envelope first, then the other envelopes' first and the LFOs
-        int offer[8], n = 0;
-        auto push = [&] (int s) { if (s == ui::kNoSource || n >= 8) return; for (int i = 0; i < n; ++i) if (offer[i] == s) return; offer[n++] = s; };
-        push (selectedSource_);
-        for (int s : { 7, 8, 1, 2, 9, 3, 19, 20 }) push (s);
-        for (int i = 0; i < n; ++i)
-            mods_.sourceIds[i] = offer[i];
-        mods_.addSource.state.count = n;
-        mods_.addSource.state.index = std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1));
-        mods_.addSource.setItem (uibind::sourceName (offer[std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1))]));
-        modsAddOffer_ = n;
         char tv[16] = "";
         if (modsTargetParam_ >= 0)
             uibind::formatValue (uibind::info (modsTargetParam_), v.param (modsTargetParam_), tv, sizeof tv);
         mods_.setTargetValue (tv);
     }
 
+    /** The sources the add-source list offers: this envelope first, then the other envelopes' first and the LFOs. */
+    void openSourceList()
+    {
+        int offer[8], n = 0;
+        auto push = [&] (int s) { if (s == ui::kNoSource || n >= 8) return; for (int i = 0; i < n; ++i) if (offer[i] == s) return; offer[n++] = s; };
+        push (selectedSource_);
+        for (int s : { 7, 8, 1, 2, 9, 3, 19, 20 }) push (s);
+        listNames_.clear();
+        listText_.clear();
+        listText_.reserve (8);
+        for (int i = 0; i < n; ++i)
+        {
+            sourceIds_[i] = offer[i];
+            listText_.push_back (uibind::sourceName (offer[i]));
+        }
+        for (const std::string& s : listText_)
+            listNames_.push_back (s.c_str());
+        sourceCount_ = n;
+        list_.state.header = "ADD SOURCE";
+        list_.state.headerBack = false;
+        list_.state.items = listNames_.data();
+        list_.state.count = n;
+        list_.state.current = -1;
+        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.showCurrent();
+        pickingSource_ = true;
+    }
+    int sourceIds_[8] = {}, sourceCount_ = 0;
+
     // ======================================================================================================================================================================
-    // writing: a Change of a component to a parameter
+    // the touch: the graph, the list; the cells of the skin are the host's
     ui::Component* topComponent() noexcept
     {
         if (stackDepth_ == 0)
-            return instPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
-        if (pageTop_ == kPageTargets)
-            return &targets_;
-        if (pageTop_ == kPageMods)
-            return &mods_;
-        if (pageTop_ == kPageList)
+            return &compactGraph_;
+        if (pageTop_ == kPageList || (pageTop_ == kPageMods && pickingSource_))
             return &list_;
-        return &full_;
-    }
-    Item* find (int id) noexcept
-    {
-        for (Item& it : items_)
-            if (it.id == id)
-                return &it;
+        if (pageTop_ == 0)
+            return &fullGraph_;
         return nullptr;
     }
 
@@ -1254,44 +1374,28 @@ private:
             return;
         using K = ui::ChangeKind;
         const int id = c.id;
-        if (instPopup_ && stackDepth_ == 0)   // the list of the selector of the compact view
-        {
-            if (id == kList && c.kind == K::Index)
-            {
-                chooseCell (v, c.index);
-                closeInstanceList();
-            }
-            else if (id == kListBackdrop && c.kind == K::Request)
-                closeInstanceList();
-            return;
-        }
         if (c.kind == K::Request)
         {
             switch (id)
             {
-                case kCompactInstances: openInstanceList(); return;
-                case kFullButton: stack.openFull (kElementEnv); return;
                 case kModsBack:
-                    if (mods_.pickingSource())
-                        mods_.setPickingSource (false);
+                    if (pickingSource_)
+                        pickingSource_ = false;
                     else
                         stack.back();
                     return;
                 case kModsAdd:
                     if (modsContextValid (v))
-                    {
-                        uibind::fillSourceBoard (mods_.board);
-                        mods_.setPickingSource (true);
-                    }
+                        openSourceList();
                     return;
-                case kClose: case kTargetsBack: case kListBackdrop: stack.back(); return;
+                case kClose: case kTargetsBack: case kListBackdrop: pickingSource_ = false; stack.back(); return;
                 case kTargets: stack.openDetail (kPageTargets); return;
                 case kTargetsAdd: stack.openDetail (kPageList); return;
                 case kListHeader: listGroup_ = -1; fillList(); return;
-                case kGraph: applyViewEdit ((stackDepth_ == 0 ? compact_.graph : full_.graph).edit()); return;   // the graph asks: a handle was touched, LOCK was tapped, the ruler was dragged
+                case kGraph: applyViewEdit ((stackDepth_ == 0 ? compactGraph_ : fullGraph_).edit()); return;   // the graph asks: a handle was touched, LOCK was tapped, the ruler was dragged
                 default: break;
             }
-            if (id >= kTargetsRow && id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage && (id - kTargetsRow) % 4 == 3)
+            if (id >= kTargetsRow && id < kTargetsRow + 4 * ModRowsPage::kPerPage && (id - kTargetsRow) % 4 == 3)
             {
                 const int slot = targetRows_[(id - kTargetsRow) / 4].slot;
                 if (slot >= 0)
@@ -1303,7 +1407,7 @@ private:
                 }
                 return;
             }
-            if (id >= kModsRow && id < kModsRow + 4 * ui::ModulationsPage::kPerPage && (id - kModsRow) % 4 == 3)
+            if (id >= kModsRow && id < kModsRow + 4 * ModRowsPage::kPerPage && (id - kModsRow) % 4 == 3)
             {
                 const auto row = modRows_[(id - kModsRow) / 4];
                 if (modsContextValid (v) && uibind::modulationMatches (v, modsTargetParam_, row))
@@ -1319,18 +1423,20 @@ private:
         {
             modsPageIndex_ = 0;
             modsPreset_ = v.stateGeneration();
-            mods_.setPickingSource (false);
+            pickingSource_ = false;
             modsTarget_ = id;
             stack.openDetail (kPageMods);
             return;
         }
-        if (c.kind == K::AddRequest)
-        {
-            addModulation (v, c.index);
-            return;
-        }
         if (id == kList && c.kind == K::Index)
         {
+            if (pickingSource_)
+            {
+                if (c.index >= 0 && c.index < sourceCount_)
+                    addModulation (v, sourceIds_[c.index]);
+                pickingSource_ = false;
+                return;
+            }
             if (listGroup_ < 0)
             {
                 listGroup_ = c.index;
@@ -1345,16 +1451,6 @@ private:
             }
             return;
         }
-        if (id == kInstances && c.kind == K::Index)
-        {
-            uibind::chooseEnv (v, c.index);   // view state only (Play Env, shared with the Play page): no parameter is written; the selector's own Index is the envelope number
-            return;
-        }
-        if (id == kCompactInstances && c.kind == K::Index)
-        {
-            chooseCell (v, c.index);   // the carousel of the compact view steps (Index = the position among the cells)
-            return;
-        }
         if (id == kTargetsPage && c.kind == K::Index)
         {
             targetsPageIndex_ = c.index;
@@ -1367,15 +1463,8 @@ private:
             loadMods (v);
             return;
         }
-        if (id == kModsAddStep && c.kind == K::Index)
-        {
-            const int i = std::clamp (c.index, 0, std::max (0, modsAddOffer_ - 1));
-            mods_.addSource.state.index = i;
-            mods_.addSource.setItem (uibind::sourceName (mods_.sourceIds[i]));
-            return;
-        }
-        // ---- the rows of the targets page
-        if (id >= kTargetsRow && id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage)
+        // ---- the native cells of the targets page
+        if (id >= kTargetsRow && id < kTargetsRow + 4 * ModRowsPage::kPerPage)
         {
             const int slot = targetRows_[(id - kTargetsRow) / 4].slot;
             if (slot < 0)
@@ -1391,8 +1480,8 @@ private:
             modsDirty_ = true;
             return;
         }
-        // ---- the rows of the modulations page of a control
-        if (id >= kModsRow && id < kModsRow + 4 * ui::ModulationsPage::kPerPage)
+        // ---- the native cells of the modulations page of a control
+        if (id >= kModsRow && id < kModsRow + 4 * ModRowsPage::kPerPage)
         {
             const auto row = modRows_[(id - kModsRow) / 4];
             if (! modsContextValid (v) || ! uibind::modulationMatches (v, modsTargetParam_, row))
@@ -1410,30 +1499,7 @@ private:
         }
         // ---- the graph: the handle that was moved
         if (id == kGraph)
-        {
-            applyEdit ((stackDepth_ == 0 ? compact_.graph : full_.graph).edit(), v);
-            return;
-        }
-        Item* it = find (id);
-        if (it == nullptr || it->c == nullptr)
-            return;
-        const int p = it->active (beats_);
-        if (p < 0)
-            return;
-        if (c.kind == K::Depth)
-        {
-            const int slot = uibind::slotOf (v, p, c.index);
-            if (slot >= 0)
-                uibind::writeNorm (v, synthyboy::modSlotParams (slot).amount, (c.value + 1.0) * 0.5);
-            modsDirty_ = true;
-            return;
-        }
-        switch (it->type)
-        {
-            case T::Knob: if (c.kind == K::Value) uibind::writeNorm (v, p, c.value); break;
-            case T::Toggle: if (c.kind == K::Index) uibind::writePlain (v, p, c.index != 0 ? 1.0 : 0.0); break;
-            default: break;
-        }
+            applyEdit ((stackDepth_ == 0 ? compactGraph_ : fullGraph_).edit(), v);
     }
 
     /** The graph asked for a change of its view state (a Request of its id): the page keeps it and gives it back with the next update (pullGraph). */
@@ -1463,12 +1529,12 @@ private:
             const int p = timeParam (e.handle == Release ? 4 : e.handle, beats_);
             if (p >= 0)
                 uibind::writeNorm (v, p, e.t);
-            if (e.handle == Decay && sustainP_ >= 0)
-                uibind::writeNorm (v, sustainP_, e.level);
+            if (e.handle == Decay && param_[kSustain] >= 0)
+                uibind::writeNorm (v, param_[kSustain], e.level);
         }
         else if (e.handle >= CurveA && e.handle <= CurveR)
         {
-            const int p = curveP_[e.handle - CurveA];
+            const int p = param_[kACurve + (e.handle - CurveA)];
             if (p >= 0)
                 uibind::writePlain (v, p, e.curve);
         }
@@ -1479,7 +1545,7 @@ private:
         const int slot = uibind::addTargetSlot (v, source, destChoice);
         if (slot < 0)
             return;
-        constexpr int rows = ui::ModTargetsPage::kPerPage;
+        constexpr int rows = ModRowsPage::kPerPage;
         const int position = uibind::targetPosition (v, source, slot);
         targetsPageIndex_ = position / rows;
         loadTargets (v, true);
@@ -1491,30 +1557,11 @@ private:
         if (! modsContextValid (v))
             return;
         if (const int slot = uibind::ensureModulationSource (v, modsTargetParam_, source); slot >= 0)
-        {
-            mods_.setPickingSource (false);
             loadMods (v, slot);
-        }
     }
 
     // ======================================================================================================================================================================
     // the Q group: the four targets the hardware knobs are mapped to
-    /** The four targets of the ADSR group of the compact view and its block of knobs (the Play view maps the groups of the three thirds together). */
-public:   // the Play view reads the targets of the compact group and sets its block
-    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.group.member (i)); }
-    void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
-private:
-    int paramOfMember (const ui::ControlModel* m) const noexcept
-    {
-        while (m != nullptr)
-        {
-            for (const Item& it : items_)
-                if (it.c == m && (it.type == T::Knob || it.type == T::Toggle))
-                    return it.active (beats_);
-            m = m->primaryModel();
-        }
-        return -1;
-    }
     /** The groups of the page in reading order, published to the sixteen Q slots (q_publish.h): the compact view has ADSR; the full screen ADSR, SHAPE, TIME (the active one on Q 1 .. 4, the next on 5 .. 16); the
         targets and modulation pages one group per row. */
     void publishQGroup (IInstanceView& v)
@@ -1522,11 +1569,9 @@ private:
         if (otherOpen_)
             return;   // the Q group belongs to the page of another element
         const char* name = "";
-        auto members = [this] (const ui::QGroup& g, int* t) { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (g.member (i)); };
         if (stackDepth_ == 0)
         {
-            name = "ADSR";
-            compact_.group.setActive (highlight_ == 2);
+            name = groupName (0);
             return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ)
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
@@ -1534,12 +1579,10 @@ private:
             const bool tg = pageTop_ == kPageTargets;
             name = tg ? "Targets" : "Mods";
             const ModRow* rows = tg ? targetRows_ : modRows_;
-            const int n = tg ? targets_.numRows() : mods_.numRows(), act = tg ? targets_.activeRow() : mods_.activeRow();
-            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < ui::ModulationsPage::kPerPage ? rows[row].slot : -1, t); });
-            if (tg)
-                setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, n, act);
-            else
-                setRowBlocks (mods_, ui::ModulationsPage::kPerPage, n, act);
+            ModRowsPage& page = tg ? targets_ : mods_;
+            const int n = page.numRows(), act = page.activeRow();
+            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < ModRowsPage::kPerPage ? rows[row].slot : -1, t); });
+            setRowBlocks (page, ModRowsPage::kPerPage, n, act);
         }
         else if (pageTop_ == kPageList)
         {
@@ -1548,27 +1591,27 @@ private:
         }
         else
         {
-            name = ui::EnvFullScreen::groupName (full_.activeGroup());
-            int ids[ui::EnvFullScreen::kMaxGroups], pos = -1;
-            const int used = usedGroups (full_.groups, ui::EnvFullScreen::kMaxGroups, full_.activeGroup(), ids, pos);
-            qSlots_.publish (v, used, pos, [&] (int k, int* t)
+            name = groupName (activeGroup_);
+            qSlots_.publish (v, kGroups, activeGroup_, [&] (int g, int* t)
             {
-                members (full_.groups[ids[k]], t);
+                for (int k = 0; k < 4; ++k)
+                    t[k] = kQ.row (g, k) >= 0 ? paramOfSlot (kQ.row (g, k)) : -1;
             });
-            setBlocks (full_.groups, ui::EnvFullScreen::kMaxGroups, ids, used, pos);
         }
         ui::setText (qName_, sizeof qName_, name);
     }
 
     // ======================================================================================================================================================================
-    ui::EnvCompact compact_;
-    ui::EnvFullScreen full_;
-    ui::ModTargetsPage targets_;
+    ui::EnvGraph compactGraph_, fullGraph_;
+    CompactView compactView_;
+    FullGeometry geo_;
+    ModRowsPage targets_ { ModRowsPage::Kind::Targets };
     NativeModTargets nativeTargets_;
-    ui::ModulationsPage mods_;
+    ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
     ui::ListPopup list_;
+    binding::SelectorSet selector_;      // ENV 1 .. 6 as "used + one free" (docs/ui-map/env-filter-lfo-plan.md (b)); filled every update
+    uibind::SelectorCells playCells_;    // the cells of the selector as positions (pullSelector)
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
-    std::vector<Item> items_;
     ui::Component* gesture_ = nullptr;
     std::array<nativeui::FxCell, nativeui::env::kFields> nativeCells_ {};
     int nativeGestureField_ = -1, nativeGestureTarget_ = -1;
@@ -1576,7 +1619,6 @@ private:
     bool nativeHold_ = false;
     int nativeDownX_ = 0, nativeDownY_ = 0;
     double nativeDownMs_ = 0.0;
-    bool instPopup_ = false;             // the list of the selector of the compact view is open (main state only)
     bool nativePlayEditor_ = false;
     uint64_t nativePlayPreset_ = 0;
     bool page_ = false;                  // the page of the Env tab
@@ -1585,12 +1627,15 @@ private:
     uint64_t selectorGeneration_ = 0;
     int pageEnv_ = 0;                    // the page of a tab: the envelope of the sub-tab (1 .. 6); 0 in the Play page's expansion
     bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, beats_ = false, nativeGround_ = false;
-    int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0;
-    int timeMs_[5] = { -1, -1, -1, -1, -1 }, timeBeats_[5] = { -1, -1, -1, -1, -1 }, sustainP_ = -1, curveP_[3] = { -1, -1, -1 };
+    int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0, laidCells_ = 0, activeGroup_ = 0, compactBlock_ = -1;
+    int param_[kRowsPerEnv] = {};        // the engine parameter index of every row of the selected envelope (-1: none)
+    uint8_t targetMask_ = 0;
+    char targetLines_[3][40] = {};
+    int numTargetLines_ = 0;
+    char captionText_[8] = {};
     struct GraphView { int selected = ui::envgraph::None; bool locked = true; double zoom = 0.0; };   // what the graph shows besides the envelope: the handle whose value is written, LOCKED, the zoom of the unlocked ruler
     GraphView graphView_[2];             // the compact graph, the full screen graph
     double modsAtMs_ = -1000.0;
-    std::string prefix_ = "env1.";
     char qName_[16] = {};
     QSlots qSlots_;
 };
