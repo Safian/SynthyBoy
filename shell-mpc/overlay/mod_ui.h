@@ -1,16 +1,16 @@
-// SynthyBoy - MPC overlay: the MODULATION MATRIX UI, the page of the Mod tab (the plugin draws the whole tab, page_view.h): the 64 slots of the matrix (shell-mpc/ui/mod_matrix.h) and the page of one slot
-// (mod_detail.h) wired to the engine parameters (modNN.* of the table, docs/MPC.md "Modulation UI"). One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls
-// update () / touch () / tick () / draw (), with the instance as IInstanceView.
-// While no slot is in use the matrix has no rows to show: the page is the quick-add BOARD instead (ui/mod_board.h): every source the engine has, as chips in groups. A tap on a chip opens the targets page of
-// that source (ui/mod_targets.h, the page of the envelope, the LFO and the macros: "where does this source go") with the grouped list of the targets on top of it; the target that is picked makes the slot, and
-// the page shows it. BACK returns to the matrix, which lists the slot (the board is gone as soon as one slot is in use).
+// SynthyBoy - MPC overlay: the MODULATION MATRIX page of the Mod tab (the plugin owns the page logic, the controls are native cells of the host skin, owner decision 2026-11-27: the C++ layer has no UI elements): the 64 slots of
+// the matrix, the page of one slot and the targets page of a source wired to the engine parameters (modNN.* of the table, docs/MPC.md "Modulation UI"). The plain data of the page (the slots with their filter and scroll window,
+// the rectangles of the native cells, the Q members) is mod_model.h; the binding of the native cells is publishNative*. One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay
+// thread calls update () / touch () / tick () / draw (), with the instance as IInstanceView.
+// While no slot is in use the matrix has no rows to show: the page is the quick-add BOARD instead (native, published by publishNativeBoard): every source the engine has. A tap on a chip opens the targets page of that source
+// (the page of the envelope, the LFO and the macros: "where does this source go") with the grouped list of the targets; the target that is picked makes the slot, and the page shows it. BACK returns to the matrix, which lists
+// the slot (the board is gone as soon as one slot is in use).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementPage): the matrix is the page; above it the details of a slot (a page over the whole tab, BACK returns) and the list popup that picks a
-// source, a target or the auxiliary source of a slot. The lists are grouped like the ADD TARGET list of the envelope and the LFO (one source of the groups: ui_bind.h DestIndex): the first level has the
-// groups, a tap on a group shows its entries (the header of the list is the way back). The Q group of the matrix is the selected row: AMOUNT, SOURCE, TARGET and the row (the fourth Q-Link steps through the rows:
-// a virtual Q target, q_router.h).
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementPage): the matrix is the page; above it the details of a slot (a page over the whole tab, BACK returns) and the native list that picks a source, a
+// target or the auxiliary source of a slot. The lists are grouped like the ADD TARGET list of the envelope and the LFO (one source of the groups: ui_bind.h DestIndex): the first level has the groups, a tap on a group shows its
+// entries (the header of the list is the way back). The Q group of the matrix is the selected row: ROW, SOURCE, TARGET and AMOUNT (the fourth Q-Link steps through the rows: a virtual Q target, q_router.h).
 #pragma once
 
 #include <algorithm>
@@ -23,19 +23,16 @@
 
 #include "../native_mod_controls.h"
 #include "../q_router.h"
-#include "../ui/list.h"
-#include "../ui/mod_detail.h"
-#include "../ui/mod_matrix.h"
-#include "../ui/mod_targets.h"
 #include "../ui/native_apertures.h"
 #include "instance_view.h"
+#include "mod_model.h"
+#include "mod_targets_native.h"
 #include "page_view.h"
 #include "native_marker_covers.h"
 #include "q_publish.h"
 #include "q_publish_mod.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
-#include "native_mod_targets_ui.h"
 #include "ui_stack.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
@@ -73,18 +70,11 @@ public:
     {
         setCanvas (kCanvasW, kCanvasH);
         setNativeControls (true);
-        assignIds();
-        for (int g = 0; g <= uibind::kSourceGroups; ++g)
-            srcGroupNames_[g] = uibind::sourceGroupName (g);
-        fillBoard();
+        matrix_.setBoardSources (static_cast<int> (synthyboy::modSourceCount()));
+        matrix_.rebuildVisibleList();
     }
 
-    void setNativeControls (bool on)
-    {
-        nativeControls_ = on;
-        matrix_.setNativeControls (on);
-        detail_.setNativeControls (on);
-    }
+    void setNativeControls (bool on) { nativeControls_ = on; }
     bool nativeControls() const noexcept { return nativeControls_; }
     void setHostBackground (bool present) noexcept { nativeGround_ = present; }
     bool hostBackground() const noexcept
@@ -110,7 +100,7 @@ public:
 
     void leftTab (IInstanceView& inst) noexcept
     {
-        nativeTargets_.hide (inst, targets_);
+        nativeTargets_.hide (inst);
         inst.setNativeModMatrix (nativeui::mod::Hidden, nullptr, nullptr);
         inst.setNativeModNavigation (0, 0, 0, nullptr);
         inst.setNativeModDetailNavigation (nullptr);
@@ -122,7 +112,7 @@ public:
         if (! nativeControls_)
             return false;
         if (pageTop_ == kPageList)
-            return hostBackground();
+            return true;
         if (pageTop_ == kPageTargets)
             return targets_.nativeHit (x, y);
         if (pageTop_ == kPageDetail)
@@ -145,11 +135,6 @@ public:
         matrix_.place (tab);
         detail_.place (tab);
         targets_.place (tab);
-        list_.place ({ w / 2 - 260, kTabY + 20, 520, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (tab);
-        list_.setId (kListPopup);
-        list_.setBackdropId (kListBackdrop);
-        list_.setHeaderId (kListHeader);
     }
 
     /** Reads the instance: the 64 slots, the page of the open slot, the live values of the sources, the pages of the stack, the Q group. */
@@ -165,7 +150,7 @@ public:
         if (namesDirty_)
         {
             namesDirty_ = false;
-            fillBoard();
+            matrix_.rebuildVisibleList();
         }
         const uint64_t gen = inst.stateGeneration();
         if (gen != stateGeneration_)
@@ -177,7 +162,6 @@ public:
             {
                 stack.back();
                 listParam_ = listSlot_ = -1;
-                gesture_ = nullptr;
                 gestureDown_ = false;
             }
             nativeGestureBlocked_ = nativeGestureField_ >= 0;
@@ -216,7 +200,8 @@ public:
         if (targetsShown())
             loadTargets (inst, false);
         nativeTargets_.update (inst, targets_, nativeControls_ && pageTop_ == kPageTargets, nativeui::targets::Mod, targetsSource_,
-                               targetRows_, [&] (ui::Change change) { handle (change, stack, inst); });
+                               targetRows_, ModTargetsNative::Ids { kTargetsBack, kTargetsAdd, kTargetsPage, kTargetsRow },
+                               [&] (ui::Change change) { handle (change, stack, inst); });
 
         // the virtual Q target of the rows: a write of the host moves the selected row
         float x;
@@ -232,7 +217,7 @@ public:
         publishQGroup (inst);
     }
 
-    /** The whole picture: the page and what lies over it. */
+    /** The whole picture: the ground with the cut-outs of the native cells (the cells themselves are the host's), the marker covers. */
     void draw (gpu::SceneBuilder& sb) const
     {
         if (hostBackground())
@@ -241,7 +226,6 @@ public:
             return;
         }
 
-        const auto view = nativeView();
         const ui::Rect tab { 0, kTabY, w_, kTabH };
         auto ground = [&] (ui::Rect r)
         {
@@ -260,33 +244,20 @@ public:
             std::copy (values.begin(), values.end(), controls.begin() + nav.size());
             ui::outsideNativeCells (tab, controls, ground);
         }
-        else if (view != nativeui::mod::Hidden && pageTop_ == kPageDetail)
+        else if (nativeView() != nativeui::mod::Hidden && pageTop_ == kPageDetail)
             ui::outsideNativeCells (tab, detail_.nativeApertures(), ground);
         else
             page::ground (sb);
-
-        if (targetsShown())
-        {
-            targets_.draw (sb);
-        }
-        else if (pageTop_ == kPageDetail || (pageTop_ == kPageList && openSlot_ >= 0))
-        {
-            detail_.draw (sb);
-        }
-        else
-        {
-            matrix_.drawPage (sb, false);
-        }
-        if (pageTop_ == kPageList)
-            list_.draw (sb);
+        drawNativeMarkerCovers (sb, "mod");
     }
 
+    /** The cells of the tab are the host's; the overlay claims the rest of the page (the gestures of the list: a tap on a row, a drag, the scroll zone, a tap on a block of the page of a slot). */
     bool covers (int x, int y) const noexcept
     {
         if (! ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y))
             return false;
         if (pageTop_ == kPageList)
-            return ! hostBackground();
+            return false;
         if (pageTop_ == kPageTargets)
             return ! (nativeControls_ && targets_.nativeHit (x, y));
         if (nativeControls_ && isNativeControl (x, y))
@@ -294,15 +265,15 @@ public:
         return true;
     }
 
-    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
+    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double)
     {
         const int x = ev.x, y = ev.y;
+        (void) stack;
         if (pageTop_ == kPageList && inst.stateGeneration() != stateGeneration_)
         {
             dropGesture();
             return true;
         }
-        ui::Component* top = topComponent();
         if (ev.kind == TouchEvent::Down)
         {
             int targetRow = -1;
@@ -320,7 +291,6 @@ public:
             nativeGestureBlocked_ = false;
             nativeGestureTarget_ = nativeGestureField_ >= 0 ? nativeCells_[nativeGestureField_].target : -1;
             gestureDown_ = false;
-            gesture_ = nullptr;
             if (nativeGestureField_ >= 0)
             {
                 if (pageTop_ == 0)
@@ -328,15 +298,40 @@ public:
                 else if (! ui::QGroup::wideDevice())
                     for (int b = 0; b < 3; ++b)
                         if (detail_.block (b).contains (x, y))
-                            detail_.setActiveBlock (static_cast<ui::ModSlotDetail::Block> (b));
+                            detail_.setActiveBlock (static_cast<modmodel::Detail::Block> (b));
                 publishQGroup (inst);
                 return false;
             }
-            if (! covers (x, y) || ! top)
+            if (! covers (x, y))
                 return false;
-            gesture_ = top;
-            gestureDown_ = true;
-            handle (top->touchDown (x, y, nowMs), stack, inst);
+            if (pageTop_ == 0)
+            {
+                gestureDown_ = matrix_.scrollDown (x, y);
+                if (gestureDown_)
+                    publishQGroup (inst);
+            }
+            else if (pageTop_ == kPageDetail)
+            {
+                for (int b = 0; b < 3; ++b)
+                    if (detail_.block (b).contains (x, y))
+                    {
+                        detail_.setActiveBlock (static_cast<modmodel::Detail::Block> (b));
+                        publishQGroup (inst);
+                        break;
+                    }
+                gestureDown_ = true;
+            }
+            else if (pageTop_ == kPageTargets)
+            {
+                for (int i = 0; i < targets_.numRows(); ++i)
+                    if (y >= targets_.rowY (i) && y < targets_.rowY (i) + modmodel::Targets::kRowH)
+                    {
+                        targets_.selectRow (i);
+                        publishQGroup (inst);
+                        break;
+                    }
+                gestureDown_ = true;
+            }
             publishNativeNavigation (inst, stack, false);
             publishNativeMatrix (inst, false);
             publishNativeBoard (inst, stack, false);
@@ -348,15 +343,20 @@ public:
             nativeGestureBlocked_ = false;
             publishNativeMatrix (inst, false);
         }
-        if (! gesture_ || ! gestureDown_)
+        if (! gestureDown_)
             return false;
         if (ev.kind == TouchEvent::Move)
-            handle (gesture_->touchMove (x, y), stack, inst);
+        {
+            if (pageTop_ == 0)
+            {
+                matrix_.scrollMove (x, y);
+                publishQGroup (inst);
+            }
+        }
         else
         {
-            handle (gesture_->touchUp (x, y), stack, inst);
+            matrix_.scrollUp();
             gestureDown_ = false;
-            gesture_ = nullptr;
         }
         publishNativeNavigation (inst, stack, false);
         publishNativeMatrix (inst, false);
@@ -364,41 +364,27 @@ public:
         return true;
     }
 
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
-    {
-        if (gesture_ && gestureDown_)
-        {
-            handle (gesture_->tick (nowMs), stack, inst);
-            publishNativeMatrix (inst, false);
-            publishNativeBoard (inst, stack, false);
-        }
-    }
+    void tick (double, UiStack&, IInstanceView&) {}
 
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
-        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the list of the matrix scrolls a row a notch. false: nothing of this page lies there, or a finger is down on it. */
+    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double)
     {
-        ui::Component* top = topComponent();
-        if (gestureDown_ || ! top || ! covers (x, y))
+        if (gestureDown_ || pageTop_ != 0 || ! covers (x, y) || ! matrix_.wheel (x, y, notches))
             return false;
-        ui::Change ch;
-        if (! top->wheelOver (x, y, notches, ch))
-            return false;
-        handle (ch, stack, inst);
+        publishQGroup (inst);
         publishNativeNavigation (inst, stack, false);
         publishNativeMatrix (inst, false);
         publishNativeBoard (inst, stack, false);
-        (void) nowMs;
         return true;
     }
 
     bool fingerDown() const noexcept { return gestureDown_; }
-    void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; nativeGestureField_ = -1; nativeGestureBlocked_ = false; }
+    void dropGesture() noexcept { matrix_.scrollUp(); gestureDown_ = false; nativeGestureField_ = -1; nativeGestureBlocked_ = false; }
     void forgetQGroup() noexcept { qSlots_.forget(); }
 
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
-        handle (pageTop_ == kPageDetail ? detail_.turnQ (knobIndex, delta) : (pageTop_ == kPageTargets ? targets_.turnQ (knobIndex, delta) : matrix_.turnQ (knobIndex, delta)), stack, inst);
+        handle (turnChange (knobIndex, delta), stack, inst);
         publishNativeMatrix (inst, false);
     }
 
@@ -408,10 +394,12 @@ public:
     int topPage() const noexcept { return pageTop_; }
     int openSlot() const noexcept { return openSlot_; }
 
-    ui::ModMatrixView& matrix() noexcept { return matrix_; }
-    ui::ModSlotDetail& detail() noexcept { return detail_; }
-    ui::ListPopup& list() noexcept { return list_; }
-    ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
+    modmodel::Matrix& matrix() noexcept { return matrix_; }
+    modmodel::Detail& detail() noexcept { return detail_; }
+    modmodel::Targets& targetsPage() noexcept { return targets_; }
+    /** The rows of the open list (the names the host list shows) and the choice value of each (0 NONE, a negative number a group). */
+    const std::vector<const char*>& listNames() const noexcept { return listNames_; }
+    const std::vector<int>& listChoices() const noexcept { return listChoices_; }
     /** The source (the choice value of modNN.source) whose targets page is or was open last (0: none yet). */
     int targetsSource() const noexcept { return targetsSource_; }
 
@@ -482,7 +470,7 @@ private:
             const int row = matrix_.nativeWindowRowAt (x, y);
             if (row >= 0 && row < n::kRows)
             {
-                const auto areas = matrix_.windowRows[row].nativeApertures();
+                const auto areas = matrix_.cells (row).values();
                 for (int field = 0; field < n::kRowFields; ++field)
                     if (areas[field].contains (x, y))
                         return row * n::kRowFields + field;
@@ -580,9 +568,9 @@ private:
             fields[field] = {target, target, nativeui::kFxToggle};
         };
         link (n::Mode);
-        if (matrix_.filterMode() == ui::ModMatrixView::FilterSource)
+        if (matrix_.filterMode() == modmodel::Matrix::FilterSource)
             link (n::SourceGroup);
-        if (matrix_.filterMode() == ui::ModMatrixView::FilterDest)
+        if (matrix_.filterMode() == modmodel::Matrix::FilterDest)
             link (n::DestinationGroup);
         if (firstUnusedSlot (inst) >= 0)
             link (n::Add);
@@ -647,9 +635,6 @@ private:
     void publishNativeMatrix (IInstanceView& inst, bool consume)
     {
         namespace n = nativeui::mod;
-        const bool nativeDetail = nativeControls_ && pageTop_ == kPageDetail;
-        if (detail_.nativeControls() != nativeDetail)
-            detail_.setNativeControls (nativeDetail);
         const auto view = nativeView();
         int rows[n::kRows] {};
         nativeCells_.fill ({});
@@ -792,23 +777,10 @@ private:
         }
     }
 
-    ui::Component* topComponent() noexcept
-    {
-        if (pageTop_ == kPageList) return &list_;
-        if (pageTop_ == kPageDetail) return &detail_;
-        if (pageTop_ == kPageTargets) return &targets_;
-        return &matrix_;
-    }
-
     // ---- the quick-add board: every source the engine has, in groups (ui_bind.h sourceGroup), in the order of the engine's table
     /** The text of a chip and the name that picks its colour: the same functions as the board of the page of one control (ui_bind.h). */
     static void boardLabel (int choice, char* out, size_t cap) { uibind::boardLabel (choice, out, cap); }
     static void boardColourName (int choice, char* out, size_t cap) { uibind::boardColourName (choice, out, cap); }
-    void fillBoard()
-    {
-        uibind::fillSourceBoard (matrix_.board);
-        matrix_.rebuildVisibleList();
-    }
 
     // ---- the targets page of one source (the board's tap, ADD TARGET): the slots whose source it is
     bool targetsShown() const noexcept { return pageTop_ == kPageTargets || (pageTop_ == kPageList && listKind_ == ListKind::NewTarget); }
@@ -820,12 +792,12 @@ private:
     }
     void loadTargets (const IInstanceView& v, bool fresh)
     {
-        constexpr int kPer = ui::ModTargetsPage::kPerPage;
+        constexpr int kPer = modmodel::Targets::kPerPage;
         const int total = uibind::slotsOfSource (v, targetsSource_, scratchSlots_, uibind::kMaxTargetSlots);
         const int pages = std::max (1, (total + kPer - 1) / kPer);
         targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
         const int first = targetsPageIndex_ * kPer, n = std::clamp (total - first, 0, kPer);
-        ui::ModTargetsPage::Entry e[kPer];
+        modmodel::Targets::Entry e[kPer];
         for (int i = 0; i < kPer; ++i)
             targetRows_[i] = {};
         for (int i = 0; i < n; ++i)
@@ -840,10 +812,7 @@ private:
         // only a change of the rows is loaded again (a reload resets the touch of a row that is being dragged)
         bool same = ! fresh && targetsLoaded_ == targetsSource_ && n == targets_.numRows() && total == targetTotal_;
         for (int i = 0; same && i < n; ++i)
-        {
-            const ui::ModTargetsPage::Row& r = targets_.rows[i];
-            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth.state.value - (e[i].depth + 1.0) * 0.5) < 1.0e-9 && r.polarity.state.on == e[i].bidirectional && r.bypass.state.on == ! e[i].bypassed;
-        }
+            same = targets_.sameRow (i, e[i]);
         if (same)
             return;
         targetTotal_ = total;
@@ -882,7 +851,7 @@ private:
         const int slot = uibind::addTargetSlot (inst, source, destChoice);
         if (slot < 0)
             return;
-        constexpr int rows = ui::ModTargetsPage::kPerPage;
+        constexpr int rows = modmodel::Targets::kPerPage;
         const int position = uibind::targetPosition (inst, source, slot);
         targetsPageIndex_ = position / rows;
         loadTargets (inst, true);
@@ -904,45 +873,22 @@ private:
     {
         const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
         const int srcVal = static_cast<int> (std::lround (inst.param (sp.source))), dstVal = static_cast<int> (std::lround (inst.param (sp.destination)));
-        detail_.setTitle (openSlot_, sourceName (srcVal), destName (dstVal));
-        const double amount = static_cast<double> (inst.param (sp.amount)) / 100.0;
-        double liveSource = 0.0;
-        if (live != nullptr && srcVal >= 1 && srcVal <= synthyboy::LiveValues::kMaxSources)
-            liveSource = static_cast<double> (live->source[srcVal - 1]);
-        detail_.summary.setSlot (openSlot_);
-        detail_.summary.updateData (sourceName (srcVal), destName (dstVal), amount, inst.param (sp.bipolar) > 0.5f, inst.param (sp.bypass) > 0.5f, live != nullptr && srcVal > 0, amount * liveSource);
-
-        const int auxSrc = static_cast<int> (std::lround (inst.param (sp.auxSource)));
-        detail_.auxSource.setValue (auxSrc > 0 ? sourceName (auxSrc) : "NONE");
-        pullKnob (inst, detail_.auxOutput, sp.auxOutput);
-        pullKnob (inst, detail_.auxPower, sp.auxPower);
-        detail_.auxInv.state.on = inst.param (sp.auxInv) > 0.5f;
-        pullKnob (inst, detail_.power, sp.power);
-        detail_.stereo.state.on = inst.param (sp.stereo) > 0.5f;
-        pullKnob (inst, detail_.rise, sp.rise);
-        pullKnob (inst, detail_.fall, sp.fall);
-        pullKnob (inst, detail_.delay, sp.delay);
-        pullKnob (inst, detail_.delayBeats, sp.delayBeats);
-        detail_.delaySync.state.on = inst.param (sp.delaySync) > 0.5f;
-        detail_.setDelaySync (detail_.delaySync.state.on);
+        detail_.setSlot (openSlot_);
+        (void) srcVal; (void) dstVal; (void) live;
+        modmodel::Detail::Values& v = detail_.values;
+        v.auxOutput = norm (inst, sp.auxOutput);
+        v.auxPower = norm (inst, sp.auxPower);
+        v.auxInv = inst.param (sp.auxInv) > 0.5f;
+        v.power = norm (inst, sp.power);
+        v.stereo = inst.param (sp.stereo) > 0.5f;
+        v.rise = norm (inst, sp.rise);
+        v.fall = norm (inst, sp.fall);
+        v.delay = norm (inst, sp.delay);
+        v.delayBeats = norm (inst, sp.delayBeats);
+        detail_.setDelaySync (inst.param (sp.delaySync) > 0.5f);
     }
-    static void pullKnob (const IInstanceView& v, ui::Knob& k, int p)
-    {
-        if (p < 0)
-        {
-            k.setEnabled (false);
-            return;
-        }
-        const synthyboy::ParamInfo& pi = uibind::info (p);
-        const float plain = v.param (p);
-        k.state.value = k.state.modValue = uibind::normOf (p, plain);
-        k.state.defaultValue = uibind::normOf (p, pi.def);
-        k.state.bipolar = pi.min < 0.0f && pi.max > 0.0f;
-        if (pi.unit == synthyboy::Unit::none)
-            std::snprintf (k.state.valueText, sizeof k.state.valueText, "%+.1f", static_cast<double> (plain));   // the curves: -10 .. +10
-        else
-            uibind::formatValue (pi, plain, k.state.valueText, sizeof k.state.valueText);
-    }
+    /** The normalised value of parameter p (0 when the engine has none). */
+    static double norm (const IInstanceView& v, int p) { return p < 0 ? 0.0 : uibind::normOf (p, v.param (p)); }
 
     // ---- the grouped lists (the sources, the targets)
     void openList (IInstanceView& inst, UiStack& stack, ListKind kind, int slot)
@@ -985,8 +931,6 @@ private:
                     listNames_.push_back (uibind::sourceGroupName (g));
                     listChoices_.push_back (-g);
                 }
-            list_.state.header = nullptr;
-            list_.state.headerBack = false;
         }
         else
         {
@@ -998,7 +942,6 @@ private:
                     listNames_.push_back (destName (c));
                     listChoices_.push_back (c);
                 }
-                list_.state.header = d.groups[static_cast<size_t> (listGroup_)].c_str();
             }
             else
             {
@@ -1008,18 +951,10 @@ private:
                         listNames_.push_back (uibind::sourceName (c));
                         listChoices_.push_back (c);
                     }
-                list_.state.header = uibind::sourceGroupName (listGroup_ + 1);
             }
-            list_.state.headerBack = true;
         }
         nativeListFirst_ = 0;
-        list_.state.items = listNames_.data();
-        list_.state.count = static_cast<int> (listNames_.size());
-        list_.state.current = -1;
-        for (size_t i = 0; i < listChoices_.size(); ++i)
-            if (listChoices_[i] == current && current > 0)
-                list_.state.current = static_cast<int> (i);
-        list_.showCurrent();
+        (void) current;
     }
     int firstUnusedSlot (const IInstanceView& inst) const noexcept
     {
@@ -1041,9 +976,9 @@ private:
         using K = ui::ChangeKind;
 
         // the filter tabs and the filter choice
-        if (c.id == kFilterAll) { matrix_.setFilterMode (ui::ModMatrixView::FilterAll); return; }
-        if (c.id == kFilterSource) { matrix_.setFilterMode (ui::ModMatrixView::FilterSource); stepSourceFilter (0); return; }
-        if (c.id == kFilterDest) { matrix_.setFilterMode (ui::ModMatrixView::FilterDest); stepDestFilter (0); return; }
+        if (c.id == kFilterAll) { matrix_.setFilterMode (modmodel::Matrix::FilterAll); return; }
+        if (c.id == kFilterSource) { matrix_.setFilterMode (modmodel::Matrix::FilterSource); stepSourceFilter (0); return; }
+        if (c.id == kFilterDest) { matrix_.setFilterMode (modmodel::Matrix::FilterDest); stepDestFilter (0); return; }
         if (c.id == kSourceFilterStep && c.kind == K::Index) { srcFilter_ = c.index; stepSourceFilter (0); return; }
         if (c.id == kDestFilterStep && c.kind == K::Index) { dstFilter_ = c.index; stepDestFilter (0); return; }
 
@@ -1063,7 +998,7 @@ private:
             loadTargets (inst, true);
             return;
         }
-        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage)
+        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * modmodel::Targets::kPerPage)
         {
             const int slot = targetRows_[(c.id - kTargetsRow) / 4].slot, what = (c.id - kTargetsRow) % 4;
             if (slot < 0)
@@ -1149,7 +1084,7 @@ private:
 
         // the rows of the matrix (id = kRowBase + window row * 10 + offset) and the row of the page of a slot
         int slot = -1, offset = -1;
-        if (c.id >= kRowBase && c.id < kRowBase + ui::ModMatrixView::kWindowRows * 10)
+        if (c.id >= kRowBase && c.id < kRowBase + modmodel::Matrix::kWindowRows * 10)
         {
             slot = matrix_.slotAtWindowIndex ((c.id - kRowBase) / 10);
             offset = (c.id - kRowBase) % 10;
@@ -1207,71 +1142,43 @@ private:
     void stepSourceFilter (int)
     {
         srcFilter_ = std::clamp (srcFilter_, 0, uibind::kSourceGroups);
-        matrix_.sourceFilter.state.count = uibind::kSourceGroups + 1;
-        matrix_.sourceFilter.state.index = srcFilter_;
-        matrix_.sourceFilter.setItem (srcFilter_ == 0 ? "ALL SOURCES" : uibind::sourceGroupName (srcFilter_));
         matrix_.setSourceFilterChoice (srcFilter_);
     }
     void stepDestFilter (int)
     {
         dstFilter_ = std::clamp (dstFilter_, 0, 10);
-        matrix_.destFilter.state.count = 11;
-        matrix_.destFilter.state.index = dstFilter_;
-        matrix_.destFilter.setItem (destModuleName (dstFilter_));
         matrix_.setDestModuleFilter (dstFilter_ - 1);
     }
 
-    void assignIds()
+    /** The change of the Q-Link `knobIndex` on the page shown: the matrix steps the row (knob 1) and writes the AMOUNT of the selected row (knob 4), the page of a slot and the targets page write their active block / row. */
+    ui::Change turnChange (int knobIndex, double delta)
     {
-        matrix_.tabAll.setId (kFilterAll);
-        matrix_.tabSource.setId (kFilterSource);
-        matrix_.tabDest.setId (kFilterDest);
-        matrix_.add.setId (kAdd);
-        matrix_.board.setId (kBoard);
-        targets_.back.setId (kTargetsBack);
-        targets_.page.setId (kTargetsPage);
-        targets_.add.setId (kTargetsAdd);
-        for (int r = 0; r < ui::ModTargetsPage::kPerPage; ++r)
-            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
-        matrix_.sourceFilter.setId (kSourceFilterStep);
-        matrix_.destFilter.setId (kDestFilterStep);
-        stepSourceFilter (0);
-        stepDestFilter (0);
-        auto rowIds = [] (ui::ModRow& r, int base)
+        if (pageTop_ == kPageDetail)
+            return detail_.turnQ (knobIndex, delta, { kDetailAuxOutput, kDetailAuxInv, kDetailAuxPower, kDetailPower, kDetailStereo, kDetailRise, kDetailFall, kDetailDelay, kDetailDelayBeats, kDetailDelaySync });
+        if (pageTop_ == kPageTargets)
+            return targets_.turnQ (knobIndex, delta, kTargetsRow);
+        if (pageTop_ != 0)
+            return {};
+        const int w = matrix_.selectedWindowRow();
+        if (knobIndex == 0)
         {
-            r.number.setId (base + kOffsetNumber);
-            r.sourceBtn.setId (base + kOffsetSource);
-            r.destBtn.setId (base + kOffsetDest);
-            r.amountBar.setId (base + kOffsetAmount);
-            r.biToggle.setId (base + kOffsetBi);
-            r.bypassToggle.setId (base + kOffsetBypass);
-            r.detailBtn.setId (base + kOffsetDetail);
-        };
-        for (int w = 0; w < ui::ModMatrixView::kWindowRows; ++w)
-            rowIds (matrix_.windowRows[w], kRowBase + w * 10);
-        rowIds (detail_.summary, kDetailRowBase);
-
-        detail_.back.setId (kDetailBack);
-        detail_.deleteBtn.setId (kDetailDelete);
-        detail_.auxSource.setId (kDetailAuxSource);
-        detail_.auxOutput.setId (kDetailAuxOutput);
-        detail_.auxInv.setId (kDetailAuxInv);
-        detail_.auxPower.setId (kDetailAuxPower);
-        detail_.power.setId (kDetailPower);
-        detail_.stereo.setId (kDetailStereo);
-        detail_.rise.setId (kDetailRise);
-        detail_.fall.setId (kDetailFall);
-        detail_.delay.setId (kDetailDelay);
-        detail_.delayBeats.setId (kDetailDelayBeats);
-        detail_.delaySync.setId (kDetailDelaySync);
+            ui::Change c = matrix_.turnRow (delta);
+            if (c)
+                matrix_.selectRow (c.index);
+            return {};
+        }
+        if (knobIndex == 3 && w >= 0)
+        {
+            const double cur = matrix_.amountNorm (w), v = std::clamp (cur + delta, 0.0, 1.0);
+            return std::fabs (v - cur) < 1.0e-12 ? ui::Change {} : ui::Change::normalised (kRowBase + w * 10 + kOffsetAmount, v);
+        }
+        return {};
     }
 
     /** The groups of the page in reading order: a targets list has one group per row, the slot detail its three blocks (AUXILIARY SOURCE, SHAPE, TIME), the matrix the selected slot. The active group is on Q 1 .. 4, the
         next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& inst)
     {
-        for (int b = 0; b < 3; ++b)
-            detail_.groups[b].setBlock (-1);
         if (pageTop_ == kPageList)
         {
             std::snprintf (qName_, sizeof qName_, "LIST");
@@ -1282,21 +1189,20 @@ private:
             char title[28];
             boardLabel (targetsSource_, title, sizeof title);
             std::snprintf (qName_, sizeof qName_, "%s TARGETS", title);
-            qSlots_.publish (inst, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModTargetsPage::kPerPage ? targetRows_[row].slot : -1, t); });
-            setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, targets_.numRows(), targets_.activeRow());
+            qSlots_.publish (inst, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < modmodel::Targets::kPerPage ? targetRows_[row].slot : -1, t); });
         }
         else if (pageTop_ == kPageDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
-            std::snprintf (qName_, sizeof qName_, "SLOT %02d %s", openSlot_ + 1, ui::ModSlotDetail::blockName (detail_.activeBlock()));
+            std::snprintf (qName_, sizeof qName_, "SLOT %02d %s", openSlot_ + 1, modmodel::Detail::blockName (detail_.activeBlock()));
             const int active = static_cast<int> (detail_.activeBlock());
             qSlots_.publish (inst, 3, active, [&] (int block, int* t)
             {
-                if (block == ui::ModSlotDetail::BlockAux)
+                if (block == modmodel::Detail::BlockAux)
                 {
                     t[0] = sp.auxSource; t[1] = sp.auxOutput; t[2] = sp.auxInv; t[3] = sp.auxPower;
                 }
-                else if (block == ui::ModSlotDetail::BlockShape)
+                else if (block == modmodel::Detail::BlockShape)
                 {
                     t[0] = sp.power; t[1] = sp.stereo;
                 }
@@ -1305,8 +1211,6 @@ private:
                     t[0] = sp.rise; t[1] = sp.fall; t[2] = detail_.delaySyncOn() ? sp.delayBeats : sp.delay; t[3] = sp.delaySync;
                 }
             });
-            for (int b = 0; b < 3; ++b)
-                detail_.groups[b].setBlock (QRouter::blockOfGroup (3, active, b));
         }
         else
         {
@@ -1332,25 +1236,22 @@ private:
     int pageTop_ = 0, openSlot_ = -1;
     int srcFilter_ = 0, dstFilter_ = 0;
 
-    ui::ModMatrixView matrix_;
-    ui::ModSlotDetail detail_;
-    ui::ListPopup list_;
-    ui::ModTargetsPage targets_;
+    modmodel::Matrix matrix_;
+    modmodel::Detail detail_;
+    modmodel::Targets targets_;
     int nativeListFirst_ = 0;
-    NativeModTargets nativeTargets_;
+    ModTargetsNative nativeTargets_;
 
     // the targets page of a source: which source, the page of its rows, the slot of every row shown
     int targetsSource_ = 0, targetsLoaded_ = 0, targetsPageIndex_ = 0, targetTotal_ = -1;
-    uibind::ModRow targetRows_[ui::ModTargetsPage::kPerPage];
+    uibind::ModRow targetRows_[modmodel::Targets::kPerPage];
     int scratchSlots_[uibind::kMaxTargetSlots] = {};
 
     ListKind listKind_ = ListKind::Source;
     int listSlot_ = -1, listParam_ = -1, listGroup_ = -1;
     std::vector<const char*> listNames_;
     std::vector<int> listChoices_;   // per row: the choice value, 0 NONE, a negative number a group
-    const char* srcGroupNames_[uibind::kSourceGroups + 1] = {};
 
-    ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
     QSlots qSlots_;

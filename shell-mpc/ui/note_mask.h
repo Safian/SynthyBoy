@@ -7,9 +7,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
-#include "led_toggle.h"
+#include "core.h"
 
 namespace synthyboy_mpc { namespace ui {
+
+/** The dot of a lit / unlit note (the flat LED dot of the oscillator pages: a filled disc in the accent colour, a thin ring when unlit). */
+namespace notemask
+{
+constexpr float kDotR = 6.5f;
+inline float nameSize() noexcept { return theme::L().fLabel + 3.0f; }
+inline void dot (Pen& p, float cx, float cy, bool lit, int dimA = 255, bool qRing = false)
+{
+    const theme::Look& T = theme::L();
+    p.style (1.0f, true);
+    if (lit)
+        p.disc (cx, cy, kDotR, p.c (T.flow[0], dimA));
+    else
+        p.arc (cx, cy, kDotR - 0.8f, 0.0f, 2.0f * kPi, 1.6f, p.c (qRing ? T.q : T.textFaint, dimA));
+    p.plain();
+}
+}
 
 class NoteMask : public Component
 {
@@ -71,8 +88,8 @@ protected:
             p.rrect (c, T.rControl, p.c (black ? T.panel0 : T.panel1, 255));
             p.rrect (c, T.rControl, p.c (lit ? (qFrame_ ? T.q : T.flow[0]) : T.keyline, 255), lit ? 1.6f : T.frame);
             const float cx = static_cast<float> (c.x) + static_cast<float> (c.w) * 0.5f;
-            led::dot (p, cx, static_cast<float> (c.y) + static_cast<float> (c.h) * 0.36f, lit, 255, qFrame_);
-            p.textCentered ({ c.x, c.y + c.h * 58 / 100, c.w, c.h * 38 / 100 }, noteName (i), led::nameSize(), lit ? p.c (T.text, 255) : p.c (T.textDim, black ? 170 : 230), T.fMin);
+            notemask::dot (p, cx, static_cast<float> (c.y) + static_cast<float> (c.h) * 0.36f, lit, 255, qFrame_);
+            p.textCentered ({ c.x, c.y + c.h * 58 / 100, c.w, c.h * 38 / 100 }, noteName (i), notemask::nameSize(), lit ? p.c (T.text, 255) : p.c (T.textDim, black ? 170 : 230), T.fMin);
         }
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); downCell_ = cellAt (x, y); return Change::none(); }
