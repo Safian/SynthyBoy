@@ -12,6 +12,7 @@ from components.style import (
     native_color as _style_native_color,
     color as _style_color,
     opacity as _style_opacity,
+    rgb as _style_rgb,
     rgba as _style_rgba,
     rect as _style_rect,
     size as _style_size,
@@ -168,9 +169,17 @@ def default_level_template():
 DIAL_LOOK = "neon"
 
 
+def apply_dial_text_style(text_style):
+    """The one text style of a dial's caption and value (DIAL_TEXT_STYLE: font.value, text.value), whatever the screen:
+    every dial definition (level, pan, compact, blue, stacked) sets its labels through this function."""
+    text_style.setdefault("font", {})["height"] = float(_style_size(DIAL_TEXT_STYLE["font"]))
+    text_style["colour"] = _style_argb(DIAL_TEXT_STYLE["colour"])
+    return text_style
+
+
 def dial_caption_style(text_style):
-    """The name of a dial as ui::Knob writes it: upper case in the dim text colour (theme textDim)."""
-    text_style["colour"] = _style_argb("text.caption")
+    """The name of a dial: the dial text style, upper case (the caption is the same style as the value, owner 2026-11-27)."""
+    apply_dial_text_style(text_style)
     text_style["case"] = "Upper Case"
     return text_style
 
@@ -480,12 +489,12 @@ def sub_dial_definition(template, skins_dir, *, bipolar=False):
     caption = controls["name"]
     caption["bounds"]["bounds"] = _style_rect("level.sub_dial_definition.caption.bounds.bounds")
     style = caption["componentData"]["data"]["textStyle"]
-    style["colour"] = _style_argb("text.caption")
-    style["font"]["height"] = _style_size('level.sub_dial_definition.style.font.height')
+    dial_caption_style(style)
     style["justification"] = "left verticallyCentred"
     value = _value_label("value", (_style_size('level.sub_dial_definition.value.offset1'), _style_size('level.sub_dial_definition.value.offset2'), _style_size('level.sub_dial_definition.value.offset3'), _style_size('level.sub_dial_definition.value.offset4')), _style_size('level.sub_dial_definition.value'))
     value_style = value["componentData"]["data"]["textStyle"]
-    value_style.update(colour=_style_argb("text.value"), justification="left verticallyCentred")
+    apply_dial_text_style(value_style)
+    value_style.update(justification="left verticallyCentred")
     definition["componentsData"] = [
         c for c in definition["componentsData"] if c["componentData"]["name"] != "value"
     ]
@@ -512,7 +521,7 @@ def level_definition(template=None, skins_dir=None, rects=None):
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.level_definition.font.height')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.caption")
+            dial_caption_style(control["data"]["textStyle"])
 
     definition["actions"] = [
         a for a in definition.get("actions", []) if a.get("handler") != "Show Overlay"
@@ -546,7 +555,7 @@ def compact_level_definition(template=None, skins_dir=None):
             control["data"]["handleName"] = "Data"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.compact_level_definition.font.height.offset1')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.value")
+            apply_dial_text_style(control["data"]["textStyle"])
 
     definition["actions"] = [
         a for a in definition.get("actions", []) if a.get("handler") != "Show Overlay"
@@ -612,7 +621,7 @@ def compact_dial_definition(template, rects=None, polarity="UniPolar", height=No
             control["data"]["handleName"] = "Data"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('level.compact_dial_definition.font.height.offset2') if is_compact else _style_size('level.compact_dial_definition.font.height.offset3')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.value")
+            apply_dial_text_style(control["data"]["textStyle"])
 
     definition["actions"] = [
         a for a in definition.get("actions", []) if a.get("handler") != "Show Overlay"
@@ -1040,6 +1049,7 @@ def blue_dial_definition(skins_dir, width, height, frame_size, knob_rect, name_r
         name["componentData"]["data"]["text"] = caption_text
     value = _label_component("value", "Value", "Data", rects["value"], value_height,
                              _style_argb("text.value"), "left verticallyCentred")
+    apply_dial_text_style(value["componentData"]["data"]["textStyle"])
     definition["componentsData"] = [focus, knob, name, value]
     return definition
 
@@ -1082,6 +1092,7 @@ def stacked_dial_definition(skins_dir, size, *, diameter, caption_height,
     dial_caption_style(caption["componentData"]["data"]["textStyle"])
     value = _label_component("value", "Value", "Data", rects["value"],
                              _style_size("font.value"), _style_argb("text.value"), centre)
+    apply_dial_text_style(value["componentData"]["data"]["textStyle"])
     definition["componentsData"].extend([caption, value])
     if alternate_caption:
         normal_gate, alt_gate, alt_text = alternate_caption
@@ -1098,3 +1109,32 @@ def stacked_dial_definition(skins_dir, size, *, diameter, caption_height,
         for trigger in ("Double Click", "Enter Pressed")
     ]
     return definition
+
+
+def unify_dial_text(tui):
+    """Give every dial of the skin the one dial text style: each Name and Value label next to a Knob in a component definition
+    takes DIAL_TEXT_STYLE (caption upper case); the inactive states (Off / NativeInactive) get the dimmed colour of the same style.
+    Geometry, bindings and texts are untouched. Returns the number of labels set."""
+    count = 0
+    dim = None
+    for definition in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]:
+        children = definition["value"].get("componentsData", [])
+        if not any(c["componentData"]["type"] == "Knob" for c in children):
+            continue
+        key = definition["key"]
+        inactive = key.endswith("Off") or key.startswith("NativeInactive")
+        for child in children:
+            data = child["componentData"]
+            if data["type"] != "Label" or data["data"].get("type") not in ("Name", "Value"):
+                continue
+            text_style = data["data"]["textStyle"]
+            (dial_caption_style if data["data"]["type"] == "Name" else apply_dial_text_style)(text_style)
+            if inactive:
+                if dim is None:
+                    from components.style import dim_artwork
+                    from PIL import Image
+                    r, g, b = _style_rgb(DIAL_TEXT_STYLE["colour"])
+                    dim = "ff%02x%02x%02x" % dim_artwork(Image.new("RGBA", (1, 1), (r, g, b, 255))).getpixel((0, 0))[:3]
+                text_style["colour"] = dim
+            count += 1
+    return count

@@ -4,7 +4,7 @@
 import copy
 from pathlib import Path
 
-from components.native.level.level import dial_caption_style, value_label, write_strip as write_dial_strip
+from components.native.level.level import apply_dial_text_style, dial_caption_style, value_label, write_strip as write_dial_strip
 from components.style import (
     focus_ring_data,
     argb as _style_argb,
@@ -139,12 +139,12 @@ def sub_dial_definition(template, skins_dir, *, bipolar=True):
     caption = controls["name"]
     caption["bounds"]["bounds"] = _style_rect("pan.sub_dial_definition.caption.bounds.bounds")
     style = caption["componentData"]["data"]["textStyle"]
-    style["colour"] = _style_argb("text.caption")
-    style["font"]["height"] = _style_size('pan.sub_dial_definition.style.font.height')
+    dial_caption_style(style)
     style["justification"] = "left verticallyCentred"
     value = _value_label("value", (_style_size('pan.sub_dial_definition.value.offset1'), _style_size('pan.sub_dial_definition.value.offset2'), _style_size('pan.sub_dial_definition.value.offset3'), _style_size('pan.sub_dial_definition.value.offset4')), _style_size('pan.sub_dial_definition.value'))
     value_style = value["componentData"]["data"]["textStyle"]
-    value_style.update(colour=_style_argb("text.value"), justification="left verticallyCentred")
+    apply_dial_text_style(value_style)
+    value_style.update(justification="left verticallyCentred")
     definition["componentsData"] = [
         c for c in definition["componentsData"] if c["componentData"]["name"] != "value"
     ]
@@ -171,7 +171,7 @@ def pan_definition(template=None, skins_dir=None, rects=None):
             control["data"]["handleName"] = "Caption"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('pan.pan_definition.font.height')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.caption")
+            dial_caption_style(control["data"]["textStyle"])
 
     definition["actions"] = [
         a for a in definition.get("actions", []) if a.get("handler") != "Show Overlay"
@@ -205,7 +205,7 @@ def compact_pan_definition(template=None, skins_dir=None):
             control["data"]["handleName"] = "Data"
             font = control["data"].setdefault("textStyle", {}).setdefault("font", {})
             font["height"] = _style_size('pan.compact_pan_definition.font.height.offset1')
-            control["data"]["textStyle"]["colour"] = _style_argb("text.value")
+            apply_dial_text_style(control["data"]["textStyle"])
 
     definition["actions"] = [
         a for a in definition.get("actions", []) if a.get("handler") != "Show Overlay"

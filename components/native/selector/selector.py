@@ -344,10 +344,12 @@ DROPDOWN_LOOKS = {
 }
 
 
-def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None):
+def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None, inset=None, neutral=False, radius=None):
     """Reference MenuButton panel and V glyph, both inside the native touch bounds.
 
-    `size` names a selector.dropdown.size.<height> token whose inset (0: the drawn box fills the slot) and chevron measures replace the default ones."""
+    `size` names a selector.dropdown.size.<height> token whose inset (0: the drawn box fills the slot) and chevron measures replace the default ones.
+    `inset` overrides the inset (0: the box fills the slot, as the Play-panel selectors do). `radius` overrides the corner radius (the Play selectors use radius.control). `neutral` is the inactive / read-only
+    face (selector.neutral.surface and border, flat grey): the Play OSC source selector and the disabled variants."""
     if look == "neon" and _control_look() == "legacy":
         look = "legacy"   # the skin default follows control.look (A/B: SYNTHYBOY_CONTROL_LOOK=flat)
     top_token, bottom_token, keyline_token, keyline_bottom_token, gradient_token = DROPDOWN_LOOKS[look]
@@ -358,18 +360,23 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None)
     theme = _style_size("theme.neon")
     scale = _style_size("sampling.standard")
     size = (width * scale, height * scale)
-    inset = geometry["inset"] * scale
+    inset = (geometry["inset"] if inset is None else inset) * scale
     box = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)
-    radius = round(theme["rControl"] * scale)
+    radius = round((theme["rControl"] if radius is None else radius) * scale)
+    fill = (_style_rgb(top_token), _style_rgb(bottom_token))
+    line = (_style_rgb(keyline_token), _style_rgb(keyline_bottom_token))
+    if neutral:
+        fill = (_style_rgb("selector.neutral.surface"),) * 2
+        line = (_style_rgb("selector.neutral.border"),) * 2
     face, pen = gradient_face(size, inset=inset, radius=radius, frame=round(theme["frame"] * scale), span=span,
-                              fill=(_style_rgb(top_token), _style_rgb(bottom_token)),
-                              line=(_style_rgb(keyline_token), _style_rgb(keyline_bottom_token)))
+                              fill=fill, line=line)
     if chevron:
         cx = (width - geometry["inset"] - geometry["chevron_lane"] / 2) * scale
         cy = height * scale / 2
         dx, dy = geometry["chevron_width"] * scale / 2, geometry["chevron_height"] * scale / 2
         pen.line(((cx - dx, cy - dy), (cx, cy + dy), (cx + dx, cy - dy)),
-                 fill=_style_color("theme.neon.textDim"), width=round(geometry["chevron_stroke"] * scale), joint="curve")
+                 fill=_style_color("selector.neutral.ink" if neutral else "theme.neon.textDim"),
+                 width=round(geometry["chevron_stroke"] * scale), joint="curve")
     return face.resize((width, height), Image.Resampling.LANCZOS)
 
 
@@ -495,14 +502,13 @@ def selector_definition(
         return popup_definition
 
     if not frame:
-        fill_col = _style_rgb("selector.neutral.surface") if neutral else _style_color("selector.surface")
-        outline_col = _style_rgb("selector.neutral.border") if neutral else _style_color("control.border")
         arrow_col = _style_rgb("selector.neutral.border") if neutral else _style_color("text.muted")
 
-        face = Image.new("RGBA", (width * scale, height * scale), _style_rgba("ink.black", _style_opacity("transparent")))
+        # The face is the dropdown component's box (shared gradient, control.look); only the arrows are drawn here.
+        base = render_dropdown_face(width, height, chevron=not (stepper or arrows or navigable), inset=0, neutral=neutral,
+                                    radius=_style_size('radius.control'))
+        face = Image.new("RGBA", (width * scale, height * scale))
         pen = ImageDraw.Draw(face)
-        pen.rounded_rectangle((0, 0, face.width - _style_size('selector.selector_definition.rounded_rectangle'), face.height - _style_size('selector.selector_definition.rounded_rectangle')), radius=_style_size('radius.control') * scale,
-                              fill=fill_col, outline=outline_col, width=scale)
 
         mid_y = height * scale // 2
         if stepper or arrows:
@@ -524,13 +530,6 @@ def selector_definition(
                           (x_v, mid_y + _style_size('selector.selector_definition.line') * scale),
                           (x_v + _style_size('selector.selector_definition.line.offset7') * scale, mid_y - _style_size('selector.selector_definition.line.offset8') * scale)),
                          fill=arrow_col, width=_style_size('stroke.icon') * scale)
-        elif not navigable:
-            # Standard down chevron v
-            x = (width - _style_size('selector.selector_definition.x')) * scale
-            pen.line(((x - _style_size('selector.selector_definition.line.offset9') * scale, mid_y - _style_size('selector.selector_definition.line.offset10') * scale),
-                      (x, mid_y + _style_size('selector.selector_definition.line') * scale),
-                      (x + _style_size('selector.selector_definition.line.offset11') * scale, mid_y - _style_size('selector.selector_definition.line.offset12') * scale)),
-                     fill=arrow_col, width=_style_size('stroke.icon') * scale)
 
         if filename is None:
             tag = ""
@@ -544,7 +543,8 @@ def selector_definition(
                 tag += "_step"
             filename = f"selector_face_{width}x{height}{tag}.png"
 
-        resized = face.resize((width, height), Image.Resampling.LANCZOS)
+        resized = base
+        resized.alpha_composite(face.resize((width, height), Image.Resampling.LANCZOS))
         if play_face:
             resized.save(skins_dir / filename)
         else:
@@ -608,13 +608,13 @@ def build_shape_selector(
     *,
     title="Data",
     caption="SHAPE",
-    stepper=True,
-    arrows=True,
+    stepper=False,
+    arrows=False,
     steps=0,
     neighbors=(),
     neutral=False,
 ):
-    """Builds the SHAPE variant selector retaining caption, value, and stepper chevrons."""
+    """Builds the SHAPE selector as a dropdown face (caption, value, down chevron)."""
     return selector_definition(
         template,
         popup,
@@ -1341,9 +1341,12 @@ def append_choice_rows(ctx, definition, labels, field, *, header_title=None, mar
         images = []
         for state in ("on", "off"):
             filename = f"{prefix}_{i}_{state}.png"
-            image = Image.new("RGB", (width, height), _style_color(f"selector.choice.{state}"))
-            ImageDraw.Draw(image).text((width / 2, height / 2), label, anchor="mm", font=font,
-                                       fill=_style_color("text.white"))
+            # A drawer row is the Button recipe (legacy face; the highlighted row is look "active"), centred in its row slot.
+            from components.native.button.button import action_art
+            face = (action_art(text=label, width=width, height=48, look="active", colour=_style_color("radio.active.text"))
+                    if state == "on" else action_art(text=label, width=width, height=48, look="legacy"))
+            image = Image.new("RGBA", (width, height))
+            image.alpha_composite(face, (0, (height - 48) // 2))
             image.save(ctx.skins_dir / filename)
             images.append(filename)
         definition["componentsData"].append(button(label, rect, *images, index=i, count=len(labels)))
@@ -1397,7 +1400,7 @@ def write_wave_selector_icon(skins_dir):
 def command_stepper_definition(skins_dir, slot, caption):
     """Show the bound value and dispatch previous/open/next as command IDs 1/2/3."""
     width, height = slot
-    face = selector_definition(None, "", slot, skins_dir, arrows=True, caption_text=caption)
+    face = selector_definition(None, "", slot, skins_dir, caption_text=caption, justification="horizontallyCentred verticallyCentred")   # a dropdown face; the Previous / Open / Next hit zones below stay
     face["actions"] = []
     hit = write_transparent_hit(skins_dir)
     edge = _style_size("selector.hit.minimum")

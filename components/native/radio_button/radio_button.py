@@ -5,7 +5,7 @@
 import hashlib
 from pathlib import Path
 
-from components.native.button.button import button, gradient_face
+from components.native.button.button import action_art, button, gradient_face
 from components.style import (
     color as _style_color,
     control_look as _control_look,
@@ -75,20 +75,51 @@ def render_segmented_button_art(label, active, width, height, *, scale=_style_si
     return im.resize((width, height), Image.Resampling.LANCZOS)
 
 
+def render_grid_cell_art(label, active, width, height, *, ends=(True, True), vertical=False):
+    """One cell of a RadioGrid-style row or column laid over a tiled hit slot: the Button recipe (action_art: legacy face,
+    or look "active" for the selected cell), the largest button size that fits the slot, centred across the group, with the
+    RadioGrid gap (`radio_grid.gap`) kept between neighbouring cells. `ends` marks the first / last cell of the group."""
+    from components.native.button.button import in_slot
+    gap = _style_size("radio_grid")["gap"]
+    along = width if not vertical else height
+    left = 0 if ends[0] else gap // 2
+    right = 0 if ends[1] else gap - gap // 2
+    extent = (along - left - right)
+    across = height if not vertical else width
+    box = max(size for size in (32, 40, 48) if size <= across) if across >= 32 else across
+    if vertical:
+        face = action_art(text=label, width=width - 0, height=box, look="active" if active else "legacy",
+                          colour=_style_color("radio.active.text")) if active else action_art(text=label, width=width, height=box, look="legacy")
+        slot = Image.new("RGBA", (width, height))
+        slot.alpha_composite(face, (0, left))
+        return slot
+    kind = {"look": "active", "colour": _style_color("radio.active.text")} if active else {"look": "legacy"}
+    face = action_art(text=label, width=extent, height=box, **kind)
+    slot = Image.new("RGBA", (width, height))
+    slot.alpha_composite(face, (left, (height - box) // 2))
+    return slot
+
+
 def _clean_name(name):
     return "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
 
 
-def segmented_radio_entry(name, label, rect, index, count, handle, skins_dir, *, gates=(), focus="Yes"):
-    """Bind one choice, including grid or vertically stacked screen layouts."""
+def segmented_radio_entry(name, label, rect, index, count, handle, skins_dir, *, gates=(), focus="Yes", grid=None):
+    """Bind one choice, including grid or vertically stacked screen layouts.
+
+    grid: None draws the segmented faces; "row" / "column" draw the RadioGrid recipe (render_grid_cell_art) instead."""
     width, height = rect[2:]
     digest = hashlib.sha256(label.encode("utf-8")).hexdigest()[:16]
     stem = f"choice_segmented_{_clean_name(label)}_{digest}_{width}x{height}"
+    if grid:
+        stem = f"choice_grid_{grid}_{_clean_name(label)}_{digest}_{width}x{height}_{int(index == 0)}{int(index == count - 1)}"
     skins = Path(skins_dir)
     skins.mkdir(parents=True, exist_ok=True)
     on, off = stem + "_on.png", stem + "_off.png"
     for selected, file in ((True, on), (False, off)):
-        render_segmented_button_art(label, selected, width, height).save(skins / file)
+        face = (render_grid_cell_art(label, selected, width, height, ends=(index == 0, index == count - 1), vertical=grid == "column")
+                if grid else render_segmented_button_art(label, selected, width, height))
+        face.save(skins / file)
     remaps = (("Data", handle),) if handle is not None else ()
     item = button(name, rect, on, off, index=index, count=count, remaps=remaps, gates=gates)
     item["bounds"]["acceptsHWFocus"] = focus
@@ -114,7 +145,7 @@ def titled_radio_grid(skins_dir, labels, rects, *, size, caption_rect, caption_h
     ]])
 
 
-def create_segmented_radio_button_group(name, rect, labels, handle, skins_dir, *, gates=(), focus="Yes", vertical=False):
+def create_segmented_radio_button_group(name, rect, labels, handle, skins_dir, *, gates=(), focus="Yes", vertical=False, grid=False):
     """Tile the available width or height, including the last remainder pixel."""
     count = len(labels)
     if count < 2:
@@ -126,7 +157,8 @@ def create_segmented_radio_button_group(name, rect, labels, handle, skins_dir, *
         start, end = extent * i // count, extent * (i + 1) // count
         cell = (x, y + start, width, end - start) if vertical else (x + start, y, end - start, height)
         items.append(segmented_radio_entry(f"{name} {label}", label, cell, i, count,
-                                           handle, skins_dir, gates=gates, focus=focus))
+                                           handle, skins_dir, gates=gates, focus=focus,
+                                           grid=("column" if vertical else "row") if grid else None))
     return items
 
 

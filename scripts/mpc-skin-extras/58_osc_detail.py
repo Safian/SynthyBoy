@@ -17,6 +17,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components import style
+from components.native.level.level import apply_dial_text_style
 from components.native.selector.selector import (OSC_TAB_NAMES, command_stepper_definition, passive_layer,
                                                   write_source_navigation_assets)
 from native_warp_picker import CONTROL as WARP_CONTROL
@@ -52,6 +53,7 @@ def stepper(artwork):
         data = {"version": 1, "type": name, "handleName": "Data", "textStyle": {"version": 1,
                 "colour": colour, "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": size},
                 "justification": "horizontallyCentred verticallyCentred", "case": "Original"}}
+        apply_dial_text_style(data["textStyle"])
         kids.append(entry(name, "Label", (0.02, y, 0.96, 0.21), data, focus="No", proportional=True))
     return passive_layer(kids)
 
