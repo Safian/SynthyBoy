@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 46,
+  "title": "RadioList",
+  "sections": [],
+  "radio_list": {
+    "samples": [
+      {
+        "id": "six-40",
+        "file": "radio-list-six-40.png",
+        "alt": "RadioList hat sor, TRI kiválasztva, 40 px",
+        "caption": "TRI kiválasztva · 40 px sor",
+        "orientation": "vertical",
+        "items": [
+          "TRI",
+          "SIN",
+          "SAW",
+          "SQR",
+          "S&H",
+          "RND"
+        ],
+        "selected": 0,
+        "height": "height.intermediate",
+        "width": 120,
+        "state": "enabled"
+      },
+      {
+        "id": "six-32",
+        "file": "radio-list-six-32.png",
+        "alt": "RadioList hat sor, SAW kiválasztva, 32 px",
+        "caption": "SAW kiválasztva · 32 px sor",
+        "orientation": "vertical",
+        "items": [
+          "TRI",
+          "SIN",
+          "SAW",
+          "SQR",
+          "S&H",
+          "RND"
+        ],
+        "selected": 2,
+        "height": "height.small",
+        "width": 120,
+        "state": "enabled"
+      },
+      {
+        "id": "six-48",
+        "file": "radio-list-six-48.png",
+        "alt": "RadioList hat sor, SAW kiválasztva, 48 px",
+        "caption": "SAW kiválasztva · 48 px sor",
+        "orientation": "vertical",
+        "items": [
+          "TRI",
+          "SIN",
+          "SAW",
+          "SQR",
+          "S&H",
+          "RND"
+        ],
+        "selected": 2,
+        "height": "height.medium",
+        "width": 120,
+        "state": "enabled"
+      },
+      {
+        "id": "horizontal-40",
+        "file": "radio-list-horizontal-40.png",
+        "alt": "RadioList vízszintes sor négy elemmel, BPM kiválasztva",
+        "caption": "HZ BPM KEY FREE, BPM kiválasztva · 40 px",
+        "orientation": "horizontal",
+        "items": [
+          "HZ",
+          "BPM",
+          "KEY",
+          "FREE"
+        ],
+        "selected": 1,
+        "height": "height.intermediate",
+        "width": 96,
+        "state": "enabled"
+      },
+      {
+        "id": "mono-poly-40",
+        "file": "radio-list-mono-poly-40.png",
+        "alt": "RadioList kételemű lista, Mono kiválasztva",
+        "caption": "Mono / Poly · 40 px sor",
+        "orientation": "vertical",
+        "items": [
+          "Mono",
+          "Poly"
+        ],
+        "selected": 0,
+        "height": "height.intermediate",
+        "width": 112,
+        "state": "enabled"
+      },
+      {
+        "id": "disabled-40",
+        "file": "radio-list-disabled-40.png",
+        "alt": "RadioList letiltva, hat sor",
+        "caption": "Disabled · 40 px sor",
+        "orientation": "vertical",
+        "items": [
+          "TRI",
+          "SIN",
+          "SAW",
+          "SQR",
+          "S&H",
+          "RND"
+        ],
+        "selected": 0,
+        "height": "height.intermediate",
+        "width": 120,
+        "state": "disabled"
+      }
+    ]
+  }
+}

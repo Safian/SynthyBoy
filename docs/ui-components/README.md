@@ -22,6 +22,8 @@ A katalógus sorrendje a `components/native/catalog-order.json` adata (`first`: 
 
 ### Button, IconButton
 
+Kompakt választó család (RadioList, RadioGrid, SlideSwitch, RotarySelector; a régi RadioButton kivezetésre): [radio_family.md](radio_family.md).
+
 Régi külsejű szöveges és ikonos gomb 32/40/48/56 px-en, ghost és disabled állapottal: [button.md](button.md), [icon_button.md](icon_button.md).
 
 ### FilterSelector

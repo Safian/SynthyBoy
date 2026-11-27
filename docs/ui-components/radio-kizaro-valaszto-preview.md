@@ -1,5 +1,7 @@
 # Akai MPC gyári rádió/kizáró választás (Selector) és a SynthyBoy HZ / BPM / KEY sor
 
+> **KIVEZETÉSRE (owner, 2026-11-27):** a mai szegmentált RadioButton (88 × 56 lapos cellák, `radio_button.py`) túl sok helyet foglal és megkerüli a Button komponenst. Helyette a kompakt család: [radio_family.md](radio_family.md) (RadioList, RadioGrid, SlideSwitch, RotarySelector). A skin átállítása külön kör.
+
 Ez a dokumentum egy **különálló előnézet és kutatási dokumentáció** (nem a végleges komponenskatalógus része). Célja az igazolt gyári Akai MPC rádiógombos / kizáró választó vezérlők (Selectors) bemutatása a hivatalos forrásokból, összevetve a SynthyBoy saját `HZ / BPM / KEY` szinkronmód-választó sorával, valamint az Akai MPC SDK mintabőrök pontos elhatárolásával.
 
 ---

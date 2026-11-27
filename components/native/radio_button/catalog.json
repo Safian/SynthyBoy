@@ -2,7 +2,7 @@
   "version": 1,
   "approved": true,
   "order": 50,
-  "title": "RadioButton",
+  "title": "RadioButton (KIVEZETÉSRE)",
   "sections": [
     {
       "images": [
@@ -33,6 +33,18 @@
           "alt": "Voice sorválasztó: PAN, DETUNE, CUTOFF, ENV, MOD 1 és MOD 2"
         }
       ]
+    },
+    {
+      "heading": "KIVEZETÉSRE: túl sok helyet foglal; helyette RadioList, RadioGrid, SlideSwitch, RotarySelector (radio_family.md)",
+      "table": {
+        "head": ["Példa", "Méret (px)"],
+        "rows": [
+          ["Egy gomb (kiválasztott)", "88 × 56"],
+          ["ENV hatos sor", "528 × 56"],
+          ["Voice sorválasztó", "232 × 176"],
+          ["Négy választás egy sorban (4 gomb)", "352 × 56"]
+        ]
+      }
     }
   ]
 }

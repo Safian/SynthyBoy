@@ -1,0 +1,213 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 48,
+  "title": "SlideSwitch",
+  "sections": [],
+  "slide_switch": {
+    "samples": [
+      {
+        "id": "lmh-l",
+        "file": "slide-switch-lmh-l.png",
+        "alt": "SlideSwitch vízszintes, három állás, L",
+        "caption": "L M H, állás L · 40 px sín",
+        "orientation": "horizontal",
+        "labels": [
+          "L",
+          "M",
+          "H"
+        ],
+        "position": 0,
+        "size": "height.intermediate",
+        "length": 160,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "lmh-m",
+        "file": "slide-switch-lmh-m.png",
+        "alt": "SlideSwitch vízszintes, három állás, M",
+        "caption": "L M H, állás M",
+        "orientation": "horizontal",
+        "labels": [
+          "L",
+          "M",
+          "H"
+        ],
+        "position": 1,
+        "size": "height.intermediate",
+        "length": 160,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "lmh-h",
+        "file": "slide-switch-lmh-h.png",
+        "alt": "SlideSwitch vízszintes, három állás, H",
+        "caption": "L M H, állás H",
+        "orientation": "horizontal",
+        "labels": [
+          "L",
+          "M",
+          "H"
+        ],
+        "position": 2,
+        "size": "height.intermediate",
+        "length": 160,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "mono",
+        "file": "slide-switch-mono.png",
+        "alt": "SlideSwitch két állás, Mono",
+        "caption": "Mono / Poly, Mono · 32 px sín",
+        "orientation": "horizontal",
+        "labels": [
+          "Mono",
+          "Poly"
+        ],
+        "position": 0,
+        "size": "height.small",
+        "length": 112,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "poly",
+        "file": "slide-switch-poly.png",
+        "alt": "SlideSwitch két állás, Poly",
+        "caption": "Mono / Poly, Poly · 32 px sín",
+        "orientation": "horizontal",
+        "labels": [
+          "Mono",
+          "Poly"
+        ],
+        "position": 1,
+        "size": "height.small",
+        "length": 112,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "four-48",
+        "file": "slide-switch-four-48.png",
+        "alt": "SlideSwitch négy állás, 3",
+        "caption": "1 2 3 4, állás 3 · 48 px sín",
+        "orientation": "horizontal",
+        "labels": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "position": 2,
+        "size": "height.medium",
+        "length": 240,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "disabled-h",
+        "file": "slide-switch-disabled-h.png",
+        "alt": "SlideSwitch letiltva, vízszintes",
+        "caption": "Disabled, L M H · 40 px sín",
+        "orientation": "horizontal",
+        "labels": [
+          "L",
+          "M",
+          "H"
+        ],
+        "position": 1,
+        "size": "height.intermediate",
+        "length": 160,
+        "title": null,
+        "state": "disabled"
+      },
+      {
+        "id": "pwm-lfo",
+        "file": "slide-switch-pwm-lfo.png",
+        "alt": "SlideSwitch függőleges, LFO",
+        "caption": "PWM, állás LFO · 40 px sín",
+        "orientation": "vertical",
+        "labels": [
+          "LFO",
+          "MAN",
+          "ENV"
+        ],
+        "position": 0,
+        "size": "height.intermediate",
+        "length": 120,
+        "title": "PWM",
+        "state": "enabled"
+      },
+      {
+        "id": "pwm-man",
+        "file": "slide-switch-pwm-man.png",
+        "alt": "SlideSwitch függőleges, MAN",
+        "caption": "PWM, állás MAN",
+        "orientation": "vertical",
+        "labels": [
+          "LFO",
+          "MAN",
+          "ENV"
+        ],
+        "position": 1,
+        "size": "height.intermediate",
+        "length": 120,
+        "title": "PWM",
+        "state": "enabled"
+      },
+      {
+        "id": "pwm-env",
+        "file": "slide-switch-pwm-env.png",
+        "alt": "SlideSwitch függőleges, ENV",
+        "caption": "PWM, állás ENV",
+        "orientation": "vertical",
+        "labels": [
+          "LFO",
+          "MAN",
+          "ENV"
+        ],
+        "position": 2,
+        "size": "height.intermediate",
+        "length": 120,
+        "title": "PWM",
+        "state": "enabled"
+      },
+      {
+        "id": "vertical-two",
+        "file": "slide-switch-vertical-two.png",
+        "alt": "SlideSwitch függőleges, két állás",
+        "caption": "Két állás függőlegesen · 40 px sín",
+        "orientation": "vertical",
+        "labels": [
+          "Mono",
+          "Poly"
+        ],
+        "position": 1,
+        "size": "height.intermediate",
+        "length": 80,
+        "title": "VOICE",
+        "state": "enabled"
+      },
+      {
+        "id": "disabled-v",
+        "file": "slide-switch-disabled-v.png",
+        "alt": "SlideSwitch letiltva, függőleges",
+        "caption": "Disabled, függőleges",
+        "orientation": "vertical",
+        "labels": [
+          "LFO",
+          "MAN",
+          "ENV"
+        ],
+        "position": 1,
+        "size": "height.intermediate",
+        "length": 120,
+        "title": "PWM",
+        "state": "disabled"
+      }
+    ]
+  }
+}

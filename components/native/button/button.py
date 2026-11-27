@@ -75,7 +75,7 @@ def semibold(size):
     return ImageFont.truetype(str(FONT_FILE), size)
 
 
-LOOKS = ("flat", "legacy", "ghost")
+LOOKS = ("flat", "legacy", "active", "ghost")
 
 
 def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), height=None, look="flat"):
@@ -85,6 +85,8 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
             tokens (font, radius, text padding) and scale the icon about the box centre.
     look:   "flat"   today's flat face (button.surface / button.border), the default the skin uses;
             "legacy" the old Play-panel face: the control.gradient fill and keyline (button.gradient.* colours);
+            "active" the legacy gradient shape filled with the accent (accent.cyan to radio.active.bottom, keyline
+                     radio.active.border); the caller passes colour=radio.active.text (RadioGrid's selected button);
             "ghost"  no face at all (no fill, no keyline): the icon or text only, on a transparent picture.
     """
     if Image is None:
@@ -103,12 +105,16 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
     if width < minimum or (icon and width != box_height):
         raise ValueError("Button width does not fit its content")
     size = (width * scale, box_height * scale)
-    if look == "legacy":
+    if look in ("legacy", "active"):
+        if look == "legacy":
+            fill = (_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom"))
+            line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
+        else:   # the selected face of a group: the accent fill (the radio.active tokens) on the same gradient shape
+            fill = (_style_rgb("accent.cyan"), _style_rgb("radio.active.bottom"))
+            line = (_style_rgb("radio.active.border"),) * 2
         image, pen = gradient_face(
             size, inset=0, radius=measures['radius'] * scale, frame=art['outline'] * scale,
-            span=_style_size("control.gradient"),
-            fill=(_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom")),
-            line=(_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom")))
+            span=_style_size("control.gradient"), fill=fill, line=line)
     else:
         image = Image.new("RGBA", size)
         pen = ImageDraw.Draw(image)
