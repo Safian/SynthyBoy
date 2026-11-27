@@ -1,10 +1,10 @@
-// SynthyBoy - MPC UI component library: the SHAPE EDITOR of the LFO: ToolSelector (POINT, FLAT, RAMP UP, RAMP DOWN, SELECT, SOFT, BEND), ShapeCanvas (the drawing surface: the shape with its grid, its points, the middles of
-// its segments and the marker of the start / loop position; touch edits the shape model of lfo_model.h), ShapeEditorPage (the whole page: the back button, the tools, SHAPES, MORE, UNDO, REDO, DELETE, MOD, the canvas, the
-// compact Selected Point row below it = Q group "EDIT" (POINT, X, Y, CURVE of the selected point; with several points selected: their count, the centre of the selection, its height; without selection: a short guide), the Q
-// group "GRID" (GRID X, GRID Y, SNAP), the Q group "TRIGGER" (MODE, PHASE, BEND ALL), LOOP, SMOOTH, CYCLE LINK and LOOP LINK) and PointModPage (the modulation of the time, the level or the curve of the selected points). The
-// component never stores the truth: the model is the owner's (`ShapeCanvas::State::shape` points at it and the canvas edits it IN PLACE, by design: the owner writes it to the content state after every change the canvas reports),
-// so is the undo stack (the canvas pushes the state only before the first actual change of a gesture: one undo state per gesture, preserving any redo branch on no-ops), and so are the trigger values (the PHASE and the MODE
-// belong to the engine's parameters: the owner hands them in with `setTrigger`).
+// SynthyBoy - MPC UI: the SHAPE EDITOR of the LFO. ShapeCanvas is the drawing surface (the shape with its grid, its points, the middles of its segments and the marker of the start / loop position; touch edits the shape model
+// of lfo_model.h): an EDITOR of a graph the host cannot draw. Every control around it (BACK, the tool strip, SHAPES, MORE, UNDO, REDO, DELETE, MOD, SNAP, LOOP, SMOOTH, CYCLE LINK, LOOP LINK, the number fields POINT, X, Y,
+// CURVE, GRID X, GRID Y, PHASE, BEND ALL and the MODE choice, and on the page above it the point modulation: BACK, MODULATE, AMOUNT, REMOVE) is a native component of the host skin (owner decision 2026-11-27): ShapeEditorModel
+// and PointModModel are the plain DATA behind them (the value, whether it is enabled, the rectangle the skin lays it out in, the Q groups EDIT / GRID / TRIGGER as the rectangles of their members). They draw nothing
+// and take no touch. The component never stores the truth: the model is the owner's (`ShapeCanvas::State::shape` points at it and the canvas edits it IN PLACE, by design: the owner writes it to the content state after
+// every change the canvas reports), so is the undo stack (the canvas pushes the state only before the first actual change of a gesture: one undo state per gesture, preserving any redo branch on no-ops), and so are the
+// trigger values (the PHASE and the MODE belong to the engine's parameters: the owner hands them in with `setTrigger`).
 // Gestures of the canvas (single finger). Tool POINT: a tap on empty ground adds a point there (snapped to the grid when SNAP is on) and the finger keeps it: dragging moves it; a touch on a point selects it and drags it
 // (the two end points only up and down; a selected group moves together); a touch on the small handle in the middle of a segment drags its curve (the finger is where the middle of the segment goes: power -20 .. 20); a double
 // tap on a point deletes it (never an end point, never the point the first tap of the pair has just added), a double tap on a curve handle resets the curve; a long press (600 ms without moving) on a point deletes it as well.
@@ -19,35 +19,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
-#include "led_toggle.h"
+#include <array>
+#include <cstdio>
+
+#include "core.h"
 #include "lfo_display.h"
 #include "lfo_model.h"
-#include "mod_board.h"
-#include "panel.h"
 
 namespace synthyboy_mpc { namespace ui {
 
-// ===============================================================================================================================================================
-// Geometry and choice/Q adapter for the native tool strip.
-class ToolSelector : public Stepper
+/** The tools of the canvas (the native tool strip has the same seven choices, in this order). */
+struct ShapeTool
 {
-public:
     enum Tool : int { Point = 0, Flat, RampUp, RampDown, Select, Soft, Bend, kTools };
-    Rect cell (int i) const noexcept { return { rect_.x + rect_.w * i / kTools, rect_.y, rect_.w * (i + 1) / kTools - rect_.w * i / kTools, rect_.h }; }
-    Size minSize() const override { return { kTools * 72, 56 }; }
-    int touchTargets (Rect* out, int max) const override { int n = 0; for (int i = 0; i < kTools && n < max; ++i) out[n++] = cell (i); return n; }
     static const char* name (int t) noexcept { static const char* const n[kTools] = { "POINT", "FLAT", "RAMP+", "RAMP-", "SELECT", "SOFT", "BEND" }; return n[std::clamp (t, 0, kTools - 1)]; }
-
-protected:
-    Change onTurn (double delta) override
-    {
-        const long d = std::lround (delta);
-        const int n = std::clamp (state.index + static_cast<int> (std::clamp<long> (d, -10, 10)), 0, kTools - 1);
-        return d == 0 || n == state.index ? Change::none() : Change::indexed (id_, n, n);
-    }
-
 };
 
+// ===============================================================================================================================================================
 // ===============================================================================================================================================================
 class ShapeCanvas : public Component
 {
@@ -59,7 +47,7 @@ public:
     {
         lfo::ShapeModel* shape = nullptr;   // the owner's model: the canvas edits it in place and reports
         lfo::Undo* undo = nullptr;           // the owner's undo stack: the canvas pushes the state before a change
-        int tool = ToolSelector::Point;
+        int tool = ShapeTool::Point;
         int gridX = 8, gridY = 8;           // divisions of the cycle (columns) and of the height (rows), lfo::kMinGrid .. kMaxGrid: drawn as the grid, used by SNAP and by the cell tools
         bool snap = true;
         int selected = -1;                   // the selected point (-1 none): the one the fields show
@@ -369,14 +357,14 @@ protected:
             return Change::none();
         lfo::ShapeModel& m = *state.shape;
         const int tool = state.tool;
-        if (tool == ToolSelector::Flat || tool == ToolSelector::RampUp || tool == ToolSelector::RampDown)
+        if (tool == ShapeTool::Flat || tool == ShapeTool::RampUp || tool == ShapeTool::RampDown)
         {
             mode_ = Mode::Draw;
             state.marks.clear();
             return drawAt (x, y);
         }
         const int hit = pointAt (x, y);
-        if (hit >= 0 && tool != ToolSelector::Bend)
+        if (hit >= 0 && tool != ShapeTool::Bend)
             return downOnPoint (hit, tool);
         if (markerLive() && markerZone().contains (x, y))
         {
@@ -384,17 +372,17 @@ protected:
             return markerTo (x);
         }
         const int seg = segAt (x, y);
-        if (seg >= 0 && (tool == ToolSelector::Point || tool == ToolSelector::Bend))
+        if (seg >= 0 && (tool == ShapeTool::Point || tool == ShapeTool::Bend))
         {
             state.selectedSeg = seg;
             state.selected = -1;
             state.marks.clear();
             downSeg_ = seg;
             base_ = m;
-            mode_ = tool == ToolSelector::Bend ? Mode::CurveAll : Mode::Curve;
+            mode_ = tool == ShapeTool::Bend ? Mode::CurveAll : Mode::Curve;
             return Change::indexed (id_, Selected, Selected);
         }
-        if (tool == ToolSelector::Select)
+        if (tool == ShapeTool::Select)
         {
             mode_ = Mode::Marquee;
             rubbing_ = true;
@@ -402,7 +390,7 @@ protected:
             rubY0_ = rubY1_ = y;
             return Change::none();
         }
-        if (tool != ToolSelector::Point)
+        if (tool != ShapeTool::Point)
             return Change::none();   // SOFT and BEND add nothing on empty ground
         if (m.n >= lfo::kMaxPoints)
             return Change::none();
@@ -521,7 +509,7 @@ protected:
                 }
                 out = Change::indexed (id_, Selected, Selected);
             }
-            else if (state.tool == ToolSelector::Point && was == Mode::Drag && t == 2 && ! prevInsertedAtDown_ && downPoint_ > 0 && downPoint_ < m.n - 1 && m.n > lfo::kMinPoints)
+            else if (state.tool == ShapeTool::Point && was == Mode::Drag && t == 2 && ! prevInsertedAtDown_ && downPoint_ > 0 && downPoint_ < m.n - 1 && m.n > lfo::kMinPoints)
             {
                 remember();   // a double tap on a point that was there before: gone
                 m.remove (downPoint_);
@@ -530,7 +518,7 @@ protected:
                 state.selectedSeg = -1;
                 out = Change::indexed (id_, Edited, Edited);
             }
-            else if (state.tool == ToolSelector::Point && was == Mode::Curve && t == 2 && downSeg_ >= 0 && downSeg_ + 1 < m.n && m.p[downSeg_].power != 0.0f)
+            else if (state.tool == ShapeTool::Point && was == Mode::Curve && t == 2 && downSeg_ >= 0 && downSeg_ + 1 < m.n && m.p[downSeg_].power != 0.0f)
             {
                 remember();   // a double tap on a curve handle: the curve is straight again
                 m.setPower (downSeg_, 0.0f);
@@ -556,7 +544,7 @@ private:
         const lfo::PointSet sel = selection();
         const bool inGroup = sel.count() >= 2 && sel.has (hit);
         downPoint_ = hit;
-        if (tool == ToolSelector::Select)
+        if (tool == ShapeTool::Select)
         {
             if (inGroup)
                 toggleOnUp_ = hit;   // a tap takes it out of the selection; a drag moves the whole selection
@@ -581,7 +569,7 @@ private:
         else
             state.selected = hit;
         state.selectedSeg = -1;
-        if (tool == ToolSelector::Soft)
+        if (tool == ShapeTool::Soft)
         {
             beginSet (hit, Mode::Soft);
             m.falloffWeights (hit, inGroup ? &sel : nullptr, static_cast<float> (kSoftRadiusPercent) * 0.01f, softW_);
@@ -688,12 +676,12 @@ private:
         const float xa = static_cast<float> (col) / static_cast<float> (gx), xb = static_cast<float> (col + 1) / static_cast<float> (gx);
         float ya, yb;
         int key;
-        if (state.tool == ToolSelector::Flat)
+        if (state.tool == ShapeTool::Flat)
         {
             ya = yb = state.snap ? lfo::snapTo (fy, gy) : std::clamp (fy, 0.0f, 1.0f);
             key = col * 4096 + static_cast<int> (std::lround (ya * 1000.0f));
         }
-        else if (state.tool == ToolSelector::RampUp)
+        else if (state.tool == ShapeTool::RampUp)
         {
             ya = static_cast<float> (row) / static_cast<float> (gy);
             yb = static_cast<float> (row + 1) / static_cast<float> (gy);
@@ -728,70 +716,130 @@ private:
     float softW_[lfo::kMaxPoints] = {};           // the weights of a soft drag (drawn as the rainbow)
 };
 
+
 // ===============================================================================================================================================================
-/** ShapeEditorPage: the full page of the shape editor (opened from the LFO full screen for every shape; the owner has made the shape a drawn one first). Parts: `back`, the tools, SHAPES (the list of the shapes: the owner
-    opens it), MORE (the list of the actions), UNDO, REDO, DELETE, MOD (the modulation of the selected points), the canvas (the grid is drawn on it); below the canvas the fixed-height compact Selected Point row = EDIT [POINT
-    (which point is selected, or how many), X (its time), Y (its level), CURVE of the segment after it] (several points selected: [N SEL, the centre of the selection in time, in level, SCALE = its height]); at the right GRID =
-    [GRID X (columns), GRID Y (rows), SNAP]; TRIGGER = [MODE (the trigger of the LFO), PHASE (the start / loop position: the marker of the canvas), BEND ALL (the mean curve)]; under them LOOP, SMOOTH, CYCLE LINK and LOOP LINK.
-    Out: the changes of the parts with the ids the owner gave; the owner writes the model after every canvas change. */
-class ShapeEditorPage : public Composite
+/** The state of one native control of the shape editor page: the value as the skin shows it, whether it takes an edit, and (a choice) the index. */
+struct EditorField
+{
+    bool enabled = true, on = false, notSet = false;
+    double value = 0.0;
+    int index = 0;
+};
+
+/** ShapeEditorModel: the data of the full page of the shape editor (opened from the LFO full screen for every shape; the owner has made the shape a drawn one first). The 22 native controls in the order of
+    nativeui::lfoeditor::Field (BACK, TOOL, SHAPES, MORE, UNDO, REDO, DELETE, MOD, SNAP, LOOP, SMOOTH, CYCLE LINK, LOOP LINK, POINT, X, Y, CURVE, GRID X, GRID Y, PHASE, BEND ALL, MODE) each have a rectangle (`rect`) and
+    an EditorField; below the canvas the fixed-height compact Selected Point row = EDIT [POINT (which point is selected, or how many), X (its time), Y (its level), CURVE of the segment after it] (several points selected:
+    [N SEL, the centre of the selection in time, in level, SCALE = its height]); at the right GRID = [GRID X (columns), GRID Y (rows), SNAP]; TRIGGER = [MODE (the trigger of the LFO), PHASE (the start / loop position:
+    the marker of the canvas), BEND ALL (the mean curve)]; under them LOOP, SMOOTH, CYCLE LINK and LOOP LINK. The Q groups are 0 EDIT, 1 GRID, 2 TRIGGER. */
+class ShapeEditorModel
 {
 public:
+    enum Field : int { kBack, kTool, kShapes, kMore, kUndo, kRedo, kDelete, kMod, kSnap, kLoop, kSmooth, kCycleLink, kLoopLink, kPoint, kX, kY, kCurve, kGridX, kGridY, kPhase, kBend, kMode, kFields };
     static constexpr int kGroups = 3;
-    MenuButton back { "BACK", MenuButton::Icon::None };
-    ToolSelector tools;
-    MenuButton shapes { "SHAPES", MenuButton::Icon::None }, more { "MORE", MenuButton::Icon::None }, undoButton { "UNDO", MenuButton::Icon::None }, redoButton { "REDO", MenuButton::Icon::None }, del { "DELETE", MenuButton::Icon::None }, modButton { "MOD", MenuButton::Icon::None };
-    LedToggle snap, loop, smooth, cycleLink, loopLink;
-    ShapeCanvas canvas;
-    NumberField fpoint { "POINT", NumberField::Format::IntPlain }, fx { "X", NumberField::Format::Decimal2 }, fy { "Y", NumberField::Format::Decimal2 }, fcurve { "CURVE", NumberField::Format::IntSigned };
-    NumberField fgx { "GRID X", NumberField::Format::IntPlain }, fgy { "GRID Y", NumberField::Format::IntPlain };
-    NumberField fphase { "PHASE", NumberField::Format::Degrees }, fbend { "BEND ALL", NumberField::Format::IntSigned };
-    Stepper mode;
-    QGroup groups[kGroups];   // 0 EDIT, 1 GRID, 2 TRIGGER
-    QGroup& group = groups[0];
+    static constexpr int kBarH = 72, kColW = 300, kMargin = 8, kGap = 4;
+
     lfo::ShapeModel model;
     lfo::Undo undo;
-    static constexpr int kBarH = 72, kColW = 300;
+    ShapeCanvas canvas;
+    EditorField fields[kFields];
+    char pointText[16] = {};   // "3 SEL" while several points are selected (the POINT field then shows it instead of a number)
+    int modeCount = 0;         // the number of trigger modes and the name of the current one
+    char modeName[40] = {};
+    bool scale = false;        // the CURVE field is the SCALE of the selection (several points selected)
+    double pointMax = 2.0;     // the highest POINT value (the number of points)
 
-    ShapeEditorPage()
+    ShapeEditorModel()
     {
-        snap.setLabel ("SNAP");
-        loop.setLabel ("LOOP");
-        smooth.setLabel ("SMOOTH");
-        cycleLink.setLabel ("CYCLE LINK");
-        loopLink.setLabel ("LOOP LINK");
-        fpoint.state.min = 1.0; fpoint.state.max = 2.0; fpoint.state.step = 1.0; fpoint.state.pxPerStep = 14;
-        fx.state.min = 0.0; fx.state.max = 1.0; fx.state.step = 0.01; fx.state.pxPerStep = 2;
-        fy.state.min = 0.0; fy.state.max = 1.0; fy.state.step = 0.01; fy.state.pxPerStep = 2;
-        fcurve.state.min = -20.0; fcurve.state.max = 20.0; fcurve.state.step = 1.0; fcurve.state.pxPerStep = 8;
-        fbend.state.min = -20.0; fbend.state.max = 20.0; fbend.state.step = 1.0; fbend.state.pxPerStep = 8;
-        fphase.state.min = 0.0; fphase.state.max = 360.0; fphase.state.step = 1.0; fphase.state.pxPerStep = 2;
-        for (NumberField* g : { &fgx, &fgy })
-        {
-            g->state.min = lfo::kMinGrid; g->state.max = lfo::kMaxGrid; g->state.step = 1.0; g->state.pxPerStep = 10; g->state.defaultValue = 8;
-        }
-        mode.setCaption ("MODE");
-        mode.listable = true;
-        mode.state.wrap = true;
-        mode.minWidth = 140;
         canvas.state.shape = &model;
         canvas.state.undo = &undo;
         model.initLinear();
-        // Native MPC controls retain geometry/state/Q adapters, outside GPU input/drawing.
-        addKid (canvas);
-        groups[0].set (0, &fpoint); groups[0].set (1, &fx); groups[0].set (2, &fy); groups[0].set (3, &fcurve);
-        groups[1].set (0, &fgx); groups[1].set (1, &fgy); groups[1].set (2, &snap);
-        groups[2].set (0, &mode); groups[2].set (1, &fphase); groups[2].set (2, &fbend);
         setActiveGroup (0);
     }
-    int activeGroup() const noexcept { return active_; }
-    void setActiveGroup (int i)
+
+    // ---- the geometry of the page ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    /** Lays the page out in the rectangle `r` (the tab): the rectangles of the native controls and of the canvas. */
+    void place (const Rect& r)
     {
-        for (int k = 0; k < kGroups; ++k)
-            groups[k].setActive (k == i);
-        active_ = i >= 0 && i < kGroups ? i : -1;
+        rect_ = r;
+        const int m = kMargin;
+        const Rect top { r.x + m, r.y + m, r.w - 2 * m, kBarH - m };
+        int x = top.x;
+        auto put = [&] (int f, int w) { rects_[f] = { x, top.y, w, 56 }; x += w + m; };
+        put (kBack, 96);
+        put (kTool, ShapeTool::kTools * 80);
+        put (kShapes, 100);
+        put (kMore, 84);
+        put (kUndo, 84);
+        put (kRedo, 84);
+        put (kDelete, 96);
+        put (kMod, 84);
+        const int cy = r.y + kBarH + m;
+        const int titleH = 22, lane = kQLane;
+        const int pointBarH = titleH + lane + 56;
+        canvas.place ({ r.x + m, cy, r.w - 3 * m - kColW, std::max (0, r.bottom() - 2 * m - pointBarH - cy) });
+        pointBar_ = { canvas.rect().x, canvas.rect().bottom() + m, canvas.rect().w, pointBarH };
+        titles_[0] = { pointBar_.x, pointBar_.y, pointBar_.w, titleH };
+        const int pointW = (pointBar_.w - 3 * kGap) / 4;
+        const int pointY = pointBar_.y + titleH + lane;
+        rects_[kPoint] = { pointBar_.x, pointY, pointW, 56 };
+        rects_[kX] = { pointBar_.x + pointW + kGap, pointY, pointW, 56 };
+        rects_[kY] = { pointBar_.x + 2 * (pointW + kGap), pointY, pointW, 56 };
+        rects_[kCurve] = { pointBar_.x + 3 * (pointW + kGap), pointY, pointBar_.w - 3 * (pointW + kGap), 56 };
+        // the column at the right: the three Q groups (the lane of the index chips above each row), then LOOP and SMOOTH
+        const int colX = r.right() - m - kColW, H = r.bottom() - m - cy;
+        const int fieldH = std::clamp ((H - 3 * titleH - 5 * lane - 3 * m - 56) / 5, 56, 72);
+        int y = cy;
+        const int hw = (kColW - kGap * 2) / 2;
+        titles_[1] = { colX, y, kColW, titleH };
+        y += titleH + lane;
+        const int tw = (kColW - 2 * kGap) / 3;
+        rects_[kGridX] = { colX, y, tw, fieldH };
+        rects_[kGridY] = { colX + tw + kGap, y, tw, fieldH };
+        rects_[kSnap] = { colX + 2 * (tw + kGap), y, kColW - 2 * (tw + kGap), fieldH };
+        y += fieldH + m;
+        titles_[2] = { colX, y, kColW, titleH };
+        y += titleH + lane;
+        rects_[kMode] = { colX, y, kColW, fieldH };
+        y += fieldH + lane;
+        rects_[kPhase] = { colX, y, hw, fieldH };
+        rects_[kBend] = { colX + kColW - hw, y, hw, fieldH };
+        y += fieldH + m;
+        const int linkW = (kColW - kGap) / 2;
+        rects_[kLoop] = { colX, y, linkW, 56 };
+        rects_[kSmooth] = { colX + linkW + kGap, y, kColW - linkW - kGap, 56 };
+        y += 56 + m;
+        rects_[kCycleLink] = { colX, y, linkW, 56 };
+        rects_[kLoopLink] = { colX + linkW + kGap, y, kColW - linkW - kGap, 56 };
     }
-    Change turnQ (int knobIndex, double delta) { return active_ >= 0 ? groups[active_].turn (knobIndex, delta) : Change::none(); }
+    Rect rect (int field) const noexcept { return field >= 0 && field < kFields ? rects_[field] : Rect {}; }
+    Rect canvasRect() const noexcept { return canvas.rect(); }
+    /** The caption rectangles over the three groups: 0 SELECTED POINT (EDIT), 1 GRID, 2 TRIGGER. */
+    Rect titleRect (int g) const noexcept { return titles_[std::clamp (g, 0, kGroups - 1)]; }
+    /** The rectangle of a Q group: the union of its members. */
+    Rect groupRect (int g) const noexcept
+    {
+        static const int kMembers[kGroups][4] = { { kPoint, kX, kY, kCurve }, { kGridX, kGridY, kSnap, -1 }, { kMode, kPhase, kBend, -1 } };
+        Rect u;
+        for (int f : kMembers[std::clamp (g, 0, kGroups - 1)])
+            if (f >= 0)
+                u = Rect::unite (u, rects_[f]);
+        return u;
+    }
+    /** A touch on a native control of the page selects the Q group it belongs to. */
+    void selectGroupAt (int x, int y)
+    {
+        if (pointBar_.contains (x, y))
+            setActiveGroup (0);
+        else
+            for (int i = 0; i < kGroups; ++i)
+                if (groupRect (i).contains (x, y))
+                {
+                    setActiveGroup (i);
+                    break;
+                }
+    }
+    int activeGroup() const noexcept { return active_; }
+    void setActiveGroup (int i) { active_ = i >= 0 && i < kGroups ? i : -1; }
 
     /** What the marker is for a trigger mode (lfoN.sync_type): 0 Retrigger and 2 Envelope: the START position, 3 Sustain envelope, 4 Loop at point, 5 Loop and hold: the LOOP position, 1 Free-run: dimmed. */
     static int markerKindOf (int syncType) noexcept
@@ -803,33 +851,35 @@ public:
             default: return ShapeCanvas::MarkerDim;
         }
     }
-    /** The trigger values of the LFO (the owner reads the parameters): the mode with its name and number of choices, the phase in degrees. Sets the stepper, the field and the marker of the canvas. */
-    void setTrigger (int syncType, const char* modeName, int modeCount, double phaseDegrees)
+    /** The trigger values of the LFO (the owner reads the parameters): the mode with its name and number of choices, the phase in degrees. Sets the mode choice, the phase field and the marker of the canvas. */
+    void setTrigger (int syncType, const char* name, int count, double phaseDegrees)
     {
-        mode.state.count = modeCount;
-        mode.state.index = syncType;
-        mode.setItem (modeName);
-        fphase.state.value = std::clamp (phaseDegrees, 0.0, 360.0);
+        modeCount = count;
+        fields[kMode].index = syncType;
+        setText (modeName, sizeof modeName, name != nullptr ? name : "");
+        fields[kPhase].value = std::clamp (phaseDegrees, 0.0, 360.0);
         canvas.state.markerKind = markerKindOf (syncType);
         canvas.state.markerX = static_cast<float> (std::clamp (phaseDegrees, 0.0, 360.0) / 360.0);
     }
     /** The line of text over the lower left of the canvas (the result of a save, a load, a copy): "" clears it. */
     void setStatus (const char* s) { setText (status_, sizeof status_, s); }
     const char* status() const noexcept { return status_; }
+    const char* info() const noexcept { return info_; }
+    void setEnabled (bool e) { enabled_ = e; sync(); }
+    bool enabled() const noexcept { return enabled_; }
 
-    /** The values of the fields and switches from the model and the canvas state (the owner calls it after every change). */
+    /** The values and the availability of the controls from the model and the canvas state (the owner calls it after every change). */
     void sync()
     {
         const ShapeCanvas::State& cs = canvas.state;
-        tools.state.index = cs.tool;
-        snap.state.on = cs.snap;
-        smooth.state.on = model.smooth;
-        cycleLink.state.on = model.linkCycleEnds;
-        loopLink.state.on = model.linkLoopEnds;
-        cycleLink.setEnabled (enabled_);
-        // Loop-link uses the playback PHASE in loop modes; a stored authored loop
-        // index is optional (legacy and interpolated seams have loop == -1).
-        loopLink.setEnabled (enabled_ && model.n > 1);
+        fields[kTool].index = cs.tool;
+        fields[kSnap].on = cs.snap;
+        fields[kSmooth].on = model.smooth;
+        fields[kCycleLink].on = model.linkCycleEnds;
+        fields[kLoopLink].on = model.linkLoopEnds;
+        fields[kCycleLink].enabled = enabled_;
+        // Loop-link uses the playback PHASE in loop modes; a stored authored loop index is optional (legacy and interpolated seams have loop == -1).
+        fields[kLoopLink].enabled = enabled_ && model.n > 1;
         const lfo::PointSet sel = canvas.selection();
         const int cnt = sel.count();
         const bool multi = cnt >= 2;
@@ -838,228 +888,110 @@ public:
         int deletable = 0;
         for (int i = 1; i + 1 < model.n; ++i)
             deletable += sel.has (i) ? 1 : 0;
-        loop.state.on = one >= 0 && model.loop == one;
-        loop.setEnabled (enabled_ && one >= 0);
-        del.setEnabled (enabled_ && deletable > 0);
-        modButton.setEnabled (enabled_ && cnt > 0);
-        undoButton.setEnabled (enabled_ && undo.depth() > 0);
-        redoButton.setEnabled (enabled_ && undo.redoDepth() > 0);
-        fpoint.setEnabled (enabled_ && model.n > 0);
-        fpoint.state.max = static_cast<double> (std::max (2, model.n));
-        fgx.state.value = cs.gridX;
-        fgy.state.value = cs.gridY;
+        fields[kLoop].on = one >= 0 && model.loop == one;
+        fields[kLoop].enabled = enabled_ && one >= 0;
+        fields[kDelete].enabled = enabled_ && deletable > 0;
+        fields[kMod].enabled = enabled_ && cnt > 0;
+        fields[kUndo].enabled = enabled_ && undo.depth() > 0;
+        fields[kRedo].enabled = enabled_ && undo.redoDepth() > 0;
+        fields[kPoint].enabled = enabled_ && model.n > 0;
+        pointMax = static_cast<double> (std::max (2, model.n));
+        fields[kGridX].value = cs.gridX;
+        fields[kGridY].value = cs.gridY;
         float x0 = 0.0f, x1 = 0.0f, y0 = 0.0f, y1 = 0.0f;
         model.spanOf (sel, x0, x1, y0, y1);
+        scale = multi;
         if (multi)
         {
-            std::snprintf (pointText_, sizeof pointText_, "%d SEL", cnt);
-            setText (fpoint.state.text, sizeof fpoint.state.text, pointText_);
-            fpoint.state.value = one >= 0 ? one + 1 : 1;
-            fpoint.state.notSet = false;
-            fx.state.value = 0.5 * (static_cast<double> (x0) + static_cast<double> (x1));
-            fx.state.notSet = false;
-            fx.setEnabled (enabled_ && deletable > 0);   // the group moves in time as far as an inner point is in it
-            fy.state.value = 0.5 * (static_cast<double> (y0) + static_cast<double> (y1));
-            fy.state.notSet = false;
-            fy.setEnabled (enabled_);
-            fcurve.setLabel ("SCALE");
-            fcurve.state.format = NumberField::Format::Decimal2;
-            fcurve.state.min = 0.01; fcurve.state.max = 1.0; fcurve.state.step = 0.01; fcurve.state.pxPerStep = 2; fcurve.state.defaultValue = 1.0;
-            fcurve.state.value = static_cast<double> (y1 - y0);
-            fcurve.state.notSet = false;
-            fcurve.setEnabled (enabled_ && y1 - y0 > 1.0e-4f);
+            std::snprintf (pointText, sizeof pointText, "%d SEL", cnt);
+            fields[kPoint].value = one >= 0 ? one + 1 : 1;
+            fields[kPoint].notSet = false;
+            fields[kX].value = 0.5 * (static_cast<double> (x0) + static_cast<double> (x1));
+            fields[kX].notSet = false;
+            fields[kX].enabled = enabled_ && deletable > 0;   // the group moves in time as far as an inner point is in it
+            fields[kY].value = 0.5 * (static_cast<double> (y0) + static_cast<double> (y1));
+            fields[kY].notSet = false;
+            fields[kY].enabled = enabled_;
+            fields[kCurve].value = static_cast<double> (y1 - y0);
+            fields[kCurve].notSet = false;
+            fields[kCurve].enabled = enabled_ && y1 - y0 > 1.0e-4f;
         }
         else
         {
-            fpoint.state.text[0] = '\0';
-            fpoint.state.value = sel1 >= 0 ? sel1 + 1 : 1;
-            fpoint.state.notSet = sel1 < 0;
-            fx.setEnabled (enabled_ && sel1 > 0 && sel1 < model.n - 1);   // the end points keep their x
-            fy.setEnabled (enabled_ && sel1 >= 0);
-            fcurve.setLabel ("CURVE");
-            fcurve.state.format = NumberField::Format::IntSigned;
-            fcurve.state.min = -20.0; fcurve.state.max = 20.0; fcurve.state.step = 1.0; fcurve.state.pxPerStep = 8; fcurve.state.defaultValue = 0.0;
-            fcurve.setEnabled (enabled_ && sel1 >= 0 && sel1 + 1 < model.n);
-            fx.state.value = sel1 >= 0 ? model.p[sel1].x : 0.0;
-            fx.state.notSet = sel1 < 0;
-            fy.state.value = sel1 >= 0 ? model.p[sel1].y : 0.0;
-            fy.state.notSet = sel1 < 0;
-            fcurve.state.value = sel1 >= 0 && sel1 + 1 < model.n ? std::round (model.p[sel1].power) : 0.0;
-            fcurve.state.notSet = ! (sel1 >= 0 && sel1 + 1 < model.n);
+            pointText[0] = '\0';
+            fields[kPoint].value = sel1 >= 0 ? sel1 + 1 : 1;
+            fields[kPoint].notSet = sel1 < 0;
+            fields[kX].enabled = enabled_ && sel1 > 0 && sel1 < model.n - 1;   // the end points keep their x
+            fields[kY].enabled = enabled_ && sel1 >= 0;
+            fields[kCurve].enabled = enabled_ && sel1 >= 0 && sel1 + 1 < model.n;
+            fields[kX].value = sel1 >= 0 ? model.p[sel1].x : 0.0;
+            fields[kX].notSet = sel1 < 0;
+            fields[kY].value = sel1 >= 0 ? model.p[sel1].y : 0.0;
+            fields[kY].notSet = sel1 < 0;
+            fields[kCurve].value = sel1 >= 0 && sel1 + 1 < model.n ? std::round (model.p[sel1].power) : 0.0;
+            fields[kCurve].notSet = ! (sel1 >= 0 && sel1 + 1 < model.n);
         }
         bool bendable = false;
         for (int i = 0; i + 1 < model.n && ! bendable; ++i)
             bendable = model.bendable (i);
-        fbend.state.value = std::round (static_cast<double> (model.meanCurve()));
-        fbend.setEnabled (enabled_ && bendable);
+        fields[kBend].value = std::round (static_cast<double> (model.meanCurve()));
+        fields[kBend].enabled = enabled_ && bendable;
+        for (int f : { kBack, kTool, kShapes, kMore, kSnap, kSmooth, kGridX, kGridY, kPhase, kMode })
+            fields[f].enabled = enabled_;
         std::snprintf (info_, sizeof info_, "%d / %d POINTS", model.n, lfo::kMaxPoints);
     }
-    Size minSize() const override { return { 1000, 520 }; }
-    Rect canvasRect() const noexcept { return canvas.rect(); }
 
-    Change touchDown (int x, int y, double nowMs) override
-    {
-        const Change c = Composite::touchDown (x, y, nowMs);
-        selectGroupAt (x, y);
-        return c;
-    }
-    void selectGroupAt (int x, int y)
-    {
-        if (pointBar_.contains (x, y))
-            setActiveGroup (0);
-        else
-            for (int i = 0; i < kGroups; ++i)
-                if (groups[i].rect().contains (x, y))
-                {
-                    setActiveGroup (i);
-                    break;
-                }
-    }
-    void setEnabled (bool e) override
-    {
-        Composite::setEnabled (e);
-        for (auto* control : nativeControls()) control->setEnabled (e);
-        sync();
-    }
-    void setInactive (bool i) override
-    {
-        Composite::setInactive (i);
-        for (auto* control : nativeControls()) control->setInactive (i);
-    }
-    std::array<ControlModel*, 22> nativeControls() noexcept
-    {
-        return { &back, &tools, &shapes, &more, &undoButton, &redoButton, &del, &modButton,
-                 &snap, &loop, &smooth, &cycleLink, &loopLink, &fpoint, &fx, &fy, &fcurve,
-                 &fgx, &fgy, &fphase, &fbend, &mode };
-    }
-
-protected:
-    void layout() override
-    {
-        const int m = 8;
-        const Rect top { rect_.x + m, rect_.y + m, rect_.w - 2 * m, kBarH - m };
-        int x = top.x;
-        auto put = [&] (Component& c, int w) { c.place ({ x, top.y, w, 56 }); x += w + m; };
-        put (back, 96);
-        put (tools, ToolSelector::kTools * 80);
-        put (shapes, 100);
-        put (more, 84);
-        put (undoButton, 84);
-        put (redoButton, 84);
-        put (del, 96);
-        put (modButton, 84);
-        snap.place ({}); loop.place ({}); smooth.place ({}); cycleLink.place ({}); loopLink.place ({});   // placed in the column below
-        const int cy = rect_.y + kBarH + m;
-        const int titleH = 22, lane = kQLane;
-        const int pointBarH = titleH + lane + 56;
-        canvas.place ({ rect_.x + m, cy, rect_.w - 3 * m - kColW, std::max (0, rect_.bottom() - 2 * m - pointBarH - cy) });
-        pointBar_ = { canvas.rect().x, canvas.rect().bottom() + m, canvas.rect().w, pointBarH };
-        titleEdit_ = { pointBar_.x, pointBar_.y, pointBar_.w, titleH };
-        const int pointW = (pointBar_.w - 3 * kGap) / 4;
-        const int pointY = titleEdit_.bottom() + lane;
-        fpoint.place ({ pointBar_.x, pointY, pointW, 56 });
-        fx.place ({ pointBar_.x + pointW + kGap, pointY, pointW, 56 });
-        fy.place ({ pointBar_.x + 2 * (pointW + kGap), pointY, pointW, 56 });
-        fcurve.place ({ pointBar_.x + 3 * (pointW + kGap), pointY, pointBar_.w - 3 * (pointW + kGap), 56 });
-        // the column at the right: the three Q groups (the lane of the index chips above each row), then LOOP and SMOOTH
-        const int colX = rect_.right() - m - kColW, H = rect_.bottom() - m - cy;
-        const int fieldH = std::clamp ((H - 3 * titleH - 5 * lane - 3 * m - 56) / 5, 56, 72);
-        int y = cy;
-        const int hw = (kColW - kGap * 2) / 2;
-        titleGrid_ = { colX, y, kColW, titleH };
-        y += titleH + lane;
-        const int tw = (kColW - 2 * kGap) / 3;
-        fgx.place ({ colX, y, tw, fieldH }); fgy.place ({ colX + tw + kGap, y, tw, fieldH }); snap.place ({ colX + 2 * (tw + kGap), y, kColW - 2 * (tw + kGap), fieldH });
-        y += fieldH + m;
-        titleTrigger_ = { colX, y, kColW, titleH };
-        y += titleH + lane;
-        mode.place ({ colX, y, kColW, fieldH });
-        y += fieldH + lane;
-        fphase.place ({ colX, y, hw, fieldH }); fbend.place ({ colX + kColW - hw, y, hw, fieldH });
-        y += fieldH + m;
-        const int linkW = (kColW - kGap) / 2;
-        loop.place ({ colX, y, linkW, 56 });
-        smooth.place ({ colX + linkW + kGap, y, kColW - linkW - kGap, 56 });
-        y += 56 + m;
-        cycleLink.place ({ colX, y, linkW, 56 });
-        loopLink.place ({ colX + linkW + kGap, y, kColW - linkW - kGap, 56 });
-        for (int i = 0; i < kGroups; ++i)
-            groups[i].setFrameRect (groups[i].rect());
-    }
-    void drawUnder (Pen& p) const override { (void) p; }
-    void drawExtra (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        if (! titleEdit_.empty())
-            p.textLeft (titleEdit_, "SELECTED POINT", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-        if (canvas.selection().count() == 0 && ! titleEdit_.empty())
-        {
-            const Rect hint { titleEdit_.x + 170, titleEdit_.y, std::max (0, titleEdit_.w - 170), titleEdit_.h };
-            p.textRight (hint, "TAP A POINT OR TURN Q1", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
-        }
-        p.textLeft (titleGrid_, "GRID", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-        p.textLeft (titleTrigger_, "TRIGGER", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-        p.textRight ({ canvas.rect().right() - 8 - 220, canvas.rect().y + 6, 220, 18 }, info_, T.fLabel - 3.0f, p.c (T.textFaint, 255), T.fMin);
-        if (status_[0] != '\0')
-            p.textLeft ({ canvas.rect().x + 14, canvas.rect().y + 6, std::max (0, canvas.rect().w - 260), 22 }, status_, T.fLabel - 2.0f, p.c (T.flow[0], 255), T.fMin);
-    }
-    Rect titleEdit_, titleGrid_, titleTrigger_, pointBar_;
+private:
+    Rect rect_, pointBar_, rects_[kFields], titles_[kGroups];
     int active_ = -1;
-    char info_[32] = {}, status_[64] = {}, pointText_[16] = {};
+    bool enabled_ = true;
+    char info_[32] = {}, status_[64] = {};
 };
 
 // ===============================================================================================================================================================
-/** PointModPage: the modulation of the time (TIME), the level (LEVEL) or the curve (CURVE) of the selected point(s): the page above the editor. `back`, `target` (a stepper: TIME, LEVEL, CURVE), `amount` (-100 .. 100
-    percent), `remove` (the modulation of the chosen value goes), the summary line (the owner writes it: "POINT 3: LEVEL BY LFO 2, +45 PERCENT") and the board of the modulation sources (the owner fills it, `board.add`): a tap on a
-    source asks the owner to give the value that source (Index change of `board`: index = the id of the source). Same contract as every component. One Q group, `group` = [MODULATE (the stepper), AMOUNT]: the owner
-    publishes the two knobs (Q 1 and Q 2 of the page, the group is always the active one; on the 16 knob device the chips 1 and 2 and no frame) and handles their turns (virtual targets: the page is the owner's, a turn is
-    a write of the host to the Q proxy, not a Change of the component); AMOUNT is off (disabled: its knob does nothing) while the chosen value has no modulation. The controls stand one lane (kQLane) lower than
-    the top of the page so that the index chips lie inside it. */
-class PointModPage : public Composite
+/** How the modulation of the selected points stands: the same source and amount (Common), the same source with different amounts, different sources. */
+enum class PointSelectionMod { Common, MixedAmount, MixedSource };
+
+/** PointModModel: the data of the modulation of the time (TIME), the level (LEVEL) or the curve (CURVE) of the selected point(s): the page above the editor. BACK, MODULATE (TIME, LEVEL, CURVE), AMOUNT (-100 .. 100 percent)
+    and REMOVE are native controls; the model holds their rectangles, their availability, the value of AMOUNT and the summary line ("POINT 3: LEVEL BY LFO 2, +45 PERCENT"). One Q group, [MODULATE, AMOUNT]: the owner
+    publishes the two knobs (Q 1 and Q 2 of the page) and handles their turns (virtual targets); AMOUNT is off while the chosen value has no modulation. */
+class PointModModel
 {
 public:
-    MenuButton back { "BACK", MenuButton::Icon::None }, remove { "REMOVE", MenuButton::Icon::None };
-    Stepper target;
-    NumberField amount { "AMOUNT", NumberField::Format::IntSigned };
-    ModSourceBoard board;
-    QGroup group;   // MODULATE, AMOUNT
+    enum Field : int { kBack, kTarget, kAmount, kRemove, kFields };
+    static constexpr int kMargin = 8;
 
-    PointModPage()
-    {
-        target.setCaption ("MODULATE");
-        target.state.count = 3;
-        target.state.wrap = true;
-        target.minWidth = 140;
-        target.setItem (targetName (0));
-        amount.state.min = -100.0; amount.state.max = 100.0; amount.state.step = 1.0; amount.state.pxPerStep = 3; amount.state.defaultValue = 50.0;
-        board.setHeadline ("TAP A SOURCE TO MODULATE THE VALUE");
-        // The source board has no native replacement yet. Header controls are adapters only.
-        addKid (board);
-        group.set (0, &target);
-        group.set (1, &amount);
-        group.setActive (true);
-    }
+    EditorField fields[kFields];
+    int target = 1;           // 0 time, 1 level, 2 curve
+
     static const char* targetName (int i) noexcept { static const char* const n[3] = { "TIME", "LEVEL", "CURVE" }; return n[std::clamp (i, 0, 2)]; }
-    /** The value being edited (0 time, 1 level, 2 curve) and how it stands: the source (its name; "" = none), the amount -1 .. 1 and the number of points the edit goes to. */
-    enum class SelectionMod { Common, MixedAmount, MixedSource };
-    void load (int which, const char* sourceName, double amountPercent, int points, int firstPoint,
-               SelectionMod mix = SelectionMod::Common)
+    void place (const Rect& r) noexcept
     {
-        target.state.index = std::clamp (which, 0, 2);
-        target.setItem (targetName (which));
-        amount.state.value = std::clamp (amountPercent, -100.0, 100.0);
+        const int m = kMargin, y = r.y + m + kQLane;   // the lane above the members is for the index chips of the group
+        rects_[kBack] = { r.x + m, y, 96, 56 };
+        rects_[kTarget] = { r.x + 112, y, 220, 56 };
+        rects_[kAmount] = { r.x + 340, y, 160, 56 };
+        rects_[kRemove] = { r.x + 508, y, 120, 56 };
+    }
+    Rect rect (int field) const noexcept { return field >= 0 && field < kFields ? rects_[field] : Rect {}; }
+    /** The value being edited (0 time, 1 level, 2 curve) and how it stands: the source (its name; "" = none), the amount -1 .. 1 and the number of points the edit goes to. */
+    void load (int which, const char* sourceName, double amountPercent, int points, int firstPoint, PointSelectionMod mix = PointSelectionMod::Common)
+    {
+        target = std::clamp (which, 0, 2);
+        fields[kTarget].index = target;
+        fields[kAmount].value = std::clamp (amountPercent, -100.0, 100.0);
         const bool selected = enabled_ && points > 0;
         const bool commonSource = sourceName != nullptr && sourceName[0] != '\0';
-        target.setEnabled (selected);
-        board.setEnabled (selected);
-        amount.setEnabled (selected && commonSource);
-        amount.state.notSet = ! commonSource || mix == SelectionMod::MixedAmount;
-        remove.setEnabled (selected && (commonSource || mix == SelectionMod::MixedSource));
+        fields[kBack].enabled = enabled_;
+        fields[kTarget].enabled = selected;
+        fields[kAmount].enabled = selected && commonSource;
+        fields[kAmount].notSet = ! commonSource || mix == PointSelectionMod::MixedAmount;
+        fields[kRemove].enabled = selected && (commonSource || mix == PointSelectionMod::MixedSource);
         if (points <= 0)
             setText (summary_, sizeof summary_, "NO POINT SELECTED");
-        else if (mix == SelectionMod::MixedSource)
+        else if (mix == PointSelectionMod::MixedSource)
             std::snprintf (summary_, sizeof summary_, "%d POINTS: %s MIXED SOURCES", points, targetName (which));
-        else if (mix == SelectionMod::MixedAmount)
+        else if (mix == PointSelectionMod::MixedAmount)
             std::snprintf (summary_, sizeof summary_, "%d POINTS: %s %s (MIXED AMOUNTS)", points, targetName (which), sourceName);
         else if (points > 1)
             std::snprintf (summary_, sizeof summary_, "%d POINTS: %s %s", points, targetName (which), commonSource ? sourceName : "NOT MODULATED");
@@ -1067,39 +999,12 @@ public:
             std::snprintf (summary_, sizeof summary_, "POINT %d: %s %s", firstPoint + 1, targetName (which), commonSource ? sourceName : "NOT MODULATED");
     }
     const char* summary() const noexcept { return summary_; }
-    Size minSize() const override { return { 1000, 520 + kQLane }; }
-    void setEnabled (bool e) override
-    {
-        Composite::setEnabled (e);
-        for (auto* control : std::array<ControlModel*, 4> { &back, &target, &amount, &remove })
-            control->setEnabled (e);
-    }
-    void setInactive (bool i) override
-    {
-        Composite::setInactive (i);
-        for (auto* control : std::array<ControlModel*, 4> { &back, &target, &amount, &remove })
-            control->setInactive (i);
-    }
+    void setEnabled (bool e) { enabled_ = e; }
+    bool enabled() const noexcept { return enabled_; }
 
-protected:
-    void layout() override
-    {
-        const int m = 8;
-        const int y = rect_.y + m + kQLane;   // the lane above the members is for the index chips of the group
-        back.place ({ rect_.x + m, y, 96, 56 });
-        target.place ({ rect_.x + 112, y, 220, 56 });
-        amount.place ({ rect_.x + 340, y, 160, 56 });
-        remove.place ({ rect_.x + 508, y, 120, 56 });
-        summaryBox_ = { rect_.x + 640, y, rect_.w - 640 - m, 56 };
-        board.place ({ rect_.x + m, y + 56 + m, rect_.w - 2 * m, rect_.bottom() - m - (y + 56 + m) });
-        group.setFrameRect (group.rect());
-    }
-    void drawExtra (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        p.textLeft (summaryBox_, summary_, T.fLabel + 2.0f, p.c (T.text, 255), T.fMin);
-    }
-    Rect summaryBox_;
+private:
+    Rect rects_[kFields];
+    bool enabled_ = true;
     char summary_[64] = {};
 };
 

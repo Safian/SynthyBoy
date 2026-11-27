@@ -1,22 +1,26 @@
-// SynthyBoy - MPC overlay: the LFO UI of the Play page, the plugin-drawn pages built from the UI library (shell-mpc/ui/lfo_*.h, shape_editor.h, mod_targets.h, panel.h, ...) and wired to the real engine
-// parameters (lfoN.* and rlfoN.* of the table). One object per (Play view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick (), with the instance
-// as IInstanceView. The element has two types: an LFO (LFO 1 .. 10: a shape of one cycle, the drawn shape in the content state) and a RANDOM LFO (RND 1 .. 4: a style; the display is the trace of its output).
+// SynthyBoy - MPC overlay: the LFO UI of the Play page and of the LFO tab (owner decision 2026-11-27: the C++ layer has no UI elements). Every control of the element is a native component of the host skin: the shape / style
+// choice, the rate, the division, the sync, the rise, the smoothing, the trigger, the phase, the delay, the direction, the swing, the stereo, the mono and host switches, the key numbers, the targets button, the instance choice
+// of the compact view and, in the shape editor, the tools, the buttons, the numbers and the choices around the canvas. This page holds what is left: the parameter ROWS (the parameter behind every control: `rows`), the Q-Link
+// groups (published to the router), the native bridge (nativeui::lfo, lfoeditor, lfodetail, playenvlfo, targets: publishes the values, takes the edits and writes them), the GEOMETRY the skin lays the cells out in
+// (lfo_layout.h: so the overlay leaves them open and selects the Q group of a touched one), the displays (the shape of one cycle, the trace of a random LFO: ui::lfodisplay) and the EDITORS (the drawn shape on its canvas,
+// the shape model, the undo stack, the content state, the saved shapes). One object per (Play view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick (),
+// with the instance as IInstanceView. The element has two types: an LFO (LFO 1 .. 10: a shape of one cycle, the drawn shape in the content state) and a RANDOM LFO (RND 1 .. 4: a style; the display is the trace of its output).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementLfo, the pages above it are ours): main = the compact view in the right third of the Play page (LfoCompact); full = the full screen
-// (LfoFullScreen) over the whole plugin area of the Play page; detail pages above it: the shape editor (ShapeEditorPage), the modulation of the selected points (PointModPage) and the name keyboard of a saved
-// shape (TextEntry) above that, the targets of the LFO (ModTargetsPage: the modulation matrix seen from the source), the list popup (instances, choices, the destination to add, the SHAPES and MORE lists of the editor)
-// and the modulations of a control (ModulationsPage). The editor's file work (the saved shapes in SynthyBoy/LFO Shapes/ on the card, lfo_shape_files.h) happens in the touch handler on the overlay thread, never in draw.
-// What it does with a touch: the library component gives a Change { id, kind, value }; the id says which control it was, the binding of the id (a key suffix of the engine table and a type) says which parameter and
-// how the UI value converts; the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). The drawn shape is not a parameter: the editor changes a shape model, which goes to the
-// content state through IInstanceView::setLfoShape (at most every kShapeSendMs while a finger is down, and at the end of the gesture). Every update () reads every parameter back into the component states, so host
-// automation, presets and the host's own widgets show on the next frame.
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementLfo, the pages above it are ours): main = the compact view in the right third of the Play page; full = the full screen over the whole plugin area
+// of the Play page or the page of the LFO tab; detail pages above it: the shape editor, the modulation of the selected points (PointModModel) and the name keyboard of a saved shape (TextEntry, kept until the native keyboard
+// is wired) above that, the targets of the LFO (the modulation matrix seen from the source), the list menu (the destination to add, the source to add, the SHAPES and MORE lists of the editor) and the modulations of a
+// control. The editor's file work (the saved shapes in SynthyBoy/LFO Shapes/ on the card, lfo_shape_files.h) happens in the touch handler on the overlay thread, never in draw.
+// What it does with an edit of the host: the native cell reports { field, value }; the row of the field says which parameter and how the value converts; the write goes through IInstanceView::writeParam (normalised; the
+// plugin tells the host). The drawn shape is not a parameter: the editor changes a shape model, which goes to the content state through IInstanceView::setLfoShape (at most every kShapeSendMs while a finger is down, and
+// at the end of the gesture). Every update () reads every parameter back, so host automation, presets and the host's own widgets show on the next frame.
 // Q-Link: the compact view and the full screen have Q groups of table parameters (q_router.h); the shape editor's group EDIT (X, Y, CURVE, GRID of the selected point) is VIRTUAL: the router keeps the values and hands
 // the host's writes back through takeQVirtual.
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -30,25 +34,26 @@
 #include "../native_lfo_detail.h"
 #include "../native_lfo_editor.h"
 #include "../native_play_env_lfo.h"
-#include "../ui/lfo_screen.h"
+#include "../ui/binding.h"
+#include "../ui/lfo_names.h"
 #include "../ui/native_apertures.h"
-#include "../ui/mod_targets.h"
+#include "../ui/play_rows.h"
 #include "../ui/shape_editor.h"
-#include "../ui/ui.h"
+#include "../ui/text_entry.h"
 #include "../safe_file.h"
 #include "../q_router.h"
 #include "backgrounds_manifest.h"
 #include "q_publish.h"
 #include "q_publish_mod.h"
 #include "instance_view.h"
+#include "lfo_layout.h"
+#include "lfo_mod_rows.h"
 #include "lfo_shape_files.h"
 #include "overlay_layout.h"
 #include "page_view.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
-#include "native_mod_targets_ui.h"
 #include "native_marker_covers.h"
-#include "modulation_window.h"
 #include "ui_stack.h"
 #include "synthyboy/lfo_display.h"
 #include "synthyboy/osc_cycle.h"
@@ -63,14 +68,6 @@ namespace synthyboy_mpc { namespace overlay {
 class LfoUi
 {
 public:
-    /** Selects LFO 1 .. 10 or RND 1 .. 4 (0 .. 13) without a touch: the gallery and the tests. */
-    /** Chooses LFO 1 .. 10 or RND 1 .. 4 by its position 0 .. 13 (view state only; the tests' way to a random LFO; the carousel and the list of the compact view choose among their cells: `selectSlot`). */
-    void select (int s, IInstanceView& v)
-    {
-        s = std::clamp (s, 0, kInstances - 1);
-        uibind::chooseLfo (v, s < kLfos ? s + 1 : uibind::kRndBase + (s - kLfos + 1));
-        adoptSelection (v);
-    }
     // ---- the pages (UiStack ids)
     static constexpr int kElementPage = 3;                                    // the page of an LFO tab is the full screen of the element (page_view.h)
     static constexpr int kElementLfo = 3;                                     // the full screen of the LFO (the oscillator is 1, the envelope 2)
@@ -79,33 +76,45 @@ public:
     static constexpr int kVirtEditorCount = 8, kVirtPmTarget = 8, kVirtPmAmount = 9;
     static_assert (kVirtPmAmount < QRouter::kNumVirtual, "the router must have a virtual target for every Q knob of the page");
 
-    // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
+    // ---- the ids of the controls (the page-local id of a row of the native bridge)
     enum Id : int
     {
-        kClose = 1, kFullButton, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact carousel; kSelector: Play full-screen cells
+        kClose = 1, kFullButton, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice; kSelector: Play full-screen cells
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
         kMpBack = 230, kMpTarget, kMpAmount, kMpRemove, kMpBoard, kKbOk = 250, kKbCancel,
-        kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
-        kList = 400, kListBackdrop, kListHeader,
-        kModsBack = 500, kModsRow = 510, kModsAddStep = 560, kModsAdd, kModsPage
+        kMemberRate = 900, kMemberSync   // the members of a Q group that are no row: the rate (the rate, or the division in the BPM sync) and the sync mode list
     };
 
     /** What a value is and how it converts to the engine's plain value. */
     enum class T : uint8_t
     {
         Knob,      // normalised 0 .. 1 of the parameter
-        Number,    // a NumberField in the units of the parameter
+        Number,    // a number in the units of the parameter
         Stepper,   // a choice parameter
         Toggle,
-        List,      // a choice parameter as a LED list (every option visible)
+        List,      // a choice parameter as a list (every option visible)
         Picker,    // the shape / style picker: the index is the value of the parameter
         Inert
     };
+    /** One binding row of the page: the id of the control, the suffix of its engine key ("rate" -> "lfo3.rate": the prefix is the LFO shown) for a standard LFO and for a random LFO ("" = the control is not there), the type. */
+    struct RowSpec { int id; const char* standard; const char* random; T type; };
+    static constexpr RowSpec kRows[] = {
+        { kShape, "shape", "", T::Stepper },           { kStyle, "", "style", T::Stepper },             { kRate, "rate", "rate", T::Knob },
+        { kDivision, "division", "division", T::Stepper }, { kRise, "fade_in", "", T::Knob },             { kSmoothTime, "smooth_time", "", T::Knob },
+        { kSync, "sync", "sync", T::Stepper },         { kStereoToggle, "", "stereo", T::Toggle },      { kPicker, "shape", "style", T::Picker },
+        { kPagePicker, "shape", "style", T::Stepper }, { kSmoothPick, "smooth", "", T::Toggle },        { kHostPick, "host", "", T::Toggle },
+        { kMode, "sync_type", "", T::Stepper },        { kModeList, "", "sync_type", T::List },         { kPhase, "phase", "", T::Knob },
+        { kDelay, "delay", "", T::Knob },              { kDirection, "direction", "", T::List },        { kSwing, "swing", "", T::Knob },
+        { kStereo, "stereo", "", T::Knob },            { kMono, "mono", "", T::Toggle },                { kKeyTranspose, "keytrack_transpose", "keytrack_transpose", T::Number },
+        { kKeyTune, "keytrack_tune", "keytrack_tune", T::Number },
+        { kInstance, "", "", T::Inert },               { kFullButton, "", "", T::Inert },               { kSyncMode, "", "", T::Inert },
+        { kTargets, "", "", T::Inert },                { kEdit, "", "", T::Inert }
+    };
+    /** The binding of a row to the engine parameter of the LFO shown. */
     struct Item
     {
         int id = 0;
-        ui::ControlModel* c = nullptr;
         T type = T::Inert;
         int param = -1;
     };
@@ -115,26 +124,25 @@ public:
     static constexpr int kInstances = 14;                                      // LFO 1 .. 10, RND 1 .. 4
     static constexpr int kCurvePoints = 256, kTracePoints = 192;
     static constexpr double kModsRefreshMs = 100.0, kShapeSendMs = 90.0, kTraceMs = 33.0;
+    static constexpr int kLfos = 10;
 
-    LfoUi() { setCanvas (kCanvasW, kCanvasH); compact_.setNativeInstanceSelector (false); compact_.setNativeDials(); }
+    LfoUi() { setCanvas (kCanvasW, kCanvasH); }
 
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
-        const ui::Rect tab { 0, kTabY, w, kTabH };
-        compact_.place ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 });
-        full_.place (tab);
-        editor_.place (tab);
-        targets_.place (tab);
-        mods_.place (tab);
-        pointMod_.place (tab);
-        entry_.place (tab);
-        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (tab);
-        list_.setId (kList);
-        list_.setBackdropId (kListBackdrop);
-        list_.setHeaderId (kListHeader);
+        geomKey_ = ~0u;
+        relayout();
     }
+
+    /** Selects LFO 1 .. 10 or RND 1 .. 4 (0 .. 13) without a touch: the gallery and the tests. */
+    void select (int s, IInstanceView& v)
+    {
+        s = std::clamp (s, 0, kInstances - 1);
+        uibind::chooseLfo (v, s < kLfos ? s + 1 : uibind::kRndBase + (s - kLfos + 1));
+        adoptSelection (v);
+    }
+
 
     /** Reads the instance: the selected LFO (the type and the number), every value of the visible controls, the modulations of the knobs, the pages of the stack, the shape, the cursors of the voices, the Q group. */
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
@@ -144,7 +152,7 @@ public:
         const bool open = stack.depth() > 0 && stack.element() == kElementLfo;
         if (open && stack.top() == kPageMods)
         {
-            const auto* control = item (modsTarget_);
+            const Item* control = item (modsTarget_);
             const int parameter = control != nullptr ? control->param : -1;
             const uint64_t preset = inst.stateGeneration();
             if (modsPreset_ != preset || modsTargetParam_ != parameter)
@@ -152,14 +160,11 @@ public:
                 dropGesture();
                 modsPreset_ = preset;
                 modsDirty_ = true;
-                mods_.setPickingSource (false);
             }
         }
         if (open && stackDepth_ == 0)
-            full_.setActiveGroup (0);
+            setActiveGroup (0);
         stackDepth_ = open ? stack.depth() : 0;
-        if (stackDepth_ > 0 && instPopup_)
-            closeInstanceList();
         syncPages (open ? stack : idle_, inst);
         content_ = inst.content();
         bpm_ = inst.bpm();
@@ -171,9 +176,8 @@ public:
         }
         if (! page_)   // the page of a tab has no selector: the hardware sub-tab names the LFO
         {
-            uibind::fillSelector (uibind::SelKind::Lfo, scan_, inst, full_.selector);
-            full_.syncSelectorLayout();
-            uibind::cellsFromSelector (uibind::SelKind::Lfo, full_.selector, playCells_);   // the Play page's carousel: the SAME cells as its full-screen selector
+            uibind::fillSelector (uibind::SelKind::Lfo, scan_, inst, selector_);
+            uibind::cellsFromSelector (uibind::SelKind::Lfo, selector_, playCells_);   // the Play page's choice: the SAME cells as its full-screen selector
             playDots_ = 0;
             for (int k = 0; k < playCells_.n && k < 32; ++k)
                 if (isSourceAssigned (playCells_.id[k]))
@@ -206,8 +210,8 @@ public:
         if (! page_)
         {
             page_ = true;
-            full_.setPageMode (true);
             configured_ = false;
+            geomKey_ = ~0u;
         }
         pageSlot_ = std::clamp (in.instance, 1, kInstances) - 1;
         updateHostedEditor (inst, stack, 3, nowMs, in.live, true);
@@ -226,8 +230,9 @@ public:
             return;
         }
         const bool entering = ! nativePlayEditor_;
+        if (entering)
+            geomKey_ = ~0u;
         nativePlayEditor_ = true;
-        full_.setNativePlayEditor (true);
         updateHostedEditor (inst, stack, highlight, nowMs, live, entering);
     }
 
@@ -236,8 +241,8 @@ public:
         if (! nativePlayEditor_)
             return;
         nativePlayEditor_ = false;
-        full_.setNativePlayEditor (false);
-        full_.setNativePageControls (false);
+        nativePage_ = false;
+        geomKey_ = ~0u;
         inst.setNativeLfoState ({});
         nativePublished_ = false;
         publishNativeEditor (inst, {});
@@ -254,83 +259,85 @@ public:
     }
 
     bool isMain() const noexcept { return stackDepth_ == 0; }
-    void setNativeSmooth (bool on) { full_.setNativeSmooth (on); }
-    bool nativeSmooth() const noexcept { return page_ && full_.nativeSmooth() && ! random(); }
+    void setNativeSmooth (bool on) { nativeSmooth_ = on; }
+    bool nativeSmooth() const noexcept { return page_ && nativeSmooth_ && ! random(); }
     void setHostBackground (bool confirmed) noexcept { nativeGround_ = confirmed; }
-    bool hostBackground() const noexcept { return nativeGround_ && full_.nativePageControls() && pageTop_ == 0; }
+    bool hostBackground() const noexcept { return nativeGround_ && nativePage_ && pageTop_ == 0; }
 
     void drawPageGround (gpu::SceneBuilder&) const {}
 
     ui::Rect nativeRect (int field, int action = nativeui::lfo::kTargets) const noexcept
     {
         namespace n = nativeui::lfo;
+        const lfolayout::Full& f = fullG_;
         switch (field)
         {
-            case n::kShape: case n::kStyle: return full_.namedPicker.rect();
-            case n::kAction: return action == n::kExpand ? full_.edit.rect() : full_.targets.rect();
+            case n::kShape: case n::kStyle: return f.namedPicker;
+            case n::kAction: return action == n::kExpand ? f.edit : f.targets;
             case n::kSmooth: case n::kSmoothTime:
             {
-                const auto r = full_.smoothArea();
-                if (r.empty())
+                if (random() || ! nativeSmooth_ || f.smoothArea.empty())
                     return {};
+                const ui::Rect r = f.smoothArea;
                 constexpr int buttonW = 72;
-                return field == n::kSmooth ? ui::Rect { r.x, r.y, buttonW, r.h }
-                                          : ui::Rect { r.x + buttonW, r.y, r.w - buttonW, r.h };
+                return field == n::kSmooth ? ui::Rect { r.x, r.y, buttonW, r.h } : ui::Rect { r.x + buttonW, r.y, r.w - buttonW, r.h };
             }
-            case n::kRate: case n::kDivision: return full_.rate.rect();
-            case n::kRise: return full_.rise.rect();
-            case n::kSync: return full_.syncSwitch.mode.rect();
-            case n::kMode: return full_.mode.rect();
-            case n::kRandomMode: return full_.modeList.rect();
-            case n::kPhase: return full_.phase.rect();
-            case n::kDelay: return full_.delay.rect();
-            case n::kHost: return full_.hostPick.rect();
-            case n::kDirection: return full_.direction.rect();
-            case n::kSwing: return full_.swing.rect();
-            case n::kStereo: return full_.stereo.rect();
-            case n::kMono: return full_.monoQ.rect();
-            case n::kRandomStereo: return full_.stereoToggle.rect();
-            case n::kTranspose: return full_.keyTranspose.rect();
-            case n::kTune: return full_.keyTune.rect();
+            case n::kRate: case n::kDivision: return f.rate;
+            case n::kRise: return f.rise;
+            case n::kSync: return f.syncMode;
+            case n::kMode: return f.mode;
+            case n::kRandomMode: return f.modeList;
+            case n::kPhase: return f.phase;
+            case n::kDelay: return f.delay;
+            case n::kHost: return f.host;
+            case n::kDirection: return f.direction;
+            case n::kSwing: return f.swing;
+            case n::kStereo: return f.stereo;
+            case n::kMono: return f.mono;
+            case n::kRandomStereo: return f.stereoToggle;
+            case n::kTranspose: return f.keyTranspose;
+            case n::kTune: return f.keyTune;
             default: return {};
         }
     }
-    ui::Rect nativeEditorRect (int field) const noexcept
+    ui::Rect nativeEditorRect (int field) const noexcept { return editor_.rect (field); }
+    ui::Rect nativeEditorToolRect (int tool) const noexcept
     {
-        return editorFields (*this)[field]->rect();
+        const ui::Rect r = editor_.rect (ui::ShapeEditorModel::kTool);
+        constexpr int tools = ui::ShapeTool::kTools;
+        return { r.x + r.w * tool / tools, r.y, r.w * (tool + 1) / tools - r.w * tool / tools, r.h };
     }
-    ui::Rect nativeEditorToolRect (int tool) const noexcept { return editor_.tools.cell (tool); }
     ui::Rect editorCanvasRect() const noexcept { return editor_.canvasRect(); }
     ui::Rect nativeDetailRect (int field) const noexcept
     {
         namespace n = nativeui::lfodetail;
         if (field < n::Header)
-            return pointModFields (*this)[field]->rect();
+            return pointMod_.rect (field);
         if (field == n::Header)
-            return list_.headerRect();
+            return menu_.headerRect();
         const int row = field - n::FirstRow;
-        return row < listNativeRows() ? list_.rowRect (list_.firstRow() + row) : ui::Rect {};
+        return row < listNativeRows() ? menu_.rowRect (menu_.firstRow() + row) : ui::Rect {};
     }
 
     /** The LFO shown: 1 .. 10 (LFO) or 1 .. 4 (RND, `random ()`). */
     bool random() const noexcept { return rnd_ != 0; }
     int selection() const noexcept { return rnd_ != 0 ? rnd_ : lfoNum_; }
     int topPage() const noexcept { return pageTop_; }
-    int activeQ() const noexcept { return full_.activeGroup(); }
+    int activeQ() const noexcept { return activeGroup(); }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     /** The selector of the full screen (tests). */
-    const ui::UsedSelector& selector() const noexcept { return full_.selector; }
+    const binding::SelectorSet& selector() const noexcept { return selector_; }
     /** The modulation source id (choice of modNN.source) of the LFO shown. */
     int source() const noexcept { return rnd_ != 0 ? 14 + rnd_ : uibind::lfoSource (lfoNum_); }
     /** The rectangle the picture of the LFO goes into now (empty when the current page shows none). */
     ui::Rect displayRect() const noexcept
     {
         if (stackDepth_ == 0)
-            return compact_.displayRect();
+            return compG_.display;
         if (pageTop_ == 0 || pageTop_ == kPageList)
-            return full_.displayRect();
+            return fullG_.display;
         return {};
     }
 
@@ -354,8 +361,8 @@ public:
         const int midY = header.bottom();
         if (rnd_ == 0)
         {
-            const ui::Rect rise = compact_.rise.rect();
-            const ui::Rect smooth = compact_.smoothTime.rect();
+            const ui::Rect rise = compG_.rise;
+            const ui::Rect smooth = compG_.smoothTime;
             ground (kGroundX0, midY, kGroundX1 - kGroundX0, rise.y - midY);
             ground (kGroundX0, rise.y, rise.x - kGroundX0, rise.h);
             ground (rise.right(), rise.y, smooth.x - rise.right(), rise.h);
@@ -364,11 +371,12 @@ public:
         }
         else
             ground (kGroundX0, midY, kGroundX1 - kGroundX0, kTabY + kTabH - midY);
-        compact_.draw (sb);
-        ui::lfodisplay::draw (sb, compact_.displayRect(), compactData(), ! displayHot_, displayHot_ && ! instPopup_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);   // hot: the data follows with the live parts (drawLive), the cells keep their groups
-        compact_.full.draw (sb);
-        if (instPopup_)
-            list_.draw (sb);   // the list of the selector lies over the third (drawLive paints no cursors then)
+        {
+            ui::Pen pen (sb, true);
+            ui::Cell cell (sb, compG_.display);
+            pen.block (compG_.display);   // the frame of the display
+        }
+        ui::lfodisplay::draw (sb, compG_.display, compactData(), ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);   // hot: the data follows with the live parts (drawLive), the cells keep their groups
     }
     /** The opaque ground of the whole tab and the page of the stack (the full screen, the editor, the targets, the modulations of a control). */
     void drawPage (gpu::SceneBuilder& sb) const
@@ -385,10 +393,9 @@ public:
         }
         else if (pageTop_ == kPagePointMod)
         {
-            const auto parts = pointModFields (*this);
             std::array<ui::Rect, nativeui::lfodetail::Header> cells {};
             for (size_t i = 0; i < cells.size(); ++i)
-                cells[i] = parts[i]->rect();
+                cells[i] = pointMod_.rect (static_cast<int> (i));
             ui::outsideNativeCells (ui::Rect { 0, kTabY, w_, kTabH }, cells,
                                     [&] (ui::Rect strip) { drawRootGround (sb, strip); });
         }
@@ -396,12 +403,12 @@ public:
             drawRootGround (sb, { 0, kTabY, w_, kTabH });
         if (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor))
         {
-            editor_.draw (sb);
+            drawEditor (sb);
             return;
         }
         if (pageTop_ == kPagePointMod)
         {
-            pointMod_.draw (sb);
+            drawPointMod (sb);
             return;
         }
         if (pageTop_ == kPageKeyboard)
@@ -410,13 +417,14 @@ public:
             return;
         }
         if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
-            targets_.draw (sb);
-        else if (pageTop_ == kPageMods)
-            mods_.draw (sb);
+            targetsView_.draw (sb, false);
+        else if (pageTop_ == kPageMods || (pageTop_ == kPageList && underList_ == kPageMods))
+            modsView_.draw (sb, true);
         else
         {
-            full_.draw (sb);
-            ui::lfodisplay::draw (sb, full_.displayRect(), fullDisplayData(), ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);
+            if (! page_)
+                drawFullFurniture (sb);
+            ui::lfodisplay::draw (sb, fullG_.display, fullDisplayData(), ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);
         }
     }
     void drawPopup (gpu::SceneBuilder& sb) const
@@ -424,21 +432,16 @@ public:
         if (stackDepth_ > 0 && pageTop_ == kPageList)
         {
             namespace n = nativeui::lfodetail;
-            if (listKind_ == ListKind::Editor)
+            drawMenuChrome (sb);
+            auto cut = [&] (ui::Rect cell)
             {
-                list_.drawNativeChrome (sb);
-                auto cut = [&] (ui::Rect cell)
-                {
-                    const gpu::ScopedClip clip (sb, cell.x, cell.y, cell.right(), cell.bottom());
-                    if (clip)
-                        sb.clear (0u);
-                };
-                cut (list_.headerRect());
-                if (listNativeRows() > 0)
-                    cut (ui::Rect::unite (nativeDetailRect (n::FirstRow), nativeDetailRect (n::FirstRow + listNativeRows() - 1)));
-            }
-            else
-                list_.draw (sb);
+                const gpu::ScopedClip clip (sb, cell.x, cell.y, cell.right(), cell.bottom());
+                if (clip)
+                    sb.clear (0u);
+            };
+            cut (menu_.headerRect());
+            if (listNativeRows() > 0)
+                cut (ui::Rect::unite (nativeDetailRect (n::FirstRow), nativeDetailRect (n::FirstRow + listNativeRows() - 1)));
         }
     }
     /** The cursors of the voices / the newest value of the trace (the display that is on screen). */
@@ -446,21 +449,18 @@ public:
     {
         if (stackDepth_ == 0)
         {
-            if (! instPopup_)
-            {
-                if (displayHot_)   // (with the selector's list open the list lies over the third: drawCompact kept the data there)
-                    ui::lfodisplay::draw (sb, compact_.displayRect(), compactData(), false, ui::lfodisplay::Part::Data);   // the data of a hot display (drawCompact left it out): live, after every cell
-                ui::lfodisplay::drawLive (sb, compact_.displayRect(), compactData());
-            }
+            if (displayHot_)
+                ui::lfodisplay::draw (sb, compG_.display, compactData(), false, ui::lfodisplay::Part::Data);   // the data of a hot display (drawCompact left it out): live, after every cell
+            ui::lfodisplay::drawLive (sb, compG_.display, compactData());
         }
         else if (pageTop_ == 0 || (pageTop_ == kPageList && underList_ == 0))
         {
             const auto data = fullDisplayData();
             if (displayHot_)
-                ui::lfodisplay::draw (sb, full_.displayRect(), data, false, ui::lfodisplay::Part::Data);
-            ui::lfodisplay::drawLive (sb, full_.displayRect(), data);
+                ui::lfodisplay::draw (sb, fullG_.display, data, false, ui::lfodisplay::Part::Data);
+            ui::lfodisplay::drawLive (sb, fullG_.display, data);
             if (nativePlayEditor_ && pageTop_ == 0)
-                ui::clearNativeCell (sb, full_.close.rect());
+                ui::clearNativeCell (sb, fullG_.close);
         }
     }
     /** What the current state draws, as one number (the picture changes when it does): a scene of everything, the live parts included. */
@@ -479,17 +479,17 @@ public:
     /** The touch hit this UI's drawing (the main state: the right third; any other state: the whole tab). */
     bool covers (int x, int y) const noexcept
     {
-        if ((pageTop_ == kPageTargets && targets_.nativeHit (x, y))
-            || (pageTop_ == kPageMods && mods_.nativeHit (x, y)))
+        if ((pageTop_ == kPageTargets && targetsView_.nativeHit (x, y))
+            || (pageTop_ == kPageMods && modsView_.nativeHit (x, y)))
             return false;
         if (stackDepth_ > 0)
         {
-            if ((nativePlayEditor_ && pageTop_ == 0 && full_.close.rect().contains (x, y))
+            if ((nativePlayEditor_ && pageTop_ == 0 && fullG_.close.contains (x, y))
                 || nativeFieldAt (x, y) >= 0 || nativeEditorHit (x, y) || nativeDetailHit (x, y))
                 return false;
             return ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y);
         }
-        if (rnd_ == 0 && ! instPopup_ && (compact_.rise.rect().contains (x, y) || compact_.smoothTime.rect().contains (x, y)))
+        if (rnd_ == 0 && (compG_.rise.contains (x, y) || compG_.smoothTime.contains (x, y)))
             return false;
         return ui::Rect { kCompactX, kTabY + 4, kCompactW, kTabH - 8 }.contains (x, y);
     }
@@ -499,26 +499,25 @@ public:
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         const int x = ev.x, y = ev.y;
-        ui::Component* top = topComponent();
         if (ev.kind == TouchEvent::Down)
         {
             int targetRow = -1;
             const bool modulations = pageTop_ == kPageMods;
-            if (modulations ? mods_.nativeHit (x, y, &targetRow)
-                            : pageTop_ == kPageTargets && targets_.nativeHit (x, y, &targetRow))
+            if (modulations ? modsView_.nativeHit (x, y, &targetRow)
+                            : pageTop_ == kPageTargets && targetsView_.nativeHit (x, y, &targetRow))
             {
                 dropGesture();
                 if (targetRow >= 0)
                 {
                     if (modulations)
-                        mods_.selectRow (targetRow);
+                        modsView_.selectRow (targetRow);
                     else
-                        targets_.selectRow (targetRow);
+                        targetsView_.selectRow (targetRow);
                     publishQGroup (inst);
                 }
                 return false;
             }
-            gesture_ = nullptr;
+            gesture_ = Gesture::None;
             gestureDown_ = false;
             if (nativeEditorHit (x, y))
             {
@@ -535,93 +534,91 @@ public:
                 publishQGroup (inst);
                 return false;
             }
-            if (! covers (x, y) || ! top)
+            if (! covers (x, y))
                 return false;
-            gesture_ = top;
+            gesture_ = gestureOfPage();
             gestureDown_ = true;
             virtualUndoActive_ = false;
-            handle (top->touchDown (x, y, nowMs), stack, inst, nowMs);
+            touchDown (x, y, stack, inst, nowMs);
             publishQGroup (inst);
             return true;
         }
-        if (! gesture_ || ! gestureDown_)
+        if (gesture_ == Gesture::None || ! gestureDown_)
             return false;
         if (ev.kind == TouchEvent::Move)
-            handle (gesture_->touchMove (x, y), stack, inst, nowMs);
+            touchMove (x, y, stack, inst, nowMs);
         else
         {
-            handle (gesture_->touchUp (x, y), stack, inst, nowMs);
+            touchUp (x, y, stack, inst, nowMs);
             gestureDown_ = false;
-            gesture_ = nullptr;
+            gesture_ = Gesture::None;
             virtualUndoActive_ = false;
             if (shapeDirty_ && ! editorContentExternal_)
                 flushShape (inst, nowMs);   // the end of a gesture: the shape goes to the content at once
         }
         return true;
     }
-    /** The clock while a finger is down (the long press of a knob, of a point of the shape). */
+    /** The clock while a finger is down (the long press of a point of the shape). */
     void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
-        if (gesture_ && gestureDown_)
-            handle (gesture_->tick (nowMs), stack, inst, nowMs);
+        if (gesture_ == Gesture::Canvas && gestureDown_)
+            handle (editor_.canvas.tick (nowMs), stack, inst, nowMs);
     }
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
-        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the list menu scrolls; every other control is a native cell that takes its own wheel. */
+    bool wheel (int x, int y, int notches, UiStack&, IInstanceView&, double)
     {
-        ui::Component* top = topComponent();
-        if (gestureDown_ || ! top || ! covers (x, y))
+        if (gestureDown_ || pageTop_ != kPageList || ! covers (x, y) || ! menu_.box().contains (x, y))
             return false;
-        ui::Change ch;
-        if (! top->wheelOver (x, y, notches, ch))
-            return false;
-        handle (ch, stack, inst, nowMs);
-        (void) nowMs;
+        menu_.scroll (-notches);
         return true;
     }
 
     bool fingerDown() const noexcept { return gestureDown_; }
-    void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    /** The page went off the screen: the open list of the compact view closes. */
-    void closePopups() { if (instPopup_) closeInstanceList(); }
+    void dropGesture() noexcept { gesture_ = Gesture::None; gestureDown_ = false; }
+    /** The page went off the screen: nothing of the compact view stays open. */
+    void closePopups() {}
     /** A full screen opened or closed somewhere: the router keeps what the last page set, so this UI publishes its Q group again at the next update (). */
     void forgetQGroup() noexcept { qSlots_.forget(); }
 
-    // ---- access for the tests
-    ui::LfoCompact& compact() noexcept { return compact_; }
-    const ui::LfoCompact& compact() const noexcept { return compact_; }
-
+    // ---- access for the tests and the other pages
     ui::Rect compactNativeRect (int field) const noexcept
     {
-        const auto* component = compactNativePart (*this, field);
-        auto rect = component != nullptr ? component->rect() : ui::Rect {};
-        return rect;
+        namespace n = nativeui::playenvlfo;
+        switch (field)
+        {
+            case n::LfoExpand: return compG_.full;
+            case n::Shape: return compG_.shape;
+            case n::Rate: return compG_.rateKnob;
+            case n::Division: return compG_.division;
+            case n::Style: return compG_.style;
+            case n::Sync: return compG_.sync;
+            case n::StandardSync: return compG_.modeCells;
+            case n::Stereo: return compG_.stereo;
+            case n::Choose: return compG_.instance;
+            default: return {};
+        }
     }
     void setCompactNativeParts (const nativeui::playenvlfo::State& view)
     {
         namespace n = nativeui::playenvlfo;
-        for (int field = n::LfoExpand; field < n::Count; ++field)
-            if (auto* control = compactNativePart (*this, field))
-                ui::setHostPainted (control, view.fields[field].target >= 0);
-        compact_.rate.setModeCellsVisible (view.fields[n::StandardSync].target < 0);
         compactNativeKey_ = view.context.view == n::LfoKey || view.context.view == n::RndKey;
     }
     void prepareCompactPresentation (IInstanceView& inst)
     {
         adoptSelection (inst);
         const int sync = paramOf ("sync");
-        compact_.rate.setMode (ui::lfo::syncModeOf (static_cast<int> (std::lround (inst.param (sync)))));
+        syncMode_ = ui::lfo::syncModeOf (static_cast<int> (std::lround (inst.param (sync))));
     }
+    /** The sync mode (Hz, BPM, KEY) of the rate of the compact view as of the last update. */
+    ui::lfo::SyncMode compactRateMode() const noexcept { return syncMode_; }
 
     int compactNativeTarget (int field) const noexcept
     {
-        if (field == nativeui::playenvlfo::StandardSync && ! random())
+        namespace n = nativeui::playenvlfo;
+        if (field == n::StandardSync && ! random())
             return paramOf ("sync");
-        const auto* part = compactNativePart (*this, field);
-        for (const auto& item : items_)
-            if (item.c == part && item.type != T::Inert)
-                return item.param;
-        return -1;
+        const Item* it = item (compactItemOf (field));
+        return it != nullptr && it->type != T::Inert ? it->param : -1;
     }
     bool applyCompactNative (IInstanceView& v, UiStack& stack, int field, float value)
     {
@@ -632,47 +629,52 @@ public:
         {
             const int target = paramOf ("sync");
             const int mode = static_cast<int> (std::lround (value * 2.0f));
-            const auto change = ui::Change::indexed (kSyncMode, mode, mode);
-            const int next = full_.syncSwitch.nextSync (ui::SyncSwitch::Mode, change);
+            const int next = nextSync (SyncPart::Mode, mode);
             if (target < 0 || static_cast<float> (next) == v.param (target))
                 return false;
-            handle (change, stack, v, lastNowMs_);
+            uibind::writePlain (v, target, next);
             return true;
         }
-        const auto* part = compactNativePart (*this, field);
-        for (const auto& item : items_)
-            if (item.c == part && item.type != T::Inert && item.param >= 0)
-            {
-                const auto& info = uibind::info (item.param);
-                if (field == n::Rate)
-                {
-                    if (std::fabs (uibind::normOf (item.param, v.param (item.param)) - value) <= 1.0e-6)
-                        return false;
-                    write (item, ui::Change::normalised (item.id, value), v);
-                }
-                else
-                {
-                    const auto wanted = synthyboy::constrainValue (info, synthyboy::fromNormalised (info, value));
-                    if (wanted == v.param (item.param))
-                        return false;
-                    write (item, ui::Change::indexed (item.id, static_cast<int> (std::lround (wanted - info.min)), wanted), v);
-                }
-                return true;
-            }
-        return false;
+        const Item* it = item (compactItemOf (field));
+        if (it == nullptr || it->type == T::Inert || it->param < 0)
+            return false;
+        const auto& info = uibind::info (it->param);
+        if (field == n::Rate)
+        {
+            if (std::fabs (uibind::normOf (it->param, v.param (it->param)) - value) <= 1.0e-6)
+                return false;
+            write (*it, ui::Change::normalised (it->id, value), v);
+        }
+        else
+        {
+            const auto wanted = synthyboy::constrainValue (info, synthyboy::fromNormalised (info, value));
+            if (wanted == v.param (it->param))
+                return false;
+            write (*it, ui::Change::indexed (it->id, static_cast<int> (std::lround (wanted - info.min)), wanted), v);
+        }
+        return true;
     }
-    ui::LfoFullScreen& full() noexcept { return full_; }
-    ui::ShapeEditorPage& editor() noexcept { return editor_; }
+    /** What the Play view's native bridge asks of the compact view: the sync mode of its rate (`compact ().rate.mode ()`). */
+    struct CompactView
+    {
+        struct Rate
+        {
+            ui::lfo::SyncMode m;
+            ui::lfo::SyncMode mode() const noexcept { return m; }
+        } rate;
+    };
+    CompactView compact() const noexcept { return { { syncMode_ } }; }
+    ui::ShapeEditorModel& editor() noexcept { return editor_; }
+    ui::PointModModel& pointModModel() noexcept { return pointMod_; }
     void syncNativeTargets (IInstanceView& inst, UiStack& stack, bool fromPlay)
     {
         using namespace nativeui::targets;
         const auto before = stack.changes();
-        nativeTargetPage_.update (inst, targets_, pageTop_ == kPageTargets, fromPlay ? PlayLfo : Lfo,
-                               source(), targetRows_, [&] (ui::Change change) { handle (change, stack, inst, lastNowMs_); });
+        targetsNative_.update (inst, targetsView_, pageTop_ == kPageTargets, fromPlay ? PlayLfo : Lfo, source(), targetRows_,
+                               [&] (ModRowsCmd cmd, int row, double value) { rowsCommand (false, cmd, row, value, stack, inst); });
         const auto destination = synthyboy::modDestinationChoiceOf (static_cast<size_t> (modsTargetParam_));
-        nativeModulations_.update (inst, mods_, ! mods_.boardShown() && modsContextValid (inst),
-            fromPlay ? PlayLfo : Lfo, static_cast<int> (destination), modRows_,
-            [&] (ui::Change change) { handle (change, stack, inst, lastNowMs_); }, Modulations);
+        modsNative_.update (inst, modsView_, modsContextValid (inst), fromPlay ? PlayLfo : Lfo, static_cast<int> (destination), modRows_,
+                            [&] (ModRowsCmd cmd, int row, double value) { rowsCommand (true, cmd, row, value, stack, inst); }, Modulations);
         if (stack.changes() != before)
         {
             stackDepth_ = stack.depth();
@@ -683,26 +685,22 @@ public:
     }
     void hideNativeTargets (IInstanceView& inst)
     {
-        nativeTargetPage_.hide (inst, targets_);
-        nativeModulations_.hide (inst, mods_);
+        targetsNative_.hide (inst);
+        modsNative_.hide (inst);
     }
-    ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
-    ui::ModulationsPage& modsPage() noexcept { return mods_; }
-    ui::ListPopup& list() noexcept { return list_; }
-    ui::PointModPage& pointModPage() noexcept { return pointMod_; }
-    ui::TextEntry& keyboard() noexcept { return entry_; }
     LfoShapeLibrary& library() noexcept { return lib_; }
+    ui::TextEntry& keyboard() noexcept { return entry_; }
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
     const ui::lfodisplay::Data& displayData() const noexcept { return data_; }
-    /** The data of the compact view (the Play third): the same picture with the plot area below the header band. The full page and the shape editor draw data_ as it is (no area). */
+    /** The data of the full page: the picture of the LFO below the edit button and the page title. */
     ui::lfodisplay::Data fullDisplayData() const noexcept
     {
         auto data = data_;
-        const auto edit = full_.edit.rect();
+        const auto edit = fullG_.edit;
         if (! edit.empty())
         {
-            const auto graph = full_.displayRect().inset (8);
+            const auto graph = fullG_.display.inset (8);
             const int top = std::max (edit.bottom() + 8, graph.y + ui::lfodisplay::titleRoom (data));   // below the edit button and the page title (inner margin to the border)
             data.pageTitle = true;
             data.area = { graph.x, top, graph.w, std::max (0, graph.bottom() - 6 - top) };
@@ -711,19 +709,20 @@ public:
         return data;
     }
 
+    /** The data of the compact view (the Play third): the same picture with the plot area below the header band. The full page and the shape editor draw data_ as it is (no area). */
     ui::lfodisplay::Data compactData() const noexcept
     {
         ui::lfodisplay::Data d = data_;
-        d.area = ui::playrows::plotRect (compact_.displayRect());
-        d.aperture = compact_.full.rect();
+        d.area = ui::playrows::plotRect (compG_.display);
+        d.aperture = compG_.full;
         return d;
     }
     int gridOf (int lfo) const noexcept { return gridXOf (lfo); }
     int gridXOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridX_[lfo - 1] : 8; }
     int gridYOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridY_[lfo - 1] : 8; }
-    static constexpr int kLfos = 10;
 
     // ---- the drawn shape and the content state (public for the tests)
+
     static ui::lfo::ShapeModel modelOf (const synthyboy::ContentLfoShape& s)
     {
         ui::lfo::ShapeModel m;
@@ -794,28 +793,70 @@ public:
 
 private:
     static constexpr int kGroundX0 = 852, kGroundX1 = 1280;
-    static uint32_t mixIn (uint32_t h, int32_t v) noexcept
-    {
-        for (int b = 0; b < 4; ++b)
-            h = (h ^ ((static_cast<uint32_t> (v) >> (8 * b)) & 255u)) * 16777619u;
-        return h;
-    }
     using ModRow = uibind::ModRow;
+    enum class Gesture : uint8_t { None, Canvas, Keyboard, Menu, Ground };
+    enum class SyncPart : uint8_t { Mode, Trip, Dot };
 
     // ======================================================================================================================================================================
     // building: the selected LFO (the type and the number) decides the parameters behind the ids
-    void bind (int id, ui::ControlModel* c, T type, const char* suffix)
+    void buildItems()
     {
-        Item it;
-        it.id = id; it.c = c; it.type = type;
-        it.param = suffix != nullptr && suffix[0] != '\0' ? uibind::indexOfKey (prefix_ + suffix) : -1;
-        if (c != nullptr)
+        items_.clear();
+        for (const RowSpec& row : kRows)
         {
-            c->setId (id);
-            c->setParam (it.param);
+            Item it;
+            it.id = row.id;
+            it.type = row.type;
+            const char* suffix = rnd_ != 0 ? row.random : row.standard;
+            it.param = suffix != nullptr && suffix[0] != '\0' ? uibind::indexOfKey (prefix_ + suffix) : -1;
+            items_.push_back (it);
         }
-        items_.push_back (it);
     }
+    /** The row id of the control the native Play view calls `field`. */
+    static int compactItemOf (int field) noexcept
+    {
+        namespace n = nativeui::playenvlfo;
+        switch (field)
+        {
+            case n::Shape: return kShape;
+            case n::Rate: return kRate;
+            case n::Division: return kDivision;
+            case n::Style: return kStyle;
+            case n::Sync: return kSync;
+            case n::Stereo: return kStereoToggle;
+            default: return 0;
+        }
+    }
+    /** The sync value after a change of the mode (HZ / BPM / KEY: `index`) or of TRIP / DOT: the mode keeps the switches, a switch excludes the other. */
+    int nextSync (SyncPart part, int index) const noexcept
+    {
+        using M = ui::lfo::SyncMode;
+        M m = ui::lfo::syncModeOf (sync_);
+        bool tr = ui::lfo::syncTrip (sync_), dt = ui::lfo::syncDot (sync_);
+        if (part == SyncPart::Mode)
+            m = static_cast<M> (std::clamp (index, 0, 2));
+        else if (part == SyncPart::Trip) { tr = index != 0; if (tr) dt = false; }
+        else { dt = index != 0; if (dt) tr = false; }
+        return ui::lfo::syncOf (m, tr, dt);
+    }
+
+    /** Recomputes the rectangles of the pages when something that decides them changed (the type, the sync, the page mode, the editor button). */
+    void relayout()
+    {
+        const uint32_t key = static_cast<uint32_t> ((random() ? 1 : 0) | (page_ ? 2 : 0) | (keyActive_ ? 4 : 0) | (nativePlayEditor_ ? 8 : 0) | (editShown() ? 16 : 0) | (w_ << 8));
+        if (key == geomKey_)
+            return;
+        geomKey_ = key;
+        const ui::Rect tab { 0, kTabY, w_, kTabH };
+        fullG_ = lfolayout::full (tab, random(), page_, keyActive_, nativePlayEditor_, editShown());
+        compG_ = lfolayout::compact ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 }, random());
+        editor_.place (tab);
+        pointMod_.place (tab);
+        menu_.parent = tab;
+    }
+    bool editShown() const noexcept { return editShown_ && ! random(); }
+
+
     /** Paint the corresponding slice of the same gradient exported for the host skin. */
     static void drawRootGround (gpu::SceneBuilder& sb, const ui::Rect& area)
     {
@@ -839,14 +880,14 @@ private:
         };
         const auto pull = [&]
         {
-            full_.setNativePageControls (useNative());
+            nativePage_ = useNative();
             update (inst, highlight, stack, nowMs, live);
         };
-        if (refresh || full_.nativePageControls() != useNative())
+        if (refresh || nativePage_ != useNative())
             pull();
         if (page_)
             syncNativeTargets (inst, stack, false);
-        full_.setNativePageControls (useNative());
+        nativePage_ = useNative();
         const auto changes = stack.changes();
         updateNativeEditor (inst, stack, nowMs);
         updateNativeDetail (inst, stack, nowMs);
@@ -856,7 +897,7 @@ private:
             publishNativeEditor (inst, nativeEditorView (inst, stack));
             publishNativeDetail (inst, nativeDetailView (inst, stack));
         }
-        if (! full_.nativePageControls())
+        if (! nativePage_)
         {
             if (nativePublished_)
                 inst.setNativeLfoState ({});
@@ -881,7 +922,7 @@ private:
     int nativeFieldAt (int x, int y) const noexcept
     {
         namespace n = nativeui::lfo;
-        if (! full_.nativePageControls())
+        if (! nativePage_)
             return -1;
         for (int field = 0; field < n::kCount; ++field)
             if ((nativeFields_ & n::bit (field)) != 0 && nativeRect (field).contains (x, y))
@@ -889,25 +930,28 @@ private:
         return ! random() && nativeRect (n::kAction, n::kExpand).contains (x, y) ? n::kAction : -1;
     }
 
+    /** A touch on (or an edit of) the native control of `field` makes the Q group it is a member of the active one. */
     void selectNativeQGroup (int field)
     {
         const int target = nativeTargets_[field];
         if (target < 0)
             return;
-        for (int group = 0; group < full_.numGroups(); ++group)
-            for (int slot = 0; slot < ui::QGroup::kSlots; ++slot)
-                if (paramOfMember (full_.groups[group].member (slot)) == target)
+        buildGroups();
+        for (int group = 0; group < nGroups_; ++group)
+            for (int slot = 0; slot < 4; ++slot)
+                if (paramOfMember (groups_[group].member[slot]) == target)
                 {
-                    full_.setActiveGroup (group);
+                    setActiveGroup (group);
                     return;
                 }
     }
+
 
     nativeui::lfo::ViewState nativeView (const IInstanceView& inst) noexcept
     {
         namespace n = nativeui::lfo;
         nativeFields_ = 0;
-        if (! full_.nativePageControls())
+        if (! nativePage_)
             return {};
         n::ViewState state;
         state.selection = slot() + 1;
@@ -995,66 +1039,7 @@ private:
             const char* suffix = nativeui::lfo::kSuffixes[field];
             nativeTargets_[field] = suffix != nullptr ? uibind::indexOfKey (prefix_ + suffix) : -1;
         }
-        items_.clear();
-        // ---- the compact view
-        bind (kInstance, &compact_.instance, T::Inert, "");
-        bind (kFullButton, &compact_.full, T::Inert, "");
-        bind (kShape, &compact_.shape, T::Stepper, rnd ? "" : "shape");
-        bind (kStyle, &compact_.style, T::Stepper, rnd ? "style" : "");
-        bind (kRate, &compact_.rate.rate, T::Knob, "rate");
-        bind (kDivision, &compact_.rate.division, T::Stepper, "division");
-        bind (kSyncMode, &compact_.rate.modeCells, T::Inert, "");
-        bind (kRise, &compact_.rise, T::Knob, rnd ? "" : "fade_in");
-        bind (kSmoothTime, &compact_.smoothTime, T::Knob, rnd ? "" : "smooth_time");
-        bind (kSync, &compact_.sync, T::Stepper, "sync");
-        bind (kStereoToggle, &compact_.stereo, T::Toggle, rnd ? "stereo" : "");
-        // ---- the full screen
-        bind (kClose, &full_.close, T::Inert, "");
-        bind (kSelector, &full_.selector, T::Inert, "");
-        bind (kSyncMode, &full_.syncSwitch.mode, T::Inert, "");
-        bind (kSyncTrip, &full_.rate.trip, T::Inert, "");
-        bind (kSyncDot, &full_.rate.dot, T::Inert, "");
-        bind (kTargets, &full_.targets, T::Inert, "");
-        bind (kPicker, &full_.picker, T::Picker, rnd ? "style" : "shape");
-        bind (kPagePicker, &full_.namedPicker, T::Stepper, rnd ? "style" : "shape");
-        bind (kSmoothPick, &full_.smoothSwitch, T::Toggle, rnd ? "" : "smooth");   // the Q member of the LED on the label of SMOOTH
-        bind (kHostPick, &full_.hostPick, T::Toggle, rnd ? "" : "host");   // touch only: a member of no Q group
-        bind (kEdit, &full_.edit, T::Inert, "");
-        bind (kRate, &full_.rate.rate, T::Knob, "rate");
-        bind (kDivision, &full_.rate.division, T::Stepper, "division");
-        bind (kRise, &full_.rise, T::Knob, rnd ? "" : "fade_in");
-        bind (kSmoothTime, &full_.smoothTime, T::Knob, rnd ? "" : "smooth_time");
-        bind (kMode, &full_.mode, T::Stepper, rnd ? "" : "sync_type");
-        bind (kModeList, &full_.modeList, T::List, rnd ? "sync_type" : "");   // the trigger of a random LFO (two options) is a LED list, the six long names of an LFO a stepper
-        bind (kPhase, &full_.phase, T::Knob, rnd ? "" : "phase");
-        bind (kDelay, &full_.delay, T::Knob, rnd ? "" : "delay");
-        bind (kDirection, &full_.direction, T::List, rnd ? "" : "direction");
-        bind (kSwing, &full_.swing, T::Knob, rnd ? "" : "swing");
-        bind (kStereo, &full_.stereo, T::Knob, rnd ? "" : "stereo");
-        bind (kMono, &full_.monoQ, T::Toggle, rnd ? "" : "mono");
-        bind (kStereoToggle, &full_.stereoToggle, T::Toggle, rnd ? "stereo" : "");
-        bind (kKeyTranspose, &full_.keyTranspose, T::Number, "keytrack_transpose");
-        bind (kKeyTune, &full_.keyTune, T::Number, "keytrack_tune");
-        // ---- the ranges of the knobs and fields come from the parameters
-        for (Item& it : items_)
-        {
-            if (it.c == nullptr || it.param < 0)
-                continue;
-            const synthyboy::ParamInfo& pi = uibind::info (it.param);
-            if (it.type == T::Knob)
-            {
-                auto* k = static_cast<ui::Knob*> (it.c);
-                k->state.bipolar = pi.min < 0.0f && pi.max > 0.0f;
-                k->state.defaultValue = synthyboy::toNormalised (pi, pi.def);
-            }
-            else if (it.type == T::Number)
-            {
-                auto& st = static_cast<ui::NumberField*> (it.c)->state;
-                st.min = pi.min; st.max = pi.max; st.defaultValue = pi.def; st.step = 1.0;
-            }
-        }
-        compact_.configure (rnd);
-        full_.configure (rnd);
+        buildItems();
         // the parameters of the display
         values_ = synthyboy::ParamValues::defaults();
         dispIdx_.clear();
@@ -1067,12 +1052,14 @@ private:
         std::fill (std::begin (trace_), std::end (trace_), 0.0f);
         qSlots_.forget();
         modsDirty_ = true;
-        gesture_ = nullptr; gestureDown_ = false;
+        gesture_ = Gesture::None; gestureDown_ = false;
         editorContent_.reset();
         editorContentExternal_ = false;
         editorShapeIdx_ = -1;
         pageSig_ = -1;
         nCache_ = 0;
+        geomKey_ = ~0u;
+        relayout();
     }
 
     // ======================================================================================================================================================================
@@ -1083,18 +1070,13 @@ private:
         const int sig = top * 16 + (top == kPageMods ? modsTarget_ & 0xff : 0);
         if (top == pageTop_ && sig == pageSig_)
             return;
-        // A standalone instance-list is a cached popup scene.  Clear its
-        // model as soon as the stack leaves the list; otherwise a same-sized
-        // RND1 -> RND2 transition can leave the old dim/list cells resident
-        // until the tab is reopened.
         if (pageTop_ == kPageList && top != kPageList)
         {
-            list_.state.items = nullptr;
-            list_.state.count = 0;
-            list_.state.current = -1;
-            list_.setPopup ({ 0, kTabY, w_, kTabH });
+            menu_.items.clear();
+            menu_.header = nullptr;
+            listKind_ = ListKind::None;
         }
-        if (gesture_ != nullptr && pageTop_ != top)
+        if (gesture_ != Gesture::None && pageTop_ != top)
             dropGesture();
         if (pageTop_ == kPageEditor && top != kPageEditor && top != kPageList && ! editorContentExternal_)
             flushShape (inst, lastNowMs_);
@@ -1107,8 +1089,8 @@ private:
         {
             case kPageTargets: if (! fromTargetsList) targetsPageIndex_ = 0; loadTargets (inst, true); break;
             case kPageMods: loadMods (inst); break;
-            case kPageEditor: setIds(); syncEditor (inst); break;
-            case kPagePointMod: setIds(); loadPointMod (inst, true); break;
+            case kPageEditor: syncEditor (inst); break;
+            case kPagePointMod: loadPointMod (inst, true); break;
             case kPageKeyboard: beginKeyboard(); break;
             default: break;
         }
@@ -1117,16 +1099,17 @@ private:
     }
 
     // ---- the targets page: the rows of the matrix whose source is this LFO
-    ModRow targetRows_[ui::ModTargetsPage::kPerPage];
+    ModRow targetRows_[LfoModRows::kPerPage];
     int targetTotal_ = 0;
     void loadTargets (const IInstanceView& v, bool fresh)
     {
+        constexpr int perPage = LfoModRows::kPerPage;
         int slots[uibind::kMaxTargetSlots];
         const int total = uibind::slotsOfSource (v, source(), slots, uibind::kMaxTargetSlots);
-        const int pages = std::max (1, (total + ui::ModTargetsPage::kPerPage - 1) / ui::ModTargetsPage::kPerPage);
+        const int pages = std::max (1, (total + perPage - 1) / perPage);
         targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
-        const int first = targetsPageIndex_ * ui::ModTargetsPage::kPerPage, n = std::clamp (total - first, 0, ui::ModTargetsPage::kPerPage);
-        ui::ModTargetsPage::Entry e[ui::ModTargetsPage::kPerPage];
+        const int first = targetsPageIndex_ * perPage, n = std::clamp (total - first, 0, perPage);
+        LfoModRows::Entry e[perPage];
         for (int i = 0; i < n; ++i)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slots[first + i]);
@@ -1136,24 +1119,20 @@ private:
             e[i].bypassed = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
             targetRows_[i] = { slots[first + i], source() };
         }
-        // only a change of the rows is loaded again (a reload resets the touch of a row that is being dragged)
-        bool same = ! fresh && n == targets_.numRows() && total == targetTotal_;
+        // only a change of the rows is loaded again
+        bool same = ! fresh && n == targetsView_.numRows() && total == targetTotal_;
         for (int i = 0; same && i < n; ++i)
         {
-            const ui::ModTargetsPage::Row& r = targets_.rows[i];
-            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth.state.value - (e[i].depth + 1.0) * 0.5) < 1.0e-9 && r.polarity.state.on == e[i].bidirectional && r.bypass.state.on == ! e[i].bypassed;
+            const LfoModRows::Entry& r = targetsView_.row (i);
+            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth - e[i].depth) < 1.0e-9 && r.bidirectional == e[i].bidirectional && r.bypassed == e[i].bypassed;
         }
         if (same)
             return;
         targetTotal_ = total;
         char title[16];
         std::snprintf (title, sizeof title, rnd_ != 0 ? "RND %d" : "LFO %d", selection());
-        targets_.load (e, n, title, ui::theme::sourceColour (rnd_ != 0 ? "RND" : "LFO"), total, targetsPageIndex_);
-        targets_.back.setId (kTargetsBack);
-        targets_.page.setId (kTargetsPage);
-        targets_.add.setId (kTargetsAdd);
-        for (int r = 0; r < ui::ModTargetsPage::kPerPage; ++r)
-            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
+        targetsView_.place ({ 0, kTabY, w_, kTabH });
+        targetsView_.load (e, n, title, ui::theme::sourceColour (rnd_ != 0 ? "RND" : "LFO"), total, targetsPageIndex_);
     }
     /** The name of a destination choice ("LFO 1 Rate"); the appended destinations that are no table parameter get a generic name. */
     static void targetName (size_t destChoice, char* out, size_t cap)
@@ -1170,45 +1149,22 @@ private:
         const int slot = uibind::addTargetSlot (v, modulationSource, destChoice);
         if (slot < 0)
             return;
-        constexpr int rows = ui::ModTargetsPage::kPerPage;
+        constexpr int rows = LfoModRows::kPerPage;
         const int position = uibind::targetPosition (v, modulationSource, slot);
         targetsPageIndex_ = position / rows;
         loadTargets (v, true);
-        targets_.selectRow (position % rows);
+        targetsView_.selectRow (position % rows);
         modsDirty_ = true;
     }
 
-    // ---- the list popup: the instances, the choices of a parameter, the groups of the destinations and the parameters of a group
-    enum class ListKind : uint8_t { None, Instance, Param, Dest, Editor, Plus };
+    // ---- the list menu: the destination to add, the source to add, the shapes and the actions of the editor. The rows are native cells of the host (nativeui::lfodetail menu); the plugin holds the names and the window.
+    enum class ListKind : uint8_t { None, Dest, Editor, ModSource, PointSource };
     using DestIndex = uibind::DestIndex;
     ListKind listKind_ = ListKind::None;
-    int listParam_ = -1, listGroup_ = -1, underList_ = 0;
-    std::vector<const char*> listNames_;
-    /** The list of the selector of the compact view: LFO 1 .. 10, RND 1 .. 4 (scrolls), a popup over the third (not a page of the stack): the same behaviour as the envelope's and the oscillator's selector. */
-    void openInstanceList (const IInstanceView& v, ListKind kind = ListKind::Instance)
-    {
-        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
-        listKind_ = kind;   // Instance: the cells of the carousel; Plus: the two free kinds of a tap on `+`
-        fillList (&v);
-        const int rows = std::max (1, std::min (list_.state.count, (third.h - 6 - ui::playrows::kSelectorH - 6 - 2 * ui::ListPopup::kPad) / ui::ListPopup::kRowH));
-        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, rows * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (third);
-        list_.showCurrent();
-        instPopup_ = true;
-    }
-    void closeInstanceList()
-    {
-        instPopup_ = false;
-        listKind_ = ListKind::None;
-        list_.state.current = -1;
-        placePageList();
-    }
-    bool instPopup_ = false;   // the list of the selector of the compact view is open (main state only)
-    void placePageList()
-    {
-        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup ({ 0, kTabY, w_, kTabH });
-    }
+    int listGroup_ = -1, underList_ = 0;
+    std::vector<std::string> listText_;
+    std::vector<int> listChoice_;   // the choice (destination / source) behind row i of a destination or source list
+    void placePageList() { menu_.parent = { 0, kTabY, w_, kTabH }; menu_.first = 0; }
     bool isSourceAssigned (int id) const noexcept
     {
         if (id >= 1 && id <= kLfos)
@@ -1217,74 +1173,115 @@ private:
             return scan_.used[uibind::rndSource (id - uibind::kRndBase)];
         return false;
     }
+    /** The names of the list of the kind that is open (the editor lists have their own fill). */
     void fillList (const IInstanceView* v)
     {
+        (void) v;
         if (listKind_ == ListKind::Editor)
         {
             fillEditorList();
             return;
         }
-        listNames_.clear();
-        list_.state.header = nullptr;
-        list_.state.headerBack = false;
-        list_.state.current = -1;
-        list_.state.dotMask = 0;
-        list_.state.dotColours = nullptr;
-        list_.state.icons = nullptr;
-        if (listKind_ == ListKind::Instance)
-        {
-            for (int i = 0; i < playCells_.n; ++i)
-                listNames_.push_back (playCells_.names[i]);   // the same cells as the carousel and the tab's selector
-            list_.state.current = playCells_.selectedPos;
-            list_.state.dotMask = playDots_;
-        }
-        else if (listKind_ == ListKind::Plus)
-        {
-            int ch[ui::UsedSelector::kMaxChoices];
-            const int n = full_.selector.plusChoices (ch, ui::UsedSelector::kMaxChoices);
-            static std::string names[ui::UsedSelector::kMaxChoices];
-            for (int i = 0; i < n; ++i)
-            {
-                plusIds_[i] = full_.selector.state.items[ch[i]].id;
-                names[i] = uibind::selectorRowName (uibind::SelKind::Lfo, plusIds_[i]);
-                listNames_.push_back (names[i].c_str());
-            }
-        }
-        else if (listKind_ == ListKind::Param && listParam_ >= 0)
-        {
-            const synthyboy::ParamInfo& pi = uibind::info (listParam_);
-            for (int i = 0; i < pi.numChoices; ++i)
-                listNames_.push_back (pi.choices[i]);
-            if (v != nullptr)
-                list_.state.current = static_cast<int> (std::lround (v->param (listParam_) - pi.min));
-        }
-        else if (listKind_ == ListKind::Dest)
+        listText_.clear();
+        listChoice_.clear();
+        menu_.header = nullptr;
+        menu_.headerBack = false;
+        if (listKind_ == ListKind::Dest)
         {
             const DestIndex& d = DestIndex::get();
             if (listGroup_ < 0)
-                for (const std::string& g : d.groups)
-                    listNames_.push_back (g.c_str());
+            {
+                for (size_t g = 0; g < d.groups.size(); ++g)
+                {
+                    listText_.push_back (d.groups[g]);
+                    listChoice_.push_back (static_cast<int> (g));
+                }
+                menu_.header = "ADD A TARGET";
+            }
             else
             {
                 for (int c : d.choices[static_cast<size_t> (listGroup_)])
-                    listNames_.push_back (uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (c))).name);
-                list_.state.header = d.groups[static_cast<size_t> (listGroup_)].c_str();
-                list_.state.headerBack = true;
+                {
+                    listText_.push_back (uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (c))).name);
+                    listChoice_.push_back (c);
+                }
+                menu_.header = d.groups[static_cast<size_t> (listGroup_)].c_str();
+                menu_.headerBack = true;
             }
         }
-        list_.state.items = listNames_.data();
-        list_.state.count = static_cast<int> (listNames_.size());
-        list_.showCurrent();
+        else if (listKind_ == ListKind::ModSource || listKind_ == ListKind::PointSource)
+        {
+            for (size_t i = 0; i < synthyboy::modSourceCount(); ++i)
+            {
+                const int choice = static_cast<int> (i) + 1;
+                listText_.push_back (uibind::sourceName (choice));
+                listChoice_.push_back (choice);
+            }
+            menu_.header = listKind_ == ListKind::ModSource ? "ADD A MODULATION SOURCE" : "MODULATE THE VALUE WITH";
+            menu_.headerBack = false;
+        }
+        menu_.items.clear();
+        for (const std::string& s : listText_)
+            menu_.items.push_back (s.c_str());
+        menu_.first = 0;
+        ++nativeMenuRevision_;
     }
-    /** The "+" of the selector with two free kinds: a two-row list "LFO n" / "RND m" over the page; a choice selects it (nothing is written). */
-    int plusIds_[ui::UsedSelector::kMaxChoices] = {};
-    void openPlusList (UiStack& stack)
+    int listNativeRows() const noexcept { return menu_.nativeRows (nativeui::lfodetail::kRows); }
+    void openList (UiStack& stack, IInstanceView& v, ListKind kind)
     {
-        listKind_ = ListKind::Plus;
+        listKind_ = kind;
+        listGroup_ = -1;
         placePageList();
         stack.openDetail (kPageList);
-        fillList (nullptr);
+        fillList (&v);
     }
+    /** The header of the list was tapped: one level up (the destination groups, the editor lists), or the list closes. */
+    void listUp (UiStack& stack, IInstanceView& v)
+    {
+        if (listKind_ == ListKind::Dest && listGroup_ >= 0)
+        {
+            listGroup_ = -1;
+            fillList (&v);
+        }
+        else if (listKind_ == ListKind::Editor)
+            editorListUp();
+        else
+            stack.back();
+    }
+    /** A row of the list was chosen. */
+    void listChosen (int index, UiStack& stack, IInstanceView& v)
+    {
+        if (listKind_ == ListKind::Editor)
+            editorListChosen (index, stack, v);
+        else if (listKind_ == ListKind::Dest)
+        {
+            if (listGroup_ < 0)
+            {
+                listGroup_ = index;
+                fillList (&v);
+            }
+            else
+            {
+                const std::vector<int>& ch = DestIndex::get().choices[static_cast<size_t> (listGroup_)];
+                if (index >= 0 && index < static_cast<int> (ch.size()))
+                    addTarget (v, ch[static_cast<size_t> (index)]);
+                stack.back();
+            }
+        }
+        else if (listKind_ == ListKind::ModSource)
+        {
+            if (index >= 0 && index < static_cast<int> (listChoice_.size()))
+                addModulation (v, listChoice_[static_cast<size_t> (index)]);
+            stack.back();
+        }
+        else if (listKind_ == ListKind::PointSource)
+        {
+            if (index >= 0 && index < static_cast<int> (listChoice_.size()))
+                setPointSource (listChoice_[static_cast<size_t> (index)], v);
+            stack.back();
+        }
+    }
+
     static const char* const* instanceNames() noexcept
     {
         static const char* const n[kInstances] = { "LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4" };
@@ -1315,31 +1312,20 @@ private:
             configure (v);
         }
     }
-    /** A choice (a position among the cells of the compact view's carousel and list: used LFOs, the selected one, `+`): view state only, nothing is written to the engine. The `+` cell selects the lowest free LFO (or random LFO) when only one
-        kind is free; with two free kinds it opens the two-row list over the third (`openPlusPopup`). */
-    void selectSlot (int s, IInstanceView& v)
-    {
-        if (s >= 0 && s < playCells_.n && playCells_.id[s] == uibind::SelectorCells::kPlusCell)
-        {
-            int ch[ui::UsedSelector::kMaxChoices];
-            if (full_.selector.plusChoices (ch, ui::UsedSelector::kMaxChoices) > 1)
-            {
-                plusPending_ = true;
-                return;
-            }
-        }
-        const int id = uibind::cellChoice (full_.selector, playCells_, s);
-        if (id > 0)
-            uibind::chooseLfo (v, id);
-        adoptSelection (v);
-    }
-    bool plusPending_ = false;   // a tap on the `+` cell of the compact view with two free kinds: the list opens at the end of the handler
     int pageSlot_ = -1;   // the page of a tab: the LFO of its sub-tab (0 .. 13: LFO 1 .. 10, RND 1 .. 4); -1 in the Play page's expansion
     uibind::SelectorCells playCells_;
     unsigned playDots_ = 0;
 public:
+    /** A choice among the cells of the Play page's selector (used LFOs, the selected one, `+`): view state only, nothing is written to the engine. The `+` cell selects the lowest free LFO (or random LFO). */
+    void selectSlot (int s, IInstanceView& v)
+    {
+        const int id = uibind::cellChoice (selector_, playCells_, s);
+        if (id > 0)
+            uibind::chooseLfo (v, id);
+        adoptSelection (v);
+    }
     const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
-    const ui::UsedSelector& tabSelector() const noexcept { return full_.selector; }
+    const binding::SelectorSet& tabSelector() const noexcept { return selector_; }
     /** The LFO tab was left (page_view_base.h): a selected LFO or random LFO that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
     void leftTab (IInstanceView& v)
     {
@@ -1356,15 +1342,15 @@ public:
     }
 private:
 
-    // ---- the modulations page of one control (a long press on a knob or a field)
-    ModRow modRows_[ui::ModulationsPage::kPerPage];
-    NativeModTargets nativeModulations_;
+    // ---- the modulations page of one control
+    ModRow modRows_[LfoModRows::kPerPage];
+    LfoNativeModRows targetsNative_, modsNative_;
     int modsPageIndex_ = 0;
     uint64_t modsPreset_ = 0;
-    int modsTarget_ = 0, modsTargetParam_ = -1, modsAddOffer_ = 0;
+    int modsTarget_ = 0, modsTargetParam_ = -1;
     bool modsContextValid (const IInstanceView& inst) const noexcept
     {
-        const auto* control = item (modsTarget_);
+        const Item* control = item (modsTarget_);
         return pageTop_ == kPageMods && modsTargetParam_ >= 0 && modsPreset_ == inst.stateGeneration()
             && uibind::selectedLfo (inst) == (rnd_ > 0 ? uibind::kRndBase + rnd_ : lfoNum_)
             && control != nullptr && control->param == modsTargetParam_;
@@ -1381,99 +1367,110 @@ private:
             modsTargetParam_ = target;
         }
         if (t != nullptr && modsTargetParam_ >= 0)
-        {
-            if (t->c != nullptr && t->type == T::Knob)
-                std::snprintf (title, sizeof title, "%.12s", static_cast<ui::Knob*> (t->c)->state.label);
-            else if (t->c != nullptr && t->type == T::Number)
-                std::snprintf (title, sizeof title, "%.12s", static_cast<ui::NumberField*> (t->c)->state.label);
-        }
-        const auto window = uibind::modulationWindow (v, modsTargetParam_, source(), modsPageIndex_, modRows_, focusSlot);
+            std::snprintf (title, sizeof title, "%.12s", controlLabel (t->id));
+        const auto window = lfomods::modulationWindow (v, modsTargetParam_, source(), modsPageIndex_, modRows_, focusSlot);
         modsPageIndex_ = window.page;
-        if (window.total == 0)
-            uibind::fillSourceBoard (mods_.board);
-        mods_.load (window.entries, title, window.total, window.page);
-        if (window.focusRow >= 0)
-            mods_.selectRow (window.focusRow);
-        mods_.page.setId (kModsPage);
-        mods_.back.setId (kModsBack);
-        mods_.addSource.setId (kModsAddStep);
-        mods_.add.setId (kModsAdd);
-        for (int r = 0; r < ui::ModulationsPage::kPerPage; ++r)
-            mods_.setRowIds (r, kModsRow + 4 * r, kModsRow + 4 * r + 1, kModsRow + 4 * r + 2, kModsRow + 4 * r + 3);
-        // what "add source" offers: this LFO first, then the first LFOs, envelopes and macros
-        int offer[8], n = 0;
-        auto push = [&] (int s) { if (s == ui::kNoSource || n >= 8) return; for (int i = 0; i < n; ++i) if (offer[i] == s) return; offer[n++] = s; };
-        push (source());
-        for (int s : { 7, 8, 1, 2, 9, 3, 19, 20 }) push (s);
+        LfoModRows::Entry e[LfoModRows::kPerPage];
+        const int n = std::clamp (window.entries.numMods, 0, LfoModRows::kPerPage);
         for (int i = 0; i < n; ++i)
-            mods_.sourceIds[i] = offer[i];
-        mods_.addSource.state.count = n;
-        mods_.addSource.state.index = std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1));
-        mods_.addSource.setItem (uibind::sourceName (offer[std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1))]));
-        modsAddOffer_ = n;
+        {
+            const ui::ModEntry& m = window.entries.mods[i];
+            std::snprintf (e[i].name, sizeof e[i].name, "%s", m.name);
+            e[i].depth = std::clamp (m.depth, -1.0, 1.0);
+            e[i].bidirectional = m.bidirectional;
+            e[i].bypassed = m.bypassed;
+            e[i].macro = m.macro;
+        }
+        modsView_.place ({ 0, kTabY, w_, kTabH });
+        modsView_.load (e, n, title, 0xffffffu, window.total, window.page);
+        if (window.focusRow >= 0)
+            modsView_.selectRow (window.focusRow);
         char tv[16] = "";
         if (modsTargetParam_ >= 0)
             uibind::formatValue (uibind::info (modsTargetParam_), v.param (modsTargetParam_), tv, sizeof tv);
-        mods_.setTargetValue (tv);
+        modsView_.setTargetValue (tv);
+    }
+    /** The label of the control a modulations page is about (the title of the page). */
+    const char* controlLabel (int id) const noexcept
+    {
+        switch (id)
+        {
+            case kRate: return "RATE"; case kRise: return "RISE"; case kSmoothTime: return "SMOOTH"; case kPhase: return "PHASE"; case kDelay: return "DELAY";
+            case kSwing: return "SWING"; case kStereo: return "STEREO"; case kKeyTranspose: return "TRANSPOSE"; case kKeyTune: return "TUNE";
+            default: return "MODULATIONS";
+        }
     }
     void addModulation (IInstanceView& v, int src)
     {
         if (! modsContextValid (v))
             return;
-        if (const int slot = uibind::ensureModulationSource (v, modsTargetParam_, src); slot >= 0)
-        {
-            mods_.setPickingSource (false);
+        if (const int slot = lfomods::ensureModulationSource (v, modsTargetParam_, src); slot >= 0)
             loadMods (v, slot);
-        }
     }
     void refreshMods (const IInstanceView& v)
     {
         scan_ = uibind::scanUsed (v);   // which LFOs the selector shows
-        for (Item& it : items_)
-        {
-            if (it.c == nullptr || it.param < 0 || (it.type != T::Knob && it.type != T::Number))
-                continue;
-            const ui::ModInput mi = uibind::modsOf (v, it.param, source(), nullptr);
-            ui::ModInput& dst = it.type == T::Knob ? static_cast<ui::ModInput&> (static_cast<ui::Knob*> (it.c)->state) : static_cast<ui::ModInput&> (static_cast<ui::NumberField*> (it.c)->state);
-            dst = mi;
-        }
         if (pageTop_ == kPageTargets)
             loadTargets (v, false);
         else if (pageTop_ == kPageMods && modsTargetParam_ >= 0)
             loadMods (v);
     }
-
-    // ======================================================================================================================================================================
-    // reading: the states of the components from the parameters
-    static void fmt (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
+    /** The commands of the native cells of a row page (targets, modulations of a control). */
+    void rowsCommand (bool modulations, ModRowsCmd cmd, int row, double value, UiStack& stack, IInstanceView& v)
     {
-        if (pi.unit == synthyboy::Unit::Hz)
+        if (cmd == ModRowsCmd::Back)
         {
-            const double v = static_cast<double> (plain);
-            if (v >= 1000.0) std::snprintf (out, cap, "%.2f kHz", v / 1000.0);
-            else if (v < 10.0) std::snprintf (out, cap, "%.2f Hz", v);
-            else std::snprintf (out, cap, v < 100.0 ? "%.1f Hz" : "%.0f Hz", v);
+            stack.back();
             return;
         }
-        uibind::formatValue (pi, plain, out, cap);
-    }
-    static void showStepper (ui::Stepper* st, int param, float plain)
-    {
-        const synthyboy::ParamInfo& pi = uibind::info (param);
-        const int n = pi.numChoices > 0 ? pi.numChoices : static_cast<int> (pi.max - pi.min) + 1;
-        const int idx = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, n - 1));
-        st->state.count = n;
-        st->state.index = idx;
-        st->state.wrap = pi.numChoices <= 14;
-        if (pi.choices != nullptr && idx < pi.numChoices)
-            st->setItem (pi.choices[idx]);
-        else
+        if (cmd == ModRowsCmd::Add)
         {
-            char t[13];
-            std::snprintf (t, sizeof t, "%d", idx);
-            st->setItem (t);
+            if (modulations)
+            {
+                if (modsContextValid (v))
+                    openList (stack, v, ListKind::ModSource);
+            }
+            else
+                openList (stack, v, ListKind::Dest);
+            return;
         }
+        if (cmd == ModRowsCmd::Page)
+        {
+            if (modulations && modsContextValid (v))
+            {
+                modsPageIndex_ = static_cast<int> (value);
+                loadMods (v);
+            }
+            else if (! modulations)
+            {
+                targetsPageIndex_ = static_cast<int> (value);
+                loadTargets (v, true);
+            }
+            return;
+        }
+        const ModRow r = row >= 0 && row < LfoModRows::kPerPage ? (modulations ? modRows_[row] : targetRows_[row]) : ModRow {};
+        if (modulations && ! (modsContextValid (v) && lfomods::modulationMatches (v, modsTargetParam_, r)))
+            return;
+        if (r.slot < 0)
+            return;
+        (modulations ? modsView_ : targetsView_).selectRow (row);
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (r.slot);
+        switch (cmd)
+        {
+            case ModRowsCmd::Remove:
+                uibind::writePlain (v, sp.source, 0); uibind::writePlain (v, sp.destination, 0); uibind::writePlain (v, sp.amount, 0);
+                modulations ? loadMods (v) : loadTargets (v, true);
+                break;
+            case ModRowsCmd::Depth: uibind::writeNorm (v, sp.amount, value); break;
+            case ModRowsCmd::Polarity: uibind::writePlain (v, sp.bipolar, value != 0.0 ? 1.0 : 0.0); break;
+            case ModRowsCmd::Bypass: uibind::writePlain (v, sp.bypass, value != 0.0 ? 0.0 : 1.0); break;   // the switch says ON (active): bypassed is its opposite
+            default: break;
+        }
+        modsDirty_ = true;
     }
+
+    // ======================================================================================================================================================================
+    // reading: the state of the page from the parameters
     /** The table index of a key of the LFO shown ("sync" -> lfo3.sync): looked up once per string literal and configuration (the update asks for a dozen of them every picture). */
     int paramOf (const char* suffix) const
     {
@@ -1491,74 +1488,18 @@ private:
     }
     void pull (IInstanceView& v)
     {
-        for (Item& it : items_)
-        {
-            if (it.c == nullptr)
-                continue;
-            if (it.type == T::Inert)
-            {
-                if (it.id == kInstance)
-                {
-                    auto* st = static_cast<ui::Carousel*> (it.c);
-                    st->state.count = playCells_.n; st->state.index = playCells_.selectedPos; st->state.wrap = true;
-                    st->state.names = playCells_.names;
-                    st->state.dotMask = playDots_; st->state.dotColours = nullptr;
-                    st->setItem (playCells_.n > 0 ? playCells_.names[playCells_.selectedPos] : instanceName (slot()));
-                }
-                it.c->setEnabled (true);
-                if (it.id == kInstance || it.id == kSelector || it.id == kTargets || it.id == kClose)
-                    it.c->setInactive (false);   // navigation stays live across an unused/off instance
-                continue;
-            }
-            if (it.param < 0)
-            {
-                it.c->setEnabled (false);
-                continue;
-            }
-            const float plain = v.param (it.param);
-            const synthyboy::ParamInfo& pi = uibind::info (it.param);
-            switch (it.type)
-            {
-                case T::Knob:
-                {
-                    auto* k = static_cast<ui::Knob*> (it.c);
-                    k->state.value = k->state.modValue = uibind::normOf (it.param, plain);
-                    fmt (pi, plain, k->state.valueText, sizeof k->state.valueText);
-                    break;
-                }
-                case T::Number: static_cast<ui::NumberField*> (it.c)->state.value = plain; break;
-                case T::Stepper: showStepper (static_cast<ui::Stepper*> (it.c), it.param, plain); break;
-                case T::Toggle: static_cast<ui::ToggleIcon*> (it.c)->state.on = plain >= 0.5f; break;
-                case T::List:
-                {
-                    auto* ll = static_cast<ui::LedList*> (it.c);
-                    ll->setOptions (pi.choices, std::min (static_cast<int> (pi.numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
-                    ll->state.index = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, ll->state.count - 1));
-                    break;
-                }
-                case T::Picker: static_cast<ui::ShapePicker*> (it.c)->state.index = std::clamp (static_cast<int> (std::lround (plain)), 0, static_cast<ui::ShapePicker*> (it.c)->count() - 1); break;
-                default: break;
-            }
-            it.c->setEnabled (! (it.id == kSmoothPick && full_.nativeSmooth()));
-        }
         // ---- what depends on the sync, the mode and the smoothing
         const int syncP = paramOf ("sync");
-        const int sync = syncP >= 0 ? static_cast<int> (std::lround (v.param (syncP))) : 0;
-        const ui::lfo::SyncMode sm = ui::lfo::syncModeOf (sync);
-        compact_.rate.setMode (sm);
-        full_.rate.setMode (sm);
-        full_.setSync (sync);
-        full_.setKeyActive (sm == ui::lfo::SyncMode::Key);
-        if (sm == ui::lfo::SyncMode::Key)   // the rate does not matter: the key decides
-            compact_.rate.rate.state.valueText[0] = full_.rate.rate.state.valueText[0] = '\0';
+        sync_ = syncP >= 0 ? static_cast<int> (std::lround (v.param (syncP))) : 0;
+        syncMode_ = ui::lfo::syncModeOf (sync_);
+        const bool key = syncMode_ == ui::lfo::SyncMode::Key;
+        if (key != keyActive_)
+        {
+            keyActive_ = key;
+            qSlots_.forget();
+        }
         const int smoothP = paramOf ("smooth");
-        const bool smoothOn = smoothP < 0 || v.param (smoothP) >= 0.5f;
-        compact_.smoothTime.state.ledOn = full_.smoothTime.state.ledOn = smoothOn;   // SMOOTH is ONE control: the time with the LED of the switch on its label (off: the knob is dim and takes only the switch)
-        compact_.smoothTime.setEnabled (rnd_ == 0);
-        full_.smoothTime.setEnabled (rnd_ == 0 && ! full_.nativeSmooth());
-        for (const Item& it : items_)   // the rate knob's own enabled state is the control's (it is dim in the key follow mode)
-            if (it.id == kRate && it.c != nullptr)
-                it.c->setEnabled (sm != ui::lfo::SyncMode::Key && it.param >= 0);
+        smoothOn_ = smoothP < 0 || v.param (smoothP) >= 0.5f;
         const int modeP = paramOf ("sync_type");
         syncType_ = modeP >= 0 ? static_cast<int> (std::lround (v.param (modeP))) : 0;
         const int directionP = paramOf ("direction");
@@ -1567,14 +1508,15 @@ private:
         swing_ = swingP >= 0 ? static_cast<float> (v.param (swingP) * 0.01) : 0.0f;
         const int shapeP = paramOf (rnd_ != 0 ? "style" : "shape");
         shapeIdx_ = shapeP >= 0 ? static_cast<int> (std::lround (v.param (shapeP))) : 0;
-        full_.edit.setEnabled (rnd_ == 0);
-        full_.setEditShown (rnd_ == 0 && (page_ || nativePlayEditor_ || shapeIdx_ == ui::lfo::kShapeCustom));   // standalone expands any LFO shape; Play popup expands only Custom
+        editShown_ = rnd_ == 0 && (page_ || nativePlayEditor_ || shapeIdx_ == ui::lfo::kShapeCustom);   // standalone expands any LFO shape; Play popup expands only Custom
+        relayout();
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
             syncEditor (v);
-        // the instance stepper of the compact view and the nameplate
+        // the nameplate
         std::snprintf (name_, sizeof name_, rnd_ != 0 ? "RND %d - %s" : "LFO %d - %s", selection(),
                        rnd_ != 0 ? ui::styleName (shapeIdx_) : ui::lfoglyph::name (shapeIdx_));
     }
+
 
     // ======================================================================================================================================================================
     // the display: the shape of one cycle (the engine's own picture), the lead-in, the loop point, the cursors of the voices; the trace of a random LFO
@@ -1713,11 +1655,10 @@ private:
         if (changed)
             displayChangedMs_ = nowMs;
         displayHot_ = nowMs - displayChangedMs_ < 350.0;
-        d.traceMarkerCached = ! displayHot_ && ! instPopup_;
+        d.traceMarkerCached = ! displayHot_;
         data_ = d;
         data_.label = label_;
     }
-
     // ======================================================================================================================================================================
     // the shape editor
     /** Opens a local editable model. The first edit commits its points to the instrument. */
@@ -1761,7 +1702,6 @@ private:
         editor_.canvas.state.gridY = gy;
         editor_.setActiveGroup (0);
         editor_.setStatus ("");
-        setIds();
         shapeDirty_ = false;
         syncEditor (v);
         stack.openDetail (kPageEditor);
@@ -1846,14 +1786,6 @@ private:
         if (rnd_ != 0 || contentShape (lfoNum_) != nullptr)
             return;
         v.setLfoShape (lfoNum_, contentOf (lfoNum_, ui::lfo::ShapeModel::fromBuiltin (from >= 0 && from < ui::lfo::kShapeCustom ? from : 1), gridXOf (lfoNum_), gridYOf (lfoNum_)));
-    }
-    void setIds()
-    {
-        editor_.back.setId (kEdBack); editor_.tools.setId (kEdTools); editor_.undoButton.setId (kEdUndo); editor_.redoButton.setId (kEdRedo); editor_.del.setId (kEdDelete);
-        editor_.snap.setId (kEdSnap); editor_.loop.setId (kEdLoop); editor_.smooth.setId (kEdSmooth); editor_.cycleLink.setId (kEdCycleLink); editor_.loopLink.setId (kEdLoopLink); editor_.canvas.setId (kEdCanvas);
-        editor_.fx.setId (kEdX); editor_.fy.setId (kEdY); editor_.fcurve.setId (kEdCurve); editor_.fgx.setId (kEdGridX); editor_.fgy.setId (kEdGridY); editor_.fpoint.setId (kEdPoint);
-        editor_.shapes.setId (kEdShapes); editor_.more.setId (kEdMore); editor_.modButton.setId (kEdMod); editor_.mode.setId (kEdMode); editor_.fphase.setId (kEdPhase); editor_.fbend.setId (kEdBend);
-        pointMod_.back.setId (kMpBack); pointMod_.target.setId (kMpTarget); pointMod_.amount.setId (kMpAmount); pointMod_.remove.setId (kMpRemove); pointMod_.board.setId (kMpBoard);
     }
     void applyEditorLinks() noexcept
     {
@@ -1955,7 +1887,7 @@ private:
             const int st = std::clamp (static_cast<int> (std::lround (v.param (modeP) - pi.min)), 0, std::max (0, pi.numChoices - 1));
             const float keep = editor_.canvas.state.markerX;
             editor_.setTrigger (st, pi.choices != nullptr && st < pi.numChoices ? pi.choices[st] : "", pi.numChoices, static_cast<double> (v.param (phaseP)));
-            if (gestureDown_ && gesture_ == &editor_)
+            if (gestureDown_ && gesture_ == Gesture::Canvas)
                 editor_.canvas.state.markerX = keep;   // a finger on the page: the marker is where the finger put it until the parameter says the same
             const ui::lfo::ShapeModel& m = editor_.model;
             if (! gestureDown_)   // the loop point and the PHASE belong together while they say the same (a change of the shape then moves the PHASE)
@@ -2076,24 +2008,19 @@ private:
         else
             editor_.undo.push (before);
     }
-    template <class Self>
-    static auto editorFields (Self& self) noexcept
-        -> std::array<std::conditional_t<std::is_const_v<Self>, const ui::ControlModel*, ui::ControlModel*>, nativeui::lfoeditor::kCount>
+
+    // ---- the native controls around the canvas: the id of a field (the Change of the editor handlers) and what the page knows of it
+    static int editorIdOf (int field) noexcept
     {
-        return {
-            &self.editor_.back, &self.editor_.tools, &self.editor_.shapes, &self.editor_.more,
-            &self.editor_.undoButton, &self.editor_.redoButton, &self.editor_.del, &self.editor_.modButton,
-            &self.editor_.snap, &self.editor_.loop, &self.editor_.smooth, &self.editor_.cycleLink, &self.editor_.loopLink,
-            &self.editor_.fpoint, &self.editor_.fx, &self.editor_.fy, &self.editor_.fcurve, &self.editor_.fgx, &self.editor_.fgy,
-            &self.editor_.fphase, &self.editor_.fbend, &self.editor_.mode
-        };
+        static const int ids[nativeui::lfoeditor::kCount] = { kEdBack, kEdTools, kEdShapes, kEdMore, kEdUndo, kEdRedo, kEdDelete, kEdMod, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink,
+                                                              kEdPoint, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPhase, kEdBend, kEdMode };
+        return ids[std::clamp (field, 0, nativeui::lfoeditor::kCount - 1)];
     }
     bool nativeEditorHit (int x, int y) const noexcept
     {
         if (pageTop_ != kPageEditor) return false;
-        const auto fields = editorFields (*this);
         for (int field = 0; field < nativeui::lfoeditor::kCount; ++field)
-            if (fields[field]->enabled() && nativeEditorRect (field).contains (x, y))
+            if (editor_.fields[field].enabled && nativeEditorRect (field).contains (x, y))
                 return true;
         return false;
     }
@@ -2113,24 +2040,23 @@ private:
             return {};
         n::State state;
         state.context = nativeEditorContext (v);
-        const auto fields = editorFields (*this);
         const int selected = state.context.selection.count();
         for (int field = 0; field < n::kCount; ++field)
         {
-            const auto* control = fields[field];
-            if (control->enabled())
+            const ui::EditorField& control = editor_.fields[field];
+            if (control.enabled)
                 state.enabled |= 1u << field;
             const auto range = n::rangeOf (field, state.context.points, selected > 1);
             switch (n::kFields[field].type)
             {
                 case n::kAction: break;
-                case n::kToolChoice: state.values[field] = range.encode (editor_.tools.state.index); break;
-                case n::kToggle: state.values[field] = static_cast<const ui::LedToggle*> (control)->state.on ? 1.0f : 0.0f; break;
+                case n::kToolChoice: state.values[field] = range.encode (editor_.canvas.state.tool); break;
+                case n::kToggle: state.values[field] = control.on ? 1.0f : 0.0f; break;
                 case n::kNumber:
                     if (field != n::kPoint || selected == 1)
-                        state.values[field] = range.encode (static_cast<const ui::NumberField*> (control)->state.value);
+                        state.values[field] = range.encode (control.value);
                     break;
-                case n::kChoice: state.values[field] = range.encode (editor_.mode.state.index); break;
+                case n::kChoice: state.values[field] = range.encode (control.index); break;
             }
         }
         return state;
@@ -2150,7 +2076,6 @@ private:
         auto state = nativeEditorView (v, stack);
         if (state.context.owner != 0)
         {
-            const auto fields = editorFields (*this);
             for (int field = 0; field < n::kCount && state.context.owner != 0; ++field)
             {
                 float value;
@@ -2160,7 +2085,7 @@ private:
                 const auto range = n::rangeOf (field, state.context.points, state.scale());
                 const double next = range.decode (value);
                 const double current = range.decode (state.values[field]);
-                const int id = fields[field]->id();
+                const int id = editorIdOf (field);
                 ui::Change change;
                 if (type == n::kAction && value >= 0.5f)
                     change = ui::Change::request (id);
@@ -2199,6 +2124,7 @@ private:
         if (shapeDirty_ && (nowMs - shapeSentMs_ >= kShapeSendMs || ! gestureDown_))
             flushShape (v, nowMs);
     }
+
     void editorChange (const ui::Change& c, UiStack& stack, IInstanceView& v, double nowMs)
     {
         using K = ui::ChangeKind;
@@ -2214,7 +2140,7 @@ private:
         switch (c.id)
         {
             case kEdBack: if (! editorContentExternal_) flushShape (v, nowMs); stack.back(); return;
-            case kEdTools: if (c.kind == K::Index) cs.tool = std::clamp (c.index, 0, ui::ToolSelector::kTools - 1); break;
+            case kEdTools: if (c.kind == K::Index) cs.tool = std::clamp (c.index, 0, ui::ShapeTool::kTools - 1); break;
             case kEdUndo:
                 if (c.kind == K::Request)
                 {
@@ -2383,9 +2309,7 @@ private:
                     cv.selectOnly (std::clamp (static_cast<int> (std::lround (c.value)) - 1, 0, m.n - 1));
                 break;
             case kEdMode:
-                if (c.kind == K::Request)
-                    openModeList (stack, v);
-                else if (c.kind == K::Index && paramOf ("sync_type") >= 0)
+                if (c.kind == K::Index && paramOf ("sync_type") >= 0)
                     uibind::writePlain (v, paramOf ("sync_type"), c.index);
                 break;
             case kEdPhase:
@@ -2404,7 +2328,6 @@ private:
             alignPhase (v, false);
         syncEditor (v);
     }
-
     // ---- the lists of the editor: SHAPES (the shapes, saving), MORE (the actions); the lists are the one ListPopup of the page
     enum class Ed : uint8_t { None, ShapesRoot, ShapesFactory, ShapesMine, Confirm, ActionsRoot, ActionsGroup, CopyLfo };
     enum class Verb : uint8_t { Load, Overwrite, Rename, Delete };
@@ -2432,16 +2355,6 @@ private:
         v.wavetableSources (src);
         return src.userRoots;
     }
-    void openModeList (UiStack& stack, IInstanceView& v)
-    {
-        const int p = paramOf ("sync_type");
-        if (p < 0)
-            return;
-        listKind_ = ListKind::Param;
-        listParam_ = p;
-        stack.openDetail (kPageList);
-        fillList (&v);
-    }
     void openEditorList (UiStack& stack, IInstanceView& v, Ed which)
     {
         listKind_ = ListKind::Editor;
@@ -2453,9 +2366,11 @@ private:
             lib_.setRoots (userRootsOf (v));
             lib_.refresh();
         }
+        placePageList();
         stack.openDetail (kPageList);
         fillEditorList();
     }
+
     const char* verbHeader() const noexcept
     {
         switch (verb_)
@@ -2526,15 +2441,15 @@ private:
                 break;
             default: break;
         }
-        listNames_.clear();
+        listText_.clear();
         for (const std::string& r : edRows_)
-            listNames_.push_back (r.c_str());
-        list_.state.header = header;
-        list_.state.headerBack = back;
-        list_.state.current = -1;
-        list_.state.items = listNames_.data();
-        list_.state.count = static_cast<int> (listNames_.size());
-        list_.showCurrent();
+            listText_.push_back (r);
+        menu_.items.clear();
+        for (const std::string& r : listText_)
+            menu_.items.push_back (r.c_str());
+        menu_.header = header;
+        menu_.headerBack = back;
+        menu_.first = 0;
     }
     /** The header of an editor list was tapped: one level up (the shapes and the actions start at their root). */
     void editorListUp()
@@ -2857,7 +2772,7 @@ private:
     struct PointModSelection
     {
         ui::lfo::PointMod common;
-        ui::PointModPage::SelectionMod mix = ui::PointModPage::SelectionMod::Common;
+        ui::PointSelectionMod mix = ui::PointSelectionMod::Common;
     };
 
     PointModSelection pointModSelection() const noexcept
@@ -2872,7 +2787,7 @@ private:
             const auto& point = model.p[i];
             return pmTarget_ == 0 ? point.mx : (pmTarget_ == 1 ? point.my : point.mc);
         };
-        using Mix = ui::PointModPage::SelectionMod;
+        using Mix = ui::PointSelectionMod;
         PointModSelection result { modAt (first) };
         for (int point = first + 1; point < model.n; ++point)
             if (selection.has (point))
@@ -2893,7 +2808,6 @@ private:
         const auto selection = editor_.canvas.selection();
         if (fresh)
         {
-            uibind::fillSourceBoard (pointMod_.board);
             pmTarget_ = 1;
             pmTurnUntilMs_ = 0.0;
             pmPreset_ = v.stateGeneration();
@@ -2904,31 +2818,42 @@ private:
         pointMod_.load (pmTarget_, state.common.on() ? uibind::sourceName (state.common.source) : "",
                         static_cast<double> (state.common.amount) * 100.0, selection.count(), selection.first(), state.mix);
     }
-    template <class Self>
-    static auto pointModFields (Self& self) noexcept
-        -> std::array<std::conditional_t<std::is_const_v<Self>, const ui::ControlModel*, ui::ControlModel*>, nativeui::lfodetail::Header>
+    /** The source of the modulation of the selected points' value (the choice of the source: the value keeps its amount, else half). */
+    void setPointSource (int src, IInstanceView& v)
     {
-        auto& page = self.pointMod_;
-        return { &page.back, &page.target, &page.amount, &page.remove };
+        ui::lfo::ShapeModel& m = editor_.model;
+        const ui::lfo::PointSet set = editor_.canvas.selection();
+        if (set.first() < 0 || src <= 0 || editorContentExternal_)
+            return;
+        const ui::lfo::PointMod cur = pointModSelection().common;
+        const ui::lfo::ShapeModel before = m;
+        m.setMod (set, pmTarget_, src, cur.on() ? cur.amount : 0.5f);
+        if (! (m == before))
+        {
+            editor_.undo.push (before);
+            markDirty();
+        }
+        loadPointMod (v, false);
+        editor_.sync();
     }
-
-    int listNativeRows() const noexcept
+public:
+    /** The hook of the native SOURCE choice of the point modulation page (none in the skin yet): opens the list of the sources over the page. */
+    void openPointSourceList (UiStack& stack, IInstanceView& v)
     {
-        return std::clamp (list_.state.count - list_.firstRow(), 0, std::min (list_.visibleRows(), nativeui::lfodetail::kRows));
+        if (pageTop_ == kPagePointMod && editor_.canvas.selection().first() >= 0)
+            openList (stack, v, ListKind::PointSource);
     }
+private:
 
     bool nativeDetailHit (int x, int y) const noexcept
     {
         namespace n = nativeui::lfodetail;
         if (pageTop_ == kPagePointMod)
-        {
-            const auto fields = pointModFields (*this);
             for (int field = 0; field < n::Header; ++field)
-                if (fields[field]->enabled() && fields[field]->rect().contains (x, y)) return true;
-        }
-        if (pageTop_ == kPageList && listKind_ == ListKind::Editor)
+                if (pointMod_.fields[field].enabled && pointMod_.rect (field).contains (x, y)) return true;
+        if (pageTop_ == kPageList)
         {
-            if (list_.headerRect().contains (x, y)) return true;
+            if (menu_.headerRect().contains (x, y)) return true;
             for (int row = 0; row < listNativeRows(); ++row)
                 if (nativeDetailRect (n::FirstRow + row).contains (x, y)) return true;
         }
@@ -2938,7 +2863,8 @@ private:
     nativeui::lfodetail::State nativeDetailView (IInstanceView& v, const UiStack& stack) const
     {
         namespace n = nativeui::lfodetail;
-        if ((! page_ && ! nativePlayEditor_) || ! v.nativeLfoShapeDetails() || rnd_ != 0 || editorContentExternal_
+        const bool editorList = pageTop_ == kPageList && listKind_ == ListKind::Editor;
+        if ((! page_ && ! nativePlayEditor_) || ! v.nativeLfoShapeDetails() || (rnd_ != 0 && editorList) || (editorContentExternal_ && (editorList || pageTop_ == kPagePointMod))
             || stack.depth() <= 2 || stack.element() != kElementLfo || &ui::theme::L() != &ui::theme::kLook1)
             return {};
         n::State state;
@@ -2949,7 +2875,7 @@ private:
             const auto mod = pointModSelection();
             state.context.pointTarget = pmTarget_;
             state.context.pointSource = mod.common.source;
-            using Mix = ui::PointModPage::SelectionMod;
+            using Mix = ui::PointSelectionMod;
             if (! state.context.editor.selection.any())
                 state.point = n::NoPoints;
             else if (mod.mix == Mix::MixedSource)
@@ -2958,26 +2884,25 @@ private:
                 state.point = n::MixedAmounts;
             else
                 state.point = mod.common.on() ? n::Assigned : n::NoMod;
-            const auto fields = pointModFields (*this);
             for (int field = 0; field < n::Header; ++field)
-                if (fields[field]->enabled())
+                if (pointMod_.fields[field].enabled)
                     state.fields |= 1u << field;
             state.values[n::Target] = n::rangeOf (n::Target).encode (pmTarget_);
-            state.values[n::Amount] = n::rangeOf (n::Amount).encode (state.point == n::Assigned ? pointMod_.amount.state.value : -101.0);
+            state.values[n::Amount] = n::rangeOf (n::Amount).encode (state.point == n::Assigned ? pointMod_.fields[ui::PointModModel::kAmount].value : -101.0);
         }
-        else if (stack.top() == kPageList && listKind_ == ListKind::Editor)
+        else if (stack.top() == kPageList && listKind_ != ListKind::None)
         {
-            state.context.view = list_.scrolls() ? n::ScrollingMenu : n::Menu;
+            state.context.view = menu_.scrolls() ? n::ScrollingMenu : n::Menu;
             state.context.menu = nativeMenuRevision_;
-            state.context.firstRow = list_.firstRow();
-            state.headerBack = list_.state.headerBack;
+            state.context.firstRow = menu_.firstRow();
+            state.headerBack = menu_.headerBack;
             state.rows = listNativeRows();
-            state.names[0] = list_.state.header;
-            if (state.headerBack)
+            state.names[0] = menu_.header;
+            if (state.headerBack || (menu_.header != nullptr && listKind_ != ListKind::Editor))
                 state.fields |= 1u << n::Header;
             for (int i = 0; i < state.rows; ++i)
             {
-                state.names[i + 1] = list_.state.items[state.context.firstRow + i];
+                state.names[i + 1] = menu_.items[static_cast<size_t> (state.context.firstRow + i)];
                 state.fields |= 1u << (n::FirstRow + i);
             }
         }
@@ -2991,7 +2916,7 @@ private:
         namespace n = nativeui::lfodetail;
         if (state.context.view == n::Hidden && nativeDetailView_ == n::Hidden)
             return;
-        list_.reserveScrollZone (pageTop_ == kPageList && listKind_ == ListKind::Editor);
+        menu_.reserveZone = pageTop_ == kPageList;
         v.setNativeLfoDetail (state);
         nativeDetailView_ = state.context.view;
         nativeDetailFields_ = state.fields;
@@ -3017,9 +2942,9 @@ private:
             else if (value >= 0.5f)
             {
                 if (field == n::Header)
-                    editorListUp();
+                    listUp (stack, v);
                 else if (field >= n::FirstRow)
-                    editorListChosen (state.context.firstRow + field - n::FirstRow, stack, v);
+                    listChosen (state.context.firstRow + field - n::FirstRow, stack, v);
                 else
                     pointModChange (ui::Change::request (field == n::Back ? kMpBack : kMpRemove), stack, v);
             }
@@ -3029,6 +2954,7 @@ private:
             flushShape (v, nowMs);
         publishNativeDetail (v, state);
     }
+
 
     /** The two knobs of the page, as 0 .. 1: MODULATE (TIME, LEVEL, CURVE: 0, 0.5, 1) and AMOUNT (-100 .. +100 percent; 0.5 while nothing modulates the chosen value: the knob is off then). */
     float pointModVirtualValue (int id) const noexcept
@@ -3111,7 +3037,6 @@ private:
             case kMpTarget: if (c.kind == K::Index) pmTarget_ = ((c.index % 3) + 3) % 3; break;
             case kMpAmount: if ((c.kind == K::Index || c.kind == K::Value) && cur.on()) m.setMod (set, pmTarget_, cur.source, static_cast<float> (c.value / 100.0)); break;
             case kMpRemove: if (c.kind == K::Request) m.setMod (set, pmTarget_, 0, 0.0f); break;
-            case kMpBoard: if (c.kind == K::Index && c.index > 0) m.setMod (set, pmTarget_, c.index, cur.on() ? cur.amount : 0.5f); break;
             default: break;
         }
         if (! (m == before))
@@ -3124,41 +3049,80 @@ private:
     }
 
     // ======================================================================================================================================================================
-    // writing: a Change of a component to a parameter
-    ui::Component* topComponent() noexcept
+    // the touch of the parts the plugin owns: the canvas of the editor, the name keyboard, the list menu, the blocks of the full screen
+    Gesture gestureOfPage() const noexcept
     {
         if (stackDepth_ == 0)
-            return instPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
+            return Gesture::Ground;
         if (pageTop_ == kPageEditor)
-            return &editor_;
-        if (pageTop_ == kPagePointMod)
-            return &pointMod_;
+            return Gesture::Canvas;
         if (pageTop_ == kPageKeyboard)
-            return &entry_;
-        if (pageTop_ == kPageTargets)
-            return &targets_;
-        if (pageTop_ == kPageMods)
-            return &mods_;
+            return Gesture::Keyboard;
         if (pageTop_ == kPageList)
-            return &list_;
-        return &full_;
+            return Gesture::Menu;
+        return Gesture::Ground;
     }
-    Item* find (int id) noexcept
+    void touchDown (int x, int y, UiStack& stack, IInstanceView& v, double nowMs)
     {
-        for (Item& it : items_)
-            if (it.id == id)
-                return &it;
-        return nullptr;
+        switch (gesture_)
+        {
+            case Gesture::Canvas: editor_.canvas.setId (kEdCanvas); handle (editor_.canvas.touchDown (x, y, nowMs), stack, v, nowMs); break;
+            case Gesture::Keyboard: handle (entry_.touchDown (x, y, nowMs), stack, v, nowMs); break;
+            case Gesture::Menu:
+            {
+                const ui::Rect box = menu_.box();
+                menuMode_ = ! box.contains (x, y) ? MenuTouch::Backdrop : menu_.scrolls() && menu_.zoneRect().contains (x, y) ? MenuTouch::Zone : MenuTouch::Box;
+                menuX0_ = x; menuY0_ = y; menuFirst0_ = menu_.firstRow();
+                if (menuMode_ == MenuTouch::Zone)
+                    menu_.dragThumb (y);
+                break;
+            }
+            case Gesture::Ground: if (stackDepth_ > 0 && pageTop_ == 0 && ! page_) selectGroupAtBlocks (x, y); break;
+            default: break;
+        }
     }
-    void openParamList (const Item* it, UiStack& stack, const IInstanceView& v)
+    void touchMove (int x, int y, UiStack& stack, IInstanceView& v, double nowMs)
     {
-        if (it == nullptr || it->param < 0 || uibind::info (it->param).choices == nullptr || uibind::info (it->param).numChoices < 2)
-            return;
-        listKind_ = ListKind::Param;
-        listParam_ = it->param;
-        placePageList();
-        stack.openDetail (kPageList);
-        fillList (&v);
+        switch (gesture_)
+        {
+            case Gesture::Canvas: handle (editor_.canvas.touchMove (x, y), stack, v, nowMs); break;
+            case Gesture::Keyboard: handle (entry_.touchMove (x, y), stack, v, nowMs); break;
+            case Gesture::Menu:
+                if (menuMode_ == MenuTouch::Zone)
+                    menu_.dragThumb (y);
+                else if (menuMode_ == MenuTouch::Box && std::abs (y - menuY0_) > 12)
+                    menu_.first = std::clamp (menuFirst0_ + (menuY0_ - y) / lfolayout::Menu::kRowH, 0, std::max (0, menu_.count() - menu_.visibleRows()));
+                break;
+            default: break;
+        }
+    }
+    void touchUp (int x, int y, UiStack& stack, IInstanceView& v, double nowMs)
+    {
+        switch (gesture_)
+        {
+            case Gesture::Canvas: handle (editor_.canvas.touchUp (x, y), stack, v, nowMs); break;
+            case Gesture::Keyboard: handle (entry_.touchUp (x, y), stack, v, nowMs); break;
+            case Gesture::Menu:
+                if (menuMode_ == MenuTouch::Backdrop && std::abs (x - menuX0_) <= 12 && std::abs (y - menuY0_) <= 12)
+                    stack.back();   // a tap on the dimmed ground closes the list
+                menuMode_ = MenuTouch::None;
+                break;
+            default: break;
+        }
+    }
+    /** A touch in a block of the bottom band of the full screen (outside the native cells) makes that block's group the active one. */
+    void selectGroupAtBlocks (int x, int y)
+    {
+        buildGroups();
+        for (int g = 0; g < nGroups_; ++g)
+        {
+            const int b = groups_[g].block;
+            if (b >= 0 && b < fullG_.nBlocks && fullG_.blocks[b].contains (x, y))
+            {
+                setActiveGroup (g);
+                return;
+            }
+        }
     }
 
     void handle (const ui::Change& c, UiStack& stack, IInstanceView& v, double nowMs)
@@ -3177,246 +3141,13 @@ private:
             pointModChange (c, stack, v);
             return;
         }
-        if (instPopup_ && stackDepth_ == 0)   // the list of the selector of the compact view
-        {
-            if (id == kList && c.kind == K::Index)
-            {
-                if (listKind_ == ListKind::Plus)
-                {
-                    if (c.index >= 0 && c.index < ui::UsedSelector::kMaxChoices && plusIds_[c.index] > 0)
-                    {
-                        uibind::chooseLfo (v, plusIds_[c.index]);
-                        adoptSelection (v);
-                    }
-                }
-                else
-                    selectSlot (c.index, v);
-                const bool again = plusPending_;
-                plusPending_ = false;
-                closeInstanceList();
-                if (again)
-                    openInstanceList (v, ListKind::Plus);
-            }
-            else if (id == kListBackdrop && c.kind == K::Request)
-                closeInstanceList();
-            return;
-        }
         if (c.kind == K::Request)
         {
             switch (id)
             {
-                case kFullButton: stack.openFull (kElementLfo); return;
-                case kModsBack:
-                    if (mods_.pickingSource())
-                        mods_.setPickingSource (false);
-                    else
-                        stack.back();
-                    return;
-                case kModsAdd:
-                    if (modsContextValid (v))
-                    {
-                        uibind::fillSourceBoard (mods_.board);
-                        mods_.setPickingSource (true);
-                    }
-                    return;
-                case kClose: case kTargetsBack: stack.back(); return;
-                case kListBackdrop: stack.back(); return;
-                case kTargets: stack.openDetail (kPageTargets); return;
-                case kTargetsAdd: listKind_ = ListKind::Dest; listGroup_ = -1; placePageList(); stack.openDetail (kPageList); fillList (&v); return;
-                case kListHeader:
-                    if (listKind_ == ListKind::Dest) { listGroup_ = -1; fillList (&v); }
-                    else if (listKind_ == ListKind::Editor) editorListUp();
-                    return;
                 case kKbOk: if (pageTop_ == kPageKeyboard) keyboardOk (stack); return;
                 case kKbCancel: if (pageTop_ == kPageKeyboard) stack.back(); return;
-                case kEdit: openEditor (stack, v); return;
-                case kInstance: openInstanceList (v); return;
-                case kPagePicker: openParamList (find (id), stack, v); return;
-                case kSelector: openPlusList (stack); return;
-                case kShape: case kStyle: case kSync: case kMode: case kDirection: case kDivision:
-                    if (stack.depth() == 0)
-                        stack.openFull (kElementLfo);   // the list lies over the full screen: from the compact view that opens first
-                    openParamList (find (id), stack, v);
-                    return;
                 default: break;
-            }
-            if (id >= kTargetsRow && id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage && (id - kTargetsRow) % 4 == 3)
-            {
-                const int s = targetRows_[(id - kTargetsRow) / 4].slot;
-                if (s >= 0)
-                {
-                    const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
-                    uibind::writePlain (v, sp.source, 0); uibind::writePlain (v, sp.destination, 0); uibind::writePlain (v, sp.amount, 0);
-                    modsDirty_ = true;
-                    loadTargets (v, true);
-                }
-                return;
-            }
-            if (id >= kModsRow && id < kModsRow + 4 * ui::ModulationsPage::kPerPage && (id - kModsRow) % 4 == 3)
-            {
-                const auto row = modRows_[(id - kModsRow) / 4];
-                if (modsContextValid (v) && uibind::modulationMatches (v, modsTargetParam_, row))
-                {
-                    const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (row.slot);
-                    uibind::writePlain (v, sp.source, 0); uibind::writePlain (v, sp.destination, 0); uibind::writePlain (v, sp.amount, 0);
-                    loadMods (v);
-                }
-            }
-            return;
-        }
-        if (c.kind == K::ModsRequest)
-        {
-            if (stack.depth() == 0)
-                stack.openFull (kElementLfo);
-            modsPageIndex_ = 0;
-            modsPreset_ = v.stateGeneration();
-            mods_.setPickingSource (false);
-            modsTarget_ = id;
-            stack.openDetail (kPageMods);
-            return;
-        }
-        if (c.kind == K::AddRequest)
-        {
-            addModulation (v, c.index);
-            return;
-        }
-        if (id == kList && c.kind == K::Index)
-        {
-            listChosen (c.index, stack, v);
-            return;
-        }
-        // ---- the instance: the stepper of the compact view, the cells of the full screen
-        if (id == kInstance && c.kind == K::Index)
-        {
-            selectSlot (c.index, v);
-            if (plusPending_)   // `+` with two free kinds: the two-row list over the third
-            {
-                plusPending_ = false;
-                openInstanceList (v, ListKind::Plus);
-            }
-            return;
-        }
-        if (id == kSelector && c.kind == K::Index)
-        {
-            uibind::chooseLfo (v, c.index);   // the id of the candidate: 1 .. 10, 11 .. 14 (R1 .. R4); view state only
-            adoptSelection (v);
-            return;
-        }
-        // ---- the sync switch: the mode and the two switches make one parameter
-        if ((id == kSyncMode || id == kSyncTrip || id == kSyncDot) && c.kind == K::Index)
-        {
-            const int p = paramOf ("sync");
-            const int part = id == kSyncMode ? ui::SyncSwitch::Mode : (id == kSyncTrip ? ui::SyncSwitch::Trip : ui::SyncSwitch::Dot);
-            if (p >= 0)
-                uibind::writePlain (v, p, full_.syncSwitch.nextSync (part, c));
-            return;
-        }
-        if (id == kTargetsPage && c.kind == K::Index)
-        {
-            targetsPageIndex_ = c.index;
-            loadTargets (v, true);
-            return;
-        }
-        if (id == kModsPage && c.kind == K::Index && modsContextValid (v))
-        {
-            modsPageIndex_ = c.index;
-            loadMods (v);
-            return;
-        }
-        if (id == kModsAddStep && c.kind == K::Index)
-        {
-            const int i = std::clamp (c.index, 0, std::max (0, modsAddOffer_ - 1));
-            mods_.addSource.state.index = i;
-            mods_.addSource.setItem (uibind::sourceName (mods_.sourceIds[i]));
-            return;
-        }
-        // ---- the rows of the targets page and of the modulations page of a control
-        if (id >= kTargetsRow && id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage)
-        {
-            matrixRow (targetRows_[(id - kTargetsRow) / 4].slot, (id - kTargetsRow) % 4, c, v);
-            return;
-        }
-        if (id >= kModsRow && id < kModsRow + 4 * ui::ModulationsPage::kPerPage)
-        {
-            const auto row = modRows_[(id - kModsRow) / 4];
-            if (modsContextValid (v) && uibind::modulationMatches (v, modsTargetParam_, row))
-                matrixRow (row.slot, (id - kModsRow) % 4, c, v);
-            return;
-        }
-        Item* it = find (id);
-        if (it == nullptr || it->c == nullptr || it->param < 0)
-            return;
-        if (c.kind == K::Depth)
-        {
-            const int s = uibind::slotOf (v, it->param, c.index);
-            if (s >= 0)
-                uibind::writeNorm (v, synthyboy::modSlotParams (s).amount, (c.value + 1.0) * 0.5);
-            modsDirty_ = true;
-            return;
-        }
-        write (*it, c, v);
-    }
-    void matrixRow (int s, int what, const ui::Change& c, IInstanceView& v)
-    {
-        using K = ui::ChangeKind;
-        if (s < 0)
-            return;
-        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
-        switch (what)
-        {
-            case 0: if (c.kind == K::Value) uibind::writeNorm (v, sp.amount, c.value); break;
-            case 1: if (c.kind == K::Index) uibind::writePlain (v, sp.bipolar, c.index != 0 ? 1.0 : 0.0); break;
-            case 2: if (c.kind == K::Index) uibind::writePlain (v, sp.bypass, c.index != 0 ? 0.0 : 1.0); break;   // the switch says ON (active): bypassed is its opposite
-            default: break;
-        }
-        modsDirty_ = true;
-    }
-    void listChosen (int index, UiStack& stack, IInstanceView& v)
-    {
-        if (listKind_ == ListKind::Instance)
-        {
-            selectSlot (index, v);
-            const bool plus = plusPending_;
-            plusPending_ = false;
-            stack.back();
-            if (plus)
-                openPlusList (stack);
-        }
-        else if (listKind_ == ListKind::Plus)
-        {
-            if (index >= 0 && index < ui::UsedSelector::kMaxChoices && plusIds_[index] > 0)
-            {
-                uibind::chooseLfo (v, plusIds_[index]);
-                adoptSelection (v);
-            }
-            stack.back();
-        }
-        else if (listKind_ == ListKind::Editor)
-            editorListChosen (index, stack, v);
-        else if (listKind_ == ListKind::Param)
-        {
-            if (listParam_ >= 0)
-            {
-                const int was = static_cast<int> (std::lround (v.param (listParam_)));
-                uibind::writePlain (v, listParam_, uibind::info (listParam_).min + index);
-                if (rnd_ == 0 && listParam_ == paramOf ("shape") && index == ui::lfo::kShapeCustom)
-                    ensureCustom (v, was);
-            }
-            stack.back();
-        }
-        else if (listKind_ == ListKind::Dest)
-        {
-            if (listGroup_ < 0)
-            {
-                listGroup_ = index;
-                fillList (&v);
-            }
-            else
-            {
-                const std::vector<int>& ch = DestIndex::get().choices[static_cast<size_t> (listGroup_)];
-                if (index >= 0 && index < static_cast<int> (ch.size()))
-                    addTarget (v, ch[static_cast<size_t> (index)]);
-                stack.back();
             }
         }
     }
@@ -3424,14 +3155,14 @@ private:
     {
         using K = ui::ChangeKind;
         const int p = it.param;
+        if (p < 0)
+            return;
         const synthyboy::ParamInfo& pi = uibind::info (p);
         switch (it.type)
         {
             case T::Knob:
                 if (c.kind == K::Value)
                     uibind::writeNorm (v, p, c.value);
-                else if (c.kind == K::Index && it.id == kSmoothTime)   // the LED on the label of SMOOTH: the switch of the smoothing, the time is the knob
-                    uibind::writePlain (v, paramOf ("smooth"), c.index != 0 ? 1.0 : 0.0);
                 break;
             case T::Number: if (c.kind == K::Index || c.kind == K::Value) uibind::writePlain (v, p, c.value); break;
             case T::Stepper:
@@ -3459,73 +3190,124 @@ private:
             default: break;
         }
     }
-
-    // ======================================================================================================================================================================
-    // the Q group: the four targets the hardware knobs are mapped to
-    template <class Self>
-    static auto compactNativePart (Self& self, int field) noexcept
-        -> std::conditional_t<std::is_const_v<Self>, const ui::ControlModel*, ui::ControlModel*>
+    Item* find (int id) noexcept
     {
-        namespace n = nativeui::playenvlfo;
-        auto& compact = self.compact_;
-        switch (field)
-        {
-            case n::LfoExpand: return &compact.full;
-            case n::Shape: return &compact.shape;
-            case n::Rate: return &compact.rate.rate;
-            case n::Division: return &compact.rate.division;
-            case n::Style: return &compact.style;
-            case n::Sync: return &compact.sync;
-            case n::StandardSync: return &compact.rate.modeCells;
-            case n::Stereo: return &compact.stereo;
-            case n::Choose: return &compact.instance;
-            default: return nullptr;
-        }
+        for (Item& it : items_)
+            if (it.id == id)
+                return &it;
+        return nullptr;
     }
 
-    /** The four targets of the RATE (or RANDOM) group of the compact view and its block of knobs (the Play view maps the groups of the three thirds together). */
-public:   // the Play view reads the targets of the compact group and sets its block
+    // ======================================================================================================================================================================
+    // the Q groups: the four targets the hardware knobs are mapped to
+    struct GroupDef
+    {
+        char name[16] = {};
+        int member[4] = { -1, -1, -1, -1 };   // the row id of every member (kMemberRate / kMemberSync: no row), -1 = none
+        int block = -1;                       // the block of the bottom band the group stands in (-1: none)
+        int numMembers() const noexcept { int n = 0; for (int m : member) n += m >= 0; return n; }
+    };
+    static constexpr int kMaxGroups = 6;
+    mutable GroupDef groups_[kMaxGroups];
+    mutable int nGroups_ = 0, keyGroup_ = -1;
+    char activeName_[16] = "Rate";
+
+    /** The groups of the page in reading order (the blocks left to right, the members of a block top to bottom): the shape page RATE, [KEY], TIMING, MOTION, SMOOTH; a random LFO RANDOM, [KEY], TRIGGER. The KEY group (TRANSPOSE
+        and TUNE, in the first block where the rate knob is not) is there in the key follow sync only. */
+    void buildGroups() const
+    {
+        nGroups_ = 0;
+        keyGroup_ = -1;
+        auto next = [&] (const char* name, int block, int a, int b = -1, int c = -1, int d = -1)
+        {
+            GroupDef& g = groups_[nGroups_++];
+            std::snprintf (g.name, sizeof g.name, "%s", name);
+            g.member[0] = a; g.member[1] = b; g.member[2] = c; g.member[3] = d;
+            g.block = block;
+        };
+        const int pick = page_ ? kPagePicker : kPicker;
+        if (! random())
+        {
+            next ("Rate", 0, pick, keyActive_ ? -1 : kMemberRate, kRise, kSmoothTime);
+            const bool smoothFirst = ui::QGroup::wideDevice() || page_;   // next knob on the XL after the time dial, adjacent in standalone page mode
+            if (smoothFirst)
+                next ("Smooth", -1, kSmoothPick);
+            if (keyActive_)
+            {
+                keyGroup_ = nGroups_;
+                next ("Key", 0, kKeyTranspose, kKeyTune);
+            }
+            next ("Timing", 1, kMemberSync, kPhase, kDelay, kMode);
+            next ("Motion", 2, kDirection, kSwing, kStereo, kMono);
+            if (! smoothFirst)
+                next ("Smooth", -1, kSmoothPick);
+        }
+        else
+        {
+            next ("Random", 0, pick, keyActive_ ? -1 : kMemberRate, kMemberSync, kStereoToggle);
+            if (keyActive_)
+            {
+                keyGroup_ = nGroups_;
+                next ("Key", 0, kKeyTranspose, kKeyTune);
+            }
+            next ("Trigger", 0, kModeList);
+        }
+    }
+    int activeGroup() const noexcept
+    {
+        for (int i = 0; i < nGroups_; ++i)
+            if (std::strcmp (groups_[i].name, activeName_) == 0)
+                return i;
+        return 0;
+    }
+    void setActiveGroup (int i)
+    {
+        buildGroups();
+        if (i >= 0 && i < nGroups_ && i == keyGroup_ && ! keyActive_)
+            i = 0;
+        if (i >= 0 && i < nGroups_)
+            std::snprintf (activeName_, sizeof activeName_, "%s", groups_[i].name);
+    }
+    int paramOfMember (int id) const noexcept
+    {
+        if (id == kMemberRate)
+            return syncMode_ == ui::lfo::SyncMode::Bpm ? paramOf ("division") : paramOf ("rate");   // the rate is the division in the BPM sync
+        if (id == kMemberSync)
+            return paramOf ("sync");   // the HZ / BPM / KEY row is the member: a knob step moves the selection (the sync values: Free, Tempo, dotted, triplet, Key follow)
+        if (id < 0)
+            return -1;
+        for (const Item& it : items_)
+            if (it.id == id && it.type != T::Inert)
+                return it.param;
+        return -1;
+    }
+public:
+    /** The four targets of the RATE (or RANDOM) group of the compact view (the Play view maps the groups of the three thirds together). */
     void compactTargets (int* t) const noexcept
     {
-        for (int i = 0; i < 4; ++i)
-            t[i] = paramOfMember (compact_.group.member (i));
+        t[0] = paramOfMember (random() ? kStyle : kShape);
+        t[1] = paramOfMember (kMemberRate);
+        t[2] = paramOfMember (random() ? kSync : kRise);
+        t[3] = paramOfMember (random() ? kStereoToggle : kSmoothTime);
         if (compactNativeKey_)
             t[1] = -1;
     }
-    void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
+    void setCompactBlock (int block) noexcept { compactBlock_ = block; }
 private:
-    int paramOfMember (const ui::ControlModel* m) const noexcept
-    {
-        while (m != nullptr)
-        {
-            if (m == &full_.syncSwitch.mode)
-                return paramOf ("sync");   // the HZ / BPM / KEY row is the member: a knob step moves the selection (the sync values: Free, Tempo, dotted, triplet, Key follow)
-            for (const Item& it : items_)
-                if (it.c == m && it.type != T::Inert)
-                    return it.param;
-            m = m->primaryModel();
-        }
-        return -1;
-    }
     /** The groups of the page in reading order, published to the sixteen Q slots (q_publish.h): the compact view has RATE (RANDOM); the full screen its blocks (RATE, TIMING, MOTION, KEY when it is there, SHAPE; RANDOM,
         TRIGGER, KEY for a random LFO), the active one on Q 1 .. 4, the next on 5 .. 16; the editor its four virtual knobs; the targets and modulation pages one group per row. */
     void publishQGroup (IInstanceView& v)
     {
         const char* name = "";
-        auto members = [this] (const ui::QGroup& g, int* t) { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (g.member (i)); };
         if (stackDepth_ == 0)
-        {
-            name = rnd_ != 0 ? "Random" : "Rate";
-            compact_.group.setActive (highlight_ == 3);
             return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ)
-        }
         else if (pageTop_ == kPageEditor)
         {
-            const int act = std::clamp (editor_.activeGroup(), 0, ui::ShapeEditorPage::kGroups - 1);
+            const int act = std::clamp (editor_.activeGroup(), 0, ui::ShapeEditorModel::kGroups - 1);
             name = act == 0 ? "Edit" : (act == 1 ? "Grid" : "Trigger");
             // EDIT = the virtual targets 0 .. 3 (POINT, X, Y, CURVE), GRID = 4 .. 6 (GRID X, GRID Y, SNAP), TRIGGER = MODE and PHASE (the parameters of the table) and the virtual 7 (BEND ALL); the active one is on Q 1 .. 4, the others after it
             const int modeP = paramOf ("sync_type"), phaseP = paramOf ("phase");
-            qSlots_.publish (v, ui::ShapeEditorPage::kGroups, act, [modeP, phaseP] (int g, int* t)
+            qSlots_.publish (v, ui::ShapeEditorModel::kGroups, act, [modeP, phaseP] (int g, int* t)
             {
                 for (int i = 0; i < 4; ++i)
                     t[i] = -1;
@@ -3542,22 +3324,18 @@ private:
                     t[2] = QRouter::encode (7, QRouter::kVirtual);
                 }
             });
-            int ids[ui::ShapeEditorPage::kGroups] = { 0, 1, 2 };
-            setBlocks (editor_.groups, ui::ShapeEditorPage::kGroups, ids, ui::ShapeEditorPage::kGroups, act);
         }
         else if (pageTop_ == kPagePointMod)
         {
             name = "Modulation";
             // ONE group, always the active one: Q 1 = MODULATE (virtual 8), Q 2 = AMOUNT (virtual 9); the editor's own targets come back with the editor page (the slots are published again at the first update there)
-            qSlots_.publish (v, pointMod_.target.enabled() ? 1 : 0, 0, [this] (int, int* t)
+            qSlots_.publish (v, pointMod_.fields[ui::PointModModel::kTarget].enabled ? 1 : 0, 0, [this] (int, int* t)
             {
                 t[0] = QRouter::encode (kVirtPmTarget, QRouter::kVirtual);
-                t[1] = pointModSelection().mix == ui::PointModPage::SelectionMod::MixedSource
+                t[1] = pointModSelection().mix == ui::PointSelectionMod::MixedSource
                     ? -1 : QRouter::encode (kVirtPmAmount, QRouter::kVirtual);
                 t[2] = t[3] = -1;
             });
-            int ids[1] = { 0 };
-            setBlocks (&pointMod_.group, 1, ids, 1, 0);
         }
         else if (pageTop_ == kPageKeyboard)
         {
@@ -3569,12 +3347,9 @@ private:
             const bool tg = pageTop_ == kPageTargets;
             name = tg ? "Targets" : "Mods";
             const ModRow* rows = tg ? targetRows_ : modRows_;
-            const int n = tg ? targets_.numRows() : mods_.numRows(), act = tg ? targets_.activeRow() : mods_.activeRow();
-            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < ui::ModulationsPage::kPerPage ? rows[row].slot : -1, t); });
-            if (tg)
-                setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, n, act);
-            else
-                setRowBlocks (mods_, ui::ModulationsPage::kPerPage, n, act);
+            const LfoModRows& view = tg ? targetsView_ : modsView_;
+            const int n = view.numRows(), act = view.activeRow();
+            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < LfoModRows::kPerPage ? rows[row].slot : -1, t); });
         }
         else if (pageTop_ == kPageList)
         {
@@ -3583,12 +3358,14 @@ private:
         }
         else
         {
-            name = full_.activeGroup() >= 0 ? full_.groupName (full_.activeGroup()) : "";
-            int ids[ui::LfoFullScreen::kMaxGroups], used = 0, pos = -1;
-            for (int g = 0; g < full_.numGroups() && g < ui::LfoFullScreen::kMaxGroups; ++g)
-                if (full_.groups[g].numMembers() > 0 && ! (g == full_.keyGroup() && ! full_.keyActive()))   // the KEY block is there only with the key follow sync
+            buildGroups();
+            const int act = activeGroup();
+            name = act >= 0 && act < nGroups_ ? groups_[act].name : "";
+            int ids[kMaxGroups], used = 0, pos = -1;
+            for (int g = 0; g < nGroups_; ++g)
+                if (groups_[g].numMembers() > 0 && ! (g == keyGroup_ && ! keyActive_))   // the KEY block is there only with the key follow sync
                 {
-                    if (g == full_.activeGroup())
+                    if (g == act)
                         pos = used;
                     ids[used++] = g;
                 }
@@ -3601,13 +3378,12 @@ private:
                 int first = 0;
                 for (int k = 0; k < used; ++k)
                 {
-                    auto& group = full_.groups[ids[k]];
-                    group.setWideFirstSlot (first);
+                    const GroupDef& group = groups_[ids[k]];
                     int next = first;
-                    for (int i = 0; i < ui::QGroup::kSlots && first + i < QRouter::kCount; ++i)
-                        if (const auto* member = group.member (i))
+                    for (int i = 0; i < 4 && first + i < QRouter::kCount; ++i)
+                        if (group.member[i] >= 0)
                         {
-                            targets[first + i] = paramOfMember (member);
+                            targets[first + i] = paramOfMember (group.member[i]);
                             next = first + i + 1;
                         }
                     first = next;
@@ -3617,34 +3393,113 @@ private:
             else
             {
                 int targets[QRouter::kCount];
-                const int capacity = QRouter::mapGroups (used, pos, [&] (int k, int* t) { members (full_.groups[ids[k]], t); }, targets);
-                (void) capacity;
+                QRouter::mapGroups (used, pos, [&] (int k, int* t) { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (groups_[ids[k]].member[i]); }, targets);
                 qSlots_.publishRaw (v, targets);
-                setBlocks (full_.groups, ui::LfoFullScreen::kMaxGroups, ids, used, pos);
             }
         }
         ui::setText (qName_, sizeof qName_, name);
     }
 
     // ======================================================================================================================================================================
-    ui::LfoCompact compact_;
-    ui::LfoFullScreen full_;
-    ui::ShapeEditorPage editor_;
-    ui::ModTargetsPage targets_;
-    NativeModTargets nativeTargetPage_;
-    ui::ModulationsPage mods_;
-    ui::PointModPage pointMod_;
+    // the parts of the pages the host cannot draw: the texts and frames of the ground, the canvas, the menu chrome
+    void drawEditor (gpu::SceneBuilder& sb) const
+    {
+        editor_.canvas.draw (sb);
+        ui::Pen p (sb, true);
+        ui::Cell cell (sb, { 0, kTabY, w_, kTabH });
+        const ui::theme::Look& T = ui::theme::L();
+        const ui::Rect titleEdit = editor_.titleRect (0);
+        if (! titleEdit.empty())
+            p.textLeft (titleEdit, "SELECTED POINT", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
+        if (editor_.canvas.selection().count() == 0 && ! titleEdit.empty())
+        {
+            const ui::Rect hint { titleEdit.x + 170, titleEdit.y, std::max (0, titleEdit.w - 170), titleEdit.h };
+            p.textRight (hint, "TAP A POINT OR TURN Q1", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
+        }
+        p.textLeft (editor_.titleRect (1), "GRID", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
+        p.textLeft (editor_.titleRect (2), "TRIGGER", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
+        const ui::Rect cr = editor_.canvasRect();
+        p.textRight ({ cr.right() - 8 - 220, cr.y + 6, 220, 18 }, editor_.info(), T.fLabel - 3.0f, p.c (T.textFaint, 255), T.fMin);
+        if (editor_.status()[0] != '\0')
+            p.textLeft ({ cr.x + 14, cr.y + 6, std::max (0, cr.w - 260), 22 }, editor_.status(), T.fLabel - 2.0f, p.c (T.flow[0], 255), T.fMin);
+    }
+    void drawPointMod (gpu::SceneBuilder& sb) const
+    {
+        ui::Pen p (sb, true);
+        ui::Cell cell (sb, { 0, kTabY, w_, kTabH });
+        const ui::theme::Look& T = ui::theme::L();
+        const int y = kTabY + 8 + ui::kQLane;
+        p.textLeft ({ 640, y, std::max (0, w_ - 640 - 8), 56 }, pointMod_.summary(), T.fLabel + 2.0f, p.c (T.text, 255), T.fMin);
+    }
+    /** The frames and the captions of the full screen of the Play page's expansion: the display block, the blocks of the bottom band with their titles. */
+    void drawFullFurniture (gpu::SceneBuilder& sb) const
+    {
+        ui::Pen p (sb, true);
+        ui::Cell cell (sb, fullG_.tab);
+        const ui::theme::Look& T = ui::theme::L();
+        if (fullG_.edit.empty())
+            p.block (fullG_.display);
+        buildGroups();
+        const int act = activeGroup();
+        const int activeBlock = act >= 0 && act < nGroups_ ? groups_[act].block : -1;
+        for (int i = 0; i < fullG_.nBlocks; ++i)
+            p.rrect (fullG_.blocks[i], T.rBlock, p.c (ui::colour::rgba (i == activeBlock ? T.keylineHi : T.keyline, 255)), T.frame);
+        p.textLeft ({ fullG_.tab.x + 8 + 84 + lfolayout::kGap, fullG_.tab.y + 2 + ui::kQLane, 56, 56 }, "LFO", T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
+        static const char* const kShape[3] = { "RATE", "TIMING", "MOTION" }, * const kRandom[1] = { "RANDOM" };
+        for (int i = 0; i < fullG_.nBlocks; ++i)
+        {
+            const char* title = random() ? kRandom[i] : kShape[i];
+            if (i == 0 && keyActive_)
+                title = random() ? "RANDOM - RATE FOLLOWS THE KEY" : "RATE - FOLLOWS THE KEY";
+            p.textLeft ({ fullG_.blocks[i].x + 10, fullG_.blocks[i].y + 4, std::max (0, fullG_.blocks[i].w - 20), 18 }, title, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        }
+    }
+    /** The dimmed ground and the frame of the list menu (the rows and the header are native cells of the host). */
+    void drawMenuChrome (gpu::SceneBuilder& sb) const
+    {
+        const ui::theme::Look& T = ui::theme::L();
+        ui::Pen p (sb, true);
+        ui::Cell cell (sb, menu_.parent);
+        p.rect (menu_.parent, ui::colour::rgba (T.bg1, 190));
+        const ui::Rect b = menu_.box();
+        p.block (b, true);
+        p.rrect (b, T.rBlock, p.c (T.flow[0], 255), 1.6f);
+        if (menu_.scrolls())
+        {
+            const ui::Rect th = menu_.thumbRect();
+            p.rrect ({ th.x, b.y + lfolayout::Menu::kPad + menu_.headerH(), lfolayout::Menu::kBarW, b.h - 2 * lfolayout::Menu::kPad - menu_.headerH() }, 5.0f, p.c (T.track, 255));
+            p.paintY2 (static_cast<float> (th.y), static_cast<float> (th.bottom()), T.flow[0], T.flow[3], 255);
+            p.rrect (th, 5.0f, 255);
+            p.paintOff();
+        }
+    }
+
+    // ======================================================================================================================================================================
+    enum class MenuTouch : uint8_t { None, Backdrop, Zone, Box };
+    MenuTouch menuMode_ = MenuTouch::None;
+    int menuX0_ = 0, menuY0_ = 0, menuFirst0_ = 0;
+    lfolayout::Full fullG_;
+    lfolayout::Compact compG_;
+    uint32_t geomKey_ = ~0u;
+    ui::ShapeEditorModel editor_;
+    ui::PointModModel pointMod_;
     ui::TextEntry entry_;
+    LfoModRows targetsView_, modsView_;
+    lfolayout::Menu menu_;
     LfoShapeLibrary lib_;
-    ui::ListPopup list_;
+    binding::SelectorSet selector_;
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     std::vector<Item> items_;
-    ui::Component* gesture_ = nullptr;
+    Gesture gesture_ = Gesture::None;
     bool gestureDown_ = false, virtualUndoActive_ = false, configured_ = false, modsDirty_ = true, shapeDirty_ = false, editorContentExternal_ = false, editorSentValid_ = false, haveCurve_ = false, displayHot_ = false;
+    bool nativePage_ = false, nativeSmooth_ = false, editShown_ = false, keyActive_ = false, smoothOn_ = true;
     int nativeTargets_[nativeui::lfo::kCount] {};
     uint32_t nativeFields_ = 0;
     bool nativePublished_ = false;
     bool compactNativeKey_ = false;
+    int compactBlock_ = -1;
+    int sync_ = 0;
+    ui::lfo::SyncMode syncMode_ = ui::lfo::SyncMode::Hz;
     uint64_t nativeEditorShape_ = 0;
     nativeui::lfoeditor::State nativeEditorState_ {};
     nativeui::lfodetail::View nativeDetailView_ = nativeui::lfodetail::Hidden;
