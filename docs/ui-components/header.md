@@ -12,19 +12,22 @@ The full-width top row of a page or of a Play panel. No screen, skin or overlay 
 | `header.side` | 8 | left and right padding |
 | `header.page.width` | 1280 (`screen.width`) | a page; the display tab area is 1280 x 628 |
 | `header.panel.width` | 400 | a Play panel |
-| `header.dropdown.width`, `header.selector.width` | 220, 200 | example widths of the centre controls |
+| `header.dropdown.min_width` | 220 | width of a fixed dropdown, minimum width of the flexible (fill) one |
 
 ## Zones
 
-- LEFT: the module POWER button (48 x 48; only on pages or panels of modules that can be switched off), then the screenTitle (page title: `font.page_title`, `text.value`, the style of the page captions). Modulators (Env, LFO, RND) have no POWER: the title starts at the side padding, no empty slot.
-- CENTRE: page-specific controls (48 px; a dropdown is 40 px by default, centred in the 48 px content, so 8 px margin above and below: PROPOSAL, the owner chooses the height from the catalogue's three dropdown heights) after one gap: dropdown (selector recipe), text button (button recipe). The centre contents per page in the catalogue are EXAMPLES, not a decision.
-- RIGHT: the common buttons, right-aligned to the side padding: EXPAND (maximise icon; in the full-screen state the same slot shows CLOSE) and MORE.
-- A Play panel uses the same header at panel width: POWER, a selector dropdown (Sub, Env 1, LFO 1), EXPAND.
+Order in a page header: [title] [POWER] [page controls] ... [common buttons].
+
+- LEFT: the screenTitle first, at the side padding (the Label component's screenTitle: `font.page_title`, `text.value`; its width comes from the text), then the module POWER button (48 x 48; only on pages or panels of modules that can be switched off) one `header.gap` after the title. Modulators (Env, LFO, RND) and Master have no POWER: the header is just the title.
+- CENTRE: page-specific controls after one gap (48 px; a dropdown is 40 px by default, centred in the 48 px content, so 8 px margin above and below: PROPOSAL, the owner chooses the height from the catalogue's three dropdown heights): dropdown (selector recipe), text button (button recipe). The centre contents per page in the catalogue are EXAMPLES, not a decision.
+- Flexible control: at most one centre control (the dropdown) is marked `"fill": true` in the catalogue data. It takes all the room between the left and the right group (width = row - side paddings - the other widths - the gaps); `header.dropdown.min_width` is its minimum. Title, POWER and the common buttons keep their size.
+- RIGHT: the common buttons, right-aligned to the side padding: EXPAND (maximise icon; in the full-screen state the same slot shows CLOSE, an X) and MORE.
+- A Play panel has the order [POWER] [selector dropdown, fills the room: it is the panel's title] [EXPAND] at panel width (`header.panel.width`): POWER 8 px from the side, the dropdown 8 px after POWER and 8 px before EXPAND.
 - POWER off: the POWER icon is unlit and the centre controls take the disabled look (`style.dim_artwork`, the artwork of `apply_control_state`). Title and common buttons stay.
 
 ## Recipes used (no new look)
 
-`button.action_art` (power icon, expand icon, text buttons), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the old Play-panel look; placement none, align center) `font.page_title` title text. CLOSE and MORE are text buttons; there is no close or more icon recipe.
+The Button and IconButton recipes (`button.render_sample`, `icon_button.render_sample`; look legacy: gradient fill, no flat button anywhere in the header), `label.render_label` (title), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the old Play-panel look; placement none, align center) `font.page_title` title text. EXPAND and CLOSE (an X) are IconButtons, MORE is a text Button (no more icon).
 
 ## Add an example
 

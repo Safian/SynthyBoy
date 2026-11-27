@@ -17,12 +17,13 @@
           {
             "kind": "dropdown",
             "value": "Saw",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width"
           },
           {
             "kind": "dropdown",
             "value": "Wavetable",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width",
+            "fill": true
           },
           {
             "kind": "button",
@@ -32,8 +33,8 @@
         "right": [
           "more"
         ],
-        "caption": "1 · Osc A: POWER, cím, TYPE-legördülő (csak érték), SOURCE-legördülő (érték középen, 40 px), BROWSE gomb; jobbra MORE",
-        "alt": "Osc A fejléc: POWER, OSC A, TYPE, SOURCE, BROWSE, MORE"
+        "caption": "1 · Osc A: cím, POWER, TYPE-legördülő (csak érték), SOURCE-legördülő (érték középen, 40 px), BROWSE gomb; jobbra MORE",
+        "alt": "Osc A fejléc: OSC A, POWER, TYPE, SOURCE, BROWSE, MORE"
       },
       {
         "id": "lfo-9",
@@ -44,7 +45,8 @@
           {
             "kind": "dropdown",
             "value": "Sine",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width",
+            "fill": true
           },
           {
             "kind": "button",
@@ -78,14 +80,15 @@
           {
             "kind": "dropdown",
             "value": "Analog",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width",
+            "fill": true
           }
         ],
         "right": [
           "more"
         ],
-        "caption": "4 · Filter 1: POWER, cím, MODEL-legördülő (csak érték); jobbra MORE",
-        "alt": "Filter 1 fejléc: POWER, FILTER 1, MODEL, MORE"
+        "caption": "4 · Filter 1: cím, POWER, MODEL-legördülő (csak érték); jobbra MORE",
+        "alt": "Filter 1 fejléc: FILTER 1, POWER, MODEL, MORE"
       },
       {
         "id": "master",
@@ -100,18 +103,19 @@
         "file": "header-play-panel.png",
         "width": "panel",
         "power": "on",
+        "right": [
+          "expand"
+        ],
+        "caption": "6 · Play-panel fejléc a panel szélességén ({size:header.panel.width} px): POWER, a választó legördülő (kitölti a helyet, ő a panel címe), EXPAND",
+        "alt": "Play panel fejléc: POWER, Env 1 választó, EXPAND",
         "centre": [
           {
             "kind": "dropdown",
             "value": "Env 1",
-            "width": "header.selector.width"
+            "width": "header.dropdown.min_width",
+            "fill": true
           }
-        ],
-        "right": [
-          "expand"
-        ],
-        "caption": "6 · Play-panel fejléc a panel szélességén ({size:header.panel.width} px): POWER, választó legördülő, EXPAND",
-        "alt": "Play panel fejléc: POWER, Env 1 választó, EXPAND"
+        ]
       },
       {
         "id": "osc-a-off",
@@ -123,12 +127,13 @@
           {
             "kind": "dropdown",
             "value": "Saw",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width"
           },
           {
             "kind": "dropdown",
             "value": "Wavetable",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width",
+            "fill": true
           },
           {
             "kind": "button",
@@ -150,7 +155,8 @@
           {
             "kind": "dropdown",
             "value": "Sine",
-            "width": "header.dropdown.width"
+            "width": "header.dropdown.min_width",
+            "fill": true
           },
           {
             "kind": "button",

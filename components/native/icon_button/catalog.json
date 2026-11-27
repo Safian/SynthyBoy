@@ -185,6 +185,76 @@
         "height": "height.medium",
         "state": "off",
         "look": "ghost"
+      },
+      {
+        "id": "close-off-filled-32",
+        "file": "icon-button-close-off-filled-32.png",
+        "alt": "IconButton CLOSE (X), 32 px",
+        "caption": "CLOSE (X) · 32 px",
+        "icon": "close",
+        "height": "height.small",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-filled-40",
+        "file": "icon-button-close-off-filled-40.png",
+        "alt": "IconButton CLOSE (X), 40 px",
+        "caption": "CLOSE (X) · 40 px",
+        "icon": "close",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-filled-48",
+        "file": "icon-button-close-off-filled-48.png",
+        "alt": "IconButton CLOSE (X), 48 px",
+        "caption": "CLOSE (X) · 48 px",
+        "icon": "close",
+        "height": "height.medium",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-filled-56",
+        "file": "icon-button-close-off-filled-56.png",
+        "alt": "IconButton CLOSE (X), 56 px",
+        "caption": "CLOSE (X) · 56 px",
+        "icon": "close",
+        "height": "height.high",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-disabled-filled-48",
+        "file": "icon-button-close-disabled-filled-48.png",
+        "alt": "IconButton CLOSE disabled, 48 px",
+        "caption": "CLOSE disabled · 48 px",
+        "icon": "close",
+        "height": "height.medium",
+        "state": "disabled",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-ghost-40",
+        "file": "icon-button-close-off-ghost-40.png",
+        "alt": "IconButton CLOSE ghost, 40 px",
+        "caption": "CLOSE ghost · 40 px",
+        "icon": "close",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "ghost"
+      },
+      {
+        "id": "close-off-ghost-48",
+        "file": "icon-button-close-off-ghost-48.png",
+        "alt": "IconButton CLOSE ghost, 48 px",
+        "caption": "CLOSE ghost · 48 px",
+        "icon": "close",
+        "height": "height.medium",
+        "state": "off",
+        "look": "ghost"
       }
     ]
   }

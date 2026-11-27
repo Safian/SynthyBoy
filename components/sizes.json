@@ -825,6 +825,11 @@
         ],
         "arm": 7,
         "stroke": 2.5
+      },
+      "close": {
+        "center": [32, 28],
+        "half": 9.6,
+        "stroke": 2.5
       }
     },
     "origin": 0,
@@ -844,8 +849,7 @@
     "header.side": 8,
     "header.page.width": {"ref": "screen.width"},
     "header.panel.width": 400,
-    "header.dropdown.width": 220,
-    "header.selector.width": 200,
+    "header.dropdown.min_width": 220,
     "label.dial.36": {"diameter": 36, "caption": {"ref": "font.annotation"}, "value": {"ref": "font.small"}, "proposal": true},
     "label.dial.40": {"diameter": {"ref": "dial.compact.diameter"}, "caption": {"ref": "pan.compact_pan_definition.font.height"}, "value": {"ref": "pan.compact_pan_definition.font.height.offset1"}, "proposal": false},
     "label.dial.48": {"diameter": 48, "caption": {"ref": "font.caption"}, "value": {"ref": "font.value"}, "proposal": true},

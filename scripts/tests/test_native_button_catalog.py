@@ -93,6 +93,21 @@ class IconButtonTests(unittest.TestCase):
                        ("power", "on", "ghost"), ("power", "off", "ghost"), ("expand", "off", "filled")):
             self.assertIn(wanted, states)
         self.assertEqual({style.size(s["height"]) for s in ICONS if s["look"] == "ghost"}, {40, 48})
+        for wanted in (("close", "off", "filled"), ("close", "disabled", "filled"), ("close", "off", "ghost")):
+            self.assertIn(wanted, states)
+
+    def test_close_is_an_x_with_the_expand_stroke_at_40_percent_of_the_height(self):
+        art = style.size("button.art")
+        self.assertEqual(art["close"]["stroke"], art["expand"]["stroke"])
+        self.assertAlmostEqual(2 * art["close"]["half"] / art["height"], 0.4, places=2)
+        face = button.action_art(icon="close", look="ghost", height=48)
+        ink = [(x, y) for y in range(48) for x in range(48) if face.getpixel((x, y))[3] > 128]
+        xs, ys = [x for x, _ in ink], [y for _, y in ink]
+        self.assertAlmostEqual((max(xs) - min(xs)) / 48, 0.4 + art["close"]["stroke"] / 48, delta=0.06)
+        self.assertAlmostEqual((min(xs) + max(xs)) / 2, 23.5, delta=1)
+        self.assertAlmostEqual((min(ys) + max(ys)) / 2, 23.5, delta=1)
+        self.assertEqual(face.getpixel((24, 24))[3] > 128, True)            # the diagonals cross in the middle
+        self.assertEqual(face.getpixel((24, 10))[3], 0)                     # nothing above the X on the axis
 
     def test_ghost_has_no_fill_and_no_keyline(self):
         background = (12, 17, 31, 255)
@@ -123,7 +138,7 @@ class IconButtonTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             icon_button.icon_samples({"samples": [dict(ICONS[0], look="glass")]})
         with self.assertRaises(ValueError):
-            icon_button.icon_samples({"samples": [dict(ICONS[0], icon="close")]})   # no CLOSE icon recipe
+            icon_button.icon_samples({"samples": [dict(ICONS[0], icon="more")]})    # no MORE icon recipe
 
 
 class OrderTests(unittest.TestCase):
