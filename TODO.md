@@ -376,3 +376,5 @@
 
 - [ ] A skin átállítása a RadioGrid/RadioList/SlideSwitch/RotarySelector komponensekre és a régi `radio_button.py` szegmentált lapos arcok törlése (KIVEZETÉSRE, docs/ui-components/radio_family.md). Kész, ha a skin a Button komponenst használja és a lapos radio példák nincsenek.
 - [ ] ui_display_host: "QGroup: the frame can run around cards (a rectangle given by the owner), inside the rectangle" fails on develop (checked with the unchanged core.h, host compile of shell-mpc/ui/tests/ui_display_host.cpp). Kész, ha a teszt zöld, vagy az elvárás igazolt módon frissül.
+- [ ] ‹ érték › nyilas választók kivezetése (owner 2026-11-27): minden képernyőn a lefelé nyilas (⌄) legördülő komponens váltja ki (a Play panelek, az LFO SHAPE, az Osc SOURCE és társaik); a C++ overlay Carousel, Stepper, UpDownStepper és UsedSelector vezérlői (az LFO „használt + egy szabad" választó is) külön lépésben, C++ build kell hozzá. Kész, ha a skinben és az overlay-ben sincs ‹ › léptető, és minden váltás a legördülő listán át megy a gyári viselkedéssel.
+
