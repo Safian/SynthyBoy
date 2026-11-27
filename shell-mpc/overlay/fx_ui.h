@@ -1,19 +1,21 @@
-// SynthyBoy - MPC overlay: the FX UI, the page of the FX tab (the plugin draws the whole tab, page_view.h): the chain of the effects of the three racks (Main, Bus 1, Bus 2) as cards in processing order and the
-// page of the selected effect (shell-mpc/ui/fx_chain_bar.h, fx_slot_editor.h, fx_display.h), wired to the engine's FX racks (fx_rack.h: the modules of the fixed chain and the slots of the pool) and to the
-// parameter descriptors of the effect types (fx_types.h: the name, the range and the unit of every parameter come from the descriptor's source key: one source of truth). One object per (page view, plugin
-// instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Mixer and FX UI".
+// SynthyBoy - MPC overlay: the FX UI, the page of the FX tab: the chain of the effects of the three racks (Main, Bus 1, Bus 2) and the page of the selected effect, wired to the engine's FX racks (fx_rack.h: the modules of
+// the fixed chain and the slots of the pool) and to the parameter descriptors of the effect types (fx_types.h: the name, the range and the unit of every parameter come from the descriptor's source key: one source of
+// truth). Owner decision 2026-11-27: the C++ layer has no UI elements. Every control of the page (the cards of the chain, the power, the rack, the panels, REMOVE, the cells of the effect, the gallery cards, the type menu)
+// is a native component of the host skin; this page holds the DATA behind them (FxEditorModel: the table of the effect, the live controls, the rows and panels, the geometry the skin lays out) and the native bridge
+// (the chain, the header and the cells), the Q-Link groups (one per row of the effect), the displays (ui::FxDisplay: EQ, compressor, delay, FX filter, distortion) and the pictures of the gallery. One object per (page
+// view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Mixer and FX UI".
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack): the page is always open; above it the list popup that picks the type of a new effect. The cards: a tap selects, the power zone switches, a drag moves the card (fxMove: the rack and
-// the position), + ADD adds an effect of the chosen type at the end of the Main rack. The page of an effect has its power switch, its rack (a stepper: the effect moves to another rack), the pages of its knobs,
-// REMOVE (the slots of the pool: the modules of the fixed chain are switched off instead), the display (EQ, compressor, delay, FX filter, distortion) and the knobs in rows of four: one Q group per row.
-// An empty chain has no effect to edit: the page is the GALLERY of the effect types the engine has (ui/fx_gallery.h, a card with a picture per type); one tap on a card adds that effect at the end of the Main
-// rack (the same as + ADD and a row of its list) and selects it, so the page of the new effect replaces the gallery.
-// THE RACKS OF THE BANDS: the page of a splitter shows one lane per band (ui/fx_band_board.h): the chain of the band as cards. A tap on a card, on the tile of the band or on its + ADD OPENS THE BAND (scope_): the chain
-// bar then holds the cards of that band (engine racks 3 .. 9; only the 13 modules of instance 0 that are no splitters sit in them), a BACK card first (the way up to the splitter), and the page of the selected effect
-// is the same table page as in the Main chain; the place stands over the name ("MAIN CHAIN > SPLITTER L/M/H > MID BAND"). + ADD in a band offers the types whose module is free (off and not in a band), moves the module
-// into the band and switches it on; a drag reorders; the rack switch of the page moves the effect to any of the ten racks; REMOVE switches the effect off and takes it out of its band.
+// What it shows: the page is always open. The cards: a native tap selects, the power zone switches, a drag of the handle moves the card (fxMove: the rack and the position), the native menu adds an effect of the chosen type at the
+// end of the Main rack. The page of an effect has its power switch, its rack (the effect moves to another rack), the pages of its cells, REMOVE (the slots of the pool: the modules of the fixed chain are switched off instead),
+// the display and the cells in rows of four: one Q group per row. An empty chain has no effect to edit: the page is the GALLERY of the effect types the engine has (a native card with a picture per type); one tap on a card
+// adds that effect at the end of the Main rack and selects it.
+// THE RACKS OF THE BANDS: the page of a splitter has the data of one lane per band (FxBandData: the tile and the chain of the band). The commands of a lane (openBand, bandAdd, bandSelect, bandPower, bandMove) open the chain
+// of the band (scope_): the chain bar then holds the cards of that band (engine racks 3 .. 9; only the 13 modules of instance 0 that are no splitters sit in them), a BACK card first (the way up to the splitter), and the page
+// of the selected effect is the same table page as in the Main chain; the place stands over the name ("MAIN CHAIN > SPLITTER L/M/H > MID BAND"). The chain offers the types whose module is free (off and not in a band), moves the
+// module into the band and switches it on; a drag reorders; the rack switch of the page moves the effect to any of the ten racks; REMOVE switches the effect off and takes it out of its band. The skin has no native lane
+// component yet (case (c) of docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md): the commands are the hooks of the native bridge it will get.
 #pragma once
 
 #include <cstdint>
@@ -26,11 +28,16 @@
 #include <string>
 #include <vector>
 
+#include "../native_fx_chain.h"
+#include "../native_fx_cells.h"
+#include "../native_fx_header.h"
 #include "../q_router.h"
+#include "../ui/binding.h"
 #include "../ui/choice_names.h"
-#include "../ui/fx_screen.h"
-#include "../ui/list.h"
-#include "../ui/ui.h"
+#include "../ui/content_name.h"
+#include "../ui/fx_gallery_picture.h"
+#include "../ui/native_apertures.h"
+#include "fx_editor_model.h"
 #include "instance_view.h"
 #include "native_marker_covers.h"
 #include "page_view.h"
@@ -52,56 +59,53 @@ class FxUi
 public:
     static constexpr int kElementPage = 6;        // the page of the FX tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
     static constexpr int kElementFx = kElementPage;
-    static constexpr int kPageList = 35;
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
 
-    enum IdBase : int
-    {
-        kChainBase = 3000,
-        kBandBase = 3100,
-        kEditorBase = 4000,
-        kEditorPower = kEditorBase + 100, kEditorRack, kEditorPage, kEditorRemove,
-        kList = 5000,
-        kListBackdrop = 5001,
-        kGallery = 5100
-    };
-
     enum class DrawPass : uint8_t { All, LiveOnly };
+
+    // ---- the geometry of the native chain bar (the rectangles the plugin leaves open and reads a drag on) ---------------------------------------------------------------------------------------------------------
+    static constexpr int kNativeCell = 56, kNativeGap = 4, kChainPad = 8;
+    static constexpr int kChainSlots = 16;
+    ui::Rect chainRect() const noexcept { return { kChainPad, kTabY + kChainPad, w_ - 2 * kChainPad, 2 * kNativeCell + 2 * kNativeGap }; }
+    ui::Rect dragRect() const noexcept { const auto r = chainRect(); return { r.x, r.y, kNativeCell, kNativeCell }; }
+    ui::Rect nativeBackRect() const noexcept { const auto r = chainRect(); return { r.x, r.y + kNativeCell + kNativeGap, kNativeCell, kNativeCell }; }
+    ui::Rect nativeAddRect() const noexcept { const auto r = chainRect(); return { r.right() - 68, nativeBackRect().y, 68, kNativeCell }; }
+    ui::Rect nativePageRect() const noexcept { const auto r = chainRect(); return { r.right() - 110, r.y, kNativeCell, kNativeCell }; }
+    ui::Rect nativeSlotRect (int i) const noexcept
+    {
+        const int start = dragRect().right() + kNativeGap;
+        const int width = (nativePageRect().x - start) / kChainSlots;
+        const auto r = chainRect();
+        return { start + i * width, r.y, width - kNativeGap, 2 * kNativeCell + kNativeGap };
+    }
+    ui::Rect nativePowerRect (int i) const noexcept { const auto r = nativeSlotRect (i); return { r.x, r.y, r.w, kNativeCell }; }
+    ui::Rect nativeSelectRect (int i) const noexcept { const auto r = nativeSlotRect (i); return { r.x, r.bottom() - kNativeCell, r.w, kNativeCell }; }
+    /** The area of the gallery of an empty chain (under the chain bar). */
+    ui::Rect galleryRect() const noexcept
+    {
+        const int topY = kTabY + kChainPad + 2 * kNativeCell + 2 * kNativeGap + kChainPad;
+        return { kChainPad, topY, w_ - 2 * kChainPad, std::max (100, kTabY + kTabH - topY - kChainPad) };
+    }
 
     FxUi()
     {
         plain_.assign (synthyboy::paramCount(), 0.0f);
-        cardItems_.reserve (2 * ui::FxChainBar::kMaxSlots);
-        screen_.assignIds (kChainBase, kEditorBase);
-        screen_.slotEditor.bands.assignIds (kBandBase);
+        cardItems_.reserve (2 * kMaxItems);
         setCanvas (kCanvasW, kCanvasH);
-        int galleryTypes[ui::fxl::kNumKinds - 1];
         for (int k = 1; k < ui::fxl::kNumKinds; ++k)
-        {
             typeNames_[k - 1] = ui::fxl::layoutOf (k).name;   // the 13 types of the pool, then the three splitters
-            galleryTypes[k - 1] = k;
-        }
-        screen_.gallery.setTypes (galleryTypes, typeNames_, ui::fxl::kNumKinds - 1);
-        screen_.gallery.setId (kGallery);
-        screen_.setEditorShown (false);
         setNativeControls (true);
     }
 
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
-        const ui::Rect tab { 0, kTabY, w, kTabH };
-        screen_.place (tab);
-        list_.setPopup (tab);
-        list_.setId (kList);
-        list_.setBackdropId (kListBackdrop);
+        editor_.setCanvas (w);
     }
 
-    ui::FxFullScreen& screen() noexcept { return screen_; }
-    const ui::FxFullScreen& screen() const noexcept { return screen_; }
-    ui::ListPopup& list() noexcept { return list_; }
-    const ui::ListPopup& list() const noexcept { return list_; }
+    FxEditorModel& editor() noexcept { return editor_; }
+    const FxEditorModel& editor() const noexcept { return editor_; }
 
     int selectedSlot() const noexcept { return selectedSlot_; }
     int numCards() const noexcept { return static_cast<int> (cardItems_.size()); }
@@ -111,12 +115,7 @@ public:
     const char* qGroupName() const noexcept { return qName_; }
     void setHostBackground (bool on) noexcept { drawPass_ = on ? DrawPass::LiveOnly : DrawPass::All; }
     bool hostBackground() const noexcept { return &ui::theme::L() == &ui::theme::kLook1 && drawPass_ == DrawPass::LiveOnly; }
-    void setNativeControls (bool on) noexcept
-    {
-        nativeControls_ = on;
-        screen_.setNativeControls (on);
-        setHostBackground (on);
-    }
+    void setNativeControls (bool on) noexcept { nativeControls_ = on; setHostBackground (on); }
     bool nativeControls() const noexcept { return nativeControls_; }
     void leftTab (IInstanceView& inst) noexcept
     {
@@ -129,46 +128,26 @@ public:
         inst.setNativeFxRackPopup (action == 0);
         inst.setNativeFxAddPopup (action == 1);
     }
-    int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
+    int topPage() const noexcept { return 0; }
     /** The chain on the page: 0 the Main / Bus chain, 3 .. 9 the chain of that band rack (fxl::bandOfRack). */
     int scope() const noexcept { return scope_; }
     /** The modules of a band rack (3 .. 9) in processing order, as of the last update. */
     const std::vector<synthyboy::FxRackItem>& bandItems (int rack) const noexcept { return bandItems_[static_cast<size_t> (std::clamp (rack, ui::fxl::kFirstBandRack, ui::fxl::kNumRacks - 1) - ui::fxl::kFirstBandRack)]; }
     const synthyboy::FxRackItem& selectedItem() const noexcept { return selectedItem_; }
+    bool galleryShown() const noexcept { return ! editorShown_ && (galleryN_ > 0 || galleryNote_[0] != '\0'); }
+    bool editorShown() const noexcept { return editorShown_; }
 
-    /** Reads the instance: the chain (only when its structure changed), the selected effect with its knobs, display data and Q group. */
+    /** Reads the instance: the chain (only when its structure changed), the selected effect with its cells, display data and Q group. */
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
+        (void) stack;
         live_ = in.live;
         // the structure of the chain: a signature of the parameters that decide it
         readRackStructure (inst);
         const uint64_t generation = inst.stateGeneration();
         const bool sameInstance = lastInstance_ == &inst;
         const bool bindingChanged = generation != stateGeneration_ || ! sameInstance;
-        const bool openNow = stack.depth() >= 2 && stack.top() == kPageList;
-        if (listOpen_ && (! openNow || bindingChanged || (listKind_ == ListKind::ParamChoice && ! renderedEditorStillLive())))
-        {
-            // Back, recall or bypass retires the old list and any held row.
-            if (openNow)
-                const_cast<UiStack&> (stack).back();
-            dropGesture();
-            listOpen_ = false;
-            listParam_ = -1;
-        }
-        if (listOpen_ && listKind_ == ListKind::ParamChoice && listParam_ >= 0 && ! cardItems_.empty() && selectedSlot_ < static_cast<int> (cardItems_.size()))
-        {
-            const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-            const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (listParam_);
-            if (pi != nullptr && std::strcmp (pi->key, "fxfilter.style") == 0)
-            {
-                const int kind = kindOfItem (item);
-                const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
-                const int count = synthyboy::filters::filterModelStyleCount (model);
-                list_.state.count = count;
-                list_.state.current = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, listParam_))), 0, std::max (0, count - 1));
-            }
-        }
         const uint32_t sig = structureSignature();
         if (bindingChanged)
         {
@@ -176,7 +155,7 @@ public:
             const bool preserve = sameInstance && renderedEditorStillLive();
             selectedItem_ = preserve ? renderedItem_ : Item { false, -1 };
             if (! preserve)
-                screen_.slotEditor.setPage (0);
+                editor_.setPage (0);
             stateGeneration_ = generation;
             lastInstance_ = &inst;
             selectedSlot_ = 0;
@@ -186,18 +165,11 @@ public:
             dropGesture();
             qSlots_.forget();
         }
-        const bool effectiveNative = nativeControls();
-        if (screen_.nativeControls() != effectiveNative)
-            selectionChanged_ = true;
-        screen_.setNativeControls (effectiveNative);
-        screen_.chainBar.nativeGround = hostBackground();
-        if (! effectiveNative)
-            galleryOpen_ = false;
         refreshEditor (inst, sig);
-        // The native editor uses the regular instance marker. Only a plugin-drawn page needs to mask the underlying tab.
-        inst.setUiFullOpen (! effectiveNative || listOpen_);
+        // The native editor uses the regular instance marker: the page never needs to mask the underlying tab.
+        inst.setUiFullOpen (false);
         if (syncNativeChain (inst)
-            || syncNativeHeader (inst, const_cast<UiStack&> (stack)))
+            || syncNativeHeader (inst))
         {
             readRackStructure (inst);
             refreshEditor (inst, structureSignature());
@@ -212,77 +184,70 @@ public:
 
     void draw (gpu::SceneBuilder& sb) const
     {
-        const bool native = screen_.nativeControls();
         if (! hostBackground())
         {
             page::ground (sb);
-            if (native && ! listOpen_)
-                clearNativeApertures (sb);
+            clearNativeApertures (sb);
         }
-        else if (hostBackground())
+        else
+            drawNativeMarkerCovers (sb, "fx");
+        if (editorShown_)
         {
-            if (native)
-                drawNativeMarkerCovers (sb, "fx");
-            else
+            // the display (the graph the host cannot draw): its static part, then the live parts
+            if (editor_.hasDisplay() && editor_.display.kind != ui::FxDisplay::Kind::None)
             {
-                page::ground (sb);
+                editor_.display.draw (sb);
+                editor_.display.drawLive (sb);
             }
         }
-        screen_.draw (sb);
-        // A fallback list takes the top drawing layer. Its modal gesture pauses the input markers.
-        if (! listOpen_ && screen_.editorShown() && screen_.slotEditor.hasDisplay())
-            screen_.slotEditor.display.drawLive (sb);
-        if (listOpen_)
-            list_.draw (sb);
+        else if (galleryShown())
+            drawGallery (sb);
     }
 
     bool covers (int x, int y) const noexcept
     {
         const ui::Rect bounds { 0, kTabY, w_, kTabH };
         const bool inTab = bounds.contains (x, y);
-        if (! inTab || ! screen_.nativeControls() || listOpen_)
-            return inTab;
-        bool found = screen_.isNativeControl (x, y);
+        if (! inTab)
+            return false;
+        bool found = editorShown_ && editor_.isNativeControl (x, y);
         visitNativeChainControls ([&] (ui::Rect area) { found = found || area.contains (x, y); });
         return ! found;
     }
 
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
+        (void) stack;
+        (void) nowMs;
         if (inst.stateGeneration() != stateGeneration_)
         {
             const bool held = gestureDown_;
             dropGesture();
             return held;
         }
-        ui::Component* top = listOpen_ ? static_cast<ui::Component*> (&list_) : static_cast<ui::Component*> (&screen_);
         if (ev.kind == TouchEvent::Down)
         {
             dropGesture();
-            auto& ed = screen_.slotEditor;
-            if (! listOpen_ && screen_.editorShown() && ed.nativeBandRect().contains (ev.x, ev.y))
-                ed.setActiveRow (ed.rowOfControl (ui::FxSlotEditor::kSel));
+            if (editorShown_ && editor_.nativeBandRect().contains (ev.x, ev.y))
+                editor_.setActiveRow (editor_.rowOfControl (FxEditorModel::kSel));
             if (! covers (ev.x, ev.y))
                 return false;
             dragSignature_ = chainSig_;
-            if (screen_.nativeControls() && screen_.chainBar.nativeDragEnabled
-                && screen_.chainBar.dragRect().contains (ev.x, ev.y))
+            if (editorShown_ && dragEnabled_ && dragRect().contains (ev.x, ev.y))
             {
                 draggedItem_ = selectedItem_;
                 dragOverPage_ = false;
                 gestureDown_ = true;
                 return true;
             }
-            gesture_ = top;
-            gestureDown_ = true;
-            handle (top->touchDown (ev.x, ev.y, nowMs), stack, inst);
+            gestureDown_ = true;   // the touch of a part of the page the overlay owns (the display): swallowed
             return true;
         }
         if (draggedItem_.index >= 0)
         {
             if (ev.kind == TouchEvent::Move)
             {
-                const bool overPage = canPageChain() && screen_.chainBar.nativePageRect().contains (ev.x, ev.y);
+                const bool overPage = canPageChain() && nativePageRect().contains (ev.x, ev.y);
                 if (overPage && ! dragOverPage_)
                     chainPage_ ^= 1;
                 dragOverPage_ = overPage;
@@ -291,7 +256,7 @@ public:
             {
                 if (canMoveCard (inst, draggedItem_))
                     for (int i = 0; i < visibleCards(); ++i)
-                        if (screen_.chainBar.nativeSlotRect (i).contains (ev.x, ev.y))
+                        if (nativeSlotRect (i).contains (ev.x, ev.y))
                         {
                             moveCard (inst, draggedItem_, firstCard() + i);
                             break;
@@ -300,60 +265,70 @@ public:
             }
             return true;
         }
-        if (! gesture_ || ! gestureDown_)
+        if (! gestureDown_)
             return false;
-        if (ev.kind == TouchEvent::Move)
-            handle (gesture_->touchMove (ev.x, ev.y), stack, inst);
-        else
-        {
-            handle (gesture_->touchUp (ev.x, ev.y), stack, inst);
+        if (ev.kind == TouchEvent::Up)
             gestureDown_ = false;
-            gesture_ = nullptr;
-        }
         return true;
     }
 
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
-    {
-        if (gesture_ && gestureDown_)
-            handle (gesture_->tick (nowMs), stack, inst);
-    }
+    void tick (double, UiStack&, IInstanceView&) {}
 
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
-        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
-    {
-        ui::Component* top = listOpen_ ? static_cast<ui::Component*> (&list_) : static_cast<ui::Component*> (&screen_);
-        if (gestureDown_ || ! top || ! covers (x, y))
-            return false;
-        ui::Change ch;
-        if (! top->wheelOver (x, y, notches, ch))
-            return false;
-        handle (ch, stack, inst);
-        (void) nowMs;
-        return true;
-    }
+    /** The mouse wheel: every control of the page is a native cell of the host; the overlay takes no wheel. */
+    bool wheel (int, int, int, UiStack&, IInstanceView&, double) { return false; }
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept
     {
-        gesture_ = nullptr;
         gestureDown_ = false;
         draggedItem_ = { false, -1 };
     }
     void forgetQGroup() noexcept { qSlots_.forget(); }
-    void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
+    /** The hardware knob `knobIndex` (0 .. 3) of the active row turned by `delta`: the member of the row in that slot. A knob moves by `delta` (normalised units), a number or a choice by whole steps, a toggle on / off by the sign. */
+    void turnQ (int knobIndex, double delta, UiStack&, IInstanceView& inst)
     {
-        if (screen_.editorShown())
-            handle (screen_.turnQ (knobIndex, delta), stack, inst);
+        if (! editorShown_ || ! editor_.powerOn || selectedSlot_ < 0 || selectedSlot_ >= numCards())
+            return;
+        const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
+        const int p = editor_.memberControl (editor_.activeRow(), knobIndex);
+        const int idx = p >= 0 ? paramIndexOf (item, p) : -1;
+        const synthyboy::ParamInfo* pi = editor_.infoOf (p);
+        if (idx < 0 || pi == nullptr)
+            return;
+        const float plain = plainOfControl (item, inst, p);
+        if (editor_.isChoice (p) || editor_.baseKind (p) == FxEditorModel::Kind::Number)
+        {
+            const bool toggle = editor_.baseKind (p) == FxEditorModel::Kind::Toggle;
+            const long step = toggle ? (delta > 0.0 ? 1 : (delta < 0.0 ? -1 : 0)) : std::clamp<long> (std::lround (delta), -100000, 100000);
+            if (step == 0)
+                return;
+            if (editor_.isChoice (p))
+            {
+                int count = pi->numChoices;
+                if (std::strcmp (pi->key, "fxfilter.style") == 0)
+                    count = synthyboy::filters::filterModelStyleCount (static_cast<int> (std::lround (plainOfKey (item, kindOfItem (item), inst, "fxfilter.model", 0.0f))));
+                const int next = binding::turnChoice (static_cast<int> (std::lround (plain)), static_cast<int> (step), std::max (1, count));
+                writeChoice (inst, item, p, next);
+            }
+            else
+            {
+                const double next = std::clamp (std::round (static_cast<double> (plain)) + static_cast<double> (step), static_cast<double> (pi->min), static_cast<double> (pi->max));
+                inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (next))));
+            }
+            return;
+        }
+        const double cur = synthyboy::toNormalised (*pi, plain);
+        const double next = binding::turnNorm (cur, delta);
+        if (std::fabs (next - cur) >= 1.0e-12)
+            uibind::writeNorm (inst, idx, next);
     }
-    bool listOpen() const noexcept { return listOpen_; }
+    bool listOpen() const noexcept { return false; }
 
     /** The table index of control p of the effect on the page (-1 none): the parameter of the slot of the pool for a control that is one of the type's own, else the engine's key of the control itself (the splitters,
         the modules of the fixed chain, the force enable of the reverb). The page is the one of `item` (the selected effect). */
     int paramIndexOf (const synthyboy::FxRackItem& item, int p) const noexcept
     {
-        const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
+        const synthyboy::ParamInfo* pi = editor_.infoOf (p);
         if (pi == nullptr)
             return -1;
         const int kind = kindOfItem (item);
@@ -362,9 +337,127 @@ public:
         return static_cast<int> (pi - synthyboy::paramTable());
     }
 
+    // ---- the commands of the native header (power, rack, panel, remove, band) and of the lanes of a splitter ------------------------------------------------------------------------------------------------
+    /** POWER of the effect on the page. */
+    void setPower (IInstanceView& inst, bool on) { if (selectedItem_.index >= 0) powerCard (inst, selectedItem_, on); }
+    /** The rack switch of the page: the effect moves to rack `target` (the page follows it into a band or back to the buses). */
+    void moveToRack (IInstanceView& inst, int target)
+    {
+        if (cardItems_.empty() || selectedSlot_ < 0 || selectedSlot_ >= numCards())
+            return;
+        const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
+        const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
+        target = std::clamp (target, 0, rackLimit (item));
+        int count = 0;
+        for (const Item& o : racks.rack[static_cast<size_t> (target)])
+            count += ! (o == item);
+        std::vector<synthyboy::FxWrite> writes;
+        if (synthyboy::fxMove (plain_.data(), item, target, count, writes))
+        {
+            applyWrites (inst, writes);
+            selectedItem_ = item;
+            selectionChanged_ = true;
+            scope_ = target >= ui::fxl::kFirstBandRack ? target : 0;   // the page follows the effect: into the band it went to, or back to the chain of the buses
+        }
+    }
+    /** REMOVE: a slot of the pool is freed, a module of instance 0 is switched off and leaves its band. */
+    void removeSelected (IInstanceView& inst)
+    {
+        if (cardItems_.empty() || selectedSlot_ < 0 || selectedSlot_ >= numCards())
+            return;
+        const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
+        std::vector<synthyboy::FxWrite> writes;
+        bool removed = false;
+        if (item.pool)
+        {
+            readSlotParameters (inst, item.index);
+            removed = synthyboy::fxRemoveSlot (plain_.data(), item.index, writes);
+        }
+        else
+        {   // a module of instance 0 is switched off and leaves its band (an off module in a bus is not on the page)
+            synthyboy::fxSetOn (plain_.data(), item, false, writes);
+            if (synthyboy::fxItemRack (plain_.data(), item) >= ui::fxl::kFirstBandRack && item.index < 13)
+                writes.push_back ({ synthyboy::fxTypeDescriptor (item.index + 1).rackIndex, 0.0f });
+            removed = ! writes.empty();
+        }
+        if (removed)
+        {
+            applyWrites (inst, writes);
+            selectedItem_ = { false, -1 };
+            selectedSlot_ = std::max (0, selectedSlot_ - 1);
+            selectionChanged_ = true;
+        }
+    }
+    /** A cell of an effect wrote the plain value `index` of a choice (a model change of the FX filter clamps the style to the styles of the model). */
+    void writeChoice (IInstanceView& inst, const synthyboy::FxRackItem& item, int p, int index)
+    {
+        const synthyboy::ParamInfo* pi = editor_.infoOf (p);
+        const int idx = paramIndexOf (item, p);
+        if (idx < 0 || pi == nullptr)
+            return;
+        inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (index))));
+        if (std::strcmp (pi->key, "fxfilter.model") == 0)
+            clampStyle (inst, item, filtersStyleCount (index));
+    }
+
+    /** The lane of band `band` of the splitter on the page: the chain of the band opens. */
+    void openBand (int band)
+    {
+        const int rack = bandRackOfSelected (band);
+        if (rack >= 0)
+            enterBand (rack, { false, -1 });
+    }
+    /** + ADD of a lane: the chain of the band opens with the gallery of the types it can still take. */
+    void bandAdd (int band)
+    {
+        const int rack = bandRackOfSelected (band);
+        if (rack < 0)
+            return;
+        enterBand (rack, { false, -1 });
+        galleryOpen_ = true;
+    }
+    /** A tap on card `card` of a lane: the band opens with that effect selected. */
+    void bandSelect (int band, int card)
+    {
+        const int rack = bandRackOfSelected (band);
+        if (rack < 0)
+            return;
+        const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
+        if (card >= 0 && card < static_cast<int> (items.size()))
+            enterBand (rack, items[static_cast<size_t> (card)]);
+    }
+    /** The power of card `card` of a lane. */
+    void bandPower (IInstanceView& inst, int band, int card, bool on)
+    {
+        const int rack = bandRackOfSelected (band);
+        if (rack < 0)
+            return;
+        const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
+        if (card >= 0 && card < static_cast<int> (items.size()))
+        {
+            std::vector<synthyboy::FxWrite> writes;
+            synthyboy::fxSetOn (plain_.data(), items[static_cast<size_t> (card)], on, writes);
+            applyWrites (inst, writes);
+        }
+    }
+    /** A card of a lane dropped on position `target` of the same lane. */
+    void bandMove (IInstanceView& inst, int band, int card, int target)
+    {
+        const int rack = bandRackOfSelected (band);
+        if (rack < 0)
+            return;
+        const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
+        if (card < 0 || card >= static_cast<int> (items.size()) || ! canMoveCard (inst, items[static_cast<size_t> (card)]))
+            return;
+        std::vector<synthyboy::FxWrite> writes;
+        if (synthyboy::fxMove (plain_.data(), items[static_cast<size_t> (card)], rack, std::clamp (target, 0, static_cast<int> (items.size()) - 1), writes))
+            applyWrites (inst, writes);
+    }
+
+
 private:
     using Item = synthyboy::FxRackItem;
-    static constexpr int kMaxItems = ui::FxChainBar::kMaxSlots;
+    static constexpr int kMaxItems = 16;   // the cards of the chain bar (nativeui::fxchain::kSlots)
     int firstCard() const noexcept { return chainPage_ * kMaxItems; }
     int visibleCards() const noexcept { return std::clamp (numCards() - firstCard(), 0, kMaxItems); }
     bool canPageChain() const noexcept { return numCards() > kMaxItems && ! galleryOpen_; }
@@ -402,7 +495,7 @@ private:
             for (const synthyboy::FxRackItem& item : racks.rack[static_cast<size_t> (scope_)])
                 if (static_cast<int> (cardItems_.size()) < kMaxItems)
                     cardItems_.push_back (item);
-        const int maxItems = screen_.nativeControls() ? 2 * kMaxItems : kMaxItems;
+        const int maxItems = 2 * kMaxItems;
         for (int r = 0; scope_ == 0 && r < synthyboy::kNumPoolRacks && numCards() < maxItems; ++r)
             for (const synthyboy::FxRackItem& item : racks.rack[static_cast<size_t> (r)])
             {
@@ -460,7 +553,7 @@ private:
     int offeredKinds (int* out) const noexcept
     {
         int n = 0;
-        const bool limited = scope_ == 0 && screen_.nativeControls() && poolFull();
+        const bool limited = scope_ == 0 && poolFull();
         for (int k = 1; k < ui::fxl::kNumKinds; ++k)
         {
             bool offered = true;
@@ -474,7 +567,7 @@ private:
         return n;
     }
 
-    /** The gallery of an empty chain offers what + ADD offers; in a band its headline says where the effect goes. */
+    /** The gallery of an empty chain offers what the native add menu offers; in a band its headline says where the effect goes. */
     void refreshGallery()
     {
         int kinds[ui::fxl::kNumKinds];
@@ -486,66 +579,50 @@ private:
             return;
         gallerySig_ = sig;
         galleryScope_ = scope_;
-        const char* names[ui::fxl::kNumKinds];
-        for (int i = 0; i < n; ++i)
-            names[i] = typeNames_[kinds[i] - 1];
-        screen_.gallery.setTypes (kinds, names, n);
-        char t[96] = "TAP AN EFFECT TO ADD IT TO THE CHAIN";
-        char note[96] = {};
+        galleryN_ = std::min (n, ui::fxgallery::kMaxTypes);
+        for (int i = 0; i < galleryN_; ++i)
+            galleryKinds_[i] = kinds[i];
+        std::snprintf (galleryHeadline_, sizeof galleryHeadline_, "TAP AN EFFECT TO ADD IT TO THE CHAIN");
+        galleryNote_[0] = '\0';
         int kind = 0, band = 0;
         if (scope_ != 0 && ui::fxl::bandOfRack (scope_, kind, band))
         {
             char sp[24];
             upper (sp, sizeof sp, ui::fxl::layoutOf (kind).name);
-            std::snprintf (t, sizeof t, "%s BAND OF %s: TAP AN EFFECT TO ADD IT", ui::fxl::bandName (kind, band), sp);
-            std::snprintf (note, sizeof note, "%s BAND OF %s: EVERY EFFECT IS IN USE (MOVE ONE HERE WITH ITS RACK SWITCH)", ui::fxl::bandName (kind, band), sp);
+            std::snprintf (galleryHeadline_, sizeof galleryHeadline_, "%s BAND OF %s: TAP AN EFFECT TO ADD IT", ui::fxl::bandName (kind, band), sp);
+            std::snprintf (galleryNote_, sizeof galleryNote_, "%s BAND OF %s: EVERY EFFECT IS IN USE (MOVE ONE HERE WITH ITS RACK SWITCH)", ui::fxl::bandName (kind, band), sp);
         }
         else
-            std::snprintf (note, sizeof note, "NO EFFECT TO ADD");
-        screen_.gallery.setHeadline (t);
-        screen_.gallery.setNote (note);
+            std::snprintf (galleryNote_, sizeof galleryNote_, "NO EFFECT TO ADD");
+    }
+    /** The rectangle of the native gallery card of kind index `i` of the offered ones. */
+    ui::Rect galleryCardRect (int i) const noexcept
+    {
+        return i >= 0 && i < galleryN_ ? ui::fxgallery::cardRectOfType (galleryRect(), galleryKinds_[i]) : ui::Rect {};
+    }
+    /** The headline (or the note when no type is offered) and the pictures of the cards of the gallery: the part of it the host cannot draw. */
+    void drawGallery (gpu::SceneBuilder& sb) const
+    {
+        const ui::Rect area = galleryRect();
+        ui::Pen p (sb, true);
+        ui::Cell cell (sb, area);
+        const ui::theme::Look& T = ui::theme::L();
+        p.textLeft ({ area.x + ui::fxgallery::kPad, area.y + 4, std::max (0, area.w - 2 * ui::fxgallery::kPad), ui::fxgallery::kHeadH - 8 }, galleryN_ == 0 ? galleryNote_ : galleryHeadline_,
+                    T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
+        for (int i = 0; i < galleryN_; ++i)
+        {
+            const ui::Rect plot = ui::fxgallery::pictureRect (galleryCardRect (i));
+            if (plot.w >= 24 && plot.h >= 24)
+                ui::fxgallery::drawPicture (p, sb, galleryKinds_[i], plot);
+        }
     }
 
-    void pullCards()
-    {
-        const int numActive = visibleCards();
-        screen_.chainBar.setBackShown (scope_ != 0);
-        if (scope_ != 0)
-        {
-            int kind = 0, band = 0;
-            ui::fxl::bandOfRack (scope_, kind, band);
-            ui::FxSlotCard::State& st = screen_.chainBar.backCard.state;
-            upper (st.name, sizeof st.name, ui::fxl::layoutOf (kind).name);
-            std::snprintf (st.tag, sizeof st.tag, "%s BAND", ui::fxl::bandName (kind, band));
-        }
-        screen_.chainBar.setNumActiveSlots (numActive);
-        for (int i = 0; i < numActive; ++i)
-        {
-            ui::FxSlotCard& card = screen_.chainBar.cards[i];
-            const Item item = cardItem (firstCard() + i);
-            card.state.slot = i;
-            card.state.type = kindOfItem (item);
-            card.state.on = synthyboy::fxItemOn (plain_.data(), item);
-            card.state.rack = synthyboy::fxItemRack (plain_.data(), item);
-            card.state.selected = firstCard() + i == selectedSlot_;
-            card.state.empty = false;
-            card.state.isPlus = false;
-            const char* nm = synthyboy::fxItemName (plain_.data(), item);
-            std::snprintf (card.state.name, sizeof card.state.name, "%.23s", nm != nullptr ? nm : "FX");
-            card.setEnabled (true);
-        }
-        screen_.chainBar.plusCard.state.isPlus = true;
-        const bool canAdd = nativeAddAvailable();
-        screen_.chainBar.plusCard.setEnabled (canAdd);
-        for (ui::FxSlotCard& sp : screen_.chainBar.spare)
-            sp.setEnabled (canAdd);
-    }
 
     /** The value (plain) of control p of the item, from the instance: a slot of the pool stores the normalised value of the type's own parameters (fxInstancePlain turns it into the plain value of its source), the other
         controls (the modules of the fixed chain, the splitters, the force enable of the reverb) are engine keys of their own. */
     float plainOfControl (const Item& item, IInstanceView& inst, int p) const
     {
-        const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
+        const synthyboy::ParamInfo* pi = editor_.infoOf (p);
         const int idx = paramIndexOf (item, p);
         if (pi == nullptr || idx < 0)
             return 0.0f;
@@ -558,7 +635,7 @@ private:
     /** The value of the parameter with the key `key` of the selected effect (plain), or `def` when the effect has no such control. */
     float plainOfKey (const Item& item, int, IInstanceView& inst, const char* key, float def) const
     {
-        const int p = screen_.slotEditor.controlOfKey (key);
+        const int p = editor_.controlOfKey (key);
         return p >= 0 && paramIndexOf (item, p) >= 0 ? plainOfControl (item, inst, p) : def;
     }
 
@@ -586,19 +663,15 @@ private:
             rebuildChain();
             chainPage_ = followSelection ? selectedSlot_ / kMaxItems : std::min (chainPage_, std::max (0, numCards() - 1) / kMaxItems);
         }
-        pullCards();
         pullEditor (inst);
         refreshGallery();
-        screen_.setEditorShown (! cardItems_.empty() && ! galleryOpen_);
-        renderedItem_ = screen_.editorShown() ? selectedItem_ : Item { false, -1 };
-        screen_.chainBar.nativeDragEnabled = screen_.editorShown() && selectedItem_.index >= 0
-                                          && synthyboy::fxItemOn (plain_.data(), selectedItem_);
+        editorShown_ = ! cardItems_.empty() && ! galleryOpen_;
+        renderedItem_ = editorShown_ ? selectedItem_ : Item { false, -1 };
+        dragEnabled_ = editorShown_ && selectedItem_.index >= 0 && synthyboy::fxItemOn (plain_.data(), selectedItem_);
     }
 
     bool nativeAddAvailable() const noexcept
     {
-        if (! screen_.nativeControls())
-            return numCards() < kMaxItems && (scope_ == 0 || numFreeModules() > 0);
         if (scope_ == 0 && ! poolFull())
             return true;
         int kinds[ui::fxl::kNumKinds];
@@ -609,30 +682,28 @@ private:
     template <typename Visit>
     void visitNativeChainControls (Visit&& visit) const
     {
-        const auto& chain = screen_.chainBar;
         if (scope_ != 0 || galleryOpen_)
-            visit (chain.nativeBackRect());
+            visit (nativeBackRect());
         if (nativeAddAvailable() && ! galleryOpen_)
-            visit (chain.nativeAddRect());
+            visit (nativeAddRect());
         if (canPageChain())
-            visit (chain.nativePageRect());
+            visit (nativePageRect());
         for (int i = 0; i < visibleCards(); ++i)
         {
-            visit (chain.nativePowerRect (i));
-            visit (chain.nativeSelectRect (i));
+            visit (nativePowerRect (i));
+            visit (nativeSelectRect (i));
         }
-        if (screen_.galleryShown())
-            for (int i = 0; i < screen_.gallery.numTypes(); ++i)
-                visit (screen_.gallery.cardRect (i));
+        if (galleryShown())
+            for (int i = 0; i < galleryN_; ++i)
+                visit (galleryCardRect (i));
     }
+
 
     nativeui::fxchain::State nativeChain() const noexcept
     {
         namespace c = nativeui::fxchain;
         c::State state;
-        if (! screen_.nativeControls() || listOpen_)
-            return state;
-        const bool gallery = screen_.galleryShown();
+        const bool gallery = galleryShown();
         int kinds[ui::fxl::kNumKinds];
         const int offered = offeredKinds (kinds);
         const bool add = offered > 0;
@@ -740,18 +811,18 @@ private:
     nativeui::fxheader::State nativeHeader() const noexcept
     {
         namespace h = nativeui::fxheader;
-        if (! screen_.nativeControls() || listOpen_ || ! screen_.editorShown() || selectedItem_.index < 0)
+        if (! editorShown_ || selectedItem_.index < 0)
             return {};
-        const auto& ed = screen_.slotEditor;
-        const int layout = h::layoutFor (ed.currentType(), ed.power.state.on);
+        const auto& ed = editor_;
+        const int layout = h::layoutFor (ed.currentType(), ed.powerOn);
         const int item = selectedItem_.index + (selectedItem_.pool ? synthyboy::kNumFxSlots : 0);
-        const int bandMode = ! ed.nativeBandShown() ? h::NoBand : ed.bandSel.state.disabledMask == 4 ? h::LowAndMid
-                           : ed.bandSel.state.disabledMask == 1 ? h::MidAndHigh : h::AllBands;
-        return { item, kindOfItem (selectedItem_), layout, ed.rack.state.index,
+        const int mask = ed.bandDisabledMask();
+        const int bandMode = ! ed.nativeBandShown() ? h::NoBand : mask == 4 ? h::LowAndMid : mask == 1 ? h::MidAndHigh : h::AllBands;
+        return { item, kindOfItem (selectedItem_), layout, ed.rackIndex,
                  bandMode != h::NoBand ? ed.effectiveBand() : -1, bandMode, ed.pageIndex(), ed.numPages(), ed.title(), ed.path(), ed.notice };
     }
 
-    bool syncNativeHeader (IInstanceView& inst, UiStack& stack)
+    bool syncNativeHeader (IInstanceView& inst)
     {
         namespace h = nativeui::fxheader;
         const auto state = nativeHeader();
@@ -762,34 +833,51 @@ private:
             float value;
             if (! inst.takeNativeFxHeader (field, state, value))
                 continue;
-            ui::Change change;
+            bool applied = false;
             if (field == h::Power && (value >= 0.5f) != state.on())
-                change = ui::Change::indexed (kEditorPower, value >= 0.5f, value);
+            {
+                leftTab (inst);
+                setPower (inst, value >= 0.5f);
+                applied = true;
+            }
             else if (field == h::Rack)
             {
                 const int rack = static_cast<int> (std::lround (value * (state.rackCount() - 1)));
                 if (rack != state.rack)
-                    change = ui::Change::indexed (kEditorRack, rack, value);
+                {
+                    leftTab (inst);
+                    moveToRack (inst, rack);
+                    applied = true;
+                }
             }
             else if (field == h::Page)
             {
                 const int panel = static_cast<int> (std::lround (value * 2.0f));
                 if (panel >= 0 && panel < state.tabCount() && panel != state.tabIndex())
-                    change = ui::Change::indexed (kEditorPage, panel, value);
+                {
+                    leftTab (inst);
+                    editor_.setPage (panel);
+                    applied = true;
+                }
             }
             else if (field == h::Remove && value >= 0.5f)
-                change = ui::Change::request (kEditorRemove);
+            {
+                leftTab (inst);
+                removeSelected (inst);
+                applied = true;
+            }
             else if (field == h::kBand)
             {
                 const int band = static_cast<int> (std::lround (value * 3.0f)) - 1;
                 if (band != state.band && state.permitsBand (band))
-                    change = ui::Change::indexed (kEditorBase + ui::FxSlotEditor::kSel, band, value);
+                {
+                    leftTab (inst);
+                    editor_.setBand (band);   // the BAND selector of the compressor: a view-local choice, no parameter, the next refresh publishes the Q groups of the band
+                    applied = true;
+                }
             }
-            if (change.kind == ui::ChangeKind::None)
-                continue;
-            leftTab (inst);
-            handle (change, stack, inst);
-            return true;
+            if (applied)
+                return true;
         }
         return false;
     }
@@ -798,13 +886,14 @@ private:
     {
         const auto clear = [&] (ui::Rect area) { ui::clearNativeCell (sb, area); };
         visitNativeChainControls (clear);
-        if (screen_.editorShown())
-            screen_.slotEditor.visitNativeControls (clear);
+        if (editorShown_)
+            editor_.visitNativeControls (clear);
     }
+
 
     nativeui::FxCell nativeCell (int slot) const noexcept
     {
-        const auto& ed = screen_.slotEditor;
+        const auto& ed = editor_;
         const int row = slot / 4;
         if (row >= ed.rowsOnPage())
             return {};
@@ -818,28 +907,28 @@ private:
 
     void syncNativeCells (IInstanceView& inst)
     {
-        auto& ed = screen_.slotEditor;
+        auto& ed = editor_;
         const int layout = ed.nativeLayout();
-        if (! screen_.editorShown() || listOpen_ || layout == 0)
+        if (! editorShown_ || layout == 0)
         {
             inst.setNativeFxCells (0, nullptr);
             return;
         }
         const int rack = synthyboy::fxItemRack (plain_.data(), selectedItem_);
         if (ed.pageIndex() != nativeFxPage_ || rack != nativeFxRack_ || layout != nativeFxLayout_
-            || ed.power.state.on != nativeFxPower_)
+            || ed.powerOn != nativeFxPower_)
         {
             inst.setNativeFxCells (0, nullptr);
             nativeFxPage_ = ed.pageIndex();
             nativeFxRack_ = rack;
-            nativeFxPower_ = ed.power.state.on;
+            nativeFxPower_ = ed.powerOn;
         }
         nativeui::FxCell cells[nativeui::kFxCells];
         for (int slot = 0; slot < nativeui::kFxCells; ++slot)
         {
             const auto cell = nativeCell (slot);
             float value;
-            if (inst.takeNativeFxCell (slot, cell, value) && cell.target >= 0 && ed.power.state.on)
+            if (inst.takeNativeFxCell (slot, cell, value) && cell.target >= 0 && ed.powerOn)
             {
                 const float norm = nativeui::fxEngineValue (cell, value);
                 const auto& real = synthyboy::paramTable()[cell.target];
@@ -862,13 +951,33 @@ private:
         inst.setNativeFxCells (nativeFxLayout_, cells);
     }
 
+
+    /** The style count of a model of the FX filter. */
+    static int filtersStyleCount (int model) noexcept { return synthyboy::filters::filterModelStyleCount (model); }
+
+    /** A style beyond the styles of the model is written back to the last one of them. */
+    void clampStyle (IInstanceView& inst, const Item& item, int count)
+    {
+        const int styleP = editor_.controlOfKey ("fxfilter.style");
+        const int styleIdx = styleP >= 0 ? paramIndexOf (item, styleP) : -1;
+        if (styleIdx < 0 || count <= 0)
+            return;
+        if (static_cast<int> (std::lround (plainOfControl (item, inst, styleP))) >= count)
+        {
+            const synthyboy::ParamInfo* spi = editor_.infoOf (styleP);
+            if (spi != nullptr)
+                inst.writeParam (styleIdx, static_cast<float> (synthyboy::toNormalised (*spi, static_cast<float> (count - 1))));
+        }
+    }
+
+    /** The page of the selected effect from the instance: the table of its controls, which ones are live, the header facts, the display. The values of the cells are the host's own (the native bridge reads the engine). */
     void pullEditor (IInstanceView& inst)
     {
         if (cardItems_.empty() || selectedSlot_ >= static_cast<int> (cardItems_.size()))
             return;
         const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
         const int kind = kindOfItem (item);
-        ui::FxSlotEditor& ed = screen_.slotEditor;
+        FxEditorModel& ed = editor_;
         ed.notice[0] = '\0';
         if (kind == synthyboy::kFxTypeConvolve && (inst.missingContent() & (1u << 6)) != 0)   // the impulse of Convolve is not there: the effect is bypassed, the page says which file it wants
         {
@@ -884,106 +993,15 @@ private:
         ed.setType (kind, true);   // every effect can be removed: a slot of the pool is freed, a module of instance 0 is switched off and leaves its band
         // the state of the effect decides which controls are live (the table of the effect, ui/fx_layout.h): the rows that have nothing live close up
         ed.setState ([&] (const char* key) { return plainOfKey (item, kind, inst, key, 0.0f); });
-        for (int p = 0; p < ed.numParams(); ++p)
-        {
-            const synthyboy::ParamInfo* pi = ed.infoOf (p);
-            if (pi == nullptr)
-                continue;
-            const float plainVal = plainOfControl (item, inst, p);
-            const float norm = static_cast<float> (synthyboy::toNormalised (*pi, plainVal));
-            ui::Knob& knob = ed.knobs[p];
-            ui::Stepper& stepper = ed.steppers[p];
-            ui::LedList& list = ed.lists[p];
-            ui::LedToggle& toggle = ed.toggles[p];
-            ui::NumberField& number = ed.numbers[p];
-            char name[24];
-            ed.nameOf (p, name, sizeof name);
-            knob.state.value = knob.state.modValue = norm;
-            if (ed.isChoice (p))
-            {
-                stepper.setCaption (name);
-                const bool isFilterStyle = (std::strcmp (pi->key, "fxfilter.style") == 0);
-                int choiceCount = pi->numChoices;
-                const char* const* customChoices = nullptr;
-                if (isFilterStyle)
-                {
-                    const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
-                    choiceCount = synthyboy::filters::filterModelStyleCount (model);
-                    customChoices = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
-                    if (choiceCount > 0 && static_cast<int> (std::lround (plainVal)) >= choiceCount)
-                    {
-                        const int clamped = choiceCount - 1;
-                        const int idx = paramIndexOf (item, p);
-                        if (idx >= 0)
-                            inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (clamped))));
-                    }
-                }
-                stepper.state.count = choiceCount;
-                const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, choiceCount - 1));
-                stepper.state.index = curIdx;
-                if (isFilterStyle)
-                {
-                    if (customChoices != nullptr && curIdx >= 0 && curIdx < choiceCount)
-                        stepper.setItem (customChoices[curIdx]);
-                    else
-                        stepper.setItem ("---");
-                    // One-style rule: a model with one style shows the style control dim / as a plain label
-                    if (choiceCount <= 1)
-                    {
-                        stepper.state.dim = true;
-                        stepper.listable = false;
-                    }
-                    else
-                    {
-                        stepper.state.dim = false;
-                        stepper.listable = true;
-                    }
-                }
-                else
-                {
-                    if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
-                        stepper.setItem (ui::shownChoice (pi->key, curIdx, pi->choices[curIdx]));
-                    else
-                        stepper.setItem ("---");
-                }
-                // the same value as a LED list (3 .. 8 values, all visible) and as a LED toggle (Off / On): the editor shows the kind the cell has
-                list.setTitle (name);
-                {
-                    const char* shown[ui::LedList::kMaxOptions];
-                    const int cnt = std::min (static_cast<int> (choiceCount), static_cast<int> (ui::LedList::kMaxOptions));
-                    for (int c = 0; c < cnt; ++c)
-                        shown[c] = isFilterStyle ? (customChoices != nullptr && c < choiceCount ? customChoices[c] : "") : ui::shownChoice (pi->key, c, pi->choices[c]);
-                    list.setOptions (shown, cnt);
-                }
-                list.state.index = std::min (curIdx, ui::LedList::kMaxOptions - 1);
-                toggle.setLabel (name);
-                toggle.state.on = curIdx == 1;
-            }
-            else if (ed.kindOf (p) == ui::FxSlotEditor::Kind::Number)
-            {
-                // a whole number (VOICES, UNISON): a number field in whole steps, the engine's own range
-                number.setLabel (name);
-                number.state.min = static_cast<double> (pi->min);
-                number.state.max = static_cast<double> (pi->max);
-                number.state.step = 1.0;
-                number.state.defaultValue = static_cast<double> (pi->def);
-                number.state.value = std::clamp (std::round (static_cast<double> (plainVal)), number.state.min, number.state.max);
-            }
-            else
-            {
-                knob.state.defaultValue = synthyboy::toNormalised (*pi, pi->def);
-                knob.state.bipolar = pi->min < 0.0f && pi->max > 0.0f;
-                paramText (*pi, plainVal, knob.state.valueText, sizeof knob.state.valueText);
-                knob.setLabel (name);
-            }
-        }
+        const int styleP = ed.controlOfKey ("fxfilter.style");
+        if (styleP >= 0 && paramIndexOf (item, styleP) >= 0)   // a model with fewer styles than the stored one: the style is the last of the model
+            clampStyle (inst, item, filtersStyleCount (static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)))));
         // the power, the rack
-        ed.power.state.on = synthyboy::fxItemOn (plain_.data(), item);
-        ed.setModuleEnabled (ed.power.state.on);
+        ed.powerOn = synthyboy::fxItemOn (plain_.data(), item);
+        ed.setModuleEnabled (ed.powerOn);
         const int rack = synthyboy::fxItemRack (plain_.data(), item);
-        ed.rack.state.count = rackChoices (item);
-        ed.rack.state.index = std::clamp (rack, 0, ed.rack.state.count - 1);
-        ed.rack.setItem (ui::fxl::rackName (rack));
+        ed.rackCount = rackChoices (item);
+        ed.rackIndex = std::clamp (rack, 0, ed.rackCount - 1);
         pullPath (ed, item, rack);
         if (ed.hasBands())
             pullBands (inst, item, kind);
@@ -994,7 +1012,7 @@ private:
     static int rackChoices (const Item& item) noexcept { return ! item.pool && item.index < 13 ? ui::fxl::kNumRacks : synthyboy::kNumPoolRacks; }
 
     /** The place of the effect over its name: "MAIN CHAIN", "BUS 1 CHAIN", or for an effect of a band "MAIN CHAIN > SPLITTER L/M/H > MID BAND" (the chain the splitter sits in). */
-    void pullPath (ui::FxSlotEditor& ed, const Item& item, int rack)
+    void pullPath (FxEditorModel& ed, const Item& item, int rack)
     {
         char path[72];
         int kind = 0, band = 0;
@@ -1014,7 +1032,7 @@ private:
     /** The lanes of the page of a splitter: per band the tile (name, range, state) and the cards of its rack. */
     void pullBands (IInstanceView& inst, const Item& item, int kind)
     {
-        ui::FxBandBoard& board = screen_.slotEditor.bands;
+        FxBandData& board = editor_.bands;
         const int nb = ui::fxl::bandsOfSplitter (kind);
         const bool splitterOn = synthyboy::fxItemOn (plain_.data(), item);
         const char* const pre = kind == ui::fxl::kKindSplitterLh ? "splitter_lh." : (kind == ui::fxl::kKindSplitterLmh ? "splitter_lmh." : "splitter_ms.");
@@ -1034,70 +1052,53 @@ private:
             hz (val ("freq_low", 200.0f), f1, sizeof f1);
             hz (val ("freq_high", 3000.0f), f2, sizeof f2);
         }
-        int counts[ui::FxBandBoard::kMaxBands] = {};
-        for (int b = 0; b < nb; ++b)
+        board.numBands = std::min (nb, FxBandData::kMaxBands);
+        for (int b = 0; b < board.numBands; ++b)
         {
             const int rack = ui::fxl::bandRack (kind, b);
             const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
-            const int n = std::min (static_cast<int> (items.size()), ui::FxBandBoard::kMaxCards);
-            counts[b] = n;
-            ui::FxBandBoard::Lane& lane = board.lane[b];
+            const int n = std::min (static_cast<int> (items.size()), FxBandData::kMaxCards);
+            FxBandData::Lane& lane = board.lane[b];
+            lane.numCards = n;
             for (int i = 0; i < n; ++i)
             {
-                ui::FxSlotCard& card = lane.cards[i];
-                card.state.slot = i;
-                card.state.type = kindOfItem (items[static_cast<size_t> (i)]);
-                card.state.on = synthyboy::fxItemOn (plain_.data(), items[static_cast<size_t> (i)]);
-                card.state.rack = rack;
-                card.state.selected = false;
-                std::snprintf (card.state.name, sizeof card.state.name, "%.23s", synthyboy::fxItemName (plain_.data(), items[static_cast<size_t> (i)]));
-                card.setEnabled (true);
+                FxBandData::Card& card = lane.cards[i];
+                card.slot = i;
+                card.type = kindOfItem (items[static_cast<size_t> (i)]);
+                card.on = synthyboy::fxItemOn (plain_.data(), items[static_cast<size_t> (i)]);
+                card.rack = rack;
+                card.selected = false;
+                std::snprintf (card.name, sizeof card.name, "%.23s", synthyboy::fxItemName (plain_.data(), items[static_cast<size_t> (i)]));
             }
-            lane.add.setEnabled (numFreeModules() > 0);
-            ui::FxBandTile::State& t = lane.tile.state;
-            std::snprintf (t.name, sizeof t.name, "%s", ui::fxl::bandName (kind, b));
-            t.idle = ! splitterOn;
-            t.colour = kind == ui::fxl::kKindSplitterMs ? (b == 0 ? 0 : 3) : (b == 0 ? 0 : (b == nb - 1 ? 3 : 1));
+            lane.addEnabled = numFreeModules() > 0;
+            std::snprintf (lane.name, sizeof lane.name, "%s", ui::fxl::bandName (kind, b));
+            lane.idle = ! splitterOn;
+            lane.colour = kind == ui::fxl::kKindSplitterMs ? (b == 0 ? 0 : 3) : (b == 0 ? 0 : (b == nb - 1 ? 3 : 1));
             if (kind == ui::fxl::kKindSplitterMs)
             {
-                std::snprintf (t.range, sizeof t.range, "%s", b == 0 ? "the centre of the picture" : "what makes it wide");
-                t.bypassed = val (b == 0 ? "mid_bypass" : "side_bypass", 0.0f) > 0.5f;
+                std::snprintf (lane.range, sizeof lane.range, "%s", b == 0 ? "the centre of the picture" : "what makes it wide");
+                lane.bypassed = val (b == 0 ? "mid_bypass" : "side_bypass", 0.0f) > 0.5f;
             }
             else
             {
-                const char* const lowKey = "low_bypass";
-                const char* const midKey = "mid_bypass";
-                const char* const highKey = "high_bypass";
                 const bool low = b == 0, high = b == nb - 1;
                 if (low)
-                    std::snprintf (t.range, sizeof t.range, "below %s", f1);
+                    std::snprintf (lane.range, sizeof lane.range, "below %s", f1);
                 else if (high)
-                    std::snprintf (t.range, sizeof t.range, "above %s", nb == 3 ? f2 : f1);
+                    std::snprintf (lane.range, sizeof lane.range, "above %s", nb == 3 ? f2 : f1);
                 else
-                    std::snprintf (t.range, sizeof t.range, "%s to %s", f1, f2);
-                t.bypassed = val (low ? lowKey : (high ? highKey : midKey), 0.0f) > 0.5f;
+                    std::snprintf (lane.range, sizeof lane.range, "%s to %s", f1, f2);
+                lane.bypassed = val (low ? "low_bypass" : (high ? "high_bypass" : "mid_bypass"), 0.0f) > 0.5f;
             }
             if (! splitterOn)
-                std::snprintf (t.info, sizeof t.info, "SPLITTER OFF");
+                std::snprintf (lane.info, sizeof lane.info, "SPLITTER OFF");
             else if (n == 0)
-                std::snprintf (t.info, sizeof t.info, "no effect");
+                std::snprintf (lane.info, sizeof lane.info, "no effect");
             else
-                std::snprintf (t.info, sizeof t.info, "%d effect%s", n, n == 1 ? "" : "s");
+                std::snprintf (lane.info, sizeof lane.info, "%d effect%s", n, n == 1 ? "" : "s");
         }
-        board.setShape (nb, counts);
     }
 
-    /** The text of a value: the name of a choice, else the number with the parameter's unit. */
-    static void paramText (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
-    {
-        if (pi.numChoices > 0 && pi.choices != nullptr)
-        {
-            const int n = std::clamp (static_cast<int> (std::lround (plain)), 0, pi.numChoices - 1);
-            std::snprintf (out, cap, "%.15s", ui::shownChoice (pi.key, n, pi.choices[n]));
-            return;
-        }
-        uibind::formatValue (pi, plain, out, cap);
-    }
 
     static float beatsOfDivision (int d) noexcept
     {
@@ -1161,7 +1162,7 @@ private:
                 d.comp.mix = plainOfKey (item, type, inst, "compressor.mix", 100.0f) * 0.01f;
                 // the band of the row of knobs that is on screen (the first live member of the active row names it)
                 {
-                    const ui::FxSlotEditor& ed = screen_.slotEditor;
+                    const FxEditorModel& ed = editor_;
                     const int first = ed.activeRow();
                     int pm = -1;
                     for (int c = 0; c < 4 && pm < 0; ++c)
@@ -1240,33 +1241,26 @@ private:
     }
 
     /** The groups of the page are ALL the rows (blocks) of the open effect, the functional panels in tab order, in reading order: the active row is on Q 1 .. 4, the other rows (wrapping) on 5 .. 16 (the XL keeps up to
-        four rows where they are). The rows of the view that is not on screen carry no chip (their controls are not drawn). */
+        four rows where they are). */
     void publishQGroup (IInstanceView& inst)
     {
         const char* name = "";
-        ui::FxSlotEditor& ed = screen_.slotEditor;
-        for (int r = 0; r < ui::FxSlotEditor::kMaxRows; ++r)
-            ed.groups[r].setBlock (-1);
-        if (listOpen_)
-        {
-            name = "List";
-            qSlots_.publish (inst, 0, 0, [] (int, int*) {});
-        }
-        else if (screen_.editorShown() && selectedSlot_ >= 0 && selectedSlot_ < static_cast<int> (cardItems_.size()))
+        FxEditorModel& ed = editor_;
+        if (editorShown_ && selectedSlot_ >= 0 && selectedSlot_ < static_cast<int> (cardItems_.size()))
         {
             const int row = ed.activeRow();
             name = ed.rowTitle (row);
             const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
             // Keep the selected editor and the page navigable while OFF, but
             // never publish parameter targets that could be turned accidentally.
-            if (! ed.power.state.on)
+            if (! ed.powerOn)
             {
                 qSlots_.publish (inst, 0, 0, [] (int, int*) {});
                 ui::setText (qName_, sizeof qName_, name);
                 return;
             }
             // ALL the rows of the effect are groups, the functional panels in tab order (the same physical routing is retained across panel selection): a row of the other view has no
-            // control on the screen (no chip) but its knobs work and the XL's knob displays show its names. The rows are in the order of the page (QRouter rule: more than four rows are paged).
+            // control on the screen but its knobs work and the XL's knob displays show its names. The rows are in the order of the page (QRouter rule: more than four rows are paged).
             const int n = std::max (0, ed.numRows());
             const int count = std::max (1, n), active = std::clamp (row, 0, count - 1);
             qSlots_.publish (inst, count, active, [&] (int k, int* t)
@@ -1277,13 +1271,12 @@ private:
                     t[c] = p >= 0 ? paramIndexOf (item, p) : -1;
                 }
             });
-            for (int k = 0; k < count && k < ui::FxSlotEditor::kMaxRows; ++k)
-                ed.groups[k].setBlock (QRouter::blockOfGroup (count, active, k));
         }
         else
             qSlots_.publish (inst, 0, 0, [] (int, int*) {});
         ui::setText (qName_, sizeof qName_, name);
     }
+
 
     void applyWrites (IInstanceView& inst, const std::vector<synthyboy::FxWrite>& writes)
     {
@@ -1292,83 +1285,6 @@ private:
             const synthyboy::ParamInfo& pi = synthyboy::paramTable()[w.param];
             inst.writeParam (w.param, static_cast<float> (synthyboy::toNormalised (pi, w.value)));
         }
-    }
-
-    void openTypeList (UiStack& stack, const ui::Rect& btn)
-    {
-        listKind_ = ListKind::Type;
-        listParam_ = -1;
-        listNames_.clear();
-        int kinds[ui::fxl::kNumKinds];
-        const int offered = offeredKinds (kinds);
-        listKinds_.assign (kinds, kinds + offered);
-        for (int i = 0; i < offered; ++i)
-            listNames_.push_back (typeNames_[kinds[i] - 1]);
-        if (offered == 0)
-            return;
-        list_.state.items = listNames_.data();
-        list_.state.count = static_cast<int> (listNames_.size());
-        list_.state.current = 0;
-        const int popW = 300, popH = std::min (9, list_.state.count) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad;
-        const int popX = std::clamp (btn.x - (popW - btn.w) / 2, 10, w_ - popW - 10);
-        const int popY = std::clamp (btn.bottom() + 4, kTabY + 10, kTabY + kTabH - popH - 10);
-        list_.place ({ popX, popY, popW, popH });
-        list_.showCurrent();
-        listOpen_ = true;
-        stack.openDetail (kPageList);
-    }
-
-    void openParamChoiceList (int p, UiStack& stack, IInstanceView& inst)
-    {
-        if (cardItems_.empty() || selectedSlot_ >= static_cast<int> (cardItems_.size()))
-            return;
-        const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-        const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
-        if (pi == nullptr || pi->numChoices <= 0 || pi->choices == nullptr)
-            return;
-        listKind_ = ListKind::ParamChoice;
-        listParam_ = p;
-        listNames_.clear();
-        if (std::strcmp (pi->key, "fxfilter.style") == 0)
-        {
-            const int kind = kindOfItem (item);
-            const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
-            const int count = synthyboy::filters::filterModelStyleCount (model);
-            if (count <= 1)
-                return; // One-style rule: a model with one style has no list popup
-            const char* const* styleNames = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
-            for (int i = 0; i < count; ++i)
-                listNames_.push_back (styleNames != nullptr && styleNames[i] != nullptr ? styleNames[i] : "");
-            list_.state.items = listNames_.data();
-            list_.state.count = count;
-            const int curChoice = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, p))), 0, std::max (0, count - 1));
-            list_.state.current = curChoice;
-        }
-        else
-        {
-            for (int i = 0; i < pi->numChoices; ++i)
-                listNames_.push_back (ui::shownChoice (pi->key, i, pi->choices[i]));
-            list_.state.items = listNames_.data();
-            list_.state.count = pi->numChoices;
-            const int idx = paramIndexOf (item, p);
-            int curChoice = 0;
-            if (idx >= 0)
-            {
-                curChoice = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, p))), 0, pi->numChoices - 1);
-            }
-            list_.state.current = curChoice;
-        }
-        const int popW = std::clamp (screen_.slotEditor.steppers[p].rect().w, 240, 360);
-        const int popH = std::min (9, list_.state.count) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad;
-        const ui::Rect btn = screen_.slotEditor.steppers[p].rect();
-        const int popX = std::clamp (btn.x + (btn.w - popW) / 2, 10, w_ - popW - 10);
-        int popY = btn.bottom() + 4;
-        if (popY + popH > kTabY + kTabH - 10)
-            popY = std::max (kTabY + 10, btn.y - popH - 4);
-        list_.place ({ popX, popY, popW, popH });
-        list_.showCurrent();
-        listOpen_ = true;
-        stack.openDetail (kPageList);
     }
 
     /** A new effect of `kind` (a type of the pool, synthyboy::FxInstanceType, or a splitter, ui::fxl::kKindSplitter*) at the end of the Main rack; it becomes the selected one. A type of the pool takes a free slot
@@ -1432,7 +1348,7 @@ private:
         selectedItem_ = item;
         selectedSlot_ = 0;
         selectionChanged_ = true;
-        screen_.slotEditor.setActiveRow (0);
+        editor_.setActiveRow (0);
         qSlots_.forget();
     }
     /** The way up from a band: the chain of the splitter's rack, with the splitter selected (its page shows the lanes). */
@@ -1445,75 +1361,29 @@ private:
         selectedItem_ = { false, 13 + (kind - ui::fxl::kKindSplitterLh) };
         selectedSlot_ = 0;
         selectionChanged_ = true;
-        screen_.slotEditor.setActiveRow (0);
+        editor_.setActiveRow (0);
         qSlots_.forget();
     }
     /** The highest rack an item can be moved to: the ten racks for a module of instance 0 that is no splitter, else the buses. */
     static int rackLimit (const Item& item) noexcept { return rackChoices (item) - 1; }
 
-    /** The lane of a band of the splitter page: a tap on a card selects it and opens the band, the power switches it, a drag moves it inside the lane; the tile and + ADD open the band. */
-    void handleBand (const ui::Change& c, int band, int what, UiStack& stack, IInstanceView& inst)
+    /** The engine rack of band `band` of the splitter that is on the page (-1: the page is no splitter's or the band does not exist). */
+    int bandRackOfSelected (int band) const noexcept
     {
         if (cardItems_.empty() || selectedSlot_ < 0 || selectedSlot_ >= static_cast<int> (cardItems_.size()))
-            return;
-        const int splitterKind = kindOfItem (cardItems_[static_cast<size_t> (selectedSlot_)]);
-        const int rack = ui::fxl::bandRack (splitterKind, band);
-        if (rack < 0 || c.kind != ui::ChangeKind::Index)
-            return;
-        const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
-        ui::FxBandBoard::Lane& lane = screen_.slotEditor.bands.lane[band];
-        if (what == ui::FxBandBoard::kOpenId)
-            enterBand (rack, { false, -1 });
-        else if (what == ui::FxBandBoard::kAddId)
-        {
-            const ui::Rect anchor = lane.add.rect();
-            enterBand (rack, { false, -1 });
-            if (screen_.nativeControls())
-                galleryOpen_ = true;
-            else
-                openTypeList (stack, anchor);
-        }
-        else if (what >= 0 && what < static_cast<int> (items.size()))
-        {
-            const Item item = items[static_cast<size_t> (what)];
-            if (c.index == ui::FxSlotCard::kSelect)
-                enterBand (rack, item);
-            else if (c.index == ui::FxSlotCard::kTogglePower)
-            {
-                std::vector<synthyboy::FxWrite> writes;
-                synthyboy::fxSetOn (plain_.data(), item, c.value >= 0.5, writes);
-                applyWrites (inst, writes);
-            }
-            else if (c.index == ui::FxSlotCard::kMove && canMoveCard (inst, item))
-            {
-                int target = 0;   // the card the finger was released over (the nearest one)
-                int best = 1 << 30;
-                for (int i = 0; i < static_cast<int> (items.size()); ++i)
-                {
-                    const ui::Rect r = lane.cards[i].rect();
-                    const int d = std::abs (static_cast<int> (c.value) - (r.x + r.w / 2));
-                    if (d < best)
-                    {
-                        best = d;
-                        target = i;
-                    }
-                }
-                std::vector<synthyboy::FxWrite> writes;
-                if (synthyboy::fxMove (plain_.data(), item, rack, target, writes)   /* it ends up where the card it was dropped on stood */)
-                    applyWrites (inst, writes);
-            }
-        }
+            return -1;
+        return ui::fxl::bandRack (kindOfItem (cardItems_[static_cast<size_t> (selectedSlot_)]), band);
     }
 
     bool renderedEditorStillLive() const noexcept
     {
-        const auto& editor = screen_.slotEditor;
         // Card releases may refresh plain_ before the display tick. The
         // editor and renderedItem_ keep the last published type and power.
-        return renderedItem_.index >= 0 && editor.power.state.on
+        return renderedItem_.index >= 0 && editor_.powerOn
             && synthyboy::fxItemOn (plain_.data(), renderedItem_)
-            && kindOfItem (renderedItem_) == editor.currentType();
+            && kindOfItem (renderedItem_) == editor_.currentType();
     }
+
 
     bool canMoveCard (IInstanceView& inst, const Item& item)
     {
@@ -1550,7 +1420,7 @@ private:
     {
         selectedSlot_ = slot;
         selectedItem_ = cardItem (slot);
-        screen_.slotEditor.setActiveRow (0);
+        editor_.setActiveRow (0);
         qSlots_.forget();
     }
 
@@ -1561,217 +1431,10 @@ private:
         applyWrites (inst, writes);
     }
 
-    void handle (const ui::Change& c, UiStack& stack, IInstanceView& inst)
-    {
-        if (! c)
-            return;
-        using K = ui::ChangeKind;
-        // the list of the types or parameter choices
-        if (c.id == kList && c.kind == K::Index)
-        {
-            if (listKind_ == ListKind::Type)
-            {
-                if (c.index >= 0 && c.index < static_cast<int> (listKinds_.size()))
-                    addEffect (inst, listKinds_[static_cast<size_t> (c.index)]);   // the list holds the kinds the page offers (all of them in the Main chain, the free types in a band)
-            }
-            else if (listKind_ == ListKind::ParamChoice && listParam_ >= 0)
-            {
-                readRackStructure (inst);
-                if (inst.stateGeneration() == stateGeneration_ && renderedEditorStillLive() && selectedItem_ == renderedItem_)
-                {
-                    const Item item = renderedItem_;
-                    const int idx = paramIndexOf (item, listParam_);
-                    const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (listParam_);
-                    if (idx >= 0 && pi != nullptr)
-                    {
-                        inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (c.index))));
-                        if (std::strcmp (pi->key, "fxfilter.model") == 0)
-                        {
-                            const int newModel = c.index;
-                            const int count = synthyboy::filters::filterModelStyleCount (newModel);
-                            const int styleP = screen_.slotEditor.controlOfKey ("fxfilter.style");
-                            const int styleIdx = styleP >= 0 ? paramIndexOf (item, styleP) : -1;
-                            if (styleIdx >= 0 && count > 0)
-                            {
-                                const float curStyle = plainOfControl (item, inst, styleP);
-                                if (static_cast<int> (std::lround (curStyle)) >= count)
-                                {
-                                    const synthyboy::ParamInfo* spi = screen_.slotEditor.infoOf (styleP);
-                                    if (spi != nullptr)
-                                        inst.writeParam (styleIdx, static_cast<float> (synthyboy::toNormalised (*spi, static_cast<float> (count - 1))));
-                                }
-                            }
-                        }
-                    }
-                }
-                listParam_ = -1;
-            }
-            listOpen_ = false;
-            stack.back();
-            return;
-        }
-        // the gallery of the empty chain: a card is a type (the number of the engine), the effect goes to the end of the Main rack and is selected
-        if (c.id == kGallery && c.kind == K::Index)
-        {
-            addEffect (inst, c.index);
-            return;
-        }
-        // the lanes of the bands on the page of a splitter
-        {
-            int band = 0, what = 0;
-            if (screen_.slotEditor.hasBands() && screen_.slotEditor.bands.decode (c.id, band, what))
-            {
-                handleBand (c, band, what, stack, inst);
-                return;
-            }
-        }
-        if (c.id == kListBackdrop)
-        {
-            listParam_ = -1;
-            listOpen_ = false;
-            stack.back();
-            return;
-        }
-        // the chain bar
-        if (c.id >= kChainBase && c.id <= kChainBase + ui::FxChainBar::kMaxSlots + 1)
-        {
-            const int idx = c.id - kChainBase;
-            if (idx == ui::FxChainBar::kMaxSlots + 1)
-            {
-                if (c.kind == K::Index && c.index == ui::FxSlotCard::kBack)
-                    leaveBand();
-                return;
-            }
-            if (idx == ui::FxChainBar::kMaxSlots)
-            {
-                if (c.kind == K::Index && c.index == ui::FxSlotCard::kAdd)
-                    openTypeList (stack, screen_.chainBar.plusCard.rect());
-                return;
-            }
-            if (idx < 0 || idx >= static_cast<int> (cardItems_.size()) || c.kind != K::Index)
-                return;
-            const Item item = cardItems_[static_cast<size_t> (idx)];
-            if (c.index == ui::FxSlotCard::kSelect)
-                selectCard (idx);
-            else if (c.index == ui::FxSlotCard::kTogglePower)
-                powerCard (inst, item, c.value >= 0.5);
-            else if (c.index == ui::FxSlotCard::kMove && canMoveCard (inst, item))
-            {
-                int target = numCards() - 1;
-                for (int i = 0; i < numCards(); ++i)
-                    if (static_cast<int> (c.value) < screen_.chainBar.cards[i].rect().right() + 3)
-                    {
-                        target = i;
-                        break;
-                    }
-                moveCard (inst, item, target);
-            }
-            return;
-        }
-        // the page of the effect
-        if (cardItems_.empty() || selectedSlot_ < 0 || selectedSlot_ >= static_cast<int> (cardItems_.size()))
-            return;
-        const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-        if (c.id == kEditorPower && c.kind == K::Index)
-        {
-            std::vector<synthyboy::FxWrite> writes;
-            synthyboy::fxSetOn (plain_.data(), item, c.index != 0, writes);
-            applyWrites (inst, writes);
-        }
-        else if (c.id == kEditorRack && c.kind == K::Index)
-        {
-            const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
-            const int target = std::clamp (c.index, 0, rackLimit (item));
-            int count = 0;
-            for (const Item& o : racks.rack[static_cast<size_t> (target)])
-                count += ! (o == item);
-            std::vector<synthyboy::FxWrite> writes;
-            if (synthyboy::fxMove (plain_.data(), item, target, count, writes))
-            {
-                applyWrites (inst, writes);
-                selectedItem_ = item;
-                selectionChanged_ = true;
-                scope_ = target >= ui::fxl::kFirstBandRack ? target : 0;   // the page follows the effect: into the band it went to, or back to the chain of the buses
-            }
-        }
-        else if (c.id == kEditorPage && c.kind == K::Index)
-            screen_.slotEditor.setPage (c.index);
-        else if (c.id == kEditorRemove && c.kind == K::Request)
-        {
-            std::vector<synthyboy::FxWrite> writes;
-            bool removed = false;
-            if (item.pool)
-            {
-                readSlotParameters (inst, item.index);
-                removed = synthyboy::fxRemoveSlot (plain_.data(), item.index, writes);
-            }
-            else
-            {   // a module of instance 0 is switched off and leaves its band (an off module in a bus is not on the page)
-                synthyboy::fxSetOn (plain_.data(), item, false, writes);
-                if (synthyboy::fxItemRack (plain_.data(), item) >= ui::fxl::kFirstBandRack && item.index < 13)
-                    writes.push_back ({ synthyboy::fxTypeDescriptor (item.index + 1).rackIndex, 0.0f });
-                removed = ! writes.empty();
-            }
-            if (removed)
-            {
-                applyWrites (inst, writes);
-                selectedItem_ = { false, -1 };
-                selectedSlot_ = std::max (0, selectedSlot_ - 1);
-                selectionChanged_ = true;
-            }
-        }
-        else if (c.id == kEditorBase + ui::FxSlotEditor::kSel && c.kind == K::Index)
-            screen_.slotEditor.setBand (c.index);   // the BAND selector of the compressor: a view-local choice, no parameter, the next refresh publishes the Q groups of the band
-        else if (c.id >= kEditorBase && c.id < kEditorBase + ui::FxSlotEditor::kMaxParams)
-        {
-            const int p = c.id - kEditorBase;
-            const int idx = paramIndexOf (item, p);
-            if (c.kind == K::Value && idx >= 0)
-            {
-                uibind::writeNorm (inst, idx, c.value);
-            }
-            else if (c.kind == K::Index)
-            {
-                // a choice (c.index) or a number field (c.value, the number itself); the engine takes the normalised value
-                const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
-                if (idx >= 0 && pi != nullptr)
-                {
-                    const float plain = screen_.slotEditor.kindOf (p) == ui::FxSlotEditor::Kind::Number ? static_cast<float> (c.value) : static_cast<float> (c.index);
-                    inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, plain)));
-                    if (std::strcmp (pi->key, "fxfilter.model") == 0)
-                    {
-                        const int newModel = static_cast<int> (std::lround (plain));
-                        const int count = synthyboy::filters::filterModelStyleCount (newModel);
-                        const int styleP = screen_.slotEditor.controlOfKey ("fxfilter.style");
-                        const int styleIdx = styleP >= 0 ? paramIndexOf (item, styleP) : -1;
-                        if (styleIdx >= 0 && count > 0)
-                        {
-                            const float curStyle = plainOfControl (item, inst, styleP);
-                            if (static_cast<int> (std::lround (curStyle)) >= count)
-                            {
-                                const synthyboy::ParamInfo* spi = screen_.slotEditor.infoOf (styleP);
-                                if (spi != nullptr)
-                                    inst.writeParam (styleIdx, static_cast<float> (synthyboy::toNormalised (*spi, static_cast<float> (count - 1))));
-                            }
-                        }
-                    }
-                }
-            }
-            else if (c.kind == K::Request)
-            {
-                openParamChoiceList (p, stack, inst);
-            }
-        }
-    }
-
     int w_ = kCanvasW, h_ = kCanvasH;
-    ui::FxFullScreen screen_;
+    FxEditorModel editor_;
     DrawPass drawPass_ = DrawPass::All;
-    ui::ListPopup list_;
-    enum class ListKind : uint8_t { Type, ParamChoice };
-    ListKind listKind_ = ListKind::Type;
-    int listParam_ = -1;
-    bool listOpen_ = false, selectionChanged_ = true, galleryOpen_ = false;
+    bool selectionChanged_ = true, galleryOpen_ = false, editorShown_ = false, dragEnabled_ = false;
     int selectedSlot_ = 0;
     int chainPage_ = 0;
     Item selectedItem_ { false, -1 }, renderedItem_ { false, -1 };
@@ -1784,13 +1447,13 @@ private:
     int scope_ = 0;                                         // 0: the chain of Main / Bus 1 / Bus 2; 3 .. 9: the chain of a band rack
     uint32_t gallerySig_ = 0;
     int galleryScope_ = -1;
-    std::vector<int> listKinds_;                            // the kind each row of the + ADD list adds
+    int galleryN_ = 0, galleryKinds_[ui::fxgallery::kMaxTypes] = {};   // the kinds the gallery offers (the engine's type numbers 1 ..)
+    char galleryHeadline_[96] = "TAP AN EFFECT TO ADD IT TO THE CHAIN", galleryNote_[96] = {};
     std::vector<float> plain_;
     const synthyboy::LiveValues* live_ = nullptr;   // the readout of the last update (the meters)
     uint32_t chainSig_ = 0;
     uint64_t stateGeneration_ = 0;
     const char* typeNames_[ui::fxl::kNumKinds - 1] = {};
-    std::vector<const char*> listNames_;
 
     // the response of the FX filter
     std::unique_ptr<synthyboy::FilterResponse> response_;
@@ -1802,10 +1465,11 @@ private:
     Item draggedItem_ { false, -1 };
     uint32_t dragSignature_ = 0;
     bool dragOverPage_ = false;
-    ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
     QSlots qSlots_;
     char qName_[24] = {};
 };
 
 }} // namespace synthyboy_mpc::overlay
+
+
