@@ -4,7 +4,7 @@
 """Standalone preview generator for catalog cards of native SynthyBoy MPC components.
 
 Generates catalog-specific preview images (prefixed catalog-) inside components/native/<component>/img/:
-- Button: 48 px icon + text native buttons (catalog-button-48.png)
+- Button / IconButton: size samples in the legacy and ghost looks (button/img, icon_button/img)
 - Selector: Filter MODEL and Voice step selector at their runtime sizes
 - RadioButton: segmented native radio at the runtime 56 px height
 - Name-value field: Sub OCT at its runtime 40 px visual height
@@ -115,26 +115,18 @@ def render_header_cards():
     print(f"Rendered {len(entry['examples'])} header examples")
 
 
-def render_button_card():
-    """Render ONE icon button and ONE text button side-by-side at 48 px."""
-    out_dir = REPO_ROOT / "components/native/button/img"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
-    icon_btn = action_art(icon="power", colour=_style_color("accent.green"))  # 48x48
-    text_btn = action_art(text="MORE", width=_style_size('catalog.render_button_card.text.btn'), colour=_style_color("text.icon"))  # 96x48
-    
-    gap = _style_size('catalog.render_button_card.gap')
-    total_w = icon_btn.width + gap + text_btn.width
-    total_h = _style_size('catalog.render_button_card.total.h')
-    
-    combined = Image.new("RGBA", (total_w, total_h), _style_rgba("ink.black", _style_opacity("transparent")))
-    combined.paste(icon_btn, (0, 0), icon_btn)
-    combined.paste(text_btn, (icon_btn.width + gap, 0), text_btn)
-    
-    out_file = out_dir / "catalog-button-48.png"
-    combined.save(out_file)
-    print(f"Generated {out_file} ({combined.size})")
-    return out_file
+def render_button_cards():
+    """Button and IconButton samples from their catalogue entries (the Button recipe, look legacy / ghost)."""
+    from components.native.button import button
+    from components.native.icon_button import icon_button
+    for name, module, key, samples in (("button", button, "button", button.button_samples),
+                                       ("icon_button", icon_button, "icon_button", icon_button.icon_samples)):
+        directory = REPO_ROOT / "components/native" / name
+        entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))[key]
+        (directory / "img").mkdir(exist_ok=True)
+        for sample in samples(entry):
+            module.render_sample(sample).save(directory / "img" / sample["file"])
+        print(f"Rendered {name} samples")
 
 
 def render_radio_cards():
@@ -221,20 +213,14 @@ def render_remaining_cards():
     """Reuse the accepted component preview sources for the remaining cards."""
     from components.native.button.button import in_slot
     targets = {
-        "filter_power": (REPO_ROOT / "components/native/button/img", "filter-catalog-active.png"),
         "meter": (REPO_ROOT / "components/native/meter/img", "catalog-active.png"),
     }
     for name, (directory, filename) in targets.items():
         directory.mkdir(parents=True, exist_ok=True)
-        if name == "filter_power":
-            preview = in_slot(action_art(icon="power"),
-                              (_style_size('catalog.render_source.geometry.offset3'),
-                               _style_size('catalog.render_source.geometry.offset4')))
-        else:
-            with Image.open(directory / "mixer_meter_idle.png") as idle, Image.open(directory / "mixer_meter_peak.png") as peak:
-                preview = idle.convert("RGBA")
-                start = preview.height // 2
-                preview.paste(peak.crop((0, start, preview.width, preview.height)), (0, start))
+        with Image.open(directory / "mixer_meter_idle.png") as idle, Image.open(directory / "mixer_meter_peak.png") as peak:
+            preview = idle.convert("RGBA")
+            start = preview.height // 2
+            preview.paste(peak.crop((0, start, preview.width, preview.height)), (0, start))
         preview.save(directory / filename)
 
 
@@ -246,7 +232,7 @@ def main():
     render_dropdown_cards()
     render_filter_selector_cards()
     render_header_cards()
-    render_button_card()
+    render_button_cards()
     render_radio_cards()
     render_name_value_cards()
     render_macro_card_sample()

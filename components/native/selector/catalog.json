@@ -70,7 +70,7 @@
         "label": "LFO MODE",
         "placement": "above",
         "align": "center",
-        "caption": "2 · felirat felül + hosszú érték: balra igazítva, '…'-tal levágva, a nyíltól chevron_gap távolságra",
+        "caption": "2 · felirat felül + hosszú érték: balra igazítva, '…'-tal levágva, a nyíltól legalább chevron_gap ({size:selector.dropdown.chevron_gap} px) távolságra",
         "alt": "Legördülő: felirat felül, hosszú érték levágva",
         "height": "height.intermediate"
       },

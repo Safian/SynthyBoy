@@ -149,6 +149,7 @@ class DropdownTests(unittest.TestCase):
     def test_long_value_is_cut_left_aligned_and_keeps_chevron_gap(self):
         gap, width = style.size("selector.dropdown.chevron_gap"), style.size("header.dropdown.width")
         token = style.size("selector.dropdown.size.40")
+        self.assertEqual(gap, 4)                                       # the minimum space between text and arrow
         chevron_left = width - style.size("selector.dropdown")["chevron_lane"] / 2 - token["chevron_width"] / 2
         for value, short in (("Env 1", True), ("Filter 1 Cutoff Modulation Amount", False)):
             image = selector.render_dropdown_variant(width, 40, value)
@@ -198,7 +199,7 @@ class OrderTests(unittest.TestCase):
     def test_catalogue_order_comes_from_the_order_list(self):
         titles = re.findall(r"<h3>([^<]*)</h3>", HTML.read_text(encoding="utf-8"))
         order = json.loads((NATIVE / "catalog-order.json").read_text(encoding="utf-8"))
-        self.assertEqual(titles[:6], ["Label", "On/Off label", "Pan", "Level", "Button", "Selector"])
+        self.assertEqual(titles[:6], ["Label", "On/Off label", "Pan", "Level", "Button", "IconButton"])
         self.assertEqual(titles[-1], "Header")
         self.assertEqual(order["last"], ["header"])
 

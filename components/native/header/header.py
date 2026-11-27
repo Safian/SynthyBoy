@@ -73,14 +73,14 @@ def power_face(state):
     """POWER 48 x 48: lit (accent.green, as the Filter power button) when on, the plain icon colour when off."""
     if state not in POWER_STATES:
         raise ValueError(f"power must be one of {POWER_STATES}: {state!r}")
-    return action_art(icon="power", colour=_style_color("accent.green" if state == "on" else "text.icon"))
+    return action_art(icon="power", colour=_style_color("accent.green" if state == "on" else "text.icon"), look="legacy")
 
 
 def right_face(kind):
     if kind == "expand":
-        return action_art(icon="expand")
+        return action_art(icon="expand", look="legacy")
     if kind in ("close", "more"):
-        return action_art(text=kind.upper())
+        return action_art(text=kind.upper(), look="legacy")
     raise ValueError(f"right button must be one of {RIGHT_KINDS}: {kind!r}")
 
 
@@ -88,7 +88,7 @@ def centre_face(item, content, *, enabled=True):
     """One page-specific control: dropdown (selector recipe; there is no left/right stepper) or a text button (button recipe)."""
     kind = item.get("kind")
     if kind == "button":
-        face = action_art(text=item["text"])
+        face = action_art(text=item["text"], look="legacy")
     elif kind == "dropdown":
         # The old Play-panel look: value only, centred, no label (render_dropdown_variant placement none, align center).
         # 40 px by default (header.dropdown.height proposal: the owner chooses from the catalogue), centred in the row.

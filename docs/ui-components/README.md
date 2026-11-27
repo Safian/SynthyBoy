@@ -20,6 +20,10 @@ Ugyanez a bejegyzés adja az állapotképeket (`dial.state_images`: állapotonk�
 
 A katalógus sorrendje a `components/native/catalog-order.json` adata (`first`: Label, On/Off label, Pan, Level, Button, Selector; `last`: Header; a többi a `catalog.json` `order` mezője szerint). Részletek: [label.md](label.md), [on_off_label.md](on_off_label.md). A Selector `dropdown` bejegyzése három elrendezést mutat egymás mellett (`selector.render_dropdown_variant`: `placement` none|above|inside, `align` center|left); képek: `r.render_dropdown_cards()`. A komponens-modul a bejegyzését a `catalog_sections(entry)` függvénnyel adja a generátornak (kulcsok: `label`, `on_off`, `dropdown`, `header`).
 
+### Button, IconButton
+
+Régi külsejű szöveges és ikonos gomb 32/40/48/56 px-en, ghost és disabled állapottal: [button.md](button.md), [icon_button.md](icon_button.md).
+
 ### FilterSelector
 
 A Filter-oldali lánc-gomb (56 × 48 px, két lámpaszegmenssel) külön komponens, nem Selector: [filter_selector.md](filter_selector.md).

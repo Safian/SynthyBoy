@@ -43,4 +43,4 @@ The Header dropdown is the Selector's value-only, centred variant (`selector.ren
 
 ## No left/right stepper
 
-The Header has no left/right stepper (arrow selector, carousel): every choice is the dropdown (value centred, 40 px). The Osc A example's SOURCE control is a dropdown; the stepper kind was removed from the Header module. A value that does not fit is left-aligned and cut with an ellipsis, ending `selector.dropdown.chevron_gap` (10 px) before the chevron lane (available width = box - `pad_x` - chevron lane - chevron gap).
+The Header has no left/right stepper (arrow selector, carousel): every choice is the dropdown (value centred, 40 px). The Osc A example's SOURCE control is a dropdown; the stepper kind was removed from the Header module. A value that does not fit is left-aligned and cut with an ellipsis, ending `selector.dropdown.chevron_gap` (4 px) before the chevron lane (available width = box - `pad_x` - chevron lane - chevron gap).
