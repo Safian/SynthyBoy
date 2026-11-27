@@ -284,6 +284,50 @@ def render_dial_frame(diameter, value, *, bipolar=False, active=True):
     return Image.fromarray(np.clip(np.rint(out), 0, 255).astype(np.uint8), "RGBA")
 
 
+def dial_variants(dial):
+    """The size variants of a catalogue dial entry (components/native/<name>/catalog.json "dial"), validated.
+
+    Each variant: id, label, diameter (a shared sizes.json token), file (in the component's img directory), alt.
+    Adding another size is adding one entry to "variants"; the picture renderer and the HTML generator both use this.
+    """
+    keys = {"bipolar", "states", "state_gap", "variants"}
+    if not isinstance(dial, dict) or set(dial) != keys:
+        raise ValueError(f"dial entry needs exactly the fields {sorted(keys)}")
+    if not dial["states"] or not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in dial["states"]):
+        raise ValueError("dial states must be a nonempty list of values in 0..1")
+    if not dial["variants"] or len({v.get("id") for v in dial["variants"]}) != len(dial["variants"]):
+        raise ValueError("dial variants must be nonempty with unique ids")
+    result = []
+    for variant in dial["variants"]:
+        if set(variant) != {"id", "label", "diameter", "file", "alt"}:
+            raise ValueError("dial variant needs exactly id, label, diameter, file, alt")
+        diameter = _style_size(variant["diameter"])
+        if type(diameter) is not int or diameter <= 0:
+            raise ValueError(f"dial variant diameter must be a positive integer size token: {variant['diameter']}")
+        result.append(dict(variant, token=variant["diameter"], diameter=diameter))
+    return result
+
+
+def render_dial_preview(diameter, states, *, bipolar=False, active=True, gap=0, caption=False, value_text=None):
+    """Catalogue picture of one dial size: the dial graphic only, one render_dial_frame per state side by side.
+
+    Every state is drawn at its real `diameter` (no resampling) with `gap` px between the states. The caption
+    and the value text are switched off by the `caption` / `value_text` parameters; anything but False/None is
+    refused, because this picture is the text-free catalogue preview.
+    """
+    if Image is None:
+        raise RuntimeError("Pillow is required to render dial previews")
+    if caption is not False or value_text is not None:
+        raise ValueError("render_dial_preview draws the dial graphic only")
+    diameter = int(diameter)
+    width = len(states) * diameter + (len(states) - 1) * int(gap)
+    canvas = Image.new("RGBA", (width, diameter))
+    for i, state in enumerate(states):
+        canvas.alpha_composite(render_dial_frame(diameter, state, bipolar=bipolar, active=active),
+                               (i * (diameter + int(gap)), 0))
+    return canvas
+
+
 @functools.lru_cache(maxsize=32)
 def _strip_png(frame_size, bipolar, active):
     import io

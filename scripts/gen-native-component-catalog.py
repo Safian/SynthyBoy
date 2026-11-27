@@ -85,11 +85,20 @@ def image_markup(component, item):
 
 
 def component_markup(component, metadata):
-    fields(metadata, ("version", "approved", "order", "title", "sections"))
+    fields(metadata, ("version", "approved", "order", "title", "sections"), ("dial",))
     require(type(metadata["order"]) is int, "order must be an integer")
-    require(isinstance(metadata["sections"], list) and metadata["sections"], "sections must be a nonempty list")
+    require(isinstance(metadata["sections"], list), "sections must be a list")
+    sections = list(metadata["sections"])
+    if "dial" in metadata:
+        # A dial entry yields one text-free size variant per entry, captioned here (never inside the image).
+        from components.native.level.level import dial_variants
+        sections.append({"images": [
+            {"presentation": "sample", "file": v["file"], "alt": v["alt"],
+             "caption": f"{v['label']} · {{size:{v['token']}}} × {{size:{v['token']}}} px"}
+            for v in dial_variants(metadata["dial"])]})
+    require(sections, "sections must be a nonempty list")
     lines = [f"    <article>\n      <h3>{text(metadata['title'])}</h3>"]
-    for section in metadata["sections"]:
+    for section in sections:
         fields(section, ("images",), ("heading",))
         if "heading" in section:
             lines.append(f"      <h4>{text(section['heading'])}</h4>")

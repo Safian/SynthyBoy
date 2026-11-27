@@ -3,25 +3,30 @@
   "approved": true,
   "order": 20,
   "title": "Level",
-  "sections": [
-    {
-      "images": [
-        {
-          "presentation": "hero",
-          "file": "level-90.png",
-          "alt": "Level"
-        }
-      ]
-    },
-    {
-      "heading": "Kompakt · {size:control.width} × {size:height.medium} px",
-      "images": [
-        {
-          "presentation": "sample",
-          "file": "level-native-40.png",
-          "alt": "Kompakt Level: minimum, közép, maximum"
-        }
-      ]
-    }
-  ]
+  "sections": [],
+  "dial": {
+    "bipolar": false,
+    "states": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "state_gap": "dial.preview.strip.gap",
+    "variants": [
+      {
+        "id": "normal",
+        "label": "Normál",
+        "diameter": "dial.diameter",
+        "file": "level-dial-normal.png",
+        "alt": "Level, normál méret: minimum, közép, maximum"
+      },
+      {
+        "id": "compact",
+        "label": "Kompakt",
+        "diameter": "dial.compact.diameter",
+        "file": "level-dial-compact.png",
+        "alt": "Level, kompakt méret: minimum, közép, maximum"
+      }
+    ]
+  }
 }

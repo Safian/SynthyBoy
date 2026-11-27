@@ -3,25 +3,30 @@
   "approved": true,
   "order": 10,
   "title": "Pan",
-  "sections": [
-    {
-      "images": [
-        {
-          "presentation": "hero",
-          "file": "pan-90.png",
-          "alt": "Pan"
-        }
-      ]
-    },
-    {
-      "heading": "Kompakt · {size:control.width} × {size:height.medium} px",
-      "images": [
-        {
-          "presentation": "sample",
-          "file": "pan-native-40.png",
-          "alt": "Kompakt Pan: minimum, közép, maximum"
-        }
-      ]
-    }
-  ]
+  "sections": [],
+  "dial": {
+    "bipolar": true,
+    "states": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "state_gap": "dial.preview.strip.gap",
+    "variants": [
+      {
+        "id": "normal",
+        "label": "Normál",
+        "diameter": "dial.diameter",
+        "file": "pan-dial-normal.png",
+        "alt": "Pan, normál méret: minimum, közép, maximum"
+      },
+      {
+        "id": "compact",
+        "label": "Kompakt",
+        "diameter": "dial.compact.diameter",
+        "file": "pan-dial-compact.png",
+        "alt": "Pan, kompakt méret: minimum, közép, maximum"
+      }
+    ]
+  }
 }

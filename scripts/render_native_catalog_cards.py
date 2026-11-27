@@ -38,77 +38,21 @@ from components.native.tune.tune import render_tune_card
 
 
 
-def _dial_frame(path, index):
-    """Read an actual native filmstrip frame, without drawing a substitute knob."""
-    with Image.open(path) as strip:
-        side = strip.width
-        return strip.crop((0, index * side, side, (index + 1) * side)).convert("RGBA")
-
-
-def _dial_cell(definition, skins, index, caption, value, size):
-    controls = definition["componentsData"]
-    width, height = size
-    background = definition["backgroundData"]["unfocussed"]["colour"]
-    alpha, red, green, blue = bytes.fromhex(background.zfill(8))
-    result = Image.new("RGBA", (width, height), (red, green, blue, alpha))
-    for child in controls:
-        model = child["componentData"]
-        data = model["data"]
-        x, y, w, h = map(int, child["bounds"]["bounds"].split())
-        if model["type"] == "Knob":
-            frame = _dial_frame(skins / data["filmStrip"], index)
-            result.alpha_composite(frame.resize((w, h), Image.Resampling.LANCZOS), (x, y))
-        elif model["type"] == "Label":
-            style = data["textStyle"]
-            text = caption if model["name"] == "name" else value
-            font = selector_font(round(native_font_em(style["font"]["height"])))
-            draw = ImageDraw.Draw(result)
-            bounds = draw.textbbox((0, 0), text, font=font)
-            tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
-            justification = style["justification"]
-            tx = x + (w - tw) / 2 if "horizontallyCentred" in justification else x
-            ty = y + (h - th) / 2 if "verticallyCentred" in justification else y
-            draw.text((tx - bounds[0], ty - bounds[1]), text, font=font, fill="#" + style["colour"][-6:])
-    return result
-
-
 def render_dial_cards():
     """Refresh bundled strips and previews from the real Pan/Level definitions."""
     from components.native.pan import pan
     from components.native.level import level
-    for name, module, values in (("pan", pan, ("L 100", "C", "R 100")),
-                                 ("level", level, ("0%", "50%", "100%"))):
+    for name, module in (("pan", pan), ("level", level)):
         directory = REPO_ROOT / "components/native" / name / "img"
         for path in sorted(directory.glob(f"play_sub_{name}_*.png")):
             frame_size = int(path.stem.split("_")[3])
             kwargs = {"active": not path.stem.endswith("_inactive")} if name == "level" else {}
             module.write_strip(path, frame_size=frame_size, **kwargs)
-        indices = (0, module.FRAMES // 2, module.FRAMES - 1)
-        with tempfile.TemporaryDirectory() as folder:
-            skins = Path(folder)
-            factory = pan.pan_definition if name == "pan" else level.level_definition
-            definition = factory(skins_dir=skins)
-            cells = [_dial_cell(definition, skins, index, name.upper(), value, module.DEFAULT_DIAL_RECTS["focus"][2:])
-                     for index, value in zip(indices, values)]
-            target = directory / f"{name}-90.png"
-            with Image.open(target) as previous:
-                canvas_size = previous.size
-            gap = (canvas_size[0] - sum(cell.width for cell in cells)) // (len(cells) - 1)
-            canvas = Image.new("RGBA", canvas_size)
-            for i, cell in enumerate(cells):
-                canvas.alpha_composite(cell, (i * (cell.width + gap), 0))
-            canvas.save(target)
-            compact = directory / f"{name}-native-40.png"
-            with Image.open(compact) as previous:
-                compact_size = previous.size
-            canvas = Image.new("RGBA", compact_size)
-            strip = directory / f"play_sub_{name}_{_style_size('dial.compact.diameter')}.png"
-            for i, index in enumerate(indices):
-                frame = _dial_frame(strip, index)
-                cell_width = compact_size[0] // len(indices)
-                canvas.alpha_composite(frame, (i * cell_width + (cell_width - frame.width) // 2,
-                                                (compact_size[1] - frame.height) // 2))
-            canvas.save(compact)
+        # Text-free size variants from the catalogue entry: the same recipe as the filmstrips, each at its real size.
+        dial = json.loads((directory.parent / "catalog.json").read_text(encoding="utf-8"))["dial"]
+        for variant in level.dial_variants(dial):
+            level.render_dial_preview(variant["diameter"], dial["states"], bipolar=dial["bipolar"],
+                                      gap=_style_size(dial["state_gap"])).save(directory / variant["file"])
         print(f"Refreshed native {name} strips and catalogue previews")
 
 
