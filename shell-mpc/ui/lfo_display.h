@@ -59,6 +59,7 @@ struct Data
     bool dim = false;            // the LFO does nothing (the picture stays, faint)
     Rect area;                   // optional explicit plot area below the header controls
     Rect aperture;               // a host-owned button inside the graph frame
+    bool pageTitle = false;      // the full page: the label is the large page title (theme::kPageTitleSize), even when the plot area is given below the edit button
     bool editing = false;        // the shape editor has the same ground and curve under its handles: no lead-in, no label
 };
 
@@ -297,7 +298,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     sb.paintOff();
     if (d.label[0] != '\0' && ! d.editing)
     {
-        if (isCompact (r, d))
+        if (isCompact (r, d) && ! d.pageTitle)
         {
             Pen pen (sb, true);   // the label lies in the header band, left of the full screen button (the text is fitted to that room)
             pen.textLeft (playrows::labelRect (r, false, false), d.label, T.fLabel, a (T.textDim, 220), T.fMin);

@@ -2353,6 +2353,11 @@ void testPlayCarouselSharesNothingWithTheTab()
         Both b;
         check (b.playText() == "LFO 1 +" && b.play.compact().instance.state.count == 2, "empty preset: the Play carousel shows LFO 1, + (" + b.playText() + ")");
         check (b.tab.selector().numCells() == 0, "the page of a tab has no selector cells");
+        {
+            const ui::lfodisplay::Data fd = b.tab.fullDisplayData();
+            check (fd.area.empty() || (fd.pageTitle && fd.area.y >= b.tab.fullDisplayData().area.y && fd.area.y >= ui::lfodisplay::titleRoom (fd)),
+                   "the full page display data marks the label as the page title (large, kPageTitleSize) and keeps the plot area below its room");
+        }
     }
     {
         Both b;

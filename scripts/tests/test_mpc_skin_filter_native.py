@@ -254,6 +254,10 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
             self.assertEqual(rect(toggle)[:2], (x + (w - tw) // 2, y + (h - th) // 2))
             self.assertEqual(toggle["componentData"]["type"], "Button")
             self.assertNotIn("Curve " + name + " label", items)
+        for name in ("Snap", "Legato"):   # the toggle captions take the em of the POINT / X / Y / CURVE captions (JUCE height 23 = 15 px em), not the 11 px default of the ActiveText art
+            art = Image.open(os.path.join(self.skin, f"filter_native_toggle_{name.lower()}_{rect(items['Curve ' + name])[2]}x{rect(items['Curve ' + name])[3]}_on.png"))
+            rows = [y for y in range(art.height) if any(art.getpixel((x, y))[3] > 128 for x in range(art.width))]
+            self.assertGreaterEqual(max(rows) - min(rows) + 1, 10, name + " caption cap height")
         for index, name in enumerate(("Point", "X", "Y", "Curve", "Grid X", "Grid Y")):
             nv = items[f"Curve {name}"]
             nv_def = definitions[nv["componentData"]["type"]]

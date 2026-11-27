@@ -376,6 +376,8 @@ public:
         {
             const ui::ScalarCurveEditor& ed = curveUi().screen;
             ed.draw (sb);
+            if (pageTop_ == 0)
+                full_.drawCurvePageTitle (sb);   // above the opaque graph frame of the editor
             if (isSplit() && pageTop_ == 0)
             {
                 const ui::Rect eb = ed.block (0);

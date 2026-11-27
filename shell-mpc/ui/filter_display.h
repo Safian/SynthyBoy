@@ -854,6 +854,16 @@ public:
         return groups[activeGroup_].turn (knobIndex, delta);
     }
 
+    /** The page title of the NOTE / VELO sub-tab (static-native-captions.json filternote / filtervelo draws the same rect on the host layer). The owner calls it AFTER the curve editor: its graph frame
+        is opaque and covers the top strip of the page, so a title drawn with the page (drawExtra) never showed on the overlay plane. */
+    void drawCurvePageTitle (gpu::SceneBuilder& sb) const
+    {
+        if (! curveView() || ! subTabPage_ || rect_.w <= 0)
+            return;
+        Pen p (sb, enabled_, inactive_);
+        p.textLeft ({ rect_.x + 22, rect_.y + 4, 400, 56 }, view_ == kViewNote ? "FILTER NOTE" : "FILTER VELO", theme::kPageTitleSize, p.c (theme::L().text, 255), theme::L().fMin);
+    }
+
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen p (sb, enabled_, inactive_);
@@ -1144,9 +1154,7 @@ protected:
     {
         if (curveView())
         {
-            if (subTabPage_ && rect_.w > 0)   // the page title of the NOTE / VELO sub-tab (static-native-captions.json filternote / filtervelo draws the same rect on the host layer)
-                p.textLeft ({ rect_.x + 22, rect_.y + 4, 400, 56 }, view_ == kViewNote ? "FILTER NOTE" : "FILTER VELO", theme::kPageTitleSize, p.c (theme::L().text, 255), theme::L().fMin);
-            return;
+            return;   // the NOTE / VELO page title is drawn after the curve editor frame (drawCurvePageTitle)
         }
         const theme::Look& T = theme::L();
         if (! graphRect_.empty())

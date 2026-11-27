@@ -350,14 +350,14 @@ def _emit_dial(ctx, container, name, rect, param, caption, bipolar, active_gates
             container.append(off_entry)
 
 
-def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passive_gates, skins_dir, *, model_proxy=None, passive_models=()):
+def _emit_toggle(ctx, container, name, rect, param, caption, active_gates, passive_gates, skins_dir, *, model_proxy=None, passive_models=(), font_size=None):
     x, y, w, h = rect
     tw, th = min(w, style.size("filter.emit_toggle.max_width")), min(h, style.size("filter.emit_toggle.max_height"))
     tx, ty = x + (w - tw) // 2, y + (h - th) // 2
     key = caption.lower().replace(" ", "_")
     on_name = f"filter_native_toggle_{key}_{tw}x{th}_on.png"
     off_name = f"filter_native_toggle_{key}_{tw}x{th}_off.png"
-    active_text.write_active_text_assets(skins_dir, text=caption, width=tw, height=th, on_name=on_name, off_name=off_name)
+    active_text.write_active_text_assets(skins_dir, text=caption, width=tw, height=th, on_name=on_name, off_name=off_name, font_size=font_size)
     btn = active_text.active_text_entry(NATIVE + name, on_name, off_name, (tx, ty, tw, th), handle="Data", gates=active_gates)
     btn["handle remapping"]["map"] = [{"key": "Data", "value": f"Parameter {param}"}]
     btn["bounds"]["acceptsHWFocus"] = "Yes"
@@ -421,6 +421,11 @@ def _ensure_nv_definition(ctx, w, h):
     return kind
 
 
+def _curve_toggle_font():
+    """The pixel em of LEGATO / SNAP: the em of the POINT / X / Y / CURVE captions beside them (JUCE height 23 draws a 15 px em)."""
+    return style.size("filter.curve_toggle.font")
+
+
 def _emit_curve_controls(ctx, container, rects, base, action, state, displays, *, is_split, expand_rect=None):
     split_or_curve_gates = [] if is_split else _state_gates(state, (3, 4))
     for index, rect in enumerate(rects):
@@ -434,11 +439,11 @@ def _emit_curve_controls(ctx, container, rects, base, action, state, displays, *
             if slot == ACTION - 1:  # Legato
                 prefix = "Split " if is_split else ""
                 _emit_toggle(ctx, container, f"{prefix}Curve {field_name}", rect, host_value, "LEGATO",
-                             split_or_curve_gates, (), ctx.skins_dir)
+                             split_or_curve_gates, (), ctx.skins_dir, font_size=_curve_toggle_font())
             elif slot in TOGGLES:
                 prefix = "Split " if is_split else ""
                 _emit_toggle(ctx, container, f"{prefix}Curve {field_name}", rect, host_value, field_name.upper(),
-                             split_or_curve_gates, (), ctx.skins_dir)
+                             split_or_curve_gates, (), ctx.skins_dir, font_size=_curve_toggle_font())
             else:
                 kind = _ensure_nv_definition(ctx, w, h)
                 prefix = "Split " if is_split else ""

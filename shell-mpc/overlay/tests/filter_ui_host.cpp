@@ -1233,6 +1233,24 @@ static void testFilterSubTabs ()
         check (root.isSubTab() && ! root.isSplit() && root.nativeViewFrame() == sub, n + ": the state of the page is the sub-tab's (frame " + std::to_string (root.nativeViewFrame()) + ")");
         check (root.curveView() == (sub >= 3) && root.filterShown() == (sub <= 2), n + (sub >= 3 ? ": the curve editor, no filter part" : ": the filter part, no curve editor"));
         check (sub >= 3 || root.editFilter() == sub, n + ": the controls edit the filter of the sub-tab");
+        if (sub >= 3)   // the page title is drawn above the opaque graph frame of the curve editor: bright title pixels at its place on the overlay plane
+        {
+            auto data = std::make_unique<gpu::SceneData>();
+            std::memset (data.get(), 0, sizeof (gpu::SceneData));
+            gpu::SceneBuilder sb (*data);
+            sb.begin (gpu::kKindPlay, 0, page::kW, page::kH);
+            root.draw (sb);
+            std::vector<uint32_t> cv;
+            renderScene (*data, cv);
+            int bright = 0;
+            for (int y = FilterUi::kTabY + 8; y < FilterUi::kTabY + 60; ++y)
+                for (int x = 22; x < 300; ++x)
+                {
+                    const uint32_t px = cv[static_cast<size_t> (y) * page::kW + static_cast<size_t> (x)];
+                    bright += ((px >> 16) & 255u) > 200u && ((px >> 8) & 255u) > 200u && (px & 255u) > 200u ? 1 : 0;
+                }
+            check (bright > 40, n + ": the large page title (FILTER NOTE / FILTER VELO) is visible over the graph frame (" + std::to_string (bright) + " bright pixels)");
+        }
         for (int stale : { FilterF1, FilterF2, FilterNote, FilterVelo, FilterExpandFilter, FilterExpandCurve })
         {
             inst.action (stale);

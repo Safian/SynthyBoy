@@ -703,7 +703,8 @@ public:
         if (! edit.empty())
         {
             const auto graph = full_.displayRect().inset (8);
-            const int top = edit.bottom() + 8;
+            const int top = std::max (edit.bottom() + 8, graph.y + ui::lfodisplay::titleRoom (data));   // below the edit button and the page title (inner margin to the border)
+            data.pageTitle = true;
             data.area = { graph.x, top, graph.w, std::max (0, graph.bottom() - 6 - top) };
             data.aperture = edit;
         }
