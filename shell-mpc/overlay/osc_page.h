@@ -142,12 +142,7 @@ public:
         for (const auto& view : layout::kViews)
             if (view.kind == layout::kKindOscUi && view.index == tabSelection_)
             {
-                drawNativeMarkerCovers (sb, view.name);
-                if (const auto* asset = backgroundOf (view.name))
-                {
-                    const int x = asset->sentinelX, y = page::kTabY + asset->sentinelY;
-                    sb.rect (x, y, x + 5, y + 5, gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
-                }
+                drawNativeMarkerCovers (sb, view.name);   // the markers and the sentinel (tab y 8)
                 return;
             }
     }
