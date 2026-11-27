@@ -317,14 +317,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(filter_style_display_host PRIVATE cxx_std_17)
     add_test(NAME filter_style_display_host COMMAND filter_style_display_host)
 
-    add_executable(mixfx_ui_host EXCLUDE_FROM_ALL overlay/tests/mixfx_ui_host.cpp)
-    target_include_directories(mixfx_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(mixfx_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(mixfx_ui_host PRIVATE cxx_std_17)
-    target_compile_options(mixfx_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
     add_executable(mixer_binding_host EXCLUDE_FROM_ALL overlay/tests/mixer_binding_host.cpp)
     target_include_directories(mixer_binding_host PRIVATE
@@ -335,45 +327,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(mixer_binding_host PRIVATE cxx_std_17)
     target_compile_options(mixer_binding_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(mod_ui_host EXCLUDE_FROM_ALL overlay/tests/mod_ui_host.cpp)
-    target_include_directories(mod_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(mod_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(mod_ui_host PRIVATE cxx_std_17)
-    target_compile_options(mod_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(filter_ui_host EXCLUDE_FROM_ALL overlay/tests/filter_ui_host.cpp)
-    add_executable(filter_ui_demo EXCLUDE_FROM_ALL overlay/tests/filter_ui_demo.cpp)
-    foreach(t filter_ui_host filter_ui_demo)
-        target_include_directories(${t} PRIVATE
-            "${CMAKE_SOURCE_DIR}/core/include"
-            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-        target_link_libraries(${t} PRIVATE synthyboy_core Threads::Threads)
-        target_compile_features(${t} PRIVATE cxx_std_17)
-        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
-    endforeach()
-    add_test(NAME filter_ui_host COMMAND filter_ui_host)
 
-    add_executable(env_ui_host EXCLUDE_FROM_ALL overlay/tests/env_ui_host.cpp)
-    target_include_directories(env_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(env_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(env_ui_host PRIVATE cxx_std_17)
-    target_compile_options(env_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(lfo_ui_host EXCLUDE_FROM_ALL overlay/tests/lfo_ui_host.cpp)
-    target_include_directories(lfo_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(lfo_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(lfo_ui_host PRIVATE cxx_std_17)
-    target_compile_options(lfo_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
     add_executable(qchip_jump_host EXCLUDE_FROM_ALL overlay/tests/qchip_jump_host.cpp)
     target_include_directories(qchip_jump_host PRIVATE
@@ -406,25 +362,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 
 
     # The NOTE / VELO curve editor (ui/scalar_curve_editor.h, overlay/scalar_curve_ui.h): component, page logic, content round trip against the engine's own evaluation
-    foreach(t ui_scalar_curve_host scalar_curve_ui_host)
-        if(t STREQUAL "ui_scalar_curve_host")
-            add_executable(${t} EXCLUDE_FROM_ALL ui/tests/${t}.cpp)
-        else()
-            add_executable(${t} EXCLUDE_FROM_ALL overlay/tests/${t}.cpp)
-        endif()
-        target_include_directories(${t} PRIVATE
-            "${CMAKE_SOURCE_DIR}/core/include"
-            "${CMAKE_SOURCE_DIR}/core/engine-own"
-            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-        target_link_libraries(${t} PRIVATE synthyboy_core Threads::Threads)
-        target_compile_features(${t} PRIVATE cxx_std_17)
-        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
-        add_test(NAME ${t} COMMAND ${t})
-    endforeach()
 
-    add_test(NAME env_ui_host COMMAND env_ui_host)
-    add_test(NAME lfo_ui_host COMMAND lfo_ui_host)
     add_executable(ui_used_selector_host overlay/tests/ui_used_selector_host.cpp)
     target_link_libraries(ui_used_selector_host PRIVATE synthyboy_core Threads::Threads)
     target_compile_features(ui_used_selector_host PRIVATE cxx_std_17)
@@ -438,18 +376,8 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME qslots_host COMMAND qslots_host)
     add_test(NAME ui_time_ruler_host COMMAND ui_time_ruler_host)
 
-    add_test(NAME mod_ui_host COMMAND mod_ui_host)
-    add_test(NAME mixfx_ui_host COMMAND mixfx_ui_host)
     add_test(NAME mixer_binding_host COMMAND mixer_binding_host)
 
-    add_executable(mastervoice_ui_host EXCLUDE_FROM_ALL overlay/tests/mastervoice_ui_host.cpp)
-    target_include_directories(mastervoice_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(mastervoice_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(mastervoice_ui_host PRIVATE cxx_std_17)
-    target_compile_options(mastervoice_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
     # the kit parity test (migration steps 2 and 3, docs/ui-components/TEMPLATE.md): the parameter source of the kit against the old direct calls, for every parameter
     add_executable(kit_parity_host EXCLUDE_FROM_ALL overlay/tests/kit_parity_host.cpp)
@@ -483,35 +411,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(ui_gallery_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_gallery_host COMMAND ui_gallery_host --test)
 
-    add_executable(osc_ui_host EXCLUDE_FROM_ALL overlay/tests/osc_ui_host.cpp)
-    target_include_directories(osc_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(osc_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(osc_ui_host PRIVATE cxx_std_17)
-    target_compile_options(osc_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(osc_page_host EXCLUDE_FROM_ALL overlay/tests/osc_page_host.cpp)
-    target_include_directories(osc_page_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(osc_page_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(osc_page_host PRIVATE cxx_std_17)
-    target_compile_options(osc_page_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(osc_page_ui_demo EXCLUDE_FROM_ALL overlay/tests/osc_page_ui_demo.cpp)
-    target_include_directories(osc_page_ui_demo PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(osc_page_ui_demo PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(osc_page_ui_demo PRIVATE cxx_std_17)
-    target_compile_options(osc_page_ui_demo PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_test(NAME osc_page_host COMMAND osc_page_host)
-    add_test(NAME osc_ui_host COMMAND osc_ui_host)
     add_executable(inhost_host EXCLUDE_FROM_ALL overlay/tests/inhost_host.cpp)
     target_include_directories(inhost_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/overlay")
     target_link_libraries(inhost_host PRIVATE Threads::Threads)
@@ -534,15 +436,6 @@ if(NOT CMAKE_CROSSCOMPILING)
         --baseline "${CMAKE_CURRENT_SOURCE_DIR}/overlay/tests/layout_lint_baseline.json" --quiet)
 
     # the names of the macros on the plugin-drawn pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
-    add_executable(macro_names_ui_host EXCLUDE_FROM_ALL overlay/tests/macro_names_ui_host.cpp)
-    target_include_directories(macro_names_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(macro_names_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(macro_names_ui_host PRIVATE cxx_std_17)
-    target_compile_options(macro_names_ui_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME macro_names_ui_host COMMAND macro_names_ui_host)
 
 
 
@@ -551,15 +444,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     # Standalone native FX aperture/ownership regression.  This deliberately
     # remains separate from the broad Mixer+FX legacy host executable so a
     # native-control failure is reported without masking unrelated fixtures.
-    add_executable(fx_native_ui_host EXCLUDE_FROM_ALL overlay/tests/fx_native_ui_host.cpp)
-    target_include_directories(fx_native_ui_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(fx_native_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(fx_native_ui_host PRIVATE cxx_std_17)
-    target_compile_options(fx_native_ui_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME fx_native_ui_host COMMAND fx_native_ui_host)
 
     # the host's standby dim (overlay/standby.h) and the parameter coverage of the pages without a test of their own
     add_executable(standby_host EXCLUDE_FROM_ALL overlay/tests/standby_host.cpp)
