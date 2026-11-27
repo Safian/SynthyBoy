@@ -10,7 +10,6 @@
 // Rows are kRowH pixels high (a touch target); names are fitted to the row box with Pen::textLeft. A scroll zone (44 px) at the right edge, when the list is longer than the box: the thumb in it is dragged (it follows the finger), a touch on the track above or below it pages by one window.
 #pragma once
 
-#include "base.h"
 #include "core.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -25,7 +24,6 @@ public:
         int count = 0, current = 0;
         const char* header = nullptr;   // a bar of its own above the rows (the content browser: the path); null = none
         bool headerBack = false;        // the header is also the way up: a back arrow at its left and a Request change with the id of `setHeaderId` on a tap
-        const int* icons = nullptr;     // the pictogram id of row i (base.h pictogram::Id, one entry per row; < 0 or a null array: none): a small drawing in front of the name (the oscillator's type list)
         unsigned dotMask = 0;           // bit i set: a small dot at the right end of row i (the envelopes that modulate something: the same dot the selector shows); 0 = none
         const uint32_t* dotColours = nullptr;   // the colour of the dot of row i (one entry per row, rgb as the look's colours); null = the accent colour
     };
@@ -171,15 +169,7 @@ protected:
             }
             const char* name = state.items != nullptr && state.items[i] != nullptr ? state.items[i] : "";
             const bool dot = i < 32 && (state.dotMask & (1u << i)) != 0;
-            int textX = r.x + 12;
-            if (state.icons != nullptr && state.icons[i] >= 0)
-                if (const pictogram::Def* pd = pictogram::find (state.icons[i]))
-                {
-                    p.style (1.0f, true);
-                    pd->draw (p, static_cast<float> (r.x) + 32.0f, static_cast<float> (r.y) + static_cast<float> (r.h) * 0.5f, p.c (cur ? T.flow[0] : T.textDim, 255));
-                    p.plain();
-                    textX = r.x + 60;
-                }
+            const int textX = r.x + 12;
             p.textLeft ({ textX, r.y + 4, std::max (0, r.right() - 8 - textX - (dot ? 24 : 0)), r.h - 8 }, name, T.fItem, p.c (cur ? T.text : T.textDim, 255), T.fMin);
             if (dot)
                 p.disc (static_cast<float> (r.right() - 16), static_cast<float> (r.y + r.h / 2), 4.0f, p.c (state.dotColours != nullptr ? state.dotColours[i] : T.flow[0], 255));

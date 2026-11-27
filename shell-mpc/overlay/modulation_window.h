@@ -5,7 +5,7 @@
 
 #include <array>
 
-#include "../ui/panel.h"
+#include "../ui/model.h"
 #include "ui_bind.h"
 
 namespace synthyboy_mpc::overlay::uibind
@@ -19,7 +19,7 @@ struct ModulationWindow
 inline ModulationWindow modulationWindow (const IInstanceView& inst, int parameter, int selectedSource,
                                           int requestedPage, ModRow* visible, int focusSlot = -1)
 {
-    constexpr int perPage = ui::ModulationsPage::kPerPage;
+    constexpr int perPage = 6;
     ModulationWindow result;
     result.entries.selectedSource = selectedSource;
     std::fill_n (visible, perPage, ModRow {});

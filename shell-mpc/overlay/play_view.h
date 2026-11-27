@@ -666,7 +666,7 @@ private:
         if (edgeX_ < play::kRegionW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge, the picture is the host's there
             sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (play::kRegionH));
         const bool compact = osc_ != nullptr && osc_->isMain();
-        const bool oscOff = compact && ! osc_->compact().power.state.on;
+        const bool oscOff = compact && ! osc_->powerOn();
         const float selectorTop = static_cast<float> (play::kTabY + play::kNativeSelectorY);
         const float selectorBottom = selectorTop + static_cast<float> (play::kNativeSelectorH);
         auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field): a cached cell
@@ -684,7 +684,7 @@ private:
                 ground (x0, static_cast<float> (play::kTabY), x1, static_cast<float> (play::kTabY + play::kTabH));
                 return;
             }
-            if (! osc_->compact().nativeHeader()[0].empty())
+            if (! osc_->compactNativeHeader()[0].empty())
             {
                 // The native skin owns the complete compact background, including
                 // the transparent padding of its rounded controls.
@@ -750,7 +750,7 @@ private:
         // the live read-outs over the picture), then the cached cells that lie over them (the full screen button of the compact view, the popups)
         const ui::Rect r = osc_->displayRect();
         osc_->drawPage (sb);
-        const auto& nativeHeader = osc_->compact().nativeHeader();
+        const auto& nativeHeader = osc_->compactNativeHeader();
         const auto* apertures = compact && ! nativeHeader[0].empty() ? &nativeHeader : nullptr;
         if (! r.empty())
             osd_.draw (sb, r, false, osc_->plotArea(), apertures);

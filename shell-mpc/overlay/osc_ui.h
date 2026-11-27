@@ -2132,7 +2132,6 @@ private:
             list_.state.headerBack = true;
         }
         list_.state.items = modsListNames_.data();
-        list_.state.icons = nullptr;
         list_.state.count = static_cast<int> (modsListNames_.size());
         list_.state.current = -1;
         list_.showCurrent();
@@ -2887,7 +2886,6 @@ private:
         list_.state.header = wtBrowser_.title().c_str();
         list_.state.headerBack = ! wtBrowser_.atCategories();
         list_.state.items = wtBrowser_.items();
-        list_.state.icons = nullptr;
         list_.state.count = wtBrowser_.count();
         list_.state.current = wtBrowser_.currentRow();
         list_.showCurrent();
