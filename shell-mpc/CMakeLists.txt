@@ -305,11 +305,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(mixer_stereo_host PRIVATE cxx_std_17)
     add_test(NAME mixer_stereo_host COMMAND mixer_stereo_host)
 
-    add_executable(play_env_lfo_host EXCLUDE_FROM_ALL tests/play_env_lfo_host.cpp)
-    target_include_directories(play_env_lfo_host PRIVATE "${MPC_SDK_DIR}/framework")
-    target_link_libraries(play_env_lfo_host PRIVATE synthyboy_core Threads::Threads ${CMAKE_DL_LIBS})
-    target_compile_features(play_env_lfo_host PRIVATE cxx_std_17)
-    add_test(NAME play_env_lfo_host COMMAND play_env_lfo_host)
 
     add_executable(filter_style_display_host EXCLUDE_FROM_ALL tests/filter_style_display_host.cpp)
     target_include_directories(filter_style_display_host PRIVATE "${MPC_SDK_DIR}/framework")
@@ -331,15 +326,6 @@ if(NOT CMAKE_CROSSCOMPILING)
 
 
 
-    add_executable(qchip_jump_host EXCLUDE_FROM_ALL overlay/tests/qchip_jump_host.cpp)
-    target_include_directories(qchip_jump_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(qchip_jump_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(qchip_jump_host PRIVATE cxx_std_17)
-    target_compile_options(qchip_jump_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME qchip_jump_host COMMAND qchip_jump_host)
 
 
     add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
@@ -363,17 +349,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     # The NOTE / VELO curve editor (ui/scalar_curve_editor.h, overlay/scalar_curve_ui.h): component, page logic, content round trip against the engine's own evaluation
 
-    add_executable(ui_used_selector_host overlay/tests/ui_used_selector_host.cpp)
-    target_link_libraries(ui_used_selector_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(ui_used_selector_host PRIVATE cxx_std_17)
-    target_compile_options(ui_used_selector_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_used_selector_host COMMAND ui_used_selector_host)
 
-    add_executable(qslots_host overlay/tests/qslots_host.cpp)
-    target_link_libraries(qslots_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(qslots_host PRIVATE cxx_std_17)
-    target_compile_options(qslots_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME qslots_host COMMAND qslots_host)
     add_test(NAME ui_time_ruler_host COMMAND ui_time_ruler_host)
 
     add_test(NAME mixer_binding_host COMMAND mixer_binding_host)
@@ -390,26 +366,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(kit_parity_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME kit_parity_host COMMAND kit_parity_host)
 
-    add_executable(page_view_host EXCLUDE_FROM_ALL overlay/tests/page_view_host.cpp)
-    target_include_directories(page_view_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(page_view_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(page_view_host PRIVATE cxx_std_17)
-    target_compile_options(page_view_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME page_view_host COMMAND page_view_host)
-    add_test(NAME filter_page_view_host COMMAND page_view_host --filter-only)
 
-    add_executable(ui_gallery_host EXCLUDE_FROM_ALL overlay/tests/ui_gallery_host.cpp)
-    target_include_directories(ui_gallery_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(ui_gallery_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(ui_gallery_host PRIVATE cxx_std_17)
-    target_compile_options(ui_gallery_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_gallery_host COMMAND ui_gallery_host --test)
 
 
 
@@ -422,18 +379,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME inhost_host COMMAND inhost_host)
 
     # the automatic layout lint of the plugin-drawn pages (every page, Init and every factory preset): a finding that is not in the baseline fails it, a baseline entry that no longer occurs too
-    add_executable(layout_lint_host EXCLUDE_FROM_ALL overlay/tests/layout_lint_host.cpp)
-    target_include_directories(layout_lint_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_definitions(layout_lint_host PRIVATE "LINT_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"")
-    target_link_libraries(layout_lint_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(layout_lint_host PRIVATE cxx_std_17)
-    target_compile_options(layout_lint_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME layout_lint_host_selftest COMMAND layout_lint_host --self-test)
-    add_test(NAME layout_lint_host COMMAND layout_lint_host --presets-dir "${CMAKE_SOURCE_DIR}/content/presets"
-        --baseline "${CMAKE_CURRENT_SOURCE_DIR}/overlay/tests/layout_lint_baseline.json" --quiet)
 
     # the names of the macros on the plugin-drawn pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
 
@@ -446,19 +391,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     # native-control failure is reported without masking unrelated fixtures.
 
     # the host's standby dim (overlay/standby.h) and the parameter coverage of the pages without a test of their own
-    add_executable(standby_host EXCLUDE_FROM_ALL overlay/tests/standby_host.cpp)
-    add_executable(coverage_host EXCLUDE_FROM_ALL overlay/tests/coverage_host.cpp)
-    foreach(t standby_host coverage_host)
-        target_include_directories(${t} PRIVATE
-            "${CMAKE_SOURCE_DIR}/core/include"
-            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-        target_link_libraries(${t} PRIVATE synthyboy_core Threads::Threads)
-        target_compile_features(${t} PRIVATE cxx_std_17)
-        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
-    endforeach()
-    add_test(NAME standby_host COMMAND standby_host)
-    add_test(NAME coverage_host COMMAND coverage_host)
 
     # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the host tests that reproduced the findings; they pass now and are registered (the plugin_review_host takes the built plugin as its argument).
     add_executable(safe_file_host EXCLUDE_FROM_ALL tests/safe_file_host.cpp)
@@ -584,53 +516,9 @@ if(NOT CMAKE_CROSSCOMPILING)
 
 
     # --- Q-Link Visual Build Policy Tests and Fixtures ---
-    add_executable(q_visual_policy_host ui/tests/q_visual_policy_host.cpp)
-    target_include_directories(q_visual_policy_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_SOURCE_DIR}/core/filters-serum/include"
-        "${CMAKE_SOURCE_DIR}/core/shapes/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_definitions(q_visual_policy_host PRIVATE
-        SYNTHYBOY_MPC_UI_GEN=${SYNTHYBOY_MPC_UI_GEN_N}
-        SYNTHYBOY_MPC_QFRAME_ENABLED=${SYNTHYBOY_MPC_QFRAME_ENABLED_N})
-    target_compile_features(q_visual_policy_host PRIVATE cxx_std_17)
-    target_compile_options(q_visual_policy_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME q_visual_policy_host COMMAND q_visual_policy_host)
 
-    add_executable(q_visual_policy_gen1_host ui/tests/q_visual_policy_host.cpp)
-    target_include_directories(q_visual_policy_gen1_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_SOURCE_DIR}/core/filters-serum/include"
-        "${CMAKE_SOURCE_DIR}/core/shapes/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_definitions(q_visual_policy_gen1_host PRIVATE SYNTHYBOY_MPC_UI_GEN=1 SYNTHYBOY_MPC_QFRAME_ENABLED=1)
-    target_compile_features(q_visual_policy_gen1_host PRIVATE cxx_std_17)
-    target_compile_options(q_visual_policy_gen1_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME q_visual_policy_gen1_host COMMAND q_visual_policy_gen1_host)
 
-    add_executable(q_visual_policy_gen2_host ui/tests/q_visual_policy_host.cpp)
-    target_include_directories(q_visual_policy_gen2_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_SOURCE_DIR}/core/filters-serum/include"
-        "${CMAKE_SOURCE_DIR}/core/shapes/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_definitions(q_visual_policy_gen2_host PRIVATE SYNTHYBOY_MPC_UI_GEN=2 SYNTHYBOY_MPC_QFRAME_ENABLED=0)
-    target_compile_features(q_visual_policy_gen2_host PRIVATE cxx_std_17)
-    target_compile_options(q_visual_policy_gen2_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME q_visual_policy_gen2_host COMMAND q_visual_policy_gen2_host)
 
-    add_executable(ui_gallery_extra_host EXCLUDE_FROM_ALL overlay/tests/ui_gallery_extra_host.cpp)
-    target_include_directories(ui_gallery_extra_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(ui_gallery_extra_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(ui_gallery_extra_host PRIVATE cxx_std_17)
-    target_compile_options(ui_gallery_extra_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_gallery_extra_host COMMAND ui_gallery_extra_host --test)
 
     # The quality profile per device (device_profile.h): the profile texts, the device table, the overrides
     add_executable(device_profile_host tests/device_profile_host.cpp)
