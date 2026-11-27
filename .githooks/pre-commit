@@ -20,7 +20,7 @@ component_template = 'scripts/templates/native-component-catalog.html'
 component_output = 'docs/ui-components/kepes-katalogus.html'
 screen_generator = 'scripts/update_native_katalogus.py'
 screen_output = 'docs/ui-components/native-katalogus.html'
-if any(p.startswith('components/') or p in (component_generator, component_template, component_output) for p in changed):
+if any(p.startswith('components/') or p in (component_generator, component_template, component_output, 'scripts/old-ui-screens.json') for p in changed):
     jobs.append((component_generator, component_output))
 if any(p.startswith('docs/screens/') or p in ('scripts/screen-catalog.json', screen_generator, screen_output) for p in changed):
     jobs.append((screen_generator, screen_output))
@@ -36,7 +36,7 @@ if not jobs:
 with tempfile.TemporaryDirectory(prefix='native-catalog-') as directory:
     snapshot = Path(directory)
     paths = git('ls-files', '-z', '--', 'components/', 'docs/screens/', component_generator,
-                component_template, screen_generator, 'scripts/screen-catalog.json')
+                component_template, screen_generator, 'scripts/screen-catalog.json', 'scripts/old-ui-screens.json')
     subprocess.run(['git', 'checkout-index', '--prefix=' + directory + '/', '-z', '--stdin'], input=paths, check=True)
     env = os.environ.copy()
     for key in ('PYTHONPATH', 'PYTHONHOME'):
