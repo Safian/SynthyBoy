@@ -95,6 +95,16 @@ def render_dropdown_cards():
     print("Rendered dropdown variants")
 
 
+def render_filter_selector_cards():
+    """The FilterSelector states from the real chain-chip recipe (selector.filter_chain_definition)."""
+    from components.native.filter_selector import filter_selector
+    directory = REPO_ROOT / "components/native/filter_selector/img"
+    directory.mkdir(parents=True, exist_ok=True)
+    for _, f1, f2, file, _ in filter_selector.STATES:
+        filter_selector.render_state(f1, f2).save(directory / file)
+    print("Rendered FilterSelector states")
+
+
 def render_header_cards():
     """Render every example of components/native/header/catalog.json from the header module (existing recipes only)."""
     from components.native.header import header
@@ -234,6 +244,7 @@ def main():
     render_label_cards()
     render_on_off_cards()
     render_dropdown_cards()
+    render_filter_selector_cards()
     render_header_cards()
     render_button_card()
     render_radio_cards()

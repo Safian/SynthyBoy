@@ -5,7 +5,8 @@
     "pan",
     "level",
     "button",
-    "selector"
+    "selector",
+    "filter_selector"
   ],
   "last": [
     "header"

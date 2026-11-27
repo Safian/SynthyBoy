@@ -24,11 +24,11 @@ The full-width top row of a page or of a Play panel. No screen, skin or overlay 
 
 ## Recipes used (no new look)
 
-`button.action_art` (power icon, expand icon, text buttons), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the old Play-panel look; placement none, align center) and `selector.render_selector_face` (stepper), `font.page_title` title text. CLOSE and MORE are text buttons; there is no close or more icon recipe.
+`button.action_art` (power icon, expand icon, text buttons), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the old Play-panel look; placement none, align center) `font.page_title` title text. CLOSE and MORE are text buttons; there is no close or more icon recipe.
 
 ## Add an example
 
-Add an object to `header.examples` in `components/native/header/catalog.json` (`id`, `file`, `alt`, `caption`, `width` = `page` or `panel`, optional `power` = `on` or `off`, `title`, `centre` list of `{kind: dropdown|stepper|button, name?, value?, width: size token, text?}`, `right` list of `expand|close|more`). Then render and generate from the repo root:
+Add an object to `header.examples` in `components/native/header/catalog.json` (`id`, `file`, `alt`, `caption`, `width` = `page` or `panel`, optional `power` = `on` or `off`, `title`, `centre` list of `{kind: dropdown|button, name?, value?, width: size token, text?}`, `right` list of `expand|close|more`). Then render and generate from the repo root:
 
 ```sh
 python3 -c "import sys; sys.path[:0]=['scripts','.']; import render_native_catalog_cards as r; r.render_header_cards()"
