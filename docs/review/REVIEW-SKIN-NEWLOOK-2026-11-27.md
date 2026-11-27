@@ -219,3 +219,44 @@
 - **Standalone `compact_level_definition(None)` / `compact_pan_definition(None)` (`components/native/level/level.py:568-569`, `components/native/pan/pan.py:218-219`):**
   When `template=None` (default), `"value"` is appended after the loop at `font = 16.0`, leaving `Name = 20.0` and `Value = 16.0` outside a full `99_zz_dial_text.py` skin pass.
 - **Focus, Q-Link, and handle names:** `build_choice_definition` (`selector.py:116-121`), `selector_definition`'s `plain` branch (`selector.py:484-502`), `unify_dial_text` (`level.py:1114-1140`), `solo_mute` (`solo_mute.py:288-351`), `54_osc_selector.py`, and `82_play.py` preserve existing `Focus` children, `acceptsHWFocus`, `handleName`, `handle remapping`, and `Q-Links.json` entries (no focus or Q-Link handle regression found beyond `command_stepper_definition` hit-zones and `unify_dial_text` disabled-state clobbering above).
+
+---
+
+## 2. Text Fit — Dial Caption / Value Rects vs `DIAL_TEXT_STYLE` (`font.value = 20.0`)
+
+- `components/native/level/level.py:333`:
+  ```python
+  DIAL_TEXT_STYLE = {"font": "font.value", "colour": "text.value"}
+  ```
+- `components/sizes.json:191`:
+  ```json
+  "font.value": 20,
+  ```
+- `components/sizes.json:906` & `components/style.py:104`:
+  ```python
+  return float(height) / size("font.host.height.per.em")
+  ```
+  (`"font.host.height.per.em": 1.521`, so JUCE TUI font height `20.0` draws at **`em = 13.15 px`** and requires a **`>= 20 px`** vertical line box for ascent + descent in `TitilliumWeb-SemiBold.ttf`).
+
+**Summary:** Across all 134 measured dial/affected label rects, **26 distinct rects have height `< 20 px`** (24 compact dial `Name` rects at `18 px`, `oscDetailStepper` at `19 px`, and `oscNativeSetting_toggle` at `14 px`). Below are the **worst 15** ordered by vertical clipping (`H < 20`) and tightest horizontal margin (`W - rendered_text_width`):
+
+| # | Screen / Widget | Role | Rect (`W×H` px) | Old → New Height | Worst Sample & Width (`px` @ `13.15` em) | W Margin | H Margin (`H-20`) | Evidence (`file:line` & quote) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **OSC Detail** `oscNativeSetting_toggle` | `Name` | `125×14` *(prop `(0,0,1,0.25)` on `125×56`)* | `14 → 20` | `"ON"` (`17.5 px`) | `+107.5 px` | **`-6.0 px`** | `scripts/mpc-skin-extras/57_osc_settings.py:76,149` — `_label("Name", (0,0,1,.25))` calls `apply_dial_text_style(data["textStyle"])` |
+| 2 | **OSC Detail / Blend** `oscNativeSetting_dial_*` (default `125×56`) | `Name` | `77×18` | `14 → 20` | `"RAND PHASE"` (`75.3 px`) | **`+1.7 px`** | **`-2.0 px`** | `scripts/mpc-skin-extras/57_osc_settings.py:120,179` (`size` None → `125×56`), `components/sizes.json:256-261` (`[48, 4, 150, 18]`) |
+| 3 | **OSC Settings** `oscNativeSetting STEREO` (`107×128`) | `Name` | `59×18` | `14 → 20` | `"STEREO"` (`45.4 px`) | `+13.6 px` | **`-2.0 px`** | `scripts/mpc-skin-extras/57_osc_settings.py:93,108` (`w = width - 48`), `components/sizes.json:256-261` (`h = 18`) |
+| 4 | **OSC Settings** `oscNativeSetting FILTER` (`107×128`) | `Name` | `59×18` | `14 → 20` | `"FILTER"` (`39.2 px`) | `+19.8 px` | **`-2.0 px`** | `scripts/mpc-skin-extras/57_osc_settings.py:93,108`, `components/sizes.json:256-261` |
+| 5 | **OSC Settings** `oscNativeSetting START` (`107×128`) | `Name` | `59×18` | `14 → 20` | `"START"` (`37.1 px`) | `+21.9 px` | **`-2.0 px`** | `scripts/mpc-skin-extras/57_osc_settings.py:93,108`, `components/sizes.json:256-261` |
+| 6 | **Mixer** `mixerSliderPAN56 / B1 / B2` | `Name` | `63×18` | `14 → 20` | `"PAN"` (`24.7 px`) | `+38.3 px` | **`-2.0 px`** | `components/sizes.json:1084` (`"mixer_strip.rect.dial_name": [48, 6, 63, 18]`), `components/native/mixer_strip/mixer_strip.py:281` |
+| 7 | **OSC Settings** `PHASE` (`136×48`), `RAND` (`138×48`), `FRAME` (`146×48`) | `Name` | `88×18` / `90×18` / `98×18` | `14 → 20` | `"PHASE"` (`38.9 px`) / `"FRAME"` (`41.4 px`) | `+49.1 px` | **`-2.0 px`** | `scripts/mpc-skin-extras/57_osc_settings.py:93,108`, `components/sizes.json:256-261` |
+| 8 | **Voice** `voiceNativeDial` (`116×146`) & `voiceNativeScaleDial/Env` (`170×132`) | `Name` | `116×18` / `170×18` | `15 → 20` | `"DETUNE"` (`47.5 px`) / `"ENV TIME"` (`55.9 px`) | `+68.5 px` | **`-2.0 px`** | `components/sizes.json:1379` (`"voice.controls.dial_caption_height": 18`), `scripts/native_voice/voice_tab.py:107`, `components/native/level/level.py:1092` |
+| 9 | **Level / Pan** `COMPACT_48_RECTS` (`202×48` OSC compact dials) | `Name` | `150×18` | `14 → 20` | `"UNISON DETUNE"` (`96.4 px`) | `+53.6 px` | **`-2.0 px`** | `components/sizes.json:256-261` (`[48, 4, 150, 18]`), `components/native/level/level.py:552-553`, `components/native/pan/pan.py:202-203` |
+| 10 | **OSC Detail** `oscDetailStepper` (`158×92`) | `Name` & `Value` | `152×19` *(prop `0.96×0.21`)* | `14→20` & `17→20` | `"UNISON MODE"` (`84.4 px`) / `"SuperSaw"` (`56.7 px`) | `+67.6 px` | **`-1.0 px`** *(+2.7 px overlap)* | `scripts/mpc-skin-extras/58_osc_detail.py:52-57` (`y=0..0.21` vs `y=0.18..0.39`: Name `y=0..19.3`, Value `y=16.6..35.9`) |
+| 11 | **LFO** `lfoNativeField4 Smooth` (`124×112`) | `Value` | `48×28` | `20 → 20` | `"250 ms"` (`42.2 px`) / `"1000 ms"` (`49.9 px`) | **`+5.8 px`** / **`-1.9 px`** | `+8.0 px` | `scripts/mpc-skin-extras/53_lfo_smooth.py:85-86` (`width-size-lfo.dial.side_left-lfo.dial.smooth_value_gap-2` = `124-60-6-8-2 = 48`) |
+| 12 | **OSC Settings** `oscNativeSetting FILTER` (`107×128`) | `Value` | `59×22` | `16 → 20` | `"20000 Hz"` (`54.6 px`) | **`+4.4 px`** | `+2.0 px` | `scripts/mpc-skin-extras/57_osc_settings.py:93,108`, `components/sizes.json:262-267` (`[48, 22, 150, 22]`) |
+| 13 | **Smooth (default)** `_SMOOTH_RECTS` (`116×72`) | `Value` | `50×24` | `14 → 20` | `"250 ms"` (`42.2 px`) / `"1000 ms"` (`49.9 px`) | **`+7.8 px`** / **`+0.1 px`** | `+4.0 px` | `components/sizes.json:344-349` (`"level._smooth_rects.value": [64, 42, 50, 24]`), `components/native/level/level.py:911,1131` |
+| 14 | **Mixer** `mixerSliderPAN56 / B1 / B2` | `Value` | `63×22` | `16 → 20` | `"100.0% L"` (`49.2 px`) / `"-12.0 dB"` (`48.8 px`) | **`+13.8 px`** | `+2.0 px` | `components/sizes.json:1085` (`"mixer_strip.rect.dial_value": [48, 26, 63, 22]`), `components/native/mixer_strip/mixer_strip.py:282` |
+| 15 | **Play LFO Smooth** `PLAY_SMOOTH_RECTS` (`196×72`) | `Value` | `62×28` | `14 → 20` | `"250 ms"` (`42.2 px`) / `"1000 ms"` (`49.9 px`) | **`+19.8 px`** / **`+12.1 px`** | `+8.0 px` | `components/sizes.json:376-385` (`[130, 22, 62, 28]`), `components/native/level/level.py:911,1131` |
+
+**Additional tight non-dial fit noted:**
+- Play Env/LFO `HZ`/`BPM`/`KEY` RadioGrid (`scripts/native_play/env_lfo.py:214-216`, `scripts/mpc-skin-extras/play-env-lfo-contract.json:7`: `[1, 9, 1050, 466, 210, 56]`): `210 px` divided into 3 slots (`70 px` each) subtracts `radio_grid.gap = 8 px` (`4 + 4`) on the middle `BPM` cell (`components/native/radio_button/radio_button.py:85-87`), leaving `extent = 62 px` against `action_art`'s `61 px` minimum width at `height=48` (`font.button=18`, `padding=24` at `components/native/button/button.py:106-109`) — **only `1 px` spare**.
