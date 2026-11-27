@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 53,
+  "title": "RotarySelector",
+  "sections": [],
+  "rotary_selector": {
+    "samples": [
+      {
+        "id": "four-2",
+        "file": "rotary-selector-four-2.png",
+        "alt": "RotarySelector négy állás, 2. állás",
+        "caption": "4 állás, 2. állás · 48 px tárcsa",
+        "icons": [
+          "wave",
+          "wave",
+          "wave",
+          "wave"
+        ],
+        "position": 1,
+        "diameter": "height.medium",
+        "title": "WAVE",
+        "state": "enabled"
+      },
+      {
+        "id": "four-3",
+        "file": "rotary-selector-four-3.png",
+        "alt": "RotarySelector négy állás, 3. állás",
+        "caption": "4 állás, 3. állás · 48 px tárcsa",
+        "icons": [
+          "wave",
+          "wave",
+          "wave",
+          "wave"
+        ],
+        "position": 2,
+        "diameter": "height.medium",
+        "title": "WAVE",
+        "state": "enabled"
+      },
+      {
+        "id": "three-2",
+        "file": "rotary-selector-three-2.png",
+        "alt": "RotarySelector három állás, 2. állás",
+        "caption": "3 állás, 2. állás · 48 px tárcsa",
+        "icons": [
+          "wave",
+          "wave",
+          "wave"
+        ],
+        "position": 1,
+        "diameter": "height.medium",
+        "title": "WAVE",
+        "state": "enabled"
+      },
+      {
+        "id": "six-5",
+        "file": "rotary-selector-six-5.png",
+        "alt": "RotarySelector hat állás, 5. állás",
+        "caption": "6 állás, 5. állás · 48 px tárcsa",
+        "icons": [
+          "wave",
+          "wave",
+          "wave",
+          "wave",
+          "wave",
+          "wave"
+        ],
+        "position": 4,
+        "diameter": "height.medium",
+        "title": "WAVE",
+        "state": "enabled"
+      },
+      {
+        "id": "four-56",
+        "file": "rotary-selector-four-56.png",
+        "alt": "RotarySelector négy állás, 56 px tárcsa",
+        "caption": "4 állás, 3. állás · 56 px tárcsa",
+        "icons": [
+          "wave",
+          "wave",
+          "wave",
+          "wave"
+        ],
+        "position": 2,
+        "diameter": "height.high",
+        "title": "WAVE",
+        "state": "enabled"
+      },
+      {
+        "id": "disabled",
+        "file": "rotary-selector-disabled.png",
+        "alt": "RotarySelector letiltva",
+        "caption": "Disabled, 4 állás · 48 px tárcsa",
+        "icons": [
+          "wave",
+          "wave",
+          "wave",
+          "wave"
+        ],
+        "position": 1,
+        "diameter": "height.medium",
+        "title": "WAVE",
+        "state": "disabled"
+      }
+    ]
+  }
+}

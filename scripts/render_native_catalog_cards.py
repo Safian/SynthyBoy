@@ -149,6 +149,10 @@ def render_slide_switch_cards():
     render_sample_cards("slide_switch", "slide_samples")
 
 
+def render_rotary_selector_cards():
+    render_sample_cards("rotary_selector", "rotary_samples")
+
+
 def render_radio_cards():
     """Render the 56 px segmented style used by ENV, Voice and FX."""
     out_dir = REPO_ROOT / "components/native/radio_button/img"
