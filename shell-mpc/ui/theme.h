@@ -22,6 +22,8 @@ struct Look
     uint32_t bg0, bg1;               // the ground of a screen, top and bottom
     uint32_t panel0, panel1;         // a block (panel) fill, top and bottom
     uint32_t keyline, keylineHi;     // the outline of a block / of a control, and of a focused one
+    uint32_t controlTop, controlBottom;          // the face of a control (Pen::control): the skin Button gradient colours (button.gradient.top / .bottom)
+    uint32_t controlBorder, controlBorderBottom; // its keyline, top and bottom (button.gradient.border / .border.bottom)
     uint32_t track;                  // the empty part of an arc, a bar, a slider
     uint32_t grid;                   // the lines of the displays
     // ---- ink
@@ -45,6 +47,7 @@ struct Look
     // ---- shape (pixels)
     float rBlock, rControl, rChip;
     int gap, pad;
+    float controlGradStart, controlGradEnd;   // the control face is flat to this fraction of its height, linear to the end fraction, flat below (control.gradient)
 };
 
 // Exact palette and geometry values are generated from the shared JSON tokens.

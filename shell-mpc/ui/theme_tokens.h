@@ -34,6 +34,10 @@ inline const Look kLook1 = {
     0x0c1026, // panel1
     0x27306a, // keyline
     0x4a5aa8, // keylineHi
+    0x131930, // controlTop
+    0x0d1122, // controlBottom
+    0x151c3a, // controlBorder
+    0x161e42, // controlBorderBottom
     0x1c2350, // track
     0x1a2250, // grid
     0xeef1ff, // text
@@ -69,6 +73,8 @@ inline const Look kLook1 = {
     6.0f, // rChip
     8, // gap
     12, // pad
+    0.3333333333333333f, // controlGradStart
+    0.6666666666666666f, // controlGradEnd
 };
 
 inline const Look kLook2 = {
@@ -79,6 +85,10 @@ inline const Look kLook2 = {
     0x0a1020, // panel1
     0x243058, // keyline
     0x4562a0, // keylineHi
+    0x121a30, // controlTop
+    0x0a1020, // controlBottom
+    0x243058, // controlBorder
+    0x243058, // controlBorderBottom
     0x182044, // track
     0x182046, // grid
     0xe6ecf8, // text
@@ -114,6 +124,8 @@ inline const Look kLook2 = {
     5.0f, // rChip
     8, // gap
     12, // pad
+    0.3333333333333333f, // controlGradStart
+    0.6666666666666666f, // controlGradEnd
 };
 
 inline const Look kLook3 = {
@@ -124,6 +136,10 @@ inline const Look kLook3 = {
     0x10081f, // panel1
     0x3a2764, // keyline
     0x6a4cc0, // keylineHi
+    0x1c1133, // controlTop
+    0x10081f, // controlBottom
+    0x3a2764, // controlBorder
+    0x3a2764, // controlBorderBottom
     0x2a1a50, // track
     0x2a1c52, // grid
     0xffffff, // text
@@ -159,4 +175,6 @@ inline const Look kLook3 = {
     8.0f, // rChip
     8, // gap
     12, // pad
+    0.3333333333333333f, // controlGradStart
+    0.6666666666666666f, // controlGradEnd
 };

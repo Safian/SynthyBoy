@@ -17,6 +17,7 @@ After editing these theme tokens, run `python3 scripts/gen-ui-theme.py`. The MPC
 |---|---|
 | name | `name` (`const char*`: `"neon"`, `"aurora"`, `"plasma"`) |
 | surfaces | `bg0`, `bg1` (ground top, bottom), `panel0`, `panel1` (block fill), `keyline`, `keylineHi`, `track`, `grid` |
+| control face | `controlTop`, `controlBottom` (the face of `Pen::control`), `controlBorder`, `controlBorderBottom` (its keyline), `controlGradStart`, `controlGradEnd` (the flat / linear / flat shape, fractions of the height): generated from the skin Button tokens `button.gradient.top/bottom/border/border.bottom` and `control.gradient` (neon); aurora and plasma take their own `panel0`/`panel1`/`keyline` |
 | ink | `text`, `textDim`, `textFaint`, `onBright`, `q` (the Q-Link group colour, yellow `0xffc23d` in all looks) |
 | gradients and colours | `flow[4]` (the main signal gradient), `inst[5]` (Sub, A, B, C, Noise), `src[kNumSources = 8]` (env, lfo, velocity, key, wheel, pressure, macro, random), `env[2]`, `lfo[2]`, `filter[2]`, `negative` |
 | strokes | `curve`, `curveHi`, `curveBack`, `hair`, `arcTrack`, `arcValue`, `arcMod` (fractions of the dial diameter), `frame` |

@@ -25,6 +25,9 @@ Use them for navigation and for opening pages or popups. They never change a par
 | `DetailButton` with `hasValue` | vertical drag, `turn (delta)` | `Value` (0 to 1, 200 px = full range) or, with `integer`, `Index` (`pxPerStep`) |
 | `RouteButton` | tap | `Request` (drag and turn do nothing) |
 
+## Look
+Every box these buttons (and Stepper, UpDownStepper, ToggleIcon, Carousel, TextEntry, UsedSelector, PictogramSelector) draw goes through `Pen::control`: the legacy gradient face of the skin Button (flat top colour to a third of the height, linear to the bottom colour at two thirds, flat below; the keyline ramps the same way; a focused control takes `keylineHi`). The colours and the shape are the skin tokens (`button.gradient.*`, `control.gradient`) through the generated `theme_tokens.h`, so a Button token change reaches the overlay (test `scripts/tests/test_overlay_control_look.py`).
+
 ## Q-Link
 `DetailButton` with a main value and `MenuButton` can be Q members (a `DetailButton` turn changes its main value; without a value it does nothing). The label takes the Q colour.
 
