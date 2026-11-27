@@ -1,30 +1,198 @@
 {
   "version": 1,
-  "approved": false,
+  "approved": true,
   "order": 85,
   "title": "MixerStrip",
-  "sections": [
-    {
-      "images": [
-        {
-          "presentation": "sample",
-          "caption": "MixerStrip natív csatornasáv",
-          "file": "catalog-mixer-strip.png",
-          "alt": "MixerStrip natív csatornasáv"
+  "wide": true,
+  "sections": [],
+  "mixer_strip": {
+    "examples": [
+      {
+        "id": "noise-knobs",
+        "file": "mixer-strip-noise-knobs.png",
+        "section": "Alsó sor, két változat (választás: owner)",
+        "alt": "A · NOISE sáv, alul a régi forgó potik (PAN, B1, B2); választás: owner",
+        "caption": "A · NOISE sáv, alul a régi forgó potik (PAN, B1, B2); választás: owner",
+        "name": "NOISE",
+        "power": "on",
+        "destination": "Filter 1",
+        "buttons": {
+          "solo": false,
+          "mute": false
         },
-        {
-          "presentation": "sample",
-          "caption": "SOURCE, BUS, MASTER változatok (115 × 606 px)",
-          "file": "variants_comparison.png",
-          "alt": "MixerStrip változatok"
+        "scale": "percent",
+        "level": 0.25,
+        "level_text": "25.0%",
+        "meter": [
+          0.35,
+          0.3
+        ],
+        "bottom": "knobs",
+        "sends": [
+          {
+            "name": "PAN",
+            "norm": 0.5,
+            "text": "C",
+            "bipolar": true
+          },
+          {
+            "name": "B1",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          },
+          {
+            "name": "B2",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          }
+        ]
+      },
+      {
+        "id": "noise-sliders",
+        "file": "mixer-strip-noise-sliders.png",
+        "section": "Alsó sor, két változat (választás: owner)",
+        "alt": "B · NOISE sáv, alul vízszintes csúszkák (HSlider); választás: owner",
+        "caption": "B · NOISE sáv, alul vízszintes csúszkák (HSlider); választás: owner",
+        "name": "NOISE",
+        "power": "on",
+        "destination": "Filter 1",
+        "buttons": {
+          "solo": false,
+          "mute": false
         },
-        {
-          "presentation": "sample",
-          "caption": "Előtte / Utána összehasonlítás",
-          "file": "source_strip_before_after.png",
-          "alt": "MixerStrip előtte és utána"
-        }
-      ]
-    }
-  ]
+        "scale": "percent",
+        "level": 0.25,
+        "level_text": "25.0%",
+        "meter": [
+          0.35,
+          0.3
+        ],
+        "bottom": "sliders",
+        "sends": [
+          {
+            "name": "PAN",
+            "norm": 0.5,
+            "text": "C",
+            "bipolar": true
+          },
+          {
+            "name": "B1",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          },
+          {
+            "name": "B2",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          }
+        ]
+      },
+      {
+        "id": "master",
+        "file": "mixer-strip-master.png",
+        "section": "További példák: MASTER, POWER ki, S/M aktív",
+        "alt": "MASTER sáv",
+        "caption": "MASTER: név és POWER, OUT legördülő, sztereó mérő -12.0 dB-en és dB kijelzés; nincs S/M, PAN, B1, B2 (a fader tölti ki a helyet; alsó sor nincs, így nincs A/B változat sem)",
+        "name": "MASTER",
+        "power": "on",
+        "destination": "OUT",
+        "scale": "skew_db",
+        "level": 0.4511,
+        "level_text": "-12.0 dB",
+        "meter": [
+          0.8,
+          0.8
+        ],
+        "bottom": "none"
+      },
+      {
+        "id": "noise-off",
+        "file": "mixer-strip-noise-off.png",
+        "section": "További példák: MASTER, POWER ki, S/M aktív",
+        "alt": "POWER kikapcsolva: a név és a POWER marad, minden más a közös tiltott kinézetű; S és M is látszik",
+        "caption": "POWER kikapcsolva: a név és a POWER marad, minden más a közös tiltott kinézetű; S és M is látszik",
+        "name": "NOISE",
+        "power": "off",
+        "destination": "Filter 1",
+        "buttons": {
+          "solo": false,
+          "mute": false
+        },
+        "scale": "percent",
+        "level": 0.25,
+        "level_text": "25.0%",
+        "meter": [
+          0.35,
+          0.3
+        ],
+        "bottom": "sliders",
+        "sends": [
+          {
+            "name": "PAN",
+            "norm": 0.5,
+            "text": "C",
+            "bipolar": true
+          },
+          {
+            "name": "B1",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          },
+          {
+            "name": "B2",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          }
+        ]
+      },
+      {
+        "id": "noise-solo-mute",
+        "file": "mixer-strip-noise-solo-mute.png",
+        "section": "További példák: MASTER, POWER ki, S/M aktív",
+        "alt": "S és M aktív (solo ciánnal, mute pirossal; a solo_mute színei)",
+        "caption": "S és M aktív (solo ciánnal, mute pirossal; a solo_mute színei)",
+        "name": "NOISE",
+        "power": "on",
+        "destination": "Filter 1",
+        "buttons": {
+          "solo": true,
+          "mute": true
+        },
+        "scale": "percent",
+        "level": 0.25,
+        "level_text": "25.0%",
+        "meter": [
+          0.35,
+          0.3
+        ],
+        "bottom": "sliders",
+        "sends": [
+          {
+            "name": "PAN",
+            "norm": 0.5,
+            "text": "C",
+            "bipolar": true
+          },
+          {
+            "name": "B1",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          },
+          {
+            "name": "B2",
+            "norm": 0.0,
+            "text": "0%",
+            "bipolar": false
+          }
+        ]
+      }
+    ]
+  }
 }

@@ -7,7 +7,9 @@
     "button",
     "icon_button",
     "selector",
-    "filter_selector"
+    "filter_selector",
+    "mixer_strip",
+    "hslider"
   ],
   "last": [
     "header"
