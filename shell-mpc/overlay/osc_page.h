@@ -137,6 +137,19 @@ public:
             ui::clearNativeCell (sb, expandedCloseRect());
     }
 
+    /** The ground of the page (the gradient of the look) inside `area`, a cached cell. */
+    static void drawGroundCell (gpu::SceneBuilder& sb, ui::Rect tab, ui::Rect area, bool off)
+    {
+        if (area.empty())
+            return;
+        ui::Cell cell (sb, area, 0);
+        ui::Pen pen (sb, true, off);
+        const auto& look = ui::theme::L();
+        pen.paintY2 (static_cast<float> (tab.y), static_cast<float> (tab.bottom()), look.bg0, look.bg1, 255);
+        pen.rect (area, pen.c (look.bg1, 255));
+        pen.paintOff();
+    }
+
     void drawHostCovers (gpu::SceneBuilder& sb) const
     {
         for (const auto& view : layout::kViews)
@@ -153,7 +166,7 @@ public:
         const bool off = osc_.full().inactive();
         const bool root = osc_.topPage() == 0;
         const auto& settings = osc_.nativeSettingsCells();
-        std::array<ui::Rect, ui::OscillatorFullScreen::kNativePanelCells + 6> cells {};
+        std::array<ui::Rect, OscFullView::kNativePanelCells + 6> cells {};
         if (root)
         {
             cells[0] = nativeSelector_ ? selectorArea() : ui::Rect {};
@@ -167,7 +180,7 @@ public:
         if (root && nativeRouting_ && &ui::theme::L() == &ui::theme::kLook1)
             ui::drawNativeCanvas (sb, tab, cells);
         else
-            ui::outsideNativeCells (tab, cells, [&] (ui::Rect area) { ui::drawOscillatorPageGround (sb, tab, area, off); });
+            ui::outsideNativeCells (tab, cells, [&] (ui::Rect area) { drawGroundCell (sb, tab, area, off); });
     }
 
     bool covers (int x, int y) const noexcept
@@ -396,13 +409,13 @@ public:
         osc_.full().setNativePower (true);
     }
     ui::Rect selectorArea() const noexcept { return osc_.selectorArea(); }
-    ui::Rect powerArea() const noexcept { return osc_.full().power.rect(); }
+    ui::Rect powerArea() const noexcept { return osc_.full().powerRect(); }
     ui::Rect routingArea() const noexcept { return osc_.routingArea(); }
     bool isNativeTuneActive() const noexcept
     {
         return nativeSettingsPublished_ && osc_.topPage() == 0 && osc_.full().hasNativeTune();
     }
-    static constexpr ui::Rect tuneArea() noexcept { return ui::OscillatorFullScreen::tuneAreaAt (0, page::kTabY); }
+    static constexpr ui::Rect tuneArea() noexcept { return OscFullView::tuneAreaAt (0, page::kTabY); }
 
 private:
     nativeui::osc::ViewState nativeState (const IInstanceView& inst) const
