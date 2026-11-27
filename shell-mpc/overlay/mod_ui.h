@@ -250,6 +250,8 @@ public:
             ui::outsideNativeCells (tab, detail_.nativeApertures(), ground);
         else
             page::ground (sb);
+        if (targetsShown())
+            targets_.draw (sb);   // the cut-outs of the native cells and the texts of the targets page
         drawNativeMarkerCovers (sb, "mod");
     }
 

@@ -359,6 +359,8 @@ public:
             if (pageTop_ == kPageEnvelope)
                 drawEnvelope (sb);
         }
+        if (pageTop_ == kPageMods)
+            mods_.draw (sb);   // the cut-outs of the native cells and the texts of the modulations page
     }
     /** The envelope of the multisample oscillator as a curve in the display area of its page (the schematic of the six values: delay, attack, hold, decay, sustain level, release). */
     void drawEnvelope (gpu::SceneBuilder& sb) const
