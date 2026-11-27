@@ -4,6 +4,7 @@
 """Generate the approved native component catalogue from each component's metadata."""
 import html
 import hashlib
+import importlib
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -19,6 +20,9 @@ from components.style import color as _style_color, named_sizes, palette, size a
 LIBRARY = ROOT / "components/native"
 OUTPUT = ROOT / "docs/ui-components/kepes-katalogus.html"
 TEMPLATE = ROOT / "scripts/templates/native-component-catalog.html"
+# Catalogue entries a component module renders into sections (module.catalog_sections(entry)).
+EXAMPLE_KEYS = ("label", "on_off", "dropdown", "header")
+ORDER = LIBRARY / "catalog-order.json"
 COMMAND = "python3 scripts/gen-native-component-catalog.py"
 
 
@@ -85,7 +89,8 @@ def image_markup(component, item):
 
 
 def component_markup(component, metadata):
-    fields(metadata, ("version", "approved", "order", "title", "sections"), ("dial",))
+    fields(metadata, ("version", "approved", "order", "title", "sections"), ("dial", "wide") + EXAMPLE_KEYS)
+    require(type(metadata.get("wide", False)) is bool, "wide must be true or false")
     require(type(metadata["order"]) is int, "order must be an integer")
     require(isinstance(metadata["sections"], list), "sections must be a list")
     sections = list(metadata["sections"])
@@ -109,8 +114,14 @@ def component_markup(component, metadata):
                 {"presentation": "sample", "file": v["file"], "alt": v["alt"],
                  "caption": f"{v['label']} · tárcsa {{size:{labelled['token']}}} × {{size:{labelled['token']}}} px"}
                 for v in variants]})
+    for key in EXAMPLE_KEYS:
+        if key in metadata:
+            # The component's own module turns its entry into sections; captions come from the entry, never the image.
+            module = importlib.import_module(f"components.native.{component.name}.{component.name}")
+            sections.extend(module.catalog_sections(metadata[key]))
     require(sections, "sections must be a nonempty list")
-    lines = [f"    <article>\n      <h3>{text(metadata['title'])}</h3>"]
+    css = ' class="wide"' if metadata.get("wide") else ""
+    lines = [f"    <article{css}>\n      <h3>{text(metadata['title'])}</h3>"]
     for section in sections:
         fields(section, ("images",), ("heading",))
         if "heading" in section:
@@ -153,7 +164,19 @@ def generate():
         except (ValueError, OSError) as error:
             raise ValueError(f"{path.relative_to(ROOT)}: {error}") from error
     require(cards, "no approved component metadata found")
-    cards.sort(key=lambda card: (card[0], card[1]))
+    # The order list (catalog-order.json) puts named components first and last; the rest keeps its `order` field.
+    placement = json.loads(ORDER.read_text(encoding="utf-8"))
+    require(set(placement) == {"first", "last"}, "catalog-order.json needs first and last")
+    named = placement["first"] + placement["last"]
+    require(len(set(named)) == len(named) and set(named) <= {card[1] for card in cards},
+            "catalog-order.json lists an unknown or repeated component")
+    def rank(card):
+        if card[1] in placement["first"]:
+            return (0, placement["first"].index(card[1]), card[1])
+        if card[1] in placement["last"]:
+            return (2, placement["last"].index(card[1]), card[1])
+        return (1, card[0], card[1])
+    cards.sort(key=rank)
     body = ('<section id="sajat-nativ-komponensek">\n  <h2>Komponensek</h2>\n'
             '  <div class="grid">\n' + "\n".join(card[2] for card in cards) + '\n  </div>\n</section>')
     template = TEMPLATE.read_text(encoding="utf-8")

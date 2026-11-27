@@ -1,0 +1,13 @@
+{
+  "first": [
+    "label",
+    "on_off_label",
+    "pan",
+    "level",
+    "button",
+    "selector"
+  ],
+  "last": [
+    "header"
+  ]
+}

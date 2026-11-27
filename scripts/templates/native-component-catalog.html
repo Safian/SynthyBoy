@@ -13,6 +13,7 @@ h4{margin:{{SIZE:catalog.variant.margin_top}}em 0 {{SIZE:catalog.title.margin_bo
 p{margin:{{SIZE:catalog.paragraph.margin_top}}em 0 {{SIZE:catalog.paragraph.margin_bottom}}em}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,{{SIZE:catalog.card.min_width}}px),1fr));gap:{{SIZE:catalog.card.gap}}px}
 article{padding:{{SIZE:catalog.card.padding}}px;background:{{COLOR:catalog.card}};border-radius:{{SIZE:catalog.card.radius}}px;display:flex;flex-direction:column}
+article.wide{grid-column:1/-1}
 article img{width:100%;height:{{SIZE:catalog.hero.height}}px;object-fit:contain;background:{{COLOR:catalog.background}};border-radius:{{SIZE:radius.control}}px}
 footer{font-size:{{SIZE:font.section}}px;color:{{COLOR:catalog.footer}};margin-top:auto;padding-top:{{SIZE:catalog.section.padding_top}}em}
 li{break-inside:avoid}

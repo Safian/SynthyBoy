@@ -113,6 +113,11 @@ def _dim_artwork(image):
     return grey
 
 
+def dim_artwork(image):
+    """The disabled look of a rendered control face (public form of the one apply_control_state uses)."""
+    return _dim_artwork(image)
+
+
 def apply_control_state(definition, skins_dir, *, active):
     """Style the original native widgets; never replace controls with Images.
 

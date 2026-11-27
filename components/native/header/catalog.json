@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 15,
+  "title": "Header",
+  "wide": true,
+  "sections": [],
+  "header": {
+    "examples": [
+      {
+        "id": "osc-a",
+        "file": "header-osc-a.png",
+        "width": "page",
+        "power": "on",
+        "title": "OSC A",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Saw",
+            "width": "header.dropdown.width"
+          },
+          {
+            "kind": "stepper",
+            "name": "SOURCE",
+            "value": "Wavetable",
+            "width": "header.stepper.width"
+          },
+          {
+            "kind": "button",
+            "text": "BROWSE"
+          }
+        ],
+        "right": [
+          "more"
+        ],
+        "caption": "1 · Osc A: POWER, cím, TYPE-legördülő (csak érték), SOURCE léptető, BROWSE gomb; jobbra MORE",
+        "alt": "Osc A fejléc: POWER, OSC A, TYPE, SOURCE, BROWSE, MORE"
+      },
+      {
+        "id": "lfo-9",
+        "file": "header-lfo-9.png",
+        "width": "page",
+        "title": "LFO 9",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Sine",
+            "width": "header.dropdown.width"
+          },
+          {
+            "kind": "button",
+            "text": "TARGETS"
+          }
+        ],
+        "right": [
+          "expand"
+        ],
+        "caption": "2 · LFO 9 (modulátor, nincs POWER): cím a bal szélen, WAVEFORM-legördülő (csak érték), TARGETS gomb; jobbra EXPAND",
+        "alt": "LFO 9 fejléc: LFO 9, WAVEFORM, TARGETS, EXPAND"
+      },
+      {
+        "id": "env-1",
+        "file": "header-env-1.png",
+        "width": "page",
+        "title": "ENV 1",
+        "right": [
+          "expand"
+        ],
+        "caption": "3 · Env 1 (modulátor): csak cím; jobbra EXPAND",
+        "alt": "Env 1 fejléc: ENV 1, EXPAND"
+      },
+      {
+        "id": "filter-1",
+        "file": "header-filter-1.png",
+        "width": "page",
+        "power": "on",
+        "title": "FILTER 1",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Analog",
+            "width": "header.dropdown.width"
+          }
+        ],
+        "right": [
+          "more"
+        ],
+        "caption": "4 · Filter 1: POWER, cím, MODEL-legördülő (csak érték); jobbra MORE",
+        "alt": "Filter 1 fejléc: POWER, FILTER 1, MODEL, MORE"
+      },
+      {
+        "id": "master",
+        "file": "header-master.png",
+        "width": "page",
+        "title": "MASTER",
+        "caption": "5 · Master: csak cím",
+        "alt": "Master fejléc: MASTER"
+      },
+      {
+        "id": "play-panel",
+        "file": "header-play-panel.png",
+        "width": "panel",
+        "power": "on",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Env 1",
+            "width": "header.selector.width"
+          }
+        ],
+        "right": [
+          "expand"
+        ],
+        "caption": "6 · Play-panel fejléc a panel szélességén ({size:header.panel.width} px): POWER, választó legördülő, EXPAND",
+        "alt": "Play panel fejléc: POWER, Env 1 választó, EXPAND"
+      },
+      {
+        "id": "osc-a-off",
+        "file": "header-osc-a-off.png",
+        "width": "page",
+        "power": "off",
+        "title": "OSC A",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Saw",
+            "width": "header.dropdown.width"
+          },
+          {
+            "kind": "stepper",
+            "name": "SOURCE",
+            "value": "Wavetable",
+            "width": "header.stepper.width"
+          },
+          {
+            "kind": "button",
+            "text": "BROWSE"
+          }
+        ],
+        "right": [
+          "more"
+        ],
+        "caption": "7 · Osc A kikapcsolt POWER-rel: a középső vezérlők tiltott kinézetűek",
+        "alt": "Osc A fejléc kikapcsolt POWER-rel"
+      },
+      {
+        "id": "lfo-9-full",
+        "file": "header-lfo-9-full.png",
+        "width": "page",
+        "title": "LFO 9",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Sine",
+            "width": "header.dropdown.width"
+          },
+          {
+            "kind": "button",
+            "text": "TARGETS"
+          }
+        ],
+        "right": [
+          "close"
+        ],
+        "caption": "8 · LFO 9 teljes képernyős állapotban: az EXPAND helyén CLOSE",
+        "alt": "LFO 9 fejléc teljes képernyőn, CLOSE gombbal"
+      }
+    ]
+  }
+}

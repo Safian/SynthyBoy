@@ -31,5 +31,41 @@
         }
       ]
     }
-  ]
+  ],
+  "dropdown": {
+    "variants": [
+      {
+        "id": "center-none",
+        "file": "dropdown-center-none.png",
+        "width": "header.dropdown.width",
+        "value": "Env 1",
+        "placement": "none",
+        "align": "center",
+        "caption": "1 · Érték középen, felirat nélkül (a régi Play-panel külső; a Header ezt használja)",
+        "alt": "Legördülő: érték középen, felirat nélkül"
+      },
+      {
+        "id": "above-left",
+        "file": "dropdown-above-left.png",
+        "width": "header.dropdown.width",
+        "value": "Percent",
+        "label": "LFO MODE",
+        "placement": "above",
+        "align": "left",
+        "caption": "2 · Felirat a doboz fölött (Label tárcsa-felirat stílus) + balra igazított érték (a mostani külső, oldalon belüli legördülők)",
+        "alt": "Legördülő: felirat felül, érték balra"
+      },
+      {
+        "id": "inside-left",
+        "file": "dropdown-inside-left.png",
+        "width": "header.dropdown.width",
+        "value": "Analog",
+        "label": "MODEL",
+        "placement": "inside",
+        "align": "left",
+        "caption": "3 · Kis felirat a dobozban + balra igazított érték (jelenlegi katalógus)",
+        "alt": "Legördülő: kis felirat a dobozban"
+      }
+    ]
+  }
 }
