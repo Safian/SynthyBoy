@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 85,
+  "title": "Keyboard",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "keyboard-preview.png",
+          "alt": "Native keyboard overlay, 40 px keys",
+          "caption": "Native on-screen touch keyboard · 40 px keys, 8 px gaps · QWERTY layout"
+        }
+      ]
+    }
+  ]
+}
