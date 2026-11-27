@@ -299,3 +299,48 @@ Update existing `play.*` / `level.play_smooth_rects.*` / `smooth.*` tokens and a
   - `:217-219`: Generate dedicated `play_header_expand.png` (`40 × 40` icon in `56 × 56` slot) — do **NOT** overwrite `lfo_native_expand.png` (`64 × 56`, shared with standalone LFO tabs in `53_lfo_smooth.py:168`)!
 - `scripts/render_play_screen_preview.py:42-55` & `scripts/render_play_native_snapshot.py:13,329-363`:
   - Update `DISPLAY_BOXES` (`y = 74..402`), `NATIVE_BUTTON_APERTURES` (move to header `y = 10..66`), and `render_play_native_snapshot.py` handling of `playOscSelectorRouted`, titled above-left dropdowns, 56 px dials (`play_sub_level_56.png`, `play_sub_pan_56.png`), `on_off_label`, and `radio_grid`.
+
+---
+
+## 3. Risks, Host-Freeze Guardrails, and Verification Split
+
+### 3.1 Host-Freeze & Regression Risks (Lessons Learned)
+
+1. **MPC Host Freeze / Key 61 Reboot Pattern (`TODO.md:383`, commits `ac2f3acb` / `dffa4cdf`):**
+   - *Fact:* Merging `agy/mixer-labels` froze MPC XL project load at `"Loading Track Outputs 31/32"` (18%) and rebooted Key 61 ~1 min after install. The TUI diff showed `99_shared_labels.py:47-52` had rewritten a `Label` inside a component definition to a `sharedNativeLabel*` wrapper and flipped its `showWhenDataModelInvalid` from `"Hide"` to `"Show"`.
+   - *Rule for Play Phase 2:*
+     - **Do NOT alter component definition nesting structure** on existing Play controls (`Knob` + `Label` + `Focus` directly inside dial definitions; `Image` + `Label` inside selector definitions; `Button` directly on tab for POWER/EXPAND/RadioGrid).
+     - **Keep all existing handle names and remapping keys intact:** `Data`, `Caption`, `Active`, `State`, `NativeActiveGate0`, `NativeActiveGate1`, `FromGesture/Parameter N`. Never change `showWhenDataModelInvalid` from `"Hide"` to `"Show"` on gated/remapped wrappers.
+     - **Audit `99_shared_labels.py:31-35` output diff** before any device deploy: `99_shared_labels.py` only matches Labels with `showWhenDataModelInvalid == "Hide"`. New titled-dropdown `name` labels (`selector.py:753`) and dial `name`/`value` labels use `showWhenDataModelInvalid == "Show"`, so `99_shared_labels.py` will skip them — verify in the generated TUI.json diff that zero Play labels were wrapped in `sharedNativeLabel*`.
+2. **Hook Execution Order Clobbering (`82_play.py` vs `88_play_env_lfo.py` vs `99_zz_dial_text.py`):**
+   - *Fact:* `88_play_env_lfo.py` (`env_lfo.py:106-133`) overwrites `compactNativeDial`, `compactNativeRiseDial`, `compactNativeSmoothWithIndicator`, `compactNativeSmoothTime`, and `compactNativeSmoothReadout` in `localComponentDefinitions` AFTER `82_play.py` creates them (root cause of `"the SMOOTH On/Off change has no effect in TUI.json"`, commit `ac2f3acb`). Both scripts MUST build from the same single helper or `82_play.py` must not duplicate the Smooth definition.
+   - *Fact:* `99_zz_dial_text.py` (`level.py:1114-1140`) runs last and forces every dial `Name` and `Value` `Label` to `DIAL_TEXT_STYLE` (`font.value = 20`, `text.value`). Because `level.py:1125` only treats `key.endswith("Off") or key.startswith("NativeInactive")` as inactive, `compactNativeSmoothReadout` currently gets overwritten to bright `text.value` (`REVIEW-SKIN-NEWLOOK:501`). Fix `level.py:1125` to include `key.endswith("Readout")` (and preserve `label.dial.56` caption/value font heights `15 / 22` if owner wants distinct caption/value sizes rather than uniform `20`).
+3. **Standalone Tab Collateral Damage via Shared Assets & `playrows::`:**
+   - *Fact:* `osc_native_power_on/off.png` (`56_osc_power.py:20`) and `lfo_native_expand.png` (`53_lfo_smooth.py:168`) are `64 × 56` and shared by standalone Osc/LFO tabs. Play Phase 2 MUST write new `56 × 56` assets (`play_header_power_on/off.png`, `play_header_expand.png`) instead of overwriting the standalone PNGs.
+   - *Fact:* Standalone `OscillatorFullScreen` (`screen.h:517`, `osc_ui.h:240`), `LfoFullScreen` (`lfo_screen.h:495,514`), and `FilterUi` (`filter_ui.h:264`) call `playrows::powerRect`, `playrows::fullRect`, `playrows::plotRect`. Changing those functions in-place would break standalone pages — add dedicated `header*Rect` and `compactPlotRect` helpers instead.
+4. **Page Detection, Standby/Blur, and Popup Markers:**
+   - *Fact:* Play page markers sit at tab `y = 1..6` (`overlay_layout.json:60-81`) and sentinel at tab `y = 2..6` (`99_backgrounds.py:62`); popup markers sit at screen `y = 120` on full-screen `MenuOverlay` popups (`controller.h:120-137`, `95_popup_markers.py:11`).
+   - *Risk:* Any header widget whose bounds creep above tab `y = 10` (e.g., `y = 0..8`) will overwrite markers/sentinel and break `PageDetector::check` and `HostBackgroundGate` (causing permanent opaque overlay or missing overlay). Keeping header slots strictly at tab `y = 10..66` guarantees `3 px` clearance (`y = 7..9`).
+5. **TUI.json Size & Decoded Filmstrip RAM (`DIAL-MEASUREMENT-2026-11-27.md:94,103,118-121`):**
+   - *Fact:* Adding `play_sub_level_56.png`, `play_sub_level_56_disabled.png`, `play_sub_level_56_inactive.png`, `play_sub_pan_56.png`, `play_sub_pan_56_disabled.png` adds ~356 KB PNG / ~7.97 MB decoded while other screens still hold 60/90 px strips (full 4-size unification later saves 50% PNG / 61% decoded).
+   - *Fact:* Global `TUI_JSON_BYTES_MAX = 750000` (`test_mpc_skin_extras.py:32`) is already exceeded on HEAD (1,859,999 B, `TODO.md:75,290`). Replacing `playOscTableField`'s 3-button arrow stepper with 1 dropdown and deduplicating `playSubPan`/`playOscPan` keeps Play Phase 2 TUI.json delta near zero or negative (`HYPOTHESIS`: `-1..3 KB` net; measure on generated `TUI.json` before deploy).
+6. **`play_env_lfo_host.cpp:545` Pre-existing Failure (`TODO.md:301`):**
+   - *Fact:* Two variants of ENV3/LFO4/RND2 expanded CLOSE checks already fail on baseline `develop`. Do not confuse this pre-existing expanded-view bug with compact Play Phase 2 geometry regressions.
+7. **Osc A/B/C/Noise Option A Dual Selector Gating (`HYPOTHESIS`):**
+   - Splitting `Play Osc Select` into Sub (`w=296`, `IndexedEnabling/0/5/Parameter 2676`) and A/B/C/Noise (`w=224`, `RangedEnabling/1/4/5/Parameter 2676`) introduces an extra `RangedEnabling` gate on the panel selector. On MPC hardware, verify that switching `Sub <-> Osc A` immediately swaps selector width without a blank/unresponsive frame; if the host drops focus on swap, fall back to Option C (`ROUTE` at graph top-right `(350, 82, 64, 56)`).
+8. **Touch Slop on `40 px` Visual Faces Inside `56 px` Slots (`HYPOTHESIS`):**
+   - Every slot is `>= 56 × 56`, satisfying lint rule (b), but the visible face of POWER/EXPAND is `40 × 40` and dropdown boxes are `40 px` high. On Key 61's capacitive screen, verify that rapid thumb taps on the outer `8 px` padding reliably trigger POWER, EXPAND, and RadioGrid cells without accidental neighbor hits.
+
+### 3.2 Offline Verification vs Device Verification
+
+| Check | Offline (Mac) | Device (Key 61 `armv7`) |
+|---|---|---|
+| Exact rect containment, zero overlaps, `>= 56 × 56` touch targets across all 5 Osc × 6 Env × 14 LFO/RND states | Yes (`test_native_play_osc.py`, `test_mpc_skin_play_env_lfo.py`, `test_play_native_smooth_active_text.py`, `layout_lint_host`) | Spot-check visual alignment |
+| C++ <-> JSON contract parity (`play_osc_native_contract.h`, `play-env-lfo-contract.json`) | Yes (`scripts/native_play/osc.py --check`, `lfo_ui_host --play-env-lfo-skin-contract`) | — |
+| `TUI.json` structural diff (no `sharedNativeLabel*` on Play, no flipped `showWhenDataModelInvalid`, `validate_synthyboy_skin.py`, SDK schema) | Yes (`test_mpc_skin_no_fallback.py`, `test_mpc_skin_overlay.py`, `validate_synthyboy_skin.py`, TUI diff script) | — |
+| Overlay graph transparency / zero aperture leaks / `plotRect` parity across all 3 thirds | Yes (`ui_screen_host`, `ui_env_host`, `ui_lfo_host`, `osc_ui_host`, `controller_host`, `page_view_host`, `render_play_screen_preview.py`) | Confirm host + overlay composite via `mpc-screen-photo` |
+| Host boot/project-load stability (no 18% freeze, no reboot) | No (cannot emulate Akai JUCE host) | **Required (Key 61 first, owner approval before XL)** |
+| Physical touchscreen ergonomics (`40 px` visual in `56 px` slot, `64 × 40` RadioGrid, `60 × 56` SMOOTH On/Off label) | No | **Required** |
+| Real JUCE font rendering (`font.host.height.per.em = 1.521`), ellipsis truncation before chevron, no clipping on long wavetable/shape names | Approximate in Pillow (`render_play_native_snapshot.py`) | **Required** |
+| Hardware Q-Link banks 1..4 (4-knob Key 61 bank switching, Gen 1 unnumbered `Q` frame clearance above `controlsLine = 422`) | Partial (`qslots_host`, `controller_host`) | **Required** |
+| Standby dim/blur recovery & page-switch markers (`y = 1..6`) with new header at `y = 10..66` | Partial (`page_detector_host`, `standby_host`) | **Required** |
