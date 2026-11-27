@@ -255,7 +255,10 @@ def render_fader_scale(
         marks = [(1.0, "+12", False), (60.0 / 72.0, "0", True), (48.0 / 72.0, "-12", False), (36.0 / 72.0, "-24", False), (0.0, "-60", False)]
     else:  # SCALE_SKEW_DB
         unity_n = unity_normalized(SCALE_SKEW_DB)
-        marks = [(1.0, "+6", False), (unity_n, "0", True), (unity_n * 0.7, "-12", False), (unity_n * 0.45, "-24", False), (0.0, "-60", False)]
+        marks = [(1.0, "+6", False), (unity_n, "0", True),
+                 (math.pow((-12 + 60.0) / 66.0, 2.5), "-12", False),
+                 (math.pow((-24 + 60.0) / 66.0, 2.5), "-24", False),
+                 (0.0, "-60", False)]
 
     tick_x0 = x + width - 12
     tick_x1 = x + width - 4

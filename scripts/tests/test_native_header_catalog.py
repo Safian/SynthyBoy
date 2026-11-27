@@ -136,9 +136,7 @@ class HeaderCatalogTests(unittest.TestCase):
             centre = [p for p in placed if p.zone == "centre"]
             right = [p for p in placed if p.zone == "right"]
             if fills and right:
-                self.assertEqual(centre[-1].x + centre[-1].face.width + m["gap"] if fills[0] is example["centre"][-1] else
-                                 max(p.x + p.face.width for p in centre) + m["gap"] * 0, right[0].x if fills[0] is example["centre"][-1] else
-                                 max(p.x + p.face.width for p in centre), example["id"])
+                self.assertEqual(centre[-1].x + centre[-1].face.width + m["gap"], right[0].x, example["id"])
             for p in centre:
                 self.assertGreaterEqual(p.face.width, 1)
 
