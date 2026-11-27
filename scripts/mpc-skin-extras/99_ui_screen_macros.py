@@ -38,5 +38,3 @@ def apply(tui, qlinks, ctx):
             target_handle=f"FromGesture/Parameter {first_target + i}", caption=caption, root_gate=root_gate,
         ))
     components[:] = modal + cards + markers
-    __import__("importlib").import_module("mpc-skin-extras.93_text_entry").wire_macros(tui, ctx)
-

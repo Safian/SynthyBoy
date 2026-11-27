@@ -18,7 +18,7 @@ SURFACES = {
     "FX": "fxNativeEditorSurface", "Mix": "mixerStripSourceFrame", "Filter 1": "filterNativeEditorSurface", "Filter 2": "filterNativeEditorSurface", "Note": "filterNativeCurveSurface", "Velo": "filterNativeCurveSurface",
     "Mod": "modNativeRowNormal", "Master": "masterNativeOutputMeters", "Tuning": "masterNativeBlock_scale", "Voice": "voiceNativeStepLevel",
 }
-BUILTINS = {"Button", "Focus", "Image", "Knob", "Label", "MenuOverlay", "Meter", "NumericOverlay", "Slider", "TextEditOverlay"}
+BUILTINS = {"Button", "Focus", "Image", "Knob", "Label", "MenuOverlay", "Meter", "NumericOverlay", "Slider"}
 SDK_TEMPLATES = {"knobUni", "knobBi", "knob overlay", "menu overlay", "toggle", "faderUni", "faderBi",
                  "radio3", "radio4", "sliderWithFocus", "sliderWithFocusMenu"}
 
