@@ -421,3 +421,54 @@ Update existing `play.*` / `level.play_smooth_rects.*` / `smooth.*` tokens and a
      bash /Users/szabi/Documents/Projects/Safian/.hw-local/tools/buildslot.sh \
        "./build/shell-mpc/overlay/osc_ui_host && ./build/shell-mpc/overlay/lfo_ui_host && ./build/shell-mpc/overlay/controller_host && ./build/shell-mpc/overlay/page_view_host && ./build/shell-mpc/overlay/layout_lint_host"
      ```
+
+---
+
+## 5. Key 61 Walk — Acceptance Checklist
+
+> **Pre-deploy gate:** Build `--arch arm32` ONLY (`AGENTS.md` release packaging rule). Save the currently working Key 61 package under `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-builds/` before installing. Capture both host-only and host+overlay composite photos (`mpc-screen-photo` skill) and store raw measurements under `.hw-local/mpc-perf/`.
+
+### 5.1 Boot, Load & Page Detection Stability
+- [ ] **Clean project load:** MPC Key 61 loads `Sbtest` / `Acid Saw Reso` to 100% with zero freeze, zero reboot, and `overlay-status.txt` reporting `play1`, valid slot, and `host_background: on (sentinel read)`.
+- [ ] **Top 10 px marker/sentinel strip:** No header widget clips or covers tab `y = 0..9`; `drawNativeMarkerCovers` hides markers cleanly; leaving Play (`Play -> Osc A -> Env -> LFO -> Play`) shows zero stale overlay frames.
+- [ ] **Overlay off / back on (`AGENTS.md` display-path rule):** With overlay disabled, the host-only Play screen shows all 3 headers, all native dials, dropdowns, RadioGrid, and clean dark graph wells with no stray host artifacts; re-enabling overlay restores all 3 live curves cleanly inside the `y = 74..402` graph frames.
+- [ ] **Standby dim & wake:** 1-minute screen dim keeps overlay aligned; waking returns to the exact Play state and selected instances.
+
+### 5.2 Panel Header Band (`y_tab = 10..66`, `40 px` Content, `8 px` Pad All Round)
+- [ ] **Visual consistency across all 3 panels:** `Play Osc Select` (blue gradient, NOT flat grey), `Play Env Select`, and `Play LFO Select` align on the exact same `y_screen = 128..168` (`40 px`) baseline with centered value text and right chevron; zero `<`/`>` stepper arrows anywhere.
+- [ ] **Osc panel header (`Sub`):** `[POWER 40×40][Sub dropdown 296×40][EXPAND 40×40]` with visible `8 px` margins on all 4 sides and `8 px` gaps.
+- [ ] **Osc panel header (`Osc A/B/C/Noise`):** `[POWER 40×40][dropdown 224×40][ROUTE 64×40][EXPAND 40×40]` (Option A) with zero overlap, readable route label (`F1`, `F1+F2`, `M`), and zero blank frame when switching `Sub <-> Osc A`.
+- [ ] **Env & LFO panel headers:** `[Env 1 dropdown 324×40][EXPAND 40×40]` and `[LFO 1 dropdown 332×40][EXPAND 40×40]` — no POWER button, right edges aligned with graph frames.
+- [ ] **Touch ergonomics:** Tapping the outer `8 px` edge of POWER and EXPAND triggers reliably without opening the adjacent dropdown.
+
+### 5.3 Graphs & Freed Height (`+108 px` Plot Height)
+- [ ] **Three-panel alignment:** Osc, Env, and LFO display frames share the exact same top (`y_screen = 184`) and bottom (`y_screen = 512`), and all 3 live plots span `y_screen = 194..492` (`298 px` tall) with zero button holes inside the graph frames.
+- [ ] **Osc live waveforms:** Sub sine/phase dots, Osc A wavetable cycle + stack, Sample/Granular min-max overview + playhead, Spectral spectrum, and Noise colour fill the full `298 px` plot cleanly; when POWER is OFF, curve dims and live animation stops.
+- [ ] **Env interactive graph:** All DAHDSR handles and curve handles are draggable across the taller `298 px` plot; voice dots track playing notes; no clipping of ruler labels at the bottom edge (`y_tab = 382..402`).
+- [ ] **LFO / RND live display:** Built-in & drawn LFO shapes + voice cursors fill the `298 px` plot without any overlapping top-left text; RND 1..4 traces fill the `230 px` plot cleanly.
+
+### 5.4 Panel 1 (Osc) Body Controls
+- [ ] **Sub:** `WAVE` titled dropdown (title `WAVE` above left, value centered, chevron right, factory `MenuOverlay` list — row tap marks, header tap applies & closes); `OCT` `name_value` box aligned flush with `WAVE` box (`y_tab = 459..499`), opens `-4..+4` keypad; `PAN` & `LEVEL` `56 px` dials with right-side caption/value.
+- [ ] **Osc A / B / C:** `TYPE` titled dropdown (Wavetable..Spectral); `SOURCE` titled dropdown (no `<`/`>` arrows!) opens the wavetable/content browser on tap, long names ellipsize `4 px` before chevron without touching it; `PAN` & `LEVEL` `56 px` dials.
+- [ ] **Noise:** `SOUND` titled dropdown; `FILTER` `56 px` dial aligned beside it; `PAN` & `LEVEL` `56 px` dials.
+- [ ] **POWER OFF write protection (`TODO.md:215`):** Switching POWER OFF dims `WAVE`/`TYPE`/`SOURCE`/`SOUND`/`OCT`/`FILTER`/`PAN`/`LEVEL` (and `ROUTE`) to disabled styling; dragging/tapping/wheel/Q-Link on disabled controls produces zero parameter writes; POWER and `Play Osc Select` remain operable; turning POWER back ON restores stored values.
+
+### 5.5 Panel 2 (Env) Body Controls
+- [ ] **2 × 2 `56 px` ADSR grid:** `ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE` all render `56 px` dials with right-side caption/value, readable on Key 61 without truncation, bottom row aligned flush with Osc `PAN`/`LEVEL`.
+- [ ] **Env switching & EXPAND/CLOSE:** Switching `Env 1 -> Env 3 -> Env 1` via header dropdown updates curve and ADSR dials; tapping header `EXPAND` opens full Env editor, tapping `CLOSE` returns cleanly to compact Play.
+
+### 5.6 Panel 3 (LFO / RND) Body Controls
+- [ ] **`SHAPE` titled dropdown:** Title `SHAPE` above left, centered value, chevron right, no `<`/`>` arrows; opens factory `MenuOverlay` list; selecting `Drawn` shows drawn curve.
+- [ ] **`HZ | BPM | KEY` RadioGrid `1 × 3`:** Three equal `64 × 40` legacy/active gradient buttons with visible `8 px` gaps:
+  - `HZ` active: `RATE` `56 px` dial visible and editable.
+  - `BPM` active: `DIVISION` titled dropdown visible, opens factory division list.
+  - `KEY` active: `RATE`/`DIVISION` slot hidden; Q-Link slot 2 does not write.
+- [ ] **`RISE` & `SMOOTH` (`56 px` dials + `on_off_label`):**
+  - `RISE` `56 px` dial edits `fade_in`.
+  - `SMOOTH` `on_off_label` button (`60 × 56`) toggles ON (cyan `active_text.on`, active `56 px` dial, bright value) <-> OFF (dim `active_text.off`, inactive grey `56 px` dial, dimmed value — confirming `unify_dial_text` fix!); dragging dial while OFF writes zero parameter changes; tapping `SMOOTH` button does not accidentally drag the `56 px` knob or hit the value label.
+- [ ] **`RND 1..4` via header dropdown:** Switching `LFO 1 -> RND 1 -> LFO 1` swaps to `STYLE` / `RATE` (or `DIVISION`) / `SYNC` titled dropdowns + `STEREO` On/Off label, hiding `RISE` and `SMOOTH`; switching back restores `LFO 1` controls cleanly.
+- [ ] **LFO EXPAND/CLOSE:** Tapping header `EXPAND` opens full LFO editor; `CLOSE` returns cleanly to compact Play.
+
+### 5.7 Hardware Q-Link & Screen Capture Sign-off
+- [ ] **4-knob Q-Link banks (Key 61):** Tapping Osc / Env / LFO bodies moves the Gen 1 unnumbered `Q` bank frame to that panel's controls block (`y_tab = 422..618`), with the unnumbered `Q` marker sitting cleanly inside the `20 px` gap (`y_tab = 402..422`) without overlapping the display frame. Turning physical knobs Q1..Q4 writes the active panel's 4 targets (Osc Basic / Env ADSR / LFO Rate).
+- [ ] **Refresh canonical screen image (`AGENTS.md` Screen image library):** Capture updated Key 61 composite photo to `docs/screens/play.jpg` (never touching `docs/screens/play_old.jpg`).
