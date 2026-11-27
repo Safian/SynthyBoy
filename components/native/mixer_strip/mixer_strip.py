@@ -65,7 +65,11 @@ from components.style import (
     size as _style_size,
 )
 from components.native.pan.pan import compact_pan_definition, synthyboy_dial_data as pan_dial_data
-from components.native.level.level import compact_level_definition, synthyboy_dial_data as level_dial_data
+from components.native.level.level import (
+    DIAL_TEXT_STYLE,
+    compact_level_definition,
+    synthyboy_dial_data as level_dial_data,
+)
 from components.native.solo_mute.solo_mute import (
     build_solo_mute_definitions,
     create_solo_mute_instance,
@@ -209,15 +213,37 @@ def _label(
     rect: Tuple[int, int, int, int],
     parameter: Optional[str] = None,
     gates: Sequence[str] = (),
-    font_size: Optional[int] = None,
+    font_size: Optional[Union[int, float, str]] = None,
     colour: Optional[str] = None,
     justification: str = "horizontallyCentred verticallyCentred",
     label_type: Optional[str] = None,
+    active: bool = True,
 ) -> Dict[str, Any]:
-    """Builds an SDK Label component (Text, Value, or Name)."""
-    colour_hex = colour or _style_argb("text.icon")
-    size_val = font_size if font_size is not None else _style_size("mixer_strip.font.caption")
+    """Builds an SDK Label component (Text, Value, or Name) styled from shared Label tokens."""
     resolved_type = label_type if label_type is not None else ("Text" if text is not None else "Value")
+    is_name = (resolved_type == "Name" or name == "name")
+
+    # Font size: strip name uses 'value large'/title style ("font.value.large"),
+    # readout uses DIAL_TEXT_STYLE value style (DIAL_TEXT_STYLE["font"] == "font.value").
+    if font_size is not None:
+        size_val = _style_size(font_size) if isinstance(font_size, str) else font_size
+    else:
+        font_token = "font.value.large" if is_name else DIAL_TEXT_STYLE["font"]
+        size_val = _style_size(font_token)
+
+    # Colour: active uses "text.value" (strip name & readout), dim/inactive uses "text.status.off"
+    if colour is not None:
+        if len(colour) == 8 and all(c in "0123456789abcdefABCDEF" for c in colour):
+            colour_hex = colour
+        else:
+            colour_hex = _style_argb(colour)
+    else:
+        if not active:
+            colour_hex = _style_argb("text.status.off")
+        else:
+            colour_token = "text.value" if is_name else DIAL_TEXT_STYLE["colour"]
+            colour_hex = _style_argb(colour_token)
+
     data = {
         "version": 1,
         "textStyle": {
@@ -275,7 +301,6 @@ def build_mixer_strip_header_definition(variant: str) -> Dict[str, Any]:
         None,
         rect_hdr,
         parameter="Name",
-        font_size=_style_size("mixer_strip.font.header"),
         label_type="Name",
     )
 
@@ -328,8 +353,6 @@ def build_destination_definition() -> Dict[str, Any]:
                 "value",
                 None,
                 tuple(_style_size("mixer_strip.rect.destination_label")),
-                font_size=_style_size("mixer_strip.font.destination"),
-                colour=_style_argb("text.icon"),
             )
         ],
     }
