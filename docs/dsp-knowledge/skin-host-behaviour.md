@@ -18,7 +18,9 @@ Facts about how the MPC host treats our skin, each with its evidence. Raw files:
 
 ## Tab background
 - SDK `ui-reference.md` 4.3 `backgroundData`: the `colour` is filled first, the `image` (if any) is drawn over it; `colour: "0", image: ""` is transparent; a tab root normally sets an explicit colour. A plain colour needs no bitmap.
-- FACT: our skin used one shared bitmap `overlay_canvas.png` (3 292 B on disk, 1280x628 decoded = 3.2 MB RGBA in the host) as the root background of all tabs, with the fallback colour `ff1e1d1e`, while the visible ground is `#090d19`. A Key 61 experiment sets `colour ff090d19` and an empty image on the tabs Env 1 and Mix (result in this page below when it exists).
+- FACT: our skin used one shared bitmap `overlay_canvas.png` (3 292 B on disk, 1280x628 decoded = 3.2 MB RGBA in the host) as the root background of all tabs, with the fallback colour `ff1e1d1e`, while the visible ground is `#090d19`. FACT (Key 61, 2026-11-27, adcfaa5b-based skin): `colour ff090d19` with an empty image on the tabs Env 1 and Mix gives exactly the same ground (9,13,25) as the bitmap tabs (Osc A, Play); the project loads normally, the overlay page detection still reads the markers (`view: env1`, `host_background: on (sentinel read)`), no black areas. A plain colour replaces the bitmap (saves the 3.2 MB decoded background). Evidence: `exp-bg-k61/` photos (copied to the raw folder).
 
 ## Capture facts used by the tools
 - Key 61: the host picture is the primary plane of `/dev/dri/card1`, our overlay is plane 38 (AR24, 800x1280, rotated); `mpc-tools/k61-photo.sh` composites both. XL: card0, overlay plane 46 (`pgrab`).
+
+- FACT: after a Key 61 reboot the DRM card number can change (the host picture was on card1 before, card0 after); the capture tools must try the cards in turn.

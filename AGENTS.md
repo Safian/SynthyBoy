@@ -73,3 +73,7 @@ A screen never draws a control face with its own code: buttons, dropdowns, selec
 
 Text input (Macro rename, LFO shape name) must be a NATIVE keyboard: no C++ overlay control. The host TextEditOverlay does not deliver typed text to a third-party plugin on the XL (our disassembly of /usr/bin/MPC 3.10.1.12: the string setter is never called for plugin parameters; unverified on the Key 61). The solution is a keyboard built from native Button components, each key writing a code into a plugin parameter (`TextEdit Context`, `TextEdit Key`, `TextEdit Text`), the text shown by a Label from the display string of the text parameter; the plan, risks and the Key 61 probe are in /private/tmp/claude-501/textentry-research/REPORT.md (copied to docs/review/TEXT-ENTRY-NATIVE-KEYBOARD-2026-11-27.md). Until the probe proves it, the C++ popup keyboard (`shell-mpc/ui/text_entry.h`) stays in the code and is removed with the native keyboard.
 
+## MPC questions: ask the expert, record every device result (owner, 2026-11-27)
+
+Ask the `mpc-expert` first for anything about the host, the SDK or the skin; do not experiment on a device for what the SDK and the expert answer. Device tests only for the rare question they cannot answer, and EVERY device result goes into `docs/dsp-knowledge/skin-host-behaviour.md` (with the raw evidence under `.hw-local/mpc-perf/`) and the expert index is refreshed (`mpc-expert index`), so the expert knows it next time.
+
