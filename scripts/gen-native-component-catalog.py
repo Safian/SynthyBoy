@@ -23,6 +23,11 @@ TEMPLATE = ROOT / "scripts/templates/native-component-catalog.html"
 # Catalogue entries a component module renders into sections (module.catalog_sections(entry)).
 EXAMPLE_KEYS = ("label", "on_off", "dropdown", "header")
 ORDER = LIBRARY / "catalog-order.json"
+OLD_SCREENS = ROOT / "scripts/old-ui-screens.json"
+SCREEN_CATALOG = ROOT / "scripts/screen-catalog.json"
+OLD_DIRECTORY = ROOT / "docs/screens/old"
+DEVICE_LABELS = {"key61": "Key 61", "xl": "XL"}
+SAFETY_GROUP = "Biztonsági másolatok (a korábbi aktuális képek)"
 COMMAND = "python3 scripts/gen-native-component-catalog.py"
 
 
@@ -151,6 +156,52 @@ def component_markup(component, metadata):
     return "\n".join(lines)
 
 
+def old_screen_groups():
+    """Ordered (group title, [(file, name, device, shows, path)]) from old-ui-screens.json and screen-catalog.json."""
+    data = json.loads(OLD_SCREENS.read_text(encoding="utf-8"))
+    groups = {}
+    for item in data["images"]:
+        require((OLD_DIRECTORY / item["file"]).is_file(),
+                f"{OLD_SCREENS.relative_to(ROOT)}: listed image is missing: docs/screens/old/{item['file']}")
+        require(item["device"] in DEVICE_LABELS, f"unknown device for {item['file']}: {item['device']!r}")
+        # The INDEX headers repeat the 'round 2' pass as a suffix; merge it into the base section.
+        title = re.sub(r"\s*\(round 2\)$", "", item["section"]) or "Alap képernyők"
+        groups.setdefault(title, []).append(
+            (item["file"], item["source_name"], item["device"], item["shows"], item["path"]))
+    safety = []
+    for screen in json.loads(SCREEN_CATALOG.read_text(encoding="utf-8"))["screens"]:
+        name = f"{screen['name']}_old.jpg"
+        require((OLD_DIRECTORY / name).is_file(), f"safety copy is missing: docs/screens/old/{name}")
+        safety.append((name, screen["title"], None, screen["status"], ""))
+    groups[SAFETY_GROUP] = safety
+    return sorted(groups.items(), key=lambda g: (g[0] == SAFETY_GROUP, g[0] == "Alap képernyők", g[0]))
+
+
+def old_screens_markup():
+    esc = lambda value: html.escape(value, quote=True)
+    lines = ['<section id="regi-ui-kepernyok">', "  <h2>Régi UI képernyők (összehasonlításhoz)</h2>",
+             "  <p>A régi UI (develop 3bb27424) hardveres felvételei, Key 61 és XL, Sbtest / Acid Saw Reso; "
+             "összehasonlításhoz a komponensekkel. Egyes host-menük ebben a buildben csak pipát mutatnak, "
+             "sorszövegek nélkül.</p>",
+             '  <p><input type="search" id="regi-szuro" placeholder="Szűrés névre, eszközre, leírásra" '
+             'aria-label="Szűrés" size="40"></p>']
+    total = 0
+    for title, items in old_screen_groups():
+        total += len(items)
+        lines.append(f'  <details class="old-group"><summary>{esc(title)} ({len(items)})</summary>')
+        lines.append('    <div class="old-grid">')
+        for file, name, device, shows, path in items:
+            url = esc(quote("../screens/old/" + file, safe="/"))
+            where = f" · {DEVICE_LABELS[device]}" if device else ""
+            tip = f' title="{esc(path)}"' if path else ""
+            lines.append(f'      <figure class="old-shot"{tip}><a href="{url}"><img src="{url}" width="320" '
+                         f'loading="lazy" decoding="async" alt="{esc(name)}"></a><figcaption><b>{esc(name)}</b>'
+                         f'{where}<br>{esc(shows)}</figcaption></figure>')
+        lines.append("    </div>\n  </details>")
+    lines.append("</section>")
+    return "\n".join(lines), total
+
+
 def generate():
     cards = []
     for component in sorted(LIBRARY.iterdir()):
@@ -189,7 +240,8 @@ def generate():
     body = ('<section id="sajat-nativ-komponensek">\n  <h2>Komponensek</h2>\n'
             '  <div class="grid">\n' + "\n".join(card[2] for card in cards) + '\n  </div>\n</section>')
     template = TEMPLATE.read_text(encoding="utf-8")
-    require(template.count("{{COMPONENTS}}") == 1, "template must contain exactly one {{COMPONENTS}} placeholder")
+    require(template.count("{{COMPONENTS}}") == 1 and template.count("{{OLD_SCREENS}}") == 1,
+            "template must contain exactly one {{COMPONENTS}} and one {{OLD_SCREENS}} placeholder")
     swatches = []
     for item in palette():
         colour = _style_color(item["token"])
@@ -197,7 +249,7 @@ def generate():
                         f'{text(item["label"])} – <code>{colour.upper()}</code></span>')
     size_list = "<p>" + "<br>".join(text(item["label"]) + " = " +
                                     str(_style_size(item["token"])) + " px" for item in named_sizes()) + "</p>"
-    generated = template.replace("{{COMPONENTS}}", body).replace("{{PALETTE}}", '<div class="swatches">\n' +
+    generated = template.replace("{{COMPONENTS}}", body).replace("{{OLD_SCREENS}}", old_screens_markup()[0]).replace("{{PALETTE}}", '<div class="swatches">\n' +
                          "\n".join(swatches) + '\n</div>').replace("{{NAMED_SIZES}}", size_list)
     generated = re.sub(r"\{\{COLOR:([^{}]+)\}\}", lambda match: _style_color(match[1]), generated)
     generated = re.sub(r"\{\{SIZE:([^{}]+)\}\}", lambda match: str(_style_size(match[1])), generated)
