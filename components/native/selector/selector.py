@@ -236,12 +236,48 @@ def render_pipa_icon(size=_style_size('selector.pipa_icon.geometry'), color=_sty
     return im.resize((size, size), Image.Resampling.LANCZOS)
 
 
-def render_wave_icon(width=_style_size('selector.wave.width'), height=_style_size('selector.wave_icon.geometry'), color=_style_color("selector.wave")):
-    """Renders a sine waveform icon for wave selectors."""
+WAVE_SHAPES = ("sine", "saw", "square", "pulse", "triangle", "sh", "noise")
+
+
+def _wave_shape_points(shape):
+    """One icon's polyline as (t, y) with t in 0..1 along the icon and y in -1..1 (up positive)."""
+    if shape == "saw":
+        return [(0, -1), (0.5, 1), (0.5, -1), (1, 1)]
+    if shape == "square":
+        return [(0, 0), (0, 1), (0.5, 1), (0.5, -1), (1, -1), (1, 0)]
+    if shape == "pulse":
+        return [(0, -1), (0.4, -1), (0.4, 1), (0.6, 1), (0.6, -1), (1, -1)]
+    if shape == "triangle":
+        return [(0, 0), (0.25, 1), (0.75, -1), (1, 0)]
+    if shape == "sh":
+        levels = _style_size("wave_icons")["sh_levels"]
+        points = []
+        for i, level in enumerate(levels):
+            points += [(i / len(levels), level), ((i + 1) / len(levels), level)]
+        return points
+    if shape == "noise":
+        levels = _style_size("wave_icons")["noise_levels"]
+        return [(i / (len(levels) - 1), level) for i, level in enumerate(levels)]
+    raise ValueError(f"wave shape must be one of {WAVE_SHAPES}: {shape!r}")
+
+
+def render_wave_icon(width=_style_size('selector.wave.width'), height=_style_size('selector.wave_icon.geometry'), color=_style_color("selector.wave"), shape="sine"):
+    """Renders a waveform icon (default the sine) for wave selectors.
+
+    The other shapes (saw, square, pulse, triangle, sh = stepped random, noise = jagged random) use the sine's box, margins
+    (selector.wave_icon.points), amplitude (38% of the height), stroke (stroke.icon) and colour; corners are round (curve joints, round end caps).
+    """
     scale = _style_size('selector.wave_icon.scale')
     w, h = width * scale, height * scale
     im = Image.new("RGBA", (w, h), _style_rgba("ink.black", _style_opacity("transparent")))
     draw = ImageDraw.Draw(im)
+    if shape != "sine":
+        margin, stroke = _style_size('selector.wave_icon.points') * scale, _style_size('stroke.icon') * scale
+        points = [(margin + t * (w - 2 * margin), h // 2 - y * h * 0.38) for t, y in _wave_shape_points(shape)]
+        draw.line(points, fill=color, width=stroke, joint="curve")
+        for x, y in (points[0], points[-1]):
+            draw.ellipse((x - stroke / 2, y - stroke / 2, x + stroke / 2, y + stroke / 2), fill=color)
+        return im.resize((width, height), Image.Resampling.LANCZOS)
     points = [
         (x, h // 2 - int((h * 0.38) * math.sin((x - _style_size('selector.wave_icon.points') * scale) * math.tau / (w - _style_size('selector.wave_icon.points.offset1') * scale))))
         for x in range(_style_size('selector.wave_icon.points') * scale, w - _style_size('selector.wave_icon.points') * scale)

@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 49,
+  "title": "SteppedDial",
+  "sections": [],
+  "stepped_dial": {
+    "samples": [
+      {
+        "id": "four-2-48",
+        "file": "stepped-dial-four-2-48.png",
+        "alt": "SteppedDial négy állás, 2. állás",
+        "caption": "4 állás, 2. állás · 48 px",
+        "stops": 4,
+        "position": 1,
+        "diameter": 48,
+        "state": "enabled"
+      },
+      {
+        "id": "three-2-48",
+        "file": "stepped-dial-three-2-48.png",
+        "alt": "SteppedDial három állás",
+        "caption": "3 állás, 2. állás · 48 px",
+        "stops": 3,
+        "position": 1,
+        "diameter": 48,
+        "state": "enabled"
+      },
+      {
+        "id": "six-4-48",
+        "file": "stepped-dial-six-4-48.png",
+        "alt": "SteppedDial hat állás",
+        "caption": "6 állás, 4. állás · 48 px",
+        "stops": 6,
+        "position": 3,
+        "diameter": 48,
+        "state": "enabled"
+      },
+      {
+        "id": "eight-5-48",
+        "file": "stepped-dial-eight-5-48.png",
+        "alt": "SteppedDial nyolc állás",
+        "caption": "8 állás, 5. állás · 48 px",
+        "stops": 8,
+        "position": 4,
+        "diameter": 48,
+        "state": "enabled"
+      },
+      {
+        "id": "four-2-36",
+        "file": "stepped-dial-four-2-36.png",
+        "alt": "SteppedDial 36 px",
+        "caption": "4 állás · 36 px",
+        "stops": 4,
+        "position": 1,
+        "diameter": 36,
+        "state": "enabled"
+      },
+      {
+        "id": "four-2-40",
+        "file": "stepped-dial-four-2-40.png",
+        "alt": "SteppedDial 40 px",
+        "caption": "4 állás · 40 px",
+        "stops": 4,
+        "position": 1,
+        "diameter": 40,
+        "state": "enabled"
+      },
+      {
+        "id": "four-2-56",
+        "file": "stepped-dial-four-2-56.png",
+        "alt": "SteppedDial 56 px",
+        "caption": "4 állás · 56 px",
+        "stops": 4,
+        "position": 1,
+        "diameter": 56,
+        "state": "enabled"
+      },
+      {
+        "id": "disabled-48",
+        "file": "stepped-dial-disabled-48.png",
+        "alt": "SteppedDial letiltva",
+        "caption": "Disabled, 4 állás · 48 px",
+        "stops": 4,
+        "position": 1,
+        "diameter": 48,
+        "state": "disabled"
+      }
+    ]
+  }
+}

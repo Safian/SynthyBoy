@@ -103,7 +103,7 @@ class RadioListTests(unittest.TestCase):
         html = HTML.read_text(encoding="utf-8")
         titles = re.findall(r"<h3>([^<]*)</h3>", html)
         first = titles.index("RadioList")
-        self.assertEqual(titles[first:first + 5], ["RadioList", "RadioGrid", "SlideSwitch", "RotarySelector", "RadioButton (KIVEZETÉSRE)"])
+        self.assertEqual(titles[first:first + 6], ["RadioList", "RadioGrid", "SlideSwitch", "SteppedDial", "RotarySelector", "RadioButton (KIVEZETÉSRE)"])
         self.assertLess(titles.index("FilterSelector") if "FilterSelector" in titles else first - 1, first)
         self.assertIn("components/native/radio_list/img/", html)
 

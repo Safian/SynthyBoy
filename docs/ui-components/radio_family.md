@@ -7,6 +7,7 @@ The current [RadioButton](radio-kizaro-valaszto-preview.md) entry (segmented 88 
 | RadioList | many options (2 to 8 and more) one under the other, each with a LED | [radio_list.md](radio_list.md) |
 | RadioGrid | 2 to 8 options in a grid (1 x N, 2 x 3, N x 1) of equal text buttons, with a group title | [radio_grid.md](radio_grid.md) |
 | SlideSwitch | 2 to 4 ordered positions (L M H, Mono / Poly, LFO MAN ENV), horizontal or vertical | [slide_switch.md](slide_switch.md) |
+| SteppedDial | the dial alone with 2 to 8 stops, no pictograms and no value arc | [stepped_dial.md](stepped_dial.md) |
 | RotarySelector | few positions (3 to 6) that have a pictogram (waveform), on a dial | [rotary_selector.md](rotary_selector.md) |
 
 ## Footprint (px, width x height), the same task: 4 choices (HZ BPM KEY FREE)

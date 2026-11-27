@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 42,
+  "title": "Hullámforma ikonok",
+  "sections": [],
+  "wave_icons": {
+    "samples": [
+      {
+        "id": "1x",
+        "file": "wave-icons-1x.png",
+        "alt": "Hullámforma ikonok 1:1",
+        "caption": "Összes ikon 1:1, a fűrész kiválasztva",
+        "zoom": 1,
+        "selected": 1
+      },
+      {
+        "id": "4x",
+        "file": "wave-icons-4x.png",
+        "alt": "Hullámforma ikonok négyszeres nagyításban",
+        "caption": "Összes ikon 4× nagyítva (képpontok)",
+        "zoom": 4,
+        "selected": 1
+      }
+    ]
+  }
+}

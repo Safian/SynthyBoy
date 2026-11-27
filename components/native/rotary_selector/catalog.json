@@ -1,7 +1,7 @@
 {
   "version": 1,
   "approved": true,
-  "order": 49,
+  "order": 50,
   "title": "RotarySelector",
   "sections": [],
   "rotary_selector": {
@@ -12,10 +12,10 @@
         "alt": "RotarySelector négy állás, 2. állás",
         "caption": "4 állás, 2. állás · 48 px tárcsa",
         "icons": [
-          "wave",
-          "wave",
-          "wave",
-          "wave"
+          "saw",
+          "square",
+          "pulse",
+          "noise"
         ],
         "position": 1,
         "diameter": "height.medium",
@@ -28,10 +28,10 @@
         "alt": "RotarySelector négy állás, 3. állás",
         "caption": "4 állás, 3. állás · 48 px tárcsa",
         "icons": [
-          "wave",
-          "wave",
-          "wave",
-          "wave"
+          "saw",
+          "square",
+          "pulse",
+          "noise"
         ],
         "position": 2,
         "diameter": "height.medium",
@@ -44,9 +44,9 @@
         "alt": "RotarySelector három állás, 2. állás",
         "caption": "3 állás, 2. állás · 48 px tárcsa",
         "icons": [
-          "wave",
-          "wave",
-          "wave"
+          "sine",
+          "square",
+          "saw"
         ],
         "position": 1,
         "diameter": "height.medium",
@@ -59,12 +59,12 @@
         "alt": "RotarySelector hat állás, 5. állás",
         "caption": "6 állás, 5. állás · 48 px tárcsa",
         "icons": [
-          "wave",
-          "wave",
-          "wave",
-          "wave",
-          "wave",
-          "wave"
+          "sine",
+          "saw",
+          "square",
+          "pulse",
+          "triangle",
+          "noise"
         ],
         "position": 4,
         "diameter": "height.medium",
@@ -77,10 +77,10 @@
         "alt": "RotarySelector négy állás, 56 px tárcsa",
         "caption": "4 állás, 3. állás · 56 px tárcsa",
         "icons": [
-          "wave",
-          "wave",
-          "wave",
-          "wave"
+          "saw",
+          "square",
+          "pulse",
+          "noise"
         ],
         "position": 2,
         "diameter": "height.high",
@@ -93,10 +93,10 @@
         "alt": "RotarySelector letiltva",
         "caption": "Disabled, 4 állás · 48 px tárcsa",
         "icons": [
-          "wave",
-          "wave",
-          "wave",
-          "wave"
+          "saw",
+          "square",
+          "pulse",
+          "noise"
         ],
         "position": 1,
         "diameter": "height.medium",

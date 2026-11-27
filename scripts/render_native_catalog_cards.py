@@ -149,6 +149,14 @@ def render_slide_switch_cards():
     render_sample_cards("slide_switch", "slide_samples")
 
 
+def render_wave_icons_cards():
+    render_sample_cards("wave_icons", "sheet_samples")
+
+
+def render_stepped_dial_cards():
+    render_sample_cards("stepped_dial", "stepped_samples")
+
+
 def render_rotary_selector_cards():
     render_sample_cards("rotary_selector", "rotary_samples")
 
