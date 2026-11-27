@@ -240,3 +240,31 @@ All **11** colour tokens added to `components/colors.json` on 2026-11-27, their 
   - `scripts/tests/test_native_rotary_selector_catalog.py`: never verifies that the active pictogram is `accent.cyan` and inactive pictograms are `selector.wave` (unlike `test_native_wave_icons_catalog.py:66-74`), nor that disabled has no cyan.
   - `scripts/tests/test_native_slide_switch_catalog.py`: never tests `length <= thickness` rejection (`slide_switch.py:133`), nor that disabled has no cyan.
   - `scripts/tests/test_native_katalogus.py`: broken against current `docs/ui-components/native-katalogus.html` (`len <= 50000` fails line `40`) and checks an obsolete worktree path (`line 12`).
+
+---
+
+## 5. Catalogue Order & `KIVEZETÉSRE` Markings
+
+### 5.1 Actual Rendered Order in `docs/ui-components/kepes-katalogus.html`
+
+From `components/native/catalog-order.json` and each `catalog.json`'s `order` field (23 approved components):
+
+1–10 (`first` in `catalog-order.json:2-13`): `Label` → `On/Off label` → `Pan` → `Level` → `Button` → `IconButton` → `Selector` → `FilterSelector` → `MixerStrip` → `HSlider`
+11–22 (sorted by `order`): `Hullámforma ikonok` (`42`) → `RadioList` (`46`) → `RadioGrid` (`47`) → `SlideSwitch` (`48`) → `SteppedDial` (`49`) → `RotarySelector` (`50`) → `RadioButton (KIVEZETÉSRE)` (`51`) → `Natív név–érték mező` (`60`) → `MacroCard` (`70`) → `Állapotszöveg` (`90`) → `Tune` (`90`) → `Meter` (`100`)
+23 (`last` in `catalog-order.json:14-16`): `Header`
+
+### 5.2 Ordering Issues
+
+- **Selector/Radio group split by `MixerStrip` and `HSlider`**: Placing `mixer_strip` (`wide: true`) and `hslider` at the end of `catalog-order.json:11-12` (`first`) splits `Selector` / `FilterSelector` (#7–8) from `Hullámforma ikonok` and the Radio family (#11–17) across a full-width strip preview.
+- **Duplicate `order: 90`**: Both `components/native/active_text/catalog.json:4` and `components/native/tune/catalog.json:4` use `"order": 90`, breaking ties only alphabetically by folder name.
+- **`RadioButton (KIVEZETÉSRE)` placement contradiction**: It sits at #17 (middle of the catalogue), contradicting `docs/ui-components/radio_family.md:3` ("at the end of the list").
+- **Duplicate `On/Off label` (#2) vs `Állapotszöveg` (`active_text`, #20)**: Both show `SMOOTH` ON/OFF rendered from `components/native/active_text/active_text.py`, with no cross-reference or `KIVEZETÉSRE` note explaining why both appear.
+
+### 5.3 Completeness of `KIVEZETÉSRE` Markings
+
+- **Old `RadioButton`**: **MARKED** in `components/native/radio_button/catalog.json:5,38` (`"RadioButton (KIVEZETÉSRE)"` and section heading), `docs/ui-components/radio-kizaro-valaszto-preview.md:3`, `docs/ui-components/radio_family.md:3`, `docs/ui-components/radio_grid.md:3`, and `docs/ui-components/README.md:27`. (Only gap: `docs/ui-components/radio_list.md:3` still says the `RadioButton` entry is unchanged, and the 3 `catalog-radio-*.png` images are stale from 2026-11-24.)
+- **Variant 3 dropdown (`inside-left`)**: **MARKED** in `components/native/selector/catalog.json:85` (`"KIVEZETÉSRE · 3 · Kis felirat a dobozban..."`) and asserted in `scripts/tests/test_native_label_catalog.py:116`. **Complete**.
+- **Flat button images**: Removed from `components/native/button/catalog.json` and `kepes-katalogus.html` (`scripts/tests/test_native_button_catalog.py:153-154`), and `docs/ui-components/button.md:9` marks `look="flat"` as `KIVEZETÉSRE`. **INCOMPLETE in two places**:
+  1. `components/native/macro_card/img/catalog-macro-card.png` still displays a **flat button** (`#151a2d`, 3,099 pixels) in the live catalogue.
+  2. `components/colors.json:271-279` (`palette`) still shows flat `button.surface` (`#151a2d`, "Gombfelület") and `button.border` (`#26304b`, "Gombkeret") in the catalogue `Színpaletta` section with no `KIVEZETÉSRE` note.
+- **Other unmarked legacy/phased-out entries**: `docs/ui-components/README.md:118-161` still lists phased-out C++ overlay controls (`Stepper`, `Carousel`, `UsedSelector`, `LedList`, `MenuButton`, `DetailButton`) in the component choice table without `KIVEZETÉSRE` markers, and `active_text/catalog.json` overlaps `on_off_label` without clarification.
