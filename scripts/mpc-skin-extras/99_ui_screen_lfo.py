@@ -367,3 +367,5 @@ def apply(tui, qlinks, ctx):
             "has_native_choice_group": HAS_NATIVE_CHOICE_GROUP,
             "rejected_concepts": REJECTED_CONCEPTS,
         }
+    importlib.import_module("mpc-skin-extras.93_text_entry").wire_lfo(tui, ctx)
+
