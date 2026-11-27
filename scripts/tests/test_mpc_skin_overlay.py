@@ -667,10 +667,8 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertNotIn("Slider", [c["componentData"]["type"] for c in selector["componentsData"]])
             menu = defs[popup_name]["componentsData"]
             if group == "osc":
-                for source, power in enumerate(osc_power):
-                    for on, status in enumerate(("OFF", "ON")):
-                        label = next(c for c in menu if c["componentData"]["name"] == f"Osc source power {source} {status}")
-                        self.assertEqual(label["bounds"]["additionalInvalidatingHandles"], [f"IndexedEnabling/{on}/2/Parameter {power}"])
+                self.assertFalse([c for c in menu if c["componentData"]["name"].startswith("Osc source power")],
+                                 "the Osc source list shows names only")
             else:
                 chooser, = menu[:-1]
                 self.assertEqual(chooser["componentData"]["type"], "MenuOverlay")

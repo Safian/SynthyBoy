@@ -16,6 +16,7 @@ from scripts.native_ui_params import OSC_SOURCE, OSC_VISIBILITY, native_base_ind
 from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
     OSC_POWER_PARAM_KEYS,
+    OSC_SOURCE_LIST_NAMES,
     OSC_SOURCE_OVERLAY_NAME,
     OSC_TAB_NAMES,
     format_osc_choice_label,
@@ -35,6 +36,7 @@ class TestNativeOscSelector(unittest.TestCase):
     def test_constants_and_formatting(self):
         self.assertEqual(len(OSC_INSTANCE_NAMES), 5)
         self.assertEqual(OSC_INSTANCE_NAMES, ("Sub", "Osc A", "Osc B", "Osc C", "Noise"))
+        self.assertEqual(OSC_SOURCE_LIST_NAMES, ("Sub", "Oscillator A", "Oscillator B", "Oscillator C", "Noise"))
         self.assertEqual(OSC_POWER_PARAM_KEYS, ("sub.on", "osc1.on", "osc2.on", "osc3.on", "noise.on"))
         self.assertEqual(OSC_TAB_NAMES, ("Sub", "Osc A", "Osc B", "Osc C", "Noise"))
 
@@ -130,24 +132,20 @@ class TestNativeOscSelector(unittest.TestCase):
         by_name = {item["componentData"]["name"]: item for item in children}
         self.assertEqual(sum(item["componentData"]["type"] == "MenuOverlay" for item in children), 1)
         self.assertEqual(sum(item["componentData"]["type"] == "Button" for item in children), 5)
-        for i, name in enumerate(OSC_INSTANCE_NAMES):
-            self.assertEqual(by_name[name]["componentData"]["data"]["text"], name)
+        self.assertFalse([n for n in by_name if n.startswith("Osc source power")], "names only: no ON/OFF badges")
+        for i, name in enumerate(OSC_SOURCE_LIST_NAMES):
+            label = by_name[name]
+            self.assertEqual(label["componentData"]["data"]["text"], name)
             hit = by_name["Choose " + name]
             y = 110 + 80 * i
             self.assertEqual(hit["bounds"]["bounds"], f"0 {y} 426 80")
             data = hit["componentData"]["data"]
             self.assertEqual((data["buttonId"], data["numButtonsInGroup"], data["handleName"]), (i, 5, "Data"))
-            for item in (by_name[name], by_name[f"Osc source power {i} ON"], by_name[f"Osc source power {i} OFF"]):
-                left, top, width, height = map(int, item["bounds"]["bounds"].split())
-                self.assertEqual((top, height), (y, 80))
-                self.assertTrue(0 <= left < left + width <= 426)
-                self.assertLess(children.index(item), children.index(hit))
-            for on, status in ((0, "OFF"), (1, "ON")):
-                badge = by_name[f"Osc source power {i} {status}"]
-                direct_power = MockCtx().param_index(OSC_POWER_PARAM_KEYS[i])
-                self.assertEqual(badge["bounds"]["additionalInvalidatingHandles"],
-                                 [f"IndexedEnabling/{on}/2/Parameter {direct_power}"])
-                self.assertEqual(badge["bounds"]["acceptsHWFocus"], "No")
+            left, top, width, height = map(int, label["bounds"]["bounds"].split())
+            self.assertEqual((top, height), (y, 80))
+            self.assertTrue(0 <= left < left + width <= 426)
+            self.assertGreater(width, 300, "the name uses the width the badges freed")
+            self.assertLess(children.index(label), children.index(hit))
         self.assertEqual([c["bounds"]["bounds"] for c in children[-3:]], ["16 120 6 6", "28 120 6 6", "40 120 6 6"])
 
         # Check components created on tabs

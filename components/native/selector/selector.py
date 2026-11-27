@@ -15,6 +15,7 @@ Key features:
 """
 
 import copy
+import os
 from hashlib import sha256
 import math
 from pathlib import Path
@@ -146,7 +147,23 @@ def _image_component(name, file, rect):
 _image = _image_component
 
 
-def _choice_overlay(overlay_name):
+LIST_PROBE_ENV = "SYNTHYBOY_LIST_PROBE"
+LIST_PROBES = ("none", "A", "B")
+
+
+def list_probe():
+    """Device probe of the Osc source list ("one tap selects and closes"): none (the normal skin), A or B."""
+    probe = os.environ.get(LIST_PROBE_ENV, "none") or "none"
+    if probe not in LIST_PROBES:
+        raise ValueError("%s=%r: expected one of %s" % (LIST_PROBE_ENV, probe, "|".join(LIST_PROBES)))
+    return probe
+
+
+def _mouse_down_focus_lost():
+    return {"version": 1, "onAction": "Mouse Down", "handler": "Focus Lost", "handleName": "Focus Lost", "additionalData": ""}
+
+
+def _choice_overlay(overlay_name, probe=None):
     items = [
         _image_component("%s background" % overlay_name, "osc_routing_overlay_bg.png", (0, 0, _style_size('selector._choice_overlay.items'), _style_size('selector._choice_overlay.items.offset1'))),
         {
@@ -183,7 +200,7 @@ def _choice_overlay(overlay_name):
     ]
     return {
         "version": 2,
-        "actions": [],
+        "actions": [_mouse_down_focus_lost()] if probe == "B" else [],
         "backgroundData": {
             "version": 1,
             "focussed": {"version": 1, "colour": _style_argb("menu.background"), "image": ""},
@@ -827,6 +844,8 @@ def bind_list_choices(tui, parameter_index, title, choices):
 
 
 OSC_INSTANCE_NAMES = ("Sub", "Osc A", "Osc B", "Osc C", "Noise")
+# the rows of the Osc source list (oscNativeSourceChoices); the tabs and the selector face keep OSC_INSTANCE_NAMES
+OSC_SOURCE_LIST_NAMES = ("Sub", "Oscillator A", "Oscillator B", "Oscillator C", "Noise")
 
 OSC_ROUTING_CHOICES = (
     "Filter 1",
@@ -963,9 +982,37 @@ def build_standalone_osc_routing_choice_overlay(
     _mark_native_menu(items)
     return overlay
 
-def labelled_choice_drawer(name, choices, *, columns=1, power_indices=None):
+def _choice_row_key(name, index):
+    return "%s row %d" % (name, index)
+
+
+def choice_row_definitions(name, choices, *, columns=1):
+    """Probe A: one local component per row, holding the Choose button and a Mouse Down -> Focus Lost action."""
+    x, top, width, pitch = _style_size("selector.source.drawer_row")
+    rows = (len(choices) + columns - 1) // columns
+    pitch = min(pitch, (800 - top) // rows)
+    definitions = []
+    for index, choice in enumerate(choices):
+        definitions.append({"key": _choice_row_key(name, index), "value": {
+            "version": 2,
+            "actions": [_mouse_down_focus_lost()],
+            "backgroundData": {
+                "version": 1,
+                "focussed": {"version": 1, "colour": _style_native_color("transparent"), "image": ""},
+                "unfocussed": {"version": 1, "colour": _style_native_color("transparent"), "image": ""},
+            },
+            "ignoreMousePresses": False,
+            "disableCoarseDataWheel": False,
+            "hideQLinkBounds": True,
+            "componentsData": [button("Choose " + choice, (0, 0, width, pitch), TRANSPARENT_HIT,
+                                      index=index, count=len(choices))],
+        }})
+    return definitions
+
+
+def labelled_choice_drawer(name, choices, *, columns=1, power_indices=None, probe=None):
     """Bind each visible native row to an explicit choice of the drawer's Data handle."""
-    overlay = _choice_overlay(name)
+    overlay = _choice_overlay(name, probe)
     items = overlay["componentsData"]
     x, top, width, pitch = _style_size("selector.source.drawer_row")
     label_x, _, name_width, _ = _style_size("selector.source.drawer_name")
@@ -995,15 +1042,23 @@ def labelled_choice_drawer(name, choices, *, columns=1, power_indices=None):
                 badge["bounds"].update(version=2, showWhenDataModelInvalid="Hide",
                                        additionalInvalidatingHandles=[f"IndexedEnabling/{on}/2/Parameter {power_indices[index]}"])
                 items.append(badge)
-        items.append(button("Choose " + choice, (left, y, width, pitch),
-                            TRANSPARENT_HIT, index=index, count=len(choices)))
+        if probe == "A":
+            items.append(_entry("Choose " + choice, _choice_row_key(name, index),
+                                {"version": 1, "handleName": "Data"}, (left, y, width, pitch)))
+        else:
+            items.append(button("Choose " + choice, (left, y, width, pitch),
+                                TRANSPARENT_HIT, index=index, count=len(choices)))
     _mark_native_menu(items)
     return overlay
 
 
-def build_standalone_osc_source_overlay(power_indices):
-    return labelled_choice_drawer(OSC_SOURCE_OVERLAY_NAME, OSC_INSTANCE_NAMES,
-                                  power_indices=power_indices)
+def build_standalone_osc_source_overlay(probe=None):
+    """The Osc source list: names only (no ON/OFF badges); the check mark is drawn by the host."""
+    return labelled_choice_drawer(OSC_SOURCE_OVERLAY_NAME, OSC_SOURCE_LIST_NAMES, probe=probe)
+
+
+def build_standalone_osc_source_row_definitions(probe=None):
+    return choice_row_definitions(OSC_SOURCE_OVERLAY_NAME, OSC_SOURCE_LIST_NAMES) if probe == "A" else []
 
 
 def build_standalone_osc_routing_component(
