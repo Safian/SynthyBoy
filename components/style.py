@@ -50,20 +50,6 @@ def control_look():
     return look
 
 
-CONTROL_LOOKS = ("legacy", "flat")
-
-
-def control_look():
-    """The look of the skin's controls (buttons, dropdowns, segmented faces): the token `control.look`
-    ("legacy": the old gradient/bubble design, the owner's decision of 2026-11-27), or "flat" for the A/B
-    comparison via the environment variable SYNTHYBOY_CONTROL_LOOK=flat."""
-    import os
-    look = os.environ.get("SYNTHYBOY_CONTROL_LOOK") or size("control.look")
-    if look not in CONTROL_LOOKS:
-        raise ValueError(f"control look must be one of {CONTROL_LOOKS}: {look!r}")
-    return look
-
-
 def rgb(name):
     value = color(name)
     return tuple(int(value[index:index + 2], 16) for index in (1, 3, 5))

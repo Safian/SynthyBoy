@@ -231,7 +231,7 @@ def apply(tui, qlinks, ctx):
     ctx.add_component_definition("compactNativeSmoothTime", smooth_active_def)
     ctx.add_component_definition("compactNativeSmoothReadout", smooth_passive_def)
     for component_name, overlay_name, frame_asset, neutral, width in (
-        (SELECTOR_COMPONENTS[0], OSC_SOURCE_OVERLAY_NAME, "play_osc_selector_frame.png", True, SELECTOR_RECTS[0][2]),
+        (SELECTOR_COMPONENTS[0], OSC_SOURCE_OVERLAY_NAME, "play_osc_selector_frame.png", False, SELECTOR_RECTS[0][2]),
         (SELECTOR_COMPONENTS[1], "fx editor choice menu", "play_selector_frame.png", False, SELECTOR_RECTS[1][2]),
     ):
         bounds = (0, 0, width, _style_size("height.high"))

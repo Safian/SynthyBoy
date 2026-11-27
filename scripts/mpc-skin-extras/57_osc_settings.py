@@ -72,8 +72,6 @@ def _label(kind, rect, *, text=None, height=None, align="horizontallyCentred ver
     if text is not None:
         data["type"] = "Text"
         data["text"] = text
-    else:
-        apply_dial_text_style(data["textStyle"])   # a dial's Name and Value labels: the one dial text style
     return _entry(kind.lower(), "Label", data, rect, relative=True)
 
 

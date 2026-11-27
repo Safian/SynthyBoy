@@ -360,8 +360,8 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None,
     theme = _style_size("theme.neon")
     scale = _style_size("sampling.standard")
     size = (width * scale, height * scale)
-    inset = (geometry["inset"] if inset is None else inset) * scale
-    box = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)
+    inset_px = geometry["inset"] if inset is None else inset
+    inset = inset_px * scale
     radius = round((theme["rControl"] if radius is None else radius) * scale)
     fill = (_style_rgb(top_token), _style_rgb(bottom_token))
     line = (_style_rgb(keyline_token), _style_rgb(keyline_bottom_token))
@@ -371,7 +371,7 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None,
     face, pen = gradient_face(size, inset=inset, radius=radius, frame=round(theme["frame"] * scale), span=span,
                               fill=fill, line=line)
     if chevron:
-        cx = (width - geometry["inset"] - geometry["chevron_lane"] / 2) * scale
+        cx = (width - inset_px - geometry["chevron_lane"] / 2) * scale
         cy = height * scale / 2
         dx, dy = geometry["chevron_width"] * scale / 2, geometry["chevron_height"] * scale / 2
         pen.line(((cx - dx, cy - dy), (cx, cy + dy), (cx + dx, cy - dy)),
@@ -739,7 +739,7 @@ def build_titled_selector(
                         "height": title_font,
                     },
                     "colour": _style_argb("text.caption"),
-                    "justification": "horizontallyCentred verticallyCentred",
+                    "justification": "left verticallyCentred",
                     "case": "Original",
                 },
                 "type": "Text" if title_text is not None else "Name",
@@ -1407,7 +1407,7 @@ def write_wave_selector_icon(skins_dir):
 def command_stepper_definition(skins_dir, slot, caption):
     """Show the bound value and dispatch previous/open/next as command IDs 1/2/3."""
     width, height = slot
-    face = selector_definition(None, "", slot, skins_dir, caption_text=caption, justification="horizontallyCentred verticallyCentred")   # a dropdown face; the Previous / Open / Next hit zones below stay
+    face = selector_definition(None, "", slot, skins_dir, arrows=True, caption_text=caption, justification="horizontallyCentred verticallyCentred")   # a dropdown face; the Previous / Open / Next hit zones below stay
     face["actions"] = []
     hit = write_transparent_hit(skins_dir)
     edge = _style_size("selector.hit.minimum")

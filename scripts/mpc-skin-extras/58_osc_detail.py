@@ -17,7 +17,6 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from components import style
-from components.native.level.level import apply_dial_text_style
 from components.native.selector.selector import (OSC_TAB_NAMES, command_stepper_definition, passive_layer,
                                                   write_source_navigation_assets)
 from native_warp_picker import CONTROL as WARP_CONTROL
@@ -49,12 +48,12 @@ def stepper(artwork):
         data = {"version": 2, "onImage": image, "offImage": image, "buttonId": 1 if i == 0 else 3,
                 "numButtonsInGroup": 4, "handleName": "Step", "gestureBehaviour": "Instant"}
         kids.append(entry(name, "Button", (x, 0.39, 0.39, 0.61), data, proportional=True))
-    for name, y, size, colour in (("Name", 0, 14, style.argb("text.caption")), ("Value", 0.18, 17, style.argb("text.icon"))):
+    for name, y, h, size, colour in (("Name", 0, 0.20, 14, style.argb("text.caption")),
+                                     ("Value", 0.20, 0.20, 17, style.argb("text.icon"))):
         data = {"version": 1, "type": name, "handleName": "Data", "textStyle": {"version": 1,
                 "colour": colour, "font": {"version": 1, "name": _ui_style.size("font.family"), "style": _ui_style.size("font.style.semibold"), "height": size},
                 "justification": "horizontallyCentred verticallyCentred", "case": "Original"}}
-        apply_dial_text_style(data["textStyle"])
-        kids.append(entry(name, "Label", (0.02, y, 0.96, 0.21), data, focus="No", proportional=True))
+        kids.append(entry(name, "Label", (0.02, y, 0.96, h), data, focus="No", proportional=True))
     return passive_layer(kids)
 
 

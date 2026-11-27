@@ -36,8 +36,8 @@ inline const Look kLook1 = {
     0x4a5aa8, // keylineHi
     0x131930, // controlTop
     0x0d1122, // controlBottom
-    0x151c3a, // controlBorder
-    0x161e42, // controlBorderBottom
+    0x27306a, // controlBorder
+    0x182046, // controlBorderBottom
     0x1c2350, // track
     0x1a2250, // grid
     0xeef1ff, // text

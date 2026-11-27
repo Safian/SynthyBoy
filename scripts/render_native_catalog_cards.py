@@ -270,6 +270,16 @@ def main():
     render_header_cards()
     render_button_cards()
     render_radio_cards()
+    render_radio_list_cards()
+    render_slide_switch_cards()
+    render_wave_icons_cards()
+    render_stepped_dial_cards()
+    render_rotary_selector_cards()
+    render_radio_grid_cards()
+    from components.native.mixer_strip import mixer_strip
+    mixer_strip.render_catalog()
+    from components.native.hslider import hslider
+    hslider.render_catalog()
     render_name_value_cards()
     render_macro_card_sample()
     render_tune_card_sample()
