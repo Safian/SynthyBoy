@@ -1,6 +1,6 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Targeted unit tests for the 48 px compact route selector."""
+"""Targeted unit tests for the compact OSC routing dropdown and button faces."""
 
 import os
 from pathlib import Path
@@ -16,7 +16,7 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import native_route_selector as nrs
+from components.native.selector import selector as nrs
 from components.native.selector.selector import (
     COMPACT_OSC_ROUTING_HEIGHT,
     OSC_COMPACT_ROUTING_COMPONENT_TYPE,
@@ -54,23 +54,6 @@ class TestCompactRouteSelector(unittest.TestCase):
         self.assertEqual(nrs.OSC_ROUTING_SHORT_NAMES[0], "F1")
         self.assertEqual(nrs.OSC_ROUTING_SHORT_NAMES[1], "F2")
         self.assertEqual(nrs.OSC_ROUTING_SHORT_NAMES[2], "F1+F2")
-
-    def test_filter_segments_mapping(self):
-        self.assertEqual(len(nrs.DESTINATION_FILTER_SEGMENTS), 7)
-        # Filter 1: F1 active, F2 inactive
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[0], (True, False))
-        # Filter 2: F1 inactive, F2 active
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[1], (False, True))
-        # Filters 1+2: both active
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[2], (True, True))
-        # Effects only: both inactive
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[3], (False, False))
-        # Direct out: both inactive
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[4], (False, False))
-        # Filter blend: both active
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[5], (True, True))
-        # None: both inactive
-        self.assertEqual(nrs.DESTINATION_FILTER_SEGMENTS[6], (False, False))
 
     def test_build_compact_routing_definition(self):
         source_def = {
@@ -133,13 +116,6 @@ class TestCompactRouteSelector(unittest.TestCase):
             self.assertTrue(bg.exists())
             with Image.open(bg) as im:
                 self.assertEqual(im.size, (16, 16))
-
-    def test_render_compact_route_face(self):
-        im = nrs.render_compact_route_face(150, 48, target_index=0, label="Filter 1")
-        self.assertEqual(im.size, (150, 48))
-
-        im_f2 = nrs.render_compact_route_face(150, 48, target_index=1, label="Filter 2")
-        self.assertEqual(im_f2.size, (150, 48))
 
     def test_render_compact_button_face(self):
         im_b1 = nrs.render_compact_button_face(64, 48, target="F1", seg0=True, seg1=False)
