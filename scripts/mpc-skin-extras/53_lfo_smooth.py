@@ -485,3 +485,4 @@ def _apply_shape_detail(tui, items, ctx):
         limit = len(rects) - 5
         gate = f"RangedEnabling/{row + 1}/{limit}/{limit + 1}/{rows}"
         add(f"Row {row + 1}", "lfoDetailRow", rect, f"FromGesture/Parameter {base + 9 + row}", (list_view, gate))
+    __import__("sys").path.insert(0, str(Path(__file__).parent)); __import__("94_editor_commands").apply_pointmod_source_controls(tui, items, ctx, base, point_view)
