@@ -6,9 +6,11 @@ ON is the shared active colour (active_text.on, cyan), OFF the dim one (active_t
 disabled look (style.dim_artwork). The faces are drawn by the ActiveText recipe; the dial is the Pan/Level dial graphic.
 Docs: docs/ui-components/on_off_label.md.
 """
+from pathlib import Path
+
 from components.native.active_text.active_text import render_active_text_art
 from components.native.level.level import render_dial_frame
-from components.style import dim_artwork, size as _style_size
+from components.style import dim_artwork, native_color as _style_native_color, size as _style_size
 
 try:
     from PIL import Image
@@ -23,12 +25,87 @@ EXAMPLE_OPTIONAL = {"dial", "layout", "text"}
 DIAL_STATE = 0.5
 
 
-def label_face(text, state, *, width=None, anchor=None):
+def label_face(text, state, *, width=None, height=None, font_size=None, anchor=None):
     """One switch label: ON bright, OFF dim, DISABLED = the OFF face dimmed."""
     if state not in STATES:
         raise ValueError(f"state must be one of {STATES}: {state!r}")
-    face = render_active_text_art(text, state == "on", width, None, anchor=anchor)
+    face = render_active_text_art(text, state == "on", width, height, font_size=font_size, anchor=anchor)
     return dim_artwork(face) if state == "disabled" else face
+
+
+def on_off_label_child(name, on_image, off_image, rect, handle="Active"):
+    """MPC Button child component for an On/Off label."""
+    bounds_str = "%d %d %d %d" % tuple(rect) if isinstance(rect, (tuple, list)) else str(rect)
+    return {
+        "version": 2,
+        "componentData": {
+            "version": 1,
+            "name": name,
+            "type": "Button",
+            "data": {
+                "version": 2,
+                "onImage": on_image,
+                "offImage": off_image,
+                "buttonId": 1,
+                "numButtonsInGroup": 1,
+                "handleName": handle,
+                "gestureBehaviour": "Instant",
+            },
+        },
+        "handle remapping": {"version": 1, "map": []},
+        "bounds": {
+            "version": 1,
+            "acceptsHWFocus": "No",
+            "showWhenDataModelInvalid": "Show",
+            "whenVisible": "Always",
+            "boundsType": "Absolute",
+            "bounds": bounds_str,
+        },
+    }
+
+
+def on_off_label_definition(
+    text,
+    size,
+    *,
+    skins_dir=None,
+    handle="Active",
+    anchor="mm",
+    active=True,
+    font_size=None,
+    asset_prefix=None,
+    actions=None,
+):
+    """Build the skin definition of the On/Off label component.
+
+    Renders ON and OFF states using the On/Off label component recipe (label_face)
+    and returns a native component definition containing the toggle Button.
+    """
+    w, h = size
+    clean = text.lower().replace(" ", "_")
+    prefix = asset_prefix or f"on_off_{clean}"
+    tag = f"{prefix}_{w}x{h}" + ("" if anchor == "mm" else "_" + anchor)
+    on_name = f"{tag}_on.png"
+    off_name = f"{tag}_off.png"
+
+    if skins_dir is not None:
+        skins_path = Path(skins_dir)
+        skins_path.mkdir(parents=True, exist_ok=True)
+        im_on = label_face(text, "on" if active else "disabled", width=w, height=h, font_size=font_size, anchor=anchor)
+        im_off = label_face(text, "off" if active else "disabled", width=w, height=h, font_size=font_size, anchor=anchor)
+        im_on.save(skins_path / on_name)
+        im_off.save(skins_path / off_name)
+
+    child = on_off_label_child("button", on_name, off_name, (0, 0, w, h), handle=handle)
+    bg = {"version": 1, "colour": _style_native_color("transparent"), "image": ""}
+    return {
+        "version": 2,
+        "actions": list(actions or []),
+        "backgroundData": {"version": 1, "focussed": bg, "unfocussed": bg},
+        "ignoreMousePresses": not active,
+        "disableCoarseDataWheel": True,
+        "componentsData": [child],
+    }
 
 
 def render_example(example):

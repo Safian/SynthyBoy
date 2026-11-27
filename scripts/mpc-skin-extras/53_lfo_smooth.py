@@ -89,7 +89,7 @@ def _dial(polarity, ctx, width=_ui_style.size("lfo.dial.default_width"), height=
         for child in definition["componentsData"]:
             if child["componentData"]["name"] == "value":
                 child["componentData"]["data"]["textStyle"]["font"]["height"] = float(_ui_style.size("lfo.dial.value_font"))
-        # The adjacent exported kSmooth cell owns the one ActiveText caption.
+        # The adjacent exported kSmooth cell owns the On/Off label caption.
         definition["componentsData"] = [c for c in definition["componentsData"]
                                          if c["componentData"]["name"] != "name"]
         return definition
@@ -111,6 +111,12 @@ def _dial(polarity, ctx, width=_ui_style.size("lfo.dial.default_width"), height=
             data["textStyle"]["font"]["height"] = _ui_style.size("lfo.dial.caption_font") if child["componentData"]["name"] == "name" else _ui_style.size("lfo.dial.value_font")
             data["textStyle"]["justification"] = "left verticallyCentred" if side else "horizontallyCentred verticallyCentred"
     return definition
+
+
+def _on_off_label(ctx, text, width, height, anchor="rm"):
+    from components.native.on_off_label.on_off_label import on_off_label_definition
+    return on_off_label_definition(text, (width, height), skins_dir=ctx.skins_dir,
+                                  anchor=anchor, asset_prefix="lfo_smooth")
 
 
 def _active_text(ctx, text, width, height, anchor="mm"):
@@ -247,8 +253,10 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
     label = FIELD_CAPTIONS.get(field)
     widget = f"Field{field}_{width}x{height}_{action}"
     if widget not in definitions:
-        if field in TOGGLE_FIELDS:
-            definitions[widget] = _active_text(ctx, label, width, height, anchor="rm" if field == SMOOTH else "mm")
+        if field == SMOOTH:
+            definitions[widget] = _on_off_label(ctx, label, width, height, anchor="rm")
+        elif field in TOGGLE_FIELDS:
+            definitions[widget] = _active_text(ctx, label, width, height, anchor="mm")
         elif field in choices or field in NUMBER_FIELDS:
             definitions[widget] = _choice(ctx, width, height, caption=label, number=field in NUMBER_FIELDS,
                                           popup=f"lfoNativeChoiceDrawer{field}" if field in choices else None)
