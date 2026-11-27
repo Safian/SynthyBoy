@@ -375,9 +375,10 @@ def dropdown_definition(width, height, *, actions, skins_dir=None, value_handle=
     inset = style["inset"]
     left = inset + style["text_inset"]
     if size:
-        # A sized dropdown: the value box spans the full height and starts pad_x from the edge (left-aligned text keeps clear of it).
+        # A sized dropdown: the value box spans the full height, starts pad_x from the edge and ends chevron_gap before
+        # the chevron lane, so the text never reaches the arrow (available = box - pad_x - chevron_lane - chevron_gap).
         pad = _style_size(size)["pad_x"]
-        rect = (pad, 0, width - pad - style["chevron_lane"], height)
+        rect = (pad, 0, width - pad - style["chevron_lane"] - _style_size("selector.dropdown.chevron_gap"), height)
     else:
         rect = (left, left, width - left - inset - style["chevron_lane"], height - 2 * left)
     value = _value_label(value_name, rect, style["font"])
@@ -1395,8 +1396,17 @@ def command_stepper_definition(skins_dir, slot, caption):
     return face
 
 
-def render_selector_face(width, height, *, name=None, value="Sine", **variants):
-    """Compose only the images and labels emitted by the actual native definition."""
+def _ellipsize(draw, text, font, room):
+    """`text` cut at the end and closed with an ellipsis until it fits `room` px."""
+    while text and draw.textbbox((0, 0), text + "\u2026", font=font)[2] > room:
+        text = text[:-1].rstrip()
+    return text + "\u2026"
+
+
+def render_selector_face(width, height, *, name=None, value="Sine", ellipsis=False, **variants):
+    """Compose only the images and labels emitted by the actual native definition.
+
+    ellipsis: a value that does not fit its label box is left-aligned and cut with an ellipsis at the end."""
     with tempfile.TemporaryDirectory() as tmp:
         skins = Path(tmp)
         definition = selector_definition(
@@ -1422,8 +1432,13 @@ def render_selector_face(width, height, *, name=None, value="Sine", **variants):
                 draw = ImageDraw.Draw(result)
                 bounds = draw.textbbox((0, 0), text, font=font)
                 tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
-                assert tw <= w and th <= h, (text, (tw, th), (w, h))
                 justification = style["justification"]
+                if ellipsis and tw > w:
+                    text = _ellipsize(draw, text, font, w)
+                    bounds = draw.textbbox((0, 0), text, font=font)
+                    tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
+                    justification = "left verticallyCentred"
+                assert tw <= w and th <= h, (text, (tw, th), (w, h))
                 tx = x + (w - tw) / 2 if "horizontallyCentred" in justification else x
                 ty = y + (h - th) / 2 if "verticallyCentred" in justification else y
                 draw.text((tx - bounds[0], ty - bounds[1]), text, font=font,
@@ -1445,10 +1460,11 @@ def render_dropdown_variant(width, height, value, *, label=None, placement="none
     about half the box height).
 
     placement: "none"   value only, no label (the old Play-panel look when align is "center");
-               "above"  `label` outside and above the box, centred, in the Label dial-caption style;
+               "above"  `label` outside and above the box, left-aligned with the box, in the Label dial-caption style;
                "inside" `label` as the small caption in the box (the catalogue's MODEL look, value left).
     align:     "center" or "left" value; with "inside" the recipe's own left value is kept.
-    The "above" picture is taller than the box by the label line and one gap.field.
+    The "above" picture is taller than the box by the label line and one gap.field. A value that does not fit is
+    left-aligned and cut with an ellipsis; it ends selector.dropdown.chevron_gap before the chevron lane.
     """
     if placement not in DROPDOWN_PLACEMENTS or align not in DROPDOWN_ALIGNS:
         raise ValueError(f"placement must be one of {DROPDOWN_PLACEMENTS} and align one of {DROPDOWN_ALIGNS}")
@@ -1465,14 +1481,14 @@ def render_dropdown_variant(width, height, value, *, label=None, placement="none
     # The recipe takes a TUI font height; the host draws em = height / font.host.height.per.em.
     tui = font_em * _style_size("font.host.height.per.em") if font_em else _style_size("selector.dropdown.preview_font")
     box = render_selector_face(width, height, value=value, justification=justification, dropdown_look="legacy",
-                               dropdown_size=size, label_height=tui)
+                               dropdown_size=size, label_height=tui, ellipsis=True)
     if placement == "none":
         return box
     from components.native.label.label import render_label
     text = render_label(label, DROPDOWN_LABEL_FONT, "text.caption", case="Upper Case")
     gap = _style_size("gap.field")
     picture = Image.new("RGBA", (width, text.height + gap + height))
-    picture.alpha_composite(text, ((width - text.width) // 2, 0))
+    picture.alpha_composite(text, (0, 0))   # the title is left-aligned with the box's left edge
     picture.alpha_composite(box, (0, text.height + gap))
     return picture
 

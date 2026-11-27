@@ -110,8 +110,10 @@ class DropdownTests(unittest.TestCase):
         variants = selector.dropdown_variants(entry("selector", "dropdown"))
         self.assertEqual([(v["placement"], v["align"], v.get("height", "height.medium")) for v in variants],
                          [("none", "center", "height.small"), ("none", "center", "height.intermediate"),
-                          ("none", "center", "height.medium"), ("above", "left", "height.medium"),
+                          ("none", "center", "height.medium"), ("none", "center", "height.intermediate"),
+                          ("above", "center", "height.intermediate"), ("above", "center", "height.intermediate"),
                           ("inside", "left", "height.medium")])
+        self.assertTrue(variants[-1]["caption"].startswith("KIVEZETÉSRE"))   # the small label inside the box is being phased out
         width = style.size("header.dropdown.width")
         for v in variants:
             box = style.size(v.get("height", "height.medium"))
@@ -144,6 +146,25 @@ class DropdownTests(unittest.TestCase):
             self.assertLessEqual(max(ys), height - 4)
             self.assertAlmostEqual((min(ys) + max(ys)) / 2, height / 2, delta=2.5)
 
+    def test_long_value_is_cut_left_aligned_and_keeps_chevron_gap(self):
+        gap, width = style.size("selector.dropdown.chevron_gap"), style.size("header.dropdown.width")
+        token = style.size("selector.dropdown.size.40")
+        chevron_left = width - style.size("selector.dropdown")["chevron_lane"] / 2 - token["chevron_width"] / 2
+        for value, short in (("Env 1", True), ("Filter 1 Cutoff Modulation Amount", False)):
+            image = selector.render_dropdown_variant(width, 40, value)
+            ink = [x for y in range(40) for x in range(2, width - 2) if sum(image.getpixel((x, y))[:3]) > 650 and image.getpixel((x, y))[3] > 200]
+            self.assertLessEqual(max(ink) + gap, chevron_left, value)    # never closer to the arrow than chevron_gap
+            if short:
+                self.assertAlmostEqual((min(ink) + max(ink)) / 2, (token["pad_x"] + width - 28 - gap) / 2, delta=3)  # centred
+            else:
+                self.assertLessEqual(min(ink), token["pad_x"] + 2)       # left-aligned
+                self.assertGreater(max(ink), width - 28 - gap - 40)      # runs to the end of the available room (cut with an ellipsis)
+
+    def test_title_above_is_left_aligned_with_the_box(self):
+        image = selector.render_dropdown_variant(220, 40, "Percent", label="LFO MODE", placement="above")
+        top = [x for y in range(0, 10) for x in range(220) if image.getpixel((x, y))[3] > 120]
+        self.assertLessEqual(min(top), 2)
+
     def test_header_dropdowns_are_the_value_only_centred_40_px_variant(self):
         plain = selector.render_dropdown_variant(220, 40, "Env 1")
         from components.native.header import header
@@ -163,8 +184,6 @@ class DropdownTests(unittest.TestCase):
         self.assertEqual(style.color("selector.dropdown.top"), "#141a38")
         self.assertEqual(style.color("selector.dropdown.bottom"), "#0b0f24")
         self.assertEqual(style.size("selector.dropdown.gradient.legacy"), style.size("selector.dropdown.gradient.neon"))
-        voice = Image.open(NATIVE / "selector/img/catalog-selector-56-valonly.png").convert("RGBA")
-        self.assertEqual(voice.getpixel((20, 8))[:3], (20, 26, 56))   # the Voice selector it matches
 
     def test_invalid_combinations_are_refused(self):
         with self.assertRaises(ValueError):

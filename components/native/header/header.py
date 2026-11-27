@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass
 
 from components.native.button.button import action_art, semibold
-from components.native.selector.selector import render_dropdown_variant, render_selector_face
+from components.native.selector.selector import render_dropdown_variant
 from components.style import color as _style_color, dim_artwork, size as _style_size
 
 try:
@@ -20,7 +20,7 @@ except ImportError:
     Image = ImageDraw = None
 
 ZONES = ("left", "centre", "right")
-CENTRE_KINDS = ("dropdown", "stepper", "button")
+CENTRE_KINDS = ("dropdown", "button")
 RIGHT_KINDS = ("expand", "close", "more")
 POWER_STATES = ("on", "off")
 WIDTHS = ("page", "panel")
@@ -85,7 +85,7 @@ def right_face(kind):
 
 
 def centre_face(item, content, *, enabled=True):
-    """One page-specific control: dropdown / stepper (selector recipe) or a text button (button recipe)."""
+    """One page-specific control: dropdown (selector recipe; there is no left/right stepper) or a text button (button recipe)."""
     kind = item.get("kind")
     if kind == "button":
         face = action_art(text=item["text"])
@@ -94,9 +94,6 @@ def centre_face(item, content, *, enabled=True):
         # 40 px by default (header.dropdown.height proposal: the owner chooses from the catalogue), centred in the row.
         face = render_dropdown_variant(_style_size(item["width"]), _style_size(item.get("height", "height.intermediate")),
                                        item.get("value", ""))
-    elif kind == "stepper":
-        face = render_selector_face(_style_size(item["width"]), content, name=item.get("name"),
-                                    value=item.get("value", ""), stepper=True)
     else:
         raise ValueError(f"centre control must be one of {CENTRE_KINDS}: {kind!r}")
     if face.height > content or (kind != "dropdown" and face.height != content):

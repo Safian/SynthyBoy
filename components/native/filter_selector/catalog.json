@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 45,
+  "title": "FilterSelector",
+  "sections": [
+    {
+      "heading": "Állapotok: a gomb arca a láncot jelzi, a felső kétszegmenses lámpasáv a két szűrő be/ki állapotát (cián = be, halvány = ki)",
+      "images": [
+        {
+          "presentation": "sample",
+          "file": "filter-selector-f1-on-f2-off.png",
+          "alt": "FilterSelector: F1 be, F2 ki",
+          "caption": "F1 be, F2 ki · 56 × 48 px"
+        },
+        {
+          "presentation": "sample",
+          "file": "filter-selector-both-on.png",
+          "alt": "FilterSelector: F1 be, F2 be",
+          "caption": "F1 be, F2 be · 56 × 48 px"
+        },
+        {
+          "presentation": "sample",
+          "file": "filter-selector-both-off.png",
+          "alt": "FilterSelector: Mindkét szűrő ki",
+          "caption": "Mindkét szűrő ki · 56 × 48 px"
+        },
+        {
+          "presentation": "sample",
+          "file": "filter-selector-f1-off-f2-on.png",
+          "alt": "FilterSelector: F1 ki, F2 be",
+          "caption": "F1 ki, F2 be · 56 × 48 px"
+        }
+      ]
+    }
+  ]
+}
