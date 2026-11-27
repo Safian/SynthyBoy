@@ -52,3 +52,7 @@ Finished packages live outside the repository in `/Users/szabi/Documents/Project
 
 Dropdowns (Selector) keep the old look: a dark blue fill with a subtle vertical gradient (a thin highlight line at the top, the lower half darkening slightly: measured #131930 at the top to #0d1122 at the bottom on the page ground #0c0f18, a lighter blue border), a "bubble" effect that is not loud. Do not replace it with a flat fill. The gradient colours and where it starts are tokens (`selector.surface`, `selector.border` and the gradient parameters), never literals. Whether the other controls (buttons, ActiveText, fields) get the same treatment is decided per component when its design is reviewed.
 
+## Dropdowns replace left/right selectors (owner, 2026-11-27)
+
+On every screen the left/right chooser (stepper, carousel, the stepper half of the source picker) is being phased out; the dropdown replaces it everywhere, the Play panels included. Dropdown rules: the title is left aligned (above the box), the value inside is centred; a value that does not fit is left aligned and cut at the end with an ellipsis, and it never touches the chevron (a fixed gap, token `selector.dropdown.chevron_gap`). The variant with the small caption inside the box is being phased out. Catalogue entries of the phased-out components stay, marked "KIVEZETÉSRE", until the screens are migrated.
+
