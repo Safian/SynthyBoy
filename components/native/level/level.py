@@ -345,13 +345,15 @@ def dial_text_variants(dial):
 
 
 def render_dial_labelled(diameter, state, caption, value, layout, *, bipolar=False, active=True, gap=0,
-                         text_style=None):
+                         text_style=None, disabled=False):
     """One dial (render_dial_frame at its real size) with its caption and value text, for the catalogue only.
 
     layout: "right"  caption, with the value under it, to the right of the dial;
             "bottom" only the value under the dial;
             "top"    caption above, the dial, the value below.
     The caption and the value use the same text_style (default DIAL_TEXT_STYLE: font and colour tokens).
+    disabled: the inactive dial look (inactiveGrey, no gradient arc) with the text colour dimmed like every other
+    disabled control (style.dim_artwork, as the On/Off label does); off by default.
     """
     if Image is None:
         raise RuntimeError("Pillow is required to render dial previews")
@@ -362,8 +364,11 @@ def render_dial_labelled(diameter, state, caption, value, layout, *, bipolar=Fal
     font_file = Path(__file__).with_name("img") / _style_size("font.file.semibold")
     font = ImageFont.truetype(str(font_file), round(native_font_em(_style_size(text_style["font"]))))
     colour = _style_color(text_style["colour"])
+    if disabled:
+        from components.style import dim_artwork
+        colour = dim_artwork(Image.new("RGBA", (1, 1), colour)).getpixel((0, 0))
     diameter, gap = int(diameter), int(gap)
-    dial = render_dial_frame(diameter, state, bipolar=bipolar, active=active)
+    dial = render_dial_frame(diameter, state, bipolar=bipolar, active=active and not disabled)
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     boxes = {text: probe.textbbox((0, 0), text, font=font) for text in (caption, value)}
     size = {text: (box[2] - box[0], box[3] - box[1]) for text, box in boxes.items()}

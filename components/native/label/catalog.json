@@ -77,37 +77,77 @@
       {
         "id": "36",
         "label": "36 px",
-        "token": "label.dial.36",
-        "file": "label-dial-36.png",
-        "alt": "Level tárcsa 36 px felirattal és értékkel"
+        "token": "label.dial.36"
       },
       {
         "id": "40",
         "label": "40 px (kompakt)",
-        "token": "label.dial.40",
-        "file": "label-dial-40.png",
-        "alt": "Level tárcsa 40 px felirattal és értékkel"
+        "token": "label.dial.40"
       },
       {
         "id": "48",
         "label": "48 px",
-        "token": "label.dial.48",
-        "file": "label-dial-48.png",
-        "alt": "Level tárcsa 48 px felirattal és értékkel"
+        "token": "label.dial.48"
       },
       {
         "id": "56",
         "label": "56 px",
-        "token": "label.dial.56",
-        "file": "label-dial-56.png",
-        "alt": "Level tárcsa 56 px felirattal és értékkel"
+        "token": "label.dial.56"
       },
       {
         "id": "90",
         "label": "90 px (normál)",
-        "token": "label.dial.90",
-        "file": "label-dial-90.png",
-        "alt": "Level tárcsa 90 px felirattal és értékkel"
+        "token": "label.dial.90"
+      }
+    ],
+    "dial_examples": [
+      {
+        "id": "lent-enabled",
+        "layout": "bottom",
+        "state": "enabled",
+        "file": "label-dial-48-lent-enabled.png",
+        "alt": "48 px tárcsa, lent, engedélyezve",
+        "caption": "Lent: csak az érték a tárcsa alatt · engedélyezve"
+      },
+      {
+        "id": "lent-disabled",
+        "layout": "bottom",
+        "state": "disabled",
+        "file": "label-dial-48-lent-disabled.png",
+        "alt": "48 px tárcsa, lent, letiltva",
+        "caption": "Lent: csak az érték a tárcsa alatt · letiltva"
+      },
+      {
+        "id": "fent-lent-enabled",
+        "layout": "top",
+        "state": "enabled",
+        "file": "label-dial-48-fent-lent-enabled.png",
+        "alt": "48 px tárcsa, fent és lent, engedélyezve",
+        "caption": "Fent és lent: felirat a tárcsa fölött, érték alatta · engedélyezve"
+      },
+      {
+        "id": "fent-lent-disabled",
+        "layout": "top",
+        "state": "disabled",
+        "file": "label-dial-48-fent-lent-disabled.png",
+        "alt": "48 px tárcsa, fent és lent, letiltva",
+        "caption": "Fent és lent: felirat a tárcsa fölött, érték alatta · letiltva"
+      },
+      {
+        "id": "jobbra-enabled",
+        "layout": "right",
+        "state": "enabled",
+        "file": "label-dial-48-jobbra-enabled.png",
+        "alt": "48 px tárcsa, jobbra, engedélyezve",
+        "caption": "Jobbra: felirat és alatta az érték a tárcsa mellett · engedélyezve"
+      },
+      {
+        "id": "jobbra-disabled",
+        "layout": "right",
+        "state": "disabled",
+        "file": "label-dial-48-jobbra-disabled.png",
+        "alt": "48 px tárcsa, jobbra, letiltva",
+        "caption": "Jobbra: felirat és alatta az érték a tárcsa mellett · letiltva"
       }
     ]
   }

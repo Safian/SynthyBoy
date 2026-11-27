@@ -71,8 +71,8 @@ def render_label_cards():
     entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))["label"]
     for v in label.label_variants(entry):
         label.render_label(v["text"], v["font"], v["colour"], unit=v["unit"], case=v["case"]).save(directory / "img" / v["file"])
-    for item in label.dial_sizes(entry):
-        label.render_dial_with_text(item["diameter"], item["caption"], item["value"]).save(directory / "img" / item["file"])
+    for item in label.dial_examples(entry):
+        label.render_dial_example(item).save(directory / "img" / item["file"])
     print("Rendered label examples")
 
 

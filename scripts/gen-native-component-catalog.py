@@ -123,9 +123,18 @@ def component_markup(component, metadata):
     css = ' class="wide"' if metadata.get("wide") else ""
     lines = [f"    <article{css}>\n      <h3>{text(metadata['title'])}</h3>"]
     for section in sections:
-        fields(section, ("images",), ("heading",))
+        fields(section, (), ("images", "table", "heading"))
+        require(("images" in section) != ("table" in section), "a section has images or a table")
         if "heading" in section:
             lines.append(f"      <h4>{text(section['heading'])}</h4>")
+        if "table" in section:
+            table = section["table"]
+            lines.append("      <table>")
+            lines.append("        <tr>" + "".join(f"<th>{text(c)}</th>" for c in table["head"]) + "</tr>")
+            for row in table["rows"]:
+                lines.append("        <tr>" + "".join(f"<td>{text(c)}</td>" for c in row) + "</tr>")
+            lines.append("      </table>")
+            continue
         require(isinstance(section["images"], list) and section["images"], "images must be a nonempty list")
         # Keep natural-size samples side by side; hero previews retain the page's overview styling.
         samples_open = False

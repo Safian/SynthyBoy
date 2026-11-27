@@ -26,6 +26,8 @@ ul{columns:2}
 #meretek table{border-collapse:collapse;width:100%;max-width:640px}
 #meretek th,#meretek td{text-align:left;padding:0.4em 1em 0.4em 0;border-bottom:1px solid #465064}
 .size-samples{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap}
+article table{border-collapse:collapse;margin:0.3em 0 0.8em}
+article th,article td{border:1px solid #465064;padding:0.2em 0.7em;text-align:left}
 .size-sample{margin:0}
 .size-sample img{width:auto;height:auto;max-width:100%;border-radius:0}
 .size-sample figcaption{margin-bottom:8px}
@@ -67,12 +69,22 @@ ul{columns:2}
         <figure class="size-sample"><figcaption>Tárcsa-érték (Pan) · pan.sub_dial_definition.value = 24 (TUI) · text.value</figcaption><a href="../../components/native/label/img/label-dial-value-pan.png?v=9a2bebe6f9f0"><img src="../../components/native/label/img/label-dial-value-pan.png?v=9a2bebe6f9f0" width="39" height="26" alt="Tárcsa-érték: L 100"></a></figure>
       </div>
       <h4>Felirat- és értékméret a tárcsa mellett (jelölve: javaslat)</h4>
+      <table>
+        <tr><th>Tárcsa (px)</th><th>Token</th><th>Felirat (TUI)</th><th>Érték (TUI)</th><th>Állapot</th></tr>
+        <tr><td>36</td><td>label.dial.36</td><td>11</td><td>12</td><td>JAVASLAT</td></tr>
+        <tr><td>40</td><td>label.dial.40</td><td>14</td><td>16</td><td>ma használt</td></tr>
+        <tr><td>48</td><td>label.dial.48</td><td>15</td><td>20</td><td>JAVASLAT</td></tr>
+        <tr><td>56</td><td>label.dial.56</td><td>15</td><td>22</td><td>JAVASLAT</td></tr>
+        <tr><td>90</td><td>label.dial.90</td><td>15.0</td><td>24</td><td>ma használt</td></tr>
+      </table>
+      <h4>48 px-es tárcsa: három elrendezés, engedélyezve és letiltva</h4>
       <div class="size-samples">
-        <figure class="size-sample"><figcaption>36 px · tárcsa 36 px · felirat 11 · érték 12 (TUI) · JAVASLAT</figcaption><a href="../../components/native/label/img/label-dial-36.png?v=53db88cfa4dc"><img src="../../components/native/label/img/label-dial-36.png?v=53db88cfa4dc" width="63" height="36" alt="Level tárcsa 36 px felirattal és értékkel"></a></figure>
-        <figure class="size-sample"><figcaption>40 px (kompakt) · tárcsa 40 px · felirat 14 · érték 16 (TUI) · ma használt</figcaption><a href="../../components/native/label/img/label-dial-40.png?v=77f25d75a8d7"><img src="../../components/native/label/img/label-dial-40.png?v=77f25d75a8d7" width="72" height="40" alt="Level tárcsa 40 px felirattal és értékkel"></a></figure>
-        <figure class="size-sample"><figcaption>48 px · tárcsa 48 px · felirat 15 · érték 20 (TUI) · JAVASLAT</figcaption><a href="../../components/native/label/img/label-dial-48.png?v=f4bd3455962c"><img src="../../components/native/label/img/label-dial-48.png?v=f4bd3455962c" width="84" height="48" alt="Level tárcsa 48 px felirattal és értékkel"></a></figure>
-        <figure class="size-sample"><figcaption>56 px · tárcsa 56 px · felirat 15 · érték 22 (TUI) · JAVASLAT</figcaption><a href="../../components/native/label/img/label-dial-56.png?v=c22457d31066"><img src="../../components/native/label/img/label-dial-56.png?v=c22457d31066" width="92" height="56" alt="Level tárcsa 56 px felirattal és értékkel"></a></figure>
-        <figure class="size-sample"><figcaption>90 px (normál) · tárcsa 90 px · felirat 15.0 · érték 24 (TUI) · ma használt</figcaption><a href="../../components/native/label/img/label-dial-90.png?v=7c3e0ef721b3"><img src="../../components/native/label/img/label-dial-90.png?v=7c3e0ef721b3" width="126" height="90" alt="Level tárcsa 90 px felirattal és értékkel"></a></figure>
+        <figure class="size-sample"><figcaption>Lent: csak az érték a tárcsa alatt · engedélyezve</figcaption><a href="../../components/native/label/img/label-dial-48-lent-enabled.png?v=fea52c5f7b2b"><img src="../../components/native/label/img/label-dial-48-lent-enabled.png?v=fea52c5f7b2b" width="48" height="66" alt="48 px tárcsa, lent, engedélyezve"></a></figure>
+        <figure class="size-sample"><figcaption>Lent: csak az érték a tárcsa alatt · letiltva</figcaption><a href="../../components/native/label/img/label-dial-48-lent-disabled.png?v=aa06ec6927b8"><img src="../../components/native/label/img/label-dial-48-lent-disabled.png?v=aa06ec6927b8" width="48" height="66" alt="48 px tárcsa, lent, letiltva"></a></figure>
+        <figure class="size-sample"><figcaption>Fent és lent: felirat a tárcsa fölött, érték alatta · engedélyezve</figcaption><a href="../../components/native/label/img/label-dial-48-fent-lent-enabled.png?v=4c3dc47940c8"><img src="../../components/native/label/img/label-dial-48-fent-lent-enabled.png?v=4c3dc47940c8" width="48" height="83" alt="48 px tárcsa, fent és lent, engedélyezve"></a></figure>
+        <figure class="size-sample"><figcaption>Fent és lent: felirat a tárcsa fölött, érték alatta · letiltva</figcaption><a href="../../components/native/label/img/label-dial-48-fent-lent-disabled.png?v=339947efc158"><img src="../../components/native/label/img/label-dial-48-fent-lent-disabled.png?v=339947efc158" width="48" height="83" alt="48 px tárcsa, fent és lent, letiltva"></a></figure>
+        <figure class="size-sample"><figcaption>Jobbra: felirat és alatta az érték a tárcsa mellett · engedélyezve</figcaption><a href="../../components/native/label/img/label-dial-48-jobbra-enabled.png?v=fa0fb81abd4a"><img src="../../components/native/label/img/label-dial-48-jobbra-enabled.png?v=fa0fb81abd4a" width="86" height="48" alt="48 px tárcsa, jobbra, engedélyezve"></a></figure>
+        <figure class="size-sample"><figcaption>Jobbra: felirat és alatta az érték a tárcsa mellett · letiltva</figcaption><a href="../../components/native/label/img/label-dial-48-jobbra-disabled.png?v=31c8fdc91ff8"><img src="../../components/native/label/img/label-dial-48-jobbra-disabled.png?v=31c8fdc91ff8" width="86" height="48" alt="48 px tárcsa, jobbra, letiltva"></a></figure>
       </div>
     </article>
     <article>

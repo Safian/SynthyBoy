@@ -16,17 +16,29 @@ The UNISON / WARP / CHARACTER block titles are drawn by the overlay panel (C++);
 
 ## Text next to a dial (36 / 40 / 48 / 56 px, plus the normal 90 px)
 
-Caption sits above the value, to the right of the dial. Tokens `label.dial.<px>` in `components/sizes.json` (`diameter`, `caption`, `value`, `proposal`):
+Size and token table only (no pictures for the sizes). Tokens `label.dial.<px>` in `components/sizes.json` (`diameter`, `caption`, `value`, `proposal`); shown as a small table on the catalogue page (`label.dial_sizes`):
 
-| Dial | Caption | Value | Status |
-|---|---|---|---|
-| 36 | `font.annotation` 11 | `font.small` 12 | PROPOSAL |
-| 40 (compact) | 14 | 16 | in use (`pan.compact_pan_definition`) |
-| 48 | `font.caption` 15 | `font.value` 20 | PROPOSAL |
-| 56 | `font.caption` 15 | `font.value.large` 22 | PROPOSAL |
-| 90 (normal) | 15 | 24 | in use (`pan.sub_dial_definition`) |
+| Dial | Token | Caption | Value | Status |
+|---|---|---|---|---|
+| 36 | `label.dial.36` | `font.annotation` 11 | `font.small` 12 | PROPOSAL |
+| 40 (compact) | `label.dial.40` | 14 | 16 | in use (`pan.compact_pan_definition`) |
+| 48 | `label.dial.48` | `font.caption` 15 | `font.value` 20 | PROPOSAL |
+| 56 | `label.dial.56` | `font.caption` 15 | `font.value.large` 22 | PROPOSAL |
+| 90 (normal) | `label.dial.90` | 15 | 24 | in use (`pan.sub_dial_definition`) |
 
-A new size: a `label.dial.<px>` token and one `dial_sizes` entry in the catalogue file.
+A new size: a `label.dial.<px>` token and one `dial_sizes` entry (`id`, `label`, `token`) in the catalogue file.
+
+### 48 px dial, three layouts, enabled and disabled
+
+One sample size (48 px, mid state of the text-free dial strip, Pan texts `PAN` / `L 100`), six pictures from `label.dial_examples` (`{id, layout, state, file, alt, caption}`; captions live in the HTML, not the image):
+
+| Layout (`layout`) | Content |
+|---|---|
+| Lent (`bottom`) | only the value under the dial |
+| Fent és lent (`top`) | title above, the dial, the value below |
+| Jobbra (`right`) | title above value, to the right of the dial |
+
+Title and value share one text style (`level.DIAL_TEXT_STYLE`). `disabled` = the inactive dial look (`inactiveGrey`, no gradient arc) with the text colour dimmed like every other disabled control (`style.dim_artwork`, as the On/Off label). Drawn by `level.render_dial_labelled(..., disabled=True)` (default off, so the Pan/Level images are unchanged). Files: `components/native/label/img/label-dial-48-<lent|fent-lent|jobbra>-<enabled|disabled>.png`. More examples: add an item to `dial_examples`.
 
 ## Add a variant
 

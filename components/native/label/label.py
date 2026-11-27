@@ -10,7 +10,7 @@ page-title size), so a variant states its `unit`. Docs: docs/ui-components/label
 import math
 from pathlib import Path
 
-from components.native.level.level import render_dial_frame
+from components.native.level.level import DIAL_TEXT_LAYOUTS, render_dial_frame, render_dial_labelled
 from components.style import color as _style_color, native_font_em, size as _style_size
 
 try:
@@ -21,7 +21,10 @@ except ImportError:
 UNITS = ("tui", "em")
 CASES = ("Original", "Upper Case")
 VARIANT_KEYS = {"id", "label", "text", "font", "unit", "colour", "case", "file", "alt"}
-DIAL_SIZE_KEYS = {"id", "label", "token", "file", "alt"}
+DIAL_SIZE_KEYS = {"id", "label", "token"}
+DIAL_EXAMPLE_KEYS = {"id", "layout", "state", "file", "alt", "caption"}
+DIAL_EXAMPLE_STATES = ("enabled", "disabled")
+DIAL_EXAMPLE_TEXT = ("PAN", "L 100")  # the Pan example texts: title, value
 DIAL_LAYOUT_STATE = 0.5
 
 
@@ -59,8 +62,8 @@ def render_label(text, font, colour, *, unit="tui", case="Original"):
 
 def label_variants(entry):
     """The variants of a catalogue "label" entry, validated; each gains `size` (the resolved font number)."""
-    if not isinstance(entry, dict) or not {"variants"} <= set(entry) <= {"variants", "dial_sizes"} or not entry["variants"]:
-        raise ValueError("label entry needs variants and may add dial_sizes")
+    if not isinstance(entry, dict) or not {"variants"} <= set(entry) <= {"variants", "dial_sizes", "dial_examples"} or not entry["variants"]:
+        raise ValueError("label entry needs variants and may add dial_sizes and dial_examples")
     result = []
     for variant in entry["variants"]:
         if set(variant) != VARIANT_KEYS or variant["unit"] not in UNITS or variant["case"] not in CASES:
@@ -87,19 +90,23 @@ def dial_sizes(entry):
     return result
 
 
-def render_dial_with_text(diameter, caption_height, value_height, caption="LEVEL", value="50%"):
-    """The Level dial (render_dial_frame) with its caption and value to the right: caption on top, value below."""
-    gap, line_gap = _style_size("gap.column"), _style_size("gap.field")
-    top = render_label(caption, caption_height, "text.caption", case="Upper Case")
-    bottom = render_label(value, value_height, "text.value")
-    dial = render_dial_frame(diameter, DIAL_LAYOUT_STATE, bipolar=False)
-    block = top.height + line_gap + bottom.height
-    canvas = Image.new("RGBA", (diameter + gap + max(top.width, bottom.width), max(diameter, block)))
-    canvas.alpha_composite(dial, (0, (canvas.height - diameter) // 2))
-    y = (canvas.height - block) // 2
-    canvas.alpha_composite(top, (diameter + gap, y))
-    canvas.alpha_composite(bottom, (diameter + gap, y + top.height + line_gap))
-    return canvas
+def dial_examples(entry):
+    """The labelled-dial examples of a catalogue "label" entry: [{id, layout, state, file, alt, caption}], validated."""
+    result = []
+    for item in entry.get("dial_examples", []):
+        if set(item) != DIAL_EXAMPLE_KEYS or item["layout"] not in DIAL_TEXT_LAYOUTS or item["state"] not in DIAL_EXAMPLE_STATES:
+            raise ValueError(f"label dial example needs exactly {sorted(DIAL_EXAMPLE_KEYS)}, layout in "
+                             f"{DIAL_TEXT_LAYOUTS}, state in {DIAL_EXAMPLE_STATES}")
+        result.append(dict(item))
+    if len({i["id"] for i in result}) != len(result):
+        raise ValueError("label dial example ids must be unique")
+    return result
+
+
+def render_dial_example(example, diameter=48):
+    """One example: the text-free dial (mid state, `diameter` px) with the Pan title and value in the layout and state."""
+    return render_dial_labelled(diameter, DIAL_LAYOUT_STATE, *DIAL_EXAMPLE_TEXT, example["layout"],
+                                gap=_style_size("gap.column"), disabled=example["state"] == "disabled")
 
 
 def catalog_sections(entry):
@@ -111,9 +118,12 @@ def catalog_sections(entry):
         for v in label_variants(entry)]}]
     sizes = dial_sizes(entry)
     if sizes:
-        sections.append({"heading": "Felirat- és értékméret a tárcsa mellett (jelölve: javaslat)", "images": [
-            {"presentation": "sample", "file": s["file"], "alt": s["alt"],
-             "caption": f"{s['label']} · tárcsa {s['diameter']} px · felirat {s['caption']} · érték {s['value']} (TUI)"
-                        + (" · JAVASLAT" if s["proposal"] else " · ma használt")}
-            for s in sizes]})
+        sections.append({"heading": "Felirat- és értékméret a tárcsa mellett (jelölve: javaslat)", "table": {
+            "head": ["Tárcsa (px)", "Token", "Felirat (TUI)", "Érték (TUI)", "Állapot"],
+            "rows": [[str(s["diameter"]), s["token"], str(s["caption"]), str(s["value"]),
+                      "JAVASLAT" if s["proposal"] else "ma használt"] for s in sizes]}})
+    examples = dial_examples(entry)
+    if examples:
+        sections.append({"heading": "48 px-es tárcsa: három elrendezés, engedélyezve és letiltva", "images": [
+            {"presentation": "sample", "file": e["file"], "alt": e["alt"], "caption": e["caption"]} for e in examples]})
     return sections

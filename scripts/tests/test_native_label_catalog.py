@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from components import style
 from components.native.label import label
+from components.native.level.level import dial_text_variants
 from components.native.on_off_label import on_off_label
 from components.native.selector import selector
 
@@ -40,15 +41,38 @@ class LabelTests(unittest.TestCase):
             self.assertTrue(same(NATIVE / "label/img" / v["file"], image), v["id"])
         self.assertEqual(variants[0]["size"], style.size("font.page_title"))
 
-    def test_dial_sizes_36_40_48_56_and_the_normal_one(self):
+    def test_dial_size_table_keeps_the_tokens(self):
         sizes = label.dial_sizes(entry("label", "label"))
+        self.assertEqual([s["token"] for s in sizes], [f"label.dial.{d}" for d in (36, 40, 48, 56, 90)])
         self.assertEqual([s["diameter"] for s in sizes], [36, 40, 48, 56, 90])
         self.assertEqual([s["proposal"] for s in sizes], [True, False, True, True, False])
         for s in sizes:
-            image = label.render_dial_with_text(s["diameter"], s["caption"], s["value"])
-            self.assertTrue(same(NATIVE / "label/img" / s["file"], image), s["id"])
-            self.assertGreaterEqual(image.height, s["diameter"])
             self.assertLess(s["caption"], s["value"])
+            self.assertFalse((NATIVE / "label/img" / f"label-dial-{s['id']}.png").exists())
+
+    def test_dial_examples_three_layouts_enabled_and_disabled(self):
+        examples = label.dial_examples(entry("label", "label"))
+        self.assertEqual([(e["layout"], e["state"]) for e in examples],
+                         [(lay, st) for lay in ("bottom", "top", "right") for st in ("enabled", "disabled")])
+        images = {}
+        for e in examples:
+            image = label.render_dial_example(e)
+            images[e["id"]] = image
+            self.assertTrue(same(NATIVE / "label/img" / e["file"], image), e["id"])
+            self.assertGreaterEqual(min(image.size), 48)
+        for lay in ("lent", "fent-lent", "jobbra"):
+            self.assertNotEqual(images[f"{lay}-enabled"].tobytes(), images[f"{lay}-disabled"].tobytes())
+            self.assertEqual(images[f"{lay}-enabled"].size, images[f"{lay}-disabled"].size)
+
+    def test_disabled_option_is_off_by_default_and_pan_level_images_unchanged(self):
+        from components.native.level.level import render_dial_labelled
+        for name in ("pan", "level"):
+            dial = entry(name, "dial")
+            text, variants = dial_text_variants(dial)
+            for v in variants:
+                image = render_dial_labelled(text["diameter_px"], text["state"], text["caption"], text["value"], v["layout"],
+                                             bipolar=dial["bipolar"], gap=style.size(dial["state_gap"]))
+                self.assertTrue(same(NATIVE / name / "img" / v["file"], image), v["file"])
 
     def test_invalid_label_input_is_refused(self):
         with self.assertRaises(ValueError):
