@@ -57,18 +57,19 @@ public:
     enum Id : int
     {
         kClose = 1, kFullButton, kInstances, kGraph, kTargets, kCompactInstances,
-        kKnob = 100,                        // 100 + Knob: the dials (the compact view and the full screen share the ids)
+        kDial = 100,                        // 100 + Knob: the dials (the compact view and the full screen share the ids)
         kBeats = 130, kLegato,
-        kKnobBeats = 140,                   // 140 + Knob: the rows of the time dials in beats
+        kDialBeats = 140,                   // 140 + Knob: the rows of the time dials in beats
         kTargetsBack = 150, kTargetsPage, kTargetsAdd, kTargetsRow = 160,    // 160 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsBack = 600, kModsRow = 610, kModsAddStep = 660, kModsAdd, kModsPage,
         kList = 700, kListBackdrop, kListHeader
     };
-    enum KnobId : int { kAttack = 0, kDecay, kSustain, kRelease, kACurve, kDCurve, kRCurve, kDelay, kHold, kNumKnobs };
+    enum DialId : int { kAttack = 0, kDecay, kSustain, kRelease, kACurve, kDCurve, kRCurve, kDelay, kHold, kNumDials };
 
     // ---- the parameter rows: sixteen per envelope (row index = kRowsPerEnv * (envelope - 1) + slot)
-    /** The slots of an envelope's rows: the nine dials (KnobId), the units switch (BEATS), the retrigger switch (the engine's `legato_inverted`), then the beats versions of the five time dials. */
-    enum Slot : int { kSlotUnits = kNumKnobs, kSlotLegato, kSlotAttackBeats, kSlotDecayBeats, kSlotReleaseBeats, kSlotDelayBeats, kSlotHoldBeats, kRowsPerEnv };
+    /** The slots of an envelope's rows: the nine dials (DialId), the units switch (BEATS), the retrigger switch (the engine's `legato_inverted`), then the beats versions of the five time dials. */
+    enum Slot : int { kSlotUnits = kNumDials, kSlotLegato, kSlotAttackBeats, kSlotDecayBeats, kSlotReleaseBeats, kSlotDelayBeats, kSlotHoldBeats, kRowsPerEnv };
+    static constexpr double kLongPressMs = 600.0;   // the long press of a native cell that opens the modulations of the control
     static constexpr int kEnvs = 6;
     /** Q-Link: three groups, ADSR [attack, decay, sustain, release], SHAPE [A curve, D curve, R curve], TIME [delay, hold, BEATS, RETRIG]; the beats rows share the slot of their dial (the engine parameter in force is chosen by the units). */
 #define SB_ENV_C(ID, N, KEY, QG, QS) binding::Row { ID, "env" #N "." KEY, binding::Kind::Continuous, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, QG, QS, false }
@@ -103,7 +104,7 @@ public:
     /** The cells of the full screen / page: the nine dials, BEATS, RETRIG, the selector (Play expansion only), the TARGETS cell, CLOSE (Play expansion only), the graph, the blocks. */
     struct FullGeometry
     {
-        ui::Rect knob[kNumKnobs], beats, legato, selector, targets, close, graph, tags, caption, block[kGroups];
+        ui::Rect knob[kNumDials], beats, legato, selector, targets, close, graph, tags, caption, block[kGroups];
     };
     /** The compact view of the Play page: the graph, the host-painted full screen cell and the four ADSR dial cells. */
     struct CompactView
@@ -430,7 +431,7 @@ public:
                 nativeGestureField_ = nativeFieldAt (x, y);
                 nativeGestureTarget_ = nativeGestureField_ >= 0 ? nativeCells_[nativeGestureField_].target : -1;
                 nativeGestureBlocked_ = false;
-                nativeHold_ = nativeGestureField_ >= 0 && nativeGestureField_ < kNumKnobs;
+                nativeHold_ = nativeGestureField_ >= 0 && nativeGestureField_ < kNumDials;
                 nativeDownX_ = x;
                 nativeDownY_ = y;
                 nativeDownMs_ = nowMs;
@@ -490,7 +491,7 @@ public:
     }
     void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
-        if (nativeHold_ && ! nativeGestureBlocked_ && nowMs - nativeDownMs_ >= ui::KnobModel::kLongPressMs)
+        if (nativeHold_ && ! nativeGestureBlocked_ && nowMs - nativeDownMs_ >= kLongPressMs)
         {
             const int field = nativeGestureField_;
             nativeHold_ = false;
@@ -667,8 +668,8 @@ private:
     using ModRow = uibind::ModRow;
 
     static constexpr int kNativeScalarIds[] {
-        kKnob + kAttack, kKnob + kDecay, kKnob + kSustain, kKnob + kRelease,
-        kKnob + kACurve, kKnob + kDCurve, kKnob + kRCurve, kKnob + kDelay, kKnob + kHold, kBeats, kLegato,
+        kDial + kAttack, kDial + kDecay, kDial + kSustain, kDial + kRelease,
+        kDial + kACurve, kDial + kDCurve, kDial + kRCurve, kDial + kDelay, kDial + kHold, kBeats, kLegato,
     };
     static_assert (std::size (kNativeScalarIds) == nativeui::env::Selection);
     static constexpr int kGroundX0 = 434, kGroundX1 = 848;
@@ -677,13 +678,13 @@ private:
     /** The slot of a control id (-1: none): the dials 100 .. 108, BEATS 130, RETRIG 131. */
     static constexpr int slotOfId (int id) noexcept
     {
-        return id >= kKnob && id < kKnob + kNumKnobs ? id - kKnob : id == kBeats ? kSlotUnits : id == kLegato ? kSlotLegato : -1;
+        return id >= kDial && id < kDial + kNumDials ? id - kDial : id == kBeats ? kSlotUnits : id == kLegato ? kSlotLegato : -1;
     }
     int paramOfId (int id) const noexcept { return paramOfSlot (slotOfId (id)); }
     static const char* labelOfSlot (int slot) noexcept
     {
-        static const char* const n[kNumKnobs] = { "ATTACK", "DECAY", "SUSTAIN", "RELEASE", "A CURVE", "D CURVE", "R CURVE", "DELAY", "HOLD" };
-        return slot >= 0 && slot < kNumKnobs ? n[slot] : "MODULATIONS";
+        static const char* const n[kNumDials] = { "ATTACK", "DECAY", "SUSTAIN", "RELEASE", "A CURVE", "D CURVE", "R CURVE", "DELAY", "HOLD" };
+        return slot >= 0 && slot < kNumDials ? n[slot] : "MODULATIONS";
     }
     /** The colour of envelope n (0 .. 5): the orange to red of the look, a step further along it for every envelope. */
     static uint32_t envColour (int n) noexcept
@@ -764,7 +765,7 @@ private:
     ui::Rect cellOf (int field) const noexcept
     {
         namespace n = nativeui::env;
-        if (field >= 0 && field < kNumKnobs)
+        if (field >= 0 && field < kNumDials)
             return geo_.knob[field];
         switch (field)
         {
@@ -797,7 +798,7 @@ private:
             }
         return -1;
     }
-    ui::Rect slotCell (int slot) const noexcept { return slot == kSlotUnits ? geo_.beats : slot == kSlotLegato ? geo_.legato : slot >= 0 && slot < kNumKnobs ? geo_.knob[slot] : ui::Rect {}; }
+    ui::Rect slotCell (int slot) const noexcept { return slot == kSlotUnits ? geo_.beats : slot == kSlotLegato ? geo_.legato : slot >= 0 && slot < kNumDials ? geo_.knob[slot] : ui::Rect {}; }
     std::array<ui::Rect, nativeui::env::kFields + 1> nativeApertures() const noexcept
     {
         std::array<ui::Rect, nativeui::env::kFields + 1> areas {};
@@ -1305,7 +1306,7 @@ private:
             modsTargetParam_ = target;
         }
         const int slotId = slotOfId (modsTarget_);
-        if (modsTargetParam_ >= 0 && slotId >= 0 && slotId < kNumKnobs)
+        if (modsTargetParam_ >= 0 && slotId >= 0 && slotId < kNumDials)
             std::snprintf (title, sizeof title, "%.12s", labelOfSlot (slotId));
         const auto window = uibind::modulationWindow (v, modsTargetParam_, selectedSource_, modsPageIndex_, modRows_, focusSlot);
         modsPageIndex_ = window.page;

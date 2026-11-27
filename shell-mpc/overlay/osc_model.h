@@ -100,7 +100,7 @@ inline void blockRows (const PanelBlock& bl, const Rect& in, int* y, int* h) noe
 inline bool blockHasCapped (const PanelPreset& p, int b) noexcept
 {
     for (int i = 0; i < p.numItems && i < kMaxItems; ++i)
-        if (p.items[i].block == b && (p.items[i].kind == PartKind::Stepper || p.items[i].kind == PartKind::Menu || p.items[i].kind == PartKind::Toggle || p.items[i].kind == PartKind::Number))
+        if (p.items[i].block == b && (p.items[i].kind == PartKind::Choice || p.items[i].kind == PartKind::Menu || p.items[i].kind == PartKind::Toggle || p.items[i].kind == PartKind::Number))
             return true;
     return false;
 }
@@ -132,7 +132,7 @@ inline PanelCells layoutPanel (const PanelPreset& p, const Rect& rect, bool warp
                 const int ix0 = in.x + it.col * (icw + kGap), ix1 = in.x + (it.col + it.colSpan - 1) * (icw + kGap) + icw;
                 int iy0 = ry[r0], iy1 = ry[r1] + rh[r1];
                 const bool oneRow = bl.innerRows == 1 && blockHasCapped (p, b);
-                const int cap = oneRow ? kOneRowH : (it.kind == PartKind::Stepper || it.kind == PartKind::Menu ? kMaxStepperH : 0);
+                const int cap = oneRow ? kOneRowH : (it.kind == PartKind::Choice || it.kind == PartKind::Menu ? kMaxStepperH : 0);
                 if (cap > 0 && iy1 - iy0 > cap)
                 {
                     const int mid = (iy0 + iy1) / 2;
@@ -190,7 +190,7 @@ inline int partMinHeight (const PanelItem& it, bool warpSingle) noexcept
 {
     switch (it.kind)
     {
-        case PartKind::Knob: return 72;
+        case PartKind::Dial: return 72;
         case PartKind::RandPair: return 72 + 8 + 56;
         case PartKind::Unison: return 112 + kGap + kUnisonGearH;
         case PartKind::WarpPair: return warpSingle ? 72 : 72 + 72 + kQLane;

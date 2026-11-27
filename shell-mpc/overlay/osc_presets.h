@@ -17,7 +17,7 @@ enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level,
                                  SampleScan, SpecPos, Span,
                                  Fin, NoisePitch, NoiseFine, NoiseKey,
                                  Count };
-enum class PartKind : uint8_t { Knob, RandPair, Unison, WarpPair, Menu, Stepper, Toggle, Number };   // Number: a NumberField (FIN, the noise's PITCH and FINE)
+enum class PartKind : uint8_t { Dial, RandPair, Unison, WarpPair, Menu, Choice, Toggle, Number };   // Number: a NumberField (FIN, the noise's PITCH and FINE)
 
 /** One part of a preset: what, which slot, its label, and the cells it covers in the grid. */
 struct PanelItem
@@ -61,31 +61,31 @@ namespace presets
 constexpr int kUnisonDisplayH = 170;   // the picture above the unison settings (the fan of the voices)
 // wavetable: WT POS, the unison box, DETUNE, BLEND in a row; the warp pair below; the separated right column PAN over LEVEL
 constexpr PanelItem kWavetableItems[] = {
-    { PartKind::Knob, PanelSlot::WtPos, "WT POS", 0, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::WtPos, "WT POS", 0, 0, 1, 1, false },
     { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
     { PartKind::WarpPair, PanelSlot::Warp, "", 0, 1, 4, 1, false },
-    { PartKind::Knob, PanelSlot::Pan, "PAN", 4, 0, 1, 1, true },
-    { PartKind::Knob, PanelSlot::Level, "LEVEL", 4, 1, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Pan, "PAN", 4, 0, 1, 1, true },
+    { PartKind::Dial, PanelSlot::Level, "LEVEL", 4, 1, 1, 1, false },
 };
 // granular: 2 rows x 6: WARP menu, SCAN, DENS, LENGTH, PAN, LEVEL / OFFSET, DIR, PITCH, and the RAND knobs under LENGTH, PAN, LEVEL (a KnobRandPair spans both rows)
 constexpr PanelItem kGranularItems[] = {
     { PartKind::Menu, PanelSlot::WarpMenu, "WARP", 0, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Scan, "SCAN", 1, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Dens, "DENS", 2, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Scan, "SCAN", 1, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Dens, "DENS", 2, 0, 1, 1, false },
     { PartKind::RandPair, PanelSlot::Length, "LENGTH", 3, 0, 1, 2, false },
     { PartKind::RandPair, PanelSlot::Pan, "PAN", 4, 0, 1, 2, true },
     { PartKind::RandPair, PanelSlot::Level, "LEVEL", 5, 0, 1, 2, false },
-    { PartKind::Knob, PanelSlot::Offset, "OFFSET", 0, 1, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Dir, "DIR", 1, 1, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Pitch, "PITCH", 2, 1, 1, 1, true },
+    { PartKind::Dial, PanelSlot::Offset, "OFFSET", 0, 1, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Dir, "DIR", 1, 1, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Pitch, "PITCH", 2, 1, 1, 1, true },
 };
 // noise: FILTER, PAN, LEVEL
 constexpr PanelItem kNoiseItems[] = {
-    { PartKind::Knob, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Pan, "PAN", 1, 0, 1, 1, true },
-    { PartKind::Knob, PanelSlot::Level, "LEVEL", 2, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, false },
+    { PartKind::Dial, PanelSlot::Pan, "PAN", 1, 0, 1, 1, true },
+    { PartKind::Dial, PanelSlot::Level, "LEVEL", 2, 0, 1, 1, false },
 };
 constexpr PanelPreset kWavetable { "wavetable", 5, 2, 4, kWavetableItems, static_cast<int> (sizeof kWavetableItems / sizeof kWavetableItems[0]) };
 constexpr PanelPreset kGranular { "granular", 6, 2, -1, kGranularItems, static_cast<int> (sizeof kGranularItems / sizeof kGranularItems[0]) };
@@ -93,23 +93,23 @@ constexpr PanelPreset kNoise { "noise", 3, 1, -1, kNoiseItems, static_cast<int> 
 // DetailPage presets: titled blocks (one Q group each), the same rules as the full screen. The unison settings: the MODE and STACK steppers (a row of their own, 64 px, with their names) over the WIDTH and
 // RANGE knobs, and the block of the three spreads over the voices (what WT POS and the two warps do from voice to voice). Knobs are one size on a page (a block's columns are as wide as the others').
 constexpr PanelItem kUnisonDetailItems[] = {
-    { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 },
-    { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::WtSpread, "WT POS", 0, 0, 1, 1, false, 1 },
-    { PartKind::Knob, PanelSlot::Warp1Spread, "WARP 1", 1, 0, 1, 1, false, 1 },
-    { PartKind::Knob, PanelSlot::Warp2Spread, "WARP 2", 2, 0, 1, 1, false, 1 },
+    { PartKind::Choice, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Choice, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::WtSpread, "WT POS", 0, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Warp1Spread, "WARP 1", 1, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Warp2Spread, "WARP 2", 2, 0, 1, 1, false, 1 },
 };
 constexpr PanelBlock kUnisonDetailBlocks[] = { { "UNISON", 0, 0, 2, 1, 2, 2, 64 }, { "VOICE SPREAD", 2, 0, 3, 1, 3, 1 } };
 constexpr QSpec kUnisonDetailQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } },
                                      { { PanelSlot::WtSpread, PanelSlot::Warp1Spread, PanelSlot::Warp2Spread, PanelSlot::Count } } };
 constexpr PanelItem kGrainDetailItems[] = {
-    { PartKind::Stepper, PanelSlot::Shape, "SHAPE", 0, 0, 4, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Amount, "AMOUNT", 0, 1, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::AmountRand, "RAND", 1, 1, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Skew, "SKEW", 2, 1, 1, 1, true, 0 },
-    { PartKind::Knob, PanelSlot::SkewRand, "RAND", 3, 1, 1, 1, false, 0 },
+    { PartKind::Choice, PanelSlot::Shape, "SHAPE", 0, 0, 4, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Amount, "AMOUNT", 0, 1, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::AmountRand, "RAND", 1, 1, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Skew, "SKEW", 2, 1, 1, 1, true, 0 },
+    { PartKind::Dial, PanelSlot::SkewRand, "RAND", 3, 1, 1, 1, false, 0 },
 };
 constexpr PanelBlock kGrainDetailBlocks[] = { { "WINDOW", 0, 0, 1, 1, 4, 2, 64 } };
 constexpr QSpec kGrainDetailQ[] = { { { PanelSlot::Amount, PanelSlot::AmountRand, PanelSlot::Skew, PanelSlot::SkewRand } },
@@ -119,7 +119,7 @@ constexpr QSpec kGrainDetailQ[] = { { { PanelSlot::Amount, PanelSlot::AmountRand
 constexpr PanelBlock kWavetableBlocks[] = { { "UNISON", 0, 0, 1, 1, 3, 2 }, { "WARP", 1, 0, 1, 1, 1, 1 } };
 constexpr PanelItem kWavetableFullItems[] = {
     { PartKind::Unison, PanelSlot::Unison, "", 0, 0, 1, 2, false, 0 },
-    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 1, 0, 1, 2, false, 0 },
+    { PartKind::Dial, PanelSlot::Detune, "DETUNE", 1, 0, 1, 2, false, 0 },
     { PartKind::Number, PanelSlot::Fin, "FIN", 2, 0, 1, 1, false, 0 },
     { PartKind::WarpPair, PanelSlot::Warp, "", 0, 0, 1, 1, false, 1 },
 };
@@ -128,19 +128,19 @@ constexpr QSpec kWavetableFullQ[] = { { { PanelSlot::Unison, PanelSlot::Detune, 
 constexpr PanelBlock kSpectralBlocks[] = { { "UNISON", 0, 0, 1, 1, 2, 2 }, { "WARP", 1, 0, 1, 1, 1, 1 } };
 constexpr PanelItem kSpectralFullItems[] = {
     { PartKind::Unison, PanelSlot::Unison, "", 0, 0, 1, 2, false, 0 },
-    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 1, 0, 1, 2, false, 0 },
+    { PartKind::Dial, PanelSlot::Detune, "DETUNE", 1, 0, 1, 2, false, 0 },
     { PartKind::WarpPair, PanelSlot::Warp, "", 0, 0, 1, 1, false, 1 },
 };
 constexpr QSpec kSpectralFullQ[] = { { { PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Count, PanelSlot::Count } } };
 // granular: GRAIN (DENS, LENGTH, WARP type) and PLAYBACK (OFFSET, DIR, PITCH, FIN); the first Q group is the top row (TYPE, SOURCE, SCAN, OCT)
 constexpr PanelBlock kGranularBlocks[] = { { "GRAIN", 0, 0, 3, 1, 3, 1 }, { "PLAYBACK", 3, 0, 4, 1, 4, 1 } };
 constexpr PanelItem kGranularFullItems[] = {
-    { PartKind::Knob, PanelSlot::Dens, "DENS", 0, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Length, "LENGTH", 1, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Dens, "DENS", 0, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Length, "LENGTH", 1, 0, 1, 1, false, 0 },
     { PartKind::Menu, PanelSlot::WarpMenu, "WARP", 2, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Offset, "OFFSET", 0, 0, 1, 1, false, 1 },
-    { PartKind::Knob, PanelSlot::Dir, "DIR", 1, 0, 1, 1, false, 1 },
-    { PartKind::Knob, PanelSlot::Pitch, "PITCH", 2, 0, 1, 1, true, 1 },
+    { PartKind::Dial, PanelSlot::Offset, "OFFSET", 0, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Dir, "DIR", 1, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Pitch, "PITCH", 2, 0, 1, 1, true, 1 },
     { PartKind::Number, PanelSlot::Fin, "FIN", 3, 0, 1, 1, false, 1 },
 };
 constexpr QSpec kGranularFullQ[] = { { { PanelSlot::Dens, PanelSlot::Length, PanelSlot::WarpMenu, PanelSlot::Count } },
@@ -149,8 +149,8 @@ constexpr QSpec kGranularFullQ[] = { { { PanelSlot::Dens, PanelSlot::Length, Pan
 // here are the other groups, in reading order. Level, pan and destination are not here (read-only indicator in the top band: their home is the Mixer); everything that is not in the default view is behind the ONE MORE button.
 // Sub: tuning and behaviour below the waveform and octave selectors.
 constexpr PanelItem kSubFullItems[] = {
-    { PartKind::Knob, PanelSlot::SubCrs, "CRS", 0, 0, 1, 1, true, 0 },
-    { PartKind::Knob, PanelSlot::SubPhase, "PHASE", 1, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::SubCrs, "CRS", 0, 0, 1, 1, true, 0 },
+    { PartKind::Dial, PanelSlot::SubPhase, "PHASE", 1, 0, 1, 1, false, 0 },
     { PartKind::Toggle, PanelSlot::SubEnv1, "ENV 1", 0, 0, 1, 1, false, 1 },
     { PartKind::Toggle, PanelSlot::SubMono, "MONO", 1, 0, 1, 1, false, 1 },
     { PartKind::Toggle, PanelSlot::SubContig, "FREE RUN", 2, 0, 1, 1, false, 1 },
@@ -165,10 +165,10 @@ constexpr PanelItem kNoiseGenItems[] = {
     { PartKind::Number, PanelSlot::NoisePitch, "PITCH", 0, 0, 1, 1, false, 0 },
     { PartKind::Number, PanelSlot::NoiseFine, "FINE", 1, 0, 1, 1, false, 0 },
     { PartKind::Toggle, PanelSlot::NoiseKey, "KEY TRACK", 2, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, true, 1 },
-    { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, true, 1 },
+    { PartKind::Dial, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 1 },
     { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 2, 0, 1, 1, false, 1 },
-    { PartKind::Knob, PanelSlot::SubBlend, "BLEND", 3, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::SubBlend, "BLEND", 3, 0, 1, 1, false, 1 },
 };
 constexpr PanelBlock kNoiseGenBlocks[] = { { "TUNE", 0, 0, 3, 1, 3, 1 }, { "CHARACTER", 3, 0, 4, 1, 4, 1 } };
 constexpr QSpec kNoiseGenQ[] = { { { PanelSlot::NoisePitch, PanelSlot::NoiseFine, PanelSlot::NoiseKey, PanelSlot::Count } },
@@ -177,7 +177,7 @@ constexpr PanelPreset kNoiseGenFull { "noise (full screen, generated)", 7, 1, -1
 constexpr PanelItem kNoiseSampleItems[] = {
     kNoiseGenItems[0], kNoiseGenItems[1], kNoiseGenItems[2], kNoiseGenItems[3],
     kNoiseGenItems[4], kNoiseGenItems[5], kNoiseGenItems[6],
-    { PartKind::Knob, PanelSlot::NoiseStart, "START", 0, 0, 1, 1, false, 2 },
+    { PartKind::Dial, PanelSlot::NoiseStart, "START", 0, 0, 1, 1, false, 2 },
     { PartKind::Toggle, PanelSlot::NoiseRand, "RANDOM", 1, 0, 1, 1, false, 2 },
     { PartKind::Toggle, PanelSlot::NoiseLoop, "LOOP", 2, 0, 1, 1, false, 2 },
     { PartKind::Toggle, PanelSlot::NoiseBounce, "BOUNCE", 3, 0, 1, 1, false, 2 },
@@ -188,31 +188,31 @@ constexpr QSpec kNoiseSampleQ[] = { kNoiseGenQ[0], kNoiseGenQ[1],
 constexpr PanelPreset kNoiseSampleFull { "noise (full screen, sample)", 11, 1, -1, kNoiseSampleItems, 11, kNoiseSampleQ, 3, 0, kNoiseSampleBlocks, 3 };
 
 constexpr PanelPreset kNoiseFull = kNoiseGenFull;
-constexpr PanelItem kNoItems[] = { { PartKind::Knob, PanelSlot::Count, "", 0, 0, 1, 1, false } };
+constexpr PanelItem kNoItems[] = { { PartKind::Dial, PanelSlot::Count, "", 0, 0, 1, 1, false } };
 constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 constexpr PanelPreset kGranularFull { "granular (full screen)", 7, 1, -1, kGranularFullItems, 7, kGranularFullQ, 2, 0, kGranularBlocks, 2 };
 constexpr PanelPreset kEmptyFull { "none (full screen)", 4, 1, -1, kNoItems, 0, nullptr, 0, 0 };
 constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 // the DetailPages of the unison settings of the three types, and the envelope of the multisample oscillator
 constexpr PanelItem kUnisonMsItems[] = {
-    { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 }, { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Warp1Spread, "WARP 1", 0, 0, 1, 1, false, 1 }, { PartKind::Knob, PanelSlot::Warp2Spread, "WARP 2", 1, 0, 1, 1, false, 1 },
+    { PartKind::Choice, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 }, { PartKind::Choice, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 }, { PartKind::Dial, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Warp1Spread, "WARP 1", 0, 0, 1, 1, false, 1 }, { PartKind::Dial, PanelSlot::Warp2Spread, "WARP 2", 1, 0, 1, 1, false, 1 },
 };
 constexpr PanelBlock kUnisonMsBlocks[] = { { "UNISON", 0, 0, 2, 1, 2, 2, 64 }, { "VOICE SPREAD", 2, 0, 2, 1, 2, 1 } };
 constexpr QSpec kUnisonMsQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } }, { { PanelSlot::Warp1Spread, PanelSlot::Warp2Spread, PanelSlot::Count, PanelSlot::Count } } };
 constexpr PanelItem kUnisonGrItems[] = {
-    { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 }, { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Start, "START", 0, 0, 1, 1, false, 1 },
-    { PartKind::Knob, PanelSlot::Span, "SPAN", 1, 0, 1, 1, false, 1 },
+    { PartKind::Choice, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 }, { PartKind::Choice, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 }, { PartKind::Dial, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Start, "START", 0, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Span, "SPAN", 1, 0, 1, 1, false, 1 },
 };
 constexpr PanelBlock kUnisonGrBlocks[] = { { "UNISON", 0, 0, 2, 1, 2, 2, 64 }, { "VOICE SPREAD", 2, 0, 2, 1, 2, 1 } };
 constexpr QSpec kUnisonGrQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } }, { { PanelSlot::Start, PanelSlot::Span, PanelSlot::Count, PanelSlot::Count } } };
 constexpr PanelItem kEnvelopeItems[] = {
-    { PartKind::Knob, PanelSlot::Delay, "DELAY", 0, 0, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Attack, "ATTACK", 1, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Hold, "HOLD", 2, 0, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Decay, "DECAY", 3, 0, 1, 1, false, 0 },
-    { PartKind::Knob, PanelSlot::Sustain, "SUSTAIN", 0, 0, 1, 1, false, 1 }, { PartKind::Knob, PanelSlot::Release, "RELEASE", 1, 0, 1, 1, false, 1 },
+    { PartKind::Dial, PanelSlot::Delay, "DELAY", 0, 0, 1, 1, false, 0 }, { PartKind::Dial, PanelSlot::Attack, "ATTACK", 1, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Hold, "HOLD", 2, 0, 1, 1, false, 0 }, { PartKind::Dial, PanelSlot::Decay, "DECAY", 3, 0, 1, 1, false, 0 },
+    { PartKind::Dial, PanelSlot::Sustain, "SUSTAIN", 0, 0, 1, 1, false, 1 }, { PartKind::Dial, PanelSlot::Release, "RELEASE", 1, 0, 1, 1, false, 1 },
     { PartKind::Toggle, PanelSlot::Override, "OVERRIDE", 2, 0, 2, 1, false, 1 },
 };
 constexpr PanelBlock kEnvelopeBlocks[] = { { "TIMES", 0, 0, 1, 1, 4, 1 }, { "SUSTAIN AND RELEASE", 0, 1, 1, 1, 4, 1 } };

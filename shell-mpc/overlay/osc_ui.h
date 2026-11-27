@@ -171,12 +171,12 @@ public:
     /** What a value is and how it converts to the engine's plain value. */
     enum class T : uint8_t
     {
-        Knob,        // normalised 0 .. 1 of the parameter
+        Dial,        // normalised 0 .. 1 of the parameter
         Number,      // a NumberField in the units of the parameter
         NumberOct,   // transpose: OCT = steps of 12 semitones
         NumberSem,   // transpose: SEM = the remainder
         NumberDeg,   // a percent parameter shown as degrees (0 .. 100 % = 0 .. 360)
-        Stepper,     // a choice parameter
+        Choice,      // a choice parameter
         Toggle,
         UpDown,
         Picto,       // the type pictograms of A, B, C
@@ -749,7 +749,7 @@ public:
             case T::NumberOct: kind = n::SettingsOctave; break;
             case T::Toggle: kind = n::SettingsToggle; break;
             case T::Picto: kind = n::SettingsType; break;
-            case T::Stepper: case T::PictoPlain: kind = n::SettingsMenu; break;
+            case T::Choice: case T::PictoPlain: kind = n::SettingsMenu; break;
             case T::UpDown: kind = n::SettingsVoices; break;
             case T::Table: case T::Source: kind = n::SettingsSource; break;
             case T::Inert: kind = item.param >= 0 ? n::SettingsMenu : n::SettingsAction; break;
@@ -1072,7 +1072,7 @@ public:
             }
             for (const auto& item : main_)
                 if (item.param >= 0 && item.full && item.hasCell && item.cell.rect.contains (x, y)
-                    && (item.type == T::Knob || item.type == T::Number || item.type == T::NumberOct || item.type == T::UpDown)
+                    && (item.type == T::Dial || item.type == T::Number || item.type == T::NumberOct || item.type == T::UpDown)
                     && synthyboy::modDestinationChoiceOf (static_cast<size_t> (item.param)) != 0
                     && std::find (nativeSettingsPaint_.begin(), nativeSettingsPaint_.end(), item.id) != nativeSettingsPaint_.end())
                     return { item.id, item.param };
@@ -1113,7 +1113,7 @@ public:
                 const int length = std::max (1, static_cast<int> (pi.numChoices));
                 const int index = static_cast<int> (std::lround (old - pi.min));
                 const int delta = value < 0.65f ? -1 : 1;
-                plain = pi.min + (item->type == T::Stepper ? (index + delta + length) % length
+                plain = pi.min + (item->type == T::Choice ? (index + delta + length) % length
                                                           : std::clamp (index + delta, 0, length - 1));
                 break;
             }
@@ -1148,10 +1148,10 @@ public:
     {
         switch (item.type)
         {
-            case T::Knob: return item.id == kPanel + static_cast<int> (oscmodel::PanelSlot::WtPos) ? "FRAME" : item.cell.label;
+            case T::Dial: return item.id == kPanel + static_cast<int> (oscmodel::PanelSlot::WtPos) ? "FRAME" : item.cell.label;
             case T::Number: case T::NumberOct: return item.cell.label;
             case T::Toggle: return item.cell.label;
-            case T::Stepper:
+            case T::Choice:
                 return item.id == kWarp1Type ? "WARP 1"
                                              : item.id == kWarp2Type ? "WARP 2"
                                                                      : item.cell.label;
@@ -1224,7 +1224,7 @@ private:
             case T::NumberSem: return n::Semitone;
             case T::Toggle: return n::Toggle;
             case T::SnapBit: return n::Snap;
-            case T::Stepper: case T::List:
+            case T::Choice: case T::List:
             {
                 const std::string_view key (pi.key);
                 const auto suffix = key.substr (key.find ('.') + 1);
@@ -1429,15 +1429,15 @@ private:
             if (! noise)
                 bind (main_, kBasic + 0, sub ? T::PictoPlain : T::Picto, typeKey);
             if (noise)
-                bind (main_, kBasic + 5, T::Stepper, "sample", "SOUND");
+                bind (main_, kBasic + 5, T::Choice, "sample", "SOUND");
             if (abc)
                 bindSource (kind);
             if (sub)
                 bind (main_, kBasic + 3, T::Number, "octave", "OCT");
             if (noise)
-                bind (main_, kBasic + 4, T::Knob, "filter", "FILTER");
-            bind (main_, kBasic + 6, T::Knob, "pan", "PAN");
-            bind (main_, kBasic + 7, T::Knob, "level", "LEVEL");
+                bind (main_, kBasic + 4, T::Dial, "filter", "FILTER");
+            bind (main_, kBasic + 6, T::Dial, "pan", "PAN");
+            bind (main_, kBasic + 7, T::Dial, "level", "LEVEL");
         }
         tuneFocus_ = -1;
         if (! sub && ! noise)
@@ -1489,31 +1489,31 @@ private:
             bindSource (kind);
             if (kind == oscmodel::Kind::Wavetable)
             {
-                bind (main_, kWavePhase, T::Knob, "phase", "PHASE");
-                bind (main_, kWaveRandom, T::Knob, "random_phase", "RAND");
+                bind (main_, kWavePhase, T::Dial, "phase", "PHASE");
+                bind (main_, kWaveRandom, T::Dial, "random_phase", "RAND");
                 bind (main_, kWaveMap, T::Inert, "", "MAP");
             }
             const PanelSlot ps = positionSlot (kind);
-            bind (main_, kPanel + static_cast<int> (ps), T::Knob, slotKey (ps),
+            bind (main_, kPanel + static_cast<int> (ps), T::Dial, slotKey (ps),
                   kind == oscmodel::Kind::Wavetable ? "WT POS" : kind == oscmodel::Kind::Multisample ? "TIMBRE" : kind == oscmodel::Kind::Spectral ? "POSITION" : "SCAN");
             bind (main_, kTuneOct, T::NumberOct, "transpose", "OCT");
         }
         else if (sub)
         {
             bind (main_, kBasic + 3, T::Number, "octave", "OCT");
-            bind (main_, kPanel + static_cast<int> (PanelSlot::SubCrs), T::Knob, "tune", "CRS");
-            bind (main_, kPanel + static_cast<int> (PanelSlot::SubPhase), T::Knob, "phase", "PHASE");
+            bind (main_, kPanel + static_cast<int> (PanelSlot::SubCrs), T::Dial, "tune", "CRS");
+            bind (main_, kPanel + static_cast<int> (PanelSlot::SubPhase), T::Dial, "phase", "PHASE");
         }
         else
         {
-            bind (main_, kPanel + static_cast<int> (PanelSlot::NoiseType), T::Stepper, "type", "KIND");
-            bind (main_, kBasic + 5, T::Stepper, "sample", "SOUND");
-            bind (main_, kBasic + 4, T::Knob, "filter", "FILTER");
-            bind (main_, kPanel + static_cast<int> (PanelSlot::NoiseStereo), T::Knob, "stereo", "STEREO");
+            bind (main_, kPanel + static_cast<int> (PanelSlot::NoiseType), T::Choice, "type", "KIND");
+            bind (main_, kBasic + 5, T::Choice, "sample", "SOUND");
+            bind (main_, kBasic + 4, T::Dial, "filter", "FILTER");
+            bind (main_, kPanel + static_cast<int> (PanelSlot::NoiseStereo), T::Dial, "stereo", "STEREO");
         }
         bindPanel (main_, full_.layout().preset, kPanel, kind, abc);
         if (sub)
-            bind (main_, kPanel + static_cast<int> (PanelSlot::SubBlend), T::Knob, "filter_blend", "BLEND");
+            bind (main_, kPanel + static_cast<int> (PanelSlot::SubBlend), T::Dial, "filter_blend", "BLEND");
         bindingFull_ = false;
     }
     /** The full screen again (the noise changed its mode: another bottom band): its rows are dropped and bound anew. */
@@ -1547,8 +1547,8 @@ private:
                     if (base == kPanel)
                         bind (list, id, T::Number, k, it.label);
                     break;
-                case oscmodel::PartKind::Knob: bind (list, id, T::Knob, k, it.label); break;
-                case oscmodel::PartKind::Stepper: bind (list, id, T::Stepper, k, it.label); break;
+                case oscmodel::PartKind::Dial: bind (list, id, T::Dial, k, it.label); break;
+                case oscmodel::PartKind::Choice: bind (list, id, T::Choice, k, it.label); break;
                 case oscmodel::PartKind::Toggle: bind (list, id, T::Toggle, k, it.label); break;
                 case oscmodel::PartKind::Menu: bind (list, id, T::Inert, k, it.label); break;   // the WARP menu of the granular oscillator: a tap steps through the warp types
                 case oscmodel::PartKind::Unison:
@@ -1556,10 +1556,10 @@ private:
                     bind (list, kUnisonCount, T::UpDown, "unison.voices", "VOICES");
                     break;
                 case oscmodel::PartKind::WarpPair:
-                    bind (list, kWarp1Type, T::Stepper, "warp.type");
-                    bind (list, kWarp1Amount, T::Knob, "warp.amount", "WARP 1");
-                    bind (list, kWarp2Type, T::Stepper, "warp2.type");
-                    bind (list, kWarp2Amount, T::Knob, "warp2.amount", "WARP 2");
+                    bind (list, kWarp1Type, T::Choice, "warp.type");
+                    bind (list, kWarp1Amount, T::Dial, "warp.amount", "WARP 1");
+                    bind (list, kWarp2Type, T::Choice, "warp2.type");
+                    bind (list, kWarp2Amount, T::Dial, "warp2.amount", "WARP 2");
                     break;
                 case oscmodel::PartKind::RandPair: break;
             }
@@ -1668,7 +1668,7 @@ private:
             else if (it.type == T::NumberDeg) { c.min = 0; c.max = 360; c.step = 1; c.def = 0; }
             else if (it.type == T::NumberOct) { c.min = -4; c.max = 4; c.step = 1; c.def = 0; }
             else if (it.type == T::NumberSem) { c.min = -11; c.max = 11; c.step = 1; c.def = 0; }
-            else if (it.type == T::Knob)
+            else if (it.type == T::Dial)
             {
                 c.bipolar = pi.min < 0.0f && pi.max > 0.0f;
                 c.def = synthyboy::toNormalised (pi, pi.def);
@@ -1942,10 +1942,10 @@ private:
             case kPageGrain: loadDetail (oscmodel::presets::kGrainDetail); break;
             case kPageEnvelope: loadDetail (oscmodel::presets::kEnvelopeDetail); break;
             case kPageRoute:
-                bind (page_, kRouteTarget, T::Stepper, "destination", "", false);
-                bind (page_, kRouteBalance, T::Knob, "filter_blend", "", false);
-                bind (page_, kRouteBus1, T::Knob, "bus1_send", "", false);
-                bind (page_, kRouteBus2, T::Knob, "bus2_send", "", false);
+                bind (page_, kRouteTarget, T::Choice, "destination", "", false);
+                bind (page_, kRouteBalance, T::Dial, "filter_blend", "", false);
+                bind (page_, kRouteBus1, T::Dial, "bus1_send", "", false);
+                bind (page_, kRouteBus2, T::Dial, "bus2_send", "", false);
                 break;
             case kPageMods: loadMods (inst); break;
             case oscspec::kWtMap: case oscspec::kMore: case oscspec::kOptions: case oscspec::kSampleRegion: case oscspec::kSampleSlice: case oscspec::kGrain: case oscspec::kSpecFilter: case oscspec::kSpecScan:
@@ -1973,10 +1973,10 @@ private:
         for (int i = 0; i < sp->numCtls; ++i)
         {
             const oscspec::Ctl& c = sp->ctls[i];
-            T t = T::Knob;
+            T t = T::Dial;
             std::string key = c.key;
             oscmodel::NumberFormat format = oscmodel::NumberFormat::IntPlain;
-            if (c.kind == oscspec::K::Stepper) t = T::Stepper;
+            if (c.kind == oscspec::K::Choice) t = T::Choice;
             else if (c.kind == oscspec::K::Toggle) t = std::strcmp (c.key, "transpose_snap") == 0 ? T::SnapBit : T::Toggle;
             else if (c.kind == oscspec::K::Number)
             {
@@ -2161,9 +2161,9 @@ private:
             if (it.alwaysOff)
             {
                 c.enabled = false;
-                if (it.type == T::Stepper && it.param >= 0)
+                if (it.type == T::Choice && it.param >= 0)
                     showStepper (c, it.param, v.param (it.param));
-                else if (it.type == T::Stepper)
+                else if (it.type == T::Choice)
                 {
                     c.count = 0;
                     oscmodel::setText (c, "-");
@@ -2205,7 +2205,7 @@ private:
             const synthyboy::ParamInfo& pi = info (it.param);
             switch (it.type)
             {
-                case T::Knob:
+                case T::Dial:
                 {
                     c.value = normOf (it.param, plain);
                     const bool isPan = ! it.full && it.id == kBasic + 6, isLevel = ! it.full && it.id == kBasic + 7;
@@ -2232,7 +2232,7 @@ private:
                 case T::NumberOct: c.value = octOf (static_cast<int> (std::lround (plain))); break;
                 case T::NumberSem: c.value = semOf (static_cast<int> (std::lround (plain))); break;
                 case T::NumberDeg: c.value = std::round (static_cast<double> (plain) * 3.6); break;
-                case T::Stepper:
+                case T::Choice:
                 {
                     showStepper (c, it.param, plain);
                     if (it.id == kWarp1Type || it.id == kWarp2Type)
@@ -2262,7 +2262,7 @@ private:
             }
             // a cell never gets a state when its parameter is read only by nothing: enabled stays as the model says (a warp slot with the type Off takes no amount)
             c.enabled = true;
-            if (it.type == T::Knob && (it.id == kWarp1Amount || it.id == kWarp2Amount))
+            if (it.type == T::Dial && (it.id == kWarp1Amount || it.id == kWarp2Amount))
                 c.enabled = ! warpIsOff (it.id);
             if (it.id == kRoute && sel_ == playosc::kSub)
                 c.enabled = false;   // the sub oscillator has no route button (its routing is the ROUTING block of its page): the hidden cell takes no touch and no Q-Link
@@ -2513,7 +2513,7 @@ private:
                 modsPicking_ = false;
                 modsListGroup_ = -1;
                 modsListFilled_ = false;
-                const char* name = target != nullptr && target->hasCell && target->type == T::Knob && target->cell.label[0] != '\0'
+                const char* name = target != nullptr && target->hasCell && target->type == T::Dial && target->cell.label[0] != '\0'
                     ? target->cell.label
                     : info (targetParam).name;
                 ui::setText (modsTitle_, sizeof modsTitle_, name);

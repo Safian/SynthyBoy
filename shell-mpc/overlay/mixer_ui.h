@@ -182,15 +182,15 @@ public:
         }
     }
 
-    bool nativeWidgetsEnabled() const noexcept { return nativeWidgetsEnabled_; }
-    void setNativeWidgetsEnabled (bool on) noexcept { nativeWidgetsEnabled_ = on; }
+    bool nativeCellsEnabled() const noexcept { return nativeCellsEnabled_; }
+    void setNativeCellsEnabled (bool on) noexcept { nativeCellsEnabled_ = on; }
 
     bool hostConfirmed() const noexcept
     {
         return &ui::theme::L() == &ui::theme::kLook1 && drawPass_ == DrawPass::LiveOnly;
     }
 
-    bool nativeBase() const noexcept { return useNativeWidgets(); }
+    bool nativeBase() const noexcept { return useNativeCells(); }
 
     bool isNativeOwned (int strip, int controlType) const noexcept
     {
@@ -238,7 +238,7 @@ public:
     void update (IInstanceView& inst, UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) stack;
-        nativeWidgetsAvailable_ = inst.nativeMixerWidgetsAvailable();
+        nativeCellsAvailable_ = inst.nativeMixerCellsAvailable();
         inst.requestMeters();   // the source strips of this page: the engine measures them only while a page asks (every update of the page)
         for (int s = 0; s < kStrips; ++s)
         {
@@ -378,8 +378,8 @@ public:
 
 private:
     int w_ = kCanvasW, h_ = kCanvasH;
-    bool nativeWidgetsEnabled_ = true;
-    bool nativeWidgetsAvailable_ = false;
+    bool nativeCellsEnabled_ = true;
+    bool nativeCellsAvailable_ = false;
     DrawPass drawPass_ = DrawPass::All;
     StripBinding bindings_[kStrips];
     bool powerOn_[kStrips] = {}, levelEnabled_[kStrips] = {};
@@ -395,10 +395,10 @@ private:
         return type >= 0 && type < kTypes ? p[type] : -1;
     }
 
-    bool useNativeWidgets() const noexcept
+    bool useNativeCells() const noexcept
     {
-        return nativeWidgetsEnabled_ && w_ == page::kW && h_ == page::kH
-            && (nativeWidgetsAvailable_ || hostConfirmed());
+        return nativeCellsEnabled_ && w_ == page::kW && h_ == page::kH
+            && (nativeCellsAvailable_ || hostConfirmed());
     }
 
     void publishStripVisuals (IInstanceView& inst) noexcept

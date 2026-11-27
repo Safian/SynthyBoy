@@ -80,7 +80,7 @@ public:
     /** The Mixer page is on screen: the engine measures the source strips (LiveValues::stripPeak[0 .. 6]) for the next moments (IEngine::requestMeters). Called every update of that page; lock free. */
     virtual void requestMeters() noexcept {}
     /** Native Mixer widgets receive the same live level and peak hold as the overlay. */
-    virtual bool nativeMixerWidgetsAvailable() const noexcept { return false; }
+    virtual bool nativeMixerCellsAvailable() const noexcept { return false; }
     virtual void setNativeMixerMeter (int /*strip*/, float /*peak*/, float /*hold*/) noexcept {}
     virtual void setNativeMixerStereoMeter (int /*strip*/, const float* /*sixFields*/) noexcept {}
     /** The native Mixer strips are on screen (and no destination list covers them): the host reads their solo / mute presentation and the page's widgets stay shown. */

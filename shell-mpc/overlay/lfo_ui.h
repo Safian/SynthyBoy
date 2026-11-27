@@ -93,9 +93,9 @@ public:
     /** What a value is and how it converts to the engine's plain value. */
     enum class T : uint8_t
     {
-        Knob,      // normalised 0 .. 1 of the parameter
+        Dial,      // normalised 0 .. 1 of the parameter
         Number,    // a number in the units of the parameter
-        Stepper,   // a choice parameter
+        Choice,   // a choice parameter
         Toggle,
         List,      // a choice parameter as a list (every option visible)
         Picker,    // the shape / style picker: the index is the value of the parameter
@@ -104,13 +104,13 @@ public:
     /** One binding row of the page: the id of the control, the suffix of its engine key ("rate" -> "lfo3.rate": the prefix is the LFO shown) for a standard LFO and for a random LFO ("" = the control is not there), the type. */
     struct RowSpec { int id; const char* standard; const char* random; T type; };
     static constexpr RowSpec kRows[] = {
-        { kShape, "shape", "", T::Stepper },           { kStyle, "", "style", T::Stepper },             { kRate, "rate", "rate", T::Knob },
-        { kDivision, "division", "division", T::Stepper }, { kRise, "fade_in", "", T::Knob },             { kSmoothTime, "smooth_time", "", T::Knob },
-        { kSync, "sync", "sync", T::Stepper },         { kStereoToggle, "", "stereo", T::Toggle },      { kPicker, "shape", "style", T::Picker },
-        { kPagePicker, "shape", "style", T::Stepper }, { kSmoothPick, "smooth", "", T::Toggle },        { kHostPick, "host", "", T::Toggle },
-        { kMode, "sync_type", "", T::Stepper },        { kModeList, "", "sync_type", T::List },         { kPhase, "phase", "", T::Knob },
-        { kDelay, "delay", "", T::Knob },              { kDirection, "direction", "", T::List },        { kSwing, "swing", "", T::Knob },
-        { kStereo, "stereo", "", T::Knob },            { kMono, "mono", "", T::Toggle },                { kKeyTranspose, "keytrack_transpose", "keytrack_transpose", T::Number },
+        { kShape, "shape", "", T::Choice },           { kStyle, "", "style", T::Choice },             { kRate, "rate", "rate", T::Dial },
+        { kDivision, "division", "division", T::Choice }, { kRise, "fade_in", "", T::Dial },             { kSmoothTime, "smooth_time", "", T::Dial },
+        { kSync, "sync", "sync", T::Choice },         { kStereoToggle, "", "stereo", T::Toggle },      { kPicker, "shape", "style", T::Picker },
+        { kPagePicker, "shape", "style", T::Choice }, { kSmoothPick, "smooth", "", T::Toggle },        { kHostPick, "host", "", T::Toggle },
+        { kMode, "sync_type", "", T::Choice },        { kModeList, "", "sync_type", T::List },         { kPhase, "phase", "", T::Dial },
+        { kDelay, "delay", "", T::Dial },              { kDirection, "direction", "", T::List },        { kSwing, "swing", "", T::Dial },
+        { kStereo, "stereo", "", T::Dial },            { kMono, "mono", "", T::Toggle },                { kKeyTranspose, "keytrack_transpose", "keytrack_transpose", T::Number },
         { kKeyTune, "keytrack_tune", "keytrack_tune", T::Number },
         { kInstance, "", "", T::Inert },               { kFullButton, "", "", T::Inert },               { kSyncMode, "", "", T::Inert },
         { kTargets, "", "", T::Inert },                { kEdit, "", "", T::Inert }
@@ -3170,12 +3170,12 @@ private:
         const synthyboy::ParamInfo& pi = uibind::info (p);
         switch (it.type)
         {
-            case T::Knob:
+            case T::Dial:
                 if (c.kind == K::Value)
                     uibind::writeNorm (v, p, c.value);
                 break;
             case T::Number: if (c.kind == K::Index || c.kind == K::Value) uibind::writePlain (v, p, c.value); break;
-            case T::Stepper:
+            case T::Choice:
                 if (c.kind == K::Index)
                 {
                     const int n = pi.numChoices > 0 ? pi.numChoices : static_cast<int> (pi.max - pi.min) + 1;

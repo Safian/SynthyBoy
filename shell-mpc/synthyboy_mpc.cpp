@@ -438,7 +438,7 @@ struct PluginInstance
             return inst.engine ? inst.engine->takeClipFlag() : false;
         }
         void requestMeters() noexcept override { if (inst.engine) inst.engine->requestMeters(); }
-        bool nativeMixerWidgetsAvailable() const noexcept override { return true; }
+        bool nativeMixerCellsAvailable() const noexcept override { return true; }
         void setNativeMixerMeter (int strip, float peak, float hold) noexcept override
         {
             if (strip >= 0 && strip < nativeui::kMixerStrips)
@@ -3218,8 +3218,8 @@ struct PluginInstance
         overlay thread asks for a report and the real slot after that: what a host that shows an old picture until the parameter is reported looks like). Display thread and startOverlay. */
     float overlayWantedValue (bool asked = false)
     {
-        const bool hideWidgets = uiFullOpen.load (std::memory_order_relaxed) && ! nativeMixerActive.load (std::memory_order_relaxed);
-        const float real = hideWidgets ? synthyboy_mpc::overlay::fullScreenParamValue() : synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
+        const bool hideHostCells = uiFullOpen.load (std::memory_order_relaxed) && ! nativeMixerActive.load (std::memory_order_relaxed);
+        const float real = hideHostCells ? synthyboy_mpc::overlay::fullScreenParamValue() : synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
         bool stale = false;
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
         char text[32] = {};

@@ -143,7 +143,7 @@ public:
         const auto& pi = *infoOf (control);
         switch (baseKind (control))
         {
-            case Kind::Knob: return pi.min < 0.0f && pi.max > 0.0f ? nativeui::kFxBipolar : nativeui::kFxDial;
+            case Kind::Dial: return pi.min < 0.0f && pi.max > 0.0f ? nativeui::kFxBipolar : nativeui::kFxDial;
             case Kind::Toggle: return nativeui::kFxToggle;
             default: return nativeui::fxDomainKind (pi, styleModel_);
         }
@@ -190,7 +190,7 @@ public:
 
     // ---- the effect on the page ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     /** How a parameter is shown by its values alone. */
-    enum class Kind : uint8_t { Knob, Stepper, List, Toggle, Number };
+    enum class Kind : uint8_t { Dial, Choice, List, Toggle, Number };
 
     int currentType() const noexcept { return kind_; }
     int numParams() const noexcept { return numParams_; }
@@ -278,16 +278,16 @@ public:
     {
         const synthyboy::ParamInfo* pi = infoOf (p);
         if (pi == nullptr)
-            return Kind::Knob;
+            return Kind::Dial;
         if (pi->numChoices <= 0 || pi->choices == nullptr)
-            return pi->interval == 1.0f && pi->max - pi->min <= 100.0f ? Kind::Number : Kind::Knob;
+            return pi->interval == 1.0f && pi->max - pi->min <= 100.0f ? Kind::Number : Kind::Dial;
         if (pi->numChoices > kMaxListOptions)
-            return Kind::Stepper;
+            return Kind::Choice;
         if (pi->numChoices == 2 && std::strcmp (pi->choices[0], "Off") == 0 && std::strcmp (pi->choices[1], "On") == 0)
             return Kind::Toggle;
         return Kind::List;
     }
-    Kind kindOf (int p) const noexcept { return p >= 0 && p < kMaxParams ? ctl_[p].kind : Kind::Knob; }
+    Kind kindOf (int p) const noexcept { return p >= 0 && p < kMaxParams ? ctl_[p].kind : Kind::Dial; }
 
     /** Disables the editing of the effect's parameters while POWER and the panel navigation stay (the module is off). */
     void setModuleEnabled (bool on)
@@ -374,7 +374,7 @@ private:
         const ui::fxl::Alt* alt = nullptr;
         int row = -1, col = -1, slot = -1;
         bool live = true;
-        Kind kind = Kind::Knob;
+        Kind kind = Kind::Dial;
     };
 
     /** The controls of the table: the engine's parameter of every key, numbered like the parameters of the type's own list (so that control p of a type of the pool IS its parameter p), the ones the type's list does not
