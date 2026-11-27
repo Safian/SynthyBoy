@@ -81,3 +81,7 @@ Everything about the MPC host, the SDK, the skin and the hardware goes to the `m
 3. From then on the question is answered from the knowledge base; the same thing is never asked, researched or measured twice. A result that exists only in `/tmp`, `TODO.md` or a chat does not count: it must be in the expert's knowledge before the task is called done.
 A task brief that touches the host or the skin tells the worker to run `mpc-expert start "<keywords>" --prepare` first.
 
+## Mechanical changes: bulk find-and-replace, not file-by-file editing (owner, 2026-11-27)
+
+A change that is mechanical (renaming a class or token, replacing a widget by a model, removing a file and every reference to it, switching a recipe call) is done as ONE scripted bulk find-and-replace over the whole file set (`git grep -l` to list the files, then perl/sed/python regex to rewrite them), followed by the compile or the touched tests as the check; the compile/test errors are the work list for the few places that need hand work. Delete first and let `git grep` / the compiler show the remaining references. Do not edit dozens of files by hand one after another and do not split a mechanical change into stages or workers. Keep the replacement script in the commit message or in the report so the change can be repeated.
+
