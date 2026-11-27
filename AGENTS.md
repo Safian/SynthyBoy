@@ -41,3 +41,10 @@ For every current MPC screen capture or photo refresh, use the [mpc-screen-photo
 ## MPC: dokumentációból dolgozunk (owner, 2026-11-24)
 
 MPC hardver-, működési és host-bekötési kérdéssel először az `mpc-expert` szakértőhöz fordulj: `/Users/szabi/Documents/Projects/Safian/.claude/agents/mpc-expert.md`. A szerep a konfiguráció betöltésével Sonnet-workerként is futtatható. Indulásakor az expert a `mpc-expert start "kérdés" --prepare` paranccsal párhuzamos forrásfrissítést és RAG-kontextusbetöltést indít; saját kutatását és tudástárát is karbantartja. Ő végzi a helyi és netes kutatást, karbantartja a tudástárát, kikeresi a modellhelyes aktuális kézikönyvet, SDK-t és igazolt host-adatutat, majd konkrét, forrásolt megoldást ad. A fő szál erre támaszkodva fejleszt és az érintett megvalósítást ellenőrzi. A szakértő közös tudástára: `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge/`; friss forrásjegyzéke: `findings/mpc-expert-current-sources.md`; projektbeli host-tények: `docs/dsp-knowledge/`.
+
+## Saved device builds (owner, 2026-11-27)
+
+Finished packages live outside the repository in `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-builds/` (see its README.md). Install one without checking out its branch: `scripts/xl-install.sh <package folder>` or `scripts/k61-install.sh <package folder>`. The installer keeps no backup of the replaced package, so save a build there before replacing one worth keeping.
+
+- `old-ui-3bb27424`: the old UI (before the sub-tab conversions of 2026-11-26/27, in-screen tab strips on Osc/Env/Master/Filter/LFO, Mixer peek bar), built from develop commit 3bb27424 for both architectures. Kept for comparison and as a fallback.
+
