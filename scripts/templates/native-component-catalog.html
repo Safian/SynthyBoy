@@ -30,6 +30,11 @@ article th,article td{border:1px solid #465064;padding:0.2em 0.4em;text-align:le
 .size-sample{margin:0}
 .size-sample img{width:auto;height:auto;max-width:100%;border-radius:0}
 .size-sample figcaption{margin-bottom:{{SIZE:catalog.samples.caption_gap}}px}
+.old-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin:8px 0 16px}
+.old-shot{margin:0;padding:8px;background:{{COLOR:catalog.card}};border-radius:{{SIZE:radius.control}}px;font-size:0.85em;overflow-wrap:anywhere}
+.old-shot img{width:100%;height:auto;display:block;background:{{COLOR:catalog.background}}}
+.old-shot[hidden],.old-group[hidden]{display:none}
+.old-group summary{cursor:pointer;font-weight:600;margin:8px 0}
 </style>
 <main>
 <h1>SynthyBoy UI-komponenstár</h1>
@@ -45,5 +50,13 @@ article th,article td{border:1px solid #465064;padding:0.2em 0.4em;text-align:le
 {{PALETTE}}
 </section>
 {{COMPONENTS}}
+{{OLD_SCREENS}}
+<script>
+(function(){var box=document.getElementById("regi-szuro");if(!box)return;
+box.addEventListener("input",function(){var q=box.value.trim().toLowerCase();
+document.querySelectorAll("#regi-ui-kepernyok details").forEach(function(d){var any=false;
+d.querySelectorAll("figure").forEach(function(f){var hit=!q||(f.textContent+" "+(f.title||"")).toLowerCase().indexOf(q)>=0;f.hidden=!hit;any=any||hit;});
+d.hidden=!any;if(q&&any)d.open=true;});});})();
+</script>
 </main>
 </html>
