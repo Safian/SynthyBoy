@@ -60,3 +60,7 @@ On every screen the left/right chooser (stepper, carousel, the stepper half of t
 
 The old RadioButton (segmented faces) takes too much room and is being phased out. The compact family in our own design replaces it: RadioList (LED rows, many options), RadioGrid (titled button matrix, 2 to 8 options), SlideSwitch (2 to 4 ordered positions) and RotarySelector (stepped dial with pictograms, few options). Dropdowns remain for long lists. The catalogue keeps the old RadioButton entry marked "KIVEZETÉSRE" until the screens are migrated.
 
+## Every control comes from its component (owner, 2026-11-27)
+
+A screen never draws a control face with its own code: buttons, dropdowns, selectors, fields, radios, dials and sliders are drawn by their shared component recipe (`components/native/<name>`; in the C++ overlay by `Pen::control`, driven by the same tokens). Test: change the component's tokens loudly and regenerate; every control of that kind on every screen must change. A control that does not change bypasses the component and is a defect to fix (see `docs/review/BUTTON-MUTATION-AUDIT-2026-11-27.md`). If a control needs a variant the component does not have, add the variant to the component and its catalogue entry, not to the screen file.
+
