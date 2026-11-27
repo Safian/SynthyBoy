@@ -149,6 +149,8 @@
     "radio.preview.width": 256,
     "selector.dropdown": {"inset": 3, "text_inset": 2, "chevron_lane": 28, "chevron_width": 12, "chevron_height": 7.2, "chevron_stroke": 2.2, "font": 26},
     "selector.dropdown.preview_font": 17,
+    "selector.dropdown.gradient.neon": {"start": 0.3333333333333333, "end": 0.6666666666666666},
+    "selector.dropdown.gradient.legacy": {"start": 0.33, "end": 0.7},
     "selector.route.width": 150,
     "selector.instance.width": 200,
     "selector.choice.width": 408,

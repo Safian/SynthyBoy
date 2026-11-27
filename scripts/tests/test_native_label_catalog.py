@@ -102,6 +102,20 @@ class DropdownTests(unittest.TestCase):
         face = header.centre_face({"kind": "dropdown", "value": "Env 1", "width": "header.dropdown.width"}, 48)
         self.assertEqual(face.tobytes(), plain.tobytes())
 
+    def test_legacy_fill_has_the_measured_old_values_and_neon_is_untouched(self):
+        face = selector.render_dropdown_face(220, 48, look="legacy").convert("RGB")
+        self.assertEqual(face.getpixel((20, 10)), (19, 25, 48))   # constant upper part: #131930
+        self.assertEqual(face.getpixel((20, 40)), (13, 17, 34))   # constant lower part: #0d1122
+        mid = face.getpixel((20, 26))                              # darkening between the two constant parts
+        self.assertTrue(all(lo <= v <= hi for v, lo, hi in zip(mid, (13, 17, 34), (19, 25, 48))) and mid not in ((19, 25, 48), (13, 17, 34)))
+        self.assertGreater(face.getpixel((20, 4)), face.getpixel((20, 44)))  # bright keyline top, dark bottom
+        neon = selector.render_dropdown_face(220, 48)
+        self.assertEqual(neon.convert("RGB").getpixel((20, 10)), (20, 26, 56))  # theme.neon.panel0 as before
+        self.assertEqual(style.color("selector.dropdown.top"), "#131930")
+        self.assertEqual(style.color("selector.dropdown.bottom"), "#0d1122")
+        span = style.size("selector.dropdown.gradient.legacy")
+        self.assertLess(span["start"], span["end"])
+
     def test_invalid_combinations_are_refused(self):
         with self.assertRaises(ValueError):
             selector.render_dropdown_variant(220, 48, "x", placement="above")

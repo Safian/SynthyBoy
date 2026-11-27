@@ -294,8 +294,23 @@ def dropdown_asset_name(width, height):
     return f"selector_dropdown_{width}x{height}.png"
 
 
-def render_dropdown_face(width, height, *, chevron=True):
+# Dropdown face tokens per look: fill top, fill bottom, keyline top, keyline bottom, gradient span (start/end as a
+# fraction of the box height: constant above `start`, linear to `end`, constant below). "neon" is the skin's theme
+# (mod_row, FX). "legacy" is the old Play-panel dropdown measured on the owner's crop (2026-11-27): fill (19,25,48) to
+# (13,17,34), keyline (24,33,69) at the top to (12,17,33) at the bottom, darkening from about a third to 0.7 of the
+# height. Only the catalogue and the Header ask for "legacy"; other components keep "neon".
+DROPDOWN_LOOKS = {
+    "neon": ("theme.neon.panel0", "theme.neon.panel1", "theme.neon.keyline", "theme.neon.keyline",
+             "selector.dropdown.gradient.neon"),
+    "legacy": ("selector.dropdown.top", "selector.dropdown.bottom", "selector.dropdown.border",
+               "selector.dropdown.border.bottom", "selector.dropdown.gradient.legacy"),
+}
+
+
+def render_dropdown_face(width, height, *, chevron=True, look="neon"):
     """Reference MenuButton panel and V glyph, both inside the native touch bounds."""
+    top_token, bottom_token, keyline_token, keyline_bottom_token, gradient_token = DROPDOWN_LOOKS[look]
+    span = _style_size(gradient_token)
     geometry = _style_size("selector.dropdown")
     theme = _style_size("theme.neon")
     scale = _style_size("sampling.standard")
@@ -307,14 +322,30 @@ def render_dropdown_face(width, height, *, chevron=True):
     ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
     face = Image.new("RGBA", size)
     pen = ImageDraw.Draw(face)
-    top, bottom = _style_rgb("theme.neon.panel0"), _style_rgb("theme.neon.panel1")
+    top, bottom = _style_rgb(top_token), _style_rgb(bottom_token)
+    line_top, line_bottom = _style_rgb(keyline_token), _style_rgb(keyline_bottom_token)
+
+    def blend(y):
+        t = min(1., max(0., ((y - inset) / max(1, box[3] - inset) - span["start"]) / (span["end"] - span["start"])))
+        return t
+
     for y in range(box[1], box[3] + 1):
-        # The four equally spaced gradient stops are top, top, bottom, bottom.
-        t = min(1., max(0., 3. * (y - inset) / max(1, box[3] - inset) - 1.))
-        colour = tuple(round(lo + t * (hi - lo)) for lo, hi in zip(top, bottom))
-        pen.line((box[0], y, box[2], y), fill=colour)
+        t = blend(y)
+        pen.line((box[0], y, box[2], y), fill=tuple(round(lo + t * (hi - lo)) for lo, hi in zip(top, bottom)))
     face.putalpha(mask)
-    pen.rounded_rectangle(box, radius, outline=_style_color("theme.neon.keyline"), width=round(theme["frame"] * scale))
+    frame = round(theme["frame"] * scale)
+    if line_top == line_bottom:
+        pen.rounded_rectangle(box, radius, outline=_style_color(keyline_token), width=frame)
+    else:
+        # The keyline darkens down the box with the fill (bright top edge, dark bottom edge).
+        outline = Image.new("L", size)
+        ImageDraw.Draw(outline).rounded_rectangle(box, radius, outline=255, width=frame)
+        ramp = Image.new("RGBA", size)
+        ramp_pen = ImageDraw.Draw(ramp)
+        for y in range(box[1], box[3] + 1):
+            t = blend(y)
+            ramp_pen.line((0, y, size[0], y), fill=tuple(round(lo + t * (hi - lo)) for lo, hi in zip(line_top, line_bottom)) + (255,))
+        face.paste(ramp, (0, 0), outline)
     if chevron:
         cx = (width - geometry["inset"] - geometry["chevron_lane"] / 2) * scale
         cy = height * scale / 2
@@ -325,13 +356,15 @@ def render_dropdown_face(width, height, *, chevron=True):
 
 
 def dropdown_definition(width, height, *, actions, skins_dir=None, value_handle="Data", value_name="Value",
-                        remaps=(), filename=None, frame_name="Selector face"):
+                        remaps=(), filename=None, frame_name="Selector face", look="neon"):
     """A native value selector whose caller owns all commands and value bindings."""
     filename = filename or dropdown_asset_name(width, height)
+    if look != "neon":
+        filename = filename.replace(".png", f"_{look}.png")
     if skins_dir is not None:
         directory = Path(skins_dir)
         directory.mkdir(parents=True, exist_ok=True)
-        save_png_filter0(render_dropdown_face(width, height), directory / filename)
+        save_png_filter0(render_dropdown_face(width, height, look=look), directory / filename)
     style = _style_size("selector.dropdown")
     inset = style["inset"]
     left = inset + style["text_inset"]
@@ -367,6 +400,7 @@ def selector_definition(
     neighbors=(),
     steps=0,
     play_face=False,
+    dropdown_look="neon",
 ):
     """Creates a shared native MPC selector definition with support for all variants."""
     if template is None:
@@ -416,7 +450,8 @@ def selector_definition(
             if action.get("handler") == "Show Overlay":
                 action["handleName"] = title
         native = dropdown_definition(width, height, skins_dir=skins_dir, actions=popup_definition["actions"],
-                                    value_handle=title, value_name=label_name, filename=filename, frame_name=frame_name)
+                                    value_handle=title, value_name=label_name, filename=filename, frame_name=frame_name,
+                                    look=dropdown_look)
         frame_child, value = native["componentsData"]
         for child in (frame_child, value):
             x, y, w, h = map(int, child["bounds"]["bounds"].split())
@@ -1454,7 +1489,8 @@ def render_selector_face(width, height, *, name=None, value="Sine", **variants):
                 style = data["textStyle"]
                 text = data.get("text", value)
                 font_height = style["font"]["height"]
-                if font_height == _style_size("selector.dropdown")["font"] and not (name or variants):
+                if font_height == _style_size("selector.dropdown")["font"] and not (
+                        name or {k: v for k, v in variants.items() if k != "dropdown_look"}):
                     font_height = _style_size("selector.dropdown.preview_font")
                 font = semibold(round(_native_font_em(font_height)))
                 draw = ImageDraw.Draw(result)
@@ -1493,9 +1529,9 @@ def render_dropdown_variant(width, height, value, *, label=None, placement="none
         return render_selector_face(width, height, name=label, value=value, label_height=_style_size("font.button"))
     justification = {"left": "left verticallyCentred"}.get(align)
     # The left-aligned value keeps the size of the centred one (selector.dropdown.preview_font).
-    box = (render_selector_face(width, height, value=value, justification=justification,
+    box = (render_selector_face(width, height, value=value, justification=justification, dropdown_look="legacy",
                                 label_height=_style_size("selector.dropdown.preview_font")) if justification
-           else render_selector_face(width, height, value=value))
+           else render_selector_face(width, height, value=value, dropdown_look="legacy"))
     if placement == "none":
         return box
     from components.native.label.label import render_label
