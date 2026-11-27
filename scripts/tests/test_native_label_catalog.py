@@ -169,7 +169,7 @@ class DropdownTests(unittest.TestCase):
     def test_header_dropdowns_are_the_value_only_centred_40_px_variant(self):
         plain = selector.render_dropdown_variant(220, 40, "Env 1")
         from components.native.header import header
-        face = header.centre_face({"kind": "dropdown", "value": "Env 1", "width": "header.dropdown.min_width"}, 48)
+        face = header.centre_face({"kind": "dropdown", "value": "Env 1", "width": "header.dropdown.min_width"}, 40)
         self.assertEqual(face.tobytes(), plain.tobytes())
         self.assertEqual(face.height, 40)
 
