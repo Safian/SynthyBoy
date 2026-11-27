@@ -16,7 +16,6 @@
         "centre": [
           {
             "kind": "dropdown",
-            "name": "TYPE",
             "value": "Saw",
             "width": "header.dropdown.width"
           },
@@ -34,7 +33,7 @@
         "right": [
           "more"
         ],
-        "caption": "1 · Osc A: POWER, cím, TYPE legördülő, SOURCE léptető, BROWSE gomb; jobbra MORE",
+        "caption": "1 · Osc A: POWER, cím, TYPE-legördülő (csak érték), SOURCE léptető, BROWSE gomb; jobbra MORE",
         "alt": "Osc A fejléc: POWER, OSC A, TYPE, SOURCE, BROWSE, MORE"
       },
       {
@@ -45,7 +44,6 @@
         "centre": [
           {
             "kind": "dropdown",
-            "name": "WAVEFORM",
             "value": "Sine",
             "width": "header.dropdown.width"
           },
@@ -57,7 +55,7 @@
         "right": [
           "expand"
         ],
-        "caption": "2 · LFO 9 (modulátor, nincs POWER): cím a bal szélen, WAVEFORM legördülő, TARGETS gomb; jobbra EXPAND",
+        "caption": "2 · LFO 9 (modulátor, nincs POWER): cím a bal szélen, WAVEFORM-legördülő (csak érték), TARGETS gomb; jobbra EXPAND",
         "alt": "LFO 9 fejléc: LFO 9, WAVEFORM, TARGETS, EXPAND"
       },
       {
@@ -80,7 +78,6 @@
         "centre": [
           {
             "kind": "dropdown",
-            "name": "MODEL",
             "value": "Analog",
             "width": "header.dropdown.width"
           }
@@ -88,7 +85,7 @@
         "right": [
           "more"
         ],
-        "caption": "4 · Filter 1: POWER, cím, MODEL legördülő; jobbra MORE",
+        "caption": "4 · Filter 1: POWER, cím, MODEL-legördülő (csak érték); jobbra MORE",
         "alt": "Filter 1 fejléc: POWER, FILTER 1, MODEL, MORE"
       },
       {
@@ -126,7 +123,6 @@
         "centre": [
           {
             "kind": "dropdown",
-            "name": "TYPE",
             "value": "Saw",
             "width": "header.dropdown.width"
           },
@@ -155,7 +151,6 @@
         "centre": [
           {
             "kind": "dropdown",
-            "name": "WAVEFORM",
             "value": "Sine",
             "width": "header.dropdown.width"
           },

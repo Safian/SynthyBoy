@@ -24,7 +24,7 @@ The full-width top row of a page or of a Play panel. No screen, skin or overlay 
 
 ## Recipes used (no new look)
 
-`button.action_art` (power icon, expand icon, text buttons), `selector.render_selector_face` (dropdown with or without name, stepper), `font.page_title` title text. CLOSE and MORE are text buttons; there is no close or more icon recipe.
+`button.action_art` (power icon, expand icon, text buttons), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the old Play-panel look; placement none, align center) and `selector.render_selector_face` (stepper), `font.page_title` title text. CLOSE and MORE are text buttons; there is no close or more icon recipe.
 
 ## Add an example
 

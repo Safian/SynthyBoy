@@ -1467,3 +1467,61 @@ def render_selector_face(width, height, *, name=None, value="Sine", **variants):
                 draw.text((tx - bounds[0], ty - bounds[1]), text, font=font,
                           fill="#" + style["colour"][-6:])
         return result
+
+
+DROPDOWN_PLACEMENTS = ("none", "above", "inside")
+DROPDOWN_ALIGNS = ("center", "left")
+# The label above a dropdown has the dial-caption style of the Label component (font, text.caption, upper case).
+DROPDOWN_LABEL_FONT = "pan.sub_dial_definition.style.font.height"
+DROPDOWN_KEYS = {"id", "file", "alt", "caption", "width", "value", "placement", "align"}
+
+
+def render_dropdown_variant(width, height, value, *, label=None, placement="none", align="center"):
+    """One dropdown from the one selector recipe (render_selector_face), 48 px box in every variant.
+
+    placement: "none"   value only, no label (the old Play-panel look when align is "center");
+               "above"  `label` outside and above the box, centred, in the Label dial-caption style;
+               "inside" `label` as the small caption in the box (the catalogue's MODEL look, value left).
+    align:     "center" or "left" value; with "inside" the recipe's own left value is kept.
+    The "above" picture is taller than the box by the label line and one gap.field.
+    """
+    if placement not in DROPDOWN_PLACEMENTS or align not in DROPDOWN_ALIGNS:
+        raise ValueError(f"placement must be one of {DROPDOWN_PLACEMENTS} and align one of {DROPDOWN_ALIGNS}")
+    if (placement == "none") == bool(label):
+        raise ValueError("a label is given exactly when the placement is above or inside")
+    if placement == "inside":
+        return render_selector_face(width, height, name=label, value=value, label_height=_style_size("font.button"))
+    justification = {"left": "left verticallyCentred"}.get(align)
+    # The left-aligned value keeps the size of the centred one (selector.dropdown.preview_font).
+    box = (render_selector_face(width, height, value=value, justification=justification,
+                                label_height=_style_size("selector.dropdown.preview_font")) if justification
+           else render_selector_face(width, height, value=value))
+    if placement == "none":
+        return box
+    from components.native.label.label import render_label
+    text = render_label(label, DROPDOWN_LABEL_FONT, "text.caption", case="Upper Case")
+    gap = _style_size("gap.field")
+    picture = Image.new("RGBA", (width, text.height + gap + height))
+    picture.alpha_composite(text, ((width - text.width) // 2, 0))
+    picture.alpha_composite(box, (0, text.height + gap))
+    return picture
+
+
+def dropdown_variants(entry):
+    """The dropdown variants of a selector catalogue "dropdown" entry, validated (label is optional)."""
+    if not isinstance(entry, dict) or set(entry) != {"variants"} or not entry["variants"]:
+        raise ValueError("dropdown entry needs a nonempty variants list")
+    for item in entry["variants"]:
+        if not DROPDOWN_KEYS <= set(item) <= DROPDOWN_KEYS | {"label"}:
+            raise ValueError(f"dropdown variant needs {sorted(DROPDOWN_KEYS)} (+ optional label)")
+        if item["placement"] not in DROPDOWN_PLACEMENTS or item["align"] not in DROPDOWN_ALIGNS:
+            raise ValueError(f"dropdown variant {item['id']!r}: placement/align out of range")
+    if len({v["id"] for v in entry["variants"]}) != len(entry["variants"]):
+        raise ValueError("dropdown variant ids must be unique")
+    return entry["variants"]
+
+
+def catalog_sections(entry):
+    return [{"heading": "Legördülő: felirat és érték elrendezése", "images": [
+        {"presentation": "sample", "file": v["file"], "alt": v["alt"], "caption": v["caption"]}
+        for v in dropdown_variants(entry)]}]

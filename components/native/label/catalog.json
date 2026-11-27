@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 5,
+  "title": "Label",
+  "sections": [],
+  "label": {
+    "variants": [
+      {
+        "id": "screen-title",
+        "label": "screenTitle (lapcím)",
+        "text": "OSC A",
+        "font": "font.page_title",
+        "unit": "em",
+        "colour": "text.value",
+        "case": "Original",
+        "file": "label-screen-title.png",
+        "alt": "screenTitle: lapcím, font.page_title"
+      },
+      {
+        "id": "block-title",
+        "label": "Blokkcím (panel)",
+        "text": "UNISON",
+        "font": "panel.title:font",
+        "unit": "tui",
+        "colour": "text.caption",
+        "case": "Original",
+        "file": "label-block-title.png",
+        "alt": "Blokkcím a panel címsorának stílusában"
+      },
+      {
+        "id": "block-title-tune",
+        "label": "Blokkcím (TUNE-fejléc)",
+        "text": "TUNE",
+        "font": "font.small",
+        "unit": "tui",
+        "colour": "text.label",
+        "case": "Original",
+        "file": "label-block-title-tune.png",
+        "alt": "Blokkcím a Tune-fejléc stílusában"
+      },
+      {
+        "id": "dial-caption",
+        "label": "Tárcsa-felirat",
+        "text": "LEVEL",
+        "font": "pan.sub_dial_definition.style.font.height",
+        "unit": "tui",
+        "colour": "text.caption",
+        "case": "Upper Case",
+        "file": "label-dial-caption.png",
+        "alt": "Tárcsa-felirat (PAN/LEVEL)"
+      },
+      {
+        "id": "dial-value",
+        "label": "Tárcsa-érték",
+        "text": "50%",
+        "font": "pan.sub_dial_definition.value",
+        "unit": "tui",
+        "colour": "text.value",
+        "case": "Original",
+        "file": "label-dial-value.png",
+        "alt": "Tárcsa-érték: 50%"
+      },
+      {
+        "id": "dial-value-pan",
+        "label": "Tárcsa-érték (Pan)",
+        "text": "L 100",
+        "font": "pan.sub_dial_definition.value",
+        "unit": "tui",
+        "colour": "text.value",
+        "case": "Original",
+        "file": "label-dial-value-pan.png",
+        "alt": "Tárcsa-érték: L 100"
+      }
+    ],
+    "dial_sizes": [
+      {
+        "id": "36",
+        "label": "36 px",
+        "token": "label.dial.36",
+        "file": "label-dial-36.png",
+        "alt": "Level tárcsa 36 px felirattal és értékkel"
+      },
+      {
+        "id": "40",
+        "label": "40 px (kompakt)",
+        "token": "label.dial.40",
+        "file": "label-dial-40.png",
+        "alt": "Level tárcsa 40 px felirattal és értékkel"
+      },
+      {
+        "id": "48",
+        "label": "48 px",
+        "token": "label.dial.48",
+        "file": "label-dial-48.png",
+        "alt": "Level tárcsa 48 px felirattal és értékkel"
+      },
+      {
+        "id": "56",
+        "label": "56 px",
+        "token": "label.dial.56",
+        "file": "label-dial-56.png",
+        "alt": "Level tárcsa 56 px felirattal és értékkel"
+      },
+      {
+        "id": "90",
+        "label": "90 px (normál)",
+        "token": "label.dial.90",
+        "file": "label-dial-90.png",
+        "alt": "Level tárcsa 90 px felirattal és értékkel"
+      }
+    ]
+  }
+}

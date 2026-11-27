@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass
 
 from components.native.button.button import action_art, semibold
-from components.native.selector.selector import render_selector_face
+from components.native.selector.selector import render_dropdown_variant, render_selector_face
 from components.style import color as _style_color, dim_artwork, size as _style_size
 
 try:
@@ -89,9 +89,12 @@ def centre_face(item, content, *, enabled=True):
     kind = item.get("kind")
     if kind == "button":
         face = action_art(text=item["text"])
-    elif kind in ("dropdown", "stepper"):
+    elif kind == "dropdown":
+        # The old Play-panel look: value only, centred, no label (render_dropdown_variant placement none, align center).
+        face = render_dropdown_variant(_style_size(item["width"]), content, item.get("value", ""))
+    elif kind == "stepper":
         face = render_selector_face(_style_size(item["width"]), content, name=item.get("name"),
-                                    value=item.get("value", ""), stepper=(kind == "stepper"))
+                                    value=item.get("value", ""), stepper=True)
     else:
         raise ValueError(f"centre control must be one of {CENTRE_KINDS}: {kind!r}")
     face = _content_face(face, content)
@@ -162,3 +165,10 @@ def header_examples(entry):
             if kind not in RIGHT_KINDS:
                 raise ValueError(f"header example {example['id']!r}: right button must be one of {RIGHT_KINDS}")
     return entry["examples"]
+
+
+def catalog_sections(entry):
+    """Catalogue sections of a "header" entry: one natural-size picture per example, the caption from the entry."""
+    return [{"heading": "Példák (az oldalspecifikus középső tartalom csak példa)", "images": [
+        {"presentation": "sample", "file": e["file"], "alt": e["alt"], "caption": e["caption"]}
+        for e in header_examples(entry)]}]

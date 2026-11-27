@@ -64,6 +64,40 @@ def render_dial_cards():
         print(f"Refreshed native {name} strips and catalogue previews")
 
 
+def render_label_cards():
+    """Label variants and the dial-size series from components/native/label/catalog.json (Label recipe + dial graphic)."""
+    from components.native.label import label
+    directory = REPO_ROOT / "components/native/label"
+    entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))["label"]
+    for v in label.label_variants(entry):
+        label.render_label(v["text"], v["font"], v["colour"], unit=v["unit"], case=v["case"]).save(directory / "img" / v["file"])
+    for item in label.dial_sizes(entry):
+        label.render_dial_with_text(item["diameter"], item["caption"], item["value"]).save(directory / "img" / item["file"])
+    print("Rendered label examples")
+
+
+def render_on_off_cards():
+    """ON/OFF LABEL examples from components/native/on_off_label/catalog.json."""
+    from components.native.on_off_label import on_off_label
+    directory = REPO_ROOT / "components/native/on_off_label"
+    entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))["on_off"]
+    for example in on_off_label.examples(entry):
+        on_off_label.render_example(example).save(directory / "img" / example["file"])
+    print("Rendered on/off label examples")
+
+
+def render_dropdown_cards():
+    """The three dropdown layouts of components/native/selector/catalog.json from the one selector recipe."""
+    from components.native.selector import selector
+    directory = REPO_ROOT / "components/native/selector"
+    entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))["dropdown"]
+    for v in selector.dropdown_variants(entry):
+        selector.render_dropdown_variant(_style_size(v["width"]), _style_size("height.medium"), v["value"],
+                                         label=v.get("label"), placement=v["placement"], align=v["align"]).save(
+            directory / "img" / v["file"])
+    print("Rendered dropdown variants")
+
+
 def render_header_cards():
     """Render every example of components/native/header/catalog.json from the header module (existing recipes only)."""
     from components.native.header import header
@@ -244,6 +278,9 @@ def render_remaining_cards():
 def main():
     print("Rendering native catalog cards...")
     render_dial_cards()
+    render_label_cards()
+    render_on_off_cards()
+    render_dropdown_cards()
     render_header_cards()
     render_button_card()
     render_selector_cards()

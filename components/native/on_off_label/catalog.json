@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 6,
+  "title": "On/Off label",
+  "sections": [],
+  "on_off": {
+    "examples": [
+      {
+        "id": "on",
+        "file": "on-off-on.png",
+        "alt": "ON: cián, kiemelt",
+        "caption": "ON: cián, kiemelt",
+        "state": "on"
+      },
+      {
+        "id": "off",
+        "file": "on-off-off.png",
+        "alt": "OFF: halvány",
+        "caption": "OFF: halvány",
+        "state": "off"
+      },
+      {
+        "id": "disabled",
+        "file": "on-off-disabled.png",
+        "alt": "Tiltott: halvány, szürke",
+        "caption": "Tiltott: halvány, szürke",
+        "state": "disabled"
+      },
+      {
+        "id": "level-right-on",
+        "file": "on-off-level-right-on.png",
+        "alt": "Level tárcsa, jobbra, ON",
+        "caption": "Level tárcsa, jobbra, ON",
+        "state": "on",
+        "dial": "level",
+        "layout": "right"
+      },
+      {
+        "id": "level-right-off",
+        "file": "on-off-level-right-off.png",
+        "alt": "Level tárcsa, jobbra, OFF",
+        "caption": "Level tárcsa, jobbra, OFF",
+        "state": "off",
+        "dial": "level",
+        "layout": "right"
+      },
+      {
+        "id": "level-right-disabled",
+        "file": "on-off-level-right-disabled.png",
+        "alt": "Level tárcsa, jobbra, tiltott",
+        "caption": "Level tárcsa, jobbra, tiltott",
+        "state": "disabled",
+        "dial": "level",
+        "layout": "right"
+      },
+      {
+        "id": "level-bottom-on",
+        "file": "on-off-level-bottom-on.png",
+        "alt": "Level tárcsa, lent, ON",
+        "caption": "Level tárcsa, lent, ON",
+        "state": "on",
+        "dial": "level",
+        "layout": "bottom"
+      },
+      {
+        "id": "level-bottom-off",
+        "file": "on-off-level-bottom-off.png",
+        "alt": "Level tárcsa, lent, OFF",
+        "caption": "Level tárcsa, lent, OFF",
+        "state": "off",
+        "dial": "level",
+        "layout": "bottom"
+      },
+      {
+        "id": "pan-right-on",
+        "file": "on-off-pan-right-on.png",
+        "alt": "Pan tárcsa, jobbra, ON",
+        "caption": "Pan tárcsa, jobbra, ON",
+        "state": "on",
+        "dial": "pan",
+        "layout": "right"
+      },
+      {
+        "id": "pan-bottom-off",
+        "file": "on-off-pan-bottom-off.png",
+        "alt": "Pan tárcsa, lent, OFF",
+        "caption": "Pan tárcsa, lent, OFF",
+        "state": "off",
+        "dial": "pan",
+        "layout": "bottom"
+      }
+    ]
+  }
+}
