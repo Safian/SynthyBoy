@@ -8,7 +8,7 @@ inline constexpr uint32_t kNativeCanvas = 0x090d19;
 /** The ONE page-title size: every page (host captions and overlay drawing) writes its title in it, in the text colour. */
 inline constexpr float kPageTitleSize = 26.0f;
 
-/** The dial recipe: the same tokens draw ui::Dial and the native knob filmstrips. */
+/** The dial recipe: the same tokens draw ui::Knob and the native knob filmstrips. */
 namespace knob {
 inline constexpr float kStartDegrees = 135.0f;
 inline constexpr float kSweepDegrees = 270.0f;
