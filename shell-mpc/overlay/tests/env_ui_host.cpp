@@ -110,7 +110,7 @@ struct Rig
         now += 100.0;
         refresh();
     }
-    void tapC (const ui::Component& c, int holdMs = 40) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
+    void tapC (const ui::ControlModel& c, int holdMs = 40) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
     void drag (int x0, int y0, int x1, int y1, int steps = 10)
     {
         ui.touch (ev (TouchEvent::Down, x0, y0), stack, inst, now);

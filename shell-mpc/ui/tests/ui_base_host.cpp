@@ -43,104 +43,79 @@ Change drag (Component& c, int x, int y0, int y1, double t = 0.0)
         last = m;
     return last;
 }
-int cx (const Component& c) { return c.rect().x + c.rect().w / 2; }
+int cx (const ControlModel& c) { return c.rect().x + c.rect().w / 2; }
 bool near (double a, double b, double e = 1.0e-9) { return std::fabs (a - b) <= e; }
 
 void testKnob()
 {
     Knob k ("WT POS");
     k.place ({ 50, 40, 120, 100 });
-    k.setId (7);
+    k.setParamHandle ({ 7, 19, "osc1.wt_pos" });
     k.state.value = 0.2;
     k.state.defaultValue = 0.35;
-    const int x = cx (k);
-    // a drag up of 100 pixels = +0.5 of the range (200 pixels for the whole), measured from the value at touch down
-    Change c = drag (k, x, 120, 20);   // y 40 .. 139 is the rectangle
-    check (c.kind == ChangeKind::Value && c.id == 7 && near (c.value, 0.7), "knob: a drag up by 100 px from 0.2 gives { id 7, 0.7 }");
-    c = k.touchUp (x, 20);
-    check (! c, "knob: the touch up of a drag gives nothing");
-    c = drag (k, x, 60, 160);
-    check (c.kind == ChangeKind::Value && near (c.value, 0.0), "knob: a drag down by 100 px (from 0.2) clamps at 0: only 0.0");
-    k.touchUp (x, 160);
-    c = drag (k, x, 130, -70);   // 200 px = the full range
-    check (c.kind == ChangeKind::Value && near (c.value, 1.0), "knob: 200 px up from 0.2 clamps at 1.0");
-    k.touchUp (x, -70);
-    k.state.value = 1.0;
-    c = drag (k, x, 130, 30);
-    check (! c, "knob: at the top end a drag up gives nothing");
-    k.touchUp (x, 30);
-    k.state.value = 0.0;
-    c = drag (k, x, 60, 160);
-    check (! c, "knob: at the bottom end a drag down gives nothing");
-    k.touchUp (x, 160);
+    k.state.modValue = 0.45;
+    k.state.bipolar = true;
+
+    // binding & geometry & visibility/inactive metadata
+    check (k.id() == 7 && k.param() == 19 && std::string (k.paramKey()) == "osc1.wt_pos" && k.paramHandle().bound(), "knob: paramHandle stores id/param/key");
+    check (k.rect().x == 50 && k.rect().y == 40 && k.rect().w == 120 && k.rect().h == 100, "knob: place sets rect");
+    check (k.minSize().w == 100 && k.minSize().h == 72 && k.sizeOk(), "knob: standard minSize is 100x72 and fits 120x100");
+    Knob kSmall ("RAND", true);
+    check (kSmall.minSize().w == 72 && kSmall.minSize().h == 56, "knob: small minSize is 72x56");
+    check (near (k.value(), 0.2) && near (k.minValue(), 0.0) && near (k.maxValue(), 1.0) && near (k.defaultValue(), 0.35), "knob: ControlModel value/min/max/default getters match state");
+    setText (k.state.valueText, sizeof k.state.valueText, "20%");
+    char txt[32] {};
+    k.formatText (txt, sizeof txt);
+    check (std::string (txt) == "20%", "knob: formatText returns state.valueText");
+
+    // turn and wheel
     k.state.value = 0.5;
-    c = k.touchDown (x, 100, 0.0);
-    c = k.touchMove (x, 97);
-    // Updated expectation: dead zone removed so any movement >= 1 px changes value (3 px = +0.015)
-    check (c.kind == ChangeKind::Value && near (c.value, 0.515), "knob: 3 px up changes value to 0.515 (dead zone removed)");
-    c = k.touchMove (x + 80, 97);
-    check (! c, "knob: a sideways slide is not a drag");
-    c = k.touchMove (x, 90);
-    check (c.kind == ChangeKind::Value && near (c.value, 0.55), "knob: 10 px up = +0.05");
-    k.touchUp (x, 90);
-    // the finger leaves the rectangle: the gesture goes on
-    k.touchDown (x, 100, 0.0);
-    c = k.touchMove (-500, -300);
-    check (c.kind == ChangeKind::Value && c.id == 7 && near (c.value, 1.0), "knob: the gesture is kept outside the rectangle (and far outside)");
-    k.touchUp (-500, -300);
-    check (! k.touchMove (x, 0) && ! k.capturing(), "knob: after the touch up nothing is captured");
-    c = k.touchDown (5, 5, 0.0);
-    check (! c && ! k.touchMove (5, -200) && ! k.touchUp (5, -200), "knob: a touch that goes down outside the rectangle is ignored for the whole gesture");
-    // double tap
-    k.state.value = 0.9;
-    c = tap (k, x, 100, 1000.0);
-    check (! c, "knob: one tap changes nothing");
-    c = tap (k, x + 3, 102, 1200.0);
-    check (c.kind == ChangeKind::Value && c.id == 7 && near (c.value, 0.35), "knob: a double tap gives the default value");
-    c = tap (k, x, 100, 1300.0);
-    check (! c, "knob: the third tap right after a double tap is a single tap again");
-    k.state.value = 0.9;
-    tap (k, x, 100, 5000.0);
-    c = tap (k, x, 100, 5600.0);
-    check (! c, "knob: two taps 600 ms apart are not a double tap");
-    tap (k, x, 100, 8000.0);
-    c = tap (k, x + 60, 100, 8100.0);
-    check (! c, "knob: two taps 60 px apart are not a double tap");
-    tap (k, x, 100, 9000.0);
-    drag (k, x, 100, 100 - 20, 9050.0);
-    k.touchUp (x, 80);
-    c = tap (k, x, 100, 9100.0);
-    check (! c, "knob: a drag between two taps breaks the double tap");
-    k.state.value = k.state.defaultValue;
-    tap (k, x, 100, 12000.0);
-    check (! tap (k, x, 100, 12100.0), "knob: a double tap on the default value changes nothing");
-    // turn
-    k.state.value = 0.5;
-    c = k.turn (0.1);
+    Change c = k.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 7 && near (c.value, 0.6), "knob: turn (+0.1) adds delta");
     c = k.turn (-0.75);
     check (c.kind == ChangeKind::Value && near (c.value, 0.0), "knob: turn clamps at 0");
     k.state.value = 1.0;
     check (! k.turn (0.3), "knob: turn at the top end gives nothing");
-    // disabled
+    k.state.value = 0.0;
+    check (! k.turn (-0.3), "knob: turn at the bottom end gives nothing");
+    k.state.value = 0.5;
+    check (near (k.wheelUnit(), 1.0 / 128.0), "knob: wheelUnit is 1/128");
+    c = k.wheel (2);
+    check (c.kind == ChangeKind::Value && c.id == 7 && near (c.value, 0.5 + 2.0 / 128.0), "knob: wheel (+2) advances by 2/128");
+    Change overOut;
+    check (cx (k) == 110 && k.wheelOver (110, 90, 1, overOut) && overOut.kind == ChangeKind::Value, "knob: wheelOver inside rect succeeds");
+    check (! k.wheelOver (5, 5, 1, overOut), "knob: wheelOver outside rect returns false");
+
+    // LED gating, disabled, visible, inactive
+    k.state.led = true;
+    k.state.ledOn = false;
+    check (! k.turn (0.1) && ! k.wheel (1), "knob: led && !ledOn blocks turn and wheel");
+    k.state.ledOn = true;
+    check (k.turn (0.1).kind == ChangeKind::Value, "knob: led && ledOn permits turn");
+    k.state.led = false;
+
+    k.setVisible (false);
+    check (! k.visible(), "knob: setVisible updates visible flag");
+    k.setVisible (true);
+    k.setInactive (true);
+    check (k.inactive(), "knob: setInactive updates inactive flag");
+    k.setInactive (false);
+
     k.state.value = 0.5;
     k.setEnabled (false);
-    check (! drag (k, x, 100, 20) && ! k.touchUp (x, 20) && ! k.turn (0.2) && ! tap (k, x, 100, 20000.0) && ! tap (k, x, 100, 20100.0), "knob: a disabled knob gives nothing (drag, double tap, turn)");
+    check (! k.turn (0.2) && ! k.wheel (1) && ! k.wheelOver (110, 90, 1, overOut), "knob: a disabled knob gives nothing (turn, wheel, wheelOver)");
     k.setEnabled (true);
-    k.touchDown (x, 100, 0.0);
-    k.setEnabled (false);
-    check (! k.touchMove (x, 0), "knob: disabling during a gesture drops the gesture");
-    k.setEnabled (true);
-    check (! k.touchMove (x, 0), "knob: and it does not come back by itself");
 }
 
 void testNumberField()
 {
     NumberField f ("OCT", NumberField::Format::IntSigned);
     f.place ({ 10, 10, 100, 60 });
-    f.setId (11);
+    f.setParamHandle ({ 11, 23, "osc1.oct" });
     f.state.min = -4; f.state.max = 4; f.state.value = 0; f.state.defaultValue = 1;
-    const int x = cx (f);
+    check (f.id() == 11 && f.param() == 23 && std::string (f.paramKey()) == "osc1.oct" && f.paramHandle().bound(), "number field: paramHandle stores id/param/key");
+    check (f.minSize().w == 80 && f.minSize().h == 56 && f.sizeOk(), "number field: minSize is 80x56");
+    check (near (f.value(), 0.0) && near (f.minValue(), -4.0) && near (f.maxValue(), 4.0) && near (f.stepValue(), 1.0) && near (f.defaultValue(), 1.0), "number field: ControlModel value/min/max/step/default match state");
     char t[16];
     NumberField::State s = f.state;
     s.value = 2; NumberField::formatValue (s, t); check (std::string (t) == "+2", "number field: integer with sign: +2");
@@ -151,55 +126,47 @@ void testNumberField()
     s.format = NumberField::Format::Degrees; s.value = 180; NumberField::formatValue (s, t); check (std::string (t) == "180\xc2\xb0", "number field: degrees: 180 and the degree sign (UTF-8, in the font)");
     s.format = NumberField::Format::IntPlain; s.value = 17; NumberField::formatValue (s, t); check (std::string (t) == "17", "number field: plain integer");
     s.notSet = true; NumberField::formatValue (s, t); check (std::string (t) == "-", "number field: not set: a dash");
+    f.formatText (t, sizeof t);
+    check (std::string (t) == "0", "number field: formatText formats current state");
     check (f.numSteps() == 8 && f.indexOf (-4) == 0 && f.indexOf (4) == 8 && f.indexOf (100) == 8, "number field: steps and index of a value (clamped)");
-    // drag: 8 px per step
-    Change c = drag (f, x, 60, 36);
-    check (c.kind == ChangeKind::Index && c.id == 11 && c.index == 4 + 3 && near (c.value, 3.0), "number field: a drag up by 24 px = +3 steps: { id 11, index 7 (= value 3) }");
-    f.touchUp (x, 36);
-    c = drag (f, x, 60, 100);
-    check (c.kind == ChangeKind::Index && c.index == 0 && near (c.value, -4.0), "number field: a drag down far clamps at the minimum");
-    f.touchUp (x, 100);
-    f.state.value = 4;
-    check (! drag (f, x, 60, 0), "number field: at the maximum a drag up gives nothing");
-    f.touchUp (x, 0);
-    f.state.value = 0;
-    f.touchDown (x, 60, 0.0);
-    c = f.touchMove (-300, 52);
-    check (c.kind == ChangeKind::Index && c.index == 5, "number field: the gesture is kept outside the rectangle (one step)");
-    f.touchUp (-300, 52);
-    // turn in steps
-    c = f.turn (2);
-    check (c.kind == ChangeKind::Index && c.index == 6 && near (c.value, 2.0), "number field: turn (+2) = two steps");
+
+    // turn & wheel in steps
+    Change c = f.turn (2);
+    check (c.kind == ChangeKind::Index && c.id == 11 && c.index == 6 && near (c.value, 2.0), "number field: turn (+2) = two steps");
     c = f.turn (-9);
-    check (c.kind == ChangeKind::Index && c.index == 0, "number field: turn clamps at the minimum");
+    check (c.kind == ChangeKind::Index && c.index == 0 && near (c.value, -4.0), "number field: turn clamps at the minimum");
+    c = f.turn (9);
+    check (c.kind == ChangeKind::Index && c.index == 8 && near (c.value, 4.0), "number field: turn clamps at the maximum");
+    f.state.value = 4;
+    check (! f.turn (1) && ! f.wheel (1), "number field: at maximum turn/wheel give nothing");
+    f.state.value = -4;
+    check (! f.turn (-1) && ! f.wheel (-1), "number field: at minimum turn/wheel give nothing");
+    f.state.value = 0;
     check (! f.turn (0.2), "number field: turn of less than half a step gives nothing");
-    // double tap = default
-    c = tap (f, x, 40, 100.0);
-    check (! c, "number field: one tap changes nothing");
-    c = tap (f, x, 40, 300.0);
-    check (c.kind == ChangeKind::Index && c.index == 5 && near (c.value, 1.0), "number field: a double tap gives the default (1)");
+    c = f.wheel (1);
+    check (c.kind == ChangeKind::Index && c.id == 11 && c.index == 5 && near (c.value, 1.0), "number field: wheel (+1) advances by 1 step");
+
     // decimal steps: the value is a whole number of steps
     NumberField d ("CRS", NumberField::Format::Decimal2);
     d.place ({ 0, 0, 100, 60 });
     d.setId (3);
     d.state.min = -48; d.state.max = 48; d.state.step = 0.01; d.state.value = 0.0; d.state.pxPerStep = 2;
-    c = drag (d, 50, 50, 30);
-    check (c.kind == ChangeKind::Index && c.index == 4800 + 10 && near (c.value, 0.10, 1e-9), "number field: CRS: 20 px at 2 px per step = +10 steps of 0.01 (value 0.10)");
-    d.touchUp (50, 30);
     c = d.turn (1);
-    check (c.kind == ChangeKind::Index && near (c.value, 0.01, 1e-9), "number field: CRS: turn (+1) = 0.01");
+    check (c.kind == ChangeKind::Index && c.index == 4801 && near (c.value, 0.01, 1e-9), "number field: CRS: turn (+1) = 0.01");
+
     // not set: the first move gives a value
     f.state.notSet = true;
     c = f.turn (1);
     check (c.kind == ChangeKind::Index, "number field: a value that is not set takes the first turn");
     f.state.notSet = false;
-    // read only
+
+    // read only & disabled
     f.state.readOnly = true;
     f.state.value = 3;
-    check (! drag (f, x, 60, 20) && ! f.turn (1) && ! tap (f, x, 40, 5000.0) && ! tap (f, x, 40, 5100.0), "number field: read only: no reaction");
+    check (! f.turn (1) && ! f.wheel (1), "number field: read only: no reaction");
     f.state.readOnly = false;
     f.setEnabled (false);
-    check (! drag (f, x, 60, 20) && ! f.turn (1) && ! tap (f, x, 40, 6000.0) && ! tap (f, x, 40, 6100.0), "number field: disabled: no reaction");
+    check (! f.turn (1) && ! f.wheel (1), "number field: disabled: no reaction");
 }
 
 void testStepper()
@@ -381,105 +348,8 @@ void checkDrawing (Component& c, const std::string& name, const Rect& r, const c
     c.setEnabled (true);
 }
 
-void testKnobDrawing()
-{
-    for (int variant = 0; variant < 2; ++variant)
-    {
-        const bool small = variant == 1;
-        Knob k (small ? "RAND" : "DETUNE", small);
-        k.setId (1);
-        const Size m = k.minSize();
-        check (k.minSize().w == (small ? 72 : 100) && k.minSize().h == (small ? 56 : 72), std::string ("knob: minimum size of the ") + (small ? "small" : "large") + " variant");
-        k.state.value = 0.6; k.state.modValue = 0.8; k.state.add (1, "LFO 1", 0.4); k.state.selectedSource = 1; k.state.bipolar = ! small;
-        if (! small)
-        {
-            k.setLabel ("WIDESTLB");
-            check (k.sizeOk() == false, "knob: a knob without a rectangle is not at its minimum size");
-            k.place ({ 0, 0, m.w, m.h });
-            check (k.sizeOk() && k.geom().labelSize >= theme::L().fMin, "knob: at the minimum size an 8 character label is drawn legibly (at least the minimum font size)");
-        }
-        const std::string nm = small ? "knob small" : "knob";
-        checkDrawing (k, nm + " (minimum size)", { 12, 12, m.w, m.h }, small ? "knob_small_min.png" : "knob_min.png");
-        checkDrawing (k, nm + " (large)", { 12, 12, 260, 220 }, small ? "knob_small_large.png" : "knob_large.png");
-        // the value marker moves monotonically with the value, and sits where valuePoint says
-        k.state.modValue = k.state.value;
-        k.place ({ 30, 30, m.w * 2, m.h * 2 });
-        double lastAngle = -1.0;
-        bool mono = true, painted = true;
-        for (int i = 0; i <= 20; ++i)
-        {
-            k.state.value = k.state.modValue = i / 20.0;
-            Scene s (400, 300, kBackgroundRgba);
-            k.draw (s.builder());
-            const Image im = render (s);
-            float x, y;
-            k.valuePoint (x, y);
-            const Knob::Geom g = k.geom();
-            double a = std::atan2 (y - g.cy, x - g.cx);
-            if (a < Knob::kStartAngle - 0.01) a += 2.0 * kPi;
-            mono = mono && a > lastAngle - 1.0e-6;
-            lastAngle = a;
-            painted = painted && colourNear (im, x, y, 1, colour::white(), 8);
-        }
-        check (mono, nm + ": the value marker moves monotonically with the value (21 steps)");
-        check (painted, nm + ": the value marker is drawn at valuePoint () in every one of them");
-        // the modulated marker
-        k.state.value = 0.3; k.state.modValue = 0.7;
-        Scene sm (400, 300, kBackgroundRgba);
-        k.draw (sm.builder());
-        const Image im = render (sm);
-        float vx, vy, mx, my;
-        k.valuePoint (vx, vy);
-        k.modPoint (mx, my);
-        check (k.modulated() && std::hypot (vx - mx, vy - my) > 6.0, nm + ": the modulated marker is somewhere else than the value marker");
-        check (colourNear (im, mx, my, 1, colour::white(), 12), nm + ": the modulated marker is drawn at modPoint ()");
-        k.state.modValue = k.state.value;
-        Scene sn (400, 300, kBackgroundRgba);
-        k.draw (sn.builder());
-        check (! k.modulated() && sn.numOps() < sm.numOps(), nm + ": with the modulated value equal to the value there is no second marker (fewer ops)");
-        // modulation tab and bipolar mark change the picture
-        Knob a2 (small ? "RAND" : "DETUNE", small), b2 (small ? "RAND" : "DETUNE", small);
-        a2.place ({ 0, 0, 200, 150 }); b2.place ({ 0, 0, 200, 150 });
-        a2.state.value = b2.state.value = 0.4;
-        b2.state.add (1, "LFO 1", 0.4); b2.state.selectedSource = 1;
-        Scene s1 (200, 150, kBackgroundRgba), s2 (200, 150, kBackgroundRgba);
-        a2.draw (s1.builder()); b2.draw (s2.builder());
-        check (render (s1).px != render (s2).px && colourNear (render (s2), static_cast<float> (b2.geom().tabBox.x + 3), static_cast<float> (b2.geom().tabBox.y + 9), 2, theme::sourceColour ("LFO 1"), 6) && ! b2.geom().tabBox.empty() && b2.geom().tabBox.y >= b2.geom().labelBox.y - 2, nm + ": the modulation tab sits in the label row (right of the name, not over the dial)");
-        b2.state = a2.state; b2.state.bipolar = true;
-        Scene s3 (200, 150, kBackgroundRgba);
-        b2.draw (s3.builder());
-        check (render (s1).px != render (s3).px, nm + ": the bipolar detent mark changes the picture");
-        // Q index
-        k.setQ (true, 3);
-        Scene sq (400, 300, kBackgroundRgba);
-        k.draw (sq.builder());
-        check (drawnOutside (render (sq), k.rect(), backgroundPixel()) == 0, nm + ": with a Q index (badge) still nothing outside the rectangle");
-        k.setQ (false, 0);
-    }
-}
-
 void testOtherDrawing()
 {
-    NumberField f ("OCT", NumberField::Format::IntSigned);
-    f.state.value = 2;
-    checkDrawing (f, "number field", { 10, 10, f.minSize().w, f.minSize().h }, "numberfield_min.png");
-    checkDrawing (f, "number field (large)", { 10, 10, 300, 100 }, "numberfield_large.png");
-    NumberField d ("CRS", NumberField::Format::Decimal2);
-    d.state.value = -64; d.state.min = -64; d.state.max = 64;
-    checkDrawing (d, "number field decimal", { 10, 10, 80, 56 }, "numberfield_decimal.png");
-    NumberField p;
-    p.state.icon = NumberField::Icon::Phase; p.state.format = NumberField::Format::Degrees; p.state.value = 180; p.state.max = 360;
-    checkDrawing (p, "number field phase icon", { 10, 10, 80, 56 }, "numberfield_phase.png");
-    NumberField rd;
-    rd.state.icon = NumberField::Icon::Rand; rd.state.format = NumberField::Format::IntPlain; rd.state.value = 40;
-    checkDrawing (rd, "number field rand icon", { 10, 10, 80, 56 }, nullptr);
-    NumberField fr;
-    fr.state.format = NumberField::Format::IntPlain; fr.state.value = 128; fr.state.readOnly = true;
-    checkDrawing (fr, "number field plain (frame number)", { 10, 10, 80, 56 }, nullptr);
-    NumberField ns ("FIN", NumberField::Format::IntSigned);
-    ns.state.notSet = true;
-    checkDrawing (ns, "number field not set", { 10, 10, 80, 56 }, nullptr);
-
     Stepper s;
     s.state.count = 5; s.state.index = 1; s.setItem ("WIDEST TEXT.");
     checkDrawing (s, "stepper (12 characters)", { 10, 10, s.minSize().w, s.minSize().h }, "stepper_min.png");
@@ -672,175 +542,21 @@ void testModulation()
     check (tabState (m) == TabState::Coloured, "tab: the selected source is in the entries: coloured");
     m.selectedSource = 11;
     check (tabState (m) == TabState::Hollow, "tab: the selected source is bypassed: hollow");
-    // pixels: the four tabs and the arc of a knob
-    auto knobWith = [] (const ModInput& mi, double v)
-    {
-        std::unique_ptr<Knob> k (new Knob ("DETUNE"));
-        k->place ({ 0, 0, 160, 120 });
-        k->state.value = k->state.modValue = v;
-        static_cast<ModInput&> (k->state) = mi;
-        return k;
-    };
-    auto pic = [] (const Knob& k) { Scene s (160, 120, kBackgroundRgba); k.draw (s.builder()); return render (s); };
-    const Rect t = knobWith (m, 0.5)->geom().tabBox;   // the chip lives in the label row, right of the name
-    const float tx = static_cast<float> (t.x + 3), ty = static_cast<float> (t.y + 9);   // inside the chip, left of its text
-    {
-        auto k = knobWith (none, 0.5);
-        check (! colourNear (pic (*k), tx, ty, 1, colour::accent(), 8) && ! colourNear (pic (*k), tx, ty, 1, colour::rest(), 8), "knob tab: absent: nothing at the tab");
-        m.selectedSource = kNoSource;
-        k = knobWith (m, 0.5);
-        check (colourNear (pic (*k), tx, ty, 0, theme::L().keylineHi, 8), "knob tab: grey");
-        m.selectedSource = 7;
-        k = knobWith (m, 0.5);
-        check (colourNear (pic (*k), tx, ty, 0, theme::sourceColour ("LFO 2"), 8), "knob tab: coloured");
-        m.selectedSource = 11;
-        k = knobWith (m, 0.5);
-        const Image im = pic (*k);
-        check (! colourNear (im, tx, ty, 0, theme::sourceColour ("OFF"), 8) && colourNear (im, static_cast<float> (t.x), ty, 0, theme::sourceColour ("OFF"), 8), "knob tab: hollow (the middle empty, the edge drawn)");
-    }
-    {
-        // the depth arc is drawn between the angles of its ends: a pixel on the inner arc at the middle of the span has the arc colour; outside of the span it does not
-        m.selectedSource = 7;
-        auto k = knobWith (m, 0.2);
-        const Knob::Geom g = k->geom();
-        const float rm = g.radius - g.stroke - 1.0f;
-        auto at = [&] (double v) { const float an = Knob::angleOf (v); return std::make_pair (g.cx + rm * std::cos (an), g.cy + rm * std::sin (an)); };
-        const Image im = pic (*k);
-        const auto in = at (0.35), out = at (0.7);
-        check (colourNear (im, in.first, in.second, 0, theme::sourceColour ("LFO 2"), 20) && ! colourNear (im, out.first, out.second, 0, theme::sourceColour ("LFO 2"), 20), "knob arc: the positive depth arc (0.2 .. 0.5) is there at 0.35 and not at 0.7");
-        m.selectedSource = 8;
-        k = knobWith (m, 0.5);
-        const Image neg = pic (*k);
-        const auto lo = at (0.35);
-        check (colourNear (neg, lo.first, lo.second, 0, colour::accentDark(), 24), "knob arc: the negative depth arc (0.2 .. 0.5) is in the darker shade");
-        m.selectedSource = 11;
-        k = knobWith (m, 0.5);
-        Scene s1 (160, 120, kBackgroundRgba), s2 (160, 120, kBackgroundRgba);
-        k->draw (s1.builder());
-        m.selectedSource = kNoSource;
-        k = knobWith (m, 0.5);
-        k->draw (s2.builder());
-        check (s1.numOps() == s2.numOps() + 0 || s1.numOps() >= s2.numOps(), "knob arc: the bypassed source draws no arc op");
-    }
-    // S4: the chip never covers the dial (the arc, the handle): at every knob size it lies below the dial's circle, right of the name, inside the rectangle
-    for (const Size sz : { Size { 100, 84 }, Size { 110, 96 }, Size { 160, 120 }, Size { 72, 70 }, Size { 200, 200 } })
-    {
-        Knob kc ("RELEASE");
-        kc.place ({ 10, 20, sz.w, sz.h });
-        kc.state.add (1, "MAC 3", 0.5);
-        kc.state.selectedSource = 1;
-        kc.state.valueText[0] = 0;
-        const Knob::Geom g = kc.geom();
-        const std::string nm = "knob chip " + std::to_string (sz.w) + "x" + std::to_string (sz.h);
-        check (! g.tabBox.empty() && g.tabBox.y >= static_cast<int> (g.cy + g.radius + g.stroke * 0.5f) - 1 && g.tabBox.x >= g.labelBox.right() - 0 && g.tabBox.right() <= kc.rect().right() && g.tabBox.bottom() <= kc.rect().bottom(),
-               nm + ": the chip is below the dial and right of the name, inside the cell");
-    }
-    // the depth gesture: only from the tab, only when the selected source is in the entries
-    Knob k ("DETUNE");
-    k.place ({ 50, 40, 160, 120 });
-    k.setId(3);
-    k.state.value = 0.5;
-    k.state.add (7, "LFO 2", 0.3);
-    k.state.add (8, "ENV 1", -0.2);
-    k.state.selectedSource = 7;
-    const Rect tabHitR = k.tabHit();
-    const int tabX = tabHitR.x + tabHitR.w / 2, tabY = tabHitR.y + tabHitR.h / 2, bodyX = 130, bodyY = 100;
-    Change c = k.touchDown (tabX, tabY, 0.0);
-    c = k.touchMove (tabX, tabY - 20);
-    check (c.kind == ChangeKind::Depth && c.id == 3 && c.index == 7 && near (c.value, 0.5 /* 0.3 + 20/100 */), "depth gesture: from the tab: { id 3, source 7, depth 0.3 + 0.2 }");
-    c = k.touchMove (tabX, tabY - 200);
-    check (c.kind == ChangeKind::Depth && near (c.value, 1.0), "depth gesture: clamps at +1 (200 px = the whole -1 .. +1)");
-    c = k.touchMove (tabX, tabY + 400);
-    check (c.kind == ChangeKind::Depth && near (c.value, -1.0), "depth gesture: clamps at -1");
-    check (! k.touchUp (tabX, tabY + 400) , "depth gesture: the touch up gives nothing");
-    k.touchDown (tabX, tabY, 10.0);
-    c = k.touchMove (-300, -300);
-    check (c.kind == ChangeKind::Depth, "depth gesture: kept outside the rectangle");
-    k.touchUp (-300, -300);
-    k.touchDown (bodyX, bodyY, 20.0);
-    c = k.touchMove (bodyX, bodyY - 20);
-    check (c.kind == ChangeKind::Value && near (c.value, 0.6), "depth gesture: a drag that starts elsewhere changes the VALUE");
-    k.touchUp (bodyX, bodyY - 20);
-    k.state.selectedSource = 99;
-    k.touchDown (tabX, tabY, 30.0);
-    c = k.touchMove (tabX, tabY - 20);
-    check (c.kind == ChangeKind::Value, "depth gesture: the selected source is not in the entries: the tab area is an ordinary part of the knob (a value drag)");
-    k.touchUp (tabX, tabY - 20);
-    k.state.selectedSource = kNoSource;
-    k.touchDown (tabX, tabY, 40.0);
-    check (k.touchMove (tabX, tabY - 20).kind == ChangeKind::Value, "depth gesture: no selected source: a value drag");
-    k.touchUp (tabX, tabY - 20);
-    k.state.selectedSource = 8;
-    k.touchDown (tabX, tabY, 50.0);
-    c = k.touchMove (tabX, tabY + 20);
-    check (c.kind == ChangeKind::Depth && c.index == 8 && near (c.value, -0.4), "depth gesture: the entry of the selected source (8): -0.2 - 0.2");
-    k.touchUp (tabX, tabY + 20);
-    // a double tap on the tab does not reset the value
-    k.state.selectedSource = 7;
-    k.state.value = 0.9; k.state.defaultValue = 0.1;
-    tap (k, tabX, tabY, 1000.0);
-    check (! tap (k, tabX, tabY, 1100.0), "depth gesture: a double tap on the tab is not 'default value'");
-    // the long press, with a fake clock
-    k.state.selectedSource = kNoSource;
-    k.touchDown (bodyX, bodyY, 5000.0);
-    check (! k.tick (5300.0) && ! k.tick (5599.0), "long press: not before 0.6 s");
-    c = k.tick (5600.0);
-    check (c.kind == ChangeKind::ModsRequest && c.id == 3, "long press: at 0.6 s: { mods requested, id 3 }");
-    check (! k.tick (6000.0) && ! k.touchUp (bodyX, bodyY), "long press: only once, and the touch up after it gives nothing (no tap)");
-    c = tap (k, bodyX, bodyY, 6100.0);
-    check (! c, "long press: a tap after it is a first tap again");
-    k.touchDown (bodyX, bodyY, 7000.0);
-    check (! k.tick (7300.0), "long press: (0.3 s)");
-    c = k.touchUp (bodyX, bodyY);
-    check (! c && ! k.tick (9000.0), "long press: a tap (released at 0.3 s) is not a long press, also not later");
-    k.touchDown (bodyX, bodyY, 8000.0);
-    k.touchMove (bodyX, bodyY - 30);
-    check (! k.tick (9000.0), "long press: a drag (beyond the tap square) is not a long press");
-    k.touchUp (bodyX, bodyY - 30);
-    k.touchDown (bodyX, bodyY, 10000.0);
-    k.touchMove (bodyX + 2, bodyY - 2);
-    check (k.tick (10700.0).kind == ChangeKind::ModsRequest, "long press: a small movement inside the tap square does not prevent it");
-    k.touchUp (bodyX, bodyY);
-    k.state.selectedSource = 7;
-    k.touchDown (tabX, tabY, 11000.0);
-    check (k.tick (11700.0).kind == ChangeKind::ModsRequest, "long press: also on the tab");
-    k.touchUp (tabX, tabY);
-    check (! k.tick (99999.0), "long press: nothing without a gesture");
-    k.setEnabled (false);
-    k.touchDown (bodyX, bodyY, 12000.0);
-    check (! k.tick (13000.0), "long press: disabled: nothing");
-    // the same for the number field
-    NumberField f ("OCT", NumberField::Format::IntSigned);
-    f.place ({ 10, 10, 100, 60 });
-    f.setId (4);
-    f.state.min = -4; f.state.max = 4; f.state.value = 0;
-    f.state.add (7, "LFO 2", 0.5);
-    f.state.selectedSource = 7;
-    f.touchDown (15, 14, 0.0);
-    c = f.touchMove (15, 14 - 20);
-    check (c.kind == ChangeKind::Depth && c.id == 4 && c.index == 7 && near (c.value, 0.7), "number field: a drag from the tab changes the depth { id 4, source 7, 0.7 }");
-    f.touchUp (15, -6);
-    f.touchDown (100, 55, 100.0);
-    check (f.touchMove (100, 31).kind == ChangeKind::Index, "number field: a drag elsewhere changes the value");
-    f.touchUp (60, 26);
-    f.touchDown (60, 50, 1000.0);
-    check (f.tick (1700.0).kind == ChangeKind::ModsRequest && ! f.touchUp (60, 50), "number field: the long press asks for the modulations");
-    ModInput none2;
-    NumberField g ("OCT", NumberField::Format::IntSigned);
-    g.place ({ 0, 0, 80, 56 });
-    g.state.min = -4; g.state.max = 4; g.state.value = 1;
-    Scene s0 (80, 56, kBackgroundRgba), s1 (80, 56, kBackgroundRgba), s2 (80, 56, kBackgroundRgba);
-    g.draw (s0.builder());
-    g.state.add (7, "LFO 2", 0.3); g.state.selectedSource = 7;
-    g.draw (s1.builder());
-    g.state.selectedSource = kNoSource;
-    g.draw (s2.builder());
-    check (s1.numOps() > s2.numOps() && s2.numOps() > s0.numOps(), "number field: the tab (grey) and, with the selected source, the underline bar are drawn");
-    Scene s3 (80, 56, kBackgroundRgba);
-    g.state.selectedSource = 7;
-    g.draw (s3.builder());
-    check (drawnOutside (render (s3), g.rect(), backgroundPixel()) == 0, "number field with a modulation: nothing outside the rectangle");
-    (void) none2;
+    // ModEntry colour and KnobModel::tab helper
+    Knob kt ("DETUNE");
+    kt.state.value = 0.5;
+    static_cast<ModInput&> (kt.state) = m;
+    kt.state.selectedSource = 7;
+    check (kt.tab() == TabState::Coloured && kt.state.mods[0].colour() == theme::sourceColour ("LFO 2"), "knob model: tab is Coloured and ModEntry::colour maps LFO 2");
+    kt.state.selectedSource = 11;
+    check (kt.tab() == TabState::Hollow && kt.state.mods[4].colour() == theme::sourceColour ("OFF"), "knob model: tab is Hollow and ModEntry::colour maps OFF");
+    kt.state.selectedSource = kNoSource;
+    check (kt.tab() == TabState::Grey, "knob model: tab is Grey when entries exist without selectedSource");
+    // modulated() check
+    kt.state.modValue = 0.7;
+    check (kt.modulated(), "knob model: modulated() is true when modValue != value");
+    kt.state.modValue = kt.state.value;
+    check (! kt.modulated(), "knob model: modulated() is false when modValue == value");
 }
 } // namespace
 
@@ -869,8 +585,7 @@ void testHBarAndSideKnob()
     k.state.add (3, "MAC 4", 0.2);
     k.state.selectedSource = 3;
     k.place ({ 0, 0, 190, 90 });
-    const Knob::Geom g = k.geom();
-    check (g.cx < static_cast<float> (g.labelBox.x) && g.chip.x > static_cast<int> (g.cx) && k.sizeOk() && k.tabHit().x >= g.chip.x, "side knob: the dial at the left, the name, the value and the modulation chip in the column at its right (the chip does not lie on the dial)");
+    check (k.minSize().w == 172 && k.minSize().h == 72 && k.sizeOk(), "side knob model: minSize 172x72 and fits 190x90");
     Stepper st;
     st.place ({ 0, 0, 300, 64 });
     st.setCaption ("MODE"); st.setItem ("Linear");
@@ -901,7 +616,6 @@ int main()
     testDetailButton();
     testPictogram();
     testModulation();
-    testKnobDrawing();
     testOtherDrawing();
     // the special signs of the screens are in the font (none of them draws as the question mark)
     {

@@ -81,7 +81,7 @@ struct Rig
     bool haveLive = false;
     double now = 1000.0;
     void refresh() { now += 600.0; ui.update (inst, 2, stack, now, haveLive ? &live : nullptr); }
-    void tap (const ui::Component& c)
+    void tap (const ui::ControlModel& c)
     {
         TouchEvent e; e.kind = TouchEvent::Down; e.x = c.rect().x + c.rect().w / 2; e.y = c.rect().y + c.rect().h / 2;
         ui.touch (e, stack, inst, now);

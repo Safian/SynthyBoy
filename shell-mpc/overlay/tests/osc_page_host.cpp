@@ -575,7 +575,7 @@ bool hasUsableControl (const ui::KnobPanel& panel, int blockIdx)
         const ui::PanelItem& it = p->items[i];
         if (it.block != blockIdx)
             continue;
-        ui::Component* c = panel.part (it.slot);
+        ui::ControlModel* c = panel.part (it.slot);
         if (c != nullptr && c->enabled() && ! c->inactive() && panel.shown (it.slot))
             return true;
     }
@@ -790,7 +790,7 @@ static void testNativeDetail()
     {
         Rig r (source);
         const char* key = source == 1 ? "sub.filter_blend" : "noise.filter_blend";
-        const auto& blend = source == 1 ? static_cast<const ui::Component&> (r.page.ui().full().subBlend)
+        const auto& blend = source == 1 ? static_cast<const ui::ControlModel&> (r.page.ui().full().subBlend)
             : *r.page.ui().full().panel.part (ui::PanelSlot::SubBlend);
         const auto area = blend.rect();
         const int x = area.x + area.w / 2, y = area.y + area.h / 2;
@@ -1100,15 +1100,8 @@ static void testHostPaintedKnobLive()
     knob.place ({20, 20, 140, 140});
     knob.state.value = 0.4;
     knob.state.modValue = 0.7;
-    knob.setHostPainted (true);
-    auto scene = std::make_unique<gpu::SceneData>();
-    gpu::SceneBuilder sb (*scene);
-    sb.begin (gpu::kKindPlay, 0, 1280, 800);
-    const auto empty = scene->numOps;
-    knob.draw (sb);
-    check (scene->numOps == empty, "native host owns knob base including its title and value");
-    knob.drawLive (sb);
-    check (scene->numOps > empty && !sb.overflow, "explicit overlay live animation remains available on a host-painted knob");
+    ui::setHostPainted (&knob, true);
+    check (knob.modulated() && knob.rect().w == 140, "KnobModel preserves modulation state and layout geometry without overlay drawing");
 }
 
 int main (int argc, char** argv)

@@ -105,7 +105,7 @@ struct RoutedPage
         view->update (in);
     }
 
-    void tap (const ui::Component& c)
+    void tap (const ui::ControlModel& c)
     {
         const ui::Rect r = c.rect();
         TouchEvent e;
@@ -773,7 +773,7 @@ void testCompactPlayInactiveOscillator()
         return im;
     };
     auto grey = [](uint32_t c) { return ((c >> 16) & 255u) == ((c >> 8) & 255u) && ((c >> 8) & 255u) == (c & 255u); };
-    auto centre = [](const ui::Component& c) { const auto r = c.rect(); return std::pair<int, int> { r.x + r.w / 2, r.y + r.h / 2 }; };
+    auto centre = [](const ui::ControlModel& c) { const auto r = c.rect(); return std::pair<int, int> { r.x + r.w / 2, r.y + r.h / 2 }; };
 
     inst.set ("sub.on", 1.0f);
     refresh();
@@ -807,7 +807,7 @@ void testCompactPlayInactiveOscillator()
     check ((off.at (40, selectorMid) >> 24) == 255 && grey (off.at (40, selectorMid))
            && off.at (140, selectorMid) == 0,
            "compact OSC OFF: the selector gutter hides the coloured native background while the selector stays visible");
-    for (const ui::Component* c : { &osc.basic.pan, &osc.basic.level })
+    for (const ui::ControlModel* c : { &osc.basic.pan, &osc.basic.level })
     {
         const ui::Rect r = c->rect();
         bool transparent = true;
@@ -827,7 +827,7 @@ void testCompactPlayInactiveOscillator()
     check (frozen, "compact OSC: a changed live phase does not animate the OFF plot");
 
     const int before = inst.writes;
-    const ui::Component* const disabled[] { &osc.basic.selector, &osc.basic.oct, &osc.basic.pan, &osc.basic.level, &osc.full };
+    const ui::ControlModel* const disabled[] { &osc.basic.selector, &osc.basic.oct, &osc.basic.pan, &osc.basic.level, &osc.full };
     for (auto* c : disabled)
     {
         const auto [x, y] = centre (*c);

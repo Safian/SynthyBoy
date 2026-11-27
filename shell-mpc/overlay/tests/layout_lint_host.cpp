@@ -225,7 +225,7 @@ void parseScene (const gpu::SceneData& d, Capture& cap)
 
 struct Leaf
 {
-    ui::Component* c = nullptr;
+    ui::ControlModel* c = nullptr;
     ui::Rect r;
     std::string kind, name;
     bool interactive = true;
@@ -240,7 +240,7 @@ const std::set<std::string>& displayKinds()
     return k;
 }
 
-std::string leafName (ui::Component* c, const std::string& kind)
+std::string leafName (ui::ControlModel* c, const std::string& kind)
 {
     std::string n = kind;
     if (c->id() != 0)
@@ -252,7 +252,7 @@ std::string leafName (ui::Component* c, const std::string& kind)
     return n + "@" + gridOf (static_cast<float> (c->rect().x), static_cast<float> (c->rect().y));
 }
 
-void walk (ui::Component* c, ui::Composite* parent, std::vector<Leaf>& leaves, std::vector<Rel>& rels, const std::string& parentName)
+void walk (ui::ControlModel* c, ui::Composite* parent, std::vector<Leaf>& leaves, std::vector<Rel>& rels, const std::string& parentName)
 {
     if (auto* comp = dynamic_cast<ui::Composite*> (c))
     {
@@ -273,7 +273,14 @@ void walk (ui::Component* c, ui::Composite* parent, std::vector<Leaf>& leaves, s
     l.interactive = displayKinds().count (l.kind) == 0;
     l.id = c->id();
     ui::Rect tg[16];
-    const int n = c->touchTargets (tg, 16);
+    int n = 0;
+    if (auto* w = dynamic_cast<ui::Component*> (c))
+        n = w->touchTargets (tg, 16);
+    else if (! l.r.empty())
+    {
+        tg[0] = l.r;
+        n = 1;
+    }
     for (int i = 0; i < n; ++i)
         l.targets.push_back (tg[i]);
     if (parent)
@@ -306,12 +313,6 @@ double unionArea (std::vector<ui::Rect> rs, const ui::Rect& clip)
                     break;
                 }
     return a;
-}
-
-bool discHitsRect (float cx, float cy, float rad, const FRect& r)
-{
-    const float nx = std::clamp (cx, r.x0, r.x1), ny = std::clamp (cy, r.y0, r.y1);
-    return (cx - nx) * (cx - nx) + (cy - ny) * (cy - ny) <= rad * rad;
 }
 
 // =============================================================================================================================================================
@@ -447,55 +448,6 @@ void analyse (Capture& cap, Sink& sink)
                 sink.add (cap, "f", 2, a, b, std::to_string (kv.second.size()) + " controls share id " + std::to_string (kv.first) + ": " + A.kind + " (" + rectStr (A.r) + ") and " + B.kind + " (" + rectStr (B.r) + ")");
             }
 
-        // h: knob diameters
-        std::map<int, int> dia;
-        for (const Leaf& L : leaves)
-            if (auto* k = dynamic_cast<ui::Knob*> (L.c))
-            {
-                if (L.r.empty()) continue;
-                const ui::Knob::Geom g = k->geom();
-                ++dia[static_cast<int> (std::lround (2.0f * g.radius + g.stroke + 6.0f))];
-            }
-        if (dia.size() > 3)
-        {
-            std::string d;
-            for (auto& kv : dia) d += (d.empty() ? "" : ", ") + std::to_string (kv.first) + "px x" + std::to_string (kv.second);
-            sink.add (cap, "h", 4, "knob sizes", "", std::to_string (dia.size()) + " distinct knob diameters: " + d);
-        }
-
-        // e: chips over the arc / handle of a knob
-        for (const Chip& ch : cap.popup ? std::vector<Chip>() : cap.chips)
-            for (const Leaf& L : leaves)
-            {
-                auto* k = dynamic_cast<ui::Knob*> (L.c);
-                if (! k || L.r.empty()) continue;
-                const ui::Knob::Geom g = k->geom();
-                const FRect cr = ch.r;
-                if (cr.x1 < L.r.x - 2 || cr.x0 > L.r.right() + 2 || cr.y1 < L.r.y - 20 || cr.y0 > L.r.bottom() + 2) continue;
-                const float half = std::max (g.stroke, g.track) * 0.5f;
-                bool arc = false;
-                for (int a = 0; a <= 270 && ! arc; a += 3)
-                {
-                    const float ang = ui::Knob::kStartAngle + static_cast<float> (a) * ui::kPi / 180.0f;
-                    const float px = g.cx + g.radius * std::cos (ang), py = g.cy + g.radius * std::sin (ang);
-                    arc = discHitsRect (px, py, half, cr);
-                }
-                float vx, vy;
-                k->valuePoint (vx, vy);
-                const bool handle = discHitsRect (vx, vy, std::max (2.5f, g.stroke * 0.9f), cr);
-                bool modh = false;
-                if (k->modulated())
-                {
-                    float mx, my;
-                    k->modPoint (mx, my);
-                    modh = discHitsRect (mx, my, std::max (2.0f, g.stroke * 0.7f), cr);
-                }
-                if (arc || handle || modh)
-                {
-                    const std::string cn = ch.tab ? "tab" : "qchip";
-                    sink.add (cap, "e", 2, cn + "@" + gridOf (cr.x0, cr.y0), L.name, std::string (ch.tab ? "modulation tab " : "Q chip ") + frectStr (cr) + " covers the " + (handle ? "handle" : (modh ? "modulation marker" : "arc")) + " of " + L.name + " (" + rectStr (L.r) + ", dial centre " + std::to_string (static_cast<int> (g.cx)) + "," + std::to_string (static_cast<int> (g.cy)) + " r " + std::to_string (static_cast<int> (g.radius)) + ")");
-                }
-            }
         // e (lane): a Q chip sits in the lane above its member; it must not cover another interactive control
         for (const Chip& ch : cap.popup ? std::vector<Chip>() : cap.chips)
         {
@@ -756,7 +708,7 @@ struct Rig
         ui.touch (e, stack, inst, now + holdMs);
         refresh();
     }
-    void tap (const ui::Component& c) { tapAt (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2); }
+    void tap (const ui::ControlModel& c) { tapAt (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2); }
 };
 
 /** Draws the scene of the page with `draw`, parses it, checks it. */
@@ -845,10 +797,10 @@ int sourceChoice (const char* key)
 }
 
 /** The first knob of the tree (the control a long press on opens the modulations page of). */
-ui::Component* firstKnob (ui::Component* c)
+ui::ControlModel* firstKnob (ui::ControlModel* c)
 {
-    ui::Component* leaves[256];
-    const int n = c->collectLeaves (leaves, 0, 256);
+    ui::ControlModel* leaves[256];
+    const int n = c->collectModelLeaves (leaves, 0, 256);
     for (int i = 0; i < n; ++i)
         if (dynamic_cast<ui::Knob*> (leaves[i]) && ! leaves[i]->rect().empty())
             return leaves[i];
@@ -857,10 +809,10 @@ ui::Component* firstKnob (ui::Component* c)
 
 /** The modulations page of a control: a long press on its first knob, as the gallery does; the page is opened directly when the press did not open it. */
 template <class Ui>
-void openMods (Rig<Ui>& r, ui::Component& full, int modsPage)
+void openMods (Rig<Ui>& r, ui::ControlModel& full, int modsPage)
 {
     r.refresh();
-    if (ui::Component* k = firstKnob (&full))
+    if (ui::ControlModel* k = firstKnob (&full))
         r.tapAt (k->rect().x + k->rect().w / 2, k->rect().y + k->rect().h / 2, 700);
     r.refresh();
     if (r.stack.top() != modsPage)
@@ -1308,9 +1260,8 @@ int selfTest()
     Page page;
     page.setBox ({ 0, 110, 1280, 628 });
     Box overA, overB, small, outside, wide, tA, tB, dupA, dupB, hugeCover;
-    ui::Knob k1 ("A"), k2 ("B"), k3 ("C"), k4 ("D"), kChip ("E");
     Box lone;
-    for (ui::Component* c : std::initializer_list<ui::Component*> { &overA, &overB, &small, &outside, &wide, &tA, &tB, &dupA, &dupB, &lone, &k1, &k2, &k3, &k4, &kChip })
+    for (ui::Component* c : std::initializer_list<ui::Component*> { &overA, &overB, &small, &outside, &wide, &tA, &tB, &dupA, &dupB, &lone })
         page.add (*c);
     overA.setBox ({ 20, 130, 100, 80 }); overB.setBox ({ 90, 150, 100, 80 });          // a: they overlap
     small.setBox ({ 300, 130, 40, 30 });                                                // b: 40 x 30
@@ -1320,10 +1271,6 @@ int selfTest()
     tA.textSize = 22.0f; tB.textSize = 22.0f;                                           // d: two texts on each other (and a: the same rectangle twice)
     dupA.setBox ({ 700, 130, 80, 60 }); dupB.setBox ({ 800, 130, 80, 60 }); dupA.setId (77); dupB.setId (77);   // f
     lone.setBox ({ 900, 130, 80, 60 });
-    // h: four knob sizes
-    k1.place ({ 20, 300, 100, 100 }); k2.place ({ 140, 300, 130, 130 }); k3.place ({ 300, 300, 160, 160 }); k4.place ({ 480, 300, 190, 190 });
-    // e: a Q chip over the arc of a knob (the chip drawn on the top of the dial)
-    kChip.place ({ 700, 300, 140, 140 });
     page.titled = true; page.title = "EMPTY BLOCK"; page.blockRect = { 20, 520, 400, 200 };   // g: a block with a title and nothing in it
     small.min = { 1, 1 };
 
@@ -1335,15 +1282,6 @@ int selfTest()
     gpu::SceneBuilder sb (*scene);
     sb.begin (gpu::kKindPlay, 0, 1280, 800);
     page.draw (sb);
-    {
-        ui::Pen pen (sb, true);
-        // Seed the forbidden shape so the detector can still catch a regression.
-        float vx, vy;
-        kChip.valuePoint (vx, vy);
-        const ui::Rect chip { static_cast<int>(vx) - 9, static_cast<int>(vy) - 8, 18, 17 };
-        pen.rrect (chip, 5.0f, pen.c (ui::theme::L().q, 255));
-        pen.textCentered (chip, "2", 13.0f, pen.c (ui::theme::L().onBright, 255), 8.0f);
-    }
     parseScene (*scene, cap);
     Sink sink;
     analyse (cap, sink);
@@ -1353,10 +1291,8 @@ int selfTest()
     expect (has (sink, "c", "parent"), "c: a control outside its parent found");
     expect (has (sink, "d", "sticks out"), "d: text wider than its control found");
     expect (has (sink, "d", "overlaps"), "d: two texts on each other found");
-    expect (has (sink, "e", "Q chip"), "e: a Q chip over a knob found");
     expect (has (sink, "f", "share id 77"), "f: a duplicate id found");
     expect (has (sink, "g", "EMPTY BLOCK"), "g: a mostly empty titled block found");
-    expect (has (sink, "h", "distinct knob diameters"), "h: more than three knob sizes found");
 
     // a clean page has no findings
     Page clean;

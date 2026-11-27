@@ -160,7 +160,7 @@ static void test_qgroup_wide_device_and_idle_chips()
         check (s.numOps() == 0, "Wide device normal mode suppresses overlay yellow badges");
     }
     {
-        const Component* row[] { &k0, &k1 };
+        const ControlModel* row[] { &k0, &k1 };
         Scene s (400, 300);
         QGroup::drawMappedMembers (s.builder(), 1, row, 2);
         check (s.numOps() == 0, "XL list and panel rows hide idle slot badges outside diagnostics");
@@ -178,7 +178,7 @@ static void test_qgroup_wide_device_and_idle_chips()
     }
 
     // Static drawMappedMembers helper
-    const Component* members[2] = { &k0, &k1 };
+    const ControlModel* members[2] = { &k0, &k1 };
     {
         Scene s (400, 300);
         QGroup::drawMappedMembers (s.builder(), 1, members, 2);
@@ -352,14 +352,14 @@ static void test_qgroup_adjacency_check()
     Knob outside ("OUTSIDE");
     outside.place ({ 400, 400, 80, 80 });
 
-    Component* all[4] = { &k0, &k1, &intruder, &outside };
-    const Component* first = nullptr;
+    ControlModel* all[4] = { &k0, &k1, &intruder, &outside };
+    const ControlModel* first = nullptr;
     int bad = qg.check (all, 4, &first);
     check (bad == 1, "Adjacency check finds 1 intruder inside union");
     check (first == &intruder, "Adjacency check reports intruder component");
 
     // Clean layout without intruder
-    Component* clean[3] = { &k0, &k1, &outside };
+    ControlModel* clean[3] = { &k0, &k1, &outside };
     first = nullptr;
     bad = qg.check (clean, 3, &first);
     check (bad == 0, "Clean layout has 0 adjacency violations");

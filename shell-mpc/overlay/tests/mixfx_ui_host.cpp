@@ -41,7 +41,7 @@ struct FxRig : demo::Rig<FxUi>
     FxRig() { ui.setNativeControls (false); }
 };
 
-bool isShown (const ui::Composite& p, const ui::Component* target)
+bool isShown (const ui::Composite& p, const ui::ControlModel* target)
 {
     for (int c = 0; c < p.numChildren(); ++c)
         if (p.child (c) == target && p.childShown (c))
@@ -917,9 +917,9 @@ void testFxGalleryEmptyState()
 /** The members of a cell of the page: the controls of the cell (both of a pair) and which of them is shown. */
 int shownControls (ui::FxSlotEditor& ed, int p)
 {
-    const ui::Component* members[5] = { &ed.knobs[p], &ed.steppers[p], &ed.lists[p], &ed.toggles[p], &ed.numbers[p] };
+    const ui::ControlModel* members[5] = { &ed.knobs[p], &ed.steppers[p], &ed.lists[p], &ed.toggles[p], &ed.numbers[p] };
     int n = 0;
-    for (const ui::Component* c : members)
+    for (const ui::ControlModel* c : members)
         n += isShown (ed, c);
     return n;
 }
@@ -957,7 +957,7 @@ bool pagesOk (FxRig& r, std::string& why)
         if (ed.rowsPerPage() != std::clamp (expectedRows, 1, ui::fxl::kMaxPageRows))
             bad ("rows per page");
         const int first = ed.firstRowOfPage(), rows = ed.rowsOnPage();
-        std::vector<const ui::Component*> shownNow;
+        std::vector<const ui::ControlModel*> shownNow;
         std::vector<char> onPage (static_cast<size_t> (ui::FxSlotEditor::kMaxParams) + 1, 0);
         for (int rr = 0; rr < rows; ++rr)
         {
@@ -968,10 +968,10 @@ bool pagesOk (FxRig& r, std::string& why)
                 if (p == ui::FxSlotEditor::kSel)   // the view-local BAND selector: shown, 56 px, last in its row, no Q member
                 {
                     onPage[static_cast<size_t> (p)] = 1;
-                    const ui::Component* comp = &ed.bandSel;
+                    const ui::ControlModel* comp = &ed.bandSel;
                     if (! isShown (ed, comp)) bad ("the BAND selector is shown");
                     if (comp->rect().h < 56 || ! comp->sizeOk()) bad ("the BAND selector: >= 56 px and legible");
-                    for (const ui::Component* o : shownNow)
+                    for (const ui::ControlModel* o : shownNow)
                         if (o->rect().overlaps (comp->rect())) bad ("the BAND selector: nothing overlaps");
                     shownNow.push_back (comp);
                     if (c != 3 && ed.controlInCell (first + rr, c + 1) >= 0) bad ("the BAND selector is the last cell of its row");
@@ -997,9 +997,9 @@ bool pagesOk (FxRig& r, std::string& why)
                 if (choice && pi->numChoices > 8 && k != ui::FxSlotEditor::Kind::Stepper) bad (std::string (pi->key) + ": more than 8 values is a stepper");
                 if (choice && pi->numChoices <= 8 && k == ui::FxSlotEditor::Kind::List && ! ed.listFits (p, ed.lists[p].rect().w, ed.lists[p].rect().h)) bad (std::string (pi->key) + ": a list fits its cell");
                 if (choice && pi->numChoices <= 8 && k == ui::FxSlotEditor::Kind::Stepper && ed.baseKind (p) == ui::FxSlotEditor::Kind::List && ed.listFits (p, ed.steppers[p].rect().w, ed.steppers[p].rect().h)) bad (std::string (pi->key) + ": a list that fits is not a stepper");
-                const ui::Component* comp = ed.memberOf (p);
+                const ui::ControlModel* comp = ed.memberOf (p);
                 if (comp->rect().h < 56 || ! comp->sizeOk()) bad (std::string (pi->key) + ": >= 56 px and legible");
-                for (const ui::Component* o : shownNow)
+                for (const ui::ControlModel* o : shownNow)
                     if (o->rect().overlaps (comp->rect())) bad (std::string (pi->key) + ": nothing overlaps");
                 shownNow.push_back (comp);
                 if (! ed.rect().contains (comp->rect())) bad (std::string (pi->key) + ": inside the page");

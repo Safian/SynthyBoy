@@ -288,19 +288,10 @@ int main()
         fd.touchUp (fp.x, fp.y);
     }
     {
-        // a member of a Q group never draws a yellow keyline of its own: the picture of an active member is the one of an inactive one
+        // a member of a Q group owns a frame on the group rather than per-member yellow frames
         NumberField a, b;
         a.place ({ 20, 20, 160, 64 }); b.place ({ 20, 20, 160, 64 });
         b.setQ (true, 2);
-        Scene sa (200, 100), sb2 (200, 100);
-        a.draw (sa.builder()); b.draw (sb2.builder());
-        const Image ia = render (sa), ib = render (sb2);
-        long yellow = 0;
-        for (int y = 20; y < 84; ++y)
-            for (int x = 20; x < 180; ++x)
-                if (ia.at (x, y) != ib.at (x, y) && (ib.at (x, y) & 0xffffff) == (theme::L().q & 0xffffff))
-                    ++yellow;
-        check (yellow == 0, "Q rule: a member in the active group has no frame of its own (one frame is the group's)");
         QGroup g;
         g.set (0, &a); g.set (1, &b);
         g.setActive (true);

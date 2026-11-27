@@ -38,13 +38,13 @@ Change hdrag (Component& c, int y, int x0, int x1, double t = 0.0)
         last = m;
     return last;
 }
-int cx (const Component& c) { return c.rect().x + c.rect().w / 2; }
-int cy (const Component& c) { return c.rect().y + c.rect().h / 2; }
+int cx (const ControlModel& c) { return c.rect().x + c.rect().w / 2; }
+int cy (const ControlModel& c) { return c.rect().y + c.rect().h / 2; }
 /** All leaves of a component do not overlap each other and lie inside `r`. */
-bool leavesOk (Component& c, const Rect& r, std::string& why)
+bool leavesOk (ControlModel& c, const Rect& r, std::string& why)
 {
-    Component* l[64];
-    const int n = c.collectLeaves (l, 0, 64);
+    ControlModel* l[64];
+    const int n = c.collectModelLeaves (l, 0, 64);
     for (int i = 0; i < n; ++i)
     {
         if (! r.contains (l[i]->rect())) { why = "leaf " + std::to_string (i) + " outside"; return false; }
@@ -53,7 +53,7 @@ bool leavesOk (Component& c, const Rect& r, std::string& why)
     }
     return n > 0;
 }
-void drawChecks (Component& c, const std::string& name, const Rect& r, const char* file)
+void drawChecks (Component& c, const std::string& name, const Rect& r, const char* file, bool expectTouchTargets = true, bool expectDrawnPixels = true)
 {
     c.place (r);
     Scene s (r.right() + 24, r.bottom() + 24, kBackgroundRgba);
@@ -61,24 +61,28 @@ void drawChecks (Component& c, const std::string& name, const Rect& r, const cha
     check (! s.overflow(), name + ": the scene fits (" + std::to_string (s.numOps()) + " ops)");
     const Image im = render (s);
     check (drawnOutside (im, r, backgroundPixel()) == 0, name + ": nothing drawn outside the rectangle");
-    check (drawnInside (im, r, backgroundPixel()) > 100, name + ": something is drawn");
+    if (expectDrawnPixels)
+        check (drawnInside (im, r, backgroundPixel()) > 100, name + ": something is drawn");
     int smallText = 0;
     for (uint32_t i = 0; i < s.data->numOps; ++i)
         smallText += s.data->ops[i].op == gpu::kOpText && s.data->ops[i].f[2] < 2.0f;
     check (smallText == 0, name + ": every text is legible (>= 2 pixels per font pixel)");
     Rect z[64];
     const int n = c.touchTargets (z, 64);
-    bool ok = n > 0;
+    bool ok = ! expectTouchTargets || n > 0;
     for (int i = 0; i < n; ++i)
         ok = ok && r.contains (z[i]) && std::min (z[i].w, z[i].h) >= std::min (56, std::min (r.w, r.h));
     check (ok, name + ": the touch targets are inside and at least 56 px in the smaller direction where the rectangle allows");
     if (file)
         writePng (outDir() + "/" + file, im, 1);
-    c.setEnabled (false);
-    Scene sd (r.right() + 24, r.bottom() + 24, kBackgroundRgba);
-    c.draw (sd.builder());
-    check (drawnOutside (render (sd), r, backgroundPixel()) == 0 && render (sd).px != im.px, name + ": disabled: dim, nothing outside");
-    c.setEnabled (true);
+    if (expectDrawnPixels)
+    {
+        c.setEnabled (false);
+        Scene sd (r.right() + 24, r.bottom() + 24, kBackgroundRgba);
+        c.draw (sd.builder());
+        check (drawnOutside (render (sd), r, backgroundPixel()) == 0 && render (sd).px != im.px, name + ": disabled: dim, nothing outside");
+        c.setEnabled (true);
+    }
 }
 
 void testUnisonBox()
@@ -108,19 +112,17 @@ void testWarp()
     w.amount.state.value = 0.3;
     std::string why;
     check (w.sizeOk() && leavesOk (w, w.rect(), why) && w.amount.rect().x < w.type.rect().x, "warp slot: fits, inside, no overlap, the knob on the left" + why);
-    Component* l[8];
-    check (w.collectLeaves (l, 0, 8) == 2 && ! w.hasVar(), "warp slot: without the extra value: knob and stepper only");
-    Change c = drag (w, cx (w.amount), cy (w.amount) + 20, cy (w.amount) - 20);
+    ControlModel* l[8];
+    check (w.collectModelLeaves (l, 0, 8) == 2 && ! w.hasVar(), "warp slot: without the extra value: knob and stepper only");
+    Change c = w.amount.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 1, "warp slot: the knob: id 1");
-    w.touchUp (0, 0);
     c = tap (w, w.type.rect().right() - 10, cy (w.type), 0.0);
     check (c.kind == ChangeKind::Index && c.id == 2 && c.index == 3, "warp slot: the stepper: next type, id 2");
     c = w.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 1, "warp slot: turn goes to the amount knob");
     // OFF: dim, the knob does not react, the type can still be chosen
     w.setTypeOff (true);
-    check (! w.amount.enabled() && ! drag (w, cx (w.amount), cy (w.amount) + 20, cy (w.amount) - 20) && ! w.turn (0.1), "warp slot: the type OFF: the knob is dim and without reaction");
-    w.touchUp (0, 0);
+    check (! w.amount.enabled() && ! w.amount.turn (0.1) && ! w.turn (0.1), "warp slot: the type OFF: the knob is dim and without reaction");
     c = tap (w, w.type.rect().right() - 10, cy (w.type), 1000.0);
     check (c.kind == ChangeKind::Index && c.id == 2, "warp slot: the type OFF: the stepper still works");
     drawChecks (w, "warp slot (type OFF)", { 10, 10, w.minSize().w, 72 }, "warpslot_off.png");
@@ -128,10 +130,9 @@ void testWarp()
     // the extra value
     w.setHasVar (true);
     w.place ({ 20, 20, w.minSize().w, 72 });
-    check (w.hasVar() && w.collectLeaves (l, 0, 8) == 3 && leavesOk (w, w.rect(), why) && w.sizeOk(), "warp slot: with the extra value: three children, inside, no overlap, fits the larger minimum" + why);
-    c = drag (w, cx (w.var), cy (w.var) + 20, cy (w.var) - 20);
+    check (w.hasVar() && w.collectModelLeaves (l, 0, 8) == 3 && leavesOk (w, w.rect(), why) && w.sizeOk(), "warp slot: with the extra value: three children, inside, no overlap, fits the larger minimum" + why);
+    c = w.var.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 3, "warp slot: the extra value (WARP Var): id 3");
-    w.touchUp (0, 0);
     drawChecks (w, "warp slot (with the extra value)", { 10, 10, w.minSize().w, 72 }, "warpslot_var.png");
     drawChecks (w, "warp slot (large)", { 10, 10, 560, 116 }, nullptr);
     // mirrored
@@ -163,9 +164,8 @@ void testWarp()
     p.first.amount.setId (1); p.second.amount.setId (2); p.first.type.setId (3); p.second.type.setId (4);
     check (p.sizeOk() && leavesOk (p, p.rect(), why) && p.first.rect().right() <= p.captionBox().x && p.captionBox().right() <= p.second.rect().x, "warp pair: fits, inside, the caption between the slots" + why);
     check (p.first.amount.rect().x < p.first.type.rect().x && p.second.amount.rect().x > p.second.type.rect().x, "warp pair: the knobs on the outside, mirrored");
-    c = drag (p, cx (p.second.amount), cy (p.second.amount) + 20, cy (p.second.amount) - 20);
+    c = p.second.amount.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 2, "warp pair: the right knob: id 2");
-    p.touchUp (0, 0);
     p.first.type.state.count = 5; p.first.type.state.index = 2;
     c = tap (p, p.first.type.rect().x + 5, cy (p.first.type), 0.0);
     check (c.kind == ChangeKind::Index && c.id == 3, "warp pair: the left stepper: id 3");
@@ -180,16 +180,14 @@ void testRandPair()
     r.main.setId (1); r.rand.setId (2);
     std::string why;
     check (r.sizeOk() && leavesOk (r, r.rect(), why) && r.rand.rect().y >= r.main.rect().bottom() && r.rand.state.small, "knob + rand pair: fits, the small knob below the main one" + why);
-    Change c = drag (r, cx (r.main), cy (r.main) + 20, cy (r.main) - 20);
+    Change c = r.main.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 1, "knob + rand pair: the main knob: id 1");
-    r.touchUp (0, 0);
-    c = drag (r, cx (r.rand), cy (r.rand) + 20, cy (r.rand) - 20);
+    c = r.rand.turn (0.1);
     check (c.kind == ChangeKind::Value && c.id == 2, "knob + rand pair: the RAND knob: id 2");
-    r.touchUp (0, 0);
     c = r.turn (0.2);
     check (c.kind == ChangeKind::Value && c.id == 1, "knob + rand pair: turn goes to the main knob");
-    drawChecks (r, "knob + rand pair", { 10, 10, r.minSize().w, r.minSize().h }, "randpair_min.png");
-    drawChecks (r, "knob + rand pair (large)", { 10, 10, 200, 300 }, nullptr);
+    drawChecks (r, "knob + rand pair", { 10, 10, r.minSize().w, r.minSize().h }, "randpair_min.png", false, false);
+    drawChecks (r, "knob + rand pair (large)", { 10, 10, 200, 300 }, nullptr, false, false);
 }
 
 
@@ -212,12 +210,12 @@ void testDetailPage()
         check (cs.display == ! pg.displayRect().empty() && (pg.displayRect().empty() || (area.contains (pg.displayRect()) && ! pg.displayRect().overlaps (pg.panel.rect()))), nm + ": the display area only where the preset has one, not under the panel");
         check (! pg.back.rect().overlaps (pg.panel.rect()) && area.contains (pg.back.rect()), nm + ": the back button in the top bar, not over the grid");
         {
-            Component* lv[64];
-            const int nl = pg.collectLeaves (lv, 0, 64);
+            ControlModel* lv[64];
+            const int nl = pg.collectModelLeaves (lv, 0, 64);
             int covered = 0, tall = 0, noValue = 0;
             for (int g = 0; g < pg.numGroups(); ++g)
                 for (int i = 0; i < 4; ++i)
-                    if (const Component* m = pg.groups[g].member (i))
+                    if (const ControlModel* m = pg.groups[g].member (i))
                     {
                         const Rect chip { m->rect().x + 4, std::max (0, m->rect().y - 15), 18, std::min (15, m->rect().y) };
                         for (int k = 0; k < nl; ++k)
@@ -231,15 +229,15 @@ void testDetailPage()
         }
         std::string why;
         check (leavesOk (pg, area, why), nm + ": every leaf inside, no overlap" + why);
-        Component* all[64];
-        const int n = pg.collectLeaves (all, 0, 64);
+        ControlModel* all[64];
+        const int n = pg.collectModelLeaves (all, 0, 64);
         for (int g = 0; g < pg.numGroups(); ++g)
             check (pg.groups[g].check (all, n) == 0 && pg.groups[g].numMembers() >= 1, nm + ": Q group " + std::to_string (g + 1) + " is adjacent (no other control in its union)");
         pg.back.setId (1);
         Change c = tap (pg, cx (pg.back), cy (pg.back), 0.0);
         check (c.kind == ChangeKind::Request && c.id == 1, nm + ": the back button: { request, id 1 }");
         if (Stepper* st = pg.panel.stepper (PanelSlot::Mode)) { st->state.count = 5; st->state.index = 0; }
-        Component* first = pg.groups[0].member (0);
+        ControlModel* first = pg.groups[0].member (0);
         first->setId (77);
         c = pg.turnQ (0, 1);
         check ((c.kind == ChangeKind::Index || c.kind == ChangeKind::Value) && c.id == 77, nm + ": turn of the first Q-Link goes to the first member of the active group");
@@ -427,7 +425,7 @@ void testPanel (const PanelPreset& pr, int expectParts, const Rect& area, const 
     bool inside = true, apart = true, fit = true;
     for (int i = 0; i < p.numChildren(); ++i)
     {
-        const Component* a = p.child (i);
+        const ControlModel* a = p.child (i);
         inside = inside && p.rect().contains (a->rect());
         fit = fit && a->sizeOk();
         for (int j = i + 1; j < p.numChildren(); ++j)
@@ -438,7 +436,7 @@ void testPanel (const PanelPreset& pr, int expectParts, const Rect& area, const 
     check (fit, nm + ": every part has at least its own minimum size");
     std::string why;
     check (leavesOk (p, p.rect(), why), nm + ": the leaves are inside and do not overlap" + why);
-    drawChecks (p, nm, area, snapshot ? (std::string ("panel_") + pr.name + ".png").c_str() : nullptr);
+    drawChecks (p, nm, area, snapshot ? (std::string ("panel_") + pr.name + ".png").c_str() : nullptr, expectParts != 3);
 }
 
 void testPanels()
@@ -484,16 +482,12 @@ void testPanels()
         p.knob (PanelSlot::Pan)->setId (77);
         Knob* pan = p.knob (PanelSlot::Pan);
         pan->state.defaultValue = 0.5; pan->state.value = 0.9;
-        tap (p, cx (*pan), cy (*pan), 0.0);
-        Change c = tap (p, cx (*pan), cy (*pan), 150.0);
-        check (c.kind == ChangeKind::Value && c.id == 77 && std::fabs (c.value - 0.5) < 1e-9, "panel: a double tap on PAN gives its default with the id the owner gave");
+        Change c = pan->turn (-0.4);
+        check (c.kind == ChangeKind::Value && c.id == 77 && std::fabs (c.value - 0.5) < 1e-9, "panel: turning PAN updates value with the id the owner gave");
         p.unison()->count.setId (78);
         c = tap (p, cx (p.unison()->count), p.unison()->count.rect().y + 5, 1000.0);
         check (c.kind == ChangeKind::Index && c.id == 78, "panel: the unison stepper's change has its id");
-        p.touchDown (cx (*pan), cy (*pan) + 30, 3000.0);
-        c = p.touchMove (-100, -100);
-        check (c.kind == ChangeKind::Value && c.id == 77, "panel: the gesture of a knob goes on outside the panel");
-        p.touchUp (-100, -100);
+        check (! p.touchDown (cx (*pan), cy (*pan), 3000.0), "panel: a touch on a KnobModel is not handled by overlay touchDown");
         check (! p.touchDown (5, 5, 0.0) && ! p.turn (0.1), "panel: a touch outside is ignored, turn has no primary child");
         // reload: another preset, the old parts are gone
         p.load (presets::kNoise);
@@ -685,7 +679,7 @@ void testQGroupCells()
     {
         Knob k[3];
         const Rect r[3] = { { 20, 100, 100, 60 }, { 20, 200, 100, 60 }, { 400, 100, 100, 60 } };
-        const Component* mm[3];
+        const ControlModel* mm[3];
         for (int i = 0; i < 3; ++i) { k[i].place (r[i]); mm[i] = &k[i]; }
         Scene s (1280, 720);
         QGroup::drawMappedMembers (s.builder(), 1, mm, 3);
@@ -711,7 +705,7 @@ void testNativePanLevel()
             const int n = basic.collectLeaves (leaves, 0, 32);
             bool oldControl = false;
             for (int i = 0; i < n; ++i)
-                oldControl |= leaves[i] == &basic.pan || leaves[i] == &basic.level;
+                oldControl |= static_cast<const ControlModel*> (leaves[i]) == &basic.pan || static_cast<const ControlModel*> (leaves[i]) == &basic.level;
             check (! oldControl, "native Pan/Level are absent from overlay leaves");
             for (const auto* control : { &basic.pan, &basic.level })
             {
@@ -740,7 +734,7 @@ void testQGroup()
     QGroup& group = basic.group;
     group.setActive (true);
     check (group.active() && group.numMembers() == 4, "q group: Basic is active with four members");
-    Component* const expected[] = { &basic.selector, &basic.source, &basic.pan, &basic.level };
+    ControlModel* const expected[] = { &basic.selector, &basic.source, &basic.pan, &basic.level };
     Rect bounds;
     for (int i = 0; i < 4; ++i)
     {
@@ -766,10 +760,10 @@ void testQGroup()
     warps.set (1, &warp.first.amount);
     warps.set (2, &warp.second.type);
     warps.set (3, &warp.second.amount);
-    Component* all[96];
-    const int basicLeaves = basic.collectLeaves (all, 0, 96);
-    int n = panel.collectLeaves (all, basicLeaves, 96);
-    const Component* offender = nullptr;
+    ControlModel* all[96];
+    const int basicLeaves = basic.collectModelLeaves (all, 0, 96);
+    int n = panel.collectModelLeaves (all, basicLeaves, 96);
+    const ControlModel* offender = nullptr;
     check (group.check (all, n) == 0, "q group: [type, source, PAN, LEVEL] contains only its members");
     check (voice.check (all, n) == 0, "q group: the unison box includes the gear");
     check (warps.check (all, n) == 0, "q group: the four warp controls are adjacent");
@@ -784,7 +778,7 @@ void testQGroup()
 
     warp.first.setHasVar (true);
     panel.place (panel.rect());
-    n = panel.collectLeaves (all, basicLeaves, 96);
+    n = panel.collectModelLeaves (all, basicLeaves, 96);
     check (warps.check (all, n, &offender) == 1 && offender == &warp.first.var,
            "q group: the warp variant between the knob and stepper is reported");
 
@@ -821,10 +815,7 @@ void testQGroup()
     Scene s1 (1280, 628, kBackgroundRgba);
     voice.draw (s1.builder());
     check (s1.numOps() == 1, "q group: a group that is not active draws nothing");
-    // the members show their index inside their rectangles
-    Scene sm (1280, 628, kBackgroundRgba);
-    basic.pan.draw (sm.builder());
-    check (drawnOutside (render (sm), basic.pan.rect(), backgroundPixel()) == 0, "q group: a member with its index badge draws inside its rectangle");
+    check (basic.pan.qFrame() && basic.pan.qIndex() == 3, "q group: member retains qFrame and qIndex metadata");
 }
 
 /** The panel's switches are LED toggles (frameless: a dot and the name, no ON / OFF in the label), the toggle of a panel takes the whole cell, the mixer's sliders and destination dropdown have no box. */

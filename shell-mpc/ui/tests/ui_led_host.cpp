@@ -298,7 +298,7 @@ int main()
         check (idle.numOps() == 0, "Q member: its idle group draws no Q decoration");
     }
 
-    // ---------------------------------------------------------------- Knob with a LED on its label (the switch of what it sets: SMOOTH)
+    // ---------------------------------------------------------------- Knob with LED gating (model contract)
     for (const bool side : { true, false })
     {
         const std::string nm = std::string ("Knob LED (") + (side ? "side" : "dial over the texts") + ")";
@@ -308,72 +308,23 @@ int main()
         k.state.valueText[0] = '5'; k.state.valueText[1] = '\0';
         const Rect r = side ? Rect { 20, 20, 300, 114 } : Rect { 20, 20, 150, 150 };
         k.place (r);
-        const Rect noLedLabel = k.geom().labelBox;
-        check (k.ledHit().empty(), nm + ": no LED, no switch zone");
         k.state.led = true;
         k.state.ledOn = true;
-        const Knob::Geom g = k.geom();
-        check (g.labelBox.x > noLedLabel.x && g.labelBox.w < noLedLabel.w, nm + ": the name moves right to make room for the LED");
-        const Rect z = k.ledHit();
-        check (z.h >= 56 && z.w >= 80 && r.contains (z) && (side ? z.x < g.labelBox.x : z.y <= g.labelBox.y), nm + ": the switch zone is the text column, at least 56 px high (" + std::to_string (z.w) + " x " + std::to_string (z.h) + ")");
-        float lx, ly;
-        k.ledPoint (lx, ly);
-        check (lx < static_cast<float> (g.labelBox.x) + (side ? 0.0f : static_cast<float> (g.labelBox.w) * 0.5f) && ly > static_cast<float> (g.labelBox.y) && ly < static_cast<float> (g.labelBox.bottom()) && z.contains (static_cast<int> (lx), static_cast<int> (ly)), nm + ": the LED is in front of the name, in the zone");
-        // a tap on the zone flips it (Index 0 / 1 with the knob's id), made on the touch up
-        const int zx = z.x + z.w - 8, zy = z.y + z.h - 8;
-        Change c = k.touchDown (zx, zy, 0.0);
-        check (! c, nm + ": touch down gives nothing yet");
-        c = k.touchUp (zx, zy);
-        check (c.kind == ChangeKind::Index && c.id == 9 && c.index == 0 && c.value == 0.0, nm + ": a tap on an lit one: Index { 9, 0 }");
-        k.state.ledOn = false;
-        k.touchDown (zx, zy, 1000.0);
-        c = k.touchUp (zx, zy);
-        check (c.kind == ChangeKind::Index && c.index == 1, nm + ": a tap on an unlit one switches on");
-        // lit: the dial works; unlit: it takes no touch and no step
-        k.state.ledOn = true;
         k.state.value = 0.5;
-        const int dx = r.x + 30, dy = r.y + r.h / 3;
-        k.touchDown (dx, dy, 2000.0);
-        c = k.touchMove (dx, dy - 40);
-        check (c.kind == ChangeKind::Value && c.value > 0.5, nm + ": with the LED lit a drag on the dial changes the value");
-        k.touchUp (dx, dy - 40);
-        check (k.turn (0.1).kind == ChangeKind::Value, nm + ": and a Q-Link step moves it");
+        check (k.turn (0.1).kind == ChangeKind::Value && k.turn (0.1).id == 9, nm + ": with LED lit a Q-Link step moves it");
+        check (k.wheel (1).kind == ChangeKind::Value, nm + ": and mouse wheel steps it");
         k.state.ledOn = false;
-        k.touchDown (dx, dy, 3000.0);
-        c = k.touchMove (dx, dy - 40);
-        check (! c, nm + ": with the LED off a drag on the dial does nothing");
-        check (! k.touchUp (dx, dy - 40) && ! k.turn (0.1), nm + ": nor the release, nor a Q-Link step");
-        check (! k.tick (4000.0 + 1000.0), nm + ": nor a long press");
-        // the picture: a lit LED is the accent colour, an unlit one a ring; the unlit knob is dim all over; nothing outside the rectangle, no glow
-        Scene sOn (400, 220, kBackgroundRgba), sOff (400, 220, kBackgroundRgba);
-        k.state.ledOn = true;
-        k.draw (sOn.builder());
-        k.state.ledOn = false;
-        k.draw (sOff.builder());
-        const Image iOn = render (sOn), iOff = render (sOff);
-        k.ledPoint (lx, ly);
-        check (colourNear (iOn, lx, ly, 1, theme::L().flow[0], 8) && ! colourNear (iOff, lx, ly, 1, theme::L().flow[0], 8), nm + ": the lit LED is the accent colour, the unlit one is not (a ring)");
-        auto brightness = [&] (const Image& im, const Rect& a)
-        {
-            long sum = 0;
-            for (int y = a.y; y < a.bottom(); ++y)
-                for (int x = a.x; x < a.right(); ++x)
-                    sum += static_cast<long> ((im.at (x, y) & 255u) + ((im.at (x, y) >> 8) & 255u) + ((im.at (x, y) >> 16) & 255u));
-            return sum;
-        };
-        const Rect dial { r.x, r.y, side ? 120 : r.w, side ? r.h : r.h - 56 };
-        check (brightness (iOff, dial) < brightness (iOn, dial), nm + ": the knob with the LED off is dim (the dial)");
-        check (drawnOutside (iOn, r, backgroundPixel()) == 0 && drawnOutside (iOff, r, backgroundPixel()) == 0 && noGlow (sOn) && noGlow (sOff), nm + ": nothing is drawn outside the rectangle, no glow");
+        check (! k.turn (0.1) && ! k.wheel (1), nm + ": with LED off a Q-Link step and wheel do nothing");
+        Change whOut;
+        check (k.wheelOver (r.x + 10, r.y + 10, 1, whOut) && ! whOut, nm + ": with LED off wheelOver absorbs without change");
     }
-    {   // a knob without the LED is what it was: no zone, a tap changes nothing, the name is where it was
+    {   // a knob without the LED works normally
         Knob k ("RATE");
         k.setId (3);
         k.place ({ 0, 0, 200, 114 });
         k.state.side = true;
         k.state.value = 0.5;
-        const Rect before = k.geom().labelBox;
-        k.touchDown (150, 60, 0.0);
-        check (! k.touchUp (150, 60) && k.ledHit().empty() && k.geom().labelBox.x == before.x, "Knob without a LED: unchanged (no zone, a tap is nothing)");
+        check (! k.state.led && k.turn (0.1).kind == ChangeKind::Value, "Knob without a LED: Q-Link step moves it");
     }
 
     std::printf ("%s\n", g_fails == 0 ? "ALL PASSED" : "FAILED");

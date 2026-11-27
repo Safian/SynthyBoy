@@ -110,7 +110,7 @@ struct Rig
         return a;
     }
 
-    void tapC (const ui::Component& c, int holdMs = 40)
+    void tapC (const ui::ControlModel& c, int holdMs = 40)
     {
         const auto& f = ui.full();
         const auto& ed = ui.curveUi().screen;
@@ -153,7 +153,7 @@ struct Rig
         refresh();
     }
 
-    void centre (const ui::Component& c, int& x, int& y)
+    void centre (const ui::ControlModel& c, int& x, int& y)
     {
         x = c.rect().x + c.rect().w / 2;
         y = c.rect().y + c.rect().h / 2;
@@ -188,7 +188,7 @@ void testEveryControlHasAParameter()
 
 /** Is the component shown (not hidden) by the screen? */
 // Native visibility comes from the published geometry, not a GPU child flag.
-bool shown (Rig& r, const ui::Component& c)
+bool shown (Rig& r, const ui::ControlModel& c)
 {
     const auto& f = r.ui.full();
     const auto controls = f.nativeControls();
@@ -200,7 +200,7 @@ bool shown (Rig& r, const ui::Component& c)
     if (&c == &f.outReadout) return ! f.nativeOutReadoutRect().empty();
     return &c == &f.display && ! r.ui.curveView();
 }
-bool gpuShown (Rig& r, const ui::Component& c)
+bool gpuShown (Rig& r, const ui::ControlModel& c)
 {
     const auto& f = r.ui.full();
     for (int i = 0; i < f.numChildren(); ++i)
