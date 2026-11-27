@@ -91,13 +91,16 @@ def centre_face(item, content, *, enabled=True):
         face = action_art(text=item["text"])
     elif kind == "dropdown":
         # The old Play-panel look: value only, centred, no label (render_dropdown_variant placement none, align center).
-        face = render_dropdown_variant(_style_size(item["width"]), content, item.get("value", ""))
+        # 40 px by default (header.dropdown.height proposal: the owner chooses from the catalogue), centred in the row.
+        face = render_dropdown_variant(_style_size(item["width"]), _style_size(item.get("height", "height.intermediate")),
+                                       item.get("value", ""))
     elif kind == "stepper":
         face = render_selector_face(_style_size(item["width"]), content, name=item.get("name"),
                                     value=item.get("value", ""), stepper=True)
     else:
         raise ValueError(f"centre control must be one of {CENTRE_KINDS}: {kind!r}")
-    face = _content_face(face, content)
+    if face.height > content or (kind != "dropdown" and face.height != content):
+        raise ValueError(f"a header component is at most {content} px high ({content} for all but dropdowns): {face.height}")
     return face if enabled else dim_artwork(face)
 
 
@@ -115,7 +118,8 @@ def layout(example):
 
     def run(zone, items, x):
         for kind, face in items:
-            placed.append(Placed(zone, kind, x, y, face))
+            # A face lower than the 48 px content (a 40 px dropdown) is centred in the row.
+            placed.append(Placed(zone, kind, x, y + (m["content"] - face.height) // 2, face))
             x += face.width + gap
         return x - gap if items else x
 

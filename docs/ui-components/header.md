@@ -17,7 +17,7 @@ The full-width top row of a page or of a Play panel. No screen, skin or overlay 
 ## Zones
 
 - LEFT: the module POWER button (48 x 48; only on pages or panels of modules that can be switched off), then the screenTitle (page title: `font.page_title`, `text.value`, the style of the page captions). Modulators (Env, LFO, RND) have no POWER: the title starts at the side padding, no empty slot.
-- CENTRE: page-specific 48 px controls after one gap: dropdown, stepper (selector recipe), text button (button recipe). The centre contents per page in the catalogue are EXAMPLES, not a decision.
+- CENTRE: page-specific controls (48 px; a dropdown is 40 px by default, centred in the 48 px content, so 8 px margin above and below: PROPOSAL, the owner chooses the height from the catalogue's three dropdown heights) after one gap: dropdown, stepper (selector recipe), text button (button recipe). The centre contents per page in the catalogue are EXAMPLES, not a decision.
 - RIGHT: the common buttons, right-aligned to the side padding: EXPAND (maximise icon; in the full-screen state the same slot shows CLOSE) and MORE.
 - A Play panel uses the same header at panel width: POWER, a selector dropdown (Sub, Env 1, LFO 1), EXPAND.
 - POWER off: the POWER icon is unlit and the centre controls take the disabled look (`style.dim_artwork`, the artwork of `apply_control_state`). Title and common buttons stay.
@@ -36,3 +36,7 @@ python3 scripts/gen-native-component-catalog.py
 ```
 
 The test checks that every example is 56 px high, content 48 px at y = 4, zones in order without overlap, nothing wider than the room.
+
+## Dropdown height and look
+
+The Header dropdown is the Selector's value-only, centred variant (`selector.render_dropdown_variant`, placement `none`, align `center`) with the Voice selector's contrast: fill `selector.dropdown.top` #141a38 to `selector.dropdown.bottom` #0b0f24, keyline #27306a. It exists at 32 / 40 / 48 px (`selector.dropdown.size.<px>`: value em 18 / 22 / 24, chevron, `pad_x`); an example picks its height with the optional `height` field (a `height.*` token), default `height.intermediate` (40). The skin's dropdowns keep the `neon` look.

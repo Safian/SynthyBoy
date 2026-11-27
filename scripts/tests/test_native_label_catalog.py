@@ -106,12 +106,15 @@ class OnOffLabelTests(unittest.TestCase):
 
 
 class DropdownTests(unittest.TestCase):
-    def test_three_layouts_same_recipe_and_48_px_box(self):
+    def test_layouts_same_recipe_value_centred_at_three_heights(self):
         variants = selector.dropdown_variants(entry("selector", "dropdown"))
-        self.assertEqual([(v["placement"], v["align"]) for v in variants],
-                         [("none", "center"), ("above", "left"), ("inside", "left")])
-        box, width = style.size("height.medium"), style.size("header.dropdown.width")
+        self.assertEqual([(v["placement"], v["align"], v.get("height", "height.medium")) for v in variants],
+                         [("none", "center", "height.small"), ("none", "center", "height.intermediate"),
+                          ("none", "center", "height.medium"), ("above", "left", "height.medium"),
+                          ("inside", "left", "height.medium")])
+        width = style.size("header.dropdown.width")
         for v in variants:
+            box = style.size(v.get("height", "height.medium"))
             image = selector.render_dropdown_variant(width, box, v["value"], label=v.get("label"),
                                                      placement=v["placement"], align=v["align"])
             self.assertTrue(same(NATIVE / "selector/img" / v["file"], image), v["id"])
@@ -120,25 +123,48 @@ class DropdownTests(unittest.TestCase):
             if v["placement"] != "above":
                 self.assertEqual(image.height, box)
 
-    def test_header_dropdowns_are_the_value_only_centred_variant(self):
-        plain = selector.render_dropdown_variant(220, 48, "Env 1")
+    def test_size_tokens_follow_the_box_height(self):
+        for height in (32, 40, 48):
+            token = style.size(f"selector.dropdown.size.{height}")
+            self.assertEqual(token["height"], height)
+            self.assertAlmostEqual(token["font_em"] / height, 0.5, delta=0.07)   # value em about half the box
+            self.assertLess(token["chevron_width"], token["pad_x"] * 2 + 8)
+        ems = [style.size(f"selector.dropdown.size.{h}")["font_em"] for h in (32, 40, 48)]
+        self.assertEqual(ems, [18, 22, 24])
+        self.assertGreater(ems[0], style.native_font_em(style.size("selector.dropdown.preview_font")))
+
+    def test_value_text_is_larger_and_clear_of_the_box_edges(self):
+        for height in (32, 40, 48):
+            image = selector.render_dropdown_variant(220, height, "Env 1")
+            ink = [(x, y) for y in range(height) for x in range(20, 180) if image.getpixel((x, y))[3] and
+                   sum(image.getpixel((x, y))[:3]) > 600]
+            ys = [y for _, y in ink]
+            self.assertTrue(ink)
+            self.assertGreaterEqual(min(ys), 4)
+            self.assertLessEqual(max(ys), height - 4)
+            self.assertAlmostEqual((min(ys) + max(ys)) / 2, height / 2, delta=2.5)
+
+    def test_header_dropdowns_are_the_value_only_centred_40_px_variant(self):
+        plain = selector.render_dropdown_variant(220, 40, "Env 1")
         from components.native.header import header
         face = header.centre_face({"kind": "dropdown", "value": "Env 1", "width": "header.dropdown.width"}, 48)
         self.assertEqual(face.tobytes(), plain.tobytes())
+        self.assertEqual(face.height, 40)
 
-    def test_legacy_fill_has_the_measured_old_values_and_neon_is_untouched(self):
-        face = selector.render_dropdown_face(220, 48, look="legacy").convert("RGB")
-        self.assertEqual(face.getpixel((20, 10)), (19, 25, 48))   # constant upper part: #131930
-        self.assertEqual(face.getpixel((20, 40)), (13, 17, 34))   # constant lower part: #0d1122
+    def test_legacy_fill_has_the_voice_selector_contrast_and_neon_is_untouched(self):
+        face = selector.render_dropdown_face(220, 48, look="legacy", size="selector.dropdown.size.48").convert("RGB")
+        self.assertEqual(face.getpixel((20, 8)), (20, 26, 56))    # constant upper part: #141a38
+        self.assertEqual(face.getpixel((20, 38)), (11, 15, 36))   # constant lower part: #0b0f24
         mid = face.getpixel((20, 26))                              # darkening between the two constant parts
-        self.assertTrue(all(lo <= v <= hi for v, lo, hi in zip(mid, (13, 17, 34), (19, 25, 48))) and mid not in ((19, 25, 48), (13, 17, 34)))
-        self.assertGreater(face.getpixel((20, 4)), face.getpixel((20, 44)))  # bright keyline top, dark bottom
+        self.assertTrue(all(lo <= v <= hi for v, lo, hi in zip(mid, (11, 15, 36), (20, 26, 56))) and mid not in ((20, 26, 56), (11, 15, 36)))
+        self.assertEqual(face.getpixel((20, 0)), (38, 46, 103))   # the thin bright keyline on top, #27306a
         neon = selector.render_dropdown_face(220, 48)
         self.assertEqual(neon.convert("RGB").getpixel((20, 10)), (20, 26, 56))  # theme.neon.panel0 as before
-        self.assertEqual(style.color("selector.dropdown.top"), "#131930")
-        self.assertEqual(style.color("selector.dropdown.bottom"), "#0d1122")
-        span = style.size("selector.dropdown.gradient.legacy")
-        self.assertLess(span["start"], span["end"])
+        self.assertEqual(style.color("selector.dropdown.top"), "#141a38")
+        self.assertEqual(style.color("selector.dropdown.bottom"), "#0b0f24")
+        self.assertEqual(style.size("selector.dropdown.gradient.legacy"), style.size("selector.dropdown.gradient.neon"))
+        voice = Image.open(NATIVE / "selector/img/catalog-selector-56-valonly.png").convert("RGBA")
+        self.assertEqual(voice.getpixel((20, 8))[:3], (20, 26, 56))   # the Voice selector it matches
 
     def test_invalid_combinations_are_refused(self):
         with self.assertRaises(ValueError):

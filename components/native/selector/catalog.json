@@ -29,14 +29,37 @@
   "dropdown": {
     "variants": [
       {
-        "id": "center-none",
-        "file": "dropdown-center-none.png",
+        "id": "center-none-32",
+        "file": "dropdown-center-none-32.png",
+        "height": "height.small",
         "width": "header.dropdown.width",
         "value": "Env 1",
         "placement": "none",
         "align": "center",
-        "caption": "1 · Érték középen, felirat nélkül (a régi Play-panel külső; a Header ezt használja)",
-        "alt": "Legördülő: érték középen, felirat nélkül"
+        "caption": "1 · Érték középen, felirat nélkül, 32 px magas (a régi Play-panel külső; a Header a 40 px-est használja: javaslat, az owner innen választ)",
+        "alt": "Legördülő: érték középen, felirat nélkül, 32 px"
+      },
+      {
+        "id": "center-none-40",
+        "file": "dropdown-center-none-40.png",
+        "height": "height.intermediate",
+        "width": "header.dropdown.width",
+        "value": "Env 1",
+        "placement": "none",
+        "align": "center",
+        "caption": "1 · Érték középen, felirat nélkül, 40 px magas (a régi Play-panel külső; a Header a 40 px-est használja: javaslat, az owner innen választ)",
+        "alt": "Legördülő: érték középen, felirat nélkül, 40 px"
+      },
+      {
+        "id": "center-none-48",
+        "file": "dropdown-center-none-48.png",
+        "height": "height.medium",
+        "width": "header.dropdown.width",
+        "value": "Env 1",
+        "placement": "none",
+        "align": "center",
+        "caption": "1 · Érték középen, felirat nélkül, 48 px magas (a régi Play-panel külső; a Header a 40 px-est használja: javaslat, az owner innen választ)",
+        "alt": "Legördülő: érték középen, felirat nélkül, 48 px"
       },
       {
         "id": "above-left",

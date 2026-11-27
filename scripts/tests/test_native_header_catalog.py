@@ -34,14 +34,17 @@ class HeaderCatalogTests(unittest.TestCase):
                 self.assertEqual(image.size, (header.header_width(example["width"]), 56), example["id"])
                 self.assertEqual(image.convert("RGBA").tobytes(), header.render_header(example).tobytes(), example["id"])
 
-    def test_content_is_48_high_with_4_px_padding(self):
+    def test_content_is_48_high_with_4_px_padding_dropdowns_40_centred(self):
         m = header.metrics()
         for example in EXAMPLES:
             _, placed = header.layout(example)
             for item in placed:
                 x, y, w, h = item.rect
-                self.assertEqual((y, h), (m["padding"], m["content"]), f"{example['id']} {item.kind}")
-                self.assertEqual(y + h + m["padding"], m["height"])
+                if item.kind == "dropdown":   # 40 px (the proposal), centred in the 48 px content: 8 px margin
+                    self.assertEqual((y, h), (m["padding"] + (m["content"] - 40) // 2, 40), example["id"])
+                else:
+                    self.assertEqual((y, h), (m["padding"], m["content"]), f"{example['id']} {item.kind}")
+                self.assertEqual(y + h + (y - m["padding"]) + m["padding"], m["height"])
 
     def test_zones_are_ordered_do_not_overlap_and_fit_the_room(self):
         m = header.metrics()

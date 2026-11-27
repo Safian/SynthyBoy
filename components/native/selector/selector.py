@@ -296,9 +296,9 @@ def dropdown_asset_name(width, height):
 
 # Dropdown face tokens per look: fill top, fill bottom, keyline top, keyline bottom, gradient span (start/end as a
 # fraction of the box height: constant above `start`, linear to `end`, constant below). "neon" is the skin's theme
-# (mod_row, FX). "legacy" is the old Play-panel dropdown measured on the owner's crop (2026-11-27): fill (19,25,48) to
-# (13,17,34), keyline (24,33,69) at the top to (12,17,33) at the bottom, darkening from about a third to 0.7 of the
-# height. Only the catalogue and the Header ask for "legacy"; other components keep "neon".
+# (mod_row, FX). "legacy" is the Play-panel dropdown with the contrast of the catalogue's Voice selector (owner,
+# 2026-11-27): fill #141a38 to #0b0f24, keyline #27306a, the same gradient shape as "neon". Only the catalogue and the
+# Header ask for "legacy"; other components keep "neon".
 DROPDOWN_LOOKS = {
     "neon": ("theme.neon.panel0", "theme.neon.panel1", "theme.neon.keyline", "theme.neon.keyline",
              "selector.dropdown.gradient.neon"),
@@ -307,11 +307,15 @@ DROPDOWN_LOOKS = {
 }
 
 
-def render_dropdown_face(width, height, *, chevron=True, look="neon"):
-    """Reference MenuButton panel and V glyph, both inside the native touch bounds."""
+def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None):
+    """Reference MenuButton panel and V glyph, both inside the native touch bounds.
+
+    `size` names a selector.dropdown.size.<height> token whose inset (0: the drawn box fills the slot) and chevron measures replace the default ones."""
     top_token, bottom_token, keyline_token, keyline_bottom_token, gradient_token = DROPDOWN_LOOKS[look]
     span = _style_size(gradient_token)
     geometry = _style_size("selector.dropdown")
+    if size:
+        geometry.update({k: v for k, v in _style_size(size).items() if k == "inset" or k.startswith("chevron_")})
     theme = _style_size("theme.neon")
     scale = _style_size("sampling.standard")
     size = (width * scale, height * scale)
@@ -356,20 +360,27 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon"):
 
 
 def dropdown_definition(width, height, *, actions, skins_dir=None, value_handle="Data", value_name="Value",
-                        remaps=(), filename=None, frame_name="Selector face", look="neon"):
+                        remaps=(), filename=None, frame_name="Selector face", look="neon", size=None):
     """A native value selector whose caller owns all commands and value bindings."""
     filename = filename or dropdown_asset_name(width, height)
     if look != "neon":
         filename = filename.replace(".png", f"_{look}.png")
+    if size:
+        filename = filename.replace(".png", f"_{size.rsplit('.', 1)[-1]}.png")
     if skins_dir is not None:
         directory = Path(skins_dir)
         directory.mkdir(parents=True, exist_ok=True)
-        save_png_filter0(render_dropdown_face(width, height, look=look), directory / filename)
+        save_png_filter0(render_dropdown_face(width, height, look=look, size=size), directory / filename)
     style = _style_size("selector.dropdown")
     inset = style["inset"]
     left = inset + style["text_inset"]
-    value = _value_label(value_name, (left, left, width - left - inset - style["chevron_lane"], height - 2 * left),
-                         style["font"])
+    if size:
+        # A sized dropdown: the value box spans the full height and starts pad_x from the edge (left-aligned text keeps clear of it).
+        pad = _style_size(size)["pad_x"]
+        rect = (pad, 0, width - pad - style["chevron_lane"], height)
+    else:
+        rect = (left, left, width - left - inset - style["chevron_lane"], height - 2 * left)
+    value = _value_label(value_name, rect, style["font"])
     value["componentData"]["data"]["handleName"] = value_handle
     value["componentData"]["data"]["textStyle"]["colour"] = _style_argb("theme.neon.text")
     value["handle remapping"]["map"] = [{"key": key, "value": target} for key, target in remaps]
@@ -401,6 +412,7 @@ def selector_definition(
     steps=0,
     play_face=False,
     dropdown_look="neon",
+    dropdown_size=None,
 ):
     """Creates a shared native MPC selector definition with support for all variants."""
     if template is None:
@@ -420,7 +432,9 @@ def selector_definition(
     skins_dir.mkdir(parents=True, exist_ok=True)
     width, slot_height = slot
 
-    if frame:
+    if dropdown_size:
+        height = slot_height  # a sized dropdown fills its slot (32 / 40 / 48 px)
+    elif frame:
         frame_name, filename = frame
         height = slot_height
     elif play_face:
@@ -451,7 +465,7 @@ def selector_definition(
                 action["handleName"] = title
         native = dropdown_definition(width, height, skins_dir=skins_dir, actions=popup_definition["actions"],
                                     value_handle=title, value_name=label_name, filename=filename, frame_name=frame_name,
-                                    look=dropdown_look)
+                                    look=dropdown_look, size=dropdown_size)
         frame_child, value = native["componentsData"]
         for child in (frame_child, value):
             x, y, w, h = map(int, child["bounds"]["bounds"].split())
@@ -1402,7 +1416,7 @@ def render_selector_face(width, height, *, name=None, value="Sine", **variants):
                 text = data.get("text", value)
                 font_height = style["font"]["height"]
                 if font_height == _style_size("selector.dropdown")["font"] and not (
-                        name or {k: v for k, v in variants.items() if k != "dropdown_look"}):
+                        name or {k: v for k, v in variants.items() if k not in ("dropdown_look", "dropdown_size")}):
                     font_height = _style_size("selector.dropdown.preview_font")
                 font = semibold(round(_native_font_em(font_height)))
                 draw = ImageDraw.Draw(result)
@@ -1425,7 +1439,10 @@ DROPDOWN_KEYS = {"id", "file", "alt", "caption", "width", "value", "placement", 
 
 
 def render_dropdown_variant(width, height, value, *, label=None, placement="none", align="center"):
-    """One dropdown from the one selector recipe (render_selector_face), 48 px box in every variant.
+    """One dropdown from the one selector recipe (render_selector_face); `height` is the box height.
+
+    The value size and the chevron follow the box: selector.dropdown.size.<height> (32 / 40 / 48 px; the value em is
+    about half the box height).
 
     placement: "none"   value only, no label (the old Play-panel look when align is "center");
                "above"  `label` outside and above the box, centred, in the Label dial-caption style;
@@ -1439,11 +1456,16 @@ def render_dropdown_variant(width, height, value, *, label=None, placement="none
         raise ValueError("a label is given exactly when the placement is above or inside")
     if placement == "inside":
         return render_selector_face(width, height, name=label, value=value, label_height=_style_size("font.button"))
-    justification = {"left": "left verticallyCentred"}.get(align)
-    # The left-aligned value keeps the size of the centred one (selector.dropdown.preview_font).
-    box = (render_selector_face(width, height, value=value, justification=justification, dropdown_look="legacy",
-                                label_height=_style_size("selector.dropdown.preview_font")) if justification
-           else render_selector_face(width, height, value=value, dropdown_look="legacy"))
+    justification = {"left": "left verticallyCentred", "center": "horizontallyCentred verticallyCentred"}[align]
+    size = f"selector.dropdown.size.{height}"
+    try:
+        font_em = _style_size(size)["font_em"]
+    except ValueError:
+        size, font_em = None, None
+    # The recipe takes a TUI font height; the host draws em = height / font.host.height.per.em.
+    tui = font_em * _style_size("font.host.height.per.em") if font_em else _style_size("selector.dropdown.preview_font")
+    box = render_selector_face(width, height, value=value, justification=justification, dropdown_look="legacy",
+                               dropdown_size=size, label_height=tui)
     if placement == "none":
         return box
     from components.native.label.label import render_label
@@ -1460,8 +1482,8 @@ def dropdown_variants(entry):
     if not isinstance(entry, dict) or set(entry) != {"variants"} or not entry["variants"]:
         raise ValueError("dropdown entry needs a nonempty variants list")
     for item in entry["variants"]:
-        if not DROPDOWN_KEYS <= set(item) <= DROPDOWN_KEYS | {"label"}:
-            raise ValueError(f"dropdown variant needs {sorted(DROPDOWN_KEYS)} (+ optional label)")
+        if not DROPDOWN_KEYS <= set(item) <= DROPDOWN_KEYS | {"label", "height"}:
+            raise ValueError(f"dropdown variant needs {sorted(DROPDOWN_KEYS)} (+ optional label, height)")
         if item["placement"] not in DROPDOWN_PLACEMENTS or item["align"] not in DROPDOWN_ALIGNS:
             raise ValueError(f"dropdown variant {item['id']!r}: placement/align out of range")
     if len({v["id"] for v in entry["variants"]}) != len(entry["variants"]):

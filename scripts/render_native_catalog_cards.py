@@ -90,7 +90,7 @@ def render_dropdown_cards():
     directory = REPO_ROOT / "components/native/selector"
     entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))["dropdown"]
     for v in selector.dropdown_variants(entry):
-        selector.render_dropdown_variant(_style_size(v["width"]), _style_size("height.medium"), v["value"],
+        selector.render_dropdown_variant(_style_size(v["width"]), _style_size(v.get("height", "height.medium")), v["value"],
                                          label=v.get("label"), placement=v["placement"], align=v["align"]).save(
             directory / "img" / v["file"])
     print("Rendered dropdown variants")
