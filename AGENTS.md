@@ -48,3 +48,7 @@ Finished packages live outside the repository in `/Users/szabi/Documents/Project
 
 - `old-ui-3bb27424`: the old UI (before the sub-tab conversions of 2026-11-26/27, in-screen tab strips on Osc/Env/Master/Filter/LFO, Mixer peek bar), built from develop commit 3bb27424 for both architectures. Kept for comparison and as a fallback.
 
+## Control look: the old gradient design, not flat (owner, 2026-11-27)
+
+Dropdowns (Selector) keep the old look: a dark blue fill with a subtle vertical gradient (a thin highlight line at the top, the lower half darkening slightly: measured #131930 at the top to #0d1122 at the bottom on the page ground #0c0f18, a lighter blue border), a "bubble" effect that is not loud. Do not replace it with a flat fill. The gradient colours and where it starts are tokens (`selector.surface`, `selector.border` and the gradient parameters), never literals. Whether the other controls (buttons, ActiveText, fields) get the same treatment is decided per component when its design is reviewed.
+
