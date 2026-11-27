@@ -98,7 +98,11 @@ def render_button_face(
     h = _style_size("mixer_strip.button.solo_h") if height is None else height
     fsz = _style_size("mixer_strip.font.sm") if font_size is None else font_size
     radius = _style_size("radius.field")
-    half = _style_size("scale.half") if False else 2  # integer center
+    half = 2  # integer center
+
+    if state == STATE_DISABLED:
+        from components.style import dim_artwork
+        return dim_artwork(render_button_face(text, STATE_NEUTRAL, w, h, font_size=font_size, radius=radius))
 
     image = Image.new("RGBA", (w, h), _style_rgba("ink.black", 0))
     pen = ImageDraw.Draw(image)

@@ -79,21 +79,21 @@ def render_grid_cell_art(label, active, width, height, *, ends=(True, True), ver
     """One cell of a RadioGrid-style row or column laid over a tiled hit slot: the Button recipe (action_art: legacy face,
     or look "active" for the selected cell), the largest button size that fits the slot, centred across the group, with the
     RadioGrid gap (`radio_grid.gap`) kept between neighbouring cells. `ends` marks the first / last cell of the group."""
-    from components.native.button.button import in_slot
     gap = _style_size("radio_grid")["gap"]
-    along = width if not vertical else height
+    along = height if vertical else width
     left = 0 if ends[0] else gap // 2
     right = 0 if ends[1] else gap - gap // 2
-    extent = (along - left - right)
-    across = height if not vertical else width
-    box = max(size for size in (32, 40, 48) if size <= across) if across >= 32 else across
+    extent = along - left - right
+    across = width if vertical else height
+    limit = extent if vertical else across
+    box = max(size for size in (32, 40, 48) if size <= limit) if limit >= 32 else 32
+    kind = {"look": "active", "colour": _style_color("radio.active.text")} if active else {}
     if vertical:
-        face = action_art(text=label, width=width - 0, height=box, look="active" if active else "legacy",
-                          colour=_style_color("radio.active.text")) if active else action_art(text=label, width=width, height=box, look="legacy")
+        face = action_art(text=label, width=width, height=box, **kind)
+        top = left + (extent - box) // 2
         slot = Image.new("RGBA", (width, height))
-        slot.alpha_composite(face, (0, left))
+        slot.alpha_composite(face, (0, top))
         return slot
-    kind = {"look": "active", "colour": _style_color("radio.active.text")} if active else {"look": "legacy"}
     face = action_art(text=label, width=extent, height=box, **kind)
     slot = Image.new("RGBA", (width, height))
     slot.alpha_composite(face, (left, (height - box) // 2))
