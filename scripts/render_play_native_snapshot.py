@@ -456,12 +456,8 @@ class PlaySketch(BaseSketch):
 
     def render(self, tab_name="Play"):
         tab = next(t for t in self.tui["pageData"]["tabs"] if t["tabName"] == tab_name)
-        # Background: overlay_canvas.png if present, else dark solid
-        bg_file = self.skins / "overlay_canvas.png"
-        if bg_file.is_file():
-            img = Image.open(bg_file).convert("RGBA")
-        else:
-            img = Image.new("RGBA", (preview_mod.TAB_W, preview_mod.TAB_H), (20, 26, 40, 255))
+        # Background: the solid page colour of the skin (no bitmap)
+        img = Image.new("RGBA", (preview_mod.TAB_W, preview_mod.TAB_H), (9, 13, 25, 255))
 
         for entry in tab["componentDefinition"]["componentsData"]:
             self.draw_entry(img, entry, (0, 0), parent_size=(preview_mod.TAB_W, preview_mod.TAB_H))

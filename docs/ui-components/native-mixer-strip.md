@@ -45,7 +45,7 @@ Following owner feedback, the header toggle switch is replaced with authentic mi
 
 Understated blue/white SynthyBoy console styling places all static furniture onto the background image once:
 - **Static Background Canvas**:
-  - Tab background: `overlay_canvas.png` ($1280 \times 628\text{ px}$).
+  - Tab background: solid page colour `ff090d19` (no bitmap).
   - Variant backgrounds: `mixer_strip_source_bg.png`, `mixer_strip_bus_bg.png`, `mixer_strip_master_bg.png` ($115 \times 606\text{ px}$).
   - Retains the required DRM plane sentinel at $(900, 18)$ with color `#141a35`.
 - **Fader Scale Marks strictly follow `param_table.cpp`**:

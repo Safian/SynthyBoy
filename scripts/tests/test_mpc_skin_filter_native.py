@@ -81,15 +81,11 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(im.size, (6, 6))
                 self.assertEqual(set(im.convert("RGB").getdata()), {colour})
         for state in ("focussed", "unfocussed"):
-            self.assertEqual(self.tab["componentDefinition"]["backgroundData"][state]["image"], "overlay_canvas.png")
+            self.assertEqual(self.tab["componentDefinition"]["backgroundData"][state]["image"], "")
         self.assertEqual(rect(sentinel), (900, 2, 5, 5))
         with Image.open(self.skin / sentinel["componentData"]["data"]["image"]) as im:
             self.assertEqual(im.size, (5, 5))
             self.assertEqual(set(im.convert("RGB").getdata()), {(23, 28, 53)})
-        with Image.open(self.skin / "overlay_canvas.png") as im:
-            for mark in markers:
-                x, y, w, h = rect(mark)
-                self.assertEqual(set(im.crop((x, y, x + w, y + h)).getdata()), {(9, 13, 25)})
 
     def test_off_navigation_and_model_permissions_are_explicit(self):
         state = len(self.params) + 212

@@ -121,13 +121,15 @@ class NoFallbackTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "shadows"):
                 validate_package(package)
             variant.unlink()
-            image = skins / "overlay_canvas.png"
+            image = skins / "overlay_marker_filter1_left.png"
+            saved = image.read_bytes()
             image.write_bytes(b"broken")
             with self.assertRaises(OSError):
                 validate_package(package)
             image.unlink()
             with self.assertRaises(FileNotFoundError):
                 validate_package(package)
+            image.write_bytes(saved)
 
     def test_each_tab_contains_its_detection_pictures_and_configured_background(self):
         tabs = self.tui["pageData"]["tabs"]
@@ -521,9 +523,8 @@ class NoFallbackTests(unittest.TestCase):
         total = sum(w * h * 4 for w, h in (png_size(p) for p in files))
         # Native standalone controls intentionally retain their SDK filmstrips
         # and definitions; the old no-fallback byte total is no longer valid.
-        backgrounds = set(self.background_assets.values())
-        self.assertGreater(total, BASE_DECODED_BYTES + len(backgrounds) * 1280 * 628 * 4)
-        self.assertGreaterEqual(len(files), 75 + len(backgrounds))
+        self.assertGreater(total, BASE_DECODED_BYTES)   # the tab backgrounds are a solid colour: no bitmap in the total
+        self.assertGreaterEqual(len(files), 75)
         self.assertLess((self.skins / "TUI.json").stat().st_size, base.TUI_JSON_BYTES_MAX)
         doc = (base.ROOT / "docs" / "MPC.md").read_text(encoding="utf-8")
         self.assertIn("9 072", doc)     # the number of the documentation: it must follow the skin

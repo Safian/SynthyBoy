@@ -5,7 +5,7 @@
 
 Composites the actual generated native host skin layer with the authentic C++ overlay:
 1. Native Host Skin Layer (1280 x 628 px):
-   - Genuine tab background (overlay_canvas.png) with static pass
+   - Solid tab page colour with static pass
    - 8 compact native rotary dials and readouts / MacroCard components in one bottom row
    - 8 standalone action buttons ("TARGETS")
    - Overlay sentinel / instance markers
@@ -341,10 +341,7 @@ def render_macros_preview(
         MacrosSketch = make_macros_sketch_class(sketch_mod, fixture_data)
         sketch = MacrosSketch(skins_path, params_list)
 
-        bg_path = skins_path / "overlay_canvas.png"
-        if not bg_path.is_file():
-            bg_path = SCRIPTS_DIR / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_canvas.png"
-        canvas = Image.open(bg_path).convert("RGBA")
+        canvas = Image.new("RGBA", (1280, 628), (9, 13, 25, 255))   # the solid page colour of the skin
 
         tab = next((t for t in sketch.tui["pageData"]["tabs"] if t["tabName"] == "Macros"), None)
         if tab is not None:

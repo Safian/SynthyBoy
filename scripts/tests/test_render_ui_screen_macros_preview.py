@@ -199,18 +199,6 @@ class TestRenderUiScreenMacrosPreview(unittest.TestCase):
                     self.assertEqual(gap_bright, 0,
                                      f"{fixture} card {i} must have ZERO overlapping text pixels in vertical gap y={vy+vh+2}..{ny-2}")
 
-    def test_static_background_png_integrity_and_size(self):
-        """Verifies overlay_canvas.png is lossless compressed RGB 1280x628 with intact top 0..110 band."""
-        bg_path = ROOT / "scripts" / "mpc-skin-extras" / "overlay-backgrounds" / "overlay_canvas.png"
-        self.assertTrue(bg_path.is_file())
-        self.assertLess(bg_path.stat().st_size, 200 * 1024, "overlay_canvas.png must be losslessly compressed (<200 KB)")
-        with Image.open(bg_path) as im:
-            self.assertEqual(im.mode, "RGB")
-            self.assertEqual(im.size, (1280, 628))
-            for px_coord in ((0, 0), (280, 12), (760, 20), (1200, 60), (200, 68)):
-                r, g, b = im.getpixel(px_coord)
-                self.assertGreater(b, r + 15, f"Static background top region at {px_coord} must be navy theme ground, got {(r, g, b)}")
-
     def test_two_fixtures_non_zero_values_and_two_name_sets(self):
         """Verifies two differing non-zero macro values fixtures and two name sets.
 

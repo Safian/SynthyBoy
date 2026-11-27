@@ -86,6 +86,6 @@ def apply(tui, qlinks, ctx):
     if mod_tab is not None:
         mod_tab["qlinkBoundsData"] = []
         bg = mod_tab["componentDefinition"].setdefault("backgroundData", {})
-        bg["focussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": "overlay_canvas.png"}
-        bg["unfocussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": "overlay_canvas.png"}
+        bg["focussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": ""}
+        bg["unfocussed"] = {"version": 1, "colour": style.argb("surface.canvas"), "image": ""}
 

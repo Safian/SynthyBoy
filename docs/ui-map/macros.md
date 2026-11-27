@@ -42,7 +42,7 @@ The MACROS page arranges all eight macros in a single horizontal row along the b
 Canonical preview PNGs are rendered via [render_ui_screen_macros_preview.py](../../scripts/render_ui_screen_macros_preview.py) by compositing two authentic layers at identical state:
 
 1. **Generated Native Host Skin Layer (1280 × 628 px)**:
-   - Rendered via `MacrosSketch` (`render-mpc-skin-preview.py`) on the static host background [overlay_canvas.png](../../scripts/mpc-skin-extras/overlay-backgrounds/overlay_canvas.png) (1280 × 628 lossless compressed RGB PNG).
+   - Rendered via `MacrosSketch` (`render-mpc-skin-preview.py`) on the solid page colour `#090d19` (no bitmap).
    - Leaves `nameRect` clear (`include_name=False`) so overlay name labels never collide with host text.
    - Renders the `90 × 90 px` 127-frame `play_sub_level_90.png` dial, centered `20 px` value readout, and centered `48 px` `TARGETS` button face.
 
