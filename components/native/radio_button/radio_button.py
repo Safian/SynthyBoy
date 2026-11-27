@@ -5,9 +5,11 @@
 import hashlib
 from pathlib import Path
 
-from components.native.button.button import button
+from components.native.button.button import button, gradient_face
 from components.style import (
     color as _style_color,
+    control_look as _control_look,
+    rgb as _style_rgb,
     opacity as _style_opacity,
     rgba as _style_rgba,
     size as _style_size,
@@ -37,22 +39,33 @@ def render_segmented_button_art(label, active, width, height, *, scale=_style_si
     pad = _style_size('radio_button.segmented_button_art.pad') * scale
     radius = _style_size('radius.control') * scale
 
-    mask = Image.new("L", (w, h), _style_opacity("transparent"))
-    ImageDraw.Draw(mask).rounded_rectangle((pad, pad, w - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle'), h - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle')), radius=radius, fill=_style_opacity("opaque"))
-
-    grad = Image.new("RGBA", (w, h))
-    gdraw = ImageDraw.Draw(grad)
-    if active:
-        # Full active cyan background gradient
-        _vgrad(gdraw, 0, 0, w, h, _style_rgba("accent.cyan"), _style_rgba("radio.active.bottom"))
-        outline_col = _style_color("radio.active.border")
+    if _control_look() == "legacy":
+        # The shared button gradient (button.gradient.*, control.gradient); the selected face is the accent on the same shape.
+        if active:
+            fill = (_style_rgb("accent.cyan"), _style_rgb("radio.active.bottom"))
+            line = (_style_rgb("radio.active.border"),) * 2
+        else:
+            fill = (_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom"))
+            line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
+        im, draw = gradient_face((w, h), inset=pad, radius=radius, frame=scale, span=_style_size("control.gradient"),
+                                 fill=fill, line=line)
     else:
-        # Dark body gradient
-        _vgrad(gdraw, 0, 0, w, h, _style_rgba("radio.surface.top"), _style_rgba("radio.surface.bottom"))
-        outline_col = _style_color("control.border")
+        mask = Image.new("L", (w, h), _style_opacity("transparent"))
+        ImageDraw.Draw(mask).rounded_rectangle((pad, pad, w - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle'), h - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle')), radius=radius, fill=_style_opacity("opaque"))
 
-    im.paste(grad, (0, 0), mask)
-    draw.rounded_rectangle((pad, pad, w - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle'), h - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle')), radius=radius, outline=outline_col, width=scale)
+        grad = Image.new("RGBA", (w, h))
+        gdraw = ImageDraw.Draw(grad)
+        if active:
+            # Full active cyan background gradient
+            _vgrad(gdraw, 0, 0, w, h, _style_rgba("accent.cyan"), _style_rgba("radio.active.bottom"))
+            outline_col = _style_color("radio.active.border")
+        else:
+            # Dark body gradient
+            _vgrad(gdraw, 0, 0, w, h, _style_rgba("radio.surface.top"), _style_rgba("radio.surface.bottom"))
+            outline_col = _style_color("control.border")
+
+        im.paste(grad, (0, 0), mask)
+        draw.rounded_rectangle((pad, pad, w - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle'), h - pad - _style_size('radio_button.segmented_button_art.rounded_rectangle')), radius=radius, outline=outline_col, width=scale)
 
     font_size = _style_size('font.option') * scale if len(label) <= 4 else _style_size('font.caption') * scale
     font = semibold(font_size)

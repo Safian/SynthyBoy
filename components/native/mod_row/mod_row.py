@@ -20,6 +20,7 @@ from components.style import (
     argb as _style_argb,
     native_color as _style_native_color,
     color as _style_color,
+    control_look as _control_look,
     size as _style_size,
 )
 from components.native.level.level import synthyboy_dial_data as level_dial_data
@@ -92,13 +93,18 @@ def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticall
     return label
 
 
+def _button_surface_token():
+    """The flat toggle cell colour: the shared button gradient's top colour in the legacy control look."""
+    return "button.gradient.top" if _control_look() == "legacy" else "mod_row.button_surface"
+
+
 def build_cell_definition(kind, width, height, *, image_name=None, skins_dir=None, choice_menu="fx editor choice menu"):
     """Factory for standard cell definitions used within a ModRow.
     
     Ensures all interactive components have a touch hitbox of at least 56px.
     """
     actions = []
-    bg_unfocussed = {"version": 1, "colour": _style_argb("mod_row.button_surface"), "image": image_name or ""}
+    bg_unfocussed = {"version": 1, "colour": _style_argb(_button_surface_token()), "image": image_name or ""}
     bg_focussed = {"version": 1, "colour": _style_argb("mod_row.focus"), "image": image_name or ""}
 
     if kind == "bar":
@@ -401,7 +407,7 @@ def render_standalone_mod_row(slot_num="01", source="LFO 1", target="Filter 1 Cu
                 with Image.open(directory / background["image"]) as face:
                     im.alpha_composite(face, (x, y))
             elif kind == "toggle":
-                pen.rectangle((x, y, x + w - 1, y + h - 1), fill=_style_color("mod_row.button_surface"))
+                pen.rectangle((x, y, x + w - 1, y + h - 1), fill=_style_color(_button_surface_token()))
             for child in cell["componentsData"]:
                 info = child["componentData"]
                 data = info["data"]
@@ -535,7 +541,7 @@ def write_route_button_art(directory, key, caption, rect, active):
     image = text_face(caption, tuple(rect[2:]), geometry="filter.pz.button",
                       surface="filter.pz.active.surface",
                       border="mod_targets.border.active" if active else "filter.pz.active.border",
-                      text="text.icon")
+                      text="text.icon", gradient=True, accent="mod_targets.border.active" if active else None)
     filename = f"mod_targets_{key}.png"
     image.save(Path(directory) / filename)
     return filename
@@ -548,7 +554,8 @@ def write_route_pagination_art(directory, width, height):
     film = Image.new("RGBA", (width, height * 4))
     for mode in range(1, 4):
         image = text_face("", (width, height), geometry="filter.pz.button",
-                          surface="filter.pz.active.surface", border="filter.pz.active.border", text="text.icon")
+                          surface="filter.pz.active.surface", border="filter.pz.active.border", text="text.icon",
+                          gradient=True)
         pen = ImageDraw.Draw(image)
         inset = geometry["arrow_inset"]
         for arrow, x, active in (("‹", inset, mode <= 2), ("›", width - inset, mode >= 2)):

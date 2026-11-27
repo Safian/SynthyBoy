@@ -7,6 +7,7 @@ from pathlib import Path
 
 from components.style import (
     color as _style_color,
+    control_look as _control_look,
     rgb as _style_rgb,
     size as _style_size,
 )
@@ -78,12 +79,13 @@ def semibold(size):
 LOOKS = ("flat", "legacy", "active", "ghost")
 
 
-def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), height=None, look="flat"):
+def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), height=None, look=None):
     """A native action button face: a text label or an icon (power, expand, close) on its box.
 
     height: None keeps the 48 px face every skin button uses; 32 / 40 / 48 / 56 take their `button.size.<px>`
             tokens (font, radius, text padding) and scale the icon about the box centre.
-    look:   "flat"   today's flat face (button.surface / button.border), the default the skin uses;
+    look:   None     the skin default: `control.look` (legacy; SYNTHYBOY_CONTROL_LOOK=flat gives the flat face back);
+            "flat"   the flat face (button.surface / button.border);
             "legacy" the old Play-panel face: the control.gradient fill and keyline (button.gradient.* colours);
             "active" the legacy gradient shape filled with the accent (accent.cyan to radio.active.bottom, keyline
                      radio.active.border); the caller passes colour=radio.active.text (RadioGrid's selected button);
@@ -93,6 +95,7 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
         raise RuntimeError("Pillow is required for action_art")
     if bool(icon) == bool(text):
         raise ValueError("Supply exactly one icon or text label")
+    look = _control_look() if look is None else look
     if look not in LOOKS:
         raise ValueError(f"look must be one of {LOOKS}: {look!r}")
     art = _style_size('button.art')
@@ -300,16 +303,32 @@ __all__ = [
 ]
 
 
-def text_face(label, size, *, geometry, surface, border, text):
-    """Token-configured native action face for compact fixed-layout toolbars."""
+def text_face(label, size, *, geometry, surface, border, text, gradient=False, accent=None):
+    """Token-configured native action face for compact fixed-layout toolbars.
+
+    gradient: the face follows the skin's control look (`control.look`): "legacy" draws the shared button gradient
+    (button.gradient.*) instead of the flat surface/border tokens; `accent` (a colour token) then overrides the
+    gradient keyline, e.g. the active route button. Disabled faces pass gradient=False and stay flat grey."""
     metrics = _style_size(geometry)
     width, height = size
-    image = Image.new("RGBA", size)
-    pen = ImageDraw.Draw(image)
-    pen.rounded_rectangle((metrics["inset"], metrics["inset"],
-                           width - metrics["end_inset"], height - metrics["end_inset"]),
-                          radius=metrics["radius"], fill=_style_color(surface),
-                          outline=_style_color(border), width=metrics["stroke"])
+    if gradient and _control_look() == "legacy":
+        scale = _style_size("sampling.standard")
+        line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
+        if accent is not None:
+            line = (_style_rgb(accent),) * 2
+        image, pen = gradient_face(
+            (width * scale, height * scale), inset=0, radius=metrics["radius"] * scale, frame=metrics["stroke"] * scale // 2,
+            span=_style_size("control.gradient"), line=line,
+            fill=(_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom")))
+        image = image.resize(size, Image.Resampling.LANCZOS)
+        pen = ImageDraw.Draw(image)
+    else:
+        image = Image.new("RGBA", size)
+        pen = ImageDraw.Draw(image)
+        pen.rounded_rectangle((metrics["inset"], metrics["inset"],
+                               width - metrics["end_inset"], height - metrics["end_inset"]),
+                              radius=metrics["radius"], fill=_style_color(surface),
+                              outline=_style_color(border), width=metrics["stroke"])
     pen.text((width / 2, height / 2), label, anchor="mm", font=semibold(metrics["font"]),
              fill=_style_color(text))
     return image
@@ -321,9 +340,11 @@ def write_switch_asset(path, active):
     width, height = geometry["size"]
     image = Image.new("RGBA", (width, height))
     pen = ImageDraw.Draw(image)
+    legacy = _control_look() == "legacy"
     pen.rounded_rectangle((0, 0, width - 1, height - 1), radius=geometry["radius"],
-                           fill=_style_color("accent.cyan" if active else "button.surface"),
-                           outline=_style_color("button.switch.border"), width=geometry["stroke"])
+                           fill=_style_color("accent.cyan" if active else ("button.gradient.top" if legacy else "button.surface")),
+                           outline=_style_color("button.gradient.border" if legacy else "button.switch.border"),
+                           width=geometry["stroke"])
     x = geometry["thumb_on_x" if active else "thumb_off_x"]
     y, size = geometry["thumb_y"], geometry["thumb_size"]
     pen.ellipse((x, y, x + size, y + size), fill=_style_color("text.icon"))

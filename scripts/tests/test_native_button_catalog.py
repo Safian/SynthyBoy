@@ -62,10 +62,14 @@ class ButtonTests(unittest.TestCase):
         from components.native.selector import selector
         self.assertIs(selector.gradient_face, button.gradient_face)
 
-    def test_default_look_is_still_the_flat_skin_face(self):
+    def test_default_look_follows_control_look_and_flat_stays_available(self):
+        self.assertEqual(style.control_look(), "legacy")
         face = button.action_art(icon="power").convert("RGB")
         self.assertEqual(face.size, (48, 48))
-        self.assertEqual(face.getpixel((6, 24)), style.rgb("button.surface"))
+        self.assertEqual(face, button.action_art(icon="power", look="legacy").convert("RGB"))
+        flat = button.action_art(icon="power", look="flat").convert("RGB")
+        self.assertEqual(flat.getpixel((6, 24)), style.rgb("button.surface"))
+        self.assertNotEqual(face.getpixel((6, 24)), flat.getpixel((6, 24)))
 
     def test_text_fits_and_look_is_validated(self):
         for height in (32, 40, 48, 56):

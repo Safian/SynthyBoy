@@ -26,6 +26,7 @@ from components.style import (
     native_font_em as _native_font_em,
     argb as _style_argb,
     color as _style_color,
+    control_look as _control_look,
     opacity as _style_opacity,
     native_color as _style_native_color,
     rgb as _style_rgb,
@@ -347,6 +348,8 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None)
     """Reference MenuButton panel and V glyph, both inside the native touch bounds.
 
     `size` names a selector.dropdown.size.<height> token whose inset (0: the drawn box fills the slot) and chevron measures replace the default ones."""
+    if look == "neon" and _control_look() == "legacy":
+        look = "legacy"   # the skin default follows control.look (A/B: SYNTHYBOY_CONTROL_LOOK=flat)
     top_token, bottom_token, keyline_token, keyline_bottom_token, gradient_token = DROPDOWN_LOOKS[look]
     span = _style_size(gradient_token)
     geometry = _style_size("selector.dropdown")

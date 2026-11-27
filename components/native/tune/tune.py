@@ -50,12 +50,14 @@ Enforces Owner Decisions and Architecture Specifications:
 import math
 from pathlib import Path
 
-from components.native.button.button import button
+from components.native.button.button import button, gradient_face
 from components.native.name_value import name_value
 from components.native.name_value.name_value import create_name_value_entry, get_height_preset
 from components.style import (
     argb as _style_argb,
     color as _style_color,
+    control_look as _control_look,
+    rgb as _style_rgb,
     opacity as _style_opacity,
     rgba as _style_rgba,
     size as _style_size,
@@ -221,6 +223,17 @@ def resolve_native_base(base=None, param_count=None):
     raise ValueError("Supply the native host base or parameter count to bind TUNE.")
 
 
+def _gradient_button_face(size, scale, pad, *, pressed=False):
+    """The shared legacy button gradient (button.gradient.*, control.gradient) at the supersampled `size`;
+    a pressed face keeps its accent keyline."""
+    line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
+    if pressed:
+        line = (_style_rgb("accent.cyan"),) * 2
+    return gradient_face(size, inset=pad, radius=_style_size('radius.field') * scale, frame=scale,
+                         span=_style_size("control.gradient"), line=line,
+                         fill=(_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom")))
+
+
 def render_tune_track_button(active=True, width=DEFAULT_COL_WIDTH, height=DEFAULT_BTN_HEIGHT, scale=_style_size('tune.tune_track_button.geometry')):
     """Render the TRACK toggle button face image with cyan LED indicator dot."""
     w, h = width * scale, height * scale
@@ -228,13 +241,16 @@ def render_tune_track_button(active=True, width=DEFAULT_COL_WIDTH, height=DEFAUL
     draw = ImageDraw.Draw(im)
 
     pad = scale // 2
-    draw.rounded_rectangle(
-        (pad, pad, w - pad - _style_size('tune.tune_track_button.rounded_rectangle'), h - pad - _style_size('tune.tune_track_button.rounded_rectangle')),
-        radius=_style_size('radius.field') * scale,
-        fill=BG_CELL,
-        outline=BORDER_CELL,
-        width=scale,
-    )
+    if _control_look() == "legacy":
+        im, draw = _gradient_button_face((w, h), scale, pad)
+    else:
+        draw.rounded_rectangle(
+            (pad, pad, w - pad - _style_size('tune.tune_track_button.rounded_rectangle'), h - pad - _style_size('tune.tune_track_button.rounded_rectangle')),
+            radius=_style_size('radius.field') * scale,
+            fill=BG_CELL,
+            outline=BORDER_CELL,
+            width=scale,
+        )
 
     dot_r = _style_size('tune.tune_track_button.dot.r') * scale
     dot_cx = _style_size('tune.tune_track_button.dot.cx') * scale
@@ -267,13 +283,16 @@ def render_tune_more_button(pressed=False, width=DEFAULT_COL_WIDTH, height=DEFAU
     border_col = CYAN_ACCENT if pressed else BORDER_CELL
     text_col = _style_color("text.white") if pressed else TEXT_VALUE
 
-    draw.rounded_rectangle(
-        (pad, pad, w - pad - _style_size('tune.tune_more_button.rounded_rectangle'), h - pad - _style_size('tune.tune_more_button.rounded_rectangle')),
-        radius=_style_size('radius.field') * scale,
-        fill=fill_col,
-        outline=border_col,
-        width=scale,
-    )
+    if _control_look() == "legacy":
+        im, draw = _gradient_button_face((w, h), scale, pad, pressed=pressed)
+    else:
+        draw.rounded_rectangle(
+            (pad, pad, w - pad - _style_size('tune.tune_more_button.rounded_rectangle'), h - pad - _style_size('tune.tune_more_button.rounded_rectangle')),
+            radius=_style_size('radius.field') * scale,
+            fill=fill_col,
+            outline=border_col,
+            width=scale,
+        )
 
     font_btn = _get_font(int(_style_size('font.label') * scale))
     draw.text(

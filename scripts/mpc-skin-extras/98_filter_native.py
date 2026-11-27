@@ -248,7 +248,7 @@ def _pz_toolbar(ctx, rects):
         state = "active" if active else "inactive"
         return ui_button.text_face(label.upper(), size, geometry="filter.pz.button",
                                    surface=f"filter.pz.{state}.surface", border=f"filter.pz.{state}.border",
-                                   text="text.icon" if active else "filter.pz.inactive.text")
+                                   text="text.icon" if active else "filter.pz.inactive.text", gradient=active)
 
     x, y, _, height = rects[2]
     right = rects[3][0] + rects[3][2]
