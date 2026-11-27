@@ -1,0 +1,261 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 31,
+  "title": "IconButton",
+  "sections": [],
+  "icon_button": {
+    "samples": [
+      {
+        "id": "power-on-filled-32",
+        "file": "icon-button-power-on-filled-32.png",
+        "alt": "IconButton POWER be, 32 px",
+        "caption": "POWER be · 32 px",
+        "icon": "power",
+        "height": "height.small",
+        "state": "on",
+        "look": "filled"
+      },
+      {
+        "id": "power-on-filled-40",
+        "file": "icon-button-power-on-filled-40.png",
+        "alt": "IconButton POWER be, 40 px",
+        "caption": "POWER be · 40 px",
+        "icon": "power",
+        "height": "height.intermediate",
+        "state": "on",
+        "look": "filled"
+      },
+      {
+        "id": "power-on-filled-48",
+        "file": "icon-button-power-on-filled-48.png",
+        "alt": "IconButton POWER be, 48 px",
+        "caption": "POWER be · 48 px",
+        "icon": "power",
+        "height": "height.medium",
+        "state": "on",
+        "look": "filled"
+      },
+      {
+        "id": "power-on-filled-56",
+        "file": "icon-button-power-on-filled-56.png",
+        "alt": "IconButton POWER be, 56 px",
+        "caption": "POWER be · 56 px",
+        "icon": "power",
+        "height": "height.high",
+        "state": "on",
+        "look": "filled"
+      },
+      {
+        "id": "power-off-filled-32",
+        "file": "icon-button-power-off-filled-32.png",
+        "alt": "IconButton POWER ki, 32 px",
+        "caption": "POWER ki · 32 px",
+        "icon": "power",
+        "height": "height.small",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "power-off-filled-40",
+        "file": "icon-button-power-off-filled-40.png",
+        "alt": "IconButton POWER ki, 40 px",
+        "caption": "POWER ki · 40 px",
+        "icon": "power",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "power-off-filled-48",
+        "file": "icon-button-power-off-filled-48.png",
+        "alt": "IconButton POWER ki, 48 px",
+        "caption": "POWER ki · 48 px",
+        "icon": "power",
+        "height": "height.medium",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "power-off-filled-56",
+        "file": "icon-button-power-off-filled-56.png",
+        "alt": "IconButton POWER ki, 56 px",
+        "caption": "POWER ki · 56 px",
+        "icon": "power",
+        "height": "height.high",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "expand-off-filled-32",
+        "file": "icon-button-expand-off-filled-32.png",
+        "alt": "IconButton EXPAND, 32 px",
+        "caption": "EXPAND · 32 px",
+        "icon": "expand",
+        "height": "height.small",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "expand-off-filled-40",
+        "file": "icon-button-expand-off-filled-40.png",
+        "alt": "IconButton EXPAND, 40 px",
+        "caption": "EXPAND · 40 px",
+        "icon": "expand",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "expand-off-filled-48",
+        "file": "icon-button-expand-off-filled-48.png",
+        "alt": "IconButton EXPAND, 48 px",
+        "caption": "EXPAND · 48 px",
+        "icon": "expand",
+        "height": "height.medium",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "expand-off-filled-56",
+        "file": "icon-button-expand-off-filled-56.png",
+        "alt": "IconButton EXPAND, 56 px",
+        "caption": "EXPAND · 56 px",
+        "icon": "expand",
+        "height": "height.high",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "power-disabled-filled-48",
+        "file": "icon-button-power-disabled-filled-48.png",
+        "alt": "IconButton POWER disabled, 48 px",
+        "caption": "POWER disabled · 48 px",
+        "icon": "power",
+        "height": "height.medium",
+        "state": "disabled",
+        "look": "filled"
+      },
+      {
+        "id": "expand-disabled-filled-48",
+        "file": "icon-button-expand-disabled-filled-48.png",
+        "alt": "IconButton EXPAND disabled, 48 px",
+        "caption": "EXPAND disabled · 48 px",
+        "icon": "expand",
+        "height": "height.medium",
+        "state": "disabled",
+        "look": "filled"
+      },
+      {
+        "id": "power-on-ghost-40",
+        "file": "icon-button-power-on-ghost-40.png",
+        "alt": "IconButton POWER be, ghost, 40 px",
+        "caption": "POWER be, ghost · 40 px",
+        "icon": "power",
+        "height": "height.intermediate",
+        "state": "on",
+        "look": "ghost"
+      },
+      {
+        "id": "power-on-ghost-48",
+        "file": "icon-button-power-on-ghost-48.png",
+        "alt": "IconButton POWER be, ghost, 48 px",
+        "caption": "POWER be, ghost · 48 px",
+        "icon": "power",
+        "height": "height.medium",
+        "state": "on",
+        "look": "ghost"
+      },
+      {
+        "id": "power-off-ghost-40",
+        "file": "icon-button-power-off-ghost-40.png",
+        "alt": "IconButton POWER ki, ghost, 40 px",
+        "caption": "POWER ki, ghost · 40 px",
+        "icon": "power",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "ghost"
+      },
+      {
+        "id": "power-off-ghost-48",
+        "file": "icon-button-power-off-ghost-48.png",
+        "alt": "IconButton POWER ki, ghost, 48 px",
+        "caption": "POWER ki, ghost · 48 px",
+        "icon": "power",
+        "height": "height.medium",
+        "state": "off",
+        "look": "ghost"
+      },
+      {
+        "id": "close-off-filled-32",
+        "file": "icon-button-close-off-filled-32.png",
+        "alt": "IconButton CLOSE (X), 32 px",
+        "caption": "CLOSE (X) · 32 px",
+        "icon": "close",
+        "height": "height.small",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-filled-40",
+        "file": "icon-button-close-off-filled-40.png",
+        "alt": "IconButton CLOSE (X), 40 px",
+        "caption": "CLOSE (X) · 40 px",
+        "icon": "close",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-filled-48",
+        "file": "icon-button-close-off-filled-48.png",
+        "alt": "IconButton CLOSE (X), 48 px",
+        "caption": "CLOSE (X) · 48 px",
+        "icon": "close",
+        "height": "height.medium",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-filled-56",
+        "file": "icon-button-close-off-filled-56.png",
+        "alt": "IconButton CLOSE (X), 56 px",
+        "caption": "CLOSE (X) · 56 px",
+        "icon": "close",
+        "height": "height.high",
+        "state": "off",
+        "look": "filled"
+      },
+      {
+        "id": "close-disabled-filled-48",
+        "file": "icon-button-close-disabled-filled-48.png",
+        "alt": "IconButton CLOSE disabled, 48 px",
+        "caption": "CLOSE disabled · 48 px",
+        "icon": "close",
+        "height": "height.medium",
+        "state": "disabled",
+        "look": "filled"
+      },
+      {
+        "id": "close-off-ghost-40",
+        "file": "icon-button-close-off-ghost-40.png",
+        "alt": "IconButton CLOSE ghost, 40 px",
+        "caption": "CLOSE ghost · 40 px",
+        "icon": "close",
+        "height": "height.intermediate",
+        "state": "off",
+        "look": "ghost"
+      },
+      {
+        "id": "close-off-ghost-48",
+        "file": "icon-button-close-off-ghost-48.png",
+        "alt": "IconButton CLOSE ghost, 48 px",
+        "caption": "CLOSE ghost · 48 px",
+        "icon": "close",
+        "height": "height.medium",
+        "state": "off",
+        "look": "ghost"
+      }
+    ]
+  }
+}

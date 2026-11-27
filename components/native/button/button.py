@@ -7,6 +7,7 @@ from pathlib import Path
 
 from components.style import (
     color as _style_color,
+    rgb as _style_rgb,
     size as _style_size,
 )
 
@@ -30,35 +31,104 @@ def write_transparent_hit(directory):
     return TRANSPARENT_HIT
 
 
+def gradient_face(size, *, inset, radius, frame, fill, line, span):
+    """The shared Play-panel control box: a rounded box with a vertical gradient fill and a keyline, drawn at the size given.
+
+    fill and line are (top, bottom) RGB pairs: the fill is constant down to span["start"] (a fraction of the box
+    height), darkens linearly to span["end"] and is constant below; the keyline follows the same ramp when its two
+    colours differ. Used by the dropdown (selector.render_dropdown_face) and the button look "legacy" (action_art),
+    so both share control.gradient. `size`, `inset`, `radius` and `frame` are in the caller's (supersampled) pixels.
+    """
+    mask = Image.new("L", size)
+    box = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)
+    ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
+    face = Image.new("RGBA", size)
+    pen = ImageDraw.Draw(face)
+    top, bottom = fill
+    line_top, line_bottom = line
+
+    def blend(y):
+        return min(1., max(0., ((y - inset) / max(1, box[3] - inset) - span["start"]) / (span["end"] - span["start"])))
+
+    for y in range(box[1], box[3] + 1):
+        t = blend(y)
+        pen.line((box[0], y, box[2], y), fill=tuple(round(lo + t * (hi - lo)) for lo, hi in zip(top, bottom)))
+    face.putalpha(mask)
+    if line_top == line_bottom:
+        pen.rounded_rectangle(box, radius, outline="#%02x%02x%02x" % tuple(line_top), width=frame)
+    else:
+        # The keyline darkens down the box with the fill (bright top edge, dark bottom edge).
+        outline = Image.new("L", size)
+        ImageDraw.Draw(outline).rounded_rectangle(box, radius, outline=255, width=frame)
+        ramp = Image.new("RGBA", size)
+        ramp_pen = ImageDraw.Draw(ramp)
+        for y in range(box[1], box[3] + 1):
+            t = blend(y)
+            ramp_pen.line((0, y, size[0], y), fill=tuple(round(lo + t * (hi - lo)) for lo, hi in zip(line_top, line_bottom)) + (255,))
+        face.paste(ramp, (0, 0), outline)
+    return face, pen
+
+
 def semibold(size):
     if ImageFont is None or not FONT_FILE.is_file():
         return None
     return ImageFont.truetype(str(FONT_FILE), size)
 
 
-def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon")):
+LOOKS = ("flat", "legacy", "ghost")
+
+
+def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), height=None, look="flat"):
+    """A native action button face: a text label or an icon (power, expand, close) on its box.
+
+    height: None keeps the 48 px face every skin button uses; 32 / 40 / 48 / 56 take their `button.size.<px>`
+            tokens (font, radius, text padding) and scale the icon about the box centre.
+    look:   "flat"   today's flat face (button.surface / button.border), the default the skin uses;
+            "legacy" the old Play-panel face: the control.gradient fill and keyline (button.gradient.* colours);
+            "ghost"  no face at all (no fill, no keyline): the icon or text only, on a transparent picture.
+    """
     if Image is None:
         raise RuntimeError("Pillow is required for action_art")
     if bool(icon) == bool(text):
         raise ValueError("Supply exactly one icon or text label")
+    if look not in LOOKS:
+        raise ValueError(f"look must be one of {LOOKS}: {look!r}")
     art = _style_size('button.art')
-    scale, height = art['scale'], art['height']
-    font = semibold(art['font'] * scale)
-    minimum = height if icon else math.ceil(font.getlength(text) / scale) + art['padding']
+    scale = art['scale']
+    measures = dict(art) if height is None else dict(art, **_style_size(f"button.size.{height}"))
+    box_height, factor = measures['height'], measures['height'] / art['height']
+    font = semibold(measures['font'] * scale)
+    minimum = box_height if icon else math.ceil(font.getlength(text) / scale) + measures['padding']
     width = minimum if width is None else width
-    if width < minimum or (icon and width != height):
+    if width < minimum or (icon and width != box_height):
         raise ValueError("Button width does not fit its content")
-    image = Image.new("RGBA", (width * scale, height * scale))
-    pen = ImageDraw.Draw(image)
-    pen.rounded_rectangle(
-        (0, 0, image.width - art['outline'], image.height - art['outline']),
-        radius=art['radius'] * scale,
-        fill=_style_color("button.surface"), outline=_style_color("button.border"), width=art['outline'] * scale,
-    )
+    size = (width * scale, box_height * scale)
+    if look == "legacy":
+        image, pen = gradient_face(
+            size, inset=0, radius=measures['radius'] * scale, frame=art['outline'] * scale,
+            span=_style_size("control.gradient"),
+            fill=(_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom")),
+            line=(_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom")))
+    else:
+        image = Image.new("RGBA", size)
+        pen = ImageDraw.Draw(image)
+    if look == "flat":
+        pen.rounded_rectangle(
+            (0, 0, image.width - art['outline'], image.height - art['outline']),
+            radius=measures['radius'] * scale,
+            fill=_style_color("button.surface"), outline=_style_color("button.border"), width=art['outline'] * scale,
+        )
 
     def stroke(points, stroke_width):
         ox, oy = art['origin']
-        points = [(round((x - ox) * scale), round((y - oy) * scale)) for x, y in points]
+        if height is None:
+            points = [(round((x - ox) * scale), round((y - oy) * scale)) for x, y in points]
+        else:
+            # The 48 px icon geometry, scaled about the box centre.
+            half, centre = art['height'] / 2, box_height / 2
+            points = [(round(((x - ox - half) * factor + centre) * scale), round(((y - oy - half) * factor + centre) * scale))
+                      for x, y in points]
+            stroke_width = stroke_width * factor
         pen.line(points, fill=colour, width=round(stroke_width * scale), joint="curve")
         radius = stroke_width * scale / 2
         for x, y in (points[0], points[-1]):
@@ -77,11 +147,18 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
         arm = geometry['arm']
         for x, y, dx, dy in geometry['corners']:
             stroke([(x, y + dy * arm), (x, y), (x + dx * arm, y)], geometry['stroke'])
+    elif icon == "close":
+        # An X: two diagonals, each `half` (40% of the 48 px button height, in all) around the centre; stroke as EXPAND.
+        geometry = art['close']
+        cx, cy = geometry['center']
+        half = geometry['half']
+        stroke([(cx - half, cy - half), (cx + half, cy + half)], geometry['stroke'])
+        stroke([(cx + half, cy - half), (cx - half, cy + half)], geometry['stroke'])
     elif text:
         pen.text((image.width / 2, image.height / 2), text, font=font, fill=colour, anchor="mm")
     else:
         raise ValueError(icon)
-    return image.resize((width, height), Image.Resampling.LANCZOS)
+    return image.resize((width, box_height), Image.Resampling.LANCZOS)
 
 
 def in_slot(face, size):
@@ -245,3 +322,34 @@ def write_switch_asset(path, active):
     y, size = geometry["thumb_y"], geometry["thumb_size"]
     pen.ellipse((x, y, x + size, y + size), fill=_style_color("text.icon"))
     image.save(path)
+
+
+SAMPLE_KEYS = {"id", "file", "alt", "caption", "height", "text", "state"}
+SAMPLE_STATES = ("enabled", "disabled")
+
+
+def render_sample(sample):
+    """One catalogue picture: the text button in the legacy look at its height token; disabled = dim_artwork of it."""
+    from components.style import dim_artwork
+    height = sample["height"] if isinstance(sample["height"], int) else _style_size(sample["height"])
+    face = action_art(text=sample["text"], height=height, look="legacy")
+    return dim_artwork(face) if sample["state"] == "disabled" else face
+
+
+def button_samples(entry):
+    """The samples of a catalogue "button" entry, validated: id, file, alt, caption, height (a height token), text, state."""
+    if not isinstance(entry, dict) or set(entry) != {"samples"} or not entry["samples"]:
+        raise ValueError("button entry needs a nonempty samples list")
+    for item in entry["samples"]:
+        if set(item) != SAMPLE_KEYS or item["state"] not in SAMPLE_STATES:
+            raise ValueError(f"button sample needs exactly {sorted(SAMPLE_KEYS)}, state in {SAMPLE_STATES}")
+        _style_size(f"button.size.{_style_size(item['height'])}")
+    if len({i["id"] for i in entry["samples"]}) != len(entry["samples"]):
+        raise ValueError("button sample ids must be unique")
+    return entry["samples"]
+
+
+def catalog_sections(entry):
+    return [{"heading": "Méret szerint egy-egy minta (régi külső: átmenetes kitöltés, világosabb kék keret)", "images": [
+        {"presentation": "sample", "file": i["file"], "alt": i["alt"], "caption": i["caption"]}
+        for i in button_samples(entry)]}]

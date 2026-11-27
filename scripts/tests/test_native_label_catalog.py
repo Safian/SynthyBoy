@@ -114,7 +114,7 @@ class DropdownTests(unittest.TestCase):
                           ("above", "center", "height.intermediate"), ("above", "center", "height.intermediate"),
                           ("inside", "left", "height.medium")])
         self.assertTrue(variants[-1]["caption"].startswith("KIVEZETÉSRE"))   # the small label inside the box is being phased out
-        width = style.size("header.dropdown.width")
+        width = style.size("header.dropdown.min_width")
         for v in variants:
             box = style.size(v.get("height", "height.medium"))
             image = selector.render_dropdown_variant(width, box, v["value"], label=v.get("label"),
@@ -147,8 +147,9 @@ class DropdownTests(unittest.TestCase):
             self.assertAlmostEqual((min(ys) + max(ys)) / 2, height / 2, delta=2.5)
 
     def test_long_value_is_cut_left_aligned_and_keeps_chevron_gap(self):
-        gap, width = style.size("selector.dropdown.chevron_gap"), style.size("header.dropdown.width")
+        gap, width = style.size("selector.dropdown.chevron_gap"), style.size("header.dropdown.min_width")
         token = style.size("selector.dropdown.size.40")
+        self.assertEqual(gap, 4)                                       # the minimum space between text and arrow
         chevron_left = width - style.size("selector.dropdown")["chevron_lane"] / 2 - token["chevron_width"] / 2
         for value, short in (("Env 1", True), ("Filter 1 Cutoff Modulation Amount", False)):
             image = selector.render_dropdown_variant(width, 40, value)
@@ -168,7 +169,7 @@ class DropdownTests(unittest.TestCase):
     def test_header_dropdowns_are_the_value_only_centred_40_px_variant(self):
         plain = selector.render_dropdown_variant(220, 40, "Env 1")
         from components.native.header import header
-        face = header.centre_face({"kind": "dropdown", "value": "Env 1", "width": "header.dropdown.width"}, 48)
+        face = header.centre_face({"kind": "dropdown", "value": "Env 1", "width": "header.dropdown.min_width"}, 40)
         self.assertEqual(face.tobytes(), plain.tobytes())
         self.assertEqual(face.height, 40)
 
@@ -198,7 +199,7 @@ class OrderTests(unittest.TestCase):
     def test_catalogue_order_comes_from_the_order_list(self):
         titles = re.findall(r"<h3>([^<]*)</h3>", HTML.read_text(encoding="utf-8"))
         order = json.loads((NATIVE / "catalog-order.json").read_text(encoding="utf-8"))
-        self.assertEqual(titles[:6], ["Label", "On/Off label", "Pan", "Level", "Button", "Selector"])
+        self.assertEqual(titles[:6], ["Label", "On/Off label", "Pan", "Level", "Button", "IconButton"])
         self.assertEqual(titles[-1], "Header")
         self.assertEqual(order["last"], ["header"])
 

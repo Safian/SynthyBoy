@@ -19,7 +19,7 @@ from hashlib import sha256
 import math
 from pathlib import Path
 
-from components.native.button.button import TRANSPARENT_HIT, write_transparent_hit
+from components.native.button.button import TRANSPARENT_HIT, gradient_face, write_transparent_hit
 from components.native.level.level import value_label
 from components.style import (
     focus_ring_data,
@@ -322,34 +322,9 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None)
     inset = geometry["inset"] * scale
     box = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)
     radius = round(theme["rControl"] * scale)
-    mask = Image.new("L", size)
-    ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
-    face = Image.new("RGBA", size)
-    pen = ImageDraw.Draw(face)
-    top, bottom = _style_rgb(top_token), _style_rgb(bottom_token)
-    line_top, line_bottom = _style_rgb(keyline_token), _style_rgb(keyline_bottom_token)
-
-    def blend(y):
-        t = min(1., max(0., ((y - inset) / max(1, box[3] - inset) - span["start"]) / (span["end"] - span["start"])))
-        return t
-
-    for y in range(box[1], box[3] + 1):
-        t = blend(y)
-        pen.line((box[0], y, box[2], y), fill=tuple(round(lo + t * (hi - lo)) for lo, hi in zip(top, bottom)))
-    face.putalpha(mask)
-    frame = round(theme["frame"] * scale)
-    if line_top == line_bottom:
-        pen.rounded_rectangle(box, radius, outline=_style_color(keyline_token), width=frame)
-    else:
-        # The keyline darkens down the box with the fill (bright top edge, dark bottom edge).
-        outline = Image.new("L", size)
-        ImageDraw.Draw(outline).rounded_rectangle(box, radius, outline=255, width=frame)
-        ramp = Image.new("RGBA", size)
-        ramp_pen = ImageDraw.Draw(ramp)
-        for y in range(box[1], box[3] + 1):
-            t = blend(y)
-            ramp_pen.line((0, y, size[0], y), fill=tuple(round(lo + t * (hi - lo)) for lo, hi in zip(line_top, line_bottom)) + (255,))
-        face.paste(ramp, (0, 0), outline)
+    face, pen = gradient_face(size, inset=inset, radius=radius, frame=round(theme["frame"] * scale), span=span,
+                              fill=(_style_rgb(top_token), _style_rgb(bottom_token)),
+                              line=(_style_rgb(keyline_token), _style_rgb(keyline_bottom_token)))
     if chevron:
         cx = (width - geometry["inset"] - geometry["chevron_lane"] / 2) * scale
         cy = height * scale / 2

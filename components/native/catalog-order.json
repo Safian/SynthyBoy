@@ -5,6 +5,7 @@
     "pan",
     "level",
     "button",
+    "icon_button",
     "selector",
     "filter_selector"
   ],

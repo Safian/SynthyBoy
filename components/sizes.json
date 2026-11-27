@@ -149,9 +149,14 @@
     "radio.preview.width": 256,
     "selector.dropdown": {"inset": 3, "text_inset": 2, "chevron_lane": 28, "chevron_width": 12, "chevron_height": 7.2, "chevron_stroke": 2.2, "font": 26},
     "selector.dropdown.preview_font": 17,
-    "selector.dropdown.chevron_gap": 10,
-    "selector.dropdown.gradient.neon": {"start": 0.3333333333333333, "end": 0.6666666666666666},
-    "selector.dropdown.gradient.legacy": {"start": 0.3333333333333333, "end": 0.6666666666666666},
+    "selector.dropdown.chevron_gap": 4,
+    "control.gradient": {"start": 0.3333333333333333, "end": 0.6666666666666666},
+    "selector.dropdown.gradient.neon": {"ref": "control.gradient"},
+    "selector.dropdown.gradient.legacy": {"ref": "control.gradient"},
+    "button.size.32": {"height": {"ref": "height.small"}, "font": {"ref": "font.label"}, "radius": {"ref": "radius.control"}, "padding": 16},
+    "button.size.40": {"height": {"ref": "height.intermediate"}, "font": {"ref": "font.body"}, "radius": {"ref": "radius.field"}, "padding": 20},
+    "button.size.48": {"height": {"ref": "height.medium"}, "font": {"ref": "font.button"}, "radius": {"ref": "button.face.radius"}, "padding": {"ref": "button.text.padding"}},
+    "button.size.56": {"height": {"ref": "height.high"}, "font": {"ref": "font.value"}, "radius": {"ref": "radius.menu"}, "padding": 28},
     "selector.dropdown.size.32": {"height": {"ref": "height.small"}, "font_em": 18, "inset": 0, "pad_x": 10, "chevron_width": 10, "chevron_height": 6, "chevron_stroke": 2},
     "selector.dropdown.size.40": {"height": {"ref": "height.intermediate"}, "font_em": 22, "inset": 0, "pad_x": 12, "chevron_width": 13, "chevron_height": 7.8, "chevron_stroke": 2.4},
     "selector.dropdown.size.48": {"height": {"ref": "height.medium"}, "font_em": 24, "inset": 0, "pad_x": 14, "chevron_width": 16, "chevron_height": 9.6, "chevron_stroke": 2.6},
@@ -820,6 +825,11 @@
         ],
         "arm": 7,
         "stroke": 2.5
+      },
+      "close": {
+        "center": [32, 28],
+        "half": 9.6,
+        "stroke": 2.5
       }
     },
     "origin": 0,
@@ -834,13 +844,11 @@
     "screen.height": 800,
     "screen.tab.height": 628,
     "header.height": 56,
-    "header.padding": 4,
+    "header.padding": 8,
     "header.gap": 8,
-    "header.side": 8,
     "header.page.width": {"ref": "screen.width"},
     "header.panel.width": 400,
-    "header.dropdown.width": 220,
-    "header.selector.width": 200,
+    "header.dropdown.min_width": 220,
     "label.dial.36": {"diameter": 36, "caption": {"ref": "font.annotation"}, "value": {"ref": "font.small"}, "proposal": true},
     "label.dial.40": {"diameter": {"ref": "dial.compact.diameter"}, "caption": {"ref": "pan.compact_pan_definition.font.height"}, "value": {"ref": "pan.compact_pan_definition.font.height.offset1"}, "proposal": false},
     "label.dial.48": {"diameter": 48, "caption": {"ref": "font.caption"}, "value": {"ref": "font.value"}, "proposal": true},
@@ -869,9 +877,6 @@
     "catalog.swatch.gap": 0.5,
     "catalog.swatch.label_gap": 0.4,
     "catalog.table.column_gap": 1,
-    "catalog.render_button_card.gap": 16,
-    "catalog.render_button_card.total.h": 48,
-    "catalog.render_button_card.text.btn": 96,
     "catalog.render_remaining_cards.preview": {
       "ref": "smooth.width"
     },
@@ -883,8 +888,6 @@
     "catalog.render_source.geometry.offset2": {
       "ref": "smooth.height"
     },
-    "catalog.render_source.geometry.offset3": 56,
-    "catalog.render_source.geometry.offset4": 56,
     "catalog.samples.gap": 20,
     "catalog.samples.caption_gap": 8,
     "font.family": "Titillium Web",

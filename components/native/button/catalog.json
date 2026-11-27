@@ -3,27 +3,54 @@
   "approved": true,
   "order": 30,
   "title": "Button",
-  "sections": [
-    {
-      "images": [
-        {
-          "presentation": "sample",
-          "caption": "{size_label:height.medium} ({size:height.medium} px)",
-          "file": "catalog-button-48.png",
-          "alt": "Button {size:height.medium} px"
-        }
-      ]
-    },
-    {
-      "heading": "Power · Filter",
-      "images": [
-        {
-          "presentation": "sample",
-          "caption": "{size:height.high} × {size:height.high} px",
-          "file": "filter-catalog-active.png",
-          "alt": "FilterPower"
-        }
-      ]
-    }
-  ]
+  "sections": [],
+  "button": {
+    "samples": [
+      {
+        "id": "text-32",
+        "file": "button-32.png",
+        "alt": "Button 32 px, + ADD",
+        "caption": "32 px · + ADD",
+        "height": "height.small",
+        "text": "+ ADD",
+        "state": "enabled"
+      },
+      {
+        "id": "text-40",
+        "file": "button-40.png",
+        "alt": "Button 40 px, + ADD",
+        "caption": "40 px · + ADD",
+        "height": "height.intermediate",
+        "text": "+ ADD",
+        "state": "enabled"
+      },
+      {
+        "id": "text-48",
+        "file": "button-48.png",
+        "alt": "Button 48 px, + ADD",
+        "caption": "48 px · + ADD",
+        "height": "height.medium",
+        "text": "+ ADD",
+        "state": "enabled"
+      },
+      {
+        "id": "text-56",
+        "file": "button-56.png",
+        "alt": "Button 56 px, + ADD",
+        "caption": "56 px · + ADD",
+        "height": "height.high",
+        "text": "+ ADD",
+        "state": "enabled"
+      },
+      {
+        "id": "text-48-disabled",
+        "file": "button-48-disabled.png",
+        "alt": "Button 48 px, disabled",
+        "caption": "48 px · disabled (a meglévő inaktív tokenekkel)",
+        "height": "height.medium",
+        "text": "+ ADD",
+        "state": "disabled"
+      }
+    ]
+  }
 }
