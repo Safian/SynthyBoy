@@ -8,7 +8,7 @@
 #include <cmath>
 #include <vector>
 
-#include "composite.h"
+#include "core.h"
 #include "synthyboy/content_state.h"
 
 namespace synthyboy_mpc::ui
@@ -170,22 +170,17 @@ private:
     int selected_ = -1, held_ = -1, offX_ = 0, offY_ = 0;
 };
 
-class PzCurveEditor final : public Composite
+/** The PZ SVF curve editor: the canvas (the only part that takes touch) and the data of the four command cells of the native toolbar of the host skin (BACK, RESET, DELETE POINT, APPLY: ids, rectangles, enabled state; the skin
+    draws and handles them, a tap arrives as the page's own action). */
+class PzCurveEditor final : public Component
 {
 public:
-    MenuButton back { "BACK", MenuButton::Icon::None };
-    MenuButton reset { "RESET", MenuButton::Icon::None };
-    MenuButton remove { "DELETE POINT", MenuButton::Icon::None };
-    MenuButton apply { "APPLY", MenuButton::Icon::None };
+    ControlModel back, reset, remove, apply;
     PzCurveCanvas canvas;
 
-    PzCurveEditor()
-    {
-        Component* parts[] { &canvas, &back, &reset, &remove, &apply };
-        for (Component* c : parts)
-            addKid (*c);
-    }
+    PzCurveEditor() = default;
     Size minSize() const override { return { 720, 400 }; }
+    void place (const Rect& r) override { rect_ = r; layout(); }
     void showFilter (int filter, const std::vector<PzCurveCanvas::Point>* points)
     {
         filter_ = filter;
@@ -200,18 +195,48 @@ public:
         apply.setEnabled (! std::equal (points.begin(), points.end(), initial_.begin(), initial_.end(),
                                        [] (auto a, auto b) { return a.x == b.x && a.y == b.y; }));
     }
-    void setNativeToolbar (bool native)
-    {
-        for (auto* button : { &back, &reset, &remove, &apply })
-            show (*button, ! native);
-    }
+    void setNativeToolbar (bool native) noexcept { nativeToolbar_ = native; }
+    bool nativeToolbar() const noexcept { return nativeToolbar_; }
     std::array<Rect, 4> toolbarRects() const noexcept
     {
         return { back.rect(), reset.rect(), remove.rect(), apply.rect() };
     }
 
+    Change touchDown (int x, int y, double nowMs) override
+    {
+        onCanvas_ = false;
+        if (! enabled_ || ! canvas.rect().contains (x, y))
+            return Change::none();
+        onCanvas_ = true;
+        return canvas.touchDown (x, y, nowMs);
+    }
+    Change touchMove (int x, int y) override { return onCanvas_ ? canvas.touchMove (x, y) : Change::none(); }
+    Change touchMove (int x, int y, double nowMs) override { return onCanvas_ ? canvas.touchMove (x, y, nowMs) : Change::none(); }
+    Change touchUp (int x, int y) override
+    {
+        const bool was = onCanvas_;
+        onCanvas_ = false;
+        return was ? canvas.touchUp (x, y) : Change::none();
+    }
+    Change tick (double nowMs) override { return onCanvas_ ? canvas.tick (nowMs) : Change::none(); }
+    bool wheelOver (int x, int y, int notches, Change& out) override { return enabled_ && canvas.wheelOver (x, y, notches, out); }
+    int touchTargets (Rect* out, int max) const override { if (max > 0) { out[0] = canvas.rect(); return 1; } return 0; }
+
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        Pen pen (sb, enabled_, inactive_);
+        {
+            Cell cell (sb, rect_);
+            drawExtra (pen);
+        }
+        canvas.draw (sb);
+    }
+
 protected:
-    void layout() override
+    void drawBody (Pen&) const override {}
+
+private:
+    void layout()
     {
         back.place ({ rect_.x + 8, rect_.y + 12, 94, 56 });
         apply.place ({ rect_.right() - 106, rect_.y + 12, 98, 56 });
@@ -219,7 +244,7 @@ protected:
         reset.place ({ remove.rect().x - 102, rect_.y + 12, 94, 56 });
         canvas.place ({ rect_.x + 12, rect_.y + 76, rect_.w - 24, rect_.h - 88 });
     }
-    void drawExtra (Pen& pen) const override
+    void drawExtra (Pen& pen) const
     {
         const auto& t = theme::L();
         pen.textLeft ({ rect_.x + 116, rect_.y + 8, 290, 31 }, filter_ == 2 ? "F2  PZ SVF CURVE" : "F1  PZ SVF CURVE",
@@ -228,8 +253,8 @@ protected:
                       t.fSmall, pen.c (t.textDim, 255), t.fMin);
     }
 
-private:
     int filter_ = 1;
+    bool onCanvas_ = false, nativeToolbar_ = false;
     std::vector<PzCurveCanvas::Point> initial_;
 };
 } // namespace synthyboy_mpc::ui
