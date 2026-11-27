@@ -30,7 +30,7 @@ from PIL import Image, ImageDraw
 # Component-specific native imports
 from components.style import color as _style_color, native_font_em, rgba as _style_rgba, opacity as _style_opacity, size as _style_size
 from components.native.button.button import action_art
-from components.native.selector.selector import filter_chain_definition, selector_definition, semibold as selector_font
+from components.native.selector.selector import filter_chain_definition, render_selector_face as _render_selector_face
 from native_name_value import render_name_value_preview
 from components.native.selector.selector import render_compact_route_face
 from components.native.macro_card.macro_card import render_macro_card, macro_level_definition, CARD_WIDTH, CARD_HEIGHT
@@ -64,6 +64,16 @@ def render_dial_cards():
         print(f"Refreshed native {name} strips and catalogue previews")
 
 
+def render_header_cards():
+    """Render every example of components/native/header/catalog.json from the header module (existing recipes only)."""
+    from components.native.header import header
+    directory = REPO_ROOT / "components/native/header"
+    entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))["header"]
+    for example in header.header_examples(entry):
+        header.render_header(example).save(directory / "img" / example["file"])
+    print(f"Rendered {len(entry['examples'])} header examples")
+
+
 def render_button_card():
     """Render ONE icon button and ONE text button side-by-side at 48 px."""
     out_dir = REPO_ROOT / "components/native/button/img"
@@ -84,41 +94,6 @@ def render_button_card():
     combined.save(out_file)
     print(f"Generated {out_file} ({combined.size})")
     return out_file
-
-
-def _render_selector_face(width, height, *, name=None, value="Sine", **variants):
-    """Compose only the images and labels emitted by the actual native definition."""
-    with tempfile.TemporaryDirectory() as tmp:
-        skins = Path(tmp)
-        definition = selector_definition(
-            None, "catalog list", (width, height), skins,
-            caption_text=name, **variants,
-        )
-        result = Image.new("RGBA", (width, height))
-        for item in definition["componentsData"]:
-            component = item["componentData"]
-            data = component["data"]
-            x, y, w, h = map(int, item["bounds"]["bounds"].split())
-            if component["type"] == "Image":
-                with Image.open(skins / data["image"]) as art:
-                    result.alpha_composite(art.convert("RGBA").resize((w, h)), (x, y))
-            elif component["type"] == "Label":
-                style = data["textStyle"]
-                text = data.get("text", value)
-                font_height = style["font"]["height"]
-                if font_height == _style_size("selector.dropdown")["font"] and not (name or variants):
-                    font_height = _style_size("selector.dropdown.preview_font")
-                font = selector_font(round(native_font_em(font_height)))
-                draw = ImageDraw.Draw(result)
-                bounds = draw.textbbox((0, 0), text, font=font)
-                tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
-                assert tw <= w and th <= h, (text, (tw, th), (w, h))
-                justification = style["justification"]
-                tx = x + (w - tw) / 2 if "horizontallyCentred" in justification else x
-                ty = y + (h - th) / 2 if "verticallyCentred" in justification else y
-                draw.text((tx - bounds[0], ty - bounds[1]), text, font=font,
-                          fill="#" + style["colour"][-6:])
-        return result
 
 
 def render_selector_cards():
@@ -269,6 +244,7 @@ def render_remaining_cards():
 def main():
     print("Rendering native catalog cards...")
     render_dial_cards()
+    render_header_cards()
     render_button_card()
     render_selector_cards()
     render_radio_cards()

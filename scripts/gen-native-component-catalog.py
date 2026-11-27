@@ -85,7 +85,8 @@ def image_markup(component, item):
 
 
 def component_markup(component, metadata):
-    fields(metadata, ("version", "approved", "order", "title", "sections"), ("dial",))
+    fields(metadata, ("version", "approved", "order", "title", "sections"), ("dial", "header", "wide"))
+    require(type(metadata.get("wide", False)) is bool, "wide must be true or false")
     require(type(metadata["order"]) is int, "order must be an integer")
     require(isinstance(metadata["sections"], list), "sections must be a list")
     sections = list(metadata["sections"])
@@ -109,8 +110,15 @@ def component_markup(component, metadata):
                 {"presentation": "sample", "file": v["file"], "alt": v["alt"],
                  "caption": f"{v['label']} · tárcsa {{size:{labelled['token']}}} × {{size:{labelled['token']}}} px"}
                 for v in variants]})
+    if "header" in metadata:
+        # Header examples: one natural-size picture each, the caption (never part of the image) from the entry.
+        from components.native.header.header import header_examples
+        sections.append({"heading": "Példák (az oldalspecifikus középső tartalom csak példa)", "images": [
+            {"presentation": "sample", "file": e["file"], "alt": e["alt"], "caption": e["caption"]}
+            for e in header_examples(metadata["header"])]})
     require(sections, "sections must be a nonempty list")
-    lines = [f"    <article>\n      <h3>{text(metadata['title'])}</h3>"]
+    css = ' class="wide"' if metadata.get("wide") else ""
+    lines = [f"    <article{css}>\n      <h3>{text(metadata['title'])}</h3>"]
     for section in sections:
         fields(section, ("images",), ("heading",))
         if "heading" in section:

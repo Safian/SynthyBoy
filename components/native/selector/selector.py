@@ -23,6 +23,7 @@ from components.native.button.button import TRANSPARENT_HIT, write_transparent_h
 from components.native.level.level import value_label
 from components.style import (
     focus_ring_data,
+    native_font_em as _native_font_em,
     argb as _style_argb,
     color as _style_color,
     opacity as _style_opacity,
@@ -33,6 +34,7 @@ from components.style import (
     size as _style_size,
 )
 import struct
+import tempfile
 import zlib
 from PIL import Image, ImageDraw, ImageFont
 
@@ -1430,3 +1432,38 @@ def command_stepper_definition(skins_dir, slot, caption):
     ), 1):
         face["componentsData"].append(button(name, (x, 0, span, height), hit, index=command, count=4))
     return face
+
+
+def render_selector_face(width, height, *, name=None, value="Sine", **variants):
+    """Compose only the images and labels emitted by the actual native definition."""
+    with tempfile.TemporaryDirectory() as tmp:
+        skins = Path(tmp)
+        definition = selector_definition(
+            None, "catalog list", (width, height), skins,
+            caption_text=name, **variants,
+        )
+        result = Image.new("RGBA", (width, height))
+        for item in definition["componentsData"]:
+            component = item["componentData"]
+            data = component["data"]
+            x, y, w, h = map(int, item["bounds"]["bounds"].split())
+            if component["type"] == "Image":
+                with Image.open(skins / data["image"]) as art:
+                    result.alpha_composite(art.convert("RGBA").resize((w, h)), (x, y))
+            elif component["type"] == "Label":
+                style = data["textStyle"]
+                text = data.get("text", value)
+                font_height = style["font"]["height"]
+                if font_height == _style_size("selector.dropdown")["font"] and not (name or variants):
+                    font_height = _style_size("selector.dropdown.preview_font")
+                font = semibold(round(_native_font_em(font_height)))
+                draw = ImageDraw.Draw(result)
+                bounds = draw.textbbox((0, 0), text, font=font)
+                tw, th = bounds[2] - bounds[0], bounds[3] - bounds[1]
+                assert tw <= w and th <= h, (text, (tw, th), (w, h))
+                justification = style["justification"]
+                tx = x + (w - tw) / 2 if "horizontallyCentred" in justification else x
+                ty = y + (h - th) / 2 if "verticallyCentred" in justification else y
+                draw.text((tx - bounds[0], ty - bounds[1]), text, font=font,
+                          fill="#" + style["colour"][-6:])
+        return result

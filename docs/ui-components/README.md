@@ -16,6 +16,10 @@ A Pan és a Level kártyája a `components/native/<név>/catalog.json` `dial` be
 
 Ugyanez a bejegyzés adja az állapotképeket (`dial.state_images`: állapotonként egy szöveg nélküli kép, normál méretben) és a szöveges változatokat (`dial.text`: `caption`, `value`, `state`, `diameter` és `variants`). Elrendezés (`layout`): `right` (felirat jobbra, alatta az érték), `bottom` (csak az érték a tárcsa alatt), `top` (felirat fent, érték lent). Új elrendezés: új elem a `dial.text.variants`-ba, és az elrendezés felvétele a `level.DIAL_TEXT_LAYOUTS`-ba és a `render_dial_labelled`-be. A felirat és az érték mindig ugyanazzal a szövegstílussal készül: `level.DIAL_TEXT_STYLE` (`font.value`, `text.value`), egyetlen helyen átállítható.
 
+### Header (javaslat v0)
+
+A `components/native/header/` bejegyzés a fejléc-sor nyolc példáját mutatja, csak katalógusban: [header.md](header.md).
+
 A HTML generált fájl; közvetlenül ne szerkeszd. Újragenerálás a repó gyökeréből:
 
 ```sh
