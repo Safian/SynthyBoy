@@ -21,7 +21,7 @@ LIBRARY = ROOT / "components/native"
 OUTPUT = ROOT / "docs/ui-components/kepes-katalogus.html"
 TEMPLATE = ROOT / "scripts/templates/native-component-catalog.html"
 # Catalogue entries a component module renders into sections (module.catalog_sections(entry)).
-EXAMPLE_KEYS = ("label", "on_off", "dropdown", "header", "button", "icon_button", "radio_list", "slide_switch", "rotary_selector", "radio_grid")
+EXAMPLE_KEYS = ("label", "on_off", "dropdown", "header", "button", "icon_button", "radio_list", "slide_switch", "rotary_selector", "radio_grid", "stepped_dial", "wave_icons")
 ORDER = LIBRARY / "catalog-order.json"
 OLD_SCREENS = ROOT / "scripts/old-ui-screens.json"
 SCREEN_CATALOG = ROOT / "scripts/screen-catalog.json"

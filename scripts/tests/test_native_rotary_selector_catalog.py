@@ -53,7 +53,7 @@ class RotarySelectorTests(unittest.TestCase):
 
     def test_n_positions_are_n_different_frames(self):
         for count in (3, 4, 6):
-            sample = dict(BY_ID["four-2"], icons=["wave"] * count)
+            sample = dict(BY_ID["four-2"], icons=["saw"] * count)
             frames = {rotary_selector.render_sample(dict(sample, position=i)).tobytes() for i in range(count)}
             self.assertEqual(len(frames), count)
 
@@ -77,7 +77,7 @@ class RotarySelectorTests(unittest.TestCase):
         enabled = rotary_selector.render_sample(dict(BY_ID["disabled"], state="enabled"))
         self.assertNotEqual(enabled.tobytes(), stored("rotary-selector-disabled.png").tobytes())
         base = BY_ID["four-2"]
-        for bad in (dict(base, icons=["wave"] * 2), dict(base, icons=["wave"] * 7), dict(base, icons=["saw"] * 4),
+        for bad in (dict(base, icons=["saw"] * 2), dict(base, icons=["saw"] * 7), dict(base, icons=["blob"] * 4),
                     dict(base, position=4), dict(base, diameter="height.small")):
             with self.assertRaises(ValueError):
                 rotary_selector.rotary_samples({"samples": [bad]})

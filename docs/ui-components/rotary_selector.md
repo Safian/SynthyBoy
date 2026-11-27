@@ -4,13 +4,13 @@ A stepped rotary dial with pictograms around it: 3 to 6 positions, the pointer j
 
 ## Structure
 
-- Dial: `level.render_dial_frame` (the ui::Knob recipe: dark track, `flow` gradient arc up to the position, white thumb and pointer), diameter 48 or 56 px (`height.medium` / `height.high`), value = position / (N - 1). The pointer angle is `knob.start.degrees` (135) + i x `knob.sweep.degrees` (270) / (N - 1): N evenly spaced stops, discrete frames.
+- Dial: the [SteppedDial](stepped_dial.md) (the ui::Knob recipe without the gradient value arc: dark track, a dot per stop, white thumb and pointer), diameter 48 or 56 px (`height.medium` / `height.high`), N = 3 to 6 here. The pointer angle is `knob.start.degrees` (135) + i x `knob.sweep.degrees` (270) / (N - 1): N evenly spaced stops, discrete frames.
 - Pictograms: on a ring around the dial at the same angles, `rotary_selector.ring_gap` (4) clear of the dial. Boxes `rotary_selector.icon` 24 x 12. The selected one `accent.cyan`, the others `selector.wave`.
 - Title: Label dial-caption style (`pan.sub_dial_definition.style.font.height`, `text.caption`, upper case), centred on top, `title_gap` 4 above the ring.
 
-## Pictograms: only what exists
+## Pictograms
 
-The existing recipes are `selector.render_wave_icon` (a sine wave) and `selector.render_pipa_icon` (a check mark). There is NO recipe for saw, square, pulse, triangle or noise glyphs: they are missing and were not invented. The catalogue examples therefore show the sine pictogram at every stop (the layout, the ring and the pointer are what is demonstrated); a new glyph is a new recipe in `selector.py` plus one entry in `rotary_selector.ICONS`, then the samples can name it in `icons`. (Open item: the saw / square / pulse / noise / triangle glyph recipes; see TODO.md.)
+The recipes of [wave_icons.md](wave_icons.md): `selector.render_wave_icon(..., shape=...)` with the shapes sine, saw, square, pulse, triangle, sh and noise, plus the check mark `render_pipa_icon`. A sample names one icon per stop in `icons` (3 to 6). The catalogue's WAVE examples show saw, square, pulse and noise (4 stops), sine, square, saw (3) and sine, saw, square, pulse, triangle, noise (6).
 
 ## States and tokens
 

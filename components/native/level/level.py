@@ -191,8 +191,11 @@ def dial_geometry(diameter):
     return radius, stroke, track
 
 
-def render_dial_frame(diameter, value, *, bipolar=False, active=True):
+def render_dial_frame(diameter, value, *, bipolar=False, active=True, value_arc=True, stops=0):
     """One dial picture exactly as ui::Knob draws it (drawStatic + drawLive), from the shared tokens.
+
+    value_arc=False leaves out the gradient value arc (the SteppedDial face); stops=N (>= 2) adds a dot on the track at each of
+    N evenly spaced angles. The defaults keep the Pan / Level pictures byte-identical.
 
     The track arc, the value arc in the four-stop flow gradient along the drawn piece, the
     bipolar centre tick, the pointer and the white thumb on the arc. Supersampled, then reduced.
@@ -256,7 +259,15 @@ def render_dial_frame(diameter, value, *, bipolar=False, active=True):
     av = angle_of(value) - start
     origin = mid if bipolar else 0.0
     lo, hi = min(origin, av), max(origin, av)
-    if hi - lo > 0.004:
+    if stops:
+        # stepped dial: a dot on the track at every stop angle (the selected one in the pointer colour, the others dim)
+        for index in range(stops):
+            sa = start + index * sweep / (stops - 1)
+            sx, sy = centre + radius * math.cos(sa), centre + radius * math.sin(sa)
+            chosen = abs(sa - (start + av)) < 1e-6
+            over((np.hypot(xs - sx, ys - sy) <= stroke / 2 * _style_size("knob.stop.ratio")).astype(np.float64),
+                 text_rgb if chosen else dim_rgb)
+    if value_arc and hi - lo > 0.004:
         t = np.clip((theta - lo) / (hi - lo), 0.0, 1.0)
         s = t * 3.0
         index = np.minimum(s.astype(int), 2)
