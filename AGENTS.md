@@ -64,3 +64,7 @@ The old RadioButton (segmented faces) takes too much room and is being phased ou
 
 A screen never draws a control face with its own code: buttons, dropdowns, selectors, fields, radios, dials and sliders are drawn by their shared component recipe (`components/native/<name>`; in the C++ overlay by `Pen::control`, driven by the same tokens). Test: change the component's tokens loudly and regenerate; every control of that kind on every screen must change. A control that does not change bypasses the component and is a defect to fix (see `docs/review/BUTTON-MUTATION-AUDIT-2026-11-27.md`). If a control needs a variant the component does not have, add the variant to the component and its catalogue entry, not to the screen file.
 
+## Lists keep the factory behaviour (owner, 2026-11-27)
+
+- Lists use the host MenuOverlay as it is: a row tap marks the row, a tap on the list header applies and closes. No select-and-close, no custom badges in rows, names only.
+- Evidence: the Key 61 probes A/B closed the list but lost the selection, because the skin action triggers cannot be ordered (SDK `ui-reference.md`, section on onAction); report in `/private/tmp/claude-501/list-probe/results/`. A plugin-drawn drawer (SDK-PORTING) is the only way to get select-and-close and is not planned.

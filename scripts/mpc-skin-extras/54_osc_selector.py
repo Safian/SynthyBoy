@@ -15,7 +15,6 @@ from components.native.selector.selector import (
     OSC_POWER_PARAM_KEYS,
     OSC_SOURCE_OVERLAY_NAME,
     build_standalone_osc_source_definitions,
-    list_probe,
     sanitize_osc_tab_navigation,
 )
 from native_ui_params import OSC_SOURCE, native_base_index
@@ -32,7 +31,7 @@ def apply(tui, qlinks, ctx):
     defs = tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     power_params = {k: ctx.param_index(k) for k in OSC_POWER_PARAM_KEYS}
     if not any(d["key"] == OSC_SOURCE_OVERLAY_NAME for d in defs):
-        defs.extend(build_standalone_osc_source_definitions(list_probe()))
+        defs.extend(build_standalone_osc_source_definitions())
     replacement = tui["pageData"].setdefault("replacementStrings", [])
     pkey = "Parameter %d" % selector_idx
     entry = next((r for r in replacement if r.get("key") == pkey), None)
