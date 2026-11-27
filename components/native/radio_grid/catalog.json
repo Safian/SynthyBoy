@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 47,
+  "title": "RadioGrid",
+  "sections": [],
+  "radio_grid": {
+    "samples": [
+      {
+        "id": "type-2x3",
+        "file": "radio-grid-type-2x3.png",
+        "alt": "RadioGrid TYPE, 2 sor 3 oszlop, BELL",
+        "caption": "TYPE 2 × 3, BELL kiválasztva · 40 px gombok",
+        "rows": 2,
+        "cols": 3,
+        "items": [
+          "BELL",
+          "LO SH",
+          "HI SH",
+          "NOTCH",
+          "LO CUT",
+          "HI CUT"
+        ],
+        "selected": 0,
+        "height": "height.intermediate",
+        "width": 280,
+        "title": "TYPE",
+        "state": "enabled"
+      },
+      {
+        "id": "row-1x4",
+        "file": "radio-grid-row-1x4.png",
+        "alt": "RadioGrid egy sor négy gombbal, BPM",
+        "caption": "1 × 4, BPM kiválasztva · 40 px gombok",
+        "rows": 1,
+        "cols": 4,
+        "items": [
+          "HZ",
+          "BPM",
+          "KEY",
+          "FREE"
+        ],
+        "selected": 1,
+        "height": "height.intermediate",
+        "width": 312,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "list-3x1",
+        "file": "radio-grid-list-3x1.png",
+        "alt": "RadioGrid három gomb függőlegesen",
+        "caption": "3 × 1 függőleges · 40 px gombok",
+        "rows": 3,
+        "cols": 1,
+        "items": [
+          "TRI",
+          "SAW",
+          "SQR"
+        ],
+        "selected": 1,
+        "height": "height.intermediate",
+        "width": 120,
+        "title": null,
+        "state": "enabled"
+      },
+      {
+        "id": "type-2x3-32",
+        "file": "radio-grid-type-2x3-32.png",
+        "alt": "RadioGrid 32 px magas gombokkal",
+        "caption": "TYPE 2 × 3 · 32 px gombok",
+        "rows": 2,
+        "cols": 3,
+        "items": [
+          "BELL",
+          "LO SH",
+          "HI SH",
+          "NOTCH",
+          "LO CUT",
+          "HI CUT"
+        ],
+        "selected": 3,
+        "height": "height.small",
+        "width": 280,
+        "title": "TYPE",
+        "state": "enabled"
+      },
+      {
+        "id": "type-2x3-48",
+        "file": "radio-grid-type-2x3-48.png",
+        "alt": "RadioGrid 48 px magas gombokkal",
+        "caption": "TYPE 2 × 3 · 48 px gombok",
+        "rows": 2,
+        "cols": 3,
+        "items": [
+          "BELL",
+          "LO SH",
+          "HI SH",
+          "NOTCH",
+          "LO CUT",
+          "HI CUT"
+        ],
+        "selected": 3,
+        "height": "height.medium",
+        "width": 280,
+        "title": "TYPE",
+        "state": "enabled"
+      },
+      {
+        "id": "disabled",
+        "file": "radio-grid-disabled.png",
+        "alt": "RadioGrid letiltva",
+        "caption": "Disabled, TYPE 2 × 3 · 40 px gombok",
+        "rows": 2,
+        "cols": 3,
+        "items": [
+          "BELL",
+          "LO SH",
+          "HI SH",
+          "NOTCH",
+          "LO CUT",
+          "HI CUT"
+        ],
+        "selected": 0,
+        "height": "height.intermediate",
+        "width": 280,
+        "title": "TYPE",
+        "state": "disabled"
+      }
+    ]
+  }
+}

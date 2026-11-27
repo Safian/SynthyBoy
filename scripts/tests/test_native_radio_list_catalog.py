@@ -99,10 +99,12 @@ class RadioListTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             radio_list.radio_samples({"samples": [dict(sample, height="height.high")]})
 
-    def test_catalogue_page_follows_radiobutton(self):
+    def test_radio_family_order_and_old_radiobutton_marked_for_removal(self):
         html = HTML.read_text(encoding="utf-8")
         titles = re.findall(r"<h3>([^<]*)</h3>", html)
-        self.assertEqual(titles[titles.index("RadioButton") + 1], "RadioList")
+        first = titles.index("RadioList")
+        self.assertEqual(titles[first:first + 5], ["RadioList", "RadioGrid", "SlideSwitch", "RotarySelector", "RadioButton (KIVEZETÉSRE)"])
+        self.assertLess(titles.index("FilterSelector") if "FilterSelector" in titles else first - 1, first)
         self.assertIn("components/native/radio_list/img/", html)
 
 
