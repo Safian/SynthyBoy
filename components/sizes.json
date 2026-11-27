@@ -152,7 +152,6 @@
     "selector.dropdown.preview_font": 17,
     "selector.dropdown.chevron_gap": 4,
     "control.look": "legacy",
-    "control.look": "legacy",
     "control.gradient": {"start": 0.3333333333333333, "end": 0.6666666666666666},
     "selector.dropdown.gradient.neon": {"ref": "control.gradient"},
     "selector.dropdown.gradient.legacy": {"ref": "control.gradient"},
@@ -255,13 +254,13 @@
     ],
     "level.compact_48_rects.name": [
       48,
-      4,
+      2,
       150,
-      18
+      20
     ],
     "level.compact_48_rects.value": [
       48,
-      22,
+      24,
       150,
       22
     ],
@@ -344,7 +343,7 @@
     "level._smooth_rects.value": [
       64,
       42,
-      50,
+      52,
       24
     ],
     "level.play_smooth_rects.focus": [
@@ -899,6 +898,9 @@
     },
     "catalog.samples.gap": 20,
     "catalog.samples.caption_gap": 8,
+    "catalog.old_grid.gap": 12,
+    "catalog.old_grid.margin_top": 8,
+    "catalog.old_shot.padding": 8,
     "font.family": "Titillium Web",
     "font.style.semibold": "SemiBold",
     "font.style.regular": "Regular",
@@ -1081,7 +1083,7 @@
     "mixer_strip.rect.slider_value_v_source": [0, 228, 95, 24],
     "mixer_strip.rect.slider_value_v_bus": [0, 444, 95, 24],
     "mixer_strip.rect.dial_knob": [4, 8, 40, 40],
-    "mixer_strip.rect.dial_name": [48, 6, 63, 18],
+    "mixer_strip.rect.dial_name": [48, 4, 63, 20],
     "mixer_strip.rect.dial_value": [48, 26, 63, 22],
     "mixer_strip.rect.slider_title_h": [6, 18, 42, 20],
     "mixer_strip.rect.slider_value_h": [52, 18, 56, 20],
@@ -1376,7 +1378,7 @@
     "button.switch.face": {"size": [64, 32], "radius": 16, "stroke": 1, "thumb_on_x": 34, "thumb_off_x": 2, "thumb_y": 2, "thumb_size": 27},
     "voice.controls.dial_max": 90,
     "voice.controls.dial_vertical_reserve": 40,
-    "voice.controls.dial_caption_height": 18,
+    "voice.controls.dial_caption_height": 20,
     "voice.controls.row_size": [114, 56],
     "voice.controls.row_origin": [4, 24],
     "voice.controls.row_pitch": [118, 60],

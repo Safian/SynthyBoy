@@ -43,11 +43,12 @@ class ButtonTests(unittest.TestCase):
         self.assertNotEqual(stored("button", "button-48.png").tobytes(), stored("button", "button-48-disabled.png").tobytes())
 
     def test_measured_old_colours(self):
-        """Owner's '+ ADD' crop: keyline (21,28,58) on top, fill (19,25,48) down to a third, then darkening to (13,17,34)."""
+        """Owner's '+ ADD' crop: keyline on top, fill (19,25,48) down to a third, then darkening to (13,17,34)."""
+        top_line = style.rgb("button.gradient.border")
         for height in (32, 40, 48, 56):
             face = button.action_art(text="+ ADD", height=height, look="legacy")
             x = 8                              # in the padding, left of the text
-            self.assertTrue(near(face.getpixel((x, 0)), (21, 28, 58), 6), height)
+            self.assertTrue(near(face.getpixel((x, 0)), top_line, 6), height)
             self.assertTrue(near(face.getpixel((x, 3)), (19, 25, 48)), height)
             self.assertTrue(near(face.getpixel((x, height * 3 // 4)), (13, 17, 34), 3), height)
             mid = face.getpixel((x, height // 2))
