@@ -689,8 +689,8 @@ public:
     }
     void hideNativeTargets (IInstanceView& inst)
     {
-        targetsNative_.hide (inst);
-        modsNative_.hide (inst);
+        targetsNative_.hide (inst, targetsView_);
+        modsNative_.hide (inst, modsView_);
     }
     LfoShapeLibrary& library() noexcept { return lib_; }
     ui::TextEntry& keyboard() noexcept { return entry_; }

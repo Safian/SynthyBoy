@@ -101,7 +101,7 @@ public:
 
     void leftTab (IInstanceView& inst) noexcept
     {
-        nativeTargets_.hide (inst);
+        nativeTargets_.hide (inst, targets_);
         inst.setNativeModMatrix (nativeui::mod::Hidden, nullptr, nullptr);
         inst.setNativeModNavigation (0, 0, 0, nullptr);
         inst.setNativeModDetailNavigation (nullptr);

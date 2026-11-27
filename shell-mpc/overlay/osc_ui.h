@@ -561,7 +561,7 @@ public:
     }
     void hideNativeModulations (IInstanceView& inst)
     {
-        nativeModulations_.hide (inst);
+        nativeModulations_.hide (inst, mods_);
     }
     ui::ListPopup& list() noexcept { return list_; }
     const std::vector<Item>& items() const noexcept { return main_; }

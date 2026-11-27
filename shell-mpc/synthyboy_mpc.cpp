@@ -169,6 +169,7 @@ namespace nativeui = synthyboy_mpc::nativeui;
 #include "kit/synthyboy_adapter.h"
 #include "native_filter_controls.h"
 #include "overlay/pages.h"
+#include "ui/voice_grid.h"
 #include "overlay/service.h"
 #include <exception>
 #include "play_log.h"
@@ -4867,7 +4868,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     else if (field == n::kStep)
                         std::snprintf (buf, kCap, "STEP %d", cell.target + 1);
                     else
-                        synthyboy_mpc::ui::VoiceGrid::formatValue (cell.source / n::kSteps, inst->paramMirror[cell.target].load (std::memory_order_relaxed) * 0.01f, buf, kCap);
+                        synthyboy_mpc::ui::voicegrid::formatValue (cell.source / n::kSteps, inst->paramMirror[cell.target].load (std::memory_order_relaxed) * 0.01f, buf, kCap);
                 }
                 else if (cell.target >= 0 && field == n::kValue && opcode == effGetParamLabel)
                     synthyboy_mpc::putBounded (buf, kCap, synthyboy::unitLabel (synthyboy::paramTable()[cell.target].unit));
@@ -5269,8 +5270,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             static const auto* lastStep = synthyboy::findParamByKey ("voicectl.s8.mod2");
             if (firstStep && lastStep && info >= firstStep && info <= lastStep)
             {
-                const int row = static_cast<int> (info - firstStep) % synthyboy_mpc::ui::VoiceGrid::kNumRows;
-                synthyboy_mpc::ui::VoiceGrid::formatValue (row, plain * 0.01f, buf, kCap);
+                const int row = static_cast<int> (info - firstStep) % synthyboy_mpc::ui::voicegrid::kNumRows;
+                synthyboy_mpc::ui::voicegrid::formatValue (row, plain * 0.01f, buf, kCap);
                 return 1;
             }
             // Passive native Filter selectors read the engine handle without an
