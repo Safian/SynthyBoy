@@ -62,7 +62,12 @@ if [[ -e "$package/VST" && ! -x "$package/VST/synthyboy-overlay-gpu-$arch" ]]; t
 fi
 
 # Complete the local archive before the remote side can activate anything.
-python3 "$(dirname "$0")/validate_synthyboy_skin.py" "$package"
+# SYNTHYBOY_SKIP_SKIN_VALIDATION=1 installs a saved older package (.hw-local/mpc-builds) whose page set the current validator rejects.
+if [[ "${SYNTHYBOY_SKIP_SKIN_VALIDATION-}" == 1 ]]; then
+    echo "Skin validation skipped (SYNTHYBOY_SKIP_SKIN_VALIDATION=1)." >&2
+else
+    python3 "$(dirname "$0")/validate_synthyboy_skin.py" "$package"
+fi
 scratch=$(mktemp -d)
 archive="$scratch/package.tar"
 trap 'rm -rf "$scratch"' EXIT
