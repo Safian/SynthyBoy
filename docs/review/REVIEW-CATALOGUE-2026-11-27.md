@@ -198,3 +198,45 @@ All **11** colour tokens added to `components/colors.json` on 2026-11-27, their 
 - **Superseded preview images in `mixer_strip/img/`**: `catalog-mixer-strip.png`, `source_strip_before_after.png`, `variants_comparison.png` (only referenced by stale `native-mixer-strip.md` / `render_native_mixer_strip_preview.py`), plus duplicate `mixer_fader_cap.png` (same asset as `fader/img/mixer_fader_cap.png`).
 - **Stale test referencing removed/shrunk file & defunct worktree**: `scripts/tests/test_native_katalogus.py:11-12,40` targets `docs/ui-components/native-katalogus.html` (which is only 7,303 bytes while line 40 asserts `> 50000` bytes) and hardcodes `/Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-pan-level-lfo-preview/docs/ui-components/native-katalogus.html`.
 - **Dead function**: `components/native/filter_selector/filter_selector.py:46-51` defines `catalog_sections()` taking 0 args; it is not in `gen-native-component-catalog.py:24` `EXAMPLE_KEYS` and is never called by the generator (only compared against static `filter_selector/catalog.json` in `test_native_filter_selector.py:47`).
+
+---
+
+## 4. Test Quality
+
+### 4.1 Tautology / Self-Comparison Bug
+
+- **`scripts/tests/test_native_header_catalog.py:138-141`** (`test_page_headers_fill_their_flexible_control_up_to_the_right_group`):
+  When `fills[0]` is NOT the last item in `example["centre"]` — which applies to **4 of the 6** fill examples (`osc-a`, `lfo-9`, `osc-a-off`, `lfo-9-full`, all followed by a `button`) — the `else` branch evaluates:
+  ```python
+  self.assertEqual(..., max(p.x + p.face.width for p in centre) + m["gap"] * 0, max(p.x + p.face.width for p in centre))
+  ```
+  This asserts `X == X` and **never checks** that the centre zone reaches `right[0].x - m["gap"]` when a button follows the flexible dropdown.
+
+### 4.2 Vacuous / Weak Assertions & Side Effects
+
+- **`scripts/tests/test_native_label_catalog.py:183-184`** (`test_legacy_fill_has_the_voice_selector_contrast_and_neon_is_untouched`):
+  Calls `selector.render_dropdown_face(220, 48)` (default `look="neon"`) and asserts the top pixel `(20, 10)` equals `(20, 26, 56)` (`#141a38`) as proof that `neon` is untouched. Because `selector.dropdown.top` (`#141a38`) is an exact duplicate of `theme.neon.panel0` (`#141a38`), the test completely misses that `selector.py:353-354` actually redirected `look="neon"` to `"legacy"` (bottom `#0b0f24` instead of `theme.neon.panel1` `#0c1026`).
+- **`scripts/tests/test_native_label_catalog.py:153-162`** (`test_long_value_is_cut_left_aligned_and_keeps_chevron_gap`):
+  Computes `chevron_left` from the chevron glyph ink (`199.5`) rather than the chevron lane edge (`192`), and only requires `max(ink) > width - 28 - gap - 40` (`> 148 px`). It never verifies that an ellipsis character (`…`) is actually drawn or that `chevron_gap = 4` (not `10`) is tight against the lane.
+- **`scripts/tests/test_native_dial_catalog.py:106-109`** (`test_html_is_current`):
+  Executes `scripts/gen-native-component-catalog.py` directly on the live working tree, overwriting `docs/ui-components/kepes-katalogus.html` as a side effect of running unit tests.
+- **`scripts/tests/test_native_mixer_strip_design.py:79-86`** (`test_thumb_follows_the_level_and_is_the_contrasty_one`):
+  Only verifies the thumb's pixel position matches `strip_design.layout(example)["thumb"]` (the renderer's own placement calculation), not that the thumb aligns with the scale tick for `level_text`. Consequently, the `-12.0 dB` thumb vs `-12` tick misalignment in `fader.py:258` went undetected. Also line `53` wraps `self.assertEqual(...) if "send0" in r else None` in a statement expression.
+
+### 4.3 Stored-vs-Renderer Self-Comparisons & Missing Token-Mutation Tests
+
+- **Every** catalogue test file (`test_native_{button,dial,header,label,radio_grid,radio_list,rotary_selector,slide_switch,stepped_dial,wave_icons}_catalog.py`, `test_native_filter_selector.py`, `test_native_mixer_strip_design.py`) verifies image bytes by comparing `stored(file)` against `module.render_sample(sample)` (a renderer self-check that catches stale PNGs, not renderer bugs).
+- **0 of 12** catalogue test files include a **token-mutation check** (per `AGENTS.md:65`: changing a component's tokens loudly must change every rendered control) or exercise `SYNTHYBOY_CONTROL_LOOK=flat`.
+
+### 4.4 Missing Negative Checks
+
+- **3 of 12 catalogue test suites have zero `assertRaises` / negative validation checks**:
+  - `scripts/tests/test_native_wave_icons_catalog.py`: never tests invalid `shape` (`render_wave_icon(..., shape="bad")`), `zoom < 1`, out-of-range `selected`, or duplicate IDs (`sheet_samples`).
+  - `scripts/tests/test_native_filter_selector.py`: never tests invalid state inputs or missing assets.
+  - `scripts/tests/test_native_mixer_strip_design.py`: never tests invalid `power` / `bottom` / `scale`, missing `sends` when `bottom != "none"`, duplicate IDs (`strip_examples`), invalid HSlider `state` or out-of-range `value`, or invalid `thumb_face` `index`.
+- **Partial negative-check gaps in the remaining suites**:
+  - `scripts/tests/test_native_button_catalog.py`: tests invalid `look` and `text + icon`, but never tests `button_samples()` validation (bad height token, bad state, duplicate IDs) or `width < minimum` (`button.py:108-109`).
+  - `scripts/tests/test_native_header_catalog.py`: never tests `> 1` `"fill": true` centre controls (`header.py:135,179`), insufficient room for `"fill"` (`header.py:141`), invalid `power`, or missing `title`/`power`/`centre` (`header.py:177`).
+  - `scripts/tests/test_native_rotary_selector_catalog.py`: never verifies that the active pictogram is `accent.cyan` and inactive pictograms are `selector.wave` (unlike `test_native_wave_icons_catalog.py:66-74`), nor that disabled has no cyan.
+  - `scripts/tests/test_native_slide_switch_catalog.py`: never tests `length <= thickness` rejection (`slide_switch.py:133`), nor that disabled has no cyan.
+  - `scripts/tests/test_native_katalogus.py`: broken against current `docs/ui-components/native-katalogus.html` (`len <= 50000` fails line `40`) and checks an obsolete worktree path (`line 12`).
