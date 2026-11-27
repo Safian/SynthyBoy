@@ -466,3 +466,24 @@
    - `command_stepper_definition` (visual chevron vs `Previous`/`Open`/`Next` hit zones).
    - Skin-side token mutation propagation across `button`, `radio_button`, `solo_mute`, `tune`, `mod_row`, `selector`, and `append_choice_rows`.
    - JSON duplicate-key check (`sizes.json:154-155`) / duplicate-symbol check (`style.py:39-64`).
+
+---
+
+## 6. Top Risks for the Next Device Check (Ordered by Hardware Impact)
+
+1. **Unusable / misleading OSC table & Unison MODE controls (`components/native/selector/selector.py:1410-1419`, `scripts/mpc-skin-extras/58_osc_detail.py:146-151`):**
+   Tapping the visible dropdown `v` chevron steps `Next` instead of opening the menu, tapping the left 56 px unexpectedly steps `Previous` without arrows, and on `oscDetailUnisonMode` (`158×92`) the center `46 px` (`x = 56..102`) is completely dead.
+2. **Buttons visually disappearing on the MPC LCD (`components/colors.json:42-45`):**
+   `button.gradient.border` (`#151c3a`) has **1.15:1** contrast against `#0a0e1a` (**1.04:1** against `button.gradient.top`), `button.gradient.bottom` (`#0d1122`) has **1.03:1** against `#0a0e1a`, and the keyline ramp is inverted (`#151c3a` → `#161e42`). Quiet/unlabelled buttons and RadioGrid off-cells risk reading as borderless floating glyphs.
+3. **Disabled dials appearing active on Mixer, Filter, and Play LFO Smooth (`components/native/level/level.py:1125`):**
+   `unify_dial_text` misses `mixerSlider*Inactive`, `filterNativeDial_*_off_*`, and `compactNativeSmoothReadout`, turning their labels bright `#eef1ff` instead of dimmed (`AGENTS.md:15`).
+4. **Clipped / overlapping dial labels on OSC, Mixer, Voice, and OSC Detail (`components/sizes.json:256,1084,1379`, `57_osc_settings.py:76,149`, `58_osc_detail.py:52-57`):**
+   26 label rects are shorter than `font.value = 20.0` (`14 px` on `oscNativeSetting_toggle`, `18 px` on 24 compact dial captions, `19 px` on `oscDetailStepper` with `2.7 px` vertical overlap), and narrow `Value` rects (`lfoNativeField4 Smooth` `48 px`, `_SMOOTH_RECTS` `50 px`, `oscNativeSetting FILTER` `59 px`, `oscNativeSetting_dial` default `77 px`) risk truncation (`+1.7 px` down to `-1.9 px` horizontal margin).
+5. **Play top-bar visual inconsistency (`scripts/mpc-skin-extras/82_play.py:234-243`, `components/native/selector/selector.py:468-502`):**
+   `playOscSelector` renders as a `48 px` tall (`radius=6`, `inset=0`) flat-grey `#202020` "inactive" box right next to `56 px` tall (`radius=10`, `inset=3`) dark-blue gradient Env/LFO selectors.
+6. **LFO Sync RadioGrid visual & touch-fit defects (`components/native/radio_button/radio_button.py:84-99`, `53_lfo_smooth.py:150-152`, `native_play/env_lfo.py:214-216`):**
+   Standalone LFO Sync (`150×168` vertical) has `12 px` / `8 px` / `4 px` uneven gaps; Play LFO Sync (`210×56` horizontal) has `66 / 62 / 66 px` unequal widths with `BPM` only `1 px` above `action_art`'s minimum width.
+7. **Mod Matrix regression (`components/native/mod_row/mod_row.py:92-93,100,109,147`):**
+   Amount readout shrunk from `34` to `20`, split toggle Name/Value hierarchy is erased, and `POLARITY`/`ROUTE`/`INVERT`/`STEREO`/`SYNC` remain flat unbordered `#131930` rectangles (`1.00:1` vs `mod_row.surface` in preview).
+8. **Unreadable disabled Mixer S/M/FX buttons (`components/native/solo_mute/solo_mute.py:123-126,143`):**
+   `#384252` text on `#131930` active blue gradient yields **1.71:1** contrast on disabled channels.
