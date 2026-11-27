@@ -160,7 +160,7 @@ static void test_qgroup_wide_device_and_idle_chips()
         check (s.numOps() == 0, "Wide device normal mode suppresses overlay yellow badges");
     }
     {
-        const Component* row[] { &k0, &k1 };
+        const ControlModel* row[] { &k0, &k1 };
         Scene s (400, 300);
         QGroup::drawMappedMembers (s.builder(), 1, row, 2);
         check (s.numOps() == 0, "XL list and panel rows hide idle slot badges outside diagnostics");
@@ -178,7 +178,7 @@ static void test_qgroup_wide_device_and_idle_chips()
     }
 
     // Static drawMappedMembers helper
-    const Component* members[2] = { &k0, &k1 };
+    const ControlModel* members[2] = { &k0, &k1 };
     {
         Scene s (400, 300);
         QGroup::drawMappedMembers (s.builder(), 1, members, 2);
@@ -352,14 +352,14 @@ static void test_qgroup_adjacency_check()
     Knob outside ("OUTSIDE");
     outside.place ({ 400, 400, 80, 80 });
 
-    Component* all[4] = { &k0, &k1, &intruder, &outside };
-    const Component* first = nullptr;
+    ControlModel* all[4] = { &k0, &k1, &intruder, &outside };
+    const ControlModel* first = nullptr;
     int bad = qg.check (all, 4, &first);
     check (bad == 1, "Adjacency check finds 1 intruder inside union");
     check (first == &intruder, "Adjacency check reports intruder component");
 
     // Clean layout without intruder
-    Component* clean[3] = { &k0, &k1, &outside };
+    ControlModel* clean[3] = { &k0, &k1, &outside };
     first = nullptr;
     bad = qg.check (clean, 3, &first);
     check (bad == 0, "Clean layout has 0 adjacency violations");
@@ -371,6 +371,80 @@ static void test_qgroup_adjacency_check()
     check (bad == 0, "Frameless mode bypasses adjacency check");
 }
 
+static void test_qgroup_mixed_models_and_widgets()
+{
+    KnobModel km ("CUTOFF");
+    km.setParamHandle ({ 601, 12, "filter1.cutoff" });
+    km.place ({ 100, 100, 100, 80 });
+    km.state.value = 0.25;
+    km.state.defaultValue = 0.5;
+    setText (km.state.valueText, sizeof km.state.valueText, "420 Hz");
+
+    NumberFieldModel nm ("OCT", NumberFieldModel::Format::IntSigned);
+    nm.setParamHandle ({ 602, 13, "osc1.octave" });
+    nm.place ({ 210, 100, 100, 80 });
+    nm.state.min = -4.0;
+    nm.state.max = 4.0;
+    nm.state.step = 1.0;
+    nm.state.value = 1.0;
+
+    Stepper st;
+    st.setId (603);
+    st.place ({ 320, 100, 140, 80 });
+    st.state.count = 4;
+    st.state.index = 1;
+    st.setItem ("SAW");
+
+    // ParamHandle & model contract metadata checks
+    check (km.paramHandle().bound() && km.param() == 12 && std::strcmp (km.paramKey(), "filter1.cutoff") == 0,
+           "KnobModel stores ParamHandle (id, param, key)");
+    check (km.visible() && nm.visible(), "Models default to visible");
+    km.setVisible (false);
+    check (! km.visible(), "Model setVisible updates visibility");
+    km.setVisible (true);
+
+    char buf[16];
+    km.formatText (buf, sizeof buf);
+    check (std::strcmp (buf, "420 Hz") == 0, "KnobModel formatText returns valueText");
+    nm.formatText (buf, sizeof buf);
+    check (std::strcmp (buf, "+1") == 0, "NumberFieldModel formatText returns formatted value");
+
+    QGroup qg;
+    qg.set (0, &km);
+    qg.set (1, &nm);
+    qg.set (2, &st);
+    check (qg.numMembers() == 3, "Mixed QGroup holds 3 members (2 pure models + 1 widget)");
+    check (qg.member (0) == &km && qg.member (1) == &nm && qg.member (2) == &st,
+           "Mixed QGroup member() returns exact ControlModel pointers");
+    check (qg.rect() == Rect { 100, 100, 360, 80 }, "Mixed QGroup rect() unites model and widget rects");
+
+    qg.setActive (true);
+    Change c = qg.turn (0, 0.25);
+    check (c.kind == ChangeKind::Value && c.id == 601 && std::fabs (c.value - 0.5) < 1.0e-9,
+           "Mixed QGroup turn(0) routes to KnobModel");
+    c = qg.turn (1, 2.0);
+    check (c.kind == ChangeKind::Index && c.id == 602 && c.index == 7 && std::fabs (c.value - 3.0) < 1.0e-9,
+           "Mixed QGroup turn(1) routes to NumberFieldModel");
+    c = qg.turn (2, 1.0);
+    check (c.kind == ChangeKind::Index && c.id == 603 && c.index == 2,
+           "Mixed QGroup turn(2) routes to legacy Stepper widget");
+
+    KnobModel intruder ("INTRUDER");
+    intruder.place ({ 200, 110, 40, 60 });
+    KnobModel outside ("OUTSIDE");
+    outside.place ({ 600, 400, 80, 60 });
+
+    ControlModel* all[5] = { &km, &nm, &st, &intruder, &outside };
+    const ControlModel* first = nullptr;
+    check (qg.check (all, 5, &first) == 1 && first == &intruder,
+           "Mixed QGroup check() detects ControlModel intruder inside union");
+
+    ControlModel* clean[4] = { &km, &nm, &st, &outside };
+    first = nullptr;
+    check (qg.check (clean, 4, &first) == 0 && first == nullptr,
+           "Mixed QGroup check() passes clean layout with mixed models and widgets");
+}
+
 int main()
 {
     test_qgroup_slots_and_turn_routing();
@@ -379,6 +453,7 @@ int main()
     test_qgroup_single_unnumbered_q_marker();
     test_qgroup_frameless_mode();
     test_qgroup_adjacency_check();
+    test_qgroup_mixed_models_and_widgets();
 
     std::printf ("ui_cov_qgroups_chips_host: %d failure(s)\n", g_fails);
     return g_fails ? 1 : 0;

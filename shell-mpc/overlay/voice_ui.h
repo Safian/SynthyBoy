@@ -51,7 +51,7 @@ public:
     struct Item
     {
         int id = 0;
-        ui::Component* c = nullptr;
+        ui::ControlModel* c = nullptr;
         T type = T::Inert;
         std::string key;
         int param = -1;
@@ -235,14 +235,17 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
 
 private:
-    void bind (int id, ui::Component* c, T type, const std::string& key)
+    void bind (int id, ui::ControlModel* c, T type, const std::string& key)
     {
         Item it;
         it.id = id; it.c = c; it.type = type;
         it.key = key;
         it.param = uibind::indexOfKey (key);
         if (c != nullptr)
+        {
             c->setId (id);
+            c->setParam (it.param);
+        }
         items_.push_back (it);
     }
 

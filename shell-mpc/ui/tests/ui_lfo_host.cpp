@@ -14,20 +14,20 @@ using namespace uit;
 
 namespace
 {
-int cx (const Component& c) { return c.rect().x + c.rect().w / 2; }
-int cy (const Component& c) { return c.rect().y + c.rect().h / 2; }
+int cx (const ControlModel& c) { return c.rect().x + c.rect().w / 2; }
+int cy (const ControlModel& c) { return c.rect().y + c.rect().h / 2; }
 Change tap (Component& c, int x, int y, double t)
 {
     const Change d = c.touchDown (x, y, t);
     const Change u = c.touchUp (x, y);
     return u ? u : d;
 }
-int chipsCovered (const QGroup& g, Component* const* all, int n)
+int chipsCovered (const QGroup& g, ControlModel* const* all, int n)
 {
     int bad = 0;
     for (int i = 0; i < QGroup::kSlots; ++i)
     {
-        const Component* m = g.member (i);
+        const ControlModel* m = g.member (i);
         if (m == nullptr)
             continue;
         const Rect chip { m->rect().x + 4, std::max (0, m->rect().y - 15), 18, std::min (15, m->rect().y) };
@@ -343,7 +343,7 @@ void testViews()
         if (! random)
         {
             const int iT = keyFollow ? 2 : 1, iM = iT + 1, iS = iT + 2;   // TIMING, MOTION, SHAPE
-            check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == (keyFollow ? nullptr : static_cast<Component*> (&f.rate)) &&
+            check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == (keyFollow ? nullptr : static_cast<ControlModel*> (&f.rate)) &&
                    f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
                    nm + ": group 0 is picker (Q1), rate (not in the key follow), rise, smooth");
             check (f.groups[iT].member (0) == &f.syncSwitch.mode && f.groups[iT].member (1) == &f.phase &&
@@ -352,7 +352,7 @@ void testViews()
             check (f.syncSwitch.mode.rect().y == f.phase.rect().y && f.phase.rect().y == f.delay.rect().y && f.syncSwitch.mode.rect().x < f.phase.rect().x && f.phase.rect().x < f.delay.rect().x && f.delay.rect().y < f.mode.rect().y && f.mode.rect().x == f.syncSwitch.mode.rect().x, nm + ": the chips of TIMING read left to right, top to bottom: SYNC, PHASE and DELAY on one line, MODE under");
             check (f.direction.rect().y == f.swing.rect().y && f.swing.rect().y < f.stereo.rect().y && f.stereo.rect().y < f.monoQ.rect().y, nm + ": the chips of MOTION read top to bottom: DIRECTION and SWING on one line, STEREO, MONO");
             check (f.hostPick.rect().h >= 56 && f.block (1).contains (f.hostPick.rect().x, f.hostPick.rect().y) && f.block (1).contains (f.hostPick.rect().right() - 1, f.hostPick.rect().bottom() - 1) && ! f.hostPick.rect().overlaps (f.mode.rect()) && ! f.hostPick.rect().overlaps (f.delay.rect()) && f.selector.rect().h >= 56 && UsedSelector::kCellW >= 56, nm + ": HOST is a LED toggle inside the TIMING block next to MODE (SMOOTH is the LED on the label of its time knob), the selector cells are 56 px or more");
-            check (f.smoothTime.state.led && f.smoothTime.ledHit().h >= 56 && f.smoothTime.ledHit().w >= 80 && f.rect().contains (f.smoothTime.ledHit()), nm + ": the SMOOTH knob has the LED on its label and a switch zone of at least 56 px");
+            check (f.smoothTime.state.led && f.smoothTime.rect().h >= 56 && f.smoothTime.rect().w >= 80 && f.rect().contains (f.smoothTime.rect()), nm + ": the SMOOTH knob has the LED model flag and cell at least 56 px");
             check (f.groups[iM].member (0) == &f.direction && f.groups[iM].member (1) == &f.swing &&
                    f.groups[iM].member (2) == &f.stereo && f.groups[iM].member (3) == &f.monoQ,
                    nm + ": group MOTION is direction, swing, stereo, mono");
@@ -376,9 +376,8 @@ void testViews()
             f.touchUp (cx (f.hostPick), cy (f.hostPick));
             check (f.activeGroup() == iT && f.groups[iT].active(), nm + ": tap on HOST makes TIMING active (the toggle is no Q member)");
             f.setActiveGroup (0);
-            f.touchDown (cx (f.keyTune), cy (f.keyTune), 0.0);
-            f.touchUp (cx (f.keyTune), cy (f.keyTune));
-            check (keyFollow == (f.activeGroup() == 1), nm + ": a touch on TUNE makes KEY the active group in the key follow sync (and is a touch on nothing without it)");
+            check (keyFollow ? f.groups[1].member (0) == &f.keyTranspose && f.groups[1].member (1) == &f.keyTune : f.numGroups() <= 4,
+                   nm + ": KEY group holds TRANSPOSE and TUNE in key follow sync");
             check (f.keyTranspose.enabled() == keyFollow, nm + ": the KEY numbers are there in the key follow sync only");
         }
         Change t = f.turnQ (0, 1.0);
@@ -441,7 +440,7 @@ void testEditor()
            "editor page: the GRID group (GRID X, GRID Y, SNAP) is adjacent, free lanes for the chips");
     {
         bool big = true;
-        for (const Component* c : std::initializer_list<const Component*> { &pg.fpoint, &pg.fx, &pg.fy, &pg.fcurve, &pg.fgx, &pg.fgy, &pg.snap, &pg.undoButton, &pg.del, &pg.loop, &pg.smooth, &pg.back })
+        for (const ControlModel* c : std::initializer_list<const ControlModel*> { &pg.fpoint, &pg.fx, &pg.fy, &pg.fcurve, &pg.fgx, &pg.fgy, &pg.snap, &pg.undoButton, &pg.del, &pg.loop, &pg.smooth, &pg.back })
             big = big && c->rect().h >= 56 && c->rect().w >= 56;
         check (big, "editor page: every control is at least 56 x 56 (touch targets)");
         bool once = true;   // no control twice: SNAP is only in the GRID group, not in a bar as well

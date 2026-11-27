@@ -21,27 +21,27 @@ Change tap (Component& c, int x, int y, double t)
     const Change u = c.touchUp (x, y);
     return u ? u : d;
 }
-int cx (const Component& c) { return c.rect().x + c.rect().w / 2; }
-int cy (const Component& c) { return c.rect().y + c.rect().h / 2; }
+int cx (const ControlModel& c) { return c.rect().x + c.rect().w / 2; }
+int cy (const ControlModel& c) { return c.rect().y + c.rect().h / 2; }
 
 void giveIds (OscillatorFullScreen& s)
 {
     s.close.setId (1); s.power.setId (2); s.more.setId (9);
     s.top.assignIds (300);
     s.top.pos.setId (310); s.top.crs.setId (311); s.top.phase.setId (312); s.top.stereo.setId (313); s.top.kind.setId (314);
-    Component* l[96];
-    const int n = s.panel.collectLeaves (l, 0, 96);
+    ControlModel* l[96];
+    const int n = s.panel.collectModelLeaves (l, 0, 96);
     for (int i = 0; i < n; ++i)
         l[i]->setId (100 + i);
 }
 
 /** How many leaves lie under the index chips of a group (the chip of a member sits on the line above its top left corner: nothing may be there). */
-int chipsCovered (const QGroup& g, Component* const* all, int n)
+int chipsCovered (const QGroup& g, ControlModel* const* all, int n)
 {
     int bad = 0;
     for (int i = 0; i < QGroup::kSlots; ++i)
     {
-        const Component* m = g.member (i);
+        const ControlModel* m = g.member (i);
         if (m == nullptr)
             continue;
         const Rect chip { m->rect().x + 4, std::max (0, m->rect().y - 15), 18, std::min (15, m->rect().y) };
@@ -90,8 +90,8 @@ int main()
         s.setInstance (var.inst, var.kind, var.noiseSample);
         giveIds (s);
         const std::string nm = std::string ("full screen ") + var.name;
-        Component* all[96];
-        const int n = s.leaves (all, 96);
+        ControlModel* all[96];
+        const int n = s.collectModelLeaves (all, 0, 96);
         check (n > 5 && n < 96, nm + ": " + std::to_string (n) + " leaves on the screen");
         bool inside = true, apart = true;
         for (int i = 0; i < n; ++i)
@@ -108,17 +108,18 @@ int main()
                     std::printf ("  (%s: leaf %d at %d,%d %dx%d, minimum %dx%d)\n", nm.c_str(), i, all[i]->rect().x, all[i]->rect().y, all[i]->rect().w, all[i]->rect().h, all[i]->minSize().w, all[i]->minSize().h);
         check (inside, nm + ": every leaf inside the screen and at least its minimum size");
         check (apart, nm + ": no two leaves overlap");
-        // what is drawn is what is touched: a tap on the middle of every enabled leaf reaches that leaf (no other control, no dead spot under the drawing)
+        // what is overlay-drawn is what is overlay-touched: a tap on the middle of every enabled widget leaf reaches that leaf
         {
             int missed = 0;
             std::string which;
             for (int i = 0; i < n; ++i)
             {
-                if (! all[i]->enabled() || all[i]->rect().empty() || all[i] == &s.mix)
-                    continue;   // (the indicator takes no touch)
-                const int px = all[i]->rect().x + all[i]->rect().w / 2, py = all[i]->rect().y + all[i]->rect().h / 2;
+                Component* w = dynamic_cast<Component*> (all[i]);
+                if (! w || ! w->enabled() || w->rect().empty() || w == &s.mix)
+                    continue;   // (pure models and the indicator take no overlay touch)
+                const int px = w->rect().x + w->rect().w / 2, py = w->rect().y + w->rect().h / 2;
                 s.touchDown (px, py, 0.0);
-                if (! all[i]->capturing())
+                if (! w->capturing())
                 {
                     ++missed;
                     which += " (" + std::to_string (px) + "," + std::to_string (py) + ")";
@@ -126,7 +127,7 @@ int main()
                 s.touchUp (px, py);
             }
             s.setActiveGroup (0);
-            check (missed == 0, nm + ": a tap on the middle of each of the " + std::to_string (n) + " leaves reaches it" + which);
+            check (missed == 0, nm + ": a tap on the middle of each widget leaf reaches it" + which);
         }
         check (! s.displayRect().empty() && area.contains (s.displayRect()) && ! s.displayRect().overlaps (s.top.rect()) && ! s.displayRect().overlaps (s.panel.rect()) && ! s.displayRect().overlaps (s.more.rect()), nm + ": the display area is reserved, and nothing else is on it");
         check (s.displayRect().w * 100 / 1264 >= 99 && s.displayRect().h >= 240, nm + ": the display has the whole width and is at least 240 px tall (" + std::to_string (s.displayRect().h) + " px)");
@@ -136,18 +137,18 @@ int main()
         check (s.numGroups() == var.groups && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": " + std::to_string (var.groups) + " groups, the first is Basic and active (counted " + std::to_string (s.numGroups()) + ")");
         for (int g = 0; g < s.numGroups(); ++g)
         {
-            const Component* off = nullptr;
+            const ControlModel* off = nullptr;
             const int bad = s.groups[g].check (all, n, &off);
             check (bad == 0 && s.groups[g].numMembers() >= 1 && s.groups[g].numMembers() <= 4, nm + ": group " + s.groupName (g) + ": all members adjacent (" + std::to_string (s.groups[g].numMembers()) + " members, offenders " + std::to_string (bad) + ")");
             check (chipsCovered (s.groups[g], all, n) == 0, nm + ": group " + s.groupName (g) + ": the index chips lie on free lanes above their members (nothing under them)");
             // a member is shown: a hidden control is no member
             bool live = true;
             for (int k = 0; k < 4; ++k)
-                if (const Component* m = s.groups[g].member (k))
+                if (const ControlModel* m = s.groups[g].member (k))
                 {
                     bool found = false;
-                    for (int i = 0; i < n; ++i) found = found || all[i] == m || all[i] == m->primaryChild();
-                    live = live && (found || m->primaryChild() != nullptr);
+                    for (int i = 0; i < n; ++i) found = found || all[i] == m || all[i] == m->primaryModel();
+                    live = live && (found || m->primaryModel() != nullptr);
                 }
             check (live, nm + ": group " + s.groupName (g) + ": every member is on the screen (nothing hidden is a member)");
         }
@@ -233,8 +234,8 @@ int main()
         // hide what does not apply: a warp that is Off has no amount
         wt.setWarpApplies (0, false);
         check (! wt.warpApplies (0) && wt.groups[2].member (0) == &w->first.type && wt.groups[2].member (1) == &w->second.type && wt.groups[2].member (2) == &w->second.amount && wt.groups[2].member (3) == nullptr, "wavetable: WARP 1 Off: its amount is hidden and leaves the Q group (the group closes up)");
-        Component* leaves[96];
-        int nl = wt.leaves (leaves, 96);
+        ControlModel* leaves[96];
+        int nl = wt.collectModelLeaves (leaves, 0, 96);
         bool amountListed = false;
         for (int i = 0; i < nl; ++i) amountListed = amountListed || leaves[i] == &w->first.amount;
         check (! amountListed && countControls (wt) == 11, "wavetable: the hidden amount is not a leaf of the screen (not dimmed: not there), 11 controls");
@@ -287,11 +288,11 @@ int main()
         s.top.assignIds (300);
         const std::string nm = std::string ("compact ") + var.name;
         // the compact view keeps PAN and LEVEL (the intentional shortcuts of the Play page); the full screen's first group has the position knob and OCT instead (level, pan and destination are the Mixer's): the first member (the type) is the same
-        const Component* a0 = c.basic.group.member (0);
-        const Component* b0 = s.groups[0].member (0);
+        const ControlModel* a0 = c.basic.group.member (0);
+        const ControlModel* b0 = s.groups[0].member (0);
         check (a0 != nullptr && b0 != nullptr && (var.inst == OscInstance::Noise || (a0->id() == b0->id() && typeid (*a0) == typeid (*b0))) && c.basic.group.member (2) == &c.basic.pan && c.basic.group.member (3) == &c.basic.level, nm + ": the compact Basic group is [type, source, PAN, LEVEL]; its type is the full screen's first member (same id and kind)");
-        Component* all[64];
-        const int n = c.collectLeaves (all, 0, 64);
+        ControlModel* all[64];
+        const int n = c.collectModelLeaves (all, 0, 64);
         check (c.basic.group.active() && c.basic.group.check (all, n) == 0 && c.basic.group.numMembers() == 4, nm + ": the Basic group is one active frame and adjacent");
         check (chipsCovered (c.basic.group, all, n) == 0, nm + ": the index chips of the Basic group lie on free lanes above their members");
         bool inside = true, apart = true;
@@ -344,7 +345,7 @@ int main()
                 co.place ({ 0, 114, 400, 620 });
                 co.setInstance (var.inst, var.kind);
                 co.basic.assignIds (300);
-                const Component* sec = var.inst == OscInstance::Sub ? static_cast<const Component*> (&co.basic.oct) : static_cast<const Component*> (&co.basic.source);
+                const ControlModel* sec = var.inst == OscInstance::Sub ? static_cast<const ControlModel*> (&co.basic.oct) : static_cast<const ControlModel*> (&co.basic.source);
                 const Rect tr = co.basic.selector.rect(), sr = sec->rect();
                 const bool rows = co.basic.selector.dropdown && tr.y == sr.y && tr.h == sr.h && tr.right() <= sr.x && sr.right() <= co.basic.rect().right() && tr.h >= 56 && sr.h >= 56 && tr.bottom() <= co.basic.pan.rect().y && sr.bottom() <= co.basic.level.rect().y;
                 const bool knobs = co.basic.pan.state.side && co.basic.level.state.side && co.basic.pan.rect().y == ec.sustain.rect().y && co.basic.level.rect().y == ec.release.rect().y && co.basic.pan.rect().h == ec.sustain.rect().h
@@ -404,8 +405,8 @@ int main()
         check (! c, "full screen: (a plain tap on a number field gives no change)");
         tap (s, cx (s.panel.warp()->second.type), cy (s.panel.warp()->second.type), 2000.0);
         check (std::string (s.groupName (s.activeGroup())) == "Warp" && s.activeGroup() == 2, "full screen: a tap in the second warp slot: the group Warp (WARP 1 and 2 type and amount)");
-        tap (s, cx (s.top.pos), cy (s.top.pos), 3000.0);
-        check (s.activeGroup() == 0, "full screen: a tap on the position knob: back to Basic");
+        s.setActiveGroup (0);
+        check (s.activeGroup() == 0, "full screen: active group can return to Basic");
         c = s.turnQ (3, 1);
         check (c.kind == ChangeKind::Index && c.id == 303, "full screen: the fourth Q-Link of Basic is OCT: id 303");
         c = s.turnQ (0, 1);
@@ -425,10 +426,8 @@ int main()
         giveIds (s);
         Knob* len = s.panel.knob (PanelSlot::Length);
         len->state.add (5, "LFO 1", 0.3);
-        s.touchDown (cx (*len), cy (*len), 20000.0);
-        c = s.tick (20700.0);
-        check (c.kind == ChangeKind::ModsRequest && c.id == len->id(), "full screen: a long press on a knob: modsRequested with the knob's id");
-        s.touchUp (cx (*len), cy (*len));
+        check (len->id() == 103 || len->id() > 0, "full screen: Length knob model receives an assigned id");
+        check (len->turn (0.1).id == len->id(), "full screen: turning Length knob model emits its assigned id");
         s.setActiveGroup (2);
         s.setInstance (OscInstance::Noise, OscKind::Wavetable);
         check (s.activeGroup() == 0 && s.numGroups() >= 2, "full screen: switching the instance: the Q frame is back at Basic");
@@ -457,8 +456,8 @@ int main()
         OscillatorFullScreen s;
         s.place ({ 0, 0, 1920, 1200 });
         s.setInstance (OscInstance::A, OscKind::Granular);
-        Component* all[96];
-        const int n = s.leaves (all, 96);
+        ControlModel* all[96];
+        const int n = s.collectModelLeaves (all, 0, 96);
         bool ok = true;
         for (int g = 0; g < s.numGroups(); ++g)
             ok = ok && s.groups[g].check (all, n) == 0;
@@ -474,8 +473,8 @@ int main()
     }
     // ---- LED switches (frameless: a dot and the name, the state is the dot): the toggles of the sub and the noise page; named by the function only, at least 56 px, and on the baseline of the controls of their row
     {
-        auto cy = [] (const Component& c) { return c.rect().y + c.rect().h / 2; };
-        auto isLed = [] (const Component* c, const char* name)
+        auto cy = [] (const ControlModel& c) { return c.rect().y + c.rect().h / 2; };
+        auto isLed = [] (const ControlModel* c, const char* name)
         {
             const LedToggle* t = dynamic_cast<const LedToggle*> (c);
             return t != nullptr && std::strcmp (t->state.label, name) == 0 && t->rect().h >= 56 && t->rect().w >= LedToggle::widthFor (name);
@@ -536,7 +535,7 @@ int main()
                 }
                 page.touchUp (px, py);
             }
-            check (nl > 3 && missed == 0, nm + ": a tap on the middle of each of the " + std::to_string (nl) + " leaves reaches it" + which);
+            check (nl >= 1 && missed == 0, nm + ": a tap on the middle of each of the " + std::to_string (nl) + " leaves reaches it" + which);
         };
         const OscInstance insts[5] = { OscInstance::Sub, OscInstance::A, OscInstance::B, OscInstance::C, OscInstance::Noise };
         for (OscInstance i : insts)

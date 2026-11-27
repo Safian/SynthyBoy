@@ -222,7 +222,7 @@ public:
         mode_ = m;
         show (rate, m != lfo::SyncMode::Bpm);
         show (division, m == lfo::SyncMode::Bpm);
-        setPrimary (m == lfo::SyncMode::Bpm ? static_cast<Component*> (&division) : &rate);
+        setPrimary (m == lfo::SyncMode::Bpm ? static_cast<ControlModel*> (&division) : &rate);
         rate.setLabel (m == lfo::SyncMode::Key ? "KEY" : "RATE");
         modeCells.state.index = static_cast<int> (m);
         refreshShown();

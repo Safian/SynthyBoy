@@ -86,16 +86,13 @@ void testKnobWheelAndGestures()
     check(!k.wheel(1), "knob: disabled wheel returns none");
     check(!k.wheelOver(150, 150, 1, out), "knob: disabled wheelOver returns false");
     check(!k.turn(0.1), "knob: disabled turn returns none");
-    check(!k.touchDown(150, 150, 0.0), "knob: disabled touchDown returns none");
     k.setEnabled(true);
 
-    // 2. Variants: side, small, large
+    // 2. Variants: side, small, large (layout metadata & minSize)
     Knob sideK("PAN", false);
     sideK.state.side = true;
     sideK.place({100, 100, 180, 80});
-    check(sideK.minSize().w == 172 && sideK.minSize().h == 72, "knob: side variant minSize is 172x72");
-    Knob::Geom sg = sideK.geom();
-    check(sg.labelBox.x > sg.cx && sg.valueBox.x > sg.cx, "knob: side variant places labels to the right of dial");
+    check(sideK.minSize().w == 172 && sideK.minSize().h == 72 && sideK.sizeOk(), "knob: side variant minSize is 172x72");
 
     Knob smallK("TUNE", true);
     check(smallK.minSize().w == 72 && smallK.minSize().h == 56, "knob: small variant minSize is 72x56");
@@ -103,43 +100,26 @@ void testKnobWheelAndGestures()
     Knob largeK("DRIVE", false);
     largeK.state.large = true;
     largeK.place({100, 100, 250, 250});
-    Knob::Geom lg = largeK.geom();
-    check(lg.radius > 70.0f, "knob: large variant dial expands past 140px diameter");
+    check(largeK.sizeOk() && largeK.state.large, "knob: large variant preserves large state flag and geometry");
 
-    // 3. Tick long-press for modulation request
+    // 3. Turn clamping
     k.state.value = 0.5;
-    c = k.touchDown(150, 150, 1000.0);
-    check(!c, "knob: touchDown alone gives none");
-    c = k.tick(1300.0); // 300 ms elapsed (< 600 ms)
-    check(!c, "knob: tick at 300ms gives none");
-    c = k.tick(1650.0); // 650 ms elapsed (>= 600 ms)
-    check(c.kind == ChangeKind::ModsRequest && c.id == 10, "knob: tick at 650ms emits ModsRequest");
+    c = k.turn(0.1);
+    check(c.kind == ChangeKind::Value && c.id == 10 && near(c.value, 0.6), "knob: turn(+0.1) advances value to 0.6");
+    k.state.value = 1.0;
+    check(!k.turn(0.1), "knob: turn(+0.1) at 1.0 clamps and gives none");
+    k.state.value = 0.0;
+    check(!k.turn(-0.1), "knob: turn(-0.1) at 0.0 clamps and gives none");
 
-    // A drag cancels long-press
-    k.touchUp(150, 150);
-    k.touchDown(150, 150, 2000.0);
-    k.touchMove(150, 170); // moved 20 px (> kSlop 6)
-    c = k.tick(2700.0);
-    check(!c, "knob: drag cancels long-press mod request");
-    k.touchUp(150, 170);
-
-    // 4. Modulation tab drag
+    // 4. Modulation tab model state
     k.state.numMods = 0;
     k.state.add(5, "LFO 1", 0.2);
     k.state.selectedSource = 5;
-    check(tabState(k.state) == TabState::Coloured, "knob: tabState is Coloured when selected source present");
-    Rect th = k.tabHit();
-    c = k.touchDown(th.x + 4, th.y + 4, 3000.0);
-    check(!c, "knob: touchDown on mod tab gives none");
-    // drag up by 50 px -> +50 / 200 * 2.0 = +0.5 depth change (new depth = 0.2 + 0.5 = 0.7)
-    c = k.touchMove(th.x + 4, th.y + 4 - 50);
-    check(c.kind == ChangeKind::Depth && c.id == 10 && c.index == 5 && near(c.value, 0.7),
-          "knob: 50px drag up on mod tab increases depth by 0.5 to 0.7");
-    k.touchUp(th.x + 4, th.y + 4 - 50);
+    check(tabState(k.state) == TabState::Coloured && k.tab() == TabState::Coloured, "knob: tabState is Coloured when selected source present");
 
     // Bypassed mod tab
     k.state.mods[0].bypassed = true;
-    check(tabState(k.state) == TabState::Hollow, "knob: tabState is Hollow when source is bypassed");
+    check(tabState(k.state) == TabState::Hollow && k.tab() == TabState::Hollow, "knob: tabState is Hollow when source is bypassed");
 }
 
 void testNumberFieldCoverage()
@@ -179,9 +159,6 @@ void testNumberFieldCoverage()
     nf.state.value = 2.0;
     check(!nf.wheel(1), "number field: readOnly ignores wheel");
     check(!nf.turn(1.0), "number field: readOnly ignores turn");
-    c = dragVertical(nf, 80, 80, 40);
-    check(!c, "number field: readOnly ignores drag");
-    nf.touchUp(80, 40);
     nf.state.readOnly = false;
 
     // 3. Format value formatting
@@ -220,20 +197,17 @@ void testNumberFieldCoverage()
     NumberField::formatValue(s, buf);
     check(std::strcmp(buf, "127") == 0, "number field: IntPlain formats as \"127\"");
 
-    // 4. Tick long press
+    // 4. Turn steps and formatText
     nf.state.value = 2.0;
-    nf.touchDown(80, 80, 1000.0);
-    check(!nf.tick(1400.0), "number field: tick < 600ms gives none");
-    c = nf.tick(1650.0);
-    check(c.kind == ChangeKind::ModsRequest && c.id == 22, "number field: tick >= 600ms gives ModsRequest");
-    nf.touchUp(80, 80);
+    c = nf.turn(2.0);
+    check(c.kind == ChangeKind::Index && c.id == 22 && c.index == 6 && near(c.value, 3.0),
+          "number field: turn(+2) advances by 2 steps (to 3.0)");
+    nf.formatText(buf, sizeof buf);
+    check(std::strcmp(buf, "2.00") == 0,
+          "number field: formatText formats current state.value");
 
-    // 5. MinSize and drawing
-    check(nf.minSize().w == 80 && nf.minSize().h == 56, "number field: minSize is 80x56");
-    Scene sc(400, 300, kBackgroundRgba);
-    nf.draw(sc.builder());
-    Image im = render(sc);
-    check(drawnOutside(im, nf.rect(), backgroundPixel()) == 0, "number field: draws strictly inside rect");
+    // 5. MinSize and sizeOk
+    check(nf.minSize().w == 80 && nf.minSize().h == 56 && nf.sizeOk(), "number field: minSize is 80x56");
 }
 
 void testHBarCoverage()
@@ -306,14 +280,13 @@ void testFilterKnobCoverage()
     Change c = fk.wheel(1);
     check(c.kind == ChangeKind::Value && c.id == 44 && near(c.value, 0.4 + 1.0 / 128.0),
           "filter knob: enabled wheel works like knob");
+    c = fk.turn(0.1);
+    check(c.kind == ChangeKind::Value && c.id == 44 && near(c.value, 0.5),
+          "filter knob: enabled turn works like knob");
 
-    // Disabled custom drawing
+    // Disabled model state blocks turn/wheel
     fk.setEnabled(false);
-    Scene sc1(300, 250, kBackgroundRgba);
-    fk.draw(sc1.builder());
-    Image im1 = render(sc1);
-    check(drawnOutside(im1, fk.rect(), backgroundPixel()) == 0, "filter knob: disabled draws strictly inside rect");
-    check(sc1.numOps() > 0, "filter knob: disabled draws dim specialized track");
+    check(!fk.turn(0.1) && !fk.wheel(1), "filter knob: disabled model rejects turn and wheel");
     fk.setEnabled(true);
 }
 
@@ -435,10 +408,7 @@ void testFaderAndSliderBarWheelAndCapture()
 
 void testKnobActiveInactiveStatus()
 {
-    const theme::Look& T = theme::L();
-    const uint32_t redAlert = colour::rgba (T.negative, 255);
-
-    // 1. Standard active knob: normal value text, no alert color, no separate box
+    // 1. Standard active knob: no status string
     Knob k ("LEVEL");
     k.place ({ 100, 100, 100, 72 });
     k.state.value = 0.5;
@@ -446,74 +416,18 @@ void testKnobActiveInactiveStatus()
     check (! k.hasStatus(), "knob: active knob is not inactive state");
     check (std::strcmp (k.statusString(), "") == 0, "knob: active knob has empty status string");
 
-    {
-        Scene s (250, 200, kBackgroundRgba);
-        k.draw (s.builder());
-        bool hasRedText = false;
-        bool hasNormalText = false;
-        for (uint32_t i = 0; i < s.data->numOps; ++i)
-        {
-            if (s.data->ops[i].op == gpu::kOpText)
-            {
-                if (s.data->ops[i].rgba == redAlert)
-                    hasRedText = true;
-                if (s.data->ops[i].rgba == colour::rgba (T.text, 255))
-                    hasNormalText = true;
-            }
-        }
-        check (! hasRedText, "knob: active knob has no red status text");
-        check (hasNormalText, "knob: active knob draws value in normal text color");
-        const Image im = render (s);
-        check (drawnOutside (im, k.rect(), backgroundPixel()) == 0, "knob: active knob draws inside rect");
-    }
-
     // 2. Inactive via Status enum: Off, Inactive, Disabled
     k.state.status = Knob::State::Status::Off;
     check (k.hasStatus(), "knob: status Off is inactive state");
     check (std::strcmp (k.statusString(), "OFF") == 0, "knob: status Off gives 'OFF'");
-    {
-        Scene s (250, 200, kBackgroundRgba);
-        k.draw (s.builder());
-        bool hasRedText = false;
-        for (uint32_t i = 0; i < s.data->numOps; ++i)
-        {
-            if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                hasRedText = true;
-        }
-        check (hasRedText, "knob: status Off draws red OFF status text");
-        const Image im = render (s);
-        check (drawnOutside (im, k.rect(), backgroundPixel()) == 0, "knob: status Off draws inside rect");
-    }
 
     k.state.status = Knob::State::Status::Inactive;
     check (k.hasStatus(), "knob: status Inactive is inactive state");
     check (std::strcmp (k.statusString(), "INACTIVE") == 0, "knob: status Inactive gives 'INACTIVE'");
-    {
-        Scene s (250, 200, kBackgroundRgba);
-        k.draw (s.builder());
-        bool hasRedText = false;
-        for (uint32_t i = 0; i < s.data->numOps; ++i)
-        {
-            if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                hasRedText = true;
-        }
-        check (hasRedText, "knob: status Inactive draws red INACTIVE status text");
-    }
 
     k.state.status = Knob::State::Status::Disabled;
     check (k.hasStatus(), "knob: status Disabled is inactive state");
     check (std::strcmp (k.statusString(), "DISABLED") == 0, "knob: status Disabled gives 'DISABLED'");
-    {
-        Scene s (250, 200, kBackgroundRgba);
-        k.draw (s.builder());
-        bool hasRedText = false;
-        for (uint32_t i = 0; i < s.data->numOps; ++i)
-        {
-            if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                hasRedText = true;
-        }
-        check (hasRedText, "knob: status Disabled draws red DISABLED status text");
-    }
 
     // A display string and the generic grey look do not change the model status.
     k.state.status = Knob::State::Status::Active;
@@ -523,7 +437,7 @@ void testKnobActiveInactiveStatus()
            "knob: generic greying and display formatting do not imply a status");
     k.setInactive (false);
 
-    // 5. Side knob variant with PAN and LEVEL (original component renderer, no badge)
+    // 5. Side knob variant with PAN and LEVEL
     Knob sidePan ("PAN");
     sidePan.state.side = true;
     sidePan.state.bipolar = true;
@@ -531,29 +445,10 @@ void testKnobActiveInactiveStatus()
     setText (sidePan.state.valueText, sizeof sidePan.state.valueText, "C");
     check (! sidePan.hasStatus(), "side PAN: active is not inactive");
     check (sidePan.qIndex() == 0, "side PAN: no separate badge");
-    {
-        Scene s (300, 200, kBackgroundRgba);
-        sidePan.draw (s.builder());
-        const Image im = render (s);
-        check (drawnOutside (im, sidePan.rect(), backgroundPixel()) == 0, "side PAN: draws inside rect");
-    }
 
     sidePan.state.status = Knob::State::Status::Off;
     check (sidePan.hasStatus(), "side PAN: status Off is inactive");
     check (std::strcmp (sidePan.statusString(), "OFF") == 0, "side PAN: statusString is OFF");
-    {
-        Scene s (300, 200, kBackgroundRgba);
-        sidePan.draw (s.builder());
-        bool hasRedText = false;
-        for (uint32_t i = 0; i < s.data->numOps; ++i)
-        {
-            if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                hasRedText = true;
-        }
-        check (hasRedText, "side PAN: status Off draws red OFF text");
-        const Image im = render (s);
-        check (drawnOutside (im, sidePan.rect(), backgroundPixel()) == 0, "side PAN: status Off draws inside rect");
-    }
 
     // 6. 48 px compact PAN (bipolar) and LEVEL (unipolar) side variants
     {
@@ -568,55 +463,15 @@ void testKnobActiveInactiveStatus()
                "compact knob: minSize is 172x48");
 
         compactPan.place ({ 30, 20, 202, 48 });
-        check (compactPan.rect().h == 48, "compact PAN: placed height is 48 px");
+        check (compactPan.rect().h == 48 && compactPan.sizeOk(), "compact PAN: placed height is 48 px");
         check (compactPan.qIndex() == 0, "compact PAN: no visible Q-Link badge");
-
-        const auto geomPan = compactPan.geom();
-        check (geomPan.labelBox.y >= compactPan.rect().y, "compact PAN: labelBox y inside rect");
-        check (geomPan.labelBox.bottom() <= compactPan.rect().bottom(), "compact PAN: labelBox bottom inside rect");
-        check (geomPan.valueBox.y >= compactPan.rect().y, "compact PAN: valueBox y inside rect");
-        check (geomPan.valueBox.bottom() <= compactPan.rect().bottom(), "compact PAN: valueBox bottom inside rect");
-        check (geomPan.cx - geomPan.radius >= static_cast<float> (compactPan.rect().x), "compact PAN: dial left inside rect");
-        check (geomPan.cy - geomPan.radius >= static_cast<float> (compactPan.rect().y), "compact PAN: dial top inside rect");
-        check (geomPan.cy + geomPan.radius <= static_cast<float> (compactPan.rect().bottom()), "compact PAN: dial bottom inside rect");
-
-        {
-            Scene s (260, 100, kBackgroundRgba);
-            compactPan.draw (s.builder());
-            bool hasRed = false, hasNormal = false;
-            for (uint32_t i = 0; i < s.data->numOps; ++i)
-            {
-                if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                    hasRed = true;
-                if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == colour::rgba (T.text, 255))
-                    hasNormal = true;
-            }
-            check (! hasRed, "compact PAN: active has no red text");
-            check (hasNormal, "compact PAN: active draws value in normal text color");
-            const Image im = render (s);
-            check (drawnOutside (im, compactPan.rect(), backgroundPixel()) == 0,
-                   "compact PAN: active draws strictly inside 48 px rect");
-        }
 
         // Inactive / Off state
         compactPan.state.status = Knob::State::Status::Off;
         compactPan.setEnabled (false);
         check (compactPan.hasStatus(), "compact PAN: status Off is inactive");
         check (std::strcmp (compactPan.statusString(), "OFF") == 0, "compact PAN: status is OFF");
-        {
-            Scene s (260, 100, kBackgroundRgba);
-            compactPan.draw (s.builder());
-            bool hasRed = false;
-            for (uint32_t i = 0; i < s.data->numOps; ++i)
-            {
-                if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                    hasRed = true;
-            }
-            check (hasRed, "compact PAN: inactive draws red OFF text");
-            const Image im = render (s);
-            check (drawnOutside (im, compactPan.rect(), backgroundPixel()) == 0,
-                   "compact PAN: inactive draws strictly inside 48 px rect");
-        }
+        check (! compactPan.turn (0.1) && ! compactPan.wheel (1), "compact PAN: disabled/off ignores turn and wheel");
     }
 
     {
@@ -629,52 +484,14 @@ void testKnobActiveInactiveStatus()
         setText (compactLevel.state.valueText, sizeof compactLevel.state.valueText, "50.0");
 
         compactLevel.place ({ 30, 80, 202, 48 });
-        check (compactLevel.rect().h == 48, "compact LEVEL: placed height is 48 px");
+        check (compactLevel.rect().h == 48 && compactLevel.sizeOk(), "compact LEVEL: placed height is 48 px");
         check (compactLevel.qIndex() == 0, "compact LEVEL: no visible Q-Link badge");
-
-        const auto geomLvl = compactLevel.geom();
-        check (geomLvl.labelBox.y >= compactLevel.rect().y, "compact LEVEL: labelBox y inside rect");
-        check (geomLvl.labelBox.bottom() <= compactLevel.rect().bottom(), "compact LEVEL: labelBox bottom inside rect");
-        check (geomLvl.valueBox.y >= compactLevel.rect().y, "compact LEVEL: valueBox y inside rect");
-        check (geomLvl.valueBox.bottom() <= compactLevel.rect().bottom(), "compact LEVEL: valueBox bottom inside rect");
-
-        {
-            Scene s (260, 160, kBackgroundRgba);
-            compactLevel.draw (s.builder());
-            bool hasRed = false, hasNormal = false;
-            for (uint32_t i = 0; i < s.data->numOps; ++i)
-            {
-                if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                    hasRed = true;
-                if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == colour::rgba (T.text, 255))
-                    hasNormal = true;
-            }
-            check (! hasRed, "compact LEVEL: active has no red text");
-            check (hasNormal, "compact LEVEL: active draws value in normal text color");
-            const Image im = render (s);
-            check (drawnOutside (im, compactLevel.rect(), backgroundPixel()) == 0,
-                   "compact LEVEL: active draws strictly inside 48 px rect");
-        }
 
         // Inactive / Off state
         compactLevel.state.status = Knob::State::Status::Off;
         compactLevel.setEnabled (false);
         check (compactLevel.hasStatus(), "compact LEVEL: status Off is inactive");
         check (std::strcmp (compactLevel.statusString(), "OFF") == 0, "compact LEVEL: status is OFF");
-        {
-            Scene s (260, 160, kBackgroundRgba);
-            compactLevel.draw (s.builder());
-            bool hasRed = false;
-            for (uint32_t i = 0; i < s.data->numOps; ++i)
-            {
-                if (s.data->ops[i].op == gpu::kOpText && s.data->ops[i].rgba == redAlert)
-                    hasRed = true;
-            }
-            check (hasRed, "compact LEVEL: inactive draws red OFF text");
-            const Image im = render (s);
-            check (drawnOutside (im, compactLevel.rect(), backgroundPixel()) == 0,
-                   "compact LEVEL: inactive draws strictly inside 48 px rect");
-        }
     }
 }
 

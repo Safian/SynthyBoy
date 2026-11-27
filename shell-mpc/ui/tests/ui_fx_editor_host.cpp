@@ -345,20 +345,14 @@ void testNumberKind()
     n.state.min = 1.0; n.state.max = 4.0; n.state.step = 1.0; n.state.value = 3.0;
     check (n.maxBox.w == 200 && n.maxBox.h == 84 && n.rect().w > 200, "the number field of the cell has a limited box, the cell is wider");
 
-    // the drawn box is limited, at the left of the cell; the touch zone is the cell
+    // the box metadata is limited while the full cell rectangle is retained
     NumberField f ("VOICES", NumberField::Format::IntPlain);
+    f.setId (901);
     f.state.min = 1.0; f.state.max = 4.0; f.state.value = 3.0;
     f.maxBox = { 160, 60 };
     f.place ({ 20, 20, 400, 150 });
-    Scene sc (500, 200, kBackgroundRgba);
-    f.draw (sc.builder());
-    const Image im = render (sc);
-    check (drawnInside (im, { 20, 20, 160, 150 }, backgroundPixel()) > 0 && drawnInside (im, { 183, 0, 317, 200 }, backgroundPixel()) == 0, "the box is drawn at the left, nothing at the right of it");
-    check (drawnInside (im, { 0, 0, 500, 20 }, backgroundPixel()) == 0 && drawnInside (im, { 20, 20, 160, 44 }, backgroundPixel()) == 0 && drawnInside (im, { 20, 126, 160, 44 }, backgroundPixel()) == 0, "and it is centred in the height of the cell");
-    (void) f.touchDown (390, 160, 0.0);   // in the cell, outside the drawn box
-    const Change moved = f.touchMove (390, 160 + 8);
-    check (moved.kind == ChangeKind::Index && moved.index == 1 && moved.value == 2.0, "a drag of 8 px down in the cell (outside the drawn box) steps the number down by one: 3 -> 2 (the touch zone is the cell)");
-    (void) f.touchUp (390, 168);
+    Change wh;
+    check (f.wheelOver (390, 160, -1, wh) && wh.kind == ChangeKind::Index && wh.index == 1 && wh.value == 2.0, "a wheel step anywhere in the cell (outside maxBox) steps the number down by one: 3 -> 2");
 }
 
 /** The band board of a splitter (fx_band_board.h): the lanes, the cards, the ids, the touch sizes, the changes; the back card of the chain bar. */

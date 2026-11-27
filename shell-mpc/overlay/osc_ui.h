@@ -97,7 +97,7 @@ public:
     struct Item
     {
         int id = 0;
-        ui::Component* c = nullptr;
+        ui::ControlModel* c = nullptr;
         T type = T::Inert;
         std::string key;           // the key of the engine parameter ("" = none: the control is disabled)
         int param = -1;            // its table index (-1: none)
@@ -564,12 +564,12 @@ public:
         for (int field = 0; field < n::kFields; ++field)
         {
             if (compactNativePaint_[field] != nullptr)
-                compactNativePaint_[field]->setHostPainted (false);
+                ui::setHostPainted (compactNativePaint_[field], false);
             const bool native = shown && items[field] != nullptr;
             compactNativePaint_[field] = native ? items[field]->c : nullptr;
             if (native)
             {
-                compactNativePaint_[field]->setHostPainted (true);
+                ui::setHostPainted (compactNativePaint_[field], true);
                 const auto cr = n::contractRect (state.layout, field);
                 compactNativeCells_[field] = cr.w > 0 && cr.h > 0
                     ? ui::Rect { cr.x, kTabY + cr.y, cr.w, cr.h }
@@ -671,7 +671,7 @@ public:
         for (size_t slot = 0; slot < fields.size(); ++slot)
         {
             if (nativeSettingsPaint_[slot] != nullptr)
-                nativeSettingsPaint_[slot]->setHostPainted (false);
+                ui::setHostPainted (nativeSettingsPaint_[slot], false);
             const Item* field = fields[slot];
             nativeSettingsPaint_[slot] = field && !(full_.hasNativeTune() && field->id == kTuneOct) ? field->c : nullptr;
         }
@@ -679,7 +679,7 @@ public:
         for (auto* component : nativeSettingsPaint_)
             if (component != nullptr && next < nativeSettingsCells_.size())
             {
-                component->setHostPainted (true);
+                ui::setHostPainted (component, true);
                 nativeSettingsCells_[next++] = component->rect();
             }
         full_.setNativeCells (next > 0 ? &nativeSettingsCells_ : nullptr);
@@ -809,7 +809,7 @@ public:
     {
         namespace n = nativeui::oscdetail;
         if (auto* blend = full_.panel.part (ui::PanelSlot::SubBlend))
-            blend->setHostPainted (false);
+            ui::setHostPainted (blend, false);
         nativeDetailItems_.fill (nullptr);
         nativeDetailBlocks_.fill (nullptr);
         nativeDetailMask_ = nullptr;
@@ -823,7 +823,6 @@ public:
         if (! enabled || full_.inactive() || (! root && ! spec && ! detail))
         {
             full_.more.setHostPainted (root && full_.hasNativeTune());
-            full_.subBlend.setHostPainted (false);
             if (nativeDetail_ >= n::Plain && spec)
                 spec_.relayoutNow();
             nativeDetail_ = n::Hidden;
@@ -841,7 +840,6 @@ public:
         state.page = pageTop_;
         state.type = typeRaw_;
         full_.more.setHostPainted (root && sel_ != playosc::kSub && sel_ != playosc::kNoise);
-        full_.subBlend.setHostPainted (root && sel_ == playosc::kSub);
         const auto action = [&] (int field, int id, const char* label)
         {
             state.fields[field] = { id, id, n::Action };
@@ -857,7 +855,7 @@ public:
                     state.fields[0] = { blend->param, blend->id, n::Uni };
                     state.labels[0] = "BLEND";
                     nativeDetailItems_[0] = blend;
-                    blend->c->setHostPainted (true);
+                    ui::setHostPainted (blend->c, true);
                 }
             }
             else
@@ -897,7 +895,7 @@ public:
             nativeDetailItems_[field] = item;
             if (item->type == T::Mask)
             {
-                nativeDetailMask_ = item->c;
+                nativeDetailMask_ = dynamic_cast<ui::Component*> (item->c);
                 auto area = nativeDetailRect (field);
                 area.w *= 3;
                 area.h = nativeDetailMask_->minSize().h;
@@ -1204,7 +1202,7 @@ private:
         return { 4, kTabY + n::kGraphY, kCanvasW - 8, n::kGraphHeight };
     }
 
-    std::pair<int, int> nativeDetailQ (const ui::Component* member) const noexcept
+    std::pair<int, int> nativeDetailQ (const ui::ControlModel* member) const noexcept
     {
         if (member == nullptr)
             return { -1, -1 };
@@ -1218,7 +1216,7 @@ private:
         return { -1, -1 };
     }
 
-    void focusNativeDetail (const ui::Component& part, IInstanceView& v)
+    void focusNativeDetail (const ui::ControlModel& part, IInstanceView& v)
     {
         const int group = nativeDetailQ (&part).first;
         if (group < 0)
@@ -1320,7 +1318,7 @@ private:
     ui::OscInstance uiInstance() const noexcept { return static_cast<ui::OscInstance> (sel_ - 1); }
     ui::OscKind kindOfRaw (int raw) const noexcept { return raw == 4 ? ui::OscKind::Multisample : raw == 2 ? ui::OscKind::Granular : raw == 1 ? ui::OscKind::Sample : raw == 3 ? ui::OscKind::Spectral : ui::OscKind::Wavetable; }
 
-    void bind (std::vector<Item>& list, int id, ui::Component* c, T type, const std::string& suffix, bool alwaysOff = false, const char* second = nullptr)
+    void bind (std::vector<Item>& list, int id, ui::ControlModel* c, T type, const std::string& suffix, bool alwaysOff = false, const char* second = nullptr)
     {
         Item it;
         it.id = id; it.c = c; it.type = type; it.alwaysOff = alwaysOff; it.full = bindingFull_;
@@ -1329,7 +1327,10 @@ private:
         if (second != nullptr)
             it.param2 = indexOfKey (prefix_ + second);
         if (c != nullptr)
+        {
             c->setId (id);
+            c->setParam (it.param);
+        }
         list.push_back (it);
     }
 
@@ -1491,7 +1492,7 @@ private:
                 continue;
             if (bindingFull_ && sel_ == playosc::kNoise && (it.slot == PanelSlot::Filter || it.slot == PanelSlot::NoiseStereo))
                 continue;
-            ui::Component* c = panel.part (it.slot);
+            ui::ControlModel* c = panel.part (it.slot);
             if (c == nullptr)
                 continue;
             int id = base + static_cast<int> (it.slot);
@@ -1750,7 +1751,7 @@ private:
         for (int i = 0; i < sp->numCtls; ++i)
         {
             const oscspec::Ctl& c = sp->ctls[i];
-            ui::Component* comp = spec_.control (i);
+            ui::ControlModel* comp = spec_.control (i);
             T t = T::Knob;
             std::string key = c.key;
             if (c.kind == oscspec::K::Stepper) t = T::Stepper;
@@ -2964,13 +2965,13 @@ public:   // the Play view reads the targets of the compact group and sets its b
     void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.basic.group.member (i)); }
     void setCompactBlock (int block) noexcept { compact_.basic.group.setBlock (block); }
 private:
-    int paramOfMember (const ui::Component* m) const noexcept
+    int paramOfMember (const ui::ControlModel* m) const noexcept
     {
         while (m != nullptr)
         {
             for (const Item& it : page_) if (it.c == m) return paramOfItem (it);
             for (const Item& it : main_) if (it.c == m) return paramOfItem (it);
-            m = m->primaryChild();
+            m = m->primaryModel();
         }
         return -1;
     }
@@ -3082,7 +3083,7 @@ private:
     // ======================================================================================================================================================================
     ui::OscillatorCompact compact_;
     CompactNativeCells compactNativeCells_ {};
-    std::array<ui::Component*, nativeui::playoscui::kFields> compactNativePaint_ {};
+    std::array<ui::ControlModel*, nativeui::playoscui::kFields> compactNativePaint_ {};
     ui::OscillatorFullScreen full_;
     ui::DetailPage detail_;
     ui::ModulationsPage mods_;
@@ -3091,7 +3092,7 @@ private:
     bool srcPopup_ = false;   // the list of the source selector of the compact view is open (main state only)
     bool nativeSelector_ = false;
     ui::OscillatorFullScreen::NativeCells nativeSettingsCells_ {};
-    std::array<ui::Component*, nativeui::osc::kSettingsAll> nativeSettingsPaint_ {};
+    std::array<ui::ControlModel*, nativeui::osc::kSettingsAll> nativeSettingsPaint_ {};
     nativeui::oscdetail::Frame nativeDetail_ = nativeui::oscdetail::Hidden;
     nativeui::oscdetail::State nativeDetailState_;
     std::array<Item*, nativeui::oscdetail::kCells> nativeDetailItems_ {};

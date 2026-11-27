@@ -205,7 +205,7 @@ struct Rig
         ui.touch (e, stack, inst, now + holdMs);
         refresh();
     }
-    void tap (const ui::Component& c, int holdMs = 40) { tapAt (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
+    void tap (const ui::ControlModel& c, int holdMs = 40) { tapAt (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
     void drag (int x0, int y0, int x1, int y1, bool lift)
     {
         TouchEvent e; e.kind = TouchEvent::Down; e.x = x0; e.y = y0;

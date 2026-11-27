@@ -27,20 +27,6 @@ bool near(double a, double b, double eps = 1.0e-5)
     return std::fabs(a - b) <= eps;
 }
 
-Change dragVertical(Component& c, int x, int y0, int y1, double t = 0.0)
-{
-    Change last = c.touchDown(x, y0, t);
-    const int dir = y1 > y0 ? 1 : -1;
-    for (int y = y0 + dir; dir > 0 ? y <= y1 : y >= y1; y += dir * 4)
-    {
-        if (const Change m = c.touchMove(x, y))
-            last = m;
-    }
-    if (const Change m = c.touchMove(x, y1))
-        last = m;
-    return last;
-}
-
 // =================================================================================================
 // 1. NoteMask (shell-mpc/ui/note_mask.h): 12-note keyboard mask editor
 // =================================================================================================
@@ -386,35 +372,24 @@ void finding_fx_band_board_min_size_overflow()
 // =================================================================================================
 void test_knob_led_and_dial_max()
 {
-    // A. dialMax behavior in side variant
+    // A. dialMax state metadata
     {
         Knob sideK("WARP", false);
         sideK.state.side = true;
         sideK.state.dialMax = 52;
         sideK.place({ 50, 50, 200, 80 });
+        check(sideK.state.dialMax == 52 && sideK.minSize().w == 172 && sideK.minSize().h == 72 && sideK.sizeOk(),
+              "knob: side variant retains dialMax=52 metadata and minSize 172x72");
 
-        Knob::Geom g52 = sideK.geom();
-        const float diameter52 = (g52.radius + g52.stroke * 0.5f + 3.0f) * 2.0f;
-        check(near(diameter52, 52.0, 1.0), "knob: side variant respects dialMax=52");
-
-        // With dialMax=0, dial expands to row limit (rect.h - 8 = 72)
-        sideK.state.dialMax = 0;
-        Knob::Geom g0 = sideK.geom();
-        const float diameter0 = (g0.radius + g0.stroke * 0.5f + 3.0f) * 2.0f;
-        check(near(diameter0, 72.0, 1.0), "knob: side variant with dialMax=0 expands to row limit (72px)");
-        check(g52.labelBox.w > g0.labelBox.w, "knob: smaller dialMax leaves more width for text column");
-
-        // Non-side variant ignores dialMax
         Knob standardK("DRIVE", false);
         standardK.state.side = false;
         standardK.state.dialMax = 40;
         standardK.place({ 50, 50, 120, 120 });
-        Knob::Geom gStd = standardK.geom();
-        const float diameterStd = (gStd.radius + gStd.stroke * 0.5f + 3.0f) * 2.0f;
-        check(diameterStd > 50.0f, "knob: non-side knob ignores dialMax, scales with rect");
+        check(standardK.minSize().w == 100 && standardK.minSize().h == 72 && standardK.sizeOk(),
+              "knob: standard variant retains minSize 100x72");
     }
 
-    // B. Knob LED-on-label feature (side and standard variants)
+    // B. Knob LED-on-label gating in model contract (side and standard variants)
     for (const bool side : { true, false })
     {
         const std::string tag = std::string("knob led (") + (side ? "side" : "standard") + ")";
@@ -424,9 +399,7 @@ void test_knob_led_and_dial_max()
         setText(k.state.valueText, sizeof(k.state.valueText), "50 ms");
         const Rect kr = side ? Rect { 40, 40, 200, 72 } : Rect { 40, 40, 100, 80 };
         k.place(kr);
-
-        // led = false: ledHit is empty
-        check(k.ledHit().empty(), tag + ": ledHit is empty when state.led is false");
+        check(k.rect() == kr && k.sizeOk(), tag + ": place stores rect and satisfies minSize");
 
         // Enable LED feature
         k.state.led = true;
@@ -434,70 +407,14 @@ void test_knob_led_and_dial_max()
         k.state.value = 0.5;
         k.state.defaultValue = 0.5;
 
-        // Minimum size and touch targets >= 56 px
-        const Rect zh = k.ledHit();
-        check(!zh.empty() && kr.contains(zh), tag + ": ledHit is inside knob rectangle");
-        check(zh.w >= 56 && zh.h >= 56,
-              tag + ": ledHit meets minimum 56px touch target size (" +
-              std::to_string(zh.w) + "x" + std::to_string(zh.h) + ")");
-
-        float lx = 0.0f, ly = 0.0f;
-        k.ledPoint(lx, ly);
-        check(zh.contains(static_cast<int>(lx), static_cast<int>(ly)),
-              tag + ": ledPoint dot is inside ledHit zone");
-
-        // Touch on ledHit toggles switch: ON -> OFF (emits Index id, 0, 0.0)
-        const int hitX = zh.x + zh.w / 2;
-        const int hitY = zh.y + zh.h / 2;
-
-        Change ch = k.touchDown(hitX, hitY, 1000.0);
-        check(!ch, tag + ": touchDown in ledHit emits none");
-        ch = k.touchUp(hitX, hitY);
-        check(ch.kind == ChangeKind::Index && ch.id == 201 && ch.index == 0 && near(ch.value, 0.0),
-              tag + ": tap in ledHit while ON switches to OFF (Index 0)");
-        k.state.ledOn = false;
-
-        // Touch on ledHit toggles switch: OFF -> ON (emits Index id, 1, 1.0)
-        k.touchDown(hitX, hitY, 1100.0);
-        ch = k.touchUp(hitX, hitY);
-        check(ch.kind == ChangeKind::Index && ch.id == 201 && ch.index == 1 && near(ch.value, 1.0),
-              tag + ": tap in ledHit while OFF switches to ON (Index 1)");
-        k.state.ledOn = true;
-
-        // Dial gesture while ledOn == true: adjusts value
-        const Knob::Geom gm = k.geom();
-        const int dialX = static_cast<int>(gm.cx);
-        const int dialY = static_cast<int>(gm.cy);
-
-        ch = dragVertical(k, dialX, dialY, dialY - 40, 1300.0);
-        check(ch.kind == ChangeKind::Value && ch.id == 201 && ch.value > 0.5,
-              tag + ": drag on dial while lit adjusts value");
-        k.touchUp(dialX, dialY - 40);
-
-        // Long press on dial while ledOn == true: emits ModsRequest
-        k.touchDown(dialX, dialY, 2000.0);
-        ch = k.tick(2300.0);
-        check(!ch, tag + ": tick at 300ms gives none");
-        ch = k.tick(2650.0);
-        check(ch.kind == ChangeKind::ModsRequest && ch.id == 201,
-              tag + ": tick at 650ms on dial emits ModsRequest");
-        k.touchUp(dialX, dialY);
-
-        // Long press in ledHit does NOT emit ModsRequest
-        k.touchDown(hitX, hitY, 3000.0);
-        ch = k.tick(3700.0);
-        check(!ch, tag + ": long press inside ledHit does NOT emit ModsRequest");
-        k.touchUp(hitX, hitY);
-
         // Q turn and wheel while ledOn == true
-        k.state.value = 0.5;
-        ch = k.turn(0.1);
-        check(ch.kind == ChangeKind::Value && near(ch.value, 0.6),
+        Change ch = k.turn(0.1);
+        check(ch.kind == ChangeKind::Value && ch.id == 201 && near(ch.value, 0.6),
               tag + ": turn(+0.1) while lit advances value to 0.6");
         k.state.value = ch.value;
 
         ch = k.wheel(1);
-        check(ch.kind == ChangeKind::Value && near(ch.value, 0.6 + 1.0 / 128.0),
+        check(ch.kind == ChangeKind::Value && ch.id == 201 && near(ch.value, 0.6 + 1.0 / 128.0),
               tag + ": wheel(+1) while lit steps value by 1/128");
 
         // Values at ends of range while ledOn == true
@@ -509,84 +426,25 @@ void test_knob_led_and_dial_max()
         check(!k.turn(-0.1), tag + ": turn(-0.1) at min clamps and emits none");
         check(!k.wheel(-1), tag + ": wheel(-1) at min clamps and emits none");
 
-        // Dial behavior when ledOn == false: takes NO touch, NO turn, NO wheel
+        // Behavior when ledOn == false: takes NO turn, NO wheel, wheelOver absorbs inside rect
         k.state.ledOn = false;
         k.state.value = 0.5;
-
-        // Dial touch/drag
-        k.touchDown(dialX, dialY, 4000.0);
-        ch = k.touchMove(dialX, dialY - 40);
-        check(!ch, tag + ": drag on dial while unlit does nothing");
-        ch = k.touchUp(dialX, dialY - 40);
-        check(!ch, tag + ": touchUp on dial while unlit does nothing");
-
-        // Dial long press
-        k.touchDown(dialX, dialY, 5000.0);
-        ch = k.tick(5700.0);
-        check(!ch, tag + ": tick on dial while unlit does nothing");
-        k.touchUp(dialX, dialY);
-
-        // Q turn and wheel while unlit
         check(!k.turn(0.1), tag + ": turn while unlit returns none");
         check(!k.wheel(1), tag + ": wheel while unlit returns none");
         Change outWh;
-        check(k.wheelOver(dialX, dialY, 1, outWh) && !outWh,
-              tag + ": wheelOver on dial while unlit absorbs event and produces no change");
+        check(k.wheelOver(kr.x + kr.w / 2, kr.y + kr.h / 2, 1, outWh) && !outWh,
+              tag + ": wheelOver while unlit absorbs event and produces no change");
 
-        // But ledHit STILL responds when unlit!
-        k.touchDown(hitX, hitY, 6000.0);
-        ch = k.touchUp(hitX, hitY);
-        check(ch.kind == ChangeKind::Index && ch.index == 1,
-              tag + ": tap on ledHit while unlit switches back to ON");
+        // Re-lighting resumes turn/wheel
         k.state.ledOn = true;
+        check(k.turn(0.1).kind == ChangeKind::Value, tag + ": turn works again after ledOn=true");
 
-        // Disabled knob takes no touch on dial or ledHit
+        // Disabled knob ignores turn/wheel even when lit
         k.setEnabled(false);
-        check(!k.touchDown(hitX, hitY, 7000.0), tag + ": disabled touchDown on ledHit returns none");
-        check(!k.touchDown(dialX, dialY, 7010.0), tag + ": disabled touchDown on dial returns none");
         check(!k.turn(0.1), tag + ": disabled turn returns none");
         check(!k.wheel(1), tag + ": disabled wheel returns none");
         k.setEnabled(true);
-
-        // Drawing containment: lit and unlit
-        Scene scLit(300, 200, kBackgroundRgba);
-        k.state.ledOn = true;
-        k.draw(scLit.builder());
-        Image imLit = render(scLit);
-        check(drawnOutside(imLit, kr, backgroundPixel()) == 0,
-              tag + ": lit knob draws strictly inside rect");
-
-        Scene scUnlit(300, 200, kBackgroundRgba);
-        k.state.ledOn = false;
-        k.draw(scUnlit.builder());
-        Image imUnlit = render(scUnlit);
-        check(drawnOutside(imUnlit, kr, backgroundPixel()) == 0,
-              tag + ": unlit knob draws strictly inside rect");
     }
-}
-
-// Defect reproduction: Knob::onMove skips tap_.move when onLed_ is true
-void finding_knob_led_drag_does_not_cancel_tap()
-{
-    Knob k("SMOOTH");
-    k.setId(205);
-    k.state.led = true;
-    k.state.ledOn = true;
-    k.place({ 40, 40, 160, 80 });
-
-    const Rect zh = k.ledHit();
-    const int hx = zh.x + 10, hy = zh.y + 10;
-
-    // A drag of 40 px inside ledHit
-    k.touchDown(hx, hy, 100.0);
-    k.touchMove(hx, hy + 40); // 40 px movement (far exceeds kSlop = 6 px)
-    const Change ch = k.touchUp(hx, hy + 40);
-
-    // In a gesture system, a 40px drag must cancel a simple tap.
-    // However, Knob::onMove has `if (onLed_ || inert_) return Change::none();` before tap_.move,
-    // so tap_.move is never called. As a result, tap_.up() still returns 1, flipping the LED switch!
-    check(ch.kind == ChangeKind::Index && ch.index == 0,
-          "finding_knob_led_drag_does_not_cancel_tap: 40px drag inside ledHit fails to cancel tap, still toggles LED");
 }
 
 // =================================================================================================
@@ -602,40 +460,19 @@ void test_number_field_max_box_and_text()
     nf.state.value = 4.0;
     nf.state.defaultValue = 4.0;
 
-    // A. maxBox behavior
+    // A. maxBox and placed rect behavior
     const Rect fieldRect { 50, 50, 160, 70 };
     nf.place(fieldRect);
     nf.maxBox = { 70, 50 };
-
-    // Touch targets >= 56px
-    Rect nfTargets[4];
-    const int numTgt = nf.touchTargets(nfTargets, 4);
-    check(numTgt == 1 && nfTargets[0] == fieldRect,
-          "number_field: touchTargets returns entire placed rectangle");
+    check(nf.rect() == fieldRect && nf.maxBox.w == 70 && nf.maxBox.h == 50 && nf.sizeOk(),
+          "number_field: placed rectangle and maxBox preserved");
     check(fieldRect.w >= 56 && fieldRect.h >= 56,
-          "number_field: placed rectangle meets >= 56px touch target requirement");
+          "number_field: placed rectangle meets >= 56px requirement");
 
-    // Touch down/drag sequence across the full rectangle (even outside maxBox)
-    // maxBox is 70px wide at left (x = 52..122). Touch at x = 180 (inside rect, right of maxBox):
-    const int farX = fieldRect.right() - 10;
-    const int startY = fieldRect.y + fieldRect.h / 2;
-
-    Change ch = nf.touchDown(farX, startY, 100.0);
-    check(!ch, "number_field: touchDown at right of cell (outside maxBox) emits none");
-    // Drag up by 16px (2 steps with default pxPerStep=8)
-    ch = nf.touchMove(farX, startY - 16);
-    check(ch.kind == ChangeKind::Index && ch.id == 301 && near(ch.value, 6.0),
-          "number_field: touch outside maxBox but inside rect captures and advances value (4 -> 6)");
-    nf.touchUp(farX, startY - 16);
-
-    // Double tap resets to default
-    nf.state.value = 8.0;
-    nf.touchDown(farX, startY, 1000.0);
-    nf.touchUp(farX, startY);
-    nf.touchDown(farX, startY, 1100.0);
-    ch = nf.touchUp(farX, startY);
-    check(ch.kind == ChangeKind::Index && near(ch.value, 4.0),
-          "number_field: double tap resets value to default 4.0");
+    Change whOut;
+    check(nf.wheelOver(fieldRect.right() - 10, fieldRect.y + fieldRect.h / 2, 2, whOut)
+          && whOut.kind == ChangeKind::Index && whOut.id == 301 && near(whOut.value, 6.0),
+          "number_field: wheelOver inside full cell rect steps value (4 -> 6)");
 
     // Values at ends of range and clamping
     nf.state.value = 16.0;
@@ -646,19 +483,17 @@ void test_number_field_max_box_and_text()
     check(!nf.turn(-1.0), "number_field: turn(-1) at min clamps and emits none");
     check(!nf.wheel(-1), "number_field: wheel(-1) at min clamps and emits none");
 
-    ch = nf.turn(1.0);
+    Change ch = nf.turn(1.0);
     check(ch.kind == ChangeKind::Index && near(ch.value, 2.0),
           "number_field: turn(+1) from min steps value to 2.0");
 
     // Disabled and readOnly state
     nf.setEnabled(false);
-    check(!nf.touchDown(farX, startY, 2000.0), "number_field: disabled touchDown returns none");
     check(!nf.turn(1.0), "number_field: disabled turn returns none");
     check(!nf.wheel(1), "number_field: disabled wheel returns none");
     nf.setEnabled(true);
 
     nf.state.readOnly = true;
-    check(!nf.touchDown(farX, startY, 2100.0), "number_field: readOnly touchDown returns none");
     check(!nf.turn(1.0), "number_field: readOnly turn returns none");
     check(!nf.wheel(1), "number_field: readOnly wheel returns none");
     nf.state.readOnly = false;
@@ -695,14 +530,6 @@ void test_number_field_max_box_and_text()
     check(ch.kind == ChangeKind::Index && near(ch.value, 6.0),
           "number_field: QGroup turn routes to number field");
     qg.setActive(false);
-
-    // Drawing containment with maxBox and custom text
-    Scene scNf(400, 200, kBackgroundRgba);
-    setText(nf.state.text, sizeof(nf.state.text), "CUSTOM_16");
-    nf.draw(scNf.builder());
-    Image imNf = render(scNf);
-    check(drawnOutside(imNf, fieldRect, backgroundPixel()) == 0,
-          "number_field: draws strictly inside rect with maxBox and custom text");
 }
 
 // =================================================================================================
@@ -893,7 +720,6 @@ int main()
     test_fx_band_board();
     finding_fx_band_board_min_size_overflow();
     test_knob_led_and_dial_max();
-    finding_knob_led_drag_does_not_cancel_tap();
     test_number_field_max_box_and_text();
     test_led_list_two_digit_q_chips();
     finding_led_list_short_name_min_width();

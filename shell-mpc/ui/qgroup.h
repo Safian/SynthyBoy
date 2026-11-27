@@ -7,6 +7,7 @@
 #include <atomic>
 
 #include "core.h"
+#include "model.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -36,7 +37,7 @@ public:
     int block() const noexcept { return block_; }
 
     /** Puts a member into slot 0 .. 3 (null empties it). The frame of the group follows the members' rectangles when it is drawn. */
-    bool set (int slot, Component* c)
+    bool set (int slot, ControlModel* c)
     {
         if (slot < 0 || slot >= kSlots)
             return false;
@@ -53,8 +54,8 @@ public:
         }
         return true;
     }
-    Component* member (int slot) const noexcept { return slot >= 0 && slot < kSlots ? slot_[slot] : nullptr; }
-    int numMembers() const noexcept { int n = 0; for (Component* c : slot_) n += c != nullptr; return n; }
+    ControlModel* member (int slot) const noexcept { return slot >= 0 && slot < kSlots ? slot_[slot] : nullptr; }
+    int numMembers() const noexcept { int n = 0; for (ControlModel* c : slot_) n += c != nullptr; return n; }
     bool active() const noexcept { return active_; }
     void setActive (bool a)
     {
@@ -78,7 +79,7 @@ public:
     Rect rect() const noexcept
     {
         Rect u;
-        for (Component* c : slot_)
+        for (ControlModel* c : slot_)
             if (c)
                 u = Rect::unite (u, c->rect());
         return u;
@@ -115,15 +116,50 @@ public:
     void drawWide (gpu::SceneBuilder&) const {}
     void drawIdle (gpu::SceneBuilder&) const {}
     void drawMapped (gpu::SceneBuilder&) const {}
+    static void drawMappedMembers (gpu::SceneBuilder&, int, const ControlModel* const*, int) {}
     static void drawMappedMembers (gpu::SceneBuilder&, int, const Component* const*, int) {}
 
     /** Route a hardware turn to the active group's member at the same index. */
     Change turn (int knobIndex, double delta)
     {
-        Component* c = member (knobIndex);
+        ControlModel* c = member (knobIndex);
         return active_ && c ? c->turn (delta) : Change::none();
     }
-    /** The adjacency check: how many components of `all` (the leaves of the layout) that are not members, and not parts of a member, overlap the union; `first` gets the first such one. */
+    /** The adjacency check: how many models/components of `all` (the leaves of the layout) that are not members, and not parts of a member, overlap the union; `first` gets the first such one. */
+    int check (ControlModel* const* all, int n, const ControlModel** first = nullptr) const
+    {
+        if (frameless_)
+        {
+            if (first)
+                *first = nullptr;
+            return 0;
+        }
+        const Rect u = frameRect_.empty() ? rect() : frameRect_;
+        ControlModel* own[kSlots * kMaxCheck];
+        int nOwn = 0;
+        for (ControlModel* c : slot_)
+            if (c)
+                nOwn = c->collectModelLeaves (own, nOwn, kSlots * kMaxCheck);
+        int bad = 0;
+        if (first)
+            *first = nullptr;
+        for (int i = 0; i < n; ++i)
+        {
+            const ControlModel* c = all[i];
+            bool mine = false;
+            for (int j = 0; j < nOwn && ! mine; ++j)
+                mine = own[j] == c;
+            for (ControlModel* m : slot_)
+                mine = mine || m == c;
+            if (! mine && c->rect().overlaps (u))
+            {
+                if (bad == 0 && first)
+                    *first = c;
+                ++bad;
+            }
+        }
+        return bad;
+    }
     int check (Component* const* all, int n, const Component** first = nullptr) const
     {
         if (frameless_)
@@ -133,22 +169,23 @@ public:
             return 0;
         }
         const Rect u = frameRect_.empty() ? rect() : frameRect_;
-        Component* own[kSlots * kMaxCheck];
+        ControlModel* own[kSlots * kMaxCheck];
         int nOwn = 0;
-        for (Component* c : slot_)
+        for (ControlModel* c : slot_)
             if (c)
-                nOwn = c->collectLeaves (own, nOwn, kSlots * kMaxCheck);
+                nOwn = c->collectModelLeaves (own, nOwn, kSlots * kMaxCheck);
         int bad = 0;
         if (first)
             *first = nullptr;
         for (int i = 0; i < n; ++i)
         {
             const Component* c = all[i];
+            const ControlModel* cm = c;
             bool mine = false;
             for (int j = 0; j < nOwn && ! mine; ++j)
-                mine = own[j] == c;
-            for (Component* m : slot_)
-                mine = mine || m == c;
+                mine = own[j] == cm;
+            for (ControlModel* m : slot_)
+                mine = mine || m == cm;
             if (! mine && c->rect().overlaps (u))
             {
                 if (bad == 0 && first)
@@ -164,7 +201,7 @@ private:
     Rect frameRect_ = {};
     int block_ = -1, wideOffset_ = 0;
     bool frameless_ = false, inactive_ = false;
-    Component* slot_[kSlots] = {};
+    ControlModel* slot_[kSlots] = {};
     bool active_ = false;
 };
 

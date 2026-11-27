@@ -249,12 +249,12 @@ struct ModRig
         return a;
     }
 
-    bool tapC (const ui::Component& c, int holdMs = 40)
+    bool tapC (const ui::ControlModel& c, int holdMs = 40)
     {
         return tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs);
     }
 
-    bool tapNative (const ui::Component& c, int field, float value = 1.0f)
+    bool tapNative (const ui::ControlModel& c, int field, float value = 1.0f)
     {
         const auto b = c.rect();
         const int x = b.x + b.w / 2, y = b.y + b.h / 2;
@@ -325,7 +325,7 @@ struct MacroRig
         return a;
     }
 
-    bool tapC (const ui::Component& c, int holdMs = 40)
+    bool tapC (const ui::ControlModel& c, int holdMs = 40)
     {
         return tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs);
     }
@@ -718,7 +718,8 @@ void testMacrosView()
     check (r.inst.q[0] == FakeInst::idx ("macro.1") && r.inst.q[3] == FakeInst::idx ("macro.4")
            && r.inst.q[4] == FakeInst::idx ("macro.5") && r.inst.q[7] == FakeInst::idx ("macro.8"),
            "fixed Q targets: Q 1..4 = macro.1..4, Q 5..8 = macro.5..8");
-    r.tap (static_cast<int> (r.ui.view().cards[4].knob.geom().cx), static_cast<int> (r.ui.view().cards[4].knob.geom().cy));
+    const auto card4 = r.ui.view().cards[4].knob.rect();
+    r.tap (card4.x + card4.w / 2, card4.y + card4.h / 2);
     check (r.ui.bank() == 1, "tapping card 5 focuses Bank 2 (5-8)");
     check (r.inst.q[0] == FakeInst::idx ("macro.1") && r.inst.q[4] == FakeInst::idx ("macro.5"),
            "Bank 2 touch focus does not swap Q 1..4 and Q 5..8 target mapping");
@@ -728,10 +729,12 @@ void testMacrosView()
     r.refresh();
     check (r.inst.get ("macro.5") > 20.0f, "turning Q1 in Bank 2 focus increases macro.5");
     // a tap on a card in Bank 1 returns focus to Bank 1
-    r.tap (static_cast<int> (r.ui.view().cards[2].knob.geom().cx), static_cast<int> (r.ui.view().cards[2].knob.geom().cy));
+    const auto card2 = r.ui.view().cards[2].knob.rect();
+    r.tap (card2.x + card2.w / 2, card2.y + card2.h / 2);
     check (r.ui.bank() == 0, "a tap on a card of Bank 1 makes Bank 1 the focused Q group");
     // returning to the page restores Bank 1 focus and keeps fixed Q mapping
-    r.tap (static_cast<int> (r.ui.view().cards[5].knob.geom().cx), static_cast<int> (r.ui.view().cards[5].knob.geom().cy));
+    const auto card5 = r.ui.view().cards[5].knob.rect();
+    r.tap (card5.x + card5.w / 2, card5.y + card5.h / 2);
     r.refresh();
     check (r.ui.bank() == 1 && r.inst.q[0] == FakeInst::idx ("macro.1") && r.inst.q[4] == FakeInst::idx ("macro.5"), "Bank 2 focused with fixed Q targets before leaving page");
     r.ui.forgetQGroup();   // the page is shown again (PageView::onShown)
@@ -1072,7 +1075,7 @@ void testStandaloneModNativeControls()
     ModRig r;
     r.ui.setNativeControls (true);
     auto& m = r.ui.matrix();
-    auto covers = [&] (const ui::Component& control)
+    auto covers = [&] (const ui::ControlModel& control)
     {
         const auto b = control.rect();
         return r.ui.covers (b.x + b.w / 2, b.y + b.h / 2);
@@ -1083,7 +1086,7 @@ void testStandaloneModNativeControls()
         r.inst.nativeMod.report (snap);
         r.inst.nativeMod.post (snap, value);
     };
-    auto centrePixel = [&] (const ui::Component& control)
+    auto centrePixel = [&] (const ui::ControlModel& control)
     {
         auto data = std::make_unique<gpu::SceneData>();
         gpu::SceneBuilder sb (*data);

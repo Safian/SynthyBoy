@@ -345,7 +345,7 @@ public:
     int numParts() const noexcept { return nItems_; }
 
     /** The part of a slot (null when the preset has none). */
-    Component* part (PanelSlot s) const noexcept
+    ControlModel* part (PanelSlot s) const noexcept
     {
         for (int i = 0; i < nItems_; ++i)
             if (items_[i].def->slot == s)
@@ -407,7 +407,7 @@ public:
     UnisonBox* unison() const noexcept { return part (PanelSlot::Unison) ? const_cast<UnisonBox*> (&unison_) : nullptr; }
     WarpPair* warp() const noexcept { return part (PanelSlot::Warp) ? const_cast<WarpPair*> (&warp_) : nullptr; }
     /** The rectangle a part got (the cells it covers). */
-    Rect cellRect (PanelSlot s) const noexcept { const Component* c = part (s); return c ? c->rect() : Rect {}; }
+    Rect cellRect (PanelSlot s) const noexcept { const ControlModel* c = part (s); return c ? c->rect() : Rect {}; }
 
     Size minSize() const override
     {
@@ -433,7 +433,7 @@ public:
 
 protected:
     static constexpr int kMargin = 4;
-    struct Item { const PanelItem* def = nullptr; Component* comp = nullptr; };
+    struct Item { const PanelItem* def = nullptr; ControlModel* comp = nullptr; };
 
     void layout() override
     {

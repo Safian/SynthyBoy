@@ -1957,7 +1957,7 @@ private:
                 }
                 for (int i = 0; i < 4; ++i)
                 {
-                    const ui::Component* m = full_.groups[k].member (i);
+                    const ui::ControlModel* m = full_.groups[k].member (i);
                     const bool allow = (k == 2 && i == 1) ? anyOn : selOn;
                     t[i] = (allow && m != nullptr) ? paramOfMember (m) : -1;
                 }
@@ -1997,7 +1997,7 @@ private:
             {
                 for (int i = 0; i < 4; ++i)
                 {
-                    const ui::Component* m = full_.groups[ids[k]].member (i);
+                    const ui::ControlModel* m = full_.groups[ids[k]].member (i);
                     const bool allow = (ids[k] == 2 && i == 1) ? anyOn : selOn;
                     t[i] = (allow && m != nullptr) ? paramOfMember (m) : -1;
                 }
@@ -2008,13 +2008,13 @@ private:
             qSlots_.publish (v, 0, 0, [] (int, int*) {});
         ui::setText (qName_, sizeof qName_, name);
     }
-    int paramOfMember (const ui::Component* m) const noexcept
+    int paramOfMember (const ui::ControlModel* m) const noexcept
     {
         while (m != nullptr)
         {
             if (m->id() > 0)
                 return paramForId (m->id(), editFilter_);
-            m = m->primaryChild();
+            m = m->primaryModel();
         }
         return -1;
     }

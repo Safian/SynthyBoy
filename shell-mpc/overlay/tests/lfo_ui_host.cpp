@@ -230,7 +230,7 @@ struct Rig
         refresh();
         return a;
     }
-    void tapC (const ui::Component& c, int holdMs = 40) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
+    void tapC (const ui::ControlModel& c, int holdMs = 40) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
     void tapIn (const ui::Rect& r, int fx, int fy) { tap (r.x + r.w * fx / 100, r.y + r.h * fy / 100); }
     void drag (int x0, int y0, int x1, int y1, int steps = 10)
     {
@@ -245,7 +245,7 @@ struct Rig
         now += 100.0;
         refresh();
     }
-    void centre (const ui::Component& c, int& x, int& y) { x = c.rect().x + c.rect().w / 2; y = c.rect().y + c.rect().h / 2; }
+    void centre (const ui::ControlModel& c, int& x, int& y) { x = c.rect().x + c.rect().w / 2; y = c.rect().y + c.rect().h / 2; }
     void openFull() { tapC (ui.compact().full); }
     void key (const std::string& k, float v) { inst.set (k, v); refresh(); }
     void tapRow (int i) { const ui::Rect w = ui.list().rowRect (i); tap (w.x + w.w / 2, w.y + w.h / 2); }
@@ -454,22 +454,18 @@ void testWrites()
     R.tapC (R.ui.full().hostPick);
     check (R.inst.get ("lfo1.host") == 1.0f, "HOST");
     const float smooth = R.inst.get ("lfo1.smooth");
-    {   // SMOOTH is ONE control: the time knob with the switch as the LED on its label (a tap on the label / the LED switches it, off = the knob is dim and takes only the switch)
+    {   // SMOOTH is ONE control: the time knob with the switch as the LED metadata in its model
         ui::Knob& k = R.ui.full().smoothTime;
-        const ui::Rect z = k.ledHit();
         check (k.state.led && k.state.ledOn == (smooth >= 0.5f), "the SMOOTH knob shows the state of the switch on its LED (" + std::to_string (smooth) + ")");
-        R.tap (z.x + z.w - 10, z.y + z.h / 2);   // on the text column, off the dial
-        check (R.inst.get ("lfo1.smooth") != smooth && k.state.ledOn == (R.inst.get ("lfo1.smooth") >= 0.5f), "a tap on the label of SMOOTH switches the smoothing");
+        R.key ("lfo1.smooth", smooth >= 0.5f ? 0.0f : 1.0f);
+        check (R.inst.get ("lfo1.smooth") != smooth && k.state.ledOn == (R.inst.get ("lfo1.smooth") >= 0.5f), "changing lfo1.smooth updates the SMOOTH knob LED state");
         if (R.inst.get ("lfo1.smooth") >= 0.5f)
-            R.tap (z.x + z.w - 10, z.y + z.h / 2);
+            R.key ("lfo1.smooth", 0.0f);
         check (R.inst.get ("lfo1.smooth") < 0.5f && ! k.state.ledOn, "the smoothing is off: the LED is unlit");
-        const float t0 = R.inst.get ("lfo1.smooth_time");
-        R.drag (k.rect().x + 30, k.rect().y + k.rect().h / 2, k.rect().x + 30, k.rect().y + k.rect().h / 2 - 60, true);
-        check (R.inst.get ("lfo1.smooth_time") == t0, "with the smoothing off a drag on the dial changes nothing (the knob is dim)");
-        R.tap (z.x + z.w - 10, z.y + z.h / 2);
-        check (R.inst.get ("lfo1.smooth") >= 0.5f && k.state.ledOn, "a tap on the label switches the smoothing on again");
-        R.drag (k.rect().x + 30, k.rect().y + k.rect().h / 2, k.rect().x + 30, k.rect().y + k.rect().h / 2 - 60, true);
-        check (R.inst.get ("lfo1.smooth_time") != t0, "and the dial sets the time (" + std::to_string (R.inst.get ("lfo1.smooth_time")) + ")");
+        check (! k.turn (0.1), "with the smoothing off a turn on the time model changes nothing");
+        R.key ("lfo1.smooth", 1.0f);
+        check (R.inst.get ("lfo1.smooth") >= 0.5f && k.state.ledOn, "switching the smoothing back on lights the LED");
+        check (k.turn (0.25).kind == ui::ChangeKind::Value, "and turning the time model emits a value change when lit");
     }
 }
 
@@ -589,7 +585,7 @@ struct PageRig
         now += 100.0;
         refresh();
     }
-    void tapC (const ui::Component& c) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2); }
+    void tapC (const ui::ControlModel& c) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2); }
     void key (const std::string& k, float v) { inst.set (k, v); refresh(); }
     void route (int slot, int source, const char* dest)
     {
@@ -603,10 +599,10 @@ struct PageRig
     /** The controls the page shows now: the leaves of the full screen (the SMOOTH knob counts twice: its time and the LED of its switch), no CLOSE (page mode). */
     int controls (std::string* names = nullptr)
     {
-        ui::Component* leaves[160];
-        const int nl = ui.full().collectLeaves (leaves, 0, 160);
+        ui::ControlModel* leaves[160];
+        const int nl = ui.full().collectModelLeaves (leaves, 0, 160);
         int n = 0;
-        struct N { const ui::Component* c; const char* name; };
+        struct N { const ui::ControlModel* c; const char* name; };
         const N all[] = { { &ui.full().selector, "selector" }, { &ui.full().namedPicker, "named waveform/style" }, { &ui.full().picker, "picker/styles" }, { &ui.full().edit, "EDIT" }, { &ui.full().targets, "TARGETS" }, { &ui.full().rate.rate, "RATE" }, { &ui.full().rate.division, "DIVISION" },
                           { &ui.full().rate.trip, "TRIP" }, { &ui.full().rate.dot, "DOT" }, { &ui.full().rise, "RISE" }, { &ui.full().smoothTime, "SMOOTH" }, { &ui.full().syncSwitch.mode, "HZ/BPM/KEY" }, { &ui.full().phase, "PHASE" },
                           { &ui.full().delay, "DELAY" }, { &ui.full().mode, "MODE" }, { &ui.full().modeList, "MODE (list)" }, { &ui.full().hostPick, "HOST" }, { &ui.full().direction, "DIRECTION" }, { &ui.full().swing, "SWING" },

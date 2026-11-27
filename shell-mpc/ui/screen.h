@@ -186,7 +186,7 @@ public:
         show (selector, ! noise); show (source, abc); show (oct, ! noise); show (pos, abc); show (crs, false); show (phase, false);
         show (kind, noise); show (sound, noise && ! noiseSample); show (filter, false); show (stereo, false);
         n_row_ = 0;
-        auto add = [&] (Component* c) { if (n_row_ < 4) row_[n_row_++] = c; };
+        auto add = [&] (ControlModel* c) { if (n_row_ < 4) row_[n_row_++] = c; };
         if (abc) { add (&selector); add (&source); add (&pos); add (&oct); }
         else if (sub) { add (&selector); add (&oct); }
         else { add (&kind); if (! noiseSample) add (&sound); }
@@ -205,7 +205,7 @@ public:
     }
     OscInstance instance() const noexcept { return inst_; }
     int numRow() const noexcept { return n_row_; }
-    Component* rowMember (int i) const noexcept { return i >= 0 && i < n_row_ ? row_[i] : nullptr; }
+    ControlModel* rowMember (int i) const noexcept { return i >= 0 && i < n_row_ ? row_[i] : nullptr; }
     /** The ids of the parts (the owner overrides the ones that differ): selector base, source stepper +1, dropdown +2, OCT +3, FILTER +4, SOUND +5. */
     void assignIds (int base)
     {
@@ -259,7 +259,7 @@ protected:
     OscInstance inst_ = OscInstance::A;
     OscKind kind_ = OscKind::Wavetable;
     bool noiseSample_ = false;
-    Component* row_[4] = {};
+    ControlModel* row_[4] = {};
     int n_row_ = 0;
 };
 
@@ -464,7 +464,7 @@ public:
                     if (kids_[i] == &panel)
                         panel.drawNativePanel (sb);
                     else
-                        kids_[i]->draw (sb);
+                        drawChild (sb, i);
                 }
             Cell cell (sb, rect_);
             drawExtra (pen);
@@ -522,9 +522,9 @@ protected:
         subBlend.place ({ rect_.right() - m - kMoreW, panelY + KnobPanel::kBlockTitleH, kMoreW, bottomH - KnobPanel::kBlockTitleH - KnobPanel::kBlockPad });
     }
     /** The live members of a Q group in slot order, closed up from slot 1; a group with no live member is not made. */
-    QGroup* addGroup (const char* name, Component* const* members)
+    QGroup* addGroup (const char* name, ControlModel* const* members)
     {
-        Component* live[4] = {};
+        ControlModel* live[4] = {};
         int n = 0;
         for (int i = 0; i < 4; ++i)
             if (members[i] != nullptr)
@@ -543,7 +543,7 @@ protected:
             for (int i = 0; i < 4; ++i)
                 g.set (i, nullptr);
         nGroups_ = 0;
-        Component* m[4] = {};
+        ControlModel* m[4] = {};
         for (int i = 0; i < 4; ++i)
             m[i] = top.group.member (i);
         addGroup ("Basic", m);
@@ -566,11 +566,11 @@ protected:
             {
                 // the WARP group right after the unison group: [WARP 1 TYPE, WARP 1 AMOUNT, WARP 2 TYPE, WARP 2 AMOUNT]; the warp 2 members only when the screen shows the second slot, an amount only while its type is not Off
                 WarpPair& w = *panel.warp();
-                Component* wm[4] = { &w.first.type, warpApplies_[0] ? static_cast<Component*> (&w.first.amount) : nullptr, nullptr, nullptr };
+                ControlModel* wm[4] = { &w.first.type, warpApplies_[0] ? static_cast<ControlModel*> (&w.first.amount) : nullptr, nullptr, nullptr };
                 if (! w.single())
                 {
                     wm[2] = &w.second.type;
-                    wm[3] = warpApplies_[1] ? static_cast<Component*> (&w.second.amount) : nullptr;
+                    wm[3] = warpApplies_[1] ? static_cast<ControlModel*> (&w.second.amount) : nullptr;
                 }
                 addGroup ("Warp", wm);
             }

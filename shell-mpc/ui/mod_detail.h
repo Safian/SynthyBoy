@@ -98,7 +98,7 @@ public:
     {
         nativeControls_ = on;
         summary.setNativeControls (on);
-        for (Component* c : std::initializer_list<Component*> {
+        for (ControlModel* c : std::initializer_list<ControlModel*> {
             &auxOutput, &auxInv, &auxPower, &power, &stereo, &rise, &fall, &delaySync })
             show (*c, ! on);
         show (delay, ! on && ! delaySyncOn_);
@@ -260,11 +260,11 @@ protected:
         blocks_[BlockTime] = { blocks_[BlockShape].right() + kBlockGap, y0, wTime, h };
         auto inner = [&] (const Rect& b) { return Rect { b.x + kBlockPad, b.y + kBlockTitleH, std::max (0, b.w - 2 * kBlockPad), std::max (0, b.h - kBlockTitleH - kBlockPad) }; };
         // a 2 x 2 grid: the cells of the second row start a lane lower (the Q index chips of the members lie above them)
-        auto grid = [&] (const Rect& b, Component* c0, Component* c1, Component* c2, Component* c3)
+        auto grid = [&] (const Rect& b, ControlModel* c0, ControlModel* c1, ControlModel* c2, ControlModel* c3)
         {
             const Rect in = inner (b);
             const int cw = (in.w - kGap) / 2, rh = (in.h - kQLane - kGap) / 2;
-            Component* cs[4] = { c0, c1, c2, c3 };
+            ControlModel* cs[4] = { c0, c1, c2, c3 };
             for (int i = 0; i < 4; ++i)
             {
                 const int col = i % 2, row = i / 2;

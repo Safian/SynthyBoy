@@ -108,7 +108,7 @@ struct Rig
         refresh();
         return a;
     }
-    void tapC (const ui::Component& c, int holdMs = 40) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
+    void tapC (const ui::ControlModel& c, int holdMs = 40) { tap (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs); }
     void drag (int x0, int y0, int x1, int y1, int steps = 10)
     {
         ui.touch (ev (TouchEvent::Down, x0, y0 + kOY), stack, inst, now);
@@ -121,7 +121,7 @@ struct Rig
         now += 100.0;
         refresh();
     }
-    void centre (const ui::Component& c, int& x, int& y) { x = c.rect().x + c.rect().w / 2; y = c.rect().y + c.rect().h / 2; }
+    void centre (const ui::ControlModel& c, int& x, int& y) { x = c.rect().x + c.rect().w / 2; y = c.rect().y + c.rect().h / 2; }
     void openFull() { tapC (ui.compact().full); }
 };
 
@@ -533,7 +533,7 @@ void testModulations()
     check (lv.state.selectedSource == 3, "the last selector touched was the envelope's: Env 3 is the selected source");
     // Native Pan/Level never expose the former overlay modulation chip input.
     const int writes = r.inst.writes;
-    const ui::Rect th = lv.tabHit();
+    const ui::Rect th = lv.rect();
     r.drag (th.x + th.w / 2, th.y + th.h / 2, th.x + th.w / 2, th.y + th.h / 2 - 40);
     check (r.inst.writes == writes && r.inst.get ("mod04.amount") == 40.0f,
            "native LEVEL retains modulation state without obsolete chip gestures");
@@ -992,7 +992,7 @@ void testSpecPages()
             if (pg.visible (i))
             {
                 ++shown;
-                const ui::Component* ci = const_cast<oscspec::OscSpecPage&> (pg).control (i);
+                const ui::ControlModel* ci = const_cast<oscspec::OscSpecPage&> (pg).control (i);
                 sizes = sizes && ci->rect().h >= 56 && ci->rect().w >= 56;
                 for (int j = i + 1; j < pg.spec()->numCtls; ++j)
                     if (pg.visible (j))
@@ -1182,7 +1182,7 @@ void testReview2()
         check (pitch != nullptr && pitch->param == Inst::idx ("noise.pitch") && fine != nullptr && fine->param == Inst::idx ("noise.fine") && key != nullptr && key->param == Inst::idx ("noise.keytrack"), "noise: the TUNE block is PITCH, FINE, KEY TRACK (and ENV 1)");
         {   // the generated noise: the display over ONE block (TUNE) of four cells in one row
             ui::OscillatorFullScreen& f = r.ui.full();
-            const ui::Component* cells[3] = { f.panel.part (ui::PanelSlot::NoisePitch), f.panel.part (ui::PanelSlot::NoiseFine), f.panel.part (ui::PanelSlot::NoiseKey) };
+            const ui::ControlModel* cells[3] = { f.panel.part (ui::PanelSlot::NoisePitch), f.panel.part (ui::PanelSlot::NoiseFine), f.panel.part (ui::PanelSlot::NoiseKey) };
             bool oneRow = true, order = true;
             long area = 0;
             const ui::Rect blk = f.panel.blockRect (0);

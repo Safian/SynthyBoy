@@ -86,7 +86,7 @@ public:
     }
 
     /** Returns true if kid component is shown in the composite. */
-    bool isShown (const Component& c) const noexcept
+    bool isShown (const ControlModel& c) const noexcept
     {
         for (int i = 0; i < n_; ++i)
             if (kids_[i] == &c)
@@ -101,9 +101,9 @@ public:
         if (grid.rect().contains (x, y) || rowList.rect().contains (x, y)
             || qStepSelect.rect().contains (x, y) || stepValue.rect().contains (x, y))
             return true;
-        const Component* const widgets[] = { &length, &randPan, &randDetune, &randCutoff, &randEnv, &randDetune10x,
-                                             &scaleEnv, &scaleLfo, &scaleLfoMode, &oscA, &oscB, &oscC, &oscSub, &oscNoise };
-        for (const Component* widget : widgets)
+        const ControlModel* const widgets[] = { &length, &randPan, &randDetune, &randCutoff, &randEnv, &randDetune10x,
+                                                &scaleEnv, &scaleLfo, &scaleLfoMode, &oscA, &oscB, &oscC, &oscSub, &oscNoise };
+        for (const ControlModel* widget : widgets)
             if (widget->rect().contains (x, y))
                 return true;
         return false;
@@ -178,7 +178,7 @@ public:
 protected:
     void layout() override
     {
-        auto nativePlace = [&] (Component& c, Rect r) { r.x += rect_.x; r.y += rect_.y; c.place (r); };
+        auto nativePlace = [&] (ControlModel& c, Rect r) { r.x += rect_.x; r.y += rect_.y; c.place (r); };
         nativePlace (grid, voicelayout::kSequenceGrid);
         nativePlace (length, voicelayout::kLength);
         nativePlace (randPan, voicelayout::kRandPan);

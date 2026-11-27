@@ -30,9 +30,9 @@ void check (bool ok, const std::string& what)
 using MRig = demo::Rig<MasterUi>;
 using VRig = demo::Rig<VoiceUi>;
 
-bool sizesOk (const std::vector<ui::Component*>& cs, std::string& bad)
+bool sizesOk (const std::vector<ui::ControlModel*>& cs, std::string& bad)
 {
-    for (ui::Component* c : cs)
+    for (ui::ControlModel* c : cs)
         if (c->rect().w <= 0 || c->rect().h < 56 || ! c->sizeOk())
         {
             bad = std::to_string (c->rect().w) + " x " + std::to_string (c->rect().h) + " min " + std::to_string (c->minSize().w) + " x " + std::to_string (c->minSize().h);
@@ -59,10 +59,10 @@ void testMasterParametersExist()
 
 // the bold cut of the Master page (owner 2026-11-21): LINK is touch only inside PITCH (no Q slot, five groups on MAIN), what does not apply is hidden (BEND DOWN while LINK is on, MPE BEND and BEND TO X while MPE is off),
 // the Q groups close up from the left. Nothing sits behind a MORE button on this page: a hidden control comes back with its switch.
-bool inLeaves (MasterUi& ui, const ui::Component& c)
+bool inLeaves (MasterUi& ui, const ui::ControlModel& c)
 {
-    ui::Component* all[96];
-    const int n = ui.screen().collectLeaves (all, 0, 96);
+    ui::ControlModel* all[96];
+    const int n = ui.screen().collectModelLeaves (all, 0, 96);
     for (int i = 0; i < n; ++i)
         if (all[i] == &c)
             return true;
@@ -123,7 +123,7 @@ void testVoiceLayout()
     ui::VoiceScreen& v = r.ui.screen();
     check (v.rect().w == 1280 && v.rect().h == 628 && r.stack.element() == VoiceUi::kElementPage, "the page has the whole tab and is the element of the Voice tab");
     std::string bad;
-    std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.rowList, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
+    std::vector<ui::ControlModel*> cs = { &v.length, &v.qStepSelect, &v.rowList, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
     check (sizesOk (cs, bad), "every control of the Voice page is >= 56 px high and has its minimum size " + bad);
     bool inside = true;
     static const int kVoiceGroupBlock[4] = { -1, 0, -1, 2 };   // group 2 = [10x DETUNE, ENV TIME, LFO TIME, LFO MODE] lies in two blocks: frameless
@@ -272,7 +272,7 @@ void testVoiceNativeSequence()
     std::vector<uint32_t> pixels;
     renderScene (*scene, pixels);
     bool hostOwns = true;
-    const ui::Component* const sequence[] { &screen.rowList, &screen.qStepSelect, &screen.stepValue };
+    const ui::ControlModel* const sequence[] { &screen.rowList, &screen.qStepSelect, &screen.stepValue };
     for (const auto* c : sequence)
     {
         const auto box = c->rect();
@@ -405,7 +405,7 @@ void testVoiceNativeControls()
            "RAND gutter and the empty sixth TARGETS cell have no host aperture");
 
     const ui::Rect rPanR = v.randPan.rect();
-    for (const auto* control : std::array<const ui::Component*, 4>{&v.grid, &v.rowList, &v.qStepSelect, &v.stepValue})
+    for (const auto* control : std::array<const ui::ControlModel*, 4>{&v.grid, &v.rowList, &v.qStepSelect, &v.stepValue})
     {
         const auto rect = control->rect();
         check (!r.ui.covers (rect.x + rect.w/2, rect.y + rect.h/2), "native sequence owns input even without a reported bank");
@@ -629,7 +629,7 @@ void testMasterNativePageView()
         return view.onTouch (ev, stack, inst, 50.0) && down;
     };
 
-    auto centreTap = [&] (const ui::Component& c)
+    auto centreTap = [&] (const ui::ControlModel& c)
     {
         const auto r = c.rect();
         return tap (r.x + r.w / 2, r.y + r.h / 2);

@@ -74,9 +74,9 @@ public:
         if (! enabled_ || ! rect_.contains (x, y))
             return Change::none();
         for (int i = 0; i < n_; ++i)
-            if (shown_[i] && kids_[i]->rect().contains (x, y))
+            if (shown_[i] && widgetKids_[i] && widgetKids_[i]->rect().contains (x, y))
             {
-                cap_ = kids_[i];
+                cap_ = widgetKids_[i];
                 return cap_->touchDown (x, y, nowMs);
             }
         return Change::none();
@@ -104,30 +104,43 @@ public:
     {
         int n = 0;
         for (int i = 0; i < n_; ++i)
-            if (shown_[i])
-                n += kids_[i]->touchTargets (out + n, max - n);
+            if (shown_[i] && widgetKids_[i])
+                n += widgetKids_[i]->touchTargets (out + n, max - n);
         return n;
     }
     int collectLeaves (Component** out, int n, int max) override
     {
         for (int i = 0; i < n_; ++i)
-            if (shown_[i])
-                n = kids_[i]->collectLeaves (out, n, max);
+            if (shown_[i] && widgetKids_[i])
+                n = widgetKids_[i]->collectLeaves (out, n, max);
         return n;
     }
-    /** The primary child (the one a hardware knob turns), null when the composite has none. */
-    Component* primary() const noexcept { return primary_; }
-    Component* primaryChild() const override { return primary_; }
-    int numChildren() const noexcept { return n_; }
-    Component* child (int i) const noexcept { return kids_[i]; }
-    bool childShown (int i) const noexcept { return shown_[i]; }
-
-protected:
-    void drawChildren (gpu::SceneBuilder& sb) const
+    int collectModelLeaves (ControlModel** out, int n, int max) override
     {
         for (int i = 0; i < n_; ++i)
             if (shown_[i])
-                kids_[i]->draw (sb);
+                n = kids_[i]->collectModelLeaves (out, n, max);
+        return n;
+    }
+    /** The primary child (the one a hardware knob turns), null when the composite has none. */
+    ControlModel* primary() const noexcept { return primary_; }
+    ControlModel* primaryModel() const override { return primary_; }
+    Component* primaryChild() const override { return primaryWidget_; }
+    int numChildren() const noexcept { return n_; }
+    ControlModel* child (int i) const noexcept { return kids_[i]; }
+    bool childShown (int i) const noexcept { return shown_[i]; }
+
+protected:
+    void drawChild (gpu::SceneBuilder& sb, int i) const
+    {
+        if (i >= 0 && i < n_ && shown_[i] && widgetKids_[i])
+            widgetKids_[i]->draw (sb);
+    }
+    void drawChildren (gpu::SceneBuilder& sb) const
+    {
+        for (int i = 0; i < n_; ++i)
+            if (shown_[i] && widgetKids_[i])
+                widgetKids_[i]->draw (sb);
     }
 
     virtual void layout() = 0;
@@ -135,16 +148,20 @@ protected:
     virtual void drawExtra (Pen&) const {}   // drawn after the children (outlines, captions)
     virtual void syncKids() { for (int i = 0; i < n_; ++i) kids_[i]->setEnabled (enabled_); }
     void drawBody (Pen&) const override {}
-    void addKid (Component& c, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &c; shown_[n_] = shown; ++n_; } }
-    void clearKids() { n_ = 0; cap_ = nullptr; primary_ = nullptr; }
-    void show (const Component& c, bool s) { for (int i = 0; i < n_; ++i) if (kids_[i] == &c) shown_[i] = s; }
-    void setPrimary (Component* c) { primary_ = c; }
+    void addKid (ControlModel& m, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &m; widgetKids_[n_] = dynamic_cast<Component*> (&m); shown_[n_] = shown; m.setVisible (shown); ++n_; } }
+    void addKid (Component& c, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &c; widgetKids_[n_] = &c; shown_[n_] = shown; c.setVisible (shown); ++n_; } }
+    void clearKids() { n_ = 0; cap_ = nullptr; primary_ = nullptr; primaryWidget_ = nullptr; }
+    void show (const ControlModel& c, bool s) { for (int i = 0; i < n_; ++i) if (kids_[i] == &c) { shown_[i] = s; kids_[i]->setVisible (s); } }
+    void setPrimary (ControlModel* c) { primary_ = c; primaryWidget_ = dynamic_cast<Component*> (c); }
+    void setPrimary (Component* c) { primary_ = c; primaryWidget_ = c; }
 
-    Component* kids_[kMaxKids] = {};
+    ControlModel* kids_[kMaxKids] = {};
+    Component* widgetKids_[kMaxKids] = {};
     bool shown_[kMaxKids] = {};
     int n_ = 0;
     Component* cap_ = nullptr;
-    Component* primary_ = nullptr;
+    ControlModel* primary_ = nullptr;
+    Component* primaryWidget_ = nullptr;
 };
 
 constexpr int kGap = 4;
@@ -409,8 +426,8 @@ public:
         show (source, ! sub && ! noise); show (oct, sub); show (filter, noise);
         for (int i = 0; i < 4; ++i)
             group.set (i, nullptr);
-        group.set (0, noise ? static_cast<Component*> (&noiseType) : &selector);
-        group.set (1, noise ? static_cast<Component*> (&filter) : (sub ? static_cast<Component*> (&oct) : &source));
+        group.set (0, noise ? static_cast<ControlModel*> (&noiseType) : &selector);
+        group.set (1, noise ? static_cast<ControlModel*> (&filter) : (sub ? static_cast<ControlModel*> (&oct) : &source));
         group.set (2, &pan);
         group.set (3, &level);
         layout();
@@ -436,8 +453,8 @@ public:
     }
     Size minSize() const override
     {
-        const Component* first = inst_ == OscInstance::Noise ? static_cast<const Component*> (&noiseType) : &selector;
-        const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
+        const ControlModel* first = inst_ == OscInstance::Noise ? static_cast<const ControlModel*> (&noiseType) : &selector;
+        const ControlModel* second = inst_ == OscInstance::Noise ? static_cast<const ControlModel*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const ControlModel*> (&oct) : &source);
         const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
         if (stacked_)
             return Size { std::max ({ a.w + b.w + kGap, 2 * Size { 172, 72 }.w + kGap }), std::max (a.h, b.h) + kQLane + 72 };
@@ -449,8 +466,8 @@ public:
 protected:
     void layout() override
     {
-        Component* first = inst_ == OscInstance::Noise ? static_cast<Component*> (&noiseType) : &selector;
-        Component* second = inst_ == OscInstance::Noise ? static_cast<Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<Component*> (&oct) : &source);
+        ControlModel* first = inst_ == OscInstance::Noise ? static_cast<ControlModel*> (&noiseType) : &selector;
+        ControlModel* second = inst_ == OscInstance::Noise ? static_cast<ControlModel*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<ControlModel*> (&oct) : &source);
         if (stacked_)
         {
             // two rows of the same height, the rows of the envelope third's knobs: row 1 the two selectors side by side (the type as a drop-down at the left, the table / content stepper or OCT at the right, 72 px high, in the middle of

@@ -294,10 +294,7 @@ static void renderAll (const std::string& dir)
                 default: break;
             }
             if (i < 11)
-            {
                 label (s.builder(), 20 + (i % 6) * 206, 20 + (i / 6) * 160, names[i]);
-                k.draw (s.builder());
-            }
         }
         static NumberField nf;
         nf.state = NumberField::State {};
@@ -305,7 +302,6 @@ static void renderAll (const std::string& dir)
         nf.state.add (1, "LFO 1", 0.4); nf.state.selectedSource = 1;
         nf.place ({ 20 + 5 * 206 + 40, 200, 110, 70 });
         label (s.builder(), 20 + 5 * 206, 180, names[11]);
-        nf.draw (s.builder());
         save (dir, "knob_states.png", s);
     }
     // pictogram selectors
@@ -383,7 +379,6 @@ static void renderAll (const std::string& dir)
                 k[i].setLabel (i == 0 ? "WT POS" : (i == 1 ? "DETUNE" : "BLEND"));
                 k[i].state.value = k[i].state.modValue = 0.3 + 0.25 * i;
                 k[i].place ({ 30 + i * 200, 570, 180, 170 });
-                k[i].draw (s.builder());
             }
             const Image im = render (s);
             for (int y = 0; y < H; ++y)
