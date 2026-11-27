@@ -313,7 +313,7 @@ public:
             if (sideOfGroup (i) != side_)
                 continue;
             for (int k = 0; k < QGroup::kSlots; ++k)
-                if (const Component* m = groups[i].member (k); m && (m == captured || (! captured && m->rect().contains (x, y))))
+                if (const ControlModel* m = groups[i].member (k); m && (m == captured || (! captured && m->rect().contains (x, y))))
                 {
                     setActiveGroup (i);
                     return;

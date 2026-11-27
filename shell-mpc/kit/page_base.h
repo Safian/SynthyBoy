@@ -158,21 +158,26 @@ protected:
         binder_.bind (id, &c, type, key);
         parts_.push_back (&c);
     }
+    /** Binds a pure ControlModel (no overlay draw or touch): only registered with the binder and Q groups. */
+    void bind (int id, ui::ControlModel& m, Binder::Type type, const char* key)
+    {
+        binder_.bind (id, &m, type, key);
+    }
     /** A component that is not a parameter (a display, a button): it is drawn, touched and wheeled like the others; its changes come to onChange (). */
     void addPart (int id, ui::Component& c)
     {
         c.setId (id);
         parts_.push_back (&c);
     }
-    /** TO MAKE A Q GROUP: pass up to four bound components in the order of the hardware knobs (Q 1 .. Q 4 of the group). The group is the active one while the player touches one of its members.
+    /** TO MAKE A Q GROUP: pass up to four bound components or models in the order of the hardware knobs (Q 1 .. Q 4 of the group). The group is the active one while the player touches one of its members.
         Returns the index of the group. */
-    int group (std::initializer_list<ui::Component*> members)
+    int group (std::initializer_list<ui::ControlModel*> members)
     {
         if (numGroups_ >= kMaxGroups)
             return -1;
         ui::QGroup& g = groups_[numGroups_];
         int slot = 0;
-        for (ui::Component* m : members)
+        for (ui::ControlModel* m : members)
             if (slot < ui::QGroup::kSlots)
                 g.set (slot++, m);
         return numGroups_++;
@@ -216,7 +221,7 @@ private:
     {
         for (int g = 0; g < numGroups_; ++g)
             for (int i = 0; i < ui::QGroup::kSlots; ++i)
-                if (const ui::Component* m = groups_[g].member (i); m != nullptr && m->rect().contains (x, y))
+                if (const ui::ControlModel* m = groups_[g].member (i); m != nullptr && m->rect().contains (x, y))
                     active_ = g;
     }
     void handle (const ui::Change& ch, UiStack& stack, IInstance& inst)

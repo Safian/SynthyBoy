@@ -522,9 +522,9 @@ protected:
         subBlend.place ({ rect_.right() - m - kMoreW, panelY + KnobPanel::kBlockTitleH, kMoreW, bottomH - KnobPanel::kBlockTitleH - KnobPanel::kBlockPad });
     }
     /** The live members of a Q group in slot order, closed up from slot 1; a group with no live member is not made. */
-    QGroup* addGroup (const char* name, Component* const* members)
+    QGroup* addGroup (const char* name, ControlModel* const* members)
     {
-        Component* live[4] = {};
+        ControlModel* live[4] = {};
         int n = 0;
         for (int i = 0; i < 4; ++i)
             if (members[i] != nullptr)
@@ -543,7 +543,7 @@ protected:
             for (int i = 0; i < 4; ++i)
                 g.set (i, nullptr);
         nGroups_ = 0;
-        Component* m[4] = {};
+        ControlModel* m[4] = {};
         for (int i = 0; i < 4; ++i)
             m[i] = top.group.member (i);
         addGroup ("Basic", m);
@@ -566,11 +566,11 @@ protected:
             {
                 // the WARP group right after the unison group: [WARP 1 TYPE, WARP 1 AMOUNT, WARP 2 TYPE, WARP 2 AMOUNT]; the warp 2 members only when the screen shows the second slot, an amount only while its type is not Off
                 WarpPair& w = *panel.warp();
-                Component* wm[4] = { &w.first.type, warpApplies_[0] ? static_cast<Component*> (&w.first.amount) : nullptr, nullptr, nullptr };
+                ControlModel* wm[4] = { &w.first.type, warpApplies_[0] ? static_cast<ControlModel*> (&w.first.amount) : nullptr, nullptr, nullptr };
                 if (! w.single())
                 {
                     wm[2] = &w.second.type;
-                    wm[3] = warpApplies_[1] ? static_cast<Component*> (&w.second.amount) : nullptr;
+                    wm[3] = warpApplies_[1] ? static_cast<ControlModel*> (&w.second.amount) : nullptr;
                 }
                 addGroup ("Warp", wm);
             }

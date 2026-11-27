@@ -16,10 +16,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <cstdint>
 
 #include "../overlay/gpu/scene.h"
 #include "../overlay/sdf_font.h"
+#include "model.h"
 #include "theme.h"
 #include "q_visual_policy.h"
 
@@ -31,51 +31,6 @@ namespace sdf = synthyboy_mpc::overlay::sdf;
 constexpr float kPi = 3.14159265358979323846f;
 /** The strip above a Q group member that holds its index chip (Pen::qIndex): the vertical gap between two stacked members is at least this. */
 constexpr int kQLane = 16;
-
-struct Size { int w = 0, h = 0; };
-
-struct Rect
-{
-    int x = 0, y = 0, w = 0, h = 0;
-    constexpr int right() const noexcept { return x + w; }
-    constexpr int bottom() const noexcept { return y + h; }
-    constexpr bool empty() const noexcept { return w <= 0 || h <= 0; }
-    constexpr bool contains (int px, int py) const noexcept { return px >= x && px < x + w && py >= y && py < y + h; }
-    constexpr bool contains (const Rect& o) const noexcept { return o.x >= x && o.y >= y && o.right() <= right() && o.bottom() <= bottom(); }
-    constexpr bool overlaps (const Rect& o) const noexcept { return ! empty() && ! o.empty() && x < o.right() && o.x < right() && y < o.bottom() && o.y < bottom(); }
-    constexpr Rect inset (int d) const noexcept { return { x + d, y + d, std::max (0, w - 2 * d), std::max (0, h - 2 * d) }; }
-    constexpr bool operator== (const Rect& o) const noexcept { return x == o.x && y == o.y && w == o.w && h == o.h; }
-    static Rect unite (const Rect& a, const Rect& b) noexcept
-    {
-        if (a.empty()) return b;
-        if (b.empty()) return a;
-        const int x0 = std::min (a.x, b.x), y0 = std::min (a.y, b.y), x1 = std::max (a.right(), b.right()), y1 = std::max (a.bottom(), b.bottom());
-        return { x0, y0, x1 - x0, y1 - y0 };
-    }
-};
-
-/** What a component hands back. Value: `value` is normalised 0 .. 1 (a knob). Index: `index` is a whole number (a list position, a switch 0 / 1, the number of steps from the minimum of a
-    number field) and `value` is the same number as a double (a number field: the value in its own units, a whole number of steps). Request: the user asked for a menu / a panel; the owner
-    opens whatever it wants. */
-enum class ChangeKind : uint8_t { None = 0, Value, Index, Request, Depth, ModsRequest, AddRequest };
-struct Change
-{
-    ChangeKind kind = ChangeKind::None;
-    int id = 0;
-    double value = 0.0;
-    int index = 0;
-    explicit operator bool() const noexcept { return kind != ChangeKind::None; }
-    /** Depth: the modulation depth (-1 .. +1, `value`) of the source `index` (its id) of a knob / number field changed (a drag that started on the tab). ModsRequest: a long press asks for the
-        list of the modulations of the control. */
-    static Change depth (int id, int source, double d) noexcept { Change c; c.kind = ChangeKind::Depth; c.id = id; c.index = source; c.value = d; return c; }
-    /** AddRequest: the owner is asked to add the modulation source `source` (the "add source" row of the modulations page). */
-    static Change addRequest (int id, int source) noexcept { Change c; c.kind = ChangeKind::AddRequest; c.id = id; c.index = source; return c; }
-    static Change modsRequest (int id) noexcept { Change c; c.kind = ChangeKind::ModsRequest; c.id = id; return c; }
-    static Change none() noexcept { return {}; }
-    static Change normalised (int id, double v) noexcept { Change c; c.kind = ChangeKind::Value; c.id = id; c.value = v; return c; }
-    static Change indexed (int id, int i, double v) noexcept { Change c; c.kind = ChangeKind::Index; c.id = id; c.index = i; c.value = v; return c; }
-    static Change request (int id) noexcept { Change c; c.kind = ChangeKind::Request; c.id = id; return c; }
-};
 
 namespace colour
 {
@@ -91,94 +46,8 @@ inline uint32_t white() noexcept { return theme::L().text; }
 inline uint32_t q() noexcept { return theme::L().q; }
 }
 
-/** Copies up to cap - 1 characters (zero terminated). */
-inline void setText (char* dst, size_t cap, const char* src) noexcept
-{
-    if (dst == nullptr || cap == 0)   // no room, not even for the terminator: nothing is written
-        return;
-    size_t n = src ? std::strlen (src) : 0;   // (strlen + memmove: the compiler knows the length of a literal; a copy loop with two exits made GCC warn about reads past it)
-    if (n + 1 > cap)
-    {
-        n = cap > 0 ? cap - 1 : 0;
-        while (n > 0 && (static_cast<unsigned char> (src[n]) & 0xc0u) == 0x80u)   // a cut never falls inside a UTF-8 sequence
-            --n;
-    }
-    if (n > 0)
-        std::memmove (dst, src, n);
-    dst[n] = '\0';
-}
+inline uint32_t ModEntry::colour() const noexcept { return theme::sourceColour (macro ? "MAC" : name); }
 
-
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** The modulation input of a Knob and a NumberField: up to kMaxMods entries {source id (opaque), source name <= 6 characters, depth -1 .. +1 as a fraction of the full range, polarity,
-    bypassed} and the selected source (kNoSource = none). */
-constexpr int kNoSource = INT32_MIN;
-struct ModEntry
-{
-    int source = 0;
-    char name[7] = {};
-    double depth = 0.0;
-    bool bidirectional = false, bypassed = false;
-    bool macro = false;   // the source is a macro: the colour of the macros, whatever the (short) name says (a macro can be called anything)
-    /** The colour of the source on the depth arc, the tab and the row: by its kind for a macro, else by its name (theme::sourceColour). */
-    uint32_t colour() const noexcept { return theme::sourceColour (macro ? "MAC" : name); }
-};
-struct ModInput
-{
-    static constexpr int kMaxMods = 8;
-    ModEntry mods[kMaxMods];
-    int numMods = 0;
-    int selectedSource = kNoSource;
-
-    bool add (int source, const char* name, double depth, bool bidirectional = false, bool bypassed = false, bool macro = false) noexcept
-    {
-        if (numMods >= kMaxMods)
-            return false;
-        ModEntry& e = mods[numMods++];
-        e.source = source; setText (e.name, sizeof e.name, name); e.depth = depth; e.bidirectional = bidirectional; e.bypassed = bypassed; e.macro = macro;
-        return true;
-    }
-    /** The entry of the selected source (null when none is selected or it is not in `mods`). */
-    const ModEntry* selected() const noexcept
-    {
-        for (int i = 0; i < std::min (numMods, kMaxMods); ++i)
-            if (mods[i].source == selectedSource && selectedSource != kNoSource)
-                return &mods[i];
-        return nullptr;
-    }
-};
-/** The tab at the top left: Absent (no modulation entries), Grey (entries, but not the selected source), Coloured (the selected source is in the entries), Hollow (and it is bypassed). */
-enum class TabState : uint8_t { Absent, Grey, Coloured, Hollow };
-inline TabState tabState (const ModInput& m) noexcept
-{
-    if (m.numMods <= 0)
-        return TabState::Absent;
-    const ModEntry* e = m.selected();
-    return ! e ? TabState::Grey : (e->bypassed ? TabState::Hollow : TabState::Coloured);
-}
-/** The ends (0 .. 1) of the depth arc around the value position v: unidirectional v .. v + depth, bidirectional v - |depth| .. v + |depth|, clamped to the range; from <= to. false when
-    the selected source is not in the entries or is bypassed (no arc). */
-inline bool depthArc (const ModInput& m, double v, double& from, double& to) noexcept
-{
-    const ModEntry* e = m.selected();
-    if (! e || e->bypassed)
-        return false;
-    v = std::clamp (v, 0.0, 1.0);
-    const double d = std::clamp (e->depth, -1.0, 1.0);
-    double a, b;
-    if (e->bidirectional) { a = v - std::fabs (d); b = v + std::fabs (d); }
-    else { a = std::min (v, v + d); b = std::max (v, v + d); }
-    from = std::clamp (a, 0.0, 1.0);
-    to = std::clamp (b, 0.0, 1.0);
-    return true;
-}
-/** The name on the tab: the selected source when it is among the entries, else the first entry (the source that modulates the control, so the tab always says WHAT it is). */
-inline const char* tabName (const ModInput& m) noexcept
-{
-    if (const ModEntry* e = m.selected())
-        return e->name;
-    return m.numMods > 0 ? m.mods[0].name : "";
-}
 /** The tab (a labelled chip with the name of the source at the top left of the control) and the rectangle that starts a depth gesture: 56 x 52 pixels where the control allows it. */
 inline Rect tabRect (const Rect& r, const char* name = "") noexcept
 {
@@ -485,34 +354,19 @@ private:
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** The base of every component: the rectangle, the id, the enabled and qFrame flags, the gesture capture, and the interface the Q groups and the panels use. A base component implements
-    onDown / onMove / onUp / onTurn and drawBody; a composite (composite.h) overrides the public events. */
-class Component
+/** The base of every drawable/touchable overlay component: extends ControlModel with drawing (draw / drawBody), touch gesture capture (touchDown / touchMove / touchUp / tick),
+    and widget tree traversal (touchTargets / collectLeaves / primaryChild). */
+class Component : public ControlModel
 {
 public:
     Component() = default;
-    virtual ~Component() = default;
+    ~Component() override = default;
     Component (const Component&) = delete;
     Component& operator= (const Component&) = delete;
 
-    // ---- the common input
-    Rect rect() const noexcept { return rect_; }
-    virtual void place (const Rect& r) { rect_ = r; }
-    bool enabled() const noexcept { return enabled_; }
-    virtual void setEnabled (bool e) { enabled_ = e; if (! e) captured_ = false; }
-    /** The INACTIVE look (a switched-off oscillator): drawn grey (Pen::inactiveGrey), still operable. A composite hands it to its parts. */
-    bool inactive() const noexcept { return inactive_; }
-    virtual void setInactive (bool i) { inactive_ = i; }
-    bool qFrame() const noexcept { return qFrame_; }
-    int qIndex() const noexcept { return qIndex_; }
-    /** The component belongs to the active Q-Link group (frame true) as member number `index` (1 .. 4, 0 = no badge). */
-    virtual void setQ (bool frame, int index) { qFrame_ = frame; qIndex_ = frame ? index : 0; }
-    int id() const noexcept { return id_; }
-    void setId (int id) noexcept { id_ = id; }
+    void setEnabled (bool e) override { enabled_ = e; if (! e) captured_ = false; }
     /** The smallest size at which the component is legible with its touch targets (the layout must give at least this). */
-    virtual Size minSize() const = 0;
-    /** The rectangle is enough for the component (a component that has more than one arrangement, a LedList, says so when any of them fits). */
-    virtual bool sizeOk() const noexcept { const Size m = minSize(); return rect_.w >= m.w && rect_.h >= m.h; }
+    Size minSize() const override = 0;
 
     // ---- the output: the drawing
     void setHostPainted (bool on) noexcept { hostPainted_ = on; }
@@ -546,21 +400,6 @@ public:
     /** The clock: the owner calls it regularly (every frame) with the current time while a finger is down; a component that detects a long press says so here. The components have no clock of
         their own: time comes in with touchDown (nowMs) and with tick (nowMs). */
     virtual Change tick (double /*nowMs*/) { return Change::none(); }
-    /** The hardware knob assigned to the component turned by `delta` detents (a knob: normalised units; a list / number: whole steps). */
-    virtual Change turn (double delta) { return enabled_ ? onTurn (delta) : Change::none(); }
-    /** The mouse wheel over the component: `notches` (positive: away from the user, "up") turn it as many steps of its own (wheelUnit) as a hardware knob step would. */
-    Change wheel (int notches) { return turn (static_cast<double> (notches) * wheelUnit()); }
-    /** What one notch of the wheel is in the units of turn (): a knob and a bar one Q-Link step (1 / 128 of the range), a number, a stepper one whole step; a list is turned the other way round (the wheel up goes up the list). */
-    virtual double wheelUnit() const noexcept { return 1.0; }
-    /** The wheel at the point (x, y): true when the component takes it (it lies over the component, which is enabled); `out` is the change it makes. A composite asks its children; one that scrolls takes the wheel
-        where its children do not. */
-    virtual bool wheelOver (int x, int y, int notches, Change& out)
-    {
-        if (! enabled_ || ! rect_.contains (x, y))
-            return false;
-        out = wheel (notches);
-        return true;
-    }
     bool capturing() const noexcept { return captured_; }
 
     // ---- structure
@@ -570,6 +409,7 @@ public:
     virtual int collectLeaves (Component** out, int n, int max) { if (n < max) out[n++] = this; return n; }
     /** The child a hardware knob turns when this component is a member of a Q group (null: the component itself; a composite: its primary child). */
     virtual Component* primaryChild() const { return nullptr; }
+    ControlModel* primaryModel() const override { return primaryChild(); }
 
 protected:
     virtual void drawBody (Pen& pen) const = 0;
@@ -577,12 +417,16 @@ protected:
     virtual Change onMove (int, int) { return Change::none(); }
     virtual Change onMove (int x, int y, double /*nowMs*/) { return onMove (x, y); }
     virtual Change onUp (int, int) { return Change::none(); }
-    virtual Change onTurn (double) { return Change::none(); }
 
-    Rect rect_;
-    bool enabled_ = true, qFrame_ = false, captured_ = false, inactive_ = false, hostPainted_ = false;
-    int qIndex_ = 0, id_ = 0;
+    bool captured_ = false, hostPainted_ = false;
 };
+
+/** Marks a ControlModel host-painted if it is a legacy drawable Component; no-op for pure models. */
+inline void setHostPainted (ControlModel* m, bool on) noexcept
+{
+    if (auto* c = dynamic_cast<Component*> (m))
+        c->setHostPainted (on);
+}
 
 /** The colour of a label: the accent in an active Q group, else the light grey. */
 inline uint32_t labelColour (bool qFrame) noexcept { return colour::rgba (qFrame ? colour::q() : colour::text(), 255); }

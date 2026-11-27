@@ -739,7 +739,7 @@ public:
         return e;
     }
     /** The Q members of group g (0 .. 1) in slot order, null where a group has fewer: what the owner publishes. */
-    const Component* qMember (int g, int slot) const noexcept { return g >= 0 && g < kMaxGroups ? groups[g].member (slot) : nullptr; }
+    const ControlModel* qMember (int g, int slot) const noexcept { return g >= 0 && g < kMaxGroups ? groups[g].member (slot) : nullptr; }
 
     Change touchDown (int x, int y, double nowMs) override
     {

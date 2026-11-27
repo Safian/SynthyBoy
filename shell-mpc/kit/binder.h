@@ -19,6 +19,7 @@
 #include "../ui/led_list.h"
 #include "../ui/led_toggle.h"
 #include "../ui/mixer_strip.h"
+#include "../ui/model.h"
 #include "instance.h"
 #include "param_source.h"
 
@@ -38,14 +39,14 @@ public:
     struct Item
     {
         int id = 0;
-        ui::Component* c = nullptr;
+        ui::ControlModel* c = nullptr;
         Type type = Type::Inert;
         const char* key = "";
         int param = -1;   // resolved by resolve ()
     };
 
     /** Adds a binding. `id` is the number the component reports its changes with (unique on the page). */
-    void bind (int id, ui::Component* c, Type type, const char* key)
+    void bind (int id, ui::ControlModel* c, Type type, const char* key)
     {
         Item it;
         it.id = id;
@@ -53,7 +54,10 @@ public:
         it.type = type;
         it.key = key;
         if (c != nullptr)
+        {
             c->setId (id);
+            c->setParamKey (key);
+        }
         items_.push_back (it);
     }
     /** Looks up the keys in the table (once: the page calls it at its first update). A key the table does not have leaves the component disabled. */
@@ -63,7 +67,10 @@ public:
         {
             it.param = params.indexOfKey (it.key);
             if (it.c != nullptr)
+            {
+                it.c->setParam (it.param);
                 it.c->setEnabled (it.param >= 0);
+            }
         }
         resolved_ = true;
     }
@@ -76,7 +83,7 @@ public:
                 return &it;
         return nullptr;
     }
-    const Item* itemOf (const ui::Component* c) const noexcept
+    const Item* itemOf (const ui::ControlModel* c) const noexcept
     {
         for (const Item& it : items_)
             if (it.c == c)
@@ -84,7 +91,7 @@ public:
         return nullptr;
     }
     /** The parameter index a component shows, -1 when it has none (a Q slot with no target). */
-    int paramOf (const ui::Component* c) const noexcept
+    int paramOf (const ui::ControlModel* c) const noexcept
     {
         const Item* it = itemOf (c);
         return it != nullptr ? it->param : -1;
