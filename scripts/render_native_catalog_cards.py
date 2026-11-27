@@ -29,7 +29,6 @@ from PIL import Image, ImageDraw
 # Component-specific native imports
 from components.style import color as _style_color, native_font_em, rgba as _style_rgba, opacity as _style_opacity, size as _style_size
 from components.native.button.button import action_art
-from components.native.selector.selector import filter_chain_definition, render_selector_face as _render_selector_face
 from native_name_value import render_name_value_preview
 from components.native.macro_card.macro_card import render_macro_card, macro_level_definition, CARD_WIDTH, CARD_HEIGHT
 from components.native.tune.tune import render_tune_card
@@ -126,39 +125,6 @@ def render_button_card():
     combined.save(out_file)
     print(f"Generated {out_file} ({combined.size})")
     return out_file
-
-
-def render_selector_cards():
-    """Render supported selector variants from their actual native definitions."""
-    out_dir = REPO_ROOT / "components/native/selector/img"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
-    # F1 selected, F1 powered, F2 bypassed. Compose the live control's image entries.
-    definition = filter_chain_definition(out_dir, "fx editor choice menu")
-    geom = _style_size("filter.chain")
-    sample = Image.new("RGBA", (geom["width"], geom["height"]))
-    for child in definition["componentsData"]:
-        item = child["componentData"]
-        x, y, w, h = map(int, child["bounds"]["bounds"].split())
-        with Image.open(out_dir / item["data"]["image"]) as image:
-            first_y = h if item["name"] == "F1 power" else 0
-            sample.alpha_composite(image.crop((0, first_y, w, first_y + h)), (x, y))
-    sample.save(out_dir / "catalog-filter-chain.png")
-
-    # Filter MODEL uses a named selector in the canonical runtime geometry.
-    contract = json.loads((REPO_ROOT / "scripts/mpc-skin-extras/filter-native-contract.json").read_text())
-    width, height = contract["filter"][0][17][2:]
-    _render_selector_face(width, height, name="MODEL", value="Analog", label_height=_style_size("font.button")).save(
-        out_dir / "catalog-selector-56-nameval.png")
-
-    # Voice step selector has a value-only 56 px native field.
-    # Its dimensions come from the actual definition, not a catalog-only preset.
-    from native_voice.voice_tab import voice_definitions
-    with tempfile.TemporaryDirectory() as tmp:
-        definition = voice_definitions(Path(tmp))["voiceNativeStepSelect"]
-        bounds = definition["componentsData"][0]["bounds"]["bounds"]
-        width, height = map(int, bounds.split()[2:])
-    _render_selector_face(width, height).save(out_dir / "catalog-selector-56-valonly.png")
 
 
 def render_radio_cards():
@@ -270,7 +236,6 @@ def main():
     render_dropdown_cards()
     render_header_cards()
     render_button_card()
-    render_selector_cards()
     render_radio_cards()
     render_name_value_cards()
     render_macro_card_sample()

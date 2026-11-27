@@ -3,29 +3,7 @@
   "approved": true,
   "order": 40,
   "title": "Selector",
-  "sections": [
-    {
-      "images": [
-        {
-          "presentation": "sample",
-          "caption": "Filter · F1/F2",
-          "file": "catalog-filter-chain.png",
-          "alt": "F1 kiválasztva, F1 bekapcsolva, F2 kikapcsolva"
-        },
-        {
-          "presentation": "sample",
-          "caption": "Filter · MODEL",
-          "file": "catalog-selector-56-nameval.png",
-          "alt": "Selector {size:height.high} px név + érték"
-        },
-        {
-          "file": "catalog-selector-56-valonly.png",
-          "caption": "Voice · csak érték",
-          "alt": "Voice natív lépésválasztó"
-        }
-      ]
-    }
-  ],
+  "sections": [],
   "dropdown": {
     "variants": [
       {
@@ -62,15 +40,39 @@
         "alt": "Legördülő: érték középen, felirat nélkül, 48 px"
       },
       {
-        "id": "above-left",
-        "file": "dropdown-above-left.png",
+        "id": "center-none-40-long",
+        "file": "dropdown-center-none-40-long.png",
+        "width": "header.dropdown.width",
+        "value": "Filter 1 Cutoff Modulation Amount",
+        "placement": "none",
+        "align": "center",
+        "height": "height.intermediate",
+        "caption": "1 · hosszú érték, 40 px: balra igazítva, a végén '…'-tal levágva; a szöveg a nyíltól legalább selector.dropdown.chevron_gap ({size:selector.dropdown.chevron_gap} px) távolságra ér véget",
+        "alt": "Legördülő: hosszú érték levágva"
+      },
+      {
+        "id": "above-center",
+        "file": "dropdown-above-center.png",
         "width": "header.dropdown.width",
         "value": "Percent",
         "label": "LFO MODE",
         "placement": "above",
-        "align": "left",
-        "caption": "2 · Felirat a doboz fölött (Label tárcsa-felirat stílus) + balra igazított érték (a mostani külső, oldalon belüli legördülők)",
-        "alt": "Legördülő: felirat felül, érték balra"
+        "align": "center",
+        "caption": "2 · Felirat a doboz fölött, a doboz bal szélével egy vonalban (Label tárcsa-felirat stílus); az érték a dobozban középen, 40 px magas",
+        "alt": "Legördülő: felirat felül balra, érték középen",
+        "height": "height.intermediate"
+      },
+      {
+        "id": "above-center-long",
+        "file": "dropdown-above-center-long.png",
+        "width": "header.dropdown.width",
+        "value": "Filter 1 Cutoff Modulation Amount",
+        "label": "LFO MODE",
+        "placement": "above",
+        "align": "center",
+        "caption": "2 · felirat felül + hosszú érték: balra igazítva, '…'-tal levágva, a nyíltól chevron_gap távolságra",
+        "alt": "Legördülő: felirat felül, hosszú érték levágva",
+        "height": "height.intermediate"
       },
       {
         "id": "inside-left",
@@ -80,7 +82,7 @@
         "label": "MODEL",
         "placement": "inside",
         "align": "left",
-        "caption": "3 · Kis felirat a dobozban + balra igazított érték (jelenlegi katalógus)",
+        "caption": "KIVEZETÉSRE · 3 · Kis felirat a dobozban + balra igazított érték (jelenlegi katalógus)",
         "alt": "Legördülő: kis felirat a dobozban"
       }
     ]
