@@ -1057,8 +1057,10 @@ def build_standalone_osc_source_overlay(probe=None):
     return labelled_choice_drawer(OSC_SOURCE_OVERLAY_NAME, OSC_SOURCE_LIST_NAMES, probe=probe)
 
 
-def build_standalone_osc_source_row_definitions(probe=None):
-    return choice_row_definitions(OSC_SOURCE_OVERLAY_NAME, OSC_SOURCE_LIST_NAMES) if probe == "A" else []
+def build_standalone_osc_source_definitions(probe=None):
+    """The local definitions of the Osc source list: the drawer and, for probe A, its row components."""
+    rows = choice_row_definitions(OSC_SOURCE_OVERLAY_NAME, OSC_SOURCE_LIST_NAMES) if probe == "A" else []
+    return [{"key": OSC_SOURCE_OVERLAY_NAME, "value": build_standalone_osc_source_overlay(probe)}] + rows
 
 
 def build_standalone_osc_routing_component(

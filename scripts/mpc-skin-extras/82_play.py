@@ -22,8 +22,7 @@ from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
     OSC_SOURCE_OVERLAY_NAME,
     build_choice_definition,
-    build_standalone_osc_source_overlay,
-    build_standalone_osc_source_row_definitions,
+    build_standalone_osc_source_definitions,
     list_probe,
     selector_definition,
 )
@@ -245,9 +244,7 @@ def apply(tui, qlinks, ctx):
         )
         definitions.append({"key": component_name, "value": selector_def})
         if overlay_name == OSC_SOURCE_OVERLAY_NAME and not any(d["key"] == overlay_name for d in definitions):
-            probe = list_probe()
-            definitions.append({"key": overlay_name, "value": build_standalone_osc_source_overlay(probe)})
-            definitions.extend(build_standalone_osc_source_row_definitions(probe))
+            definitions.extend(build_standalone_osc_source_definitions(list_probe()))
     by_param = _controls_by_param(tui)
     # the templates of the selectors: a control of the production skin of the same widget
     selector_template = {}
