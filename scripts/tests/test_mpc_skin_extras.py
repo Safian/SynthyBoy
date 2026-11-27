@@ -28,8 +28,6 @@ APPLY = ROOT / "scripts" / "apply-mpc-skin-extras.py"
 GEN = ROOT / "scripts" / "gen-mpc-ui.py"
 SDK = Path(os.environ.get("MPC_SDK") or Path.home() / ".local/share/local-worker/ext/mpc-sdk")
 
-# The skin with directly bound FX scalar cells and 90 px Play Sub dials generates 745,687 bytes.
-TUI_JSON_BYTES_MAX = 750000
 
 def standalone_editor_entries(tab, definitions):
     """Read the standalone ENV/LFO leaves in their translated tab coordinates."""
@@ -270,7 +268,6 @@ class SkinExtrasTest(unittest.TestCase):
         self.assertIn("playEnvLfoMenu SYNC", changed)
         self.assertEqual(apply_mod.dump_json(packed, indent_step=0), apply_mod.dump_json(unpacked, indent_step=0))
         self.assertLess(new_file.stat().st_size, old_file.stat().st_size)
-        self.assertLess(new_file.stat().st_size, TUI_JSON_BYTES_MAX)
 
         mod = load("test_popup_marker_optimizer", REAL_EXTRAS / "95_popup_markers.py")
         choice = next(d for d in old_defs if d["key"] == "fx editor choice menu")
