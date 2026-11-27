@@ -252,7 +252,9 @@ public:
         sb_.paintOff();
         rrect (r, t.rBlock, c (colour::rgba (hi ? t.keylineHi : t.keyline, 255)), t.frame);
     }
-    /** A control: smaller radius, the panel colour, a keyline. One Q-Link group is marked by ONE frame around the whole group (QGroup::draw) and the index chips; a member never draws a frame of its own, so
+    /** A control: smaller radius, the LEGACY GRADIENT face of the skin Button (owner, 2026-11-27: the old gradient/bubble design): flat at the top colour down to the start fraction of the height, linear to the bottom colour at the
+        end fraction, flat below; the keyline follows the same ramp (lighter blue at the top). The colours and the fractions are the skin recipe's tokens (button.gradient.*, control.gradient) through theme.h, so a Button token
+        change reaches every overlay control. A focused control (`hi`) takes the focus keyline. One Q-Link group is marked by ONE frame around the whole group (QGroup::draw) and the index chips; a member never draws a frame of its own, so
         `q` (the member is in the active group) does not change the keyline: the rule lives here, once, for every page. */
     void control (const Rect& r, bool /*q*/ = false, bool hi = false, bool greyGround = false)
     {
@@ -261,11 +263,19 @@ public:
             const uint32_t colour = c (rgb, 255);
             return greyGround && ! grey_ ? inactiveGrey (colour) : colour;
         };
-        const uint32_t top = ground (t.panel0), bottom = ground (t.panel1);
-        sb_.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), top, top, bottom, bottom);
+        const uint32_t top = ground (t.controlTop), bottom = ground (t.controlBottom);
+        // Four equal stops cover [y0, y1]: the flat/linear/flat shape of control.gradient is that range chosen so the 2nd and 3rd stop fall on start and end.
+        const float h = static_cast<float> (r.h), s0 = t.controlGradStart, s1 = t.controlGradEnd;
+        const float y0 = static_cast<float> (r.y) + (2.0f * s0 - s1) * h, y1 = y0 + 3.0f * (s1 - s0) * h;
+        sb_.paintY (y0, y1, top, top, bottom, bottom);
         rrect (r, t.rControl, bottom);
+        const uint32_t lineTop = ground (t.controlBorder), lineBottom = ground (t.controlBorderBottom);
+        if (hi)
+            sb_.paintOff();
+        else
+            sb_.paintY (y0, y1, lineTop, lineTop, lineBottom, lineBottom);
+        rrect (r, t.rControl, hi ? ground (t.keylineHi) : lineBottom, t.frame);
         sb_.paintOff();
-        rrect (r, t.rControl, ground (hi ? t.keylineHi : t.keyline), t.frame);
     }
     /** A string with the pen at (x, baseline), `size` pixels per em (the font of sdf_font.h; any length, UTF-8). */
     void text (float x, float baseline, float size, const char* s, uint32_t col, float tracking = 0.0f) { if (s[0] != '\0' && size > 0.0f) sb_.text (x, baseline, size, s, col, tracking); }

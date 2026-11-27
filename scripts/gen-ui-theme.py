@@ -12,8 +12,10 @@ if str(ROOT) not in sys.path:
 from components.style import color, size, theme_colors
 
 OUTPUT = ROOT / "shell-mpc/ui/theme_tokens.h"
-COLOR_FIELDS = "bg0 bg1 panel0 panel1 keyline keylineHi track grid text textDim textFaint onBright q flow inst src env lfo filter negative".split()
+COLOR_FIELDS = "bg0 bg1 panel0 panel1 keyline keylineHi controlTop controlBottom controlBorder controlBorderBottom track grid text textDim textFaint onBright q flow inst src env lfo filter negative".split()
 METRIC_FIELDS = "curve curveHi curveBack hair arcTrack arcValue arcMod frame backGlow afterglow fTitle fValue fLabel fItem fSmall fMin rBlock rControl rChip gap pad".split()
+# The control face gradient shape (components/sizes.json control.gradient), shared with the skin recipe (gradient_face).
+CONTROL_GRADIENT_FIELDS = (("controlGradStart", "start"), ("controlGradEnd", "end"))
 # The dial recipe shared by ui::Knob (GPU) and the native filmstrips (components/native/level/level.py).
 KNOB_FIELDS = (
     ("kStartDegrees", "knob.start.degrees"), ("kSweepDegrees", "knob.sweep.degrees"),
@@ -51,6 +53,8 @@ def render_header():
             value = metrics[field]
             literal = str(int(value)) if field in ("gap", "pad") else repr(float(value)) + "f"
             lines.append(f"    {literal}, // {field}")
+        for field, key in CONTROL_GRADIENT_FIELDS:
+            lines.append(f"    {float(size('control.gradient')[key])!r}f, // {field}")
         lines += ["};", ""]
     return "\n".join(lines)
 
