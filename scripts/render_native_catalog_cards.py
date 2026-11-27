@@ -145,6 +145,10 @@ def render_radio_list_cards():
     render_sample_cards("radio_list", "radio_samples")
 
 
+def render_slide_switch_cards():
+    render_sample_cards("slide_switch", "slide_samples")
+
+
 def render_radio_cards():
     """Render the 56 px segmented style used by ENV, Voice and FX."""
     out_dir = REPO_ROOT / "components/native/radio_button/img"
