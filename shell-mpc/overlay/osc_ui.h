@@ -39,7 +39,8 @@
 #include "osc_spec_page.h"
 #include "modulation_window.h"
 #include "mod_model.h"
-#include "mod_targets_native.h"
+#include "mod_rows_page.h"
+#include "native_mod_targets_ui.h"
 #include "osc_model.h"
 #include "instance_view.h"
 #include "../native_osc_detail.h"
@@ -226,6 +227,7 @@ public:
         list_.setHeaderId (kListHeader);
         spec_.place (tab);
         mods_.place (tab);
+        mods_.setIds (kModsBack, kModsAdd, kModsPage, kModsRow);
         relayout();
     }
 
@@ -435,7 +437,7 @@ public:
             }
             if (pageTop_ == kPageMods && ! modsPicking_)
                 for (int i = 0; i < mods_.numRows(); ++i)   // a touch on a row makes it the active one
-                    if (y >= mods_.rowY (i) && y < mods_.rowY (i) + modmodel::Targets::kRowH)
+                    if (y >= mods_.rowY (i) && y < mods_.rowY (i) + ModRowsPage::kRowH)
                     {
                         mods_.selectRow (i);
                         publishQGroup (inst);
@@ -541,15 +543,14 @@ public:
     }
     OscFullView& full() noexcept { return full_; }
     const OscFullView& full() const noexcept { return full_; }
-    modmodel::Targets& modsPage() noexcept { return mods_; }
-    const modmodel::Targets& modsPage() const noexcept { return mods_; }
+    ModRowsPage& modsPage() noexcept { return mods_; }
+    const ModRowsPage& modsPage() const noexcept { return mods_; }
     void syncNativeModulations (IInstanceView& inst, UiStack& stack, nativeui::targets::Owner owner)
     {
         const auto destination = synthyboy::modDestinationChoiceOf (static_cast<size_t> (modsTargetParam_));
         const bool shown = stack.element() == kElementOsc && stack.top() == kPageMods && ! modsBoard()
             && modsContextValid (inst);
         nativeModulations_.update (inst, mods_, shown, owner, static_cast<int> (destination), modRows_,
-            ModTargetsNative::Ids { kModsBack, kModsAdd, kModsPage, kModsRow },
             [&] (ui::Change c)
             {
                 handle (c, stack, inst);
@@ -2063,9 +2064,9 @@ private:
         buildDetailGroups();
     }
     // ---- the modulations page
-    static constexpr int kModsPerPage = modmodel::Targets::kPerPage;
+    static constexpr int kModsPerPage = ModRowsPage::kPerPage;
     uibind::ModRow modRows_[kModsPerPage];
-    ModTargetsNative nativeModulations_;
+    NativeModTargets nativeModulations_;
     int modsPageIndex_ = 0, modsSource_ = 0, modsType_ = -1;
     uint64_t modsPreset_ = 0;
     int modsTarget_ = 0;     // the id of the control whose modulations the page shows
@@ -2087,11 +2088,13 @@ private:
     {
         const auto window = uibind::modulationWindow (inst, modsTargetParam_, selectedSource_, modsPageIndex_, modRows_, focusSlot);
         modsPageIndex_ = window.page;
-        modmodel::Targets::Entry e[kModsPerPage];
+        ModRowsPage::Entry e[kModsPerPage];
         const int n = std::clamp (window.entries.numMods, 0, kModsPerPage);
         for (int i = 0; i < n; ++i)
         {
             ui::setText (e[i].name, sizeof e[i].name, window.entries.mods[i].name);
+            e[i].source = window.entries.mods[i].source;
+            e[i].macro = window.entries.mods[i].macro;
             e[i].depth = window.entries.mods[i].depth;
             e[i].bidirectional = window.entries.mods[i].bidirectional;
             e[i].bypassed = window.entries.mods[i].bypassed;
@@ -3116,7 +3119,7 @@ private:
     oscmodel::DetailLayout detailLayout_;
     QGroupIds detailGroups_[kMaxDetailGroups];
     int nDetailGroups_ = 0, detailActive_ = 0;
-    modmodel::Targets mods_;
+    ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
     ui::ListPopup list_;
     ui::NoteMask mask_;                                        // case (c): the mask of the transpose snap, the only control the plugin still draws and handles
     bool modsPicking_ = false, modsListFilled_ = false;

@@ -26,7 +26,8 @@
 #include "../ui/native_apertures.h"
 #include "instance_view.h"
 #include "mod_model.h"
-#include "mod_targets_native.h"
+#include "mod_rows_page.h"
+#include "native_mod_targets_ui.h"
 #include "page_view.h"
 #include "native_marker_covers.h"
 #include "q_publish.h"
@@ -135,6 +136,7 @@ public:
         matrix_.place (tab);
         detail_.place (tab);
         targets_.place (tab);
+        targets_.setIds (kTargetsBack, kTargetsAdd, kTargetsPage, kTargetsRow);
     }
 
     /** Reads the instance: the 64 slots, the page of the open slot, the live values of the sources, the pages of the stack, the Q group. */
@@ -200,7 +202,7 @@ public:
         if (targetsShown())
             loadTargets (inst, false);
         nativeTargets_.update (inst, targets_, nativeControls_ && pageTop_ == kPageTargets, nativeui::targets::Mod, targetsSource_,
-                               targetRows_, ModTargetsNative::Ids { kTargetsBack, kTargetsAdd, kTargetsPage, kTargetsRow },
+                               targetRows_,
                                [&] (ui::Change change) { handle (change, stack, inst); });
 
         // the virtual Q target of the rows: a write of the host moves the selected row
@@ -324,7 +326,7 @@ public:
             else if (pageTop_ == kPageTargets)
             {
                 for (int i = 0; i < targets_.numRows(); ++i)
-                    if (y >= targets_.rowY (i) && y < targets_.rowY (i) + modmodel::Targets::kRowH)
+                    if (y >= targets_.rowY (i) && y < targets_.rowY (i) + ModRowsPage::kRowH)
                     {
                         targets_.selectRow (i);
                         publishQGroup (inst);
@@ -396,7 +398,7 @@ public:
 
     modmodel::Matrix& matrix() noexcept { return matrix_; }
     modmodel::Detail& detail() noexcept { return detail_; }
-    modmodel::Targets& targetsPage() noexcept { return targets_; }
+    ModRowsPage& targetsPage() noexcept { return targets_; }
     /** The rows of the open list (the names the host list shows) and the choice value of each (0 NONE, a negative number a group). */
     const std::vector<const char*>& listNames() const noexcept { return listNames_; }
     const std::vector<int>& listChoices() const noexcept { return listChoices_; }
@@ -792,12 +794,12 @@ private:
     }
     void loadTargets (const IInstanceView& v, bool fresh)
     {
-        constexpr int kPer = modmodel::Targets::kPerPage;
+        constexpr int kPer = ModRowsPage::kPerPage;
         const int total = uibind::slotsOfSource (v, targetsSource_, scratchSlots_, uibind::kMaxTargetSlots);
         const int pages = std::max (1, (total + kPer - 1) / kPer);
         targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
         const int first = targetsPageIndex_ * kPer, n = std::clamp (total - first, 0, kPer);
-        modmodel::Targets::Entry e[kPer];
+        ModRowsPage::Entry e[kPer];
         for (int i = 0; i < kPer; ++i)
             targetRows_[i] = {};
         for (int i = 0; i < n; ++i)
@@ -851,7 +853,7 @@ private:
         const int slot = uibind::addTargetSlot (inst, source, destChoice);
         if (slot < 0)
             return;
-        constexpr int rows = modmodel::Targets::kPerPage;
+        constexpr int rows = ModRowsPage::kPerPage;
         const int position = uibind::targetPosition (inst, source, slot);
         targetsPageIndex_ = position / rows;
         loadTargets (inst, true);
@@ -998,7 +1000,7 @@ private:
             loadTargets (inst, true);
             return;
         }
-        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * modmodel::Targets::kPerPage)
+        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * ModRowsPage::kPerPage)
         {
             const int slot = targetRows_[(c.id - kTargetsRow) / 4].slot, what = (c.id - kTargetsRow) % 4;
             if (slot < 0)
@@ -1156,7 +1158,7 @@ private:
         if (pageTop_ == kPageDetail)
             return detail_.turnQ (knobIndex, delta, { kDetailAuxOutput, kDetailAuxInv, kDetailAuxPower, kDetailPower, kDetailStereo, kDetailRise, kDetailFall, kDetailDelay, kDetailDelayBeats, kDetailDelaySync });
         if (pageTop_ == kPageTargets)
-            return targets_.turnQ (knobIndex, delta, kTargetsRow);
+            return targets_.turnQ (knobIndex, delta);
         if (pageTop_ != 0)
             return {};
         const int w = matrix_.selectedWindowRow();
@@ -1189,7 +1191,7 @@ private:
             char title[28];
             boardLabel (targetsSource_, title, sizeof title);
             std::snprintf (qName_, sizeof qName_, "%s TARGETS", title);
-            qSlots_.publish (inst, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < modmodel::Targets::kPerPage ? targetRows_[row].slot : -1, t); });
+            qSlots_.publish (inst, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ModRowsPage::kPerPage ? targetRows_[row].slot : -1, t); });
         }
         else if (pageTop_ == kPageDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
         {
@@ -1238,13 +1240,13 @@ private:
 
     modmodel::Matrix matrix_;
     modmodel::Detail detail_;
-    modmodel::Targets targets_;
+    ModRowsPage targets_;
     int nativeListFirst_ = 0;
-    ModTargetsNative nativeTargets_;
+    NativeModTargets nativeTargets_;
 
     // the targets page of a source: which source, the page of its rows, the slot of every row shown
     int targetsSource_ = 0, targetsLoaded_ = 0, targetsPageIndex_ = 0, targetTotal_ = -1;
-    uibind::ModRow targetRows_[modmodel::Targets::kPerPage];
+    uibind::ModRow targetRows_[ModRowsPage::kPerPage];
     int scratchSlots_[uibind::kMaxTargetSlots] = {};
 
     ListKind listKind_ = ListKind::Source;

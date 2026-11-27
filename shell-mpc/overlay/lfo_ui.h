@@ -47,7 +47,9 @@
 #include "q_publish_mod.h"
 #include "instance_view.h"
 #include "lfo_layout.h"
-#include "lfo_mod_rows.h"
+#include "modulation_window.h"
+#include "mod_rows_page.h"
+#include "native_mod_targets_ui.h"
 #include "lfo_shape_files.h"
 #include "overlay_layout.h"
 #include "page_view.h"
@@ -82,6 +84,8 @@ public:
         kClose = 1, kFullButton, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice; kSelector: Play full-screen cells
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
+        kTgBack = 300, kTgAdd, kTgPage, kTgRow = 310,    // the cells of the targets page (310 + 4 * row + 0 depth, 1 polarity, 2 on / off, 3 remove)
+        kMdBack = 340, kMdAdd, kMdPage, kMdRow = 350,    // the cells of the modulations page (same numbering)
         kMpBack = 230, kMpTarget, kMpAmount, kMpRemove, kMpBoard, kKbOk = 250, kKbCancel,
         kMemberRate = 900, kMemberSync   // the members of a Q group that are no row: the rate (the rate, or the division in the BPM sync) and the sync mode list
     };
@@ -417,9 +421,9 @@ public:
             return;
         }
         if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
-            targetsView_.draw (sb, false);
+            targetsView_.draw (sb);
         else if (pageTop_ == kPageMods || (pageTop_ == kPageList && underList_ == kPageMods))
-            modsView_.draw (sb, true);
+            modsView_.draw (sb);
         else
         {
             if (! page_)
@@ -671,10 +675,10 @@ public:
         using namespace nativeui::targets;
         const auto before = stack.changes();
         targetsNative_.update (inst, targetsView_, pageTop_ == kPageTargets, fromPlay ? PlayLfo : Lfo, source(), targetRows_,
-                               [&] (ModRowsCmd cmd, int row, double value) { rowsCommand (false, cmd, row, value, stack, inst); });
+                               [&] (ui::Change c) { rowsCommand (false, c, stack, inst); });
         const auto destination = synthyboy::modDestinationChoiceOf (static_cast<size_t> (modsTargetParam_));
         modsNative_.update (inst, modsView_, modsContextValid (inst), fromPlay ? PlayLfo : Lfo, static_cast<int> (destination), modRows_,
-                            [&] (ModRowsCmd cmd, int row, double value) { rowsCommand (true, cmd, row, value, stack, inst); }, Modulations);
+                            [&] (ui::Change c) { rowsCommand (true, c, stack, inst); }, Modulations);
         if (stack.changes() != before)
         {
             stackDepth_ = stack.depth();
@@ -1099,17 +1103,17 @@ private:
     }
 
     // ---- the targets page: the rows of the matrix whose source is this LFO
-    ModRow targetRows_[LfoModRows::kPerPage];
+    ModRow targetRows_[ModRowsPage::kPerPage];
     int targetTotal_ = 0;
     void loadTargets (const IInstanceView& v, bool fresh)
     {
-        constexpr int perPage = LfoModRows::kPerPage;
+        constexpr int perPage = ModRowsPage::kPerPage;
         int slots[uibind::kMaxTargetSlots];
         const int total = uibind::slotsOfSource (v, source(), slots, uibind::kMaxTargetSlots);
         const int pages = std::max (1, (total + perPage - 1) / perPage);
         targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
         const int first = targetsPageIndex_ * perPage, n = std::clamp (total - first, 0, perPage);
-        LfoModRows::Entry e[perPage];
+        ModRowsPage::Entry e[perPage];
         for (int i = 0; i < n; ++i)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slots[first + i]);
@@ -1123,8 +1127,7 @@ private:
         bool same = ! fresh && n == targetsView_.numRows() && total == targetTotal_;
         for (int i = 0; same && i < n; ++i)
         {
-            const LfoModRows::Entry& r = targetsView_.row (i);
-            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth - e[i].depth) < 1.0e-9 && r.bidirectional == e[i].bidirectional && r.bypassed == e[i].bypassed;
+            same = targetsView_.sameRow (i, e[i]);
         }
         if (same)
             return;
@@ -1132,6 +1135,7 @@ private:
         char title[16];
         std::snprintf (title, sizeof title, rnd_ != 0 ? "RND %d" : "LFO %d", selection());
         targetsView_.place ({ 0, kTabY, w_, kTabH });
+        targetsView_.setIds (kTgBack, kTgAdd, kTgPage, kTgRow);
         targetsView_.load (e, n, title, ui::theme::sourceColour (rnd_ != 0 ? "RND" : "LFO"), total, targetsPageIndex_);
     }
     /** The name of a destination choice ("LFO 1 Rate"); the appended destinations that are no table parameter get a generic name. */
@@ -1149,7 +1153,7 @@ private:
         const int slot = uibind::addTargetSlot (v, modulationSource, destChoice);
         if (slot < 0)
             return;
-        constexpr int rows = LfoModRows::kPerPage;
+        constexpr int rows = ModRowsPage::kPerPage;
         const int position = uibind::targetPosition (v, modulationSource, slot);
         targetsPageIndex_ = position / rows;
         loadTargets (v, true);
@@ -1343,8 +1347,8 @@ public:
 private:
 
     // ---- the modulations page of one control
-    ModRow modRows_[LfoModRows::kPerPage];
-    LfoNativeModRows targetsNative_, modsNative_;
+    ModRow modRows_[ModRowsPage::kPerPage];
+    NativeModTargets targetsNative_, modsNative_;
     int modsPageIndex_ = 0;
     uint64_t modsPreset_ = 0;
     int modsTarget_ = 0, modsTargetParam_ = -1;
@@ -1368,10 +1372,10 @@ private:
         }
         if (t != nullptr && modsTargetParam_ >= 0)
             std::snprintf (title, sizeof title, "%.12s", controlLabel (t->id));
-        const auto window = lfomods::modulationWindow (v, modsTargetParam_, source(), modsPageIndex_, modRows_, focusSlot);
+        const auto window = uibind::modulationWindow (v, modsTargetParam_, source(), modsPageIndex_, modRows_, focusSlot);
         modsPageIndex_ = window.page;
-        LfoModRows::Entry e[LfoModRows::kPerPage];
-        const int n = std::clamp (window.entries.numMods, 0, LfoModRows::kPerPage);
+        ModRowsPage::Entry e[ModRowsPage::kPerPage];
+        const int n = std::clamp (window.entries.numMods, 0, ModRowsPage::kPerPage);
         for (int i = 0; i < n; ++i)
         {
             const ui::ModEntry& m = window.entries.mods[i];
@@ -1382,6 +1386,7 @@ private:
             e[i].macro = m.macro;
         }
         modsView_.place ({ 0, kTabY, w_, kTabH });
+        modsView_.setIds (kMdBack, kMdAdd, kMdPage, kMdRow);
         modsView_.load (e, n, title, 0xffffffu, window.total, window.page);
         if (window.focusRow >= 0)
             modsView_.selectRow (window.focusRow);
@@ -1404,7 +1409,7 @@ private:
     {
         if (! modsContextValid (v))
             return;
-        if (const int slot = lfomods::ensureModulationSource (v, modsTargetParam_, src); slot >= 0)
+        if (const int slot = uibind::ensureModulationSource (v, modsTargetParam_, src); slot >= 0)
             loadMods (v, slot);
     }
     void refreshMods (const IInstanceView& v)
@@ -1416,14 +1421,16 @@ private:
             loadMods (v);
     }
     /** The commands of the native cells of a row page (targets, modulations of a control). */
-    void rowsCommand (bool modulations, ModRowsCmd cmd, int row, double value, UiStack& stack, IInstanceView& v)
+    void rowsCommand (bool modulations, const ui::Change& c, UiStack& stack, IInstanceView& v)
     {
-        if (cmd == ModRowsCmd::Back)
+        using K = ui::ChangeKind;
+        const int idBack = modulations ? kMdBack : kTgBack, idAdd = modulations ? kMdAdd : kTgAdd, idPage = modulations ? kMdPage : kTgPage, idRow = modulations ? kMdRow : kTgRow;
+        if (c.id == idBack && c.kind == K::Request)
         {
             stack.back();
             return;
         }
-        if (cmd == ModRowsCmd::Add)
+        if (c.id == idAdd && c.kind == K::Request)
         {
             if (modulations)
             {
@@ -1434,38 +1441,41 @@ private:
                 openList (stack, v, ListKind::Dest);
             return;
         }
-        if (cmd == ModRowsCmd::Page)
+        if (c.id == idPage && c.kind == K::Index)
         {
             if (modulations && modsContextValid (v))
             {
-                modsPageIndex_ = static_cast<int> (value);
+                modsPageIndex_ = c.index;
                 loadMods (v);
             }
             else if (! modulations)
             {
-                targetsPageIndex_ = static_cast<int> (value);
+                targetsPageIndex_ = c.index;
                 loadTargets (v, true);
             }
             return;
         }
-        const ModRow r = row >= 0 && row < LfoModRows::kPerPage ? (modulations ? modRows_[row] : targetRows_[row]) : ModRow {};
-        if (modulations && ! (modsContextValid (v) && lfomods::modulationMatches (v, modsTargetParam_, r)))
+        if (c.id < idRow || c.id >= idRow + 4 * ModRowsPage::kPerPage)
+            return;
+        const int row = (c.id - idRow) / 4, what = (c.id - idRow) % 4;
+        const ModRow r = modulations ? modRows_[row] : targetRows_[row];
+        if (modulations && ! (modsContextValid (v) && uibind::modulationMatches (v, modsTargetParam_, r)))
             return;
         if (r.slot < 0)
             return;
         (modulations ? modsView_ : targetsView_).selectRow (row);
         const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (r.slot);
-        switch (cmd)
+        if (what == 3 && c.kind == K::Request)
         {
-            case ModRowsCmd::Remove:
-                uibind::writePlain (v, sp.source, 0); uibind::writePlain (v, sp.destination, 0); uibind::writePlain (v, sp.amount, 0);
-                modulations ? loadMods (v) : loadTargets (v, true);
-                break;
-            case ModRowsCmd::Depth: uibind::writeNorm (v, sp.amount, value); break;
-            case ModRowsCmd::Polarity: uibind::writePlain (v, sp.bipolar, value != 0.0 ? 1.0 : 0.0); break;
-            case ModRowsCmd::Bypass: uibind::writePlain (v, sp.bypass, value != 0.0 ? 0.0 : 1.0); break;   // the switch says ON (active): bypassed is its opposite
-            default: break;
+            uibind::writePlain (v, sp.source, 0); uibind::writePlain (v, sp.destination, 0); uibind::writePlain (v, sp.amount, 0);
+            modulations ? loadMods (v) : loadTargets (v, true);
         }
+        else if (what == 0 && c.kind == K::Value)
+            uibind::writeNorm (v, sp.amount, c.value);
+        else if (what == 1 && c.kind == K::Index)
+            uibind::writePlain (v, sp.bipolar, c.index != 0 ? 1.0 : 0.0);
+        else if (what == 2 && c.kind == K::Index)
+            uibind::writePlain (v, sp.bypass, c.index != 0 ? 0.0 : 1.0);   // the switch says ON (active): bypassed is its opposite
         modsDirty_ = true;
     }
 
@@ -3347,9 +3357,9 @@ private:
             const bool tg = pageTop_ == kPageTargets;
             name = tg ? "Targets" : "Mods";
             const ModRow* rows = tg ? targetRows_ : modRows_;
-            const LfoModRows& view = tg ? targetsView_ : modsView_;
+            const ModRowsPage& view = tg ? targetsView_ : modsView_;
             const int n = view.numRows(), act = view.activeRow();
-            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < LfoModRows::kPerPage ? rows[row].slot : -1, t); });
+            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < ModRowsPage::kPerPage ? rows[row].slot : -1, t); });
         }
         else if (pageTop_ == kPageList)
         {
@@ -3484,7 +3494,7 @@ private:
     ui::ShapeEditorModel editor_;
     ui::PointModModel pointMod_;
     ui::TextEntry entry_;
-    LfoModRows targetsView_, modsView_;
+    ModRowsPage targetsView_ { ModRowsPage::Kind::Targets }, modsView_ { ModRowsPage::Kind::Modulations };
     lfolayout::Menu menu_;
     LfoShapeLibrary lib_;
     binding::SelectorSet selector_;

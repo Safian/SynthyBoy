@@ -1,4 +1,5 @@
-// SynthyBoy - MPC overlay: the DATA of the two detail pages "targets of a source" and "modulations of a control" (Env, Filter NOTE / VELO, ...): the rows, the page index, the title and the rectangles of the native cells
+// SynthyBoy - MPC overlay: the ONE data model of the two detail pages "targets of a source" and "modulations of a control" (Env, LFO, Filter NOTE / VELO, Mod, Osc, ...): the rows (name, source, depth, polarity, on / off),
+// the page index, the title and the rectangles of the native cells (the geometry of scripts/mpc-skin-extras/mod-targets-native-contract.json)
 // the host skin draws (BACK, ADD, the page stepper and, per row, the depth, the polarity, the on / off and the remove cell). A model, not a control (owner decision 2026-11-27: the C++ layer has no UI elements): it
 // takes no touch and draws no control; the overlay paints only what the host skin does not (the title, the count, the names, the empty hint) and cuts the native cells out of the ground. The native bridge
 // (native_mod_targets_ui.h) publishes the rows and reads the gestures of the skin through the same ids the page gave (`setRowIds`).
@@ -26,7 +27,7 @@ public:
     enum class Kind : uint8_t { Targets, Modulations };
 
     static constexpr int kPerPage = 6, kRowH = 72, kCtlH = 56, kBarH = 92, kNameW = 340;
-    static constexpr int kToolbarY = 32, kToolbarAddW = 200, kGap = 8, kNameLen = 40;
+    static constexpr int kToolbarY = 32, kToolbarAddW = 200, kPageW = 208, kGap = 4, kNameLen = 40;
 
     /** The id and the rectangle of one native cell. */
     struct Cell
@@ -47,12 +48,16 @@ public:
         char name[kNameLen] = {};
         int source = 0;
         bool macro = false;
+        double depthNorm = 0.5;                // 0 .. 1 (the depth cell)
+        bool bidirectional = false, on = true; // on = the modulation is active
     };
     struct Entry
     {
         char name[kNameLen] = {};
         int source = 0;
         bool macro = false;
+        double depth = 0.0;                    // -1 .. +1 of the range of the target
+        bool bidirectional = false, bypassed = false;
     };
 
     Cell back, add;
@@ -83,6 +88,9 @@ public:
             ui::setText (rows[i].name, sizeof rows[i].name, e[i].name);
             rows[i].source = e[i].source;
             rows[i].macro = e[i].macro;
+            rows[i].depthNorm = (std::clamp (e[i].depth, -1.0, 1.0) + 1.0) * 0.5;
+            rows[i].bidirectional = e[i].bidirectional;
+            rows[i].on = ! e[i].bypassed;
         }
         selectRow (nRows_ > 0 ? std::min (std::max (activeRow_, 0), nRows_ - 1) : -1);
         layout();
@@ -99,6 +107,42 @@ public:
 
     int numRows() const noexcept { return nRows_; }
     int activeRow() const noexcept { return activeRow_; }
+    int pageIndex() const noexcept { return page.state.index; }
+    int pageCount() const noexcept { return page.state.count; }
+    int total() const noexcept { return total_; }
+    const char* title() const noexcept { return title_; }
+    uint32_t colour() const noexcept { return colour_; }
+    /** True when row `i` of the page shows exactly this data (a reload resets the touch of a row that is being dragged). */
+    bool sameRow (int i, const Entry& e) const noexcept
+    {
+        const Row& r = rows[i];
+        return std::strcmp (r.name, e.name) == 0 && std::fabs (r.depthNorm - (e.depth + 1.0) * 0.5) < 1.0e-9 && r.bidirectional == e.bidirectional && r.on == ! e.bypassed;
+    }
+    /** The ids of the cells the page reports changes with (the owner's numbering): BACK, ADD, the page cell, and per row `rowBase + 4 * row` + 0 depth, 1 polarity, 2 on / off, 3 remove. */
+    void setIds (int backId, int addId, int pageId, int rowBase)
+    {
+        back.setId (backId);
+        add.setId (addId);
+        page.setId (pageId);
+        for (int row = 0; row < kPerPage; ++row)
+            setRowIds (row, rowBase + 4 * row, rowBase + 4 * row + 1, rowBase + 4 * row + 2, rowBase + 4 * row + 3);
+    }
+    /** The Q-Link `knobIndex` of the active row: 0 depth, 1 polarity, 2 on / off; the ids are those of `setIds`. */
+    ui::Change turnQ (int knobIndex, double delta) const noexcept
+    {
+        if (activeRow_ < 0 || delta == 0.0)
+            return ui::Change::none();
+        const Row& r = rows[activeRow_];
+        if (knobIndex == 0)
+        {
+            const double v = std::clamp (r.depthNorm + delta, 0.0, 1.0);
+            return std::fabs (v - std::clamp (r.depthNorm, 0.0, 1.0)) < 1.0e-12 ? ui::Change::none() : ui::Change::normalised (r.depth.id(), v);
+        }
+        const bool cur = knobIndex == 1 ? r.bidirectional : r.on, next = delta > 0.0;
+        if ((knobIndex != 1 && knobIndex != 2) || next == cur)
+            return ui::Change::none();
+        return ui::Change::indexed (knobIndex == 1 ? r.polarity.id() : r.bypass.id(), next ? 1 : 0, next ? 1.0 : 0.0);
+    }
     void selectRow (int i) noexcept { activeRow_ = i >= 0 && i < nRows_ ? i : -1; }
     /** The page id of the cells of a row (the ids the native bridge reports). */
     void setRowIds (int row, int depth, int polarity, int bypass, int remove)
@@ -193,7 +237,7 @@ private:
         const int toolbarY = rect_.y + kToolbarY;
         back.rect_ = { rect_.x + 4, toolbarY, 120, kCtlH };
         add.rect_ = { rect_.right() - 4 - kToolbarAddW, toolbarY, kToolbarAddW, kCtlH };
-        page.rect_ = { add.rect_.x - kGap - 144, toolbarY, 144, kCtlH };
+        page.rect_ = { add.rect_.x - kGap - kPageW, toolbarY, kPageW, kCtlH };
         for (int i = 0; i < kPerPage; ++i)
         {
             Row& r = rows[i];

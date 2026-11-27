@@ -1,11 +1,11 @@
-// SynthyBoy - host control ownership and edit routing shared by the TARGETS pages.
+// SynthyBoy - the ONE bridge of the host controls of the TARGETS / MODULATIONS pages (ModRowsPage, mod_rows_page.h): publishes the bindings of the native cells and hands what the host wrote into them back as page changes (the ids the page was given by `setIds`).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
 #include "../native_mod_targets.h"
-#include "../ui/mod_targets.h"
 #include "instance_view.h"
+#include "mod_rows_page.h"
 #include "synthyboy/modulation.h"
 
 namespace synthyboy_mpc::overlay
@@ -13,7 +13,9 @@ namespace synthyboy_mpc::overlay
 class NativeModTargets
 {
 public:
-    static_assert (ui::ModTargetsPage::kPerPage == nativeui::targets::kRows);
+    static_assert (ModRowsPage::kPerPage == nativeui::targets::kRows);
+
+    bool active() const noexcept { return active_; }
 
     template<class Screen>
     void hide (IInstanceView& inst, Screen& screen)
