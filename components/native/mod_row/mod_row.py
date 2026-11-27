@@ -89,6 +89,8 @@ def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticall
     label = _label_component(kind.lower(), kind, "Caption" if name_mode else "Data", bounds_rect,
                              font_size, _style_argb("mod_row.text_label" if name_mode else "mod_row.text_value"),
                              justification)
+    from components.native.level.level import apply_dial_text_style, dial_caption_style
+    (dial_caption_style if name_mode else apply_dial_text_style)(label["componentData"]["data"]["textStyle"])   # the dial text style
     label["bounds"]["showWhenDataModelInvalid"] = "Hide"
     return label
 

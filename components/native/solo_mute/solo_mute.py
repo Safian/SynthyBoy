@@ -32,8 +32,10 @@ try:
 except ImportError:
     Image = ImageDraw = None
 
+from components.native.button.button import gradient_face
 from components.style import (
     argb as _style_argb,
+    control_look as _control_look,
     rgb as _style_rgb,
     rgba as _style_rgba,
     size as _style_size,
@@ -135,7 +137,20 @@ def render_button_face(
         border = _style_rgb("button.border")
         fg = _style_rgb("text.icon")
 
-    pen.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=bg, outline=border, width=1)
+    if _control_look() == "legacy":
+        # The shared button gradient (button.gradient.*); the state keyline colour stays, the pressed fill is its own.
+        scale = _style_size("sampling.standard")
+        fill = (bg, bg) if state == STATE_PRESSED else (_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom"))
+        if state == STATE_NEUTRAL:
+            line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
+        else:
+            line = (border, border)
+        face, _ = gradient_face((w * scale, h * scale), inset=0, radius=radius * scale, frame=scale,
+                                span=_style_size("control.gradient"), fill=fill, line=line)
+        image = face.resize((w, h), Image.Resampling.LANCZOS)
+        pen = ImageDraw.Draw(image)
+    else:
+        pen.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=bg, outline=border, width=1)
     if font:
         pen.text((w // half, h // half), text, font=font, fill=fg, anchor="mm")
     return image

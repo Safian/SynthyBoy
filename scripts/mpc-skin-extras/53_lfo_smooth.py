@@ -143,7 +143,7 @@ def _sync_radio(ctx, width, height, handle="Data"):
     from components.native.radio_button.radio_button import create_segmented_radio_button_group
     vertical = width < 3 * _ui_style.size("lfo.dial.option_min_width")
     children = create_segmented_radio_button_group("LFO Sync", (0, 0, width, height),
-                                                   ("HZ", "BPM", "KEY"), handle, ctx.skins_dir, vertical=vertical)
+                                                   ("HZ", "BPM", "KEY"), handle, ctx.skins_dir, vertical=vertical, grid=True)
     # The existing append-only Sync handle is the engine's FIVE-state value:
     # Hz=0, Tempo=1, dotted=2, triplet=3, Key=4. Keep that API unchanged.
     for child, index in zip(children, (0, 1, 4)):

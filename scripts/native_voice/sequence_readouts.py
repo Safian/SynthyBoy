@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Host-native step selection and readouts for the Voice sequence."""
 from components import style
+from components.native.level.level import apply_dial_text_style
 from components.native.button.button import button, entry, write_transparent_hit
 from components.native.name_value.name_value import _label_component
 from components.native.selector.selector import passive_layer
@@ -24,9 +25,11 @@ SEQUENCE_READOUT_NAMES = {
 
 
 def _label(handle, rect, *, kind="Value"):
-    return _label_component(handle, kind, handle, rect, style.size("font.value"),
-                            style.argb("text.caption" if kind == "Name" else "text.value"),
-                            "horizontallyCentred verticallyCentred")
+    label = _label_component(handle, kind, handle, rect, style.size("font.value"),
+                             style.argb("text.caption" if kind == "Name" else "text.value"),
+                             "horizontallyCentred verticallyCentred")
+    apply_dial_text_style(label["componentData"]["data"]["textStyle"])
+    return label
 
 
 def _geometry():

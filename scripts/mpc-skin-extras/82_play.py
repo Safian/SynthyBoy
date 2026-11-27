@@ -238,7 +238,7 @@ def apply(tui, qlinks, ctx):
         selector_def = selector_definition(
             selector_source, overlay_name, bounds[2:], ctx.skins_dir,
             title="Data", frame_name="Play selector frame",
-            filename=frame_asset, neutral=neutral, arrows=True, label_height=_style_size("play.font.24"),
+            filename=frame_asset, neutral=neutral, arrows=False, label_height=_style_size("play.font.24"),
             justification="horizontallyCentred verticallyCentred"
         )
         definitions.append({"key": component_name, "value": selector_def})

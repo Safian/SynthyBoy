@@ -22,7 +22,7 @@ if str(SCRIPTS) not in sys.path:
 
 from components import style
 from components.native.button.button import action_button
-from components.native.level.level import COMPACT_48_RECTS, DEFAULT_DIAL_RECTS, compact_level_definition, level_definition
+from components.native.level.level import apply_dial_text_style, COMPACT_48_RECTS, DEFAULT_DIAL_RECTS, compact_level_definition, level_definition
 from components.native.pan.pan import compact_pan_definition, pan_definition
 from components.native.name_value.name_value import DEFAULT_BOX_WIDTH, DEFAULT_HEIGHT, build_name_value_definition
 from components.native.active_text.active_text import active_text_definition, write_active_text_assets
@@ -72,6 +72,8 @@ def _label(kind, rect, *, text=None, height=None, align="horizontallyCentred ver
     if text is not None:
         data["type"] = "Text"
         data["text"] = text
+    else:
+        apply_dial_text_style(data["textStyle"])   # a dial's Name and Value labels: the one dial text style
     return _entry(kind.lower(), "Label", data, rect, relative=True)
 
 

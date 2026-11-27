@@ -168,8 +168,8 @@ def apply(tui, items, ctx, contract):
                 ctx.skins_dir,
                 title="Data",
                 caption="SHAPE",
-                stepper=True,
-                arrows=True,
+                stepper=False,
+                arrows=False,
             )
         elif field == CHOOSE:
             control = selector_definition(
@@ -181,7 +181,7 @@ def apply(tui, items, ctx, contract):
                 frame_name="Play selector frame",
                 filename="play_lfo_selector_frame.png",
                 neutral=False,
-                arrows=True,
+                arrows=False,
                 label_height=_style_size("play.font.24"),
                 justification="horizontallyCentred verticallyCentred",
             )
@@ -213,7 +213,7 @@ def apply(tui, items, ctx, contract):
                 handle = f"Parameter {native_base + PLAY_LFO_STANDARD_SYNC}"
                 items.extend(create_segmented_radio_button_group(
                     f"Play Native EnvLfo SYNC {first}-{last}", rect, ("HZ", "BPM", "KEY"),
-                    handle, ctx.skins_dir, gates=(modal_gate, visible)))
+                    handle, ctx.skins_dir, gates=(modal_gate, visible), grid=True))
             elif field in (ENV_EXPAND, LFO_EXPAND):
                 items.append(button(name, rect, "lfo_native_expand.png",
                                     remaps=(("Data", "FromGesture/" + handle),), gates=(modal_gate, visible)))
