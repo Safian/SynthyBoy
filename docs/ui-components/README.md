@@ -1,12 +1,14 @@
-# The UI component library of the SynthyBoy MPC plugin
+# The native component library of the SynthyBoy MPC plugin
 
-For developers and AI coding agents who want to build their own plugin-drawn pages (and later their own Akai MPC plugin UI) from these components. Start here; the details are one page per component.
+The controls of the plugin are the shared **native components**: the catalogue (`components/native/<name>`, the picture catalogue below), the tokens (`components/colors.json`, `components/sizes.json`) and the host skin recipes (`components/native` and `scripts/mpc-skin-extras`). Every control on every screen comes from its component. The plugin-drawn layer (`shell-mpc/ui`, `shell-mpc/overlay`) keeps only what the host cannot draw: live graphs, meters, curve, waveform and spectrum displays, animation, the automation indicators around native controls and the interaction of the curve editors. (Owner decision 2026-11-27: the C++ widget library is not offered to others; everyone draws native controls for themselves, as we did.)
+
+The pages below that describe C++ classes (one page per class, the contract further down) are an internal developer reference of the plugin-drawn layer, not a library to build on. The C++ widgets that remain are the parameter/Q-Link model and layout of the native cells; see [docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md](../review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md) for which of them are reachable and what is left to replace.
 
 [Képes komponenskatalógus (magyar)](kepes-katalogus.html)
 
 ## A képes katalógus karbantartása
 
-A képes katalógus kizárólag az önálló MPC host natív skin-komponenseit mutatja. C++ overlay-vezérlő, kézzel utánrajzolt komponens vagy külön HTML/SVG/CSS-animáció nem kerülhet bele. Kép csak a használt natív komponensdefinícióból vagy annak tényleges skin-eszközéből, illetve az MPC hardverről származhat; eredetét meg kell nevezni. A teljes C++ könyvtár alábbi dokumentációja külön fejlesztői referencia.
+A képes katalógus kizárólag az önálló MPC host natív skin-komponenseit mutatja. C++ overlay-vezérlő, kézzel utánrajzolt komponens vagy külön HTML/SVG/CSS-animáció nem kerülhet bele. Kép csak a használt natív komponensdefinícióból vagy annak tényleges skin-eszközéből, illetve az MPC hardverről származhat; eredetét meg kell nevezni. Az alábbi C++ osztálydokumentáció a plugin-rajzolt réteg belső fejlesztői referenciája, nem külső könyvtár.
 
 ### Tárcsák (Pan, Level): szöveg nélküli méretváltozatok
 
