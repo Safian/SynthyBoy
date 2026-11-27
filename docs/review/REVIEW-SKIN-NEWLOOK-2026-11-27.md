@@ -331,3 +331,77 @@
   - `selector.neutral.ink` (`#909090`) on `selector.neutral.surface` (`#202020`): **5.10 : 1**; border `#5a5a5a` vs `#0a0e1a`: **2.79 : 1** — readable, which causes active `playOscSelector` (`82_play.py:234`, `neutral=True`) to look flat grey/disabled yet higher-bordered than the active blue gradient `playModSelector` beside it.
 - **Active cyan RadioGrid / segmented face (`components/native/button/button.py:116-117`, `components/native/radio_button/radio_button.py:45`):**
   - `radio.active.text` (`#06101e`) on `accent.cyan` (`#2ee6f0`) top: **12.44 : 1**; on `radio.active.bottom` (`#127a8a`) bottom: **3.79 : 1** (below 4.5:1 AA normal text at the lower half, borderline for bold 18 px).
+
+---
+
+## 4. Rules Violations (`AGENTS.md`, `components/AGENTS.md`, `BUTTON-MUTATION-AUDIT-2026-11-27.md`)
+
+### 4.1 Duplicate Token & Duplicate Function Definitions
+- `components/sizes.json:154-155`:
+  ```json
+      "control.look": "legacy",
+      "control.look": "legacy",
+  ```
+  Duplicate JSON key in the canonical size token file.
+- `components/style.py:39-64`:
+  `CONTROL_LOOKS = ("legacy", "flat")` and `def control_look():` are defined twice verbatim at lines `39-50` and `53-64` (likely from a merge conflict resolution).
+
+### 4.2 Literals Instead of Tokens (`components/AGENTS.md:15`, `AGENTS.md:53`)
+- `components/native/selector/selector.py:1353-1356` (`append_choice_rows`):
+  ```python
+  face = (action_art(text=label, width=width, height=48, look="active", colour=_style_color("radio.active.text"))
+          if state == "on" else action_art(text=label, width=width, height=48, look="legacy"))
+  image = Image.new("RGBA", (width, height))
+  image.alpha_composite(face, (0, (height - 48) // 2))
+  ```
+  Hardcodes `48` twice instead of `_style_size("button.face.height")` / `_style_size("height.medium")`.
+- `components/native/radio_button/radio_button.py:89,91`:
+  ```python
+  box = max(size for size in (32, 40, 48) if size <= across) if across >= 32 else across
+  if vertical:
+      face = action_art(text=label, width=width - 0, height=box, ...
+  ```
+  Hardcodes `(32, 40, 48)` and `32` instead of `height.small`, `height.intermediate`, `height.medium`; stray `width - 0`.
+- `components/native/level/level.py:1137`:
+  ```python
+  dim = "ff%02x%02x%02x" % dim_artwork(Image.new("RGBA", (1, 1), (r, g, b, 255))).getpixel((0, 0))[:3]
+  ```
+  Builds an ARGB string inline with literal `255` and `"ff..."` instead of a shared helper in `components/style.py`.
+- `scripts/mpc-skin-extras/57_osc_settings.py:66` (`(14 if caption else 18)`) and `scripts/mpc-skin-extras/58_osc_detail.py:52` (`14`, `17`) retain pre-existing pixel literals now masked by `apply_dial_text_style`.
+
+### 4.3 "Every Control Comes from Its Component" Bypassed (`AGENTS.md:63-65`, `BUTTON-MUTATION-AUDIT-2026-11-27.md`)
+- **Direct `gradient_face()` re-implementations instead of `button.py` face recipe:**
+  - `components/native/solo_mute/solo_mute.py:140-151` reads `button.gradient.*` itself and calls `gradient_face(..., radius=radius * scale, frame=scale)` instead of going through `button.py` (bypassing `button.art` / `button.size.*` geometry tokens).
+  - `components/native/tune/tune.py:226-235` (`_gradient_button_face`) defines its own button painter with `radius.field * scale`, `inset=pad`, `frame=scale`, duplicating `button.py`.
+  - `components/native/radio_button/radio_button.py:42-51` duplicates `action_art`'s `legacy`/`active` fill & border logic inside `render_segmented_button_art` instead of delegating to `action_art` (note: `render_grid_cell_art` at lines `91-97` correctly calls `action_art`).
+- **Mutation-audit bypasses still left unfixed:**
+  - `components/native/tune/tune.py:692-713` (`render_tune_card`): still draws flat `draw.rounded_rectangle(..., fill=BG_CELL, outline=BORDER_CELL, width=scale)`, ignoring `button.gradient.*`.
+  - `components/native/selector/selector.py:1141-1177` (`render_compact_button_face`): still draws flat `route.button.surface` / `button.surface`.
+  - `components/native/selector/selector.py:786` (`filter_chain_definition` "CHAIN" chip):
+    ```python
+    face = render_dropdown_face(*size, chevron=False)
+    ```
+    Flagged in `docs/review/BUTTON-MUTATION-AUDIT-2026-11-27.md:41-42` as a button that should use `action_art`; because it calls `render_dropdown_face`, a `button.gradient.*` mutation does **not** reach the Filter CHAIN button (`selector.dropdown.*` is a separate token set).
+
+### 4.4 Flat Faces Left (`AGENTS.md:51-53`: "the old gradient design, not flat")
+- `components/native/mod_row/mod_row.py:100,109,153-165,412`: `modNative_toggle_*` (`POLARITY`, `ROUTE`, and Mod Detail `INVERT`/`STEREO`/`SYNC`) are still **flat unbordered rectangles** whose background colour is `"button.gradient.top"` (`#131930`), with no gradient and no border.
+- `components/native/button/button.py:344-347`: `write_switch_asset` draws a flat `pen.rounded_rectangle(..., fill=_style_color("accent.cyan" if active else ("button.gradient.top" if legacy else "button.surface")), outline=_style_color("button.gradient.border" if legacy else "button.switch.border"))` instead of a gradient face.
+- `scripts/mpc-skin-extras/82_play.py:234` + `components/native/selector/selector.py:368-370`: active `playOscSelector` passes `neutral=True`, rendering a flat `#202020` box.
+- `components/native/solo_mute/solo_mute.py:143`: `STATE_PRESSED` passes `fill=(bg, bg)` (flat `#172038`) to `gradient_face`.
+- `components/native/mixer_strip/mixer_strip.py:331-350,495-575`: `mixerDestination56` uses flat `field.surface` (`#12182d`) instead of `selector.dropdown_definition`, and strip wells use flat `button.surface`/`button.border`.
+
+### 4.5 Left/Right Steppers & Phased-Out Variants (`AGENTS.md:55-61`)
+- **Left/right steppers remaining (`AGENTS.md:55-57`):**
+  - `scripts/native_play/osc.py:151-162` (`playOscTableField` keeps `previous` / `next` chevron buttons).
+  - `scripts/mpc-skin-extras/58_osc_detail.py:45-58` (`oscDetailStepper` keeps left/right chevron buttons) and `146-151` (`oscDetailUnisonMode` via `command_stepper_definition`).
+  - `components/native/selector/selector.py:1407-1420` (`command_stepper_definition` keeps `Previous` / `Open` / `Next` hit zones under a dropdown face).
+- **Inside-box caption variant (`AGENTS.md:57`: "being phased out"):** `selector.py:583-593` (`caption_text` / `name` inside the selector box) is still emitted by `build_shape_selector`, `command_stepper_definition`, `53_lfo_smooth.py:_choice`, `57_osc_settings.py`, `98_filter_native.py`, and `native_play/osc.py:148`.
+- **Old segmented `RadioButton` (`AGENTS.md:59-61`: "being phased out"):** `render_segmented_button_art` / `create_segmented_radio_button_group(..., grid=False)` remains on FX (`20_fx.py:438,651,659`), Mod (`99_ui_screen_mod.py:34`), LFO tools (`53_lfo_smooth.py:360`), Filter `F1+F2` (`98_filter_native.py:618`), Env selector (`96_env_native.py:112`), Warp picker (`native_warp_picker.py:44`), and Voice (`voice_tab.py:111`, `sequence_readouts.py:50`). Only LFO Sync (`53_lfo_smooth.py:152` and `native_play/env_lfo.py:216`) was switched to `grid=True`.
+
+### 4.6 Lists Keep Factory Behaviour (`AGENTS.md:67-70`)
+- **Compliant on Osc source list:** `6f4d8296` removed the select-and-close probes and `d123fc75` / `3328da40` stripped the ON/OFF badges (`components/native/selector/selector.py:1006-1013`, `scripts/mpc-skin-extras/54_osc_selector.py:34`, `scripts/mpc-skin-extras/82_play.py:246`).
+- **Note on `append_choice_rows` (`components/native/selector/selector.py:1322-1376`):** Used by Play Sub octave/wave (`scripts/native_play/osc.py:103,112`) and Filter chain (`scripts/mpc-skin-extras/98_filter_native.py:382`). It preserves header-tap apply/close (`header_title`), but paints Button-styled `action_art` rows (`look="legacy"`/`"active"`) + `render_pipa_icon` checkmarks on top of `MenuOverlay` rather than plain factory `MenuOverlay` rows.
+
+### 4.7 Component `img/` Sync (`components/AGENTS.md:6`)
+- Only `components/native/filter_selector/img/filter-selector-*.png` (in `ca1ad4b0`) and `components/native/selector/img/dropdown-inside-left.png` (in `3328da40`) were updated.
+- Components whose rendering changed in `ca1ad4b0..3328da40` without refreshing their `components/native/*/img/` assets: `solo_mute`, `tune`, `radio_button`, `mod_row`, `level`, and `pan`.
