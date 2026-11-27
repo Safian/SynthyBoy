@@ -1075,23 +1075,7 @@ OSC_ROUTING_SHORT_NAMES = (
     "OFF",
 )
 
-DESTINATION_FILTER_SEGMENTS = (
-    (True, False),   # 0: Filter 1
-    (False, True),   # 1: Filter 2
-    (True, True),    # 2: Filters 1+2
-    (False, False),  # 3: Effects only (bypasses both filters)
-    (False, False),  # 4: Direct out (direct to master)
-    (True, True),    # 5: Filter blend / balance (both filters in blend)
-    (False, False),  # 6: None / Off (muted)
-)
-
 BG_DARK = _style_color("surface.canvas")
-
-BG_CELL = _style_color("route.surface")
-
-BORDER_CELL = _style_color("control.border")
-
-BORDER_CELL_FOCUS = _style_color("route.focus")
 
 CYAN_F1 = _style_color("accent.cyan")
 
@@ -1102,78 +1086,6 @@ SEG_INACTIVE = _style_color("route.segment.off")
 TEXT_VALUE = _style_color("text.value")
 
 TEXT_LABEL = _style_color("text.label")
-
-CARET_COL = _style_color("text.muted")
-
-def render_compact_route_face(
-    width=_style_size('selector.route.width'),
-    height=COMPACT_HEIGHT,
-    target_index=0,
-    label=None,
-    *,
-    show_segments=True,
-    scale=_style_size('selector.compact_route_face.geometry'),
-):
-    """Render antialiased 48 px compact route selector face (150x48 px or custom)."""
-    w, h = width * scale, height * scale
-    im = Image.new("RGBA", (w, h), _style_rgba("ink.black", _style_opacity("transparent")))
-    draw = ImageDraw.Draw(im)
-
-    pad = _style_size('selector.compact_route_face.pad') * scale
-    radius = _style_size('radius.control') * scale
-
-    draw.rounded_rectangle(
-        (pad, pad, w - pad - _style_size('selector.compact_route_face.rounded_rectangle'), h - pad - _style_size('selector.compact_route_face.rounded_rectangle')),
-        radius=radius,
-        fill=BG_CELL,
-        outline=BORDER_CELL,
-        width=scale,
-    )
-
-    idx = max(0, min(target_index, len(OSC_ROUTING_CHOICES) - _style_size('selector.compact_route_face.idx')))
-    seg0, seg1 = DESTINATION_FILTER_SEGMENTS[idx]
-
-    if show_segments:
-        strip_y = _style_size('selector.compact_route_face.strip.y') * scale
-        strip_h = _style_size('selector.compact_route_face.strip.h') * scale
-        strip_pad_x = _style_size('selector.compact_route_face.strip.pad.x') * scale
-        total_strip_w = w - _style_size('selector.compact_route_face.total.strip.w') * strip_pad_x
-        seg_w = (total_strip_w - _style_size('selector.compact_route_face.seg.w') * scale) // 2
-
-        col0 = CYAN_F1 if seg0 else SEG_INACTIVE
-        draw.rounded_rectangle(
-            (strip_pad_x, strip_y, strip_pad_x + seg_w, strip_y + strip_h),
-            radius=_style_size('radius.indicator') * scale,
-            fill=col0,
-        )
-
-        col1 = GREEN_F2 if seg1 else SEG_INACTIVE
-        draw.rounded_rectangle(
-            (strip_pad_x + seg_w + _style_size('selector.compact_route_face.rounded_rectangle.offset1') * scale, strip_y, strip_pad_x + total_strip_w, strip_y + strip_h),
-            radius=_style_size('radius.indicator') * scale,
-            fill=col1,
-        )
-
-    caret_cx = w - _style_size('selector.compact_route_face.caret.cx') * scale
-    caret_cy = (h // 2 + (_style_size('selector.compact_route_face.caret.cy') * scale if show_segments else 0))
-    caret_sz = _style_size('selector.compact_route_face.caret.sz') * scale
-    draw.polygon(
-        [
-            (caret_cx - caret_sz, caret_cy - _style_size('selector.compact_route_face.polygon') * scale),
-            (caret_cx + caret_sz, caret_cy - _style_size('selector.compact_route_face.polygon') * scale),
-            (caret_cx, caret_cy + _style_size('selector.compact_route_face.polygon.offset1') * scale),
-        ],
-        fill=CARET_COL,
-    )
-
-    text = label if label is not None else OSC_ROUTING_CHOICES[idx]
-    font_sz = _style_size('font.caption') * scale if len(text) <= 12 else _style_size('font.section') * scale
-    font = semibold(font_sz)
-    text_cy = (h // 2 + (_style_size('selector.compact_route_face.text.cy') * scale if show_segments else 0))
-    text_cx = (w - _style_size('selector.compact_route_face.text.cx') * scale) // 2
-    draw.text((text_cx, text_cy), text, fill=TEXT_VALUE, font=font, anchor="mm")
-
-    return im.resize((width, height), Image.Resampling.LANCZOS)
 
 def render_compact_button_face(
     width=_style_size('button.slot.width'),

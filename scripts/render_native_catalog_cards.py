@@ -8,7 +8,6 @@ Generates catalog-specific preview images (prefixed catalog-) inside components/
 - Selector: Filter MODEL and Voice step selector at their runtime sizes
 - RadioButton: segmented native radio at the runtime 56 px height
 - Name-value field: Sub OCT at its runtime 40 px visual height
-- Route: 48 px compact route selector face
 - MacroCard: direct single MacroCard component sample (298x172)
 """
 
@@ -32,7 +31,6 @@ from components.style import color as _style_color, native_font_em, rgba as _sty
 from components.native.button.button import action_art
 from components.native.selector.selector import filter_chain_definition, render_selector_face as _render_selector_face
 from native_name_value import render_name_value_preview
-from components.native.selector.selector import render_compact_route_face
 from components.native.macro_card.macro_card import render_macro_card, macro_level_definition, CARD_WIDTH, CARD_HEIGHT
 from components.native.tune.tune import render_tune_card
 
@@ -215,17 +213,6 @@ def render_name_value_cards():
         out_dir / "catalog-name-value-40.png")
 
 
-def render_route_card():
-    """Render 48 px compact route selector face."""
-    out_dir = REPO_ROOT / "components/native/selector/img"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
-    im = render_compact_route_face(width=_style_size('catalog.render_route_card.im'), height=_style_size('catalog.render_route_card.im.offset1'), target_index=0)
-    f = out_dir / "catalog-route-48.png"
-    im.save(f)
-    print(f"Generated {f} ({im.size})")
-
-
 def render_macro_card_sample():
     """Render a single MacroCard sample (298x172) using shared button/dial components."""
     out_dir = REPO_ROOT / "components/native/macro_card/img"
@@ -286,7 +273,6 @@ def main():
     render_selector_cards()
     render_radio_cards()
     render_name_value_cards()
-    render_route_card()
     render_macro_card_sample()
     render_tune_card_sample()
     render_remaining_cards()
