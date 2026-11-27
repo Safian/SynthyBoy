@@ -260,3 +260,74 @@
 
 **Additional tight non-dial fit noted:**
 - Play Env/LFO `HZ`/`BPM`/`KEY` RadioGrid (`scripts/native_play/env_lfo.py:214-216`, `scripts/mpc-skin-extras/play-env-lfo-contract.json:7`: `[1, 9, 1050, 466, 210, 56]`): `210 px` divided into 3 slots (`70 px` each) subtracts `radio_grid.gap = 8 px` (`4 + 4`) on the middle `BPM` cell (`components/native/radio_button/radio_button.py:85-87`), leaving `extent = 62 px` against `action_art`'s `61 px` minimum width at `height=48` (`font.button=18`, `padding=24` at `components/native/button/button.py:106-109`) — **only `1 px` spare**.
+
+---
+
+## 3. Contrast Analysis
+
+### 3.1 Legacy Button Keyline vs Page Ground (`#0a0e1a` / `overlay_canvas.png` `#090d19`)
+
+- `components/colors.json:42-45`:
+  ```json
+  "button.gradient.top": "#131930",
+  "button.gradient.bottom": "#0d1122",
+  "button.gradient.border": "#151c3a",
+  "button.gradient.border.bottom": "#161e42",
+  ```
+- `components/native/button/button.py:61`:
+  ```python
+  # The keyline darkens down the box with the fill (bright top edge, dark bottom edge).
+  ```
+- `shell-mpc/ui/core.h:256-257` (after `6363e68b`):
+  ```cpp
+  the keyline follows the same ramp (lighter blue at the top).
+  ```
+- `AGENTS.md:53`:
+  ```markdown
+  a dark blue fill with a subtle vertical gradient (a thin highlight line at the top, the lower half darkening slightly: measured #131930 at the top to #0d1122 at the bottom on the page ground #0c0f18, a lighter blue border)
+  ```
+
+| Pair | Hexes | WCAG Contrast Ratio | ΔRGB | Assessment |
+|---|---|---:|---|---|
+| `button.gradient.border` vs page ground `#0a0e1a` | `#151c3a` vs `#0a0e1a` | **1.15 : 1** | `(+11, +14, +32)` | **Near-invisible** vs `#090d19` (`overlay_canvas.png` pixel): **1.16 : 1** |
+| `button.gradient.border` vs `button.gradient.top` | `#151c3a` vs `#131930` | **1.04 : 1** | `(+2, +3, +10)` | **Indistinguishable** top keyline from button fill |
+| `button.gradient.bottom` vs `#0a0e1a` | `#0d1122` vs `#0a0e1a` | **1.03 : 1** | `(+3, +3, +8)` | Lower half of buttons melts into the dark canvas |
+| `button.gradient.border.bottom` vs `#0a0e1a` | `#161e42` vs `#0a0e1a` | **1.19 : 1** | `(+12, +16, +40)` | Bottom border is *brighter* than top border (`#151c3a`) |
+| `button.gradient.border.bottom` vs `button.gradient.bottom` | `#161e42` vs `#0d1122` | **1.16 : 1** | `(+9, +13, +32)` | Low edge contrast |
+| *Reference:* Old `button.border` vs `#0a0e1a` | `#26304b` vs `#0a0e1a` | **1.47 : 1** | `(+28, +34, +49)` | Substantially clearer edge |
+| *Reference:* `selector.dropdown.border` vs `#0a0e1a` | `#27306a` vs `#0a0e1a` | **1.57 : 1** | `(+29, +34, +80)` | `1.39:1` vs `dropdown.top` (`#141a38`), `1.55:1` vs `dropdown.bottom` (`#0b0f24`) |
+| *Reference:* Old `control.border` vs `#0a0e1a` | `#2c456d` vs `#0a0e1a` | **2.00 : 1** | `(+34, +55, +83)` | Clear "lighter blue border" |
+
+**Defects:**
+1. **Near-invisible button border:** `button.gradient.border` (`#151c3a`) differs from `button.gradient.top` (`#131930`) by only **(+2, +3, +10)** (`1.04:1`) and from `#0a0e1a` by **1.15:1**. Unlabelled/quiet icon buttons and RadioGrid off-cells lose their box boundary on the MPC LCD.
+2. **Inverted keyline ramp:** `#151c3a` (top) → `#161e42` (bottom) brightens downward instead of darkening downward, directly contradicting `button.py:61` ("bright top edge, dark bottom edge"), `shell-mpc/ui/core.h:256-257` ("lighter blue at the top"), and `AGENTS.md:53` ("a thin highlight line at the top").
+3. **Zero-contrast `mod_row` toggle cell in preview:** `components/native/mod_row/mod_row.py:100,412` paints flat `button.gradient.top` (`#131930`) on `mod_row.surface` (`#121930`), yielding `ΔRGB = (+1, 0, 0)` (**1.00 : 1**).
+
+---
+
+### 3.2 Disabled & State Readability
+
+- **Solo / Mute `STATE_DISABLED` (`components/native/solo_mute/solo_mute.py:123-126,143`):**
+  ```python
+  elif state == STATE_DISABLED:
+      bg = _style_rgb("button.surface")
+      border = _style_rgb("smooth.border.off")
+      fg = _style_rgb("smooth.caption.off")
+  ...
+  fill = (bg, bg) if state == STATE_PRESSED else (_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom"))
+  ```
+  - `smooth.caption.off` (`#384252`) on `button.gradient.top` (`#131930`): **1.71 : 1** (on bottom `#0d1122`: **1.85 : 1**).
+  - `smooth.border.off` (`#232d44`) vs `#0a0e1a`: **1.40 : 1**. Disabled S/M/FX labels are nearly illegible and sit on an active blue gradient.
+- **`dim_artwork` disabled buttons (`components/style.py:137-141`, `components/colors.json:99-100`):**
+  ```python
+  grey = ImageOps.colorize(image.convert("L"), color("inactive.preview.dark"), color("inactive.preview.light"))
+  ```
+  - Text `dim(text.icon)` (`#9b9b9b`) on `dim(button.gradient.top)` (`#1f1f1f`): **5.93 : 1** (on bottom `#1a1a1a`: **6.26 : 1**) — text stays clearly readable.
+  - Box border `dim(button.gradient.border)` (`#212121`) vs `dim(button.gradient.top)` (`#1f1f1f`): **1.01 : 1** (`ΔRGB = (+2, +2, +2)`), and vs `#0a0e1a`: **1.20 : 1** — the disabled button border vanishes completely.
+- **Disabled dials (`unify_dial_text` vs `apply_control_state`):**
+  - `unify_dial_text` (`components/native/level/level.py:1136-1137`) dims `#eef1ff` to `#a3a3a3` (**7.63 : 1** vs `#0a0e1a`), whereas `apply_control_state` (`components/style.py:180`) uses `text.status.off` (`#b9bdc9`, **10.26 : 1** vs `#0a0e1a`) and Filter off dials used `smooth.value.off` (`#6e7a9b`, **4.51 : 1**).
+  - Worse, because of the key-matching bug in Section 1.2, Mixer (`*Inactive`), Filter (`*_off_*`), and Play LFO Smooth (`compactNativeSmoothReadout`) disabled dials are overwritten to active `#eef1ff` (**17.5 : 1** vs `#0a0e1a`), making them visually indistinguishable from enabled dials (`AGENTS.md:15` violation).
+- **Neutral selector (`selector.neutral.*` at `components/colors.json:40,85-86`):**
+  - `selector.neutral.ink` (`#909090`) on `selector.neutral.surface` (`#202020`): **5.10 : 1**; border `#5a5a5a` vs `#0a0e1a`: **2.79 : 1** — readable, which causes active `playOscSelector` (`82_play.py:234`, `neutral=True`) to look flat grey/disabled yet higher-bordered than the active blue gradient `playModSelector` beside it.
+- **Active cyan RadioGrid / segmented face (`components/native/button/button.py:116-117`, `components/native/radio_button/radio_button.py:45`):**
+  - `radio.active.text` (`#06101e`) on `accent.cyan` (`#2ee6f0`) top: **12.44 : 1**; on `radio.active.bottom` (`#127a8a`) bottom: **3.79 : 1** (below 4.5:1 AA normal text at the lower half, borderline for bold 18 px).
