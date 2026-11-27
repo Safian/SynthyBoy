@@ -4,6 +4,7 @@ import unittest
 from itertools import combinations
 
 import test_mpc_skin_extras as base
+from components import style
 
 
 @unittest.skipUnless((base.SDK / "tools/gen_ui.py").is_file(), "MPC SDK not found (set MPC_SDK)")
@@ -249,6 +250,8 @@ class NativeFxHeaderTests(unittest.TestCase):
         chooser = definitions["fxNativeChainAdd"]
         self.assertEqual([(a["onAction"], a["handler"], a["additionalData"]) for a in chooser["actions"]],
                          [(ev, "Show Overlay", "fx chain add menu") for ev in ("Mouse Down", "Enter Pressed")])
+        self.assertEqual(chooser["backgroundData"]["unfocussed"]["colour"], style.native_color("transparent"),
+                         "the + ADD caption has no darker rectangle behind it: the unfocussed ground is transparent")
         popup = definitions["fx chain add menu"]["componentsData"]
         self.assertEqual(sum(c["componentData"]["type"] == "MenuOverlay" for c in popup), 1)
         add, = [c for c in popup if c["componentData"]["name"] == "FX Add Popup Marker"]

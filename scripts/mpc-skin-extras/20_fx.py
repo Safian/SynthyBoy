@@ -548,6 +548,7 @@ def _add_native_chain(tui, tab, ctx, contract, base):
     caption["bounds"]["showWhenDataModelInvalid"] = "Show"
     definition = _native_definition([caption], popup=FX_ADD_MENU)
     definition["disableCoarseDataWheel"] = True
+    definition["backgroundData"]["unfocussed"] = _empty_bg()["unfocussed"]   # the "+ ADD" caption lies on the page background: no darker surface.control rectangle (68x56) behind it; the focus colour stays
     ctx.add_component_definition("fxNativeChainAdd", definition)
     items.append(_native_entry("FX Chain Add Menu", "fxNativeChainAdd", {"version": 1, "handleName": "Data"},
                               add, menu, (gate(2, 3),), True))
