@@ -127,3 +127,175 @@
 | `playOscFilterDial` (Noise FILTER, 200×60) | `(200, 60)` | `(0, 0, 200, 60)` | `(2, 2, 56, 56)` | `(66, 4, 130, 22)` | `(66, 28, 130, 28)` | `play_sub_level_56.png` |
 | `playEnvLfoRate` (LFO/RND RATE) | `(180, 60)` | `(0, 0, 180, 60)` | `(2, 2, 56, 56)` | `(66, 4, 110, 22)` | `(66, 28, 110, 28)` | `play_sub_level_56.png` |
 | `compactNativeSmoothWithIndicator` / `Readout` | `(194, 60)` | `(0, 0, 194, 60)` | `(2, 2, 56, 56)` | On/Off Button `(62, 2, 60, 56)` | `(126, 16, 66, 28)` | `play_sub_level_56[_inactive].png` |
+
+---
+
+## 2. Exact C++ and Skin Change Inventory
+
+### 2.1 C++ Places That Must Change
+
+#### A. Shared Play Row & Header Geometry (`shell-mpc/ui/play_rows.h`)
+- **CRITICAL GUARDRAIL:** Standalone full-screen views ALSO call `playrows::powerRect`, `playrows::fullRect`, `playrows::plotRect` (`shell-mpc/ui/screen.h:517`, `shell-mpc/ui/lfo_screen.h:495,514`, `shell-mpc/overlay/osc_ui.h:240`, `shell-mpc/overlay/filter_ui.h:264`). **Do NOT change or remove** `kBandH`, `bandRect`, `powerRect(display)`, `fullRect(display)`, `routeRect(display)`, or `plotRect(display)` for display-band callers.
+- `shell-mpc/ui/play_rows.h:15-20`:
+  - Change `kControlsH` from `232` to **`196`**.
+  - Add Play header & compact-row constants: `kHeaderPad = 8`, `kHeaderGap = 8`, `kHeaderButtonSlot = 56`, `kHeaderRouteSlot = 72`, `kControlGap = 8`, `kCompactRowH = 60`, `kCompactTwoRowH = 94`.
+  - Keep `kMargin = 6`, `kSelectorH = 56`, `kSelectorGap = 8`, `kDisplayGap = kQLane + 4` (`20`).
+- `shell-mpc/ui/play_rows.h:22-59`:
+  - `displayRect(third)` (`:22-27`) and `controlsLine(third)` (`:59`) automatically yield `y = 74..402` (`h = 328`) and `controlsLine = 422` (tab) once `kControlsH = 196`.
+  - Add Play-panel header placement helpers operating on `third`:
+    - `headerBandRect(third)` -> `{ third.x + kMargin, third.y + kMargin, third.w - 2 * kMargin, kSelectorH }`
+    - `headerPowerRect(third)` -> `{ h.x, h.y, kHeaderButtonSlot, kSelectorH }` (`(14, 120, 56, 56)` screen)
+    - `headerExpandRect(third)` -> `{ h.right() - kHeaderButtonSlot, h.y, kHeaderButtonSlot, kSelectorH }` (`(366/778/1204, 120, 56, 56)` screen)
+    - `headerRouteRect(third)` -> `{ h.right() - kHeaderButtonSlot - kHeaderRouteSlot, h.y, kHeaderRouteSlot, kSelectorH }` (`(294, 120, 72, 56)` screen, Option A)
+    - `headerSelectorRect(third, hasPower, hasRoute)` -> `{ x0, h.y, x1 - x0, kSelectorH }` where `x0 = hasPower ? h.x + kHeaderButtonSlot : h.x + kHeaderPad`, `x1 = hasRoute ? h.right() - kHeaderButtonSlot - kHeaderRouteSlot : h.right() - kHeaderButtonSlot`.
+  - Add `compactPlotRect(display)` -> `{ display.x + kPlotPadX, display.y + kPlotPadTop, std::max(0, display.w - 2 * kPlotPadX), std::max(0, display.h - kPlotPadTop - kPlotPadBottom) }` (no `kBandH` subtraction -> `y_tab = 84..382`, `h = 298`).
+
+#### B. Compact UI Components (`shell-mpc/ui/`)
+- `shell-mpc/ui/screen.h:61-64,84-96` (`OscillatorCompact`):
+  - `:62`: `plotRect()` returns `playrows::compactPlotRect(display_)` (instead of `playrows::plotRect(display_)`).
+  - `:89-93`: Place `power` at `playrows::headerPowerRect(rect_)`, `full` at `playrows::headerExpandRect(rect_)`, `route` at `sub ? Rect {} : playrows::headerRouteRect(rect_)` (Option A), and `instances` at `playrows::headerSelectorRect(rect_, true, !sub)`.
+  - `:94-95`: `basic.place({ rect_.x + m, by, W, std::max(0, rect_.bottom() - m - by) })` automatically gets `y_tab = 422..618` (`h = 196`).
+- `shell-mpc/ui/composite.h:467-483` (`BasicControls::layout`, `stacked_` branch):
+  - Replace internal row/column gaps (`kQLane = 16`, `kGap = 4`) with `playrows::kControlGap` (`8`):
+    - `rowH = (rect_.h - 8) / 2` = `94`, `row2Y = rect_.y + 94 + 8` = `524` (tab), `cw = (rect_.w - 8) / 2` = `200`.
+    - Row 1 height `h1 = 60`, `y1 = rect_.y + (rowH - h1) / 2` = `439` (tab).
+    - Sub special widths (`inst_ == OscInstance::Sub`): `first` (`WAVE`) `{ rect_.x, y1, 284, 60 }`, `second` (`OCT`) `{ rect_.x + 292, y1 + 12, 116, 56 }` (`(306, 451, 116, 56)` tab; matches `play-osc-native-contract.json`).
+    - A/B/C & Noise: `first` `{ rect_.x, y1, 200, 60 }`, `second` `{ rect_.x + 208, y1, 200, 60 }`.
+    - Row 2 (`pan`, `level`): `dialMax = 56`, `pan` `{ rect_.x, row2Y, 200, 94 }`, `level` `{ rect_.x + 208, row2Y, 200, 94 }`.
+    - Update `BasicControls::minSize()` (`composite.h:454-462`) so `stacked_` minimum width/height stays `<= 408 × 196` (also resolves Noise FILTER minimum mismatch noted in `TODO.md:297`).
+- `shell-mpc/ui/env_screen.h:67,74,119-134` (`EnvCompact`):
+  - `:74`: `k->state.dialMax = 56;` (was `96`).
+  - `:122`: `instances.place(playrows::headerSelectorRect(rect_, false, false))` (`(454, 120, 324, 56)` screen).
+  - `:126`: `graph.plotArea = playrows::compactPlotRect(gr);` (was `playrows::plotRect(gr)`).
+  - `:127`: `full.place(playrows::headerExpandRect(rect_));` (was `playrows::fullRect(gr)`).
+  - `:128-133`: Use `const int gap = playrows::kControlGap;` (`8`), `kh = (rect_.bottom() - kMargin - by - gap) / 2` (`94`), `cw = (W - gap) / 2` (`190`): `attack (446, 422, 190, 94)`, `decay (644, 422, 190, 94)`, `sustain (446, 524, 190, 94)`, `release (644, 524, 190, 94)` (tab).
+- `shell-mpc/ui/lfo_screen.h:78,87-124` (`LfoCompact`):
+  - `:78`: Update `kQuadH = 212` (`196 + 16`), `kQuadRandomH = 280` (`264 + 16`), `kRowH = 60`, `kRateH = 60`.
+  - `:90`: `instance.place(playrows::headerSelectorRect(rect_, false, false))` (`(872, 120, 332, 56)` screen).
+  - `:94-101`: Standard LFO uses `display_ = playrows::displayRect(rect_)` (`y_tab = 74..402`, `h = 328`), `qy = display_.bottom() + 4`; Random LFO uses `qy = rect_.bottom() - m - kQuadRandomH` (`y_tab = 338`), `display_ = { rect_.x + m, dy, W, std::max(0, qy - 4 - dy) }` (`y_tab = 74..334`, `h = 260`).
+  - `:102`: `full.place(playrows::headerExpandRect(rect_));` (was `playrows::fullRect(display_)`).
+  - `:103-124`: Use internal row gap `const int rg = playrows::kControlGap;` (`8`) instead of `kQLane` (`16`) between rows inside the block (keeping `y = qy + kQLane` at the top of the block for the Gen 1 Q-bank badge!):
+    - Random (`random_`): `style` `354..414`, `rate` `422..482`, `sync` `490..550`, `stereo` `558..618` (each `h = 60`, `8 px` gaps).
+    - Standard: `shape` `422..482`, `rate` `490..550`, `rise` `(864, 558, 194, 60)` + `smoothTime` `(1066, 558, 194, 60)` (`cw = (W - 8) / 2 = 194`).
+- `shell-mpc/ui/lfo_parts.h:198,239-268` (`RateControl`):
+  - `:198`: Change `kModeW` from `3 * 70` (`210`) to **`208`** (`64 + 8 + 64 + 8 + 64`).
+  - `:242-247`: In `showMode_` (compact), use `const int mg = playrows::kControlGap;` (`8`) instead of `kGap` (`4`) between `main` and `modeCells` -> `main.w = 396 - 208 - 8 = 180` (`(864, 490, 180, 60)` tab), `modeCells` `(1052, 492, 208, 56)` tab (`h = 56` centered in `60`).
+  - `:263`: In compact `else` branch, `const int h = std::min(main.h, 60);` -> `division` gets `(864, 490, 180, 60)` tab (matching `RATE`).
+- `shell-mpc/ui/lfo_display.h:299-308`:
+  - `:301-305`: `if (isCompact(r, d) && !d.pageTitle)` currently calls `pen.textLeft(playrows::labelRect(r, false, false), d.label, ...)` which draws inside `y = r.y + 4..68`, overlapping the new `compactPlotRect` (`y = r.y + 10`)! Suppress compact band text when `d.area.y < r.y + playrows::kBandH` (the SHAPE/STYLE dropdown right below already displays the shape/style name).
+- `shell-mpc/ui/display.h:215-224` & `shell-mpc/ui/native_apertures.h:14-49`:
+  - **Verify-only (no change required for Option A):** `outsideNativeCells` (`native_apertures.h:21`) checks `base.overlaps(cell)`. When `POWER` and `EXPAND` (and Option A `ROUTE`) move to `y_tab = 10..66`, none of them overlaps `displayRect` (`y_tab = 74..402`), so `paintAroundNativeCells` paints the full unbroken `drawNativeGraphFrame` while keeping `!nativeHeader[0].empty()` true.
+
+#### C. Overlay Views, Apertures, Touch Routing & Generated Contract Header (`shell-mpc/overlay/` & `shell-mpc/`)
+- `shell-mpc/play_osc_native_contract.h:14-16` (**regenerated from JSON** via `python3 scripts/native_play/osc.py`):
+  - `kSubContractRects`: `{ { 14, 10, 56, 56 }, { 366, 10, 56, 56 }, { 0, 0, 0, 0 }, { 14, 439, 284, 60 }, { 306, 451, 116, 56 }, { 14, 524, 200, 94 }, { 222, 524, 200, 94 } }`
+  - `kAbcContractRects`: `{ { 14, 10, 56, 56 }, { 366, 10, 56, 56 }, { 294, 10, 72, 56 }, { 14, 439, 200, 60 }, { 222, 439, 200, 60 }, { 14, 524, 200, 94 }, { 222, 524, 200, 94 } }`
+  - `kNoiseContractRects`: identical to `kAbcContractRects`.
+- `shell-mpc/overlay/play_view.h`:
+  - `:43`: `kNativeSelectorY = 10, kNativeSelectorH = 56` — **unchanged**; continues to pass all touches (`:347-348`) and wheel events (`:373-374`) across the entire `56 px` panel header band (`POWER`, `dropdown`, `ROUTE`, `EXPAND`) to the host, and continues to bound `drawNativeMarkerCovers(sb, "play1")` (`:733-734`).
+  - `:337-342` (`onTouch`): `nativeEnvLfo_.coversNative` already checks `EnvExpand` and `LfoExpand` via `compact_.full.rect()`; once `full` moves to the header band, check order (`:337` before `:347`) still returns `false` to the host.
+  - `:687-710` (`compactGround`, fallback path when native compact Osc is off): update `:700` `84.0f -> 70.0f`, `:703` `dialTop = 634.0f` (was `620.0f`), `:707` `214.0f..222.0f` (was `216.0f..220.0f`).
+  - `:534-567` (`publishQ`, `extraTargets`): **unchanged** — Q-Link banks 1..4 (`Osc Basic`, `Env ADSR`, `LFO Rate`, `Extra [LFO SYNC, OSC POWER, LFO MONO, -]`) stay identical.
+- `shell-mpc/overlay/play_env_lfo.h:17-20,90-108`:
+  - `rect(env, lfo, field)` reads `env.compact().full.rect()` and `lfo.compactNativeRect(field)`, so `coversNative` and `drawApertures` automatically track the new header & body rects without hardcoded constants.
+- `shell-mpc/overlay/osc_ui.h`:
+  - `:115,120,361`: `kCompactX = 8, kCompactW = 420` — unchanged.
+  - `:356-360` (`covers`): reads `compactNativeCells_` (populated from `playoscui::contractRect` at `:573-576`) and `compact_.basic.pan/level.rect()` — automatically updated once `play_osc_native_contract.h` and `BasicControls::layout()` update.
+  - `:579`: `compact_.setNativeHeader(...)` still populates non-empty `nativeHeader_[0]` (`POWER`), preserving native-background mode in `PlayView::compactGround` (`play_view.h:687`) and `OscillatorCompact::draw` (`screen.h:69`).
+  - `:743-755` (`applyNativeSetting`, `SettingsSource` for Wavetable): verify that single-tap dropdown sends `SourceBrowse = 2` (`value = 2.0f / 3.0f` or `>= 0.5f`) and opens the wavetable browser cleanly (no `SourcePrevious`/`SourceNext` arrows emitted in skin, while retaining `SourcePrevious`/`SourceNext` support for Q-Link/tests).
+  - `:2838,2860`: `openSourceList`/`openTypeList` (legacy overlay fallback list): `third.y + 6 + kSelectorH` remains `y_tab = 66` — unchanged.
+- `shell-mpc/overlay/env_ui.h`:
+  - `:79,138,255-284,349-354,666`: `kCompactX = 440, kCompactW = 400`, `kGroundX0 = 434, kGroundX1 = 848`, `drawCompact` and `covers` read `compact_.attack/decay/sustain/release.rect()` dynamically — automatically updated; no hardcoded rect changes needed.
+- `shell-mpc/overlay/lfo_ui.h`:
+  - `:114,125,350,492-494,796`: `drawCompact` (`:350`) hardcodes `header { kCompactX + 6, kTabY + 10, kCompactW - 12, 56 }` (covers the entire `864..1260, y=10..66` header band including EXPAND, still valid!). `covers` (`:492`) reads `compact_.rise.rect()` and `compact_.smoothTime.rect()` dynamically.
+  - `:714-720` (`compactData`): change `d.area = ui::playrows::plotRect(compact_.displayRect())` (`:717`) to **`d.area = ui::playrows::compactPlotRect(compact_.displayRect())`**. Keep `d.aperture = compact_.full.rect()` (non-empty) so `lfodisplay::draw` (`lfo_display.h:154-170`) continues to render `drawNativeGraphFrame` instead of the legacy gradient fill!
+- **Detection Markers & Sentinels (NO POSITION CHANGES):**
+  - `shell-mpc/overlay/overlay_layout.json:46-82` & `overlay_layout.h:25`: Play markers `(33, 1, 6, 6)`, `(1241, 1, 6, 6)`, instance `(45, 1, 6, 6)` — **unchanged**.
+  - `shell-mpc/overlay/backgrounds_manifest.h:23` & `scripts/mpc-skin-extras/99_backgrounds.py:62`: Play sentinel `(900, 2, 5, 5)` — **unchanged**.
+  - `shell-mpc/overlay/controller.h:120-137` & `scripts/mpc-skin-extras/95_popup_markers.py:11`: Modal/action markers at `y = 120` (`x = 16, 28, 40, 52, 64, 76, 88, 100, 112, 124, 136`) live on full-screen `MenuOverlay` popups — **unchanged**.
+  - `shell-mpc/overlay/native_marker_covers.h:17-41`: covers the same top 10 px strip — **unchanged**.
+
+---
+
+### 2.2 Skin & Component Places That Must Change
+
+#### A. Tokens in `components/sizes.json`
+Update existing `play.*` / `level.play_smooth_rects.*` / `smooth.*` tokens and add explicit Phase 2 tokens (zero hardcoded pixel literals in scripts, per `components/AGENTS.md:15`):
+
+| Token Name in `components/sizes.json` | Old Value (line) | New Value | Purpose |
+|---|---|---|---|
+| `play.selector.rects` | `[[14, 10, 408, 56], [446, 10, 388, 56], [864, 10, 396, 56]]` (`:1136`) | `[[70, 10, 296, 56], [454, 10, 324, 56], [872, 10, 332, 56]]` | Panel header dropdown slots (Sub, Env, LFO) |
+| `play.selector.osc_routed.rect` *(NEW)* | — | `[70, 10, 224, 56]` | Osc A/B/C/Noise header dropdown slot (Option A, leaves `294..366` for ROUTE) |
+| `play.header.icon.size` *(NEW)* | — | `{"ref": "height.intermediate"}` (`40`) | Visual `40 × 40` size of POWER / EXPAND inside `56 × 56` header slot |
+| `play.header.icon.slot` *(NEW)* | — | `[56, 56]` | Touch slot size for Play header POWER / EXPAND |
+| `play.header.dropdown.size` *(NEW)* | — | `"selector.dropdown.size.40"` | Shared 40 px dropdown token for all 3 panel headers |
+| `play.titled_dropdown.title_height` *(NEW)* | — | `20` | Title above left (`16 px` label + `4 px` `gap.field`) for WAVE/TYPE/SOURCE/SOUND/SHAPE/DIV/STYLE/SYNC |
+| `play.titled_dropdown.box_height` *(NEW)* | — | `{"ref": "height.intermediate"}` (`40`) | 40 px dropdown face under title (`20 + 40 = 60 px` outer cell) |
+| `play.env.attack.rect` | `[446, 386, 192, 108]` (`:1140`) | `[446, 422, 190, 94]` | Env Attack 56 px dial cell |
+| `play.env.decay.rect` | `[642, 386, 192, 108]` (`:1141`) | `[644, 422, 190, 94]` | Env Decay 56 px dial cell |
+| `play.env.sustain.rect` | `[446, 510, 192, 108]` (`:1142`) | `[446, 524, 190, 94]` | Env Sustain 56 px dial cell |
+| `play.env.release.rect` | `[642, 510, 192, 108]` (`:1143`) | `[644, 524, 190, 94]` | Env Release 56 px dial cell |
+| `play.lfo.rise.rect` | `[864, 546, 196, 72]` (`:1139`) | `[864, 558, 194, 60]` | LFO Rise 56 px dial cell |
+| `play.lfo.smooth.rect` | `[1064, 546, 196, 72]` (`:1144`) | `[1066, 558, 194, 60]` | LFO Smooth 56 px dial + On/Off label cell |
+| `play.env.dial.geometry` | `[192, 108, 90, [2, 9, 90, 90], [96, 32, 92, 22], [96, 54, 92, 32]]` (`:1145`) | `[190, 94, 56, [2, 19, 56, 56], [66, 22, 120, 22], [66, 46, 120, 28]]` | Env ADSR 56 px dial internal rects |
+| `play.osc.dial.geometry` *(NEW)* | — | `[200, 94, 56, [2, 19, 56, 56], [66, 22, 130, 22], [66, 46, 130, 28]]` | Osc PAN/LEVEL 56 px dial internal rects (`playSubPan`/`playOscPan`/`playSubLevel`/`playOscLevel`) |
+| `play.osc.filter.dial.geometry` *(NEW)* | — | `[200, 60, 56, [2, 2, 56, 56], [66, 4, 130, 22], [66, 28, 130, 28]]` | Noise FILTER 56 px dial internal rects |
+| `play.rise.dial.geometry` | `[196, 72, 60, [2, 6, 60, 60], [68, 12, 124, 22], [68, 34, 124, 28]]` (`:1146`) | `[194, 60, 56, [2, 2, 56, 56], [66, 4, 124, 22], [66, 28, 124, 28]]` | LFO Rise 56 px dial internal rects |
+| `play.rise.seed_rects` | `{"focus":[0,0,196,72],"knob":[2,0,60,60],"name":[66,16,126,36]}` (`:1138`) | `{"focus":[0,0,194,60],"knob":[2,2,56,56],"name":[66,4,124,22]}` | Seed rects in `82_play.py:193` |
+| `play.rate.dial.geometry` | `[182, 72, 60, [2, 6, 60, 60], [68, 12, 110, 22], [68, 34, 110, 28]]` (`:1147`) | `[180, 60, 56, [2, 2, 56, 56], [66, 4, 110, 22], [66, 28, 110, 28]]` | LFO/RND RATE 56 px dial internal rects |
+| `play.osc.routing.size` | `[64, 64]` (`:1153`) | `[72, 56]` | Osc A/B/C/Noise header ROUTE slot (64×40 visual inside 72×56 slot, Option A) |
+| `play.osc.choice.size` | `[202, 72]` (`:1154`) | `[200, 60]` | Osc TYPE / SOUND titled dropdown size |
+| `play.lfo.selector.size` | `[396, 56]` (`:1177`) | `[396, 60]` | LFO SHAPE / STYLE / SYNC titled dropdown size |
+| `play.lfo.division.size` *(NEW)* | — | `[180, 60]` | LFO/RND DIVISION titled dropdown size |
+| `play.lfo.sync_grid` *(NEW)* | — | `{"button_width": 64, "button_height": {"ref": "height.intermediate"}, "slot_height": {"ref": "height.high"}, "gap": {"ref": "radio_grid.gap"}}` | LFO HZ/BPM/KEY RadioGrid 1×3 (`64+8+64+8+64 = 208`) |
+| `smooth.play.width` / `smooth.play.height` *(NEW)* | `smooth.play.width: 196` (`:43`), reused `smooth.height: 72` (`:37`) | `smooth.play.width: 194`, `smooth.play.height: 60` | Keep `smooth.height: 72` untouched for non-Play callers; Play uses `60` |
+| `smooth.play.value.width` | `62` (`:46`) | `66` | Widens Smooth value box inside `194 × 60` cell |
+| `level.play_smooth_rects.*` | `focus [0,0,196,72]`, `knob [2,6,60,60]`, `name [66,8,60,56]`, `value [130,22,62,28]` (`:350-385`) | `focus [0,0,194,60]`, `knob [2,2,56,56]`, `name [62,2,60,56]`, `value [126,16,66,28]` | 56 px knob + 60×56 On/Off label Button + 66×28 value Label, all strictly disjoint |
+| `play.qlink.bounds_yh` | `[301, 323]` (`:1137`) | Keep `[301, 323]` (or evaluate `[422, 196]` only with device test — see `TODO.md:247`) | `HYPOTHESIS`: changing `qlinkBoundsData` without device check may alter host Q-Link focus rectangle behavior |
+
+#### B. Shared Native Components (`components/native/`)
+- `components/native/selector/selector.py`:
+  - `:374` (`render_dropdown_face`): **Bug fix** noted in `docs/review/REVIEW-SKIN-NEWLOOK-2026-11-27.md:511-512` — compute `inset_px = geometry["inset"] if inset is None else inset` and use `inset_px` in `cx = (width - inset_px - geometry["chevron_lane"] / 2) * scale` so chevrons align consistently across `inset=0` and `dropdown_size`.
+  - `:457-475` (`selector_definition`): When `dropdown_size` is passed with `slot_height > _style_size(dropdown_size)["height"]` (e.g. `slot=(296, 56)` with `dropdown_size="selector.dropdown.size.40"`), set `height = _style_size(dropdown_size)["height"]` (`40`) and center vertically via `top = (slot_height - height) // 2` (`8`) so the 40 px dropdown renders cleanly inside the 56 px header touch slot!
+  - `:640-763` (`build_titled_selector`):
+    1. `:687-689`: Allow `child_h = 40` (`height.intermediate`) when `total_height >= height.high (56)` and `dropdown_size` is set (today it hard-errors if `child_h < 56`).
+    2. `:701-710`: Support `play_face=False, dropdown_look="legacy", dropdown_size="selector.dropdown.size.40"` so the child uses the plain legacy dropdown box (centered value, chevron right, no caption inside box).
+    3. `:742`: Add `title_justification="left verticallyCentred"` parameter (currently hardcoded `"horizontallyCentred verticallyCentred"`) and `title_case="Upper Case"` with `DROPDOWN_LABEL_FONT` (`font.caption` 15) so `WAVE`, `TYPE`, `SOURCE`, `SOUND`, `SHAPE`, `DIVISION`, `STYLE`, `SYNC` render **above left** per `AGENTS.md` and `selector.py:1475-1517`.
+- `components/native/level/level.py`:
+  - `:55-60`: `PLAY_SMOOTH_RECTS` already reads `level.play_smooth_rects.*` from `sizes.json`.
+  - `:1031-1054` (`blue_dial_definition`): Add optional `bipolar=False` parameter (calling `_dial_for_polarity(skins_dir, "BiPolar" if bipolar else "UniPolar", frame_size)` instead of hardcoding `bipolar=False` at `:1041`) so `playSubPan`/`playOscPan` can use the exact same 56 px `blue_dial_definition` factory (also closing `TODO.md:60` duplicate Pan definition!).
+  - `:1125` (`unify_dial_text`): **Bug fix** noted in `docs/review/REVIEW-SKIN-NEWLOOK-2026-11-27.md:501` — include `key.endswith("Readout")` (specifically `compactNativeSmoothReadout`) in the `inactive` check so `99_zz_dial_text.py` does not overwrite the dimmed `smooth.value.off` colour on `compactNativeSmoothReadout` with bright `text.value`! Also decide whether `unify_dial_text` keeps `font.value` (20) on all 56 px dials or reads `label.dial.56` (`caption: 15, value: 22`) — see Risk 3.5.
+- `components/native/on_off_label/on_off_label.py`:
+  - `:28-108`: `label_face`, `on_off_label_child`, and `on_off_label_definition` already exist! Use `on_off_label.label_face("SMOOTH", "on"/"off", width=60, height=56)` + `on_off_label_child("name", on_img, off_img, PLAY_SMOOTH_RECTS["name"], handle="Active")` in BOTH `82_play.py` AND `env_lfo.py` (replacing `active_text_child`), and `on_off_label_definition("STEREO", (396, 60), handle="Data")` for `playRndStereo`.
+- `components/native/radio_grid/radio_grid.py`:
+  - Add a native skin entry builder `build_radio_grid_entries(name, rect, labels, handle, skins_dir, *, height=40, gates=(), focus="Yes")` (implementing `docs/ui-components/radio_grid.md:25-27` / using `action_art(text=..., width=64, height=40, look="legacy"/"active")` placed inside disjoint `>= 56 px` touch slots via `button.in_slot` / explicit x-offsets `0/+4/+4` so all 3 faces are **identical 64 × 40** with exact `8 px` gaps, unlike `radio_button.py:157` which produced unequal `65/61/66 px` widths on `width=208`).
+- `components/native/button/button.py`:
+  - `:222-238` (`_store_action_face`, `action_button`): Add optional `height=None` parameter forwarded to `action_art(..., height=height)` so Play header EXPAND (`action_button(..., rect=(366,10,56,56), height=40, icon="expand")`) renders a `40 × 40` icon centered in the `56 × 56` slot (`in_slot`).
+
+#### C. Play Skin Extra Scripts & Contracts (`scripts/mpc-skin-extras/` & `scripts/native_play/`)
+- `scripts/mpc-skin-extras/play-osc-native-contract.json:1-29`: Update all 3 groups (`sub`, `abc`, `noise`) to the exact Section 1.2 tab slots, then regenerate `shell-mpc/play_osc_native_contract.h` via `python3 scripts/native_play/osc.py`.
+- `scripts/mpc-skin-extras/play-env-lfo-contract.json:1-39`: Regenerate from `lfo_ui_host --play-env-lfo-skin-contract` (after Batch 2B C++ changes) so every `[view, field, x, y, w, h]` matches Section 1.3 & 1.4 exact rects (`ENV Expand (778,10,56,56)`, `LFO Expand (1204,10,56,56)`, `Select (872,10,332,56)`, `SHAPE (864,422,396,60)`, `RATE (864,490,180,60)`, `DIVISION (864,490,180,60)`, `StandardSync (1052,492,208,56)`, RND `STYLE/RATE/DIV/SYNC/STEREO`).
+- `scripts/mpc-skin-extras/82_play.py`:
+  - `:198-232`: Switch `compactNativeSmoothWithIndicator`/`Readout` from `active_text_child` to `on_off_label.label_face` + `on_off_label_child` (using updated `PLAY_SMOOTH_RECTS` 56 px knob + 60×56 On/Off label + 66×28 value).
+  - `:233-246`: Fix `playOscSelector` `neutral=True` -> **`neutral=False`** (`REVIEW-SKIN-NEWLOOK:511-512`), pass `dropdown_look="legacy"`, `dropdown_size="selector.dropdown.size.40"` to both `playOscSelector` (`w=296`), `playOscSelectorRouted` (`w=224`, Option A), and `playModSelector` (`w=324`).
+  - `:260-276`: Emit Sub-gated `Play Osc Select` (`w=296`, `IndexedEnabling/0/5/Parameter 2676`) and ABC/Noise-gated `Play Osc Select Routed` (`w=224`, `RangedEnabling/1/4/5/Parameter 2676`) under Option A; keep `Play Env Select` `(454, 10, 324, 56)` and `Play LFO Select` `(872, 10, 332, 56)`.
+- `scripts/native_play/osc.py`:
+  - `:123-128`: Replace `playOscChoiceField` with `build_titled_selector(..., slot=(200, 60), title_height=20, selector_height=40, title_justification="left verticallyCentred", dropdown_look="legacy", dropdown_size="selector.dropdown.size.40")` (or per-caption `playOscTypeField` `"TYPE"` / `playNoiseSoundField` `"SOUND"` so each has its exact title above left). Update `playOscRouteField` to `40 px` visual face inside `(72, 56)` slot (Option A, `8 px` left pad).
+  - `:129-146`: `playOscNumberField` (`OCT`): reads updated `geometry["sub"]["second"] = [306, 451, 116, 56]` -> `oct_w = 116, oct_visual_h = 40, oct_top = 8`.
+  - `:147-150`: Replace `playSubWaveField` with `build_titled_selector(..., slot=(284, 60), title_height=20, selector_height=40, caption="WAVE", title_justification="left verticallyCentred", dropdown_look="legacy", dropdown_size="selector.dropdown.size.40")` (removes caption-inside-box & wave icon inside box per `AGENTS.md` dropdown rules).
+  - `:151-162`: Replace `playOscTableField` (`previous`/`browse`/`next` arrow steppers!) and `playOscContentField` with titled `SOURCE` dropdown (`(200, 60)`, title `"SOURCE"` above left, `40 px` legacy dropdown face, value centered, chevron right, single full-box transparent browse `Button` with `buttonId=2, count=4` so C++ `SourceBrowse = 2` contract is preserved with zero arrows).
+  - `:164-166`: Replace 90 px `pan_definition`/`level_definition` with 56 px `blue_dial_definition(ctx.skins_dir, *_style_size("play.osc.dial.geometry"), bipolar=True/False)`.
+  - `:168-171,212-214`: Generate 40×40-in-56×56 Play header POWER (`play_header_power_on.png`, `play_header_power_off.png` — do NOT overwrite `osc_native_power_*.png` which is `64 × 56` and shared with standalone Osc `56_osc_power.py:20`!) and EXPAND (`action_button(..., height=40, icon="expand")`).
+    - **Owner confirmation item (POWER OFF colour):** `icon_button.md:8` / `header.md:25` specifies POWER off = `text.icon`, whereas `56_osc_power.py:30` and `TODO.md:215` / `ui_screen_host.cpp:328` specify red (`accent.red`) when off. Default to `accent.red` on `play_header_power_off.png` to preserve `TODO.md:215` until owner explicitly unifies with `icon_button.md:8`.
+  - `:176-185`: Bind Noise `Filter` to `playOscFilterDial` (`200 × 60`, 56 px dial), `pan` to `playOscPan` (`200 × 94`, 56 px), `level` to `playOscLevel` (`200 × 94`, 56 px).
+- `scripts/native_play/env_lfo.py`:
+  - `:73-118`: **CRITICAL:** Mirror the exact `on_off_label` Smooth definition update here (remember `88_play_env_lfo.py` runs AFTER `82_play.py` and overwrites `compactNativeSmoothWithIndicator`/`Readout` in `localComponentDefinitions`!). Update `compactNativeDial` and `compactNativeRiseDial` to read the new 56 px `play.env.dial.geometry` and `play.rise.dial.geometry`.
+  - `:137-141`: `playEnvLfoRate` reads updated `play.rate.dial.geometry` (`180 × 60`, 56 px).
+  - `:144-151`: `playRndStereo` uses `on_off_label_definition("STEREO", stereo_size, skins_dir=ctx.skins_dir, handle="Data")` (`396 × 60`).
+  - `:163-194`:
+    - `CHOOSE`: `selector_definition(..., selectors[2:], ..., dropdown_look="legacy", dropdown_size="selector.dropdown.size.40")` (`(332, 56)` slot, `40 px` centered face).
+    - `SHAPE`, `DIVISION`, `STYLE`, `SYNC`: use `build_titled_selector(..., title_height=20, selector_height=40, caption=LABELS[field], title_justification="left verticallyCentred", dropdown_look="legacy", dropdown_size="selector.dropdown.size.40")` (`(396, 60)` for SHAPE/STYLE/SYNC, `(180, 60)` for DIVISION).
+  - `:212-216`: Replace `create_segmented_radio_button_group(..., grid=True)` with `radio_grid.build_radio_grid_entries(...)` (equal `64 × 40` buttons, `8 px` gaps, disjoint `68/72/68 × 56` slots).
+  - `:217-219`: Generate dedicated `play_header_expand.png` (`40 × 40` icon in `56 × 56` slot) — do **NOT** overwrite `lfo_native_expand.png` (`64 × 56`, shared with standalone LFO tabs in `53_lfo_smooth.py:168`)!
+- `scripts/render_play_screen_preview.py:42-55` & `scripts/render_play_native_snapshot.py:13,329-363`:
+  - Update `DISPLAY_BOXES` (`y = 74..402`), `NATIVE_BUTTON_APERTURES` (move to header `y = 10..66`), and `render_play_native_snapshot.py` handling of `playOscSelectorRouted`, titled above-left dropdowns, 56 px dials (`play_sub_level_56.png`, `play_sub_pan_56.png`), `on_off_label`, and `radio_grid`.
