@@ -405,3 +405,64 @@
 ### 4.7 Component `img/` Sync (`components/AGENTS.md:6`)
 - Only `components/native/filter_selector/img/filter-selector-*.png` (in `ca1ad4b0`) and `components/native/selector/img/dropdown-inside-left.png` (in `3328da40`) were updated.
 - Components whose rendering changed in `ca1ad4b0..3328da40` without refreshing their `components/native/*/img/` assets: `solo_mute`, `tune`, `radio_button`, `mod_row`, `level`, and `pan`.
+
+---
+
+## 5. Dead Code, Dead Tokens & Test Quality
+
+### 5.1 Is `SYNTHYBOY_CONTROL_LOOK=flat` Worth Keeping? **Verdict: No — Remove It**
+
+`SYNTHYBOY_CONTROL_LOOK=flat` (`components/style.py:47`, `components/sizes.json:154`) does **not** restore the pre-`ca1ad4b0` / pre-`3328da40` look, nor does it produce a consistent flat skin:
+1. **Selectors stay gradient in `"flat"` mode:** `components/native/selector/selector.py:353-354`:
+   ```python
+   if look == "neon" and _control_look() == "legacy":
+       look = "legacy"   # the skin default follows control.look (A/B: SYNTHYBOY_CONTROL_LOOK=flat)
+   ```
+   When `SYNTHYBOY_CONTROL_LOOK=flat`, `look` stays `"neon"`, which still calls `gradient_face()` with `theme.neon.panel0/panel1` (`#141a38` → `#0c1026`, `selector.py:340,371`) — **not** the old flat `selector.surface` (`#0e1b33`) + `control.border` (`#2c456d`).
+2. **Hardcoded `"legacy"` callers ignore the flag:**
+   - `components/native/radio_button/radio_button.py:91-92,96` (`render_grid_cell_art` hardcodes `look="active"` / `look="legacy"`).
+   - `components/native/selector/selector.py:1353-1354` (`append_choice_rows` hardcodes `look="active"` / `look="legacy"`).
+   - `components/native/button/button.py:362` (`render_sample` hardcodes `look="legacy"`).
+3. **C++ overlay ignores the flag:** `shell-mpc/ui/core.h:266-277` and `shell-mpc/ui/theme_tokens.h:37-40` always render `button.gradient.*` (`controlTop`/`controlBottom`/`controlBorder`) regardless of `SYNTHYBOY_CONTROL_LOOK`.
+4. **Maintenance cost without benefit:** The flag duplicates drawing branches across 7 files (`style.py`, `button.py`, `selector.py`, `radio_button.py`, `solo_mute.py`, `tune.py`, `mod_row.py`), keeps dead flat tokens alive, and already caused duplicate definitions (`sizes.json:154-155`, `style.py:39-64`). The owner has already committed to the legacy gradient look (`AGENTS.md:51-53`), and `old-ui-3bb27424` is preserved in `.hw-local/mpc-builds/` (`AGENTS.md:49`).
+
+### 5.2 Dead Code Introduced or Left
+- `components/style.py:39-50` & `53-64`: duplicate `CONTROL_LOOKS` and `def control_look():`.
+- `components/sizes.json:154-155`: duplicate `"control.look": "legacy"`.
+- `components/native/radio_button/radio_button.py:82`: unused `from components.native.button.button import in_slot` inside `render_grid_cell_art`.
+- `components/native/selector/selector.py:364`: unused local `box = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)` inside `render_dropdown_face` (`gradient_face` computes `box` itself).
+- `components/native/selector/selector.py:508`: `dropdown_look` parameter on `selector_definition` (`line 436`) is ignored in the non-plain branch.
+- **Overwritten font assignments (dead work):**
+  - `components/native/level/level.py:494,523,552,557,618,623,1042-1043,1091` and `components/native/pan/pan.py:144,173,202,207` compute/assign per-variant font heights and colours that are immediately overwritten by `dial_caption_style` / `apply_dial_text_style`. In particular, `blue_dial_definition` (`level.py:1032,1042-1052`) accepts `caption_height` and `value_height` (still passed by `scripts/native_play/env_lfo.py:109,113,139`) and discards both.
+  - `scripts/mpc-skin-extras/53_lfo_smooth.py:91,111`, `96_env_native.py:198`, `98_filter_native.py:319`, and `components/native/macro_card/macro_card.py:68-69` set custom dial font heights/colours that `scripts/mpc-skin-extras/99_zz_dial_text.py` (`unify_dial_text`) unconditionally overwrites at the end of skin generation.
+
+### 5.3 Dead Tokens (`0` Production / Test References)
+- `components/colors.json:41`: `"selector.surface": "#0e1b33"` (0 prod, 0 test)
+- `components/colors.json:134`: `"mod_row.button_border": "#26304b"` (0 prod, 0 test)
+- `components/colors.json:141-142`: `"selector.choice.on": "#175a76"`, `"selector.choice.off": "#303237"` (0 prod, 0 test)
+- `components/sizes.json:393`: `"level.sub_dial_definition.style.font.height": 15.0` (0 prod, 0 test)
+- `components/sizes.json:676`: `"selector.selector_definition.rounded_rectangle": 1` (0 prod, 0 test)
+- `components/sizes.json:691`: `"selector.selector_definition.x": 18` (0 exact references; only prefix-matched by `.x.l`, `.x.r`, `.x.v`)
+- `components/sizes.json:708-711`: `"selector.selector_definition.line.offset9"` .. `"offset12"` (0 prod, 0 test)
+- **Effectively dead** (only read in overwritten assignments or `"flat"`-only fallback): `level.level_definition.font.height`, `level.compact_level_definition.font.height*`, `level.compact_dial_definition.font.height*`, `pan.pan_definition.font.height`, `pan.compact_pan_definition.font.height*`, `level.blue.caption.font`, `level.blue.value.font`, `button.switch.border`, `mod_row.button_surface`, `radio.surface.top/bottom` (aside from `99_ui_screen_lfo.py:181`), `filter.pz.active.surface/border`.
+
+### 5.4 Test Quality Audit
+1. **Brittle exact-colour assertions (fail on any legitimate palette tweak instead of verifying the token path):**
+   - `scripts/tests/test_native_button_catalog.py:45-57` (`test_measured_old_colours`) hardcodes RGB `(21, 28, 58)`, `(19, 25, 48)`, `(13, 17, 34)` and hexes `"#131930"`, `"#0d1122"`.
+   - `scripts/tests/test_native_label_catalog.py:176-187` (`test_legacy_fill_has_the_voice_selector_contrast_and_neon_is_untouched`) hardcodes RGB `(20, 26, 56)`, `(11, 15, 36)`, `(38, 46, 103)` and hexes `"#141a38"`, `"#0b0f24"`.
+2. **False-positive test (`scripts/tests/test_native_label_catalog.py:183-184`):**
+   ```python
+   neon = selector.render_dropdown_face(220, 48)
+   self.assertEqual(neon.convert("RGB").getpixel((20, 10)), (20, 26, 56))  # theme.neon.panel0 as before
+   ```
+   `selector.py:353-354` silently diverted `look="neon"` to `look="legacy"` (`selector.dropdown.top`), so `neon` was **not** untouched — the test passed only by coincidence because `selector.dropdown.top == theme.neon.panel0 == "#141a38"`.
+3. **Stale default coverage (`scripts/tests/test_native_selector.py:99-108`):**
+   `test_shape_variant` explicitly passes `stepper=True, arrows=True`, leaving the new default `build_shape_selector(..., stepper=False, arrows=False)` (`selector.py:611-612`) untested.
+4. **Good pattern to follow (`scripts/tests/test_overlay_control_look.py:54-67`):**
+   `test_changing_a_button_token_changes_the_generated_theme` mutates `button.gradient.top` to `#ff00ff` and asserts the generated C++ header updates, matching `AGENTS.md:65`.
+5. **Coverage gaps (no tests added by `ca1ad4b0` / `3328da40` for):**
+   - `unify_dial_text` / `99_zz_dial_text.py` (especially inactive-state detection across `Off`, `Inactive`, `_off_`, `Readout`).
+   - `render_grid_cell_art` (vertical and horizontal gaps, cell widths, minimum-width fit).
+   - `command_stepper_definition` (visual chevron vs `Previous`/`Open`/`Next` hit zones).
+   - Skin-side token mutation propagation across `button`, `radio_button`, `solo_mute`, `tune`, `mod_row`, `selector`, and `append_choice_rows`.
+   - JSON duplicate-key check (`sizes.json:154-155`) / duplicate-symbol check (`style.py:39-64`).
