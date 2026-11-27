@@ -216,5 +216,7 @@ def compact_pan_definition(template=None, skins_dir=None):
         skins_dir, frame_size=COMPACT_48_RECTS["knob"][2], bipolar=True
     )
     if "value" not in controls:
-        definition["componentsData"].append(_value_label("value", COMPACT_48_RECTS["value"], _style_size('pan.compact_pan_definition._value_label')))
+        val = _value_label("value", COMPACT_48_RECTS["value"], _style_size('pan.compact_pan_definition._value_label'))
+        apply_dial_text_style(val["componentData"]["data"]["textStyle"])
+        definition["componentsData"].append(val)
     return definition

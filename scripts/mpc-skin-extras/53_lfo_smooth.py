@@ -83,7 +83,7 @@ def _dial(polarity, ctx, width=_ui_style.size("lfo.dial.default_width"), height=
         rects = {"focus": (0, 0, width, height), "knob": (_ui_style.size("lfo.dial.side_left"), (height-size)//2, size, size),
                  "name": (0, 0, width, 1),
                  "value": (_ui_style.size("lfo.dial.side_left") + size + _ui_style.size("lfo.dial.smooth_value_gap"), (height-value_h)//2,
-                           width-size-_ui_style.size("lfo.dial.side_left")-_ui_style.size("lfo.dial.smooth_value_gap")-2, value_h)}
+                           width-size-_ui_style.size("lfo.dial.side_left")-_ui_style.size("lfo.dial.smooth_value_gap"), value_h)}
         definition = build_native_smooth_dial_with_indicator_definition(
             rects=rects, skins_dir=ctx.skins_dir, active=active, handle_name="Active")
         for child in definition["componentsData"]:

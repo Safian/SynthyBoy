@@ -89,8 +89,6 @@ def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticall
     label = _label_component(kind.lower(), kind, "Caption" if name_mode else "Data", bounds_rect,
                              font_size, _style_argb("mod_row.text_label" if name_mode else "mod_row.text_value"),
                              justification)
-    from components.native.level.level import apply_dial_text_style, dial_caption_style
-    (dial_caption_style if name_mode else apply_dial_text_style)(label["componentData"]["data"]["textStyle"])   # the dial text style
     label["bounds"]["showWhenDataModelInvalid"] = "Hide"
     return label
 
@@ -595,6 +593,9 @@ def build_editor_cell_definition(kind, w, h, *, choice_menu="fx editor choice me
         control = _entry("knob", "Knob", knob_data, (dial_x, knob_y, dial_size, dial_size), focus="Yes")
         name_lbl = editor_label("Name", (_style_size("mod_row.build_editor_cell_definition.padding"), _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), name_h), just="horizontallyCentred verticallyCentred")
         val_lbl = editor_label("Value", (_style_size("mod_row.build_editor_cell_definition.padding"), knob_y + dial_size + _style_size("mod_row.build_editor_cell_definition.padding"), w - _style_size("mod_row.build_editor_cell_definition.double_padding"), val_h), just="horizontallyCentred verticallyCentred")
+        from components.native.level.level import apply_dial_text_style, dial_caption_style
+        dial_caption_style(name_lbl["componentData"]["data"]["textStyle"])
+        apply_dial_text_style(val_lbl["componentData"]["data"]["textStyle"])
         children = [name_lbl, control, val_lbl]
     else:
         raise ValueError(f"Unsupported native modulation editor cell: {kind}")
