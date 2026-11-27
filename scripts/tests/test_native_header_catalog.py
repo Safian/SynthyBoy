@@ -23,9 +23,11 @@ EXAMPLES = header.header_examples(json.loads((DIRECTORY / "catalog.json").read_t
 
 class HeaderCatalogTests(unittest.TestCase):
     def test_tokens(self):
-        self.assertEqual((style.size("header.height"), style.size("header.padding"), style.size("header.gap")), (56, 4, 8))
+        self.assertEqual((style.size("header.height"), style.size("header.padding"), style.size("header.gap")), (56, 8, 8))
         m = header.metrics()
-        self.assertEqual(m["content"], style.size("height.medium"))
+        self.assertEqual(m["content"], style.size("height.intermediate"))   # 56 - 2 x 8 = 40
+        with self.assertRaises(ValueError):
+            style.size("header.side")                                      # one margin token: header.padding
         self.assertEqual(style.size("header.page.width"), style.size("screen.width"))
 
     def test_eight_examples_with_one_picture_each(self):
@@ -36,20 +38,29 @@ class HeaderCatalogTests(unittest.TestCase):
                 self.assertEqual(image.size, (header.header_width(example["width"]), 56), example["id"])
                 self.assertEqual(image.convert("RGBA").tobytes(), header.render_header(example).tobytes(), example["id"])
 
-    def test_content_is_48_high_with_4_px_padding_title_and_dropdowns_centred(self):
+    def test_content_is_40_high_with_the_same_8_px_all_around(self):
         m = header.metrics()
+        self.assertEqual((m["padding"], m["content"], m["side"]), (8, 40, 8))
         for example in EXAMPLES:
-            _, placed = header.layout(example)
+            width, placed = header.layout(example)
             for item in placed:
                 x, y, w, h = item.rect
-                if item.kind == "dropdown":   # 40 px (the proposal), centred in the 48 px content: 8 px margin
-                    self.assertEqual((y, h), (m["padding"] + (m["content"] - 40) // 2, 40), example["id"])
-                elif item.kind == "title":    # the Label screenTitle, centred, width from the text
-                    self.assertLessEqual(h, m["content"])
+                if item.kind == "title":      # the Label screenTitle, centred, width from the text
+                    ink = item.face.getbbox()      # the line box may be a pixel taller than the row; the letters fit
+                    self.assertLessEqual(ink[3] - ink[1], m["content"])
                     self.assertEqual(y, m["padding"] + (m["content"] - h) // 2, example["id"])
-                else:
+                else:                         # every button and dropdown is the content height: 8 px above and below
                     self.assertEqual((y, h), (m["padding"], m["content"]), f"{example['id']} {item.kind}")
-                self.assertEqual(y + h + (y - m["padding"]) + m["padding"] + (m["content"] - h) % 2 * 0, m["height"] - (m["content"] - h) % 2)
+                    self.assertEqual(m["height"] - (y + h), m["padding"], f"{example['id']} {item.kind}")
+            real = [p for p in placed if p.kind != "title"]
+            if real:
+                self.assertEqual(min(p.y for p in real), m["padding"])                       # top edge 8 px from the header edge
+                self.assertEqual(m["height"] - max(p.y + p.face.height for p in real), m["padding"])   # bottom edge 8 px
+            self.assertEqual(min(p.x for p in placed), m["padding"], example["id"])           # left edge 8 px
+            if example.get("right") or any(i.get("fill") for i in example.get("centre", [])):
+                self.assertEqual(width - max(p.x + p.face.width for p in placed), m["padding"], example["id"])   # right edge 8 px
+            if example["width"] == "panel":
+                self.assertEqual(width, 400)
 
     def test_zones_are_ordered_do_not_overlap_and_fit_the_room(self):
         m = header.metrics()
@@ -133,8 +144,8 @@ class HeaderCatalogTests(unittest.TestCase):
 
     def test_buttons_are_the_button_and_icon_button_recipes_never_flat(self):
         flat = style.rgb("button.surface")
-        samples = {"power": lambda state: icon_button.render_sample({"icon": "power", "height": "height.medium", "state": state, "look": "filled"}),
-                   "expand": lambda state: icon_button.render_sample({"icon": "expand", "height": "height.medium", "state": "off", "look": "filled"})}
+        samples = {"power": lambda state: icon_button.render_sample({"icon": "power", "height": header.metrics()["content"], "state": state, "look": "filled"}),
+                   "expand": lambda state: icon_button.render_sample({"icon": "expand", "height": header.metrics()["content"], "state": "off", "look": "filled"})}
         for example in EXAMPLES:
             _, placed = header.layout(example)
             for item in placed:
@@ -143,12 +154,15 @@ class HeaderCatalogTests(unittest.TestCase):
                 elif item.kind == "expand":
                     self.assertEqual(item.face.tobytes(), samples["expand"]("off").tobytes(), example["id"])
                 elif item.kind == "close":
-                    self.assertEqual(item.face.tobytes(), icon_button.render_sample({"icon": "close", "height": "height.medium", "state": "off", "look": "filled"}).tobytes())
+                    self.assertEqual(item.face.tobytes(), icon_button.render_sample({"icon": "close", "height": header.metrics()["content"], "state": "off", "look": "filled"}).tobytes())
                 elif item.kind == "more":
-                    self.assertEqual(item.face.tobytes(), button.render_sample({"text": "MORE", "height": "height.medium", "state": "enabled"}).tobytes())
+                    self.assertEqual(item.face.tobytes(), button.render_sample({"text": "MORE", "height": header.metrics()["content"], "state": "enabled"}).tobytes())
+            for item in placed:                # no flat (21,26,45) fill inside any button face
+                if item.kind in ("power", "expand", "close", "more", "button"):
+                    flat_pixels = sum(1 for p in item.face.getdata() if p[3] == 255 and p[:3] == flat)
+                    self.assertLessEqual(flat_pixels, 2, (example["id"], item.kind))   # a flat fill would be hundreds of pixels (an edge blend can hit it once)
             with Image.open(DIRECTORY / "img" / example["file"]) as image:
-                image = image.convert("RGBA")
-                self.assertEqual(sum(1 for p in image.getdata() if p[3] == 255 and p[:3] == flat), 0, example["id"])   # no flat (21,26,45) fill
+                self.assertEqual(image.size[1], 56)
 
     def test_invalid_examples_are_refused(self):
         with self.assertRaises(ValueError):

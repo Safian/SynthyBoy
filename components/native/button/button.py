@@ -331,7 +331,8 @@ SAMPLE_STATES = ("enabled", "disabled")
 def render_sample(sample):
     """One catalogue picture: the text button in the legacy look at its height token; disabled = dim_artwork of it."""
     from components.style import dim_artwork
-    face = action_art(text=sample["text"], height=_style_size(sample["height"]), look="legacy")
+    height = sample["height"] if isinstance(sample["height"], int) else _style_size(sample["height"])
+    face = action_art(text=sample["text"], height=height, look="legacy")
     return dim_artwork(face) if sample["state"] == "disabled" else face
 
 

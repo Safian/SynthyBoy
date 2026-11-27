@@ -4,7 +4,7 @@
 
 Three zones in one row: LEFT = POWER (only for modules that can be switched off) and the page title, CENTRE =
 page-specific controls, RIGHT = the common buttons (EXPAND / CLOSE, MORE). Every face is rendered by an existing
-recipe at the shared 48 px content height; this module only places them. All sizes come from components/sizes.json
+recipe at the shared content height (header.height - 2 x header.padding: 40 px with padding 8, 48 with padding 4); this module only places them. All sizes come from components/sizes.json
 (header.*), the examples from components/native/header/catalog.json. Docs: docs/ui-components/header.md.
 """
 import math
@@ -41,10 +41,10 @@ class Placed:
 
 
 def metrics():
-    """The header tokens as plain numbers: height, padding, gap, side padding and the content height."""
+    """The header tokens as plain numbers: height, padding (the one margin on all four sides), gap and the content height."""
     height, padding = _style_size("header.height"), _style_size("header.padding")
     return {"height": height, "padding": padding, "gap": _style_size("header.gap"),
-            "side": _style_size("header.side"), "content": height - 2 * padding}
+            "side": padding, "content": height - 2 * padding}
 
 
 def header_width(width_id):
@@ -65,20 +65,20 @@ def title_face(text):
     return render_label(text, "font.page_title", "text.value", unit="em")
 
 
-def power_face(state):
+def power_face(state, height):
     """POWER 48 x 48: lit (accent.green, as the Filter power button) when on, the plain icon colour when off."""
     if state not in POWER_STATES:
         raise ValueError(f"power must be one of {POWER_STATES}: {state!r}")
-    return _icon_button.render_sample({"icon": "power", "height": "height.medium", "state": state, "look": "filled"})
+    return _icon_button.render_sample({"icon": "power", "height": height, "state": state, "look": "filled"})
 
 
-def right_face(kind):
+def right_face(kind, height):
     if kind == "expand":
-        return _icon_button.render_sample({"icon": "expand", "height": "height.medium", "state": "off", "look": "filled"})
+        return _icon_button.render_sample({"icon": "expand", "height": height, "state": "off", "look": "filled"})
     if kind == "close":
-        return _icon_button.render_sample({"icon": "close", "height": "height.medium", "state": "off", "look": "filled"})
+        return _icon_button.render_sample({"icon": "close", "height": height, "state": "off", "look": "filled"})
     if kind == "more":
-        return _button.render_sample({"text": "MORE", "height": "height.medium", "state": "enabled"})
+        return _button.render_sample({"text": "MORE", "height": height, "state": "enabled"})
     raise ValueError(f"right button must be one of {RIGHT_KINDS}: {kind!r}")
 
 
@@ -86,11 +86,11 @@ def centre_face(item, content, *, enabled=True):
     """One page-specific control: dropdown (selector recipe; there is no left/right stepper) or a text button (button recipe)."""
     kind = item.get("kind")
     if kind == "button":
-        face = _button.render_sample({"text": item["text"], "height": "height.medium", "state": "enabled"})
+        face = _button.render_sample({"text": item["text"], "height": content, "state": "enabled"})
     elif kind == "dropdown":
         # The old Play-panel look: value only, centred, no label (render_dropdown_variant placement none, align center).
-        # 40 px by default (header.dropdown.height proposal: the owner chooses from the catalogue), centred in the row.
-        face = render_dropdown_variant(item.get("width_px") or _style_size(item["width"]), _style_size(item.get("height", "height.intermediate")),
+        # As high as the content row (40 px with padding 8; sizes 32 / 40 / 48 exist), centred in the row.
+        face = render_dropdown_variant(item.get("width_px") or _style_size(item["width"]), _style_size(item["height"]) if "height" in item else content,
                                        item.get("value", ""))
     else:
         raise ValueError(f"centre control must be one of {CENTRE_KINDS}: {kind!r}")
@@ -114,7 +114,7 @@ def layout(example):
 
     def run(zone, items, x):
         for kind, face in items:
-            # A face lower than the 48 px content (a 40 px dropdown) is centred in the row.
+            # A face lower than the content row (the title) is centred in the row.
             placed.append(Placed(zone, kind, x, y + (m["content"] - face.height) // 2, face))
             x += face.width + gap
         return x - gap if items else x
@@ -123,10 +123,10 @@ def layout(example):
     if example.get("title"):
         left.append(("title", title_face(example["title"])))
     if example.get("power"):
-        left.append(("power", power_face(example["power"])))
+        left.append(("power", power_face(example["power"], m["content"])))
     end = run("left", left, m["side"])
     enabled = example.get("power") != "off"
-    right = [(kind, _content_face(right_face(kind), m["content"])) for kind in example.get("right", [])]
+    right = [(kind, _content_face(right_face(kind, m["content"]), m["content"])) for kind in example.get("right", [])]
     right_x = width - m["side"] - sum(f.width for _, f in right) - gap * (len(right) - 1) if right else width - m["side"] + gap
     items = example.get("centre", [])
     centre_x = end + gap if left else m["side"]

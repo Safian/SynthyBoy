@@ -19,7 +19,8 @@ def render_sample(sample):
     """One icon button: square at its height token; "on" lights POWER green, "disabled" dims the off face."""
     icon, state = sample["icon"], sample["state"]
     colour = _style_color("accent.green" if (icon == "power" and state == "on") else "text.icon")
-    face = action_art(icon=icon, height=_style_size(sample["height"]), colour=colour,
+    height = sample["height"] if isinstance(sample["height"], int) else _style_size(sample["height"])
+    face = action_art(icon=icon, height=height, colour=colour,
                       look="legacy" if sample["look"] == "filled" else "ghost")
     return dim_artwork(face) if state == "disabled" else face
 
