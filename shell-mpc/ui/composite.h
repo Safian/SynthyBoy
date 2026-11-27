@@ -148,7 +148,7 @@ protected:
     virtual void drawExtra (Pen&) const {}   // drawn after the children (outlines, captions)
     virtual void syncKids() { for (int i = 0; i < n_; ++i) kids_[i]->setEnabled (enabled_); }
     void drawBody (Pen&) const override {}
-    void addKid (ControlModel& m, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &m; widgetKids_[n_] = nullptr; shown_[n_] = shown; m.setVisible (shown); ++n_; } }
+    void addKid (ControlModel& m, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &m; widgetKids_[n_] = dynamic_cast<Component*> (&m); shown_[n_] = shown; m.setVisible (shown); ++n_; } }
     void addKid (Component& c, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &c; widgetKids_[n_] = &c; shown_[n_] = shown; c.setVisible (shown); ++n_; } }
     void clearKids() { n_ = 0; cap_ = nullptr; primary_ = nullptr; primaryWidget_ = nullptr; }
     void show (const ControlModel& c, bool s) { for (int i = 0; i < n_; ++i) if (kids_[i] == &c) { shown_[i] = s; kids_[i]->setVisible (s); } }
