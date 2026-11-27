@@ -301,7 +301,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             pen.textLeft (playrows::labelRect (r, false, false), d.label, T.fLabel, a (T.textDim, 220), T.fMin);
         }
         else
-            sb.text (static_cast<float> (r.x + 14), static_cast<float> (r.y + 24), T.fLabel, d.label, a (T.textDim, 220));
+            sb.text (static_cast<float> (r.x + 14), static_cast<float> (r.y + 17), theme::kPageTitleSize, d.label, a (T.text, 255));   // the page title (the host layer draws "LFO n" / "RND n" in the same place, 99_backgrounds.py)
     }
     if (d.kind == Data::Kind::Random && d.traceMarkerCached && ! d.dim && d.trace != nullptr && d.traceN >= 2)
         drawTraceMarker (sb, plot, d, st[3]);

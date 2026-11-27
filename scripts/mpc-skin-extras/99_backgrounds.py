@@ -61,6 +61,7 @@ KNOWN = {
     "macros": ("Macros", CANVAS_ASSET, 900, 20, "0b1028"),
     "play1": ("Play", CANVAS_ASSET, 900, 20, "141a3b"),
 }
+LFO_TITLE_RECT = (22, 82, 400, 40)   # the top left of the graph panel; shell-mpc/ui/lfo_display.h draws the page title at the same place
 SENTINELS = {view: (v[2], v[3], v[4]) for view, v in KNOWN.items()}
 
 # The root background stays below the three named Play selector instances;
@@ -123,8 +124,12 @@ def apply(tui, qlinks, ctx):
         children[:] = [entry for entry in children if not entry["componentData"]["name"].startswith(
             ("Overlay Background Sentinel ", "Native Caption " + view))]
         children.append(sentinel_entry(view, marker, SENTINELS[view]))
-        # LFO captions belong to its layout-gated native hook.
-        if not view.startswith(("lfo", "rnd")):
+        # LFO captions belong to its layout-gated native hook; the page title of a sub-tab is its own caption (the 14 tabs share one surface, so only
+        # the tab knows which LFO or RND it is: "LFO 3", "RND 2"; the plugin's own drawing adds the shape, shell-mpc/ui/lfo_display.h).
+        if view.startswith(("lfo", "rnd")):
+            from native_static_captions import title_entry
+            children.append(title_entry("Native Caption %s title" % view, view[:3].upper() + " " + view[3:], LFO_TITLE_RECT))
+        else:
             from native_static_captions import caption_entries
             gates = ()
             if view == "tuning":

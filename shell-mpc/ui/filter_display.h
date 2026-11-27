@@ -1152,7 +1152,7 @@ protected:
                 : (isFormant_ ? (view_ == kViewF2 ? "FILTER 2 · FORMANT XY" : "FILTER 1 · FORMANT XY")
                               : (view_ == kViewF2 ? "FILTER 2 · RESPONSE" : "FILTER 1 · RESPONSE"));
             p.textLeft ({ graphRect_.x + 74, graphRect_.y + 4, std::max (0, graphRect_.w - 204), 56 },
-                        hdr, T.fLabel, p.c (power.state.on ? T.textDim : T.textFaint, 255), T.fMin);
+                        hdr, theme::kPageTitleSize, p.c (power.state.on ? T.text : T.textFaint, 255), T.fMin);   // the page title: the size of every page (static-native-captions.json filter1 / filter2 draws the same rect on the host layer)
         }
         const Rect blocks[kMaxGroups] = { mainBlock_, trackBlock_, outBlock_, formantBlock_ };
         for (int i = 0; i < kMaxGroups; ++i)

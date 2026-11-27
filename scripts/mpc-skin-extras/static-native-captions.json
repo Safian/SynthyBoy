@@ -9,7 +9,7 @@
         260,
         56
       ],
-      "size": 26,
+      "size": "font.page_title",
       "colour": "text.value"
     }
   ],
@@ -17,13 +17,13 @@
     {
       "text": "ENV 1",
       "rect": [
+        8,
         12,
-        27,
-        60,
-        26
+        96,
+        56
       ],
-      "size": 17,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     },
     {
       "text": "ADSR",
@@ -63,13 +63,13 @@
     {
       "text": "ENV 2",
       "rect": [
+        8,
         12,
-        27,
-        60,
-        26
+        96,
+        56
       ],
-      "size": 17,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     },
     {
       "text": "ADSR",
@@ -109,13 +109,13 @@
     {
       "text": "ENV 3",
       "rect": [
+        8,
         12,
-        27,
-        60,
-        26
+        96,
+        56
       ],
-      "size": 17,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     },
     {
       "text": "ADSR",
@@ -155,13 +155,13 @@
     {
       "text": "ENV 4",
       "rect": [
+        8,
         12,
-        27,
-        60,
-        26
+        96,
+        56
       ],
-      "size": 17,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     },
     {
       "text": "ADSR",
@@ -201,13 +201,13 @@
     {
       "text": "ENV 5",
       "rect": [
+        8,
         12,
-        27,
-        60,
-        26
+        96,
+        56
       ],
-      "size": 17,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     },
     {
       "text": "ADSR",
@@ -247,13 +247,13 @@
     {
       "text": "ENV 6",
       "rect": [
+        8,
         12,
-        27,
-        60,
-        26
+        96,
+        56
       ],
-      "size": 17,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     },
     {
       "text": "ADSR",
@@ -298,7 +298,7 @@
         166,
         42
       ],
-      "size": 28,
+      "size": "font.page_title",
       "colour": "text.value"
     }
   ],
@@ -407,7 +407,7 @@
         220,
         56
       ],
-      "size": 26,
+      "size": "font.page_title",
       "colour": "text.value"
     }
   ],
@@ -421,7 +421,7 @@
         260,
         56
       ],
-      "size": 26,
+      "size": "font.page_title",
       "colour": "text.value"
     }
   ],
@@ -429,64 +429,112 @@
     {
       "text": "OSC A",
       "rect": [
-        10,
-        31,
-        50,
-        24
+        988,
+        2,
+        282,
+        34
       ],
-      "size": 15,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     }
   ],
   "oscb": [
     {
       "text": "OSC B",
       "rect": [
-        10,
-        31,
-        50,
-        24
+        988,
+        2,
+        282,
+        34
       ],
-      "size": 15,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     }
   ],
   "oscc": [
     {
       "text": "OSC C",
       "rect": [
-        10,
-        31,
-        50,
-        24
+        988,
+        2,
+        282,
+        34
       ],
-      "size": 15,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     }
   ],
   "oscsub": [
     {
       "text": "SUB",
       "rect": [
-        10,
-        31,
-        50,
-        24
+        988,
+        2,
+        282,
+        34
       ],
-      "size": 15,
-      "colour": "text.caption"
+      "size": "font.page_title",
+      "colour": "text.value"
     }
   ],
   "oscnoise": [
     {
       "text": "NOISE",
       "rect": [
-        10,
-        31,
-        50,
-        24
+        988,
+        2,
+        282,
+        34
       ],
-      "size": 15,
+      "size": "font.page_title",
+      "colour": "text.value"
+    }
+  ],
+  "filter1": [
+    {
+      "text": "FILTER 1",
+      "rect": [
+        82,
+        80,
+        300,
+        56
+      ],
+      "size": "font.page_title",
+      "colour": "text.value"
+    },
+    {
+      "text": "SET ON MIXER",
+      "rect": [
+        1084,
+        412,
+        184,
+        20
+      ],
+      "size": 13,
+      "colour": "text.caption"
+    }
+  ],
+  "filter2": [
+    {
+      "text": "FILTER 2",
+      "rect": [
+        82,
+        80,
+        300,
+        56
+      ],
+      "size": "font.page_title",
+      "colour": "text.value"
+    },
+    {
+      "text": "SET ON MIXER",
+      "rect": [
+        1084,
+        412,
+        184,
+        20
+      ],
+      "size": 13,
       "colour": "text.caption"
     }
   ]

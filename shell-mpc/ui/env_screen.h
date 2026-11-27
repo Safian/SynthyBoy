@@ -448,7 +448,7 @@ public:
     void drawFixedLabels (Pen& p) const
     {
         const theme::Look& T = theme::L();
-        p.textLeft (caption_, pageMode_ && caption_text_[0] != '\0' ? caption_text_ : "ENV", T.fLabel + 2.0f, p.c (pageMode_ ? T.text : T.textDim, 255), T.fMin);
+        p.textLeft (caption_, pageMode_ && caption_text_[0] != '\0' ? caption_text_ : "ENV", pageMode_ ? theme::kPageTitleSize : T.fLabel + 2.0f, p.c (pageMode_ ? T.text : T.textDim, 255), T.fMin);   // the page title in page mode
         for (int i = 0; i < kMaxGroups; ++i)
         {
             p.textLeft ({ blocks_[i].x + KnobPanel::kBlockPad + 4, blocks_[i].y + 3, std::max (0, blocks_[i].w - 16), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
