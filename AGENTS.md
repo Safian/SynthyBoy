@@ -68,3 +68,8 @@ A screen never draws a control face with its own code: buttons, dropdowns, selec
 
 - Lists use the host MenuOverlay as it is: a row tap marks the row, a tap on the list header applies and closes. No select-and-close, no custom badges in rows, names only.
 - Evidence: the Key 61 probes A/B closed the list but lost the selection, because the skin action triggers cannot be ordered (SDK `ui-reference.md`, section on onAction); report in `/private/tmp/claude-501/list-probe/results/`. A plugin-drawn drawer (SDK-PORTING) is the only way to get select-and-close and is not planned.
+
+## Exception: the C++ text keyboard stays (owner decision pending, found 2026-11-27)
+
+The host TextEditOverlay drops the typed text for third-party VST plugins (evidence: branch `agy/native-textentry`, commit 5cdf0c88). The C++ popup keyboard (`shell-mpc/ui/text_entry.h`) is therefore the only control that stays in the overlay, for the Macro rename and the LFO shape name, until a host firmware offers a string-valued handle to external plugins. Every other control comes from the native components.
+
