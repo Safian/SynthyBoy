@@ -78,10 +78,17 @@ def _dial(polarity, ctx, width=_ui_style.size("lfo.dial.default_width"), height=
     side = width >= _ui_style.size("lfo.dial.side_min_width") and height <= _ui_style.size("lfo.dial.side_max_height")
     size = _ui_style.size("lfo.dial.small_size") if side or height < _ui_style.size("lfo.dial.small_max_height") else _ui_style.size("lfo.dial.large_size")
     if smooth:
-        rects = {"focus": (0, 0, width, height), "knob": ((width-size)//2, _ui_style.size("lfo.dial.top"), size, size),
-                 "name": (0, 0, width, 1), "value": (2, height-_ui_style.size("lfo.dial.value_bottom"), width-_ui_style.size("lfo.dial.top"), _ui_style.size("lfo.dial.value_height"))}
+        # The knob sits at the left edge of its cell, next to the right-aligned SMOOTH caption of the cell before it; the value stands to its right, large.
+        value_h = _ui_style.size("lfo.dial.value_height")
+        rects = {"focus": (0, 0, width, height), "knob": (_ui_style.size("lfo.dial.side_left"), (height-size)//2, size, size),
+                 "name": (0, 0, width, 1),
+                 "value": (_ui_style.size("lfo.dial.side_left") + size + _ui_style.size("lfo.dial.smooth_value_gap"), (height-value_h)//2,
+                           width-size-_ui_style.size("lfo.dial.side_left")-_ui_style.size("lfo.dial.smooth_value_gap")-2, value_h)}
         definition = build_native_smooth_dial_with_indicator_definition(
             rects=rects, skins_dir=ctx.skins_dir, active=active, handle_name="Active")
+        for child in definition["componentsData"]:
+            if child["componentData"]["name"] == "value":
+                child["componentData"]["data"]["textStyle"]["font"]["height"] = float(_ui_style.size("lfo.dial.value_font"))
         # The adjacent exported kSmooth cell owns the one ActiveText caption.
         definition["componentsData"] = [c for c in definition["componentsData"]
                                          if c["componentData"]["name"] != "name"]
@@ -106,15 +113,15 @@ def _dial(polarity, ctx, width=_ui_style.size("lfo.dial.default_width"), height=
     return definition
 
 
-def _active_text(ctx, text, width, height):
+def _active_text(ctx, text, width, height, anchor="mm"):
     from components.native.active_text.active_text import (
         active_text_definition, render_active_text_art,
     )
-    tag = text.lower().replace(" ", "_") + f"_{width}x{height}"
+    tag = text.lower().replace(" ", "_") + f"_{width}x{height}" + ("" if anchor == "mm" else "_" + anchor)
     on, off = f"lfo_{tag}_on.png", f"lfo_{tag}_off.png"
     from components.style import size
     for active, filename in ((True, on), (False, off)):
-        render_active_text_art(text, active, width, height, font_size=size("font.caption"), anchor="mm").save(ctx.skins_dir / filename)
+        render_active_text_art(text, active, width, height, font_size=size("font.caption"), anchor=anchor).save(ctx.skins_dir / filename)
     return active_text_definition(text, on, off, (width, height), handle="Active")
 
 
@@ -241,7 +248,7 @@ def _widget(items, base, choices, field, action, rect, first, last, ctx, definit
     widget = f"Field{field}_{width}x{height}_{action}"
     if widget not in definitions:
         if field in TOGGLE_FIELDS:
-            definitions[widget] = _active_text(ctx, label, width, height)
+            definitions[widget] = _active_text(ctx, label, width, height, anchor="rm" if field == SMOOTH else "mm")
         elif field in choices or field in NUMBER_FIELDS:
             definitions[widget] = _choice(ctx, width, height, caption=label, number=field in NUMBER_FIELDS,
                                           popup=f"lfoNativeChoiceDrawer{field}" if field in choices else None)

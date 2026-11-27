@@ -1302,6 +1302,7 @@
     "lfo.dial.value_offset": 24,
     "lfo.dial.caption_font": 14,
     "lfo.dial.value_font": 20,
+    "lfo.dial.smooth_value_gap": 8,
     "lfo.dial.choice_font": 17,
     "lfo.dial.option_min_width": 56,
     "selector.table.arrow_y": [15, 28, 41],

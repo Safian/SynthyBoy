@@ -65,7 +65,8 @@ def render_active_text_art(
     fill_color = _style_color("active_text.on") if active else _style_color("active_text.off")
 
     effective_anchor = anchor or ("mm" if width > _style_size("active_text.default.width") else "lm")
-    pos = (w / 2, h / 2) if effective_anchor == "mm" else (0, h / 2)
+    # "rm": the text ends at the right edge (a caption that sits next to the control on its right)
+    pos = (w / 2, h / 2) if effective_anchor == "mm" else (w - 4 * scale, h / 2) if effective_anchor == "rm" else (0, h / 2)
     draw.text(pos, text, font=font, fill=fill_color, anchor=effective_anchor)
     if scale == 1:
         return image
