@@ -31,3 +31,25 @@ def ensure_routing_replacement_strings(tui, dest_param_indices, choices=()):
     """Keep the generic selector adapter's original empty default."""
     from components.native.selector.selector import ensure_routing_replacement_strings as apply_choices
     return apply_choices(tui, dest_param_indices, choices)
+
+
+import importlib.util as _importlib_util
+
+_sel95_path = Path(__file__).resolve().parent / "mpc-skin-extras" / "95_selectors.py"
+if _sel95_path.is_file():
+    _sel95_spec = _importlib_util.spec_from_file_location("mpc_skin_extra_95_selectors", _sel95_path)
+    _sel95_mod = _importlib_util.module_from_spec(_sel95_spec)
+    _sel95_spec.loader.exec_module(_sel95_mod)
+    LFO_INSTANCE_MENU = _sel95_mod.LFO_INSTANCE_MENU
+    ENV_INSTANCE_MENU = _sel95_mod.ENV_INSTANCE_MENU
+    FILTER_VIEW_MENU = _sel95_mod.FILTER_VIEW_MENU
+    FILTER_SCALAR_MENU = _sel95_mod.FILTER_SCALAR_MENU
+    LFO_INSTANCE_CHOICES = _sel95_mod.LFO_INSTANCE_CHOICES
+    ENV_INSTANCE_CHOICES = _sel95_mod.ENV_INSTANCE_CHOICES
+    FILTER_VIEW_CHOICES = _sel95_mod.FILTER_VIEW_CHOICES
+    FILTER_SCALAR_CHOICES = _sel95_mod.FILTER_SCALAR_CHOICES
+    build_lfo_instance_selector = _sel95_mod.build_lfo_instance_selector
+    build_env_instance_selector = _sel95_mod.build_env_instance_selector
+    build_filter_view_selector = _sel95_mod.build_filter_view_selector
+    build_filter_scalar_view_selector = _sel95_mod.build_filter_scalar_view_selector
+

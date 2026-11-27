@@ -32,6 +32,7 @@ from components.native.radio_button.radio_button import (
 from components import style
 import native_ui_params as handles
 from native_ui_params import ENV_SELECTOR_CELLS, ENV_SELECTOR_LAST_FRAME, env_selector_base
+from native_selector import build_env_instance_selector  # hook: native dropdown replacement for EnvFullScreen.selector
 
 
 # Tab coordinates matching EnvFullScreen::layout (screen y minus 110).
