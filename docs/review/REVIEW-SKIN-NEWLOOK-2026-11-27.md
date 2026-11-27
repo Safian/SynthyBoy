@@ -487,3 +487,61 @@
    Amount readout shrunk from `34` to `20`, split toggle Name/Value hierarchy is erased, and `POLARITY`/`ROUTE`/`INVERT`/`STEREO`/`SYNC` remain flat unbordered `#131930` rectangles (`1.00:1` vs `mod_row.surface` in preview).
 8. **Unreadable disabled Mixer S/M/FX buttons (`components/native/solo_mute/solo_mute.py:123-126,143`):**
    `#384252` text on `#131930` active blue gradient yields **1.71:1** contrast on disabled channels.
+
+---
+
+## 7. Prioritized Action List
+
+### MUST FIX
+
+1. **`components/sizes.json:154-155` & `components/style.py:39-64` — Duplicate `"control.look"` key and duplicate `control_look()` definition.**  
+   **Fix:** Remove the duplicate JSON key in `components/sizes.json:155` and the duplicate `CONTROL_LOOKS` / `control_look()` block in `components/style.py:53-64` (or remove `control_look` / `SYNTHYBOY_CONTROL_LOOK` entirely per SHOULD FIX #1).
+2. **`components/native/selector/selector.py:1407-1420` & `scripts/mpc-skin-extras/58_osc_detail.py:146-151` — `command_stepper_definition` draws a down-chevron (`v`) inside the `Next` hit zone and hides `<`/`>` arrows; `oscDetailUnisonMode` leaves a 46 px dead center.**  
+   **Fix:** Either migrate OSC table and Unison MODE to real single-action dropdowns (`Show Overlay` or a single full-rect `"Open"` hit zone with `chevron=True`), or pass `arrows=True` while `Previous`/`Open`/`Next` hit zones remain (`selector.py:1410`) so the face never draws a dropdown chevron over `Next`.
+3. **`components/native/level/level.py:1125` — `unify_dial_text` misses `mixerSlider*Inactive` (`mixer_strip.py:705`), `filterNativeDial_*_off_*` (`98_filter_native.py:287`), and `compactNativeSmoothReadout` (`82_play.py:232`, `env_lfo.py:117`).**  
+   **Fix:** Detect inactive dial definitions by checking `any(c["componentData"]["type"] == "Knob" and c["componentData"]["data"].get("dragOrientation") == "None" for c in children)` or `definition["value"].get("ignoreMousePresses")` alongside the key pattern `(?:Off|Inactive|Disabled|Readout)|_off_`, so every disabled dial stays dimmed.
+4. **`components/colors.json:44-45` & `components/native/button/button.py:61` — Legacy button keyline `#151c3a → #161e42` is near-invisible (`1.15:1` vs `#0a0e1a`, `1.04:1` vs fill) and inverted.**  
+   **Fix:** Set `button.gradient.border` (top) to a lighter blue matching dropdown/button edge visibility (e.g. `#27306a` or `#26304b`, `>= 1.45:1` vs `#0a0e1a`) and `button.gradient.border.bottom` darker than the top keyline (e.g. `#182046`), then regenerate `shell-mpc/ui/theme_tokens.h` and update token-driven tests.
+5. **`components/native/mod_row/mod_row.py:92-93` — `_label_entry` forces dial text style (`20.0`, `#eef1ff`, Upper Case) onto non-dial Mod Matrix cells (shrinking Amount readout `mod_row.py:147` from `34` to `20`).**  
+   **Fix:** Remove `(dial_caption_style if name_mode else apply_dial_text_style)(...)` from `_label_entry` and apply it only in `build_editor_cell_definition`'s `dial_uni`/`dial_bi` branch (`mod_row.py:596-597`), restoring `mod_row.font.amount` (`34`) and `mod_row.text_label` (`#8fa2c0`).
+6. **`scripts/mpc-skin-extras/57_osc_settings.py:75-76` & `scripts/mpc-skin-extras/58_osc_detail.py:52-57` — `apply_dial_text_style` applied to non-dial toggle/action labels (`14 px` tall) and `oscDetailStepper` (`19 px` tall overlapping Name/Value).**  
+   **Fix:** Remove `apply_dial_text_style` from `57_osc_settings.py:76` (its callers at lines `149` and `157` are toggle/action, not dials) and from `58_osc_detail.py:56` (adjust stepper label rects so `Name` `y=0..0.20` and `Value` `y=0.20..0.40` do not overlap and keep `text.caption` vs `text.icon`).
+7. **`components/native/radio_button/radio_button.py:88-95` — `render_grid_cell_art` uses `across = width` instead of `extent` in vertical mode, producing asymmetric `12/8/4 px` gaps on LFO Sync and clipping/crashing on smaller slots.**  
+   **Fix:** When `vertical=True`, pick `box` from `extent` (available slot height) rather than `across`, centre the face vertically within `(left, along - right)` instead of `(0, left)`, guard `across < 32` against missing `button.size.<px>`, and pass `look=None` instead of hardcoded `"legacy"`.
+8. **`scripts/mpc-skin-extras/82_play.py:234-243` & `components/native/selector/selector.py:374,468-502` — `playOscSelector` renders flat-grey `48 px` (`neutral=True`, `radius=6`, `inset=0`) next to `56 px` dark-blue gradient `playModSelector` (`plain=True`, `radius=10`, `inset=3`), and `render_dropdown_face` shifts the chevron by `geometry["inset"]` when `inset` is overridden.**  
+   **Fix:** Pass `neutral=False` for active `playOscSelector` (`82_play.py:234`), align all three Play selectors on identical height/radius/inset tokens (e.g. `dropdown_size="selector.dropdown.size.48"` or uniform `plain` path), and fix `selector.py:374` to use `inset_px = geometry["inset"] if inset is None else inset` for chevron `cx`.
+9. **`components/sizes.json:256-261,1084,1379` & `components/native/level/level.py:568-569` / `components/native/pan/pan.py:218-219` — 24 compact dial `Name` rects are `18 px` tall (`< 20.0`), narrow `Value` rects (`48–63 px`) are tight/overflowing, and `compact_*_definition(None)` emits `Name=20.0 / Value=16.0`.**  
+   **Fix:** Expand `18 px` caption rects to `>= 22 px` (or introduce a compact dial caption/value font token `<= 16–18` for `40 px` / narrow cells), widen `lfoNativeField4 Smooth` value rect (`53_lfo_smooth.py:85-86`) and `_SMOOTH_RECTS` (`sizes.json:344-349`), and apply `apply_dial_text_style` to the fallback `_value_label` in `level.py:569` and `pan.py:219`.
+10. **`components/native/solo_mute/solo_mute.py:123-126,140-151` — `STATE_DISABLED` renders `#384252` on active blue gradient (`CR = 1.71:1`, illegible).**  
+    **Fix:** Render `STATE_DISABLED` via `dim_artwork(render_button_face(text, STATE_NEUTRAL, ...))` (matching `button.render_sample` and `AGENTS.md:15`, yielding `CR = 5.93:1`), or use a neutral grey disabled surface with readable ink (`>= 4.5:1`).
+
+---
+
+### SHOULD FIX
+
+1. **Remove `SYNTHYBOY_CONTROL_LOOK=flat` (`components/style.py:39-64`, `components/sizes.json:154-155`, `button.py`, `selector.py`, `radio_button.py`, `solo_mute.py`, `tune.py`, `mod_row.py`):**  
+   **Fix:** Delete the broken env-var toggle and dead flat branches; `old-ui-3bb27424` in `.hw-local/mpc-builds/` already serves as the historical fallback (`AGENTS.md:49`).
+2. **Eliminate remaining flat button/control bypasses and consolidate `gradient_face` callers:**  
+   **Fix:** Convert `modNative_toggle_*` (`mod_row.py:100,109,153-165,412`), `write_switch_asset` (`button.py:344-347`), `render_tune_card` (`tune.py:692-713`), and `mixerDestination56` (`mixer_strip.py:331-350`) to use `button.py` / `selector.py` shared recipes; route `solo_mute.py:140-151`, `tune.py:226-235`, and `radio_button.py:42-51` through one shared `button.py` face helper.
+3. **Fix `text_face` stroke/inset mismatch & `tune` pressed fill (`components/native/button/button.py:319-321`, `components/native/tune/tune.py:226-235,286-287`):**  
+   **Fix:** Pass `inset=metrics["inset"] * scale` and `frame=metrics["stroke"] * scale` in `text_face` so active/disabled PZ buttons share identical borders; give `render_tune_more_button(pressed=True)` a distinct pressed fill/tint in legacy mode.
+4. **Replace remaining literals and forward `dropdown_look` (`components/native/selector/selector.py:508,1353-1356`, `components/native/radio_button/radio_button.py:89`):**  
+   **Fix:** Replace `48` with `_style_size("button.face.height")` in `append_choice_rows` (`selector.py:1353-1356`), pass `look=dropdown_look` at `selector.py:508`, and read `(32, 40, 48)` from `height.*` tokens in `radio_button.py:89` (and remove `width - 0` at line `91`).
+5. **Remove dead tokens & dead code:**  
+   **Fix:** Prune unused tokens in `components/colors.json:41,134,141-142` (`selector.surface`, `mod_row.button_border`, `selector.choice.on/off`) and `components/sizes.json:393,676,691,708-711`; remove unused `in_slot` import (`radio_button.py:82`), unused `box` variable (`selector.py:364`), dead font-height assignments in `level.py` / `pan.py`, and unused `caption_height`/`value_height` parameters on `blue_dial_definition` (`level.py:1032`).
+6. **Upgrade test suite to mutation + behavioural assertions (`scripts/tests/`):**  
+   **Fix:** Replace hardcoded RGB/hex assertions in `test_native_button_catalog.py:45-57` and `test_native_label_catalog.py:176-187` with token-derived + mutation tests (as in `test_overlay_control_look.py:54-67`); fix the false-positive `neon` check at `test_native_label_catalog.py:183-184`; add tests for `unify_dial_text`, `render_grid_cell_art` (both orientations), `command_stepper_definition`, `build_shape_selector` defaults, and JSON duplicate-key detection.
+7. **Complete migration from left/right steppers & old segmented `RadioButton` (`AGENTS.md:55-61`):**  
+   **Fix:** Replace `playOscTableField` (`scripts/native_play/osc.py:151-162`), `oscDetailStepper` (`scripts/mpc-skin-extras/58_osc_detail.py:45-58`), and remaining `render_segmented_button_art` callers (FX, Mod, LFO tools, Filter `F1+F2`, Env, Warp, Voice) with dropdowns and `RadioGrid` / `SlideSwitch` / `RadioList`.
+8. **Refresh component catalogue `img/` artwork (`components/AGENTS.md:6`):**  
+   **Fix:** Once the gradient/border tokens are finalized, regenerate `components/native/{solo_mute,tune,radio_button,mod_row,level,pan}/img/` previews in the same commit.
+
+---
+
+### NOTE
+
+1. **`scripts/mpc-skin-extras/98_filter_native.py:155-172` (`_choice_definition`):** Active and `Off` Filter Model/Style definitions share `filter_selector_{w}x{h}.png`, so the disabled dropdown keeps the active blue face while only dimming text.
+2. **`components/native/selector/selector.py:786` (`filter_chain_definition`):** The Filter `CHAIN` chip uses `render_dropdown_face(..., chevron=False)` (`selector.dropdown.*`) rather than `action_art` (`button.gradient.*`), leaving it out of Button token mutations (`BUTTON-MUTATION-AUDIT-2026-11-27.md:41-42`).
+3. **`components/native/selector/selector.py:583-593`:** The inside-box caption variant (`caption_text`/`name`) remains widely used across OSC/Filter/LFO/Play; keep tracked under the `AGENTS.md:57` phase-out.
+4. **`components/native/radio_button/radio_button.py:45`:** Selected cyan gradient bottom (`#127a8a`) with `#06101e` text measures `3.79:1` (acceptable for bold 18 px, monitor legibility on matte MPC screens).
+5. **`components/native/selector/selector.py:1322-1376` (`append_choice_rows`):** Keeps factory apply-on-header behaviour (`AGENTS.md:67-70`) while rendering Button-styled rows instead of plain `MenuOverlay` text rows.
