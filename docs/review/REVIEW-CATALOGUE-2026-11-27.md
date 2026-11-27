@@ -268,3 +268,21 @@ From `components/native/catalog-order.json` and each `catalog.json`'s `order` fi
   1. `components/native/macro_card/img/catalog-macro-card.png` still displays a **flat button** (`#151a2d`, 3,099 pixels) in the live catalogue.
   2. `components/colors.json:271-279` (`palette`) still shows flat `button.surface` (`#151a2d`, "Gombfelület") and `button.border` (`#26304b`, "Gombkeret") in the catalogue `Színpaletta` section with no `KIVEZETÉSRE` note.
 - **Other unmarked legacy/phased-out entries**: `docs/ui-components/README.md:118-161` still lists phased-out C++ overlay controls (`Stepper`, `Carousel`, `UsedSelector`, `LedList`, `MenuButton`, `DetailButton`) in the component choice table without `KIVEZETÉSRE` markers, and `active_text/catalog.json` overlaps `on_off_label` without clarification.
+
+---
+
+## 6. Implied by Owner Decisions — Missing from the Catalogue
+
+1. **Pan & Level dials at `36 / 40 / 48 / 56 px`** (`components/native/pan/catalog.json:15-30`, `components/native/level/catalog.json:15-30`): Currently only `90 px` and `40 px` exist visually on `Pan` / `Level`; `36 / 48 / 56 px` only appear in `SteppedDial` and in `Label`'s text table.
+2. **Pan & Level disabled states** (`pan/catalog.json:31-82`, `level/catalog.json:31-82`): Neither text-free `state_images` nor `right`/`bottom`/`top` labelled layouts show disabled dials (only a single 48 px `Pan` disabled example exists in `label/catalog.json:103-152`).
+3. **Dropdown disabled state** (`components/native/selector/catalog.json`): No disabled / neutral (`neutral=True` or `dim_artwork`) dropdown sample is shown, even though Header POWER-off and MixerStrip POWER-off both use dimmed dropdowns.
+4. **Button `look="active"` sample** (`components/native/button/catalog.json`): `button.py:79,90-91` added `look="active"` (cyan gradient face used by `RadioGrid` and choice drawers), but `Button`'s own catalogue card has no active sample.
+5. **Button disabled samples at `32 / 40 / 56 px`** (`components/native/button/catalog.json`): Disabled is shown only at `48 px`.
+6. **IconButton ghost at `32 px`, ghost `EXPAND`, and ghost disabled samples** (`components/native/icon_button/catalog.json`): Ghost is only shown at `40 / 48 px` for `POWER` and `CLOSE`, omitting `32 px` (which `MixerStrip` uses for `POWER`), `EXPAND`, and disabled states.
+7. **Factory List / `MenuOverlay` catalogue entry** (`AGENTS.md:67-70`): Owner decided lists keep the factory `MenuOverlay` behaviour (names only, no ON/OFF badges, row tap marks, header tap applies & closes, no select-and-close), yet there is no catalogue card or component doc illustrating this approved list component.
+8. **`MixerStrip` `BUS` variant** (`components/native/mixer_strip/catalog.json`): Only `NOISE` (Source) and `MASTER` are shown; `BUS` (`S`/`M` + destination + full-height fader + no bottom sends) is missing.
+9. **Dedicated dropdown doc (`docs/ui-components/selector.md` or `dropdown.md`)**: Every other 2026-11-27 component has its own `docs/ui-components/<name>.md`; dropdown rules (`32/40/48`, legacy gradient, `chevron_gap = 4 px`, truncation, `KIVEZETÉSRE` variant 3) live only in `header.md` and `README.md`.
+10. **Updated `Színpaletta` & `Méretek` header data** (`components/colors.json:271-308`, `components/sizes.json:1442-1455`): `palette` omits the new legacy gradient and fader thumb tokens (`button.gradient.*`, `selector.dropdown.*`, `fader.thumb.*`), and `named_sizes` omits `height.intermediate` (`40 px`).
+11. **`SteppedDial` 2-stop & `RotarySelector` `sh` / `pipa` samples**: `stepped_dial/catalog.json` omits 2 stops (`2..8` supported) and `rotary_selector/catalog.json` omits `sh` and `pipa` (`rotary_selector.py:30` registers `"pipa"`).
+12. **Pending sub-component approval decisions (`approved: false`)**: `fader`, `meter_block`, `solo_mute`, `mod_row`, and `panel` all have `approved: false` in their `catalog.json` (`TODO.md:355` tracks `panel`).
+13. **Automated token-mutation check for catalogue/skin controls** (`AGENTS.md:65`): No test in `scripts/tests/test_native_*catalog*.py` verifies that mutating `colors.json` / `sizes.json` tokens propagates to every rendered control.
