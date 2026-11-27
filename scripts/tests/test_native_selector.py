@@ -151,5 +151,71 @@ class TestNativeSelector(unittest.TestCase):
         self.assertIn("Title", comp_names)
         self.assertIn("Name", comp_names)
 
+    def test_scoped_dropdown_factories(self):
+        """Verifies native dropdown components replacing C++ UsedSelector/steppers on LFO, Env, Filter."""
+        # 1. LFO instance dropdown
+        lfo_sel = ns.build_lfo_instance_selector(self.skins_dir, 202, 56)
+        self.assertFalse(lfo_sel["ignoreMousePresses"])
+        self.assertEqual(len(lfo_sel["actions"]), 2)
+        self.assertEqual(lfo_sel["actions"][0]["additionalData"], ns.LFO_INSTANCE_MENU)
+        face, val = lfo_sel["componentsData"]
+        self.assertEqual(val["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred")
+        self.assertTrue((self.skins_dir / face["componentData"]["data"]["image"]).is_file())
+
+        # 2. Env instance dropdown
+        env_sel = ns.build_env_instance_selector(self.skins_dir, 202, 56)
+        self.assertFalse(env_sel["ignoreMousePresses"])
+        self.assertEqual(env_sel["actions"][0]["additionalData"], ns.ENV_INSTANCE_MENU)
+        face_env, val_env = env_sel["componentsData"]
+        self.assertEqual(val_env["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred")
+        self.assertTrue((self.skins_dir / face_env["componentData"]["data"]["image"]).is_file())
+
+        # 3. Filter view dropdown
+        f_view = ns.build_filter_view_selector(self.skins_dir, 202, 56)
+        self.assertFalse(f_view["ignoreMousePresses"])
+        self.assertEqual(f_view["actions"][0]["additionalData"], ns.FILTER_VIEW_MENU)
+        face_fv, val_fv = f_view["componentsData"]
+        self.assertEqual(val_fv["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred")
+        self.assertTrue((self.skins_dir / face_fv["componentData"]["data"]["image"]).is_file())
+
+        # 4. Filter scalar view dropdown
+        f_scalar = ns.build_filter_scalar_view_selector(self.skins_dir, 150, 56)
+        self.assertFalse(f_scalar["ignoreMousePresses"])
+        self.assertEqual(f_scalar["actions"][0]["additionalData"], ns.FILTER_SCALAR_MENU)
+        face_fs, val_fs = f_scalar["componentsData"]
+        self.assertEqual(val_fs["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred")
+        self.assertTrue((self.skins_dir / face_fs["componentData"]["data"]["image"]).is_file())
+
+    def test_scoped_dropdown_extra_apply(self):
+        """Verifies 95_selectors.apply hook adds all required overlay menus and dropdown components."""
+        from types import SimpleNamespace
+        tui = {
+            "pageData": {
+                "componentDefinitions": {
+                    "localComponentDefinitions": []
+                }
+            }
+        }
+        ctx = SimpleNamespace(
+            meta={"variant": "overlay"},
+            skins_dir=self.skins_dir,
+            add_component_definition=lambda k, v: tui["pageData"]["componentDefinitions"]["localComponentDefinitions"].append({"key": k, "value": v}),
+        )
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("sel95", ROOT / "scripts/mpc-skin-extras/95_selectors.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.apply(tui, {}, ctx)
+
+        defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+        self.assertIn("lfoNativeInstanceChoiceMenu", defs)
+        self.assertIn("envNativeInstanceChoiceMenu", defs)
+        self.assertIn("filterNativeViewChoiceMenu", defs)
+        self.assertIn("filterNativeScalarChoiceMenu", defs)
+        self.assertIn("lfoNativeInstanceDropdown", defs)
+        self.assertIn("envNativeSelectorDropdown", defs)
+        self.assertIn("filterNativeViewDropdown", defs)
+        self.assertIn("filterNativeScalarViewDropdown", defs)
+
 if __name__ == "__main__":
     unittest.main()

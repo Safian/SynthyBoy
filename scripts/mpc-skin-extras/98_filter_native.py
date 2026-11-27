@@ -21,6 +21,7 @@ from components.native.name_value import name_value as ui_name_value
 from components.native.pan import pan as ui_pan
 from components.native.radio_button import radio_button as ui_radio
 from components.native.selector import selector as ui_selector
+from native_selector import build_filter_view_selector, build_filter_scalar_view_selector  # hook: native dropdown selectors
 from native_skin_font import semibold
 from native_ui_params import (FILTER_CHAIN_MENU, FILTER_STATE_OFFSET, FX_DOMAIN_OFFSET, LEGACY_EXTRAS,
                               PZ_ACTIONS, PZ_AVAILABILITY, PZ_SOURCE)

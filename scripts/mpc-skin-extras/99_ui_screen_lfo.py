@@ -41,6 +41,7 @@ try:
     HAS_NATIVE_CHOICE_GROUP = True
 except ImportError:
     HAS_NATIVE_CHOICE_GROUP = False
+from native_selector import build_lfo_instance_selector  # hook: native dropdown selector
 
 CONTRACT = _HERE / "lfo-native-contract.json"
 EDITOR_CONTRACT = _HERE / "lfo-shape-editor-contract.json"

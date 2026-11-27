@@ -83,7 +83,8 @@ def _keep_component(tab, component):
 def _used_definitions(tui):
     """Names of the component definitions the tabs use (directly or through another definition: its componentsData types and the popups it opens by name)."""
     defs = {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
-    used, todo = set(), []
+    used = {k for k in ("lfoNativeInstanceDropdown", "envNativeSelectorDropdown", "filterNativeViewDropdown", "filterNativeScalarViewDropdown") if k in defs}
+    todo = list(used)
 
     def scan(node):
         if isinstance(node, dict):
