@@ -1066,6 +1066,7 @@
     "mixer_strip.font.note": 10,
     "mixer_strip.font.sm": 16,
     "mixer_strip.font.scale": 10,
+    "mixer_strip.scale.min_label_gap": 18,
     "mixer_strip.font.preview_title": 20,
     "mixer_strip.font.preview_sub": 13,
     "mixer_strip.font.preview_card": 15,

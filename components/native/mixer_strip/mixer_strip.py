@@ -346,6 +346,19 @@ def supply_replacement_strings(tui: Dict[str, Any], parameter_index: int, choice
         item["value"] = list(choices)
 
 
+def thin_scale_labels(positions: List[int], unity: List[bool], min_gap: int) -> set:
+    """Indexes of the scale ticks that get a label: the unity mark first, then the two ends, then the rest from the top; none closer than min_gap pixels to a placed one."""
+    order = [i for i, u in enumerate(unity) if u]
+    ends = [min(range(len(positions)), key=positions.__getitem__), max(range(len(positions)), key=positions.__getitem__)] if positions else []
+    order += [i for i in ends if i not in order]
+    order += [i for i in sorted(range(len(positions)), key=positions.__getitem__) if i not in order]
+    placed: List[int] = []
+    for i in order:
+        if all(abs(positions[i] - positions[j]) >= min_gap for j in placed):
+            placed.append(i)
+    return set(placed)
+
+
 def draw_fader_scale(
     draw: ImageDraw.Draw,
     fx: int,
@@ -421,16 +434,21 @@ def draw_fader_scale(
         cy = int(round(travel_bottom - norm * travel_len))
         draw.line([tick_right - 4, cy, tick_right, cy], fill=_style_rgb("control.border"), width=1)
 
-    # Draw major ticks and labels
-    for norm, lbl, is_unity in ticks:
-        cy = int(round(travel_bottom - norm * travel_len))
+    # Draw major ticks and labels. A label is drawn only where it keeps the minimum gap to the labels already placed (the unity mark first, then
+    # the two ends, then the rest); every major tick stays. The labels end left of the fader cap so the handle never covers one.
+    positions = [int(round(travel_bottom - norm * travel_len)) for norm, _, _ in ticks]
+    labelled = thin_scale_labels(positions, [unity for _, _, unity in ticks], _style_size("mixer_strip.scale.min_label_gap"))
+    cap_left = tx0 + track_w // 2 - _style_size("mixer_strip.fader.cap_width") // 2
+    for index, ((norm, lbl, is_unity), cy) in enumerate(zip(ticks, positions)):
         if is_unity:
             # Highlighted unity / 0 dB mark: thicker, brighter, longer tick and highlighted label
             draw.line([tick_right - 8, cy, tick_right, cy], fill=_style_rgb("text.white"), width=2)
-            draw.text((tick_right - 10, cy), lbl, font=f_scale, fill=_style_rgb("accent.cyan"), anchor="rm")
+            if index in labelled:
+                draw.text((min(tick_right - 10, cap_left - 2), cy), lbl, font=f_scale, fill=_style_rgb("accent.cyan"), anchor="rm")
         else:
             draw.line([tick_right - 6, cy, tick_right, cy], fill=_style_rgb("text.label"), width=1)
-            draw.text((tick_right - 8, cy), lbl, font=f_scale, fill=_style_rgb("text.muted"), anchor="rm")
+            if index in labelled:
+                draw.text((min(tick_right - 8, cap_left - 2), cy), lbl, font=f_scale, fill=_style_rgb("text.muted"), anchor="rm")
 
     # Static LEVEL caption
     f_cap = semibold(_style_size("mixer_strip.font.caption"))
