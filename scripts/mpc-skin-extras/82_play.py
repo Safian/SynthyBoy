@@ -20,10 +20,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 from components.native.selector.selector import (
     OSC_INSTANCE_NAMES,
-    OSC_POWER_PARAM_KEYS,
     OSC_SOURCE_OVERLAY_NAME,
     build_choice_definition,
-    build_standalone_osc_source_overlay,
+    build_standalone_osc_source_definitions,
+    list_probe,
     selector_definition,
 )
 from components.native.active_text.active_text import (
@@ -244,8 +244,7 @@ def apply(tui, qlinks, ctx):
         )
         definitions.append({"key": component_name, "value": selector_def})
         if overlay_name == OSC_SOURCE_OVERLAY_NAME and not any(d["key"] == overlay_name for d in definitions):
-            popup = build_standalone_osc_source_overlay(ctx.param_index(k) for k in OSC_POWER_PARAM_KEYS)
-            definitions.append({"key": overlay_name, "value": popup})
+            definitions.extend(build_standalone_osc_source_definitions(list_probe()))
     by_param = _controls_by_param(tui)
     # the templates of the selectors: a control of the production skin of the same widget
     selector_template = {}
