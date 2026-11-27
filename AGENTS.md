@@ -56,3 +56,7 @@ Dropdowns (Selector) keep the old look: a dark blue fill with a subtle vertical 
 
 On every screen the left/right chooser (stepper, carousel, the stepper half of the source picker) is being phased out; the dropdown replaces it everywhere, the Play panels included. Dropdown rules: the title is left aligned (above the box), the value inside is centred; a value that does not fit is left aligned and cut at the end with an ellipsis, and it never touches the chevron (a fixed gap, token `selector.dropdown.chevron_gap`). The variant with the small caption inside the box is being phased out. Catalogue entries of the phased-out components stay, marked "KIVEZETÉSRE", until the screens are migrated.
 
+## Radio family replaces the old RadioButton (owner, 2026-11-27)
+
+The old RadioButton (segmented faces) takes too much room and is being phased out. The compact family in our own design replaces it: RadioList (LED rows, many options), RadioGrid (titled button matrix, 2 to 8 options), SlideSwitch (2 to 4 ordered positions) and RotarySelector (stepped dial with pictograms, few options). Dropdowns remain for long lists. The catalogue keeps the old RadioButton entry marked "KIVEZETÉSRE" until the screens are migrated.
+
