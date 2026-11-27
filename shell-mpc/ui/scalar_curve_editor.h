@@ -6,18 +6,18 @@
 //    what core/engine-own/voice/own_content.h bakes and Voice::curvedSource reads), the identity reads x itself, the result is clamped to 0 .. 1. Nothing of that evaluation is copied here.
 //  - ScalarCurveCanvas: the small graph (axes and labels, grid, the curve, point handles) and its touch: drag a handle, a tap on the empty graph adds a point ON the curve at that x, a vertical drag on a segment bends its
 //    power, a long press on a middle point deletes it. Out: Index changes { kSelect, kEdit, kEditEnd }.
-//  - ScalarCurveEditor: the screen (1100 x 500 at least; designed for the body of the Filter tab): the canvas, INIT / UNDO / DELETE POINT, the LEGATO toggle with the read-only GLIDE chip, the USED BY list with TARGETS, and
-//    two Q groups: Q1 [POINT, X, Y, CURVE], Q2 [LEGATO, GRID X, GRID Y, SNAP]. `apply` turns a change of any part into an Event for the owner (overlay/scalar_curve_ui.h).
+//  - ScalarCurveEditor: the editor of the body of the Filter tab (1100 x 500 at least): the canvas (the only part that takes touch), the USED BY list (a display), and the DATA of the native cells of the host skin: the models of
+//    POINT, X, Y, CURVE, GRID X, GRID Y, SNAP, LEGATO and the command cells INIT / UNDO / DELETE POINT / TARGETS (ids, rectangles, values: no drawing, no touch; the skin owns them), the GLIDE chip rectangle and two Q groups:
+//    Q1 [POINT, X, Y, CURVE], Q2 [LEGATO, GRID X, GRID Y, SNAP]. `apply` turns a change of any native cell into an Event for the owner (overlay/scalar_curve_ui.h).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
 #include <array>
 
-#include "composite.h"
-#include "led_toggle.h"
+#include "core.h"
 #include "lfo_model.h"
-#include "note_mask.h"
+#include "model.h"
 #include "native_apertures.h"
 #include "qgroup.h"
 #include "synthyboy/shapes/shape.h"
@@ -229,6 +229,14 @@ private:
 };
 
 enum class Source : uint8_t { Velocity = 0, Note = 1 };
+/** The name of a MIDI key with its octave in the MPC convention (key 60 = C3, key 0 = C-2, key 127 = G8): "C-2", "C#3", "G8" (the NOTE axis labels its places with it). */
+inline void keyName (int key, char* out, size_t cap) noexcept
+{
+    static const char* const kNotes[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    key = std::clamp (key, 0, 127);
+    std::snprintf (out, cap, "%s%d", kNotes[key % 12], key / 12 - 2);
+}
+
 /** The x axis labels: the key / velocity number at each of the five places. NOTE is named by keyName (the MPC convention, key 60 = C3, key 0 = C-2: C-2, C1, C3, C5, G8), VELO by its number (0, 32, 64, 96, 127). */
 inline int axisPlace (int k) noexcept { return k < 0 ? 0 : (k > 4 ? 4 : k); }   // (no std::clamp: GCC 12 warns "may be used uninitialized" about the references to temporaries)
 inline int axisValue (Source s, int k) noexcept { static const int kNote[5] = { 0, 36, 60, 84, 127 }, kVelo[5] = { 0, 32, 64, 96, 127 }; return (s == Source::Note ? kNote : kVelo)[axisPlace (k)]; }
@@ -594,19 +602,42 @@ protected:
     }
 };
 
-class ScalarCurveEditor : public Composite
+/** The model of a native two-state cell (SNAP, LEGATO): the id, the rectangle, the state; no drawing. */
+class ToggleModel : public ControlModel
+{
+public:
+    struct State { bool on = false; };
+    State state;
+    float centre = 0.36f;   // where the dot and the name stand in the cell of the skin (a fraction of the height)
+    void setLabel (const char* s) { setText (label_, sizeof label_, s); }
+    const char* label() const noexcept { return label_; }
+    Size minSize() const override { return { 100, 56 }; }
+    double value() const noexcept override { return state.on ? 1.0 : 0.0; }
+    double maxValue() const noexcept override { return 1.0; }
+    double stepValue() const noexcept override { return 1.0; }
+
+protected:
+    Change onTurn (double delta) override
+    {
+        const bool next = delta > 0.0;
+        return delta == 0.0 || next == state.on ? Change::none() : Change::indexed (id_, next ? 1 : 0, next ? 1.0 : 0.0);
+    }
+    char label_[16] = {};
+};
+
+class ScalarCurveEditor : public Component
 {
 public:
     // the ids of the parts (the owner reads them back from the changes)
     enum Id { kIdCanvas = 1, kIdPoint, kIdX, kIdY, kIdCurve, kIdGridX, kIdGridY, kIdSnap, kIdLegato, kIdInit, kIdUndo, kIdDelete, kIdTargets, kIdExpand };
-    static constexpr int kMaxGroups = 2, kBandH = 100, kSideW = 400, kMargin = 8, kRowH = ScalarUsedByList::kRowH, kShownRows = ScalarUsedByList::kShownRows, kMaxRows = ScalarUsedBy::kMaxRows, kTitleH = 34;
+    static constexpr int kMaxGroups = 2, kBandH = 100, kSideW = 400, kMargin = 8, kRowH = ScalarUsedByList::kRowH, kShownRows = ScalarUsedByList::kShownRows, kMaxRows = ScalarUsedBy::kMaxRows, kTitleH = 34, kGap = 4;
 
     ScalarCurveCanvas canvas;
-    NumberField point { "POINT", NumberField::Format::IntPlain }, xField { "X", NumberField::Format::IntPlain }, yField { "Y", NumberField::Format::IntPlain }, curveField { "CURVE", NumberField::Format::Decimal2 };
-    NumberField gridX { "GRID X", NumberField::Format::IntPlain }, gridY { "GRID Y", NumberField::Format::IntPlain };
-    LedToggle snap, legato;
-    MenuButton init { "INIT", MenuButton::Icon::None }, undoButton { "UNDO", MenuButton::Icon::None }, del { "DELETE POINT", MenuButton::Icon::None }, targets { "TARGETS", MenuButton::Icon::None };
-    MenuButton expandBtn { "", MenuButton::Icon::Expand };
+    NumberFieldModel point { "POINT", NumberFieldModel::Format::IntPlain }, xField { "X", NumberFieldModel::Format::IntPlain }, yField { "Y", NumberFieldModel::Format::IntPlain }, curveField { "CURVE", NumberFieldModel::Format::Decimal2 };
+    NumberFieldModel gridX { "GRID X", NumberFieldModel::Format::IntPlain }, gridY { "GRID Y", NumberFieldModel::Format::IntPlain };
+    ToggleModel snap, legato;
+    ControlModel init, undoButton, del, targets;   // the command cells (INIT, UNDO, DELETE POINT, TARGETS): the skin's buttons, a Request change each
+    ControlModel expandBtn;
     QGroup groups[kMaxGroups];   // Q1 [POINT, X, Y, CURVE], Q2 [LEGATO, GRID X, GRID Y, SNAP]
 
     using UsedRow = ScalarUsedRow;
@@ -623,20 +654,14 @@ public:
         init.setId (kIdInit); undoButton.setId (kIdUndo); del.setId (kIdDelete); targets.setId (kIdTargets);
         expandBtn.setId (kIdExpand);
         snap.setLabel ("SNAP"); legato.setLabel ("LEGATO");
-        snap.centre = legato.centre = 0.36f;
         point.state.min = 1.0; point.state.step = 1.0;
         xField.state.min = 0.0; xField.state.max = scurve::kKeys; xField.state.step = 1.0;
         yField.state.min = 0.0; yField.state.max = 100.0; yField.state.step = 1.0;
         curveField.state.min = -scurve::kMaxPower; curveField.state.max = scurve::kMaxPower; curveField.state.step = 0.5; curveField.state.pxPerStep = 6;
-        for (NumberField* f : { &gridX, &gridY })
+        for (NumberFieldModel* f : { &gridX, &gridY })
         {
             f->state.min = lfo::kMinGrid; f->state.max = lfo::kMaxGrid; f->state.step = 1.0; f->state.defaultValue = 4.0; f->state.value = 4.0;
         }
-        addKid (canvas);
-        for (NumberField* f : { &point, &xField, &yField, &curveField, &gridX, &gridY })
-            addKid (*f, false);
-        addKid (snap, false); addKid (legato, false); addKid (init, false); addKid (undoButton, false); addKid (del, false); addKid (targets, false); addKid (usedList);
-        addKid (expandBtn, false);
         usedList.used = &used;
         groups[0].set (0, &point); groups[0].set (1, &xField); groups[0].set (2, &yField); groups[0].set (3, &curveField);
         groups[1].set (0, &legato); groups[1].set (1, &gridX); groups[1].set (2, &gridY); groups[1].set (3, &snap);
@@ -644,6 +669,7 @@ public:
         sync();
     }
     Size minSize() const override { return compact_ ? Size { 480, 500 } : Size { 1100, 500 }; }
+    void place (const Rect& r) override { rect_ = r; layout(); }
     bool compact() const noexcept { return compact_; }
     void setCompact (bool compact)
     {
@@ -651,7 +677,6 @@ public:
             return;
         compact_ = compact;
         canvas.compactMode = compact;
-        show (usedList, ! compact_);
         if (rect_.w > 0)
             layout();
     }
@@ -741,9 +766,12 @@ public:
     /** The Q members of group g (0 .. 1) in slot order, null where a group has fewer: what the owner publishes. */
     const ControlModel* qMember (int g, int slot) const noexcept { return g >= 0 && g < kMaxGroups ? groups[g].member (slot) : nullptr; }
 
+    // ---- the touch: only the canvas takes it (every other part is a native cell of the skin)
     Change touchDown (int x, int y, double nowMs) override
     {
-        const Change c = Composite::touchDown (x, y, nowMs);
+        onCanvas_ = false;
+        if (! enabled_ || ! rect_.contains (x, y))
+            return Change::none();
         const int maxG = compact_ ? 1 : kMaxGroups;
         if (ownQFrames_)
         {
@@ -754,8 +782,26 @@ public:
                     break;
                 }
         }
-        return c;
+        if (! canvas.rect().contains (x, y))
+            return Change::none();
+        onCanvas_ = true;
+        return canvas.touchDown (x, y, nowMs);
     }
+    Change touchMove (int x, int y) override { return onCanvas_ ? canvas.touchMove (x, y) : Change::none(); }
+    Change touchMove (int x, int y, double nowMs) override { return onCanvas_ ? canvas.touchMove (x, y, nowMs) : Change::none(); }
+    Change touchUp (int x, int y) override
+    {
+        const bool was = onCanvas_;
+        onCanvas_ = false;
+        return was ? canvas.touchUp (x, y) : Change::none();
+    }
+    Change tick (double nowMs) override { return onCanvas_ ? canvas.tick (nowMs) : Change::none(); }
+    bool wheelOver (int x, int y, int notches, Change& out) override
+    {
+        return enabled_ && rect_.contains (x, y) && canvas.wheelOver (x, y, notches, out);
+    }
+    int touchTargets (Rect* out, int max) const override { if (max > 0) { out[0] = canvas.rect(); return 1; } return 0; }
+
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen p (sb, enabled_, inactive_);
@@ -769,12 +815,8 @@ public:
         {
             const int maxG = compact_ ? 1 : kMaxGroups;
             for (int i = 0; i < maxG; ++i)
-            {
                 if (i == active_)
                     groups[i].draw (sb);
-                else
-                    groups[i].drawIdle (sb);
-            }
         }
     }
     /** The live marker of the graph (the animated layer): call after `draw`. */
@@ -801,7 +843,8 @@ public:
     Rect nativeExpandRect() const noexcept { return compact_ ? expandBtn.rect() : Rect {}; }
 
 protected:
-    void layout() override
+    void drawBody (Pen&) const override {}
+    void layout()
     {
         if (compact_)
         {
@@ -822,7 +865,6 @@ protected:
         undoButton.place ({ sx + bw + kGap, gr.y, bw, 56 });
         del.place ({ sx + 2 * (bw + kGap), gr.y, sw - 2 * (bw + kGap), 56 });
         glideRect_ = { sx, gr.y + 56 + m, sw, 40 };
-        legato.setEnabled (enabled_);
         const int uy = glideRect_.bottom() + m;
         usedRect_ = { sx, uy, sw, std::max (0, gr.bottom() - uy) };
         targets.place ({ usedRect_.x + 8, usedRect_.bottom() - 8 - 56, usedRect_.w - 16, 56 });
@@ -854,7 +896,6 @@ protected:
         glideRect_ = {};
         usedRect_ = {};
         usedList.place ({});
-        legato.setEnabled (enabled_);
 
         const int optRowH = 56, editH = 88;
         const int optY = rect_.bottom() - optRowH;
@@ -882,7 +923,7 @@ protected:
         undoButton.place ({});
         del.place ({});
     }
-    void drawExtra (Pen& p) const override
+    void drawExtra (Pen& p) const
     {
         const theme::Look& T = theme::L();
         if (compact_)
@@ -899,7 +940,7 @@ protected:
     }
     Rect blocks_[kMaxGroups], usedRect_, glideRect_, graphRect_;
     int active_ = -1;
-    bool compact_ = false, ownQFrames_ = true;
+    bool compact_ = false, ownQFrames_ = true, onCanvas_ = false;
 };
 
 }} // namespace synthyboy_mpc::ui

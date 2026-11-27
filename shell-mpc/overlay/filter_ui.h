@@ -1,18 +1,18 @@
-// SynthyBoy - MPC overlay: the FILTER UI, the page of the ONE Filter tab (native controls and live overlay, page_view.h): the plugin-drawn pages built from the UI library (shell-mpc/ui/filter_display.h, panel.h, list.h)
-// and wired to the real engine parameters (filterN.* of the table and filter.routing). One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () /
-// touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Filter UI".
+// SynthyBoy - MPC overlay: the FILTER UI, the page of the ONE Filter tab: the parameter binding rows of the two filters (binding::Row, one table per filter), the Q-Link banks (binding::QTable), the geometry of the native
+// cells of the host skin (filter_geometry.h), the native bridge, the response display (FilterDisplay: a display with its handle), the NOTE / VELO curve editor (ScalarCurveUi: canvas and data of its native cells), the PZ curve editor and the
+// detail pages (the modulations of one control, the targets of NOTE / VELO: ModRowsPage data). The page holds no control (owner decision 2026-11-27: the C++ layer has no UI elements). One object per (page view, plugin instance).
+// Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Filter UI".
 // FOUR STATES (the chunk-only view state mpcTabView.filter, IInstanceView::tabView (kTabViewFilter)): 0 F1, 1 F2 (the controls edit that filter; the F1+F2 toggle is a VIEW only: both curves and the resultant are drawn),
-// 2 NOTE, 3 VELO: the scalar curve editor of the source (ScalarCurveUi, ui/scalar_curve_editor.h) in the body under the top bar; its TARGETS button opens the ModTargetsPage of the source (23 velocity, 24 note).
+// 2 NOTE, 3 VELO: the scalar curve editor of the source (ScalarCurveUi, ui/scalar_curve_editor.h) in the body under the top bar; its TARGETS cell opens the targets page of the source (23 velocity, 24 note).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementFilter, the pages above it are ours): the page (FilterFullScreen) is always open; detail pages above it: the list of the models or of the styles
-// (ListPopup), the modulations of one control (ModulationsPage, a long press on a knob), the targets of NOTE / VELO (ModTargetsPage) and the list that picks a new target. LEVEL, PAN, DEST, BUS 1 and BUS 2 are read-only
-// here (the Mixer is their home); BLEND and ROUTING are editable.
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementFilter, the pages above it are ours): the page is always open; detail pages above it: the modulations of one control (a long press on a dial), the
+// targets of NOTE / VELO and the list that picks a new target (ListPopup: the host list), the PZ curve editor. LEVEL, PAN, DEST, BUS 1 and BUS 2 are read-only here (the Mixer is their home); BLEND and ROUTING are editable.
 // The display shows the response the filter really has: shell-mpc/overlay/curve_source.h runs the engine's own filter on an impulse (once per change, with the live, modulated cutoff and resonance of the voice that is
-// heard); F1 + F2 shows both and the resultant by the routing. What it does with a touch: the library component gives a Change { id, kind, value }; the id says which control it was, the binding of the id (a key of the
-// engine table) says which parameter; the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back, so host automation, presets and the host's
-// own widgets show on the next frame.
+// heard); F1 + F2 shows both and the resultant by the routing. What it does with a touch: the display gives a Change { id, kind, value } (the finger on the handle); a native cell of the skin writes its value through the native
+// bridge (updateNativeControls) into the row it stands for (row.key, the engine table); the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back, so
+// host automation, presets and the host's own widgets show on the next frame.
 // Q groups (one block each, q_router.h): MAIN CUTOFF RESO DRIVE MIX; TRACK KEYTRACK ENV 1 VAR (Formant: RESONANCE) COMB (Comb only); OUT BLEND ROUTING MODEL STYLE (frameless: MODEL and STYLE are in the top bar);
 // FORMANT X Y TRANSPOSE SPREAD (the Formant model). NOTE / VELO: EDIT [POINT X Y CURVE], LEGATO AND GRID [LEGATO GRID X GRID Y SNAP]. A tap on a member selects its block.
 #pragma once
@@ -27,13 +27,17 @@
 
 #include "../q_router.h"
 #include "../tab_view.h"
+#include "../ui/binding.h"
 #include "../ui/choice_names.h"
-#include "../ui/mod_targets.h"
+#include "../ui/filter_display.h"
+#include "../ui/list.h"
 #include "../ui/play_rows.h"
 #include "../ui/pz_curve_editor.h"
-#include "../ui/ui.h"
+#include "../ui/scalar_curve_editor.h"
 #include "backgrounds_manifest.h"
 #include "curve_source.h"
+#include "filter_geometry.h"
+#include "mod_rows_page.h"
 #include "native_marker_covers.h"
 #include "page_view.h"
 #include "q_publish.h"
@@ -49,6 +53,7 @@
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/readout.h"
+
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -75,19 +80,78 @@ public:
         kPzOpen = 600, kPzBack, kPzReset, kPzRemove, kPzApply, kPzCanvas
     };
 
+    // ---- the parameter rows: nineteen per filter, in the order of nativeui::FilterSlot (row index = kRowsPerFilter * (filter - 1) + slot)
+    /** Q-Link: MAIN [CUTOFF, RESO, DRIVE, MIX], TRACK [KEYTRACK, ENV 1, VAR (the Formant model: its RESONANCE), COMB (Comb model only)], OUT [BLEND, ROUTING, MODEL, STYLE], FORMANT [X, Y, TRANSPOSE, SPREAD]; CLEAN and the
+        power switch have no slot. ROUTING is the one shared parameter (`filter.routing`) of both filters. */
+#define SB_FLT_C(ID, F, KEY, QG, QS) binding::Row { ID, "filter" #F "." KEY, binding::Kind::Continuous, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, QG, QS, false }
+#define SB_FLT_T(ID, F, KEY, QG, QS) binding::Row { ID, "filter" #F "." KEY, binding::Kind::Toggle, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, QG, QS, false }
+#define SB_FLT_H(ID, F, KEY, QG, QS) binding::Row { ID, "filter" #F "." KEY, binding::Kind::Choice, 0, 0, 0, 0, binding::Format::ChoiceName, nullptr, 0, QG, QS, false }
+#define SB_FILTER(F) \
+    SB_FLT_T (kPower, F, "on", -1, -1), SB_FLT_C (kCutoff, F, "cutoff", 0, 0), SB_FLT_C (kResonance, F, "resonance", 0, 1), SB_FLT_C (kDrive, F, "drive", 0, 2), SB_FLT_C (kMix, F, "mix", 0, 3), \
+    SB_FLT_C (kKeytrack, F, "keytrack", 1, 0), SB_FLT_T (kEnv1, F, "env1", 1, 1), SB_FLT_C (kVar, F, "var", 1, 2), SB_FLT_C (kCombOffset, F, "comb_offset", 1, 3), SB_FLT_C (kBlend, F, "blend", 2, 0), \
+    binding::Row { kRouting, "filter.routing", binding::Kind::Choice, 0, 0, 0, 0, binding::Format::ChoiceName, nullptr, 0, 2, 1, false }, \
+    SB_FLT_C (kFormantX, F, "formant.x", 3, 0), SB_FLT_C (kFormantY, F, "formant.y", 3, 1), SB_FLT_C (kFormantTrans, F, "formant.transpose", 3, 2), SB_FLT_C (kFormantRes, F, "formant.resonance", 1, 2), \
+    SB_FLT_C (kFormantSpread, F, "formant.spread", 3, 3), SB_FLT_T (kClean, F, "clean_mode", -1, -1), SB_FLT_H (kModel, F, "model", 2, 2), SB_FLT_H (kStyle, F, "style", 2, 3)
+    static constexpr int kRowsPerFilter = nativeui::FilterPoint;
+    static constexpr binding::Row kRows[2 * kRowsPerFilter] = { SB_FILTER (1), SB_FILTER (2) };
+#undef SB_FILTER
+#undef SB_FLT_H
+#undef SB_FLT_T
+#undef SB_FLT_C
+    static constexpr int kGroups = 4;   // MAIN, TRACK, OUT, FORMANT
+    /** The Q banks as slot numbers (add kRowsPerFilter * (filter - 1) for the row index); the TRACK bank swaps VAR for the formant RESONANCE with the Formant model and has COMB with the Comb model only (qMember). */
+    static constexpr binding::QTable<kGroups> kQ { { { nativeui::FilterCutoff, nativeui::FilterResonance, nativeui::FilterDrive, nativeui::FilterMix },
+                                                  { nativeui::FilterKeytrack, nativeui::FilterEnv1, nativeui::FilterVar, nativeui::FilterCombOffset },
+                                                  { nativeui::FilterBlend, nativeui::FilterRouting, nativeui::FilterModel, nativeui::FilterStyle },
+                                                  { nativeui::FilterFormantX, nativeui::FilterFormantY, nativeui::FilterFormantTranspose, nativeui::FilterFormantSpread } } };
+    static constexpr const binding::Row& rowOf (int filter, int slot) noexcept { return kRows[(filter - 1) * kRowsPerFilter + slot]; }
+    static const char* groupName (int g) noexcept { static const char* const n[kGroups] = { "MAIN", "TRACK", "OUT", "FORMANT" }; return g >= 0 && g < kGroups ? n[g] : ""; }
+    /** The slot of a control id (-1: none); the ids of the display's changes are the dials they stand for. */
+    static constexpr int slotOfId (int id) noexcept
+    {
+        switch (id)
+        {
+            case kPower: return nativeui::FilterPower;
+            case kCutoff: case kDisplayCutoff: return nativeui::FilterCutoff;
+            case kResonance: case kDisplayReso: return nativeui::FilterResonance;
+            case kDrive: return nativeui::FilterDrive;
+            case kMix: return nativeui::FilterMix;
+            case kKeytrack: return nativeui::FilterKeytrack;
+            case kEnv1: return nativeui::FilterEnv1;
+            case kVar: return nativeui::FilterVar;
+            case kCombOffset: return nativeui::FilterCombOffset;
+            case kBlend: return nativeui::FilterBlend;
+            case kRouting: return nativeui::FilterRouting;
+            case kFormantX: case kDisplayFormant: return nativeui::FilterFormantX;
+            case kFormantY: case kDisplayFormantY: return nativeui::FilterFormantY;
+            case kFormantTrans: return nativeui::FilterFormantTranspose;
+            case kFormantRes: return nativeui::FilterFormantResonance;
+            case kFormantSpread: return nativeui::FilterFormantSpread;
+            case kClean: return nativeui::FilterClean;
+            case kModel: return nativeui::FilterModel;
+            case kStyle: return nativeui::FilterStyle;
+            default: return -1;
+        }
+    }
+    static constexpr int idOfSlot (int slot) noexcept { return slot >= 0 && slot < kRowsPerFilter ? kRows[slot].id : 0; }
+
     using ModRow = uibind::ModRow;
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     static constexpr int kModelFormant = 5, kModelComb = 6, kModelPz = 21;   // the model indices shared by the engine and the patch format
     static constexpr double kModsRefreshMs = 100.0;
+    static constexpr int kViewF1 = 0, kViewF2 = 1, kViewNote = 2, kViewVelo = 3;   // the states of the page (the selector's candidate id is the state + 1)
 
     explicit FilterUi (int standaloneFilter = -1)
         : standaloneFilter_ (standaloneFilter)
     {
+        for (int f = 0; f < 2; ++f)
+            for (int s = 0; s < kRowsPerFilter; ++s)
+                params_[f][s] = kRows[f * kRowsPerFilter + s].hasParam() ? uibind::indexOfKey (kRows[f * kRowsPerFilter + s].key) : -1;
         curve_[0].configure (0);   // velocity (the state VELO)
         curve_[1].configure (1);   // note (the state NOTE)
-        setCanvas (kCanvasW, kCanvasH);
         assignIds();
-        full_.setPageMode (true);
+        geo_.setPageMode (true);
+        setCanvas (kCanvasW, kCanvasH);
         if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
             adoptSplitState (standaloneFilter_ - 1, scalarSel_, tabview::kFilterExpandedFilter);
         else
@@ -108,13 +172,13 @@ public:
     void setSubTab (bool on) noexcept
     {
         subTab_ = on;
-        full_.setSubTabPage (on);
+        geo_.setSubTabPage (on);
         if (on)
             adoptSplitState (filterSel_, scalarSel_, tabview::kFilterExpandedFilter);
     }
     bool isSubTab() const noexcept { return subTab_; }
 
-    // Native controls are the only base-control owner; there is no fallback switch.
+    // Native controls are the only owner of the controls; there is no fallback switch.
     bool hasNativePower() const noexcept { return true; }
     void setHostBackground (bool on) noexcept { nativeGround_ = on; }
     bool hostBackground() const noexcept
@@ -122,7 +186,8 @@ public:
         return nativeGround_ && nativeControlsActive() && w_ == page::kW && h_ == page::kH
             && &ui::theme::L() == &ui::theme::kLook1;
     }
-    ui::Rect nativePowerRect() const noexcept { return full_.power.rect(); }
+    ui::Rect nativePowerRect() const noexcept { return geo_.cell (nativeui::FilterPower); }
+
     int nativeViewFrame() const noexcept
     {
         if (! hasNativePower() || pageTop_ != 0)
@@ -136,7 +201,7 @@ public:
     {
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
-        full_.place (tab);
+        geo_.place (tab);
         syncLayoutMode();
         destList_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         destList_.setPopup (tab);
@@ -146,7 +211,9 @@ public:
         mods_.place (tab);
         targets_.place (tab);
         pzEditor_.place (tab);
+        syncDisplayGeometry();
     }
+
 
     /** Reads the instance: the state of the page (F1, F2, NOTE, VELO: `mpcTabView.filter`), the real response curves, every value of the controls, the modulations of the knobs, the pages of the stack, the Q group.
         `in.targets` the live cutoff and resonance of both filters (cutoff 1, resonance 1, cutoff 2, resonance 2). */
@@ -207,7 +274,7 @@ public:
             else if (modsPreset_ != generation)
             {
                 modsPreset_ = generation;
-                mods_.setPickingSource (false);
+                pickingSource_ = false;
                 loadMods (inst);
             }
         }
@@ -258,12 +325,11 @@ public:
         pzOpen_.setEnabled (pzButtonShown_ && pzPowered (inst));
         if (pzButtonShown_)
         {
-            if (! full_.expand.rect().empty())
-                pzOpen_.place ({ full_.expand.rect().x - 64, full_.expand.rect().y, 56, 56 });
+            if (! geo_.expand().empty())
+                pzOpen_.place ({ geo_.expand().x - 64, geo_.expand().y, 56, 56 });
             else
-                pzOpen_.place (ui::playrows::fullRect (full_.displayRect()));
+                pzOpen_.place (ui::playrows::fullRect (geo_.displayRect()));
         }
-        full_.both.state.on = dual_;
         if (nowMs - modsAtMs_ >= kModsRefreshMs || modsDirty_)
         {
             refreshMods (inst);
@@ -278,7 +344,7 @@ public:
         const auto destination = activeModParam_ >= 0
             ? synthyboy::modDestinationChoiceOf (static_cast<size_t> (activeModParam_)) : 0;
         const int pageBeforeMods = pageTop_;
-        nativeModulations_.update (inst, mods_, ! mods_.boardShown() && modsContextValid (inst),
+        nativeModulations_.update (inst, mods_, ! pickingSource_ && modsContextValid (inst),
             nativeui::targets::Filter, static_cast<int> (destination), modRows_,
             [&] (ui::Change change) { handle (change, mutableStack, inst); }, nativeui::targets::Modulations);
         syncPages (stack);
@@ -287,11 +353,13 @@ public:
         const bool pzNative = nativePzToolbar();
         pzEditor_.setNativeToolbar (pzNative);
         inst.setNativePzToolbar (pzNative ? pzFilter_ : 0, pzNative ? pzToolbarAvailability() : nativeui::pz::None);
+        syncDisplayGeometry();
         inst.setUiFullOpen (nativeViewFrame() == 0);
         publishQGroup (inst);
     }
 
     int view() const noexcept { return view_; }                       // 0 F1, 1 F2, 2 NOTE, 3 VELO (expanded compat)
+
     int filterSelection() const noexcept { return filterSel_; }
     int scalarSelection() const noexcept { return scalarSel_; }
     int expandMode() const noexcept { return expandMode_; }
@@ -309,7 +377,7 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
-    ui::Rect displayRect() const noexcept { return full_.displayRect(); }
+    ui::Rect displayRect() const noexcept { return geo_.displayRect(); }
     void leftTab (IInstanceView& inst) noexcept
     {
         nativeTargets_.hide (inst, targets_);
@@ -322,7 +390,7 @@ public:
     // The Filter already owns its ground inside draw().
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
-    /** The Filter foreground, including its opaque fallback or full-screen detail. */
+    /** The Filter foreground, including its opaque ground or full-screen detail. */
     void draw (gpu::SceneBuilder& sb) const
     {
         if (hostBackground())
@@ -344,6 +412,8 @@ public:
         if (pageTop_ == kPageMods)
         {
             mods_.draw (sb);
+            if (pickingSource_)
+                destList_.draw (sb);
             return;
         }
         if (pageTop_ == kPagePz)
@@ -361,7 +431,7 @@ public:
                 destList_.draw (sb);
             return;
         }
-        full_.draw (sb);
+        drawFilterPage (sb);
         if (pageTop_ == 0 && pzButtonShown_)
         {
             if (nativePzOpen())
@@ -377,14 +447,12 @@ public:
             const ui::ScalarCurveEditor& ed = curveUi().screen;
             ed.draw (sb);
             if (pageTop_ == 0)
-                full_.drawCurvePageTitle (sb);   // above the opaque graph frame of the editor
+                drawCurvePageTitle (sb);   // above the opaque graph frame of the editor
             if (isSplit() && pageTop_ == 0)
             {
                 const ui::Rect eb = ed.block (0);
                 if (splitQBank_ == 3)
                     ed.groups[0].draw (sb, nativeControlsActive() ? &eb : nullptr);
-                else
-                    ed.groups[0].drawIdle (sb);
             }
             if (pageTop_ == 0)
                 ed.drawLive (sb);   // the live marker of the last note: the animated layer, nothing cached repaints with it
@@ -438,33 +506,31 @@ public:
                 return false;
             }
             if (! top)
-                return false;
-            gesture_ = top;
-            gestureDown_ = true;
-            if (isSplit() && pageTop_ == 0)
             {
-                if (top == &curveUi().screen)
+                if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
                 {
-                    if (curveUi().screen.block (0).contains (x, y) || curveUi().screen.canvas.rect().contains (x, y))
-                        splitQBank_ = 3;
-                }
-                else if (top == &full_)
-                {
-                    const int beforeG = full_.activeGroup();
-                    const ui::Change ch = top->touchDown (x, y, nowMs);
-                    if (full_.activeGroup() != beforeG && full_.activeGroup() >= 0 && full_.activeGroup() < 3)
-                        splitQBank_ = full_.activeGroup();
-                    dispatch (ch, stack, inst);
-                    handlePending (stack, inst);
-                    syncSplitQFocus();
+                    // a touch on a row of the page makes it the active row (the Q group of the page); the cells themselves are the skin's
+                    ModRowsPage& pg = pageTop_ == kPageMods ? mods_ : targets_;
+                    if (const int row = pg.rowAt (x, y); row >= 0)
+                        pg.selectRow (row);
+                    publishQGroup (inst);
                     return true;
                 }
+                return false;
+            }
+            gesture_ = top;
+            gestureDown_ = true;
+            if (isSplit() && pageTop_ == 0 && top == &curveUi().screen)
+            {
+                if (curveUi().screen.block (0).contains (x, y) || curveUi().screen.canvas.rect().contains (x, y))
+                    splitQBank_ = 3;
             }
             dispatch (top->touchDown (x, y, nowMs), stack, inst);
             handlePending (stack, inst);
             syncSplitQFocus();
             return true;
         }
+
         if (nativeTouchSlot_ >= 0 || blockedNativeSlot_ >= 0)
         {
             if (ev.kind == TouchEvent::Up)
@@ -503,7 +569,7 @@ public:
             dispatch (gesture_->tick (nowMs), stack, inst);
         if (nativeTouchSlot_ >= 0 && nativeModControl_ >= 0 && nativeControlsActive() && nowMs - nativeTouchAt_ >= 500.0)
         {
-            if (full_.power.state.on)
+            if (powerOn_)
             {
                 blockedNativeSlot_ = nativeTouchSlot_;
                 handle (ui::Change::modsRequest (nativeModControl_), stack, inst);
@@ -514,14 +580,37 @@ public:
         drainCurveRequests (stack, inst);
     }
 
+    /** The hardware knob `slot` (0 .. 3) of the active group turned by `delta`: the dial / switch / choice of the member, as the group's row says (nothing while the filter is off; ROUTING while any filter is on). */
     void turnQ (int slot, double delta, UiStack& stack, IInstanceView& inst)
     {
         if (pageTop_ == kPagePz)
             return;
-        if (pageTop_ == kPageMods)
-            handle (mods_.turn (delta), stack, inst);
-        else if (pageTop_ == kPageTargets)
-            handle (targets_.turnQ (slot, delta), stack, inst);
+        if (pageTop_ == kPageMods || pageTop_ == kPageTargets)
+        {
+            // the three cells of the active row: depth, polarity, on / off
+            ModRowsPage& pg = pageTop_ == kPageMods ? mods_ : targets_;
+            const ModRow* rows = pageTop_ == kPageMods ? modRows_ : targetRows_;
+            const int row = pg.activeRow();
+            if (row < 0 || slot < 0 || slot > 2 || rows[row].slot < 0)
+                return;
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (rows[row].slot);
+            if (slot == 0)
+            {
+                const double cur = uibind::normOf (sp.amount, inst.param (sp.amount));
+                const double next = binding::turnNorm (cur, delta);
+                if (std::fabs (next - cur) >= 1.0e-12)
+                    handle (ui::Change::normalised (pageTop_ == kPageMods ? kModsRow + 4 * row : kTargetsRow + 4 * row, next), stack, inst);
+            }
+            else
+            {
+                const int id = (pageTop_ == kPageMods ? kModsRow : kTargetsRow) + 4 * row + slot;
+                const int p = slot == 1 ? sp.bipolar : sp.bypass;
+                const bool on = slot == 1 ? inst.param (p) >= 0.5f : inst.param (p) < 0.5f;   // the shown state (the switch says ON: the opposite of bypassed)
+                const bool next = delta > 0.0;
+                if (next != on)
+                    handle (ui::Change::indexed (id, next ? 1 : 0, next ? 1.0 : 0.0), stack, inst);
+            }
+        }
         else if (curveView() || (isSplit() && splitQBank_ == 3))
         {
             ScalarCurveUi& cu = curveUi();
@@ -531,21 +620,13 @@ public:
             drainCurveRequests (stack, inst);
         }
         else
-            handle (full_.turnQ (slot, delta), stack, inst);
+            turnMember (activeGroup_, slot, delta, inst);
     }
 
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
-        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the display or the editor under the pointer takes it as steps of its own. false: nothing of this page lies there, or a finger is down on it. */
     bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         ui::Component* top = topComponent (x, y);
-        if (! full_.power.state.on && filterShown() && pageTop_ == 0 && top == &full_)
-        {
-            if (! full_.power.rect().contains (x, y) && ! full_.view.rect().contains (x, y)
-                && ! full_.both.rect().contains (x, y) && ! full_.close.rect().contains (x, y)
-                && ! full_.expand.rect().contains (x, y) && ! full_.scalarView.rect().contains (x, y))
-                return false;
-        }
         if (gestureDown_ || ! top || ! covers (x, y))
             return false;
         ui::Change ch;
@@ -563,6 +644,7 @@ public:
     }
 
     bool fingerDown() const noexcept { return gestureDown_ || nativeTouchSlot_ >= 0; }
+
     void dropGesture() noexcept
     {
         if (gesture_ != nullptr)
@@ -574,23 +656,29 @@ public:
     /** Another element's page was open: the Q group is published again at the next update. */
     void forgetQGroup() noexcept { qSlots_.forget(); }
 
-    ui::FilterFullScreen& full() noexcept { return full_; }
-    ui::ModulationsPage& modsPage() noexcept { return mods_; }
-    ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
+    const FilterGeometry& geometry() const noexcept { return geo_; }
+    ModRowsPage& modsPage() noexcept { return mods_; }
+    ModRowsPage& targetsPage() noexcept { return targets_; }
     ui::ListPopup& destList() noexcept { return destList_; }
+    ui::FilterDisplay& display() noexcept { return display_; }
     const CurveSource* curve (int filter) const noexcept { return filter == 2 ? curve2_.get() : curve1_.get(); }
-    const ui::MenuButton& pzEditorButton() const noexcept { return pzOpen_; }
+    const ui::ControlModel& pzEditorButton() const noexcept { return pzOpen_; }
     const ui::PzCurveEditor& pzEditor() const noexcept { return pzEditor_; }
     int paramOf (int id, int filter) const noexcept { return paramForId (id, filter); }
     const ModRow* modRows() const noexcept { return modRows_; }
+    bool selectedFilterOn() const noexcept { return powerOn_; }
+    bool formantMode() const noexcept { return geo_.formantMode(); }
+    bool combMode() const noexcept { return geo_.combMode(); }
+    int activeGroup() const noexcept { return activeGroup_; }
 
 private:
+
     static void coverRootMarkers (gpu::SceneBuilder& sb) noexcept
     {
         drawNativeMarkerCovers (sb, "filter1");
     }
 
-    bool nativePzOpen() const noexcept { return pzButtonShown_ && full_.power.state.on && nativeControlsActive(); }
+    bool nativePzOpen() const noexcept { return pzButtonShown_ && powerOn_ && nativeControlsActive(); }
     bool nativePzToolbar() const noexcept
     {
         return pzToolbarSupported_ && hasNativePower() && pageTop_ == kPagePz && pzOwner_ != nullptr
@@ -622,10 +710,61 @@ private:
     bool nativePowerVisible() const noexcept { return nativeViewFrame() == 1 || nativeViewFrame() == 2; }
     bool nativeControlsActive() const noexcept { return nativeViewFrame() != 0; }
 
+
     void hideNativeControls (IInstanceView& inst) noexcept
     {
         inst.setNativeFilterControls (0, nullptr, nullptr, nullptr);
     }
+
+    // ---- which native cells exist (the slots of the filter part, nativeui::FilterPower .. FilterStyle)
+    bool hasNativeGeometry (int slot) const noexcept
+    {
+        using namespace nativeui;
+        if (curveView())
+            return false;
+        switch (slot)
+        {
+            case FilterVar: return ! geo_.formantMode();
+            case FilterClean: return ! geo_.formantMode() && ! geo_.combMode();
+            case FilterCombOffset: return geo_.combMode();
+            case FilterFormantX: case FilterFormantY: case FilterFormantTranspose: case FilterFormantSpread:
+                return geo_.formantMode() && ! geo_.splitMode();
+            case FilterFormantResonance: return geo_.formantMode();
+            default: return true;
+        }
+    }
+    bool hasNativeControl (int slot) const noexcept
+    {
+        return hasNativeGeometry (slot) && (slot != nativeui::FilterStyle || styleCount_ > 1)
+            && (slot == nativeui::FilterPower || (slot == nativeui::FilterRouting ? anyOn_ : powerOn_));
+    }
+    std::array<ui::Rect, nativeui::FilterPoint> nativeRects (bool includePassive = false) const noexcept
+    {
+        std::array<ui::Rect, nativeui::FilterPoint> out {};
+        for (int slot = 0; slot < nativeui::FilterPoint; ++slot)
+            if (slot != nativeui::FilterRouting && (includePassive ? hasNativeGeometry (slot) : hasNativeControl (slot)))
+                out[slot] = geo_.cell (slot);
+        return out;
+    }
+    ui::Rect nativeSingleStyleRect() const noexcept
+    {
+        return ! curveView() && powerOn_ && styleCount_ == 1 ? geo_.cell (nativeui::FilterStyle) : ui::Rect {};
+    }
+    ui::Rect nativeOutReadoutRect() const noexcept
+    {
+        return ! curveView() && ! geo_.splitMode() ? geo_.outReadout() : ui::Rect {};
+    }
+    /** The member of Q group g at slot k (a nativeui::FilterSlot; -1: none): the TRACK bank holds the formant RESONANCE instead of VAR with the Formant model and COMB with the Comb model only. */
+    int qMember (int g, int k) const noexcept
+    {
+        int s = kQ.row (g, k);
+        if (g == 1 && k == 2 && geo_.formantMode())
+            s = nativeui::FilterFormantResonance;
+        if (g == 1 && k == 3 && ! geo_.combMode())
+            s = -1;
+        return s;
+    }
+    void setActiveGroup (int g) noexcept { activeGroup_ = g >= 0 && g < kGroups ? g : -1; }
 
     void observeNativeTouch (int x, int y, double nowMs) noexcept
     {
@@ -656,19 +795,18 @@ private:
             if (curveView())
                 return;
         }
-        const auto areas = full_.nativeRects();
-        const auto controls = full_.nativeControls();
+        const auto areas = nativeRects();
         for (int s = 0; s < FilterPoint; ++s)
             if (areas[s].contains (x, y))
             {
                 nativeTouchSlot_ = s == FilterModel || s == FilterStyle ? -1 : s;
                 if (s != FilterPower && s != FilterClean && s != FilterModel && s != FilterStyle && s != FilterRouting && s != FilterEnv1)
-                    nativeModControl_ = controls[s]->id();
-                for (int group = 0; group < full_.kMaxGroups; ++group)
-                    for (int knob = 0; knob < ui::QGroup::kSlots; ++knob)
-                        if (full_.groups[group].member (knob) == controls[s])
+                    nativeModControl_ = idOfSlot (s);
+                for (int group = 0; group < kGroups; ++group)
+                    for (int knob = 0; knob < binding::QTable<kGroups>::kSlots; ++knob)
+                        if (qMember (group, knob) == s)
                         {
-                            full_.setActiveGroup (group);
+                            setActiveGroup (group);
                             if (isSplit() && group < 3)
                                 splitQBank_ = group;
                         }
@@ -683,22 +821,22 @@ private:
         if (nativeControlsActive())
         {
             int idx = 0;
-            out[idx++] = full_.view.rect();
+            out[idx++] = geo_.view();
             if (isSplit())
             {
-                out[idx++] = full_.scalarView.rect();
-                out[idx++] = full_.nativeExpandFilterRect();
+                out[idx++] = geo_.scalarView();
+                out[idx++] = geo_.expand();
                 out[idx++] = curveUi().screen.nativeExpandRect();
             }
             else
             {
                 if (! curveView())
-                    out[idx++] = full_.both.rect();
-                out[idx++] = full_.nativeExpandFilterRect();
+                    out[idx++] = geo_.both();
+                out[idx++] = geo_.expand();
             }
             if (filterShown())
             {
-                const auto areas = full_.nativeRects (includeReadouts);
+                const auto areas = nativeRects (includeReadouts);
                 for (const auto& r : areas)
                     if (! r.empty() && idx < static_cast<int> (out.size()))
                         out[idx++] = r;
@@ -706,8 +844,8 @@ private:
                     out[idx++] = pzOpen_.rect();
                 if (includeReadouts)
                 {
-                    if (idx < static_cast<int> (out.size())) out[idx++] = full_.nativeOutReadoutRect();
-                    if (idx < static_cast<int> (out.size())) out[idx++] = full_.nativeSingleStyleRect();
+                    if (idx < static_cast<int> (out.size())) out[idx++] = nativeOutReadoutRect();
+                    if (idx < static_cast<int> (out.size())) out[idx++] = nativeSingleStyleRect();
                 }
             }
             if (curveShown())
@@ -722,9 +860,10 @@ private:
             }
         }
         else if (nativePowerVisible())
-            out[0] = full_.power.rect();
+            out[0] = geo_.cell (nativeui::FilterPower);
         return out;
     }
+
 
     nativeui::FxCell nativeCell (int slot, IInstanceView& inst) const noexcept
     {
@@ -742,14 +881,14 @@ private:
             }
             return { 0, 0, kFxDial };
         }
-        if (slot < FilterPoint && filterShown() && full_.hasNativeControl (slot))
+        if (slot < FilterPoint && filterShown() && hasNativeControl (slot))
         {
             const bool selOn = isSelectedFilterOn (inst);
             const bool allow = slot == FilterPower
                 || (slot == FilterRouting ? anyFilterOn (inst) : selOn);
             if (! allow)
                 return {};
-            const int target = paramForId (full_.nativeControls()[slot]->id(), editFilter_);
+            const int target = params_[editFilter_ - 1][slot];
             const bool toggle = slot == FilterPower || slot == FilterEnv1 || slot == FilterClean;
             int kind = toggle ? kFxToggle : kFxDial;
             if (slot == FilterModel)
@@ -838,7 +977,7 @@ private:
                 return;
             }
         }
-        const bool powerBefore = full_.power.state.on;
+        const bool powerBefore = powerOn_;
         for (int slot = 0; slot < FilterAction; ++slot)
         {
             if (slot == blockedNativeSlot_)
@@ -872,8 +1011,8 @@ private:
         if (filterShown() && powerBefore != isSelectedFilterOn (inst))
         {
             pullControls (inst);
-            nativeLastOn_ = full_.power.state.on;
-            nativeLastAnyOn_ = full_.anyFilterOn();
+            nativeLastOn_ = powerOn_;
+            nativeLastAnyOn_ = anyOn_;
         }
         FxCell cells[FilterSlots];
         float values[2 * kFilterCurveFields] {};
@@ -896,18 +1035,20 @@ private:
         indicators[2] = (showScalarSel && scalarSel_ == 0 ? 2 : 0) | ((nativeUsedMask_ >> 2) & 1);
         indicators[3] = (showScalarSel && scalarSel_ == 1 ? 2 : 0) | ((nativeUsedMask_ >> 3) & 1);
         if (isSplit())
-            indicators[4] = full_.power.state.on ? 2 : (full_.anyFilterOn() ? 1 : 0);
+            indicators[4] = powerOn_ ? 2 : (anyOn_ ? 1 : 0);
         else
-            indicators[4] = (dual_ && ! curveView() ? 1 : 0) | ((filterShown() && full_.power.state.on) ? 2 : 0);
+            indicators[4] = (dual_ && ! curveView() ? 1 : 0) | ((filterShown() && powerOn_) ? 2 : 0);
         inst.setNativeFilterControls (nativeViewFrame(), cells, values, indicators);
     }
     static const synthyboy::ParamInfo& info (int idx) noexcept { return uibind::info (idx); }
+
 
     bool isSelectedFilterOn (const IInstanceView& inst) const noexcept
     {
         const int p = paramForId (kPower, editFilter_);
         return p >= 0 && inst.param (p) >= 0.5f;
     }
+
     bool anyFilterOn (const IInstanceView& inst) const noexcept
     {
         const int p1 = paramForId (kPower, 1), p2 = paramForId (kPower, 2);
@@ -920,46 +1061,54 @@ private:
             return;
         if (splitQBank_ == 3)
         {
-            full_.setActiveGroup (-1);
+            setActiveGroup (-1);
             curveUi().screen.setActiveGroup (0);
         }
         else
         {
-            if (full_.activeGroup() != splitQBank_)
-                full_.setActiveGroup (splitQBank_);
+            if (activeGroup_ != splitQBank_)
+                setActiveGroup (splitQBank_);
             curveUi().screen.setActiveGroup (-1);
         }
+    }
+
+    /** The display follows the geometry (the page of a curve view has none). */
+    void syncDisplayGeometry()
+    {
+        if (geo_.curveView())
+            display_.place ({});
+        else
+            display_.placeGraph (geo_.displayRect(), geo_.cell (nativeui::FilterPower), geo_.expand());
     }
 
     void syncLayoutMode()
     {
         const bool sp = isSplit();
-        full_.setSplitMode (sp);
+        const int fv = curveView() ? (scalarSel_ == 0 ? kViewNote : kViewVelo) : filterSel_;
+        geo_.setCurveView (fv >= kViewNote);
+        geo_.setSplitMode (sp);
+        syncDisplayGeometry();
         ui::Rect compactRect {};
         if (sp)
         {
-            const ui::Rect fr = full_.rect();
+            const ui::Rect fr = geo_.rect();
             const int lx = fr.x + 8, lw = (fr.w - 28) * 60 / 100;
             const int rx = lx + lw + 12, rw = fr.right() - 8 - rx;
-            compactRect = { rx, full_.scalarView.rect().y, rw, fr.bottom() - 8 - full_.scalarView.rect().y };
+            compactRect = { rx, geo_.scalarView().y, rw, fr.bottom() - 8 - geo_.scalarView().y };
         }
         for (ScalarCurveUi& c : curve_)
         {
             c.screen.setCompact (sp);
             c.screen.setOwnQFrames (! sp);
-            c.screen.place (sp ? compactRect : full_.bodyRect());
+            c.screen.place (sp ? compactRect : geo_.bodyRect());
         }
-        full_.setScalarView (scalarSel_);
-        const int fv = curveView() ? (scalarSel_ == 0 ? ui::FilterFullScreen::kViewNote : ui::FilterFullScreen::kViewVelo) : filterSel_;
         view_ = fv;
-        full_.setView (fv);
-        full_.setViewCells ((nativeUsedMask_ & 1) != 0, (nativeUsedMask_ & 2) != 0, (nativeUsedMask_ & 4) != 0, (nativeUsedMask_ & 8) != 0);
-        full_.setScalarCells ((nativeUsedMask_ & 4) != 0, (nativeUsedMask_ & 8) != 0);
         if (sp)
             syncSplitQFocus();
         else
             curve_[0].screen.setOwnQFrames (true), curve_[1].screen.setOwnQFrames (true);
     }
+
 
     void adoptSplitState (int f, int s, int e)
     {
@@ -1002,89 +1151,44 @@ private:
         pzEditor_.remove.setId (kPzRemove);
         pzEditor_.apply.setId (kPzApply);
         pzEditor_.canvas.setId (kPzCanvas);
-        full_.close.setId (kClose);
-        full_.expand.setId (kExpand);
-        full_.power.setId (kPower);
-        full_.view.setId (kView);
-        full_.scalarView.setId (kScalarView);
-        full_.both.setId (kBoth);
-        full_.model.setId (kModel);
-        full_.style.setId (kStyle);
-        full_.clean.setId (kClean);
-        full_.display.assignIds (kDisplayCutoff, kDisplayReso, kDisplayFormant, kDisplayFormantY);
-
-        full_.cutoff.setId (kCutoff);
-        full_.resonance.setId (kResonance);
-        full_.drive.setId (kDrive);
-        full_.mix.setId (kMix);
-
-        full_.keytrack.setId (kKeytrack);
-        full_.env1.setId (kEnv1);
-        full_.var.setId (kVar);
-        full_.combOffset.setId (kCombOffset);
-
-        full_.blend.setId (kBlend);
-        full_.routing.setId (kRouting);
-
-        full_.formantX.setId (kFormantX);
-        full_.formantY.setId (kFormantY);
-        full_.formantTrans.setId (kFormantTrans);
-        full_.formantRes.setId (kFormantRes);
-        full_.formantSpread.setId (kFormantSpread);
-
+        display_.assignIds (kDisplayCutoff, kDisplayReso, kDisplayFormant, kDisplayFormantY);
         mods_.back.setId (kModsBack);
+        mods_.page.setId (kModsPage);
         mods_.add.setId (kModsAdd);
         targets_.back.setId (kTargetsBack);
         targets_.page.setId (kTargetsPage);
         targets_.add.setId (kTargetsAdd);
+        for (int r = 0; r < ModRowsPage::kPerPage; ++r)
+        {
+            mods_.setRowIds (r, kModsRow + 4 * r, kModsRow + 4 * r + 1, kModsRow + 4 * r + 2, kModsRow + 4 * r + 3);
+            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
+        }
     }
 
+    /** The engine parameter behind a control id of filter `filterNum` (1 or 2; -1: none). */
     int paramForId (int id, int filterNum) const noexcept
     {
-        if (id == kRouting)
-            return uibind::indexOfKey ("filter.routing");
-        const char* s = nullptr;
-        switch (id)
-        {
-            case kPower: s = "on"; break;
-            case kModel: s = "model"; break;
-            case kStyle: s = "style"; break;
-            case kClean: s = "clean_mode"; break;
-            case kCutoff: case kDisplayCutoff: s = "cutoff"; break;
-            case kResonance: case kDisplayReso: s = "resonance"; break;
-            case kDrive: s = "drive"; break;
-            case kMix: s = "mix"; break;
-            case kBlend: s = "blend"; break;
-            case kKeytrack: s = "keytrack"; break;
-            case kEnv1: s = "env1"; break;
-            case kVar: s = "var"; break;
-            case kCombOffset: s = "comb_offset"; break;
-            case kFormantX: case kDisplayFormant: s = "formant.x"; break;
-            case kFormantY: case kDisplayFormantY: s = "formant.y"; break;
-            case kFormantTrans: s = "formant.transpose"; break;
-            case kFormantRes: s = "formant.resonance"; break;
-            case kFormantSpread: s = "formant.spread"; break;
-            default: return -1;
-        }
-        return uibind::indexOfKey ("filter" + std::to_string (filterNum) + "." + s);
+        const int s = slotOfId (id);
+        return s >= 0 && filterNum >= 1 && filterNum <= 2 ? params_[filterNum - 1][s] : -1;
     }
 
-    /** The component a touch at height y starts on: a page above the tab, else in the NOTE / VELO states the top bar (the selector) or the editor under it, else the filter page. */
+    /** The part a touch at (x, y) starts on: a list above the tab, the PZ editor, in the NOTE / VELO states the editor under the top bar, else the response display (every other control is a native cell). */
     ui::Component* topComponent (int x, int y) noexcept
     {
-        if (pageTop_ == kPageMods) return &mods_;
-        if (pageTop_ == kPageTargets) return &targets_;
+        if (pageTop_ == kPageMods) return pickingSource_ ? &destList_ : nullptr;
+        if (pageTop_ == kPageTargets) return nullptr;
         if (pageTop_ == kPageDest) return &destList_;
         if (pageTop_ == kPagePz) return &pzEditor_;
-        if (isSplit() && full_.scalarView.rect().contains (x, y))
-            return &full_;
+        if (isSplit() && geo_.scalarView().contains (x, y))
+            return nullptr;
         if (curveShown() && curveUi().screen.rect().contains (x, y))
             return &curveUi().screen;
-        if (curveView() && y >= full_.bodyRect().y)
+        if (curveView() && y >= geo_.bodyRect().y)
             return &curveUi().screen;
-        return &full_;
+        return curveView() ? nullptr : &display_;
     }
     bool gestureOnCurve() noexcept { return curveShown() && pageTop_ == 0 && gesture_ == &curveUi().screen; }
+
 
     void syncPages (const UiStack& stack)
     {
@@ -1144,7 +1248,7 @@ private:
     void handlePending (UiStack& stack, IInstanceView& inst)
     {
         ui::Change extra;
-        while (gesture_ == &full_ && full_.display.takePending (extra))
+        while (gesture_ == &display_ && display_.takePending (extra))
             handle (extra, stack, inst);
     }
 
@@ -1173,10 +1277,10 @@ private:
     void chooseView (IInstanceView& inst, int v)
     {
         v = std::clamp (v, 0, 3);
-        if (v < ui::FilterFullScreen::kViewNote)
+        if (v < kViewNote)
             chooseFilter (inst, v);
         else
-            chooseSplitState (inst, filterSel_, v - ui::FilterFullScreen::kViewNote, tabview::kFilterExpandedCurve);
+            chooseSplitState (inst, filterSel_, v - kViewNote, tabview::kFilterExpandedCurve);
     }
 
     bool isPzModel (const IInstanceView& inst) const noexcept
@@ -1282,7 +1386,7 @@ private:
                 modsPreset_ = inst.stateGeneration();
                 modsPageIndex_ = 0;
                 modsFilterModel_ = static_cast<int> (std::lround (inst.param (paramForId (kModel, editFilter_))));
-                mods_.setPickingSource (false);
+                pickingSource_ = false;
                 modsDirty_ = true;
                 loadMods (inst);
                 stack.openDetail (kPageMods);
@@ -1296,7 +1400,7 @@ private:
             return;
         }
         // the rows of the modulations page
-        if (c.id >= kModsRow && c.id < kModsRow + 4 * ui::ModulationsPage::kPerPage)
+        if (c.id >= kModsRow && c.id < kModsRow + 4 * ModRowsPage::kPerPage)
         {
             const int row = (c.id - kModsRow) / 4, part = (c.id - kModsRow) % 4;
             if (modsContextValid (inst) && uibind::modulationMatches (inst, activeModParam_, modRows_[row]))
@@ -1319,7 +1423,7 @@ private:
             return;
         }
         // the rows of the targets page of NOTE / VELO
-        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage)
+        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * ModRowsPage::kPerPage)
         {
             const int row = (c.id - kTargetsRow) / 4, part = (c.id - kTargetsRow) % 4;
             const int slot = targetRows_[row].slot;
@@ -1359,13 +1463,6 @@ private:
             loadMods (inst);
             return;
         }
-        if (c.id == kModsAddStep && c.kind == K::Index)
-        {
-            const int i = std::clamp (c.index, 0, std::max (0, modsAddOffer_ - 1));
-            mods_.addSource.state.index = i;
-            mods_.addSource.setItem (uibind::sourceName (mods_.sourceIds[i]));
-            return;
-        }
         if (c.id == kTargetsPage && c.kind == K::Index)
         {
             targetsPageIndex_ = c.index;
@@ -1386,19 +1483,24 @@ private:
                     }
                     break;
                 case kModsBack:
-                    if (mods_.pickingSource())
-                        mods_.setPickingSource (false);
+                    if (pickingSource_)
+                        pickingSource_ = false;
                     else
                         stack.back();
                     break;
                 case kModsAdd:
                     if (modsContextValid (inst))
-                    {
-                        uibind::fillSourceBoard (mods_.board);
-                        mods_.setPickingSource (true);
-                    }
+                        openSourceList();
                     break;
-                case kTargetsBack: case kDestBackdrop: stack.back(); break;
+                case kDestBackdrop:
+                    if (pickingSource_)
+                    {
+                        pickingSource_ = false;
+                        break;
+                    }
+                    stack.back();
+                    break;
+                case kTargetsBack: stack.back(); break;
                 case kTargetsAdd: openDestList (stack); break;
                 case kDestHeader: destGroup_ = -1; fillDestList(); break;
                 default: break;
@@ -1410,6 +1512,13 @@ private:
         // the list that picks a new target of NOTE / VELO: the groups of the destinations, then the parameters of a group
         if (c.id == kDestList && c.kind == K::Index)
         {
+            if (pickingSource_)
+            {
+                if (c.index >= 0 && c.index < sourceCount_)
+                    addModulation (inst, sourceIds_[c.index]);
+                pickingSource_ = false;
+                return;
+            }
             if (destGroup_ < 0)
             {
                 destGroup_ = c.index;
@@ -1505,16 +1614,57 @@ private:
             uibind::writePlain (inst, style, count - 1);
     }
 
-    /** The parameter of a control of the page (a knob, a stepper, a switch). */
+    /** The parameter of a control of the page (a dial, a choice, a switch). */
     int activeParamOfControl (int id) const noexcept { return paramForId (id, editFilter_); }
 
-    /** The box of the list popup: the standard one (600 px wide, nine rows) or, for the style list, the size of its content: as wide as the longest name needs (and at least 280 px), as tall as its rows, centred. */
-
-
-
+    /** One detent of the hardware knob `knob` of group `group`: the member's row decides (a dial steps 1 / 128, a switch goes on / off, a choice steps whole numbers); a filter that is off takes none, ROUTING needs any filter on. */
+    void turnMember (int group, int knob, double delta, IInstanceView& inst)
+    {
+        if (group < 0 || curveView())
+            return;
+        const int slot = qMember (group, knob);
+        if (slot < 0)
+            return;
+        const bool routing = slot == nativeui::FilterRouting;
+        if (routing ? ! anyOn_ : ! powerOn_)
+            return;
+        const binding::Row& row = rowOf (editFilter_, slot);
+        const int p = params_[editFilter_ - 1][slot];
+        if (p < 0)
+            return;
+        switch (row.kind)
+        {
+            case binding::Kind::Continuous:
+            {
+                const double cur = uibind::normOf (p, inst.param (p));
+                const double next = binding::turnNorm (cur, delta);
+                if (std::fabs (next - cur) >= 1.0e-12)
+                    uibind::writeNorm (inst, p, next);
+                break;
+            }
+            case binding::Kind::Toggle:
+            {
+                const bool on = delta > 0.0;
+                if (on != (inst.param (p) >= 0.5f))
+                    uibind::writePlain (inst, p, on ? 1.0 : 0.0);
+                break;
+            }
+            case binding::Kind::Choice:
+            {
+                const int n = info (p).numChoices;
+                const int cur = static_cast<int> (std::lround (inst.param (p)));
+                const int next = binding::turnChoice (cur, static_cast<int> (std::lround (delta)), n);
+                if (next != cur)
+                    writeChoice (inst, p, next);
+                break;
+            }
+            default: break;
+        }
+    }
 
     // ---- the targets page of NOTE / VELO: the slots of the matrix whose source is the velocity (23) or the note (24)
     int curveSource() const noexcept { return scalarSel_ == 0 ? 24 : 23; }
+
     static void targetName (size_t destChoice, char* out, size_t cap)
     {
         const int p = synthyboy::modDestinationParamIndex (destChoice);
@@ -1522,47 +1672,34 @@ private:
     }
     void loadTargets (const IInstanceView& v, bool fresh)
     {
+        (void) fresh;
+        constexpr int kPer = ModRowsPage::kPerPage;
         const int src = curveSource();
         int slots[uibind::kMaxTargetSlots];
         const int total = uibind::slotsOfSource (v, src, slots, uibind::kMaxTargetSlots);
-        const int pages = std::max (1, (total + ui::ModTargetsPage::kPerPage - 1) / ui::ModTargetsPage::kPerPage);
+        const int pages = std::max (1, (total + kPer - 1) / kPer);
         targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
-        const int first = targetsPageIndex_ * ui::ModTargetsPage::kPerPage, n = std::clamp (total - first, 0, ui::ModTargetsPage::kPerPage);
-        ui::ModTargetsPage::Entry e[ui::ModTargetsPage::kPerPage];
+        const int first = targetsPageIndex_ * kPer, n = std::clamp (total - first, 0, kPer);
+        ModRowsPage::Entry e[kPer];
         for (int i = 0; i < n; ++i)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slots[first + i]);
             targetName (static_cast<size_t> (std::lround (v.param (sp.destination))), e[i].name, sizeof e[i].name);
-            e[i].depth = std::clamp (static_cast<double> (v.param (sp.amount)) / 100.0, -1.0, 1.0);
-            e[i].bidirectional = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
-            e[i].bypassed = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
             targetRows_[i] = { slots[first + i], src };
         }
-        for (int i = n; i < ui::ModTargetsPage::kPerPage; ++i)
+        for (int i = n; i < kPer; ++i)
             targetRows_[i] = {};
-        // only a change of the rows is loaded again (a reload resets the touch of a row that is being dragged)
-        bool same = ! fresh && n == targets_.numRows() && total == targetTotal_;
-        for (int i = 0; same && i < n; ++i)
-        {
-            const ui::ModTargetsPage::Row& r = targets_.rows[i];
-            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth.state.value - (e[i].depth + 1.0) * 0.5) < 1.0e-9 && r.polarity.state.on == e[i].bidirectional && r.bypass.state.on == ! e[i].bypassed;
-        }
-        if (same)
-            return;
         targetTotal_ = total;
         targets_.load (e, n, src == 24 ? "NOTE" : "VELO", ui::theme::sourceColour (src == 24 ? "NOTE" : "VEL"), total, targetsPageIndex_);
-        targets_.back.setId (kTargetsBack);
-        targets_.page.setId (kTargetsPage);
-        targets_.add.setId (kTargetsAdd);
-        for (int r = 0; r < ui::ModTargetsPage::kPerPage; ++r)
-            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
     }
+
     void openDestList (UiStack& stack)
     {
         destGroup_ = -1;
         fillDestList();
         stack.openDetail (kPageDest);
     }
+
     /** The list that picks a new target: the groups of the destinations, then the parameters of a group. */
     void fillDestList()
     {
@@ -1587,19 +1724,50 @@ private:
         destList_.state.current = -1;
         destList_.showCurrent();
     }
+
     void addTarget (IInstanceView& v, int destChoice)
     {
         const int source = curveSource();
         const int slot = uibind::addTargetSlot (v, source, destChoice);
         if (slot < 0)
             return;
-        constexpr int rows = ui::ModTargetsPage::kPerPage;
+        constexpr int rows = ModRowsPage::kPerPage;
         const int position = uibind::targetPosition (v, source, slot);
         targetsPageIndex_ = position / rows;
         loadTargets (v, true);
         targets_.selectRow (position % rows);
         modsDirty_ = true;
     }
+
+    /** The source list of the modulations page (ADD): the selected source first, then the first envelopes and LFOs; the host list is the only list there is (the popup of the targets list). */
+    void openSourceList()
+    {
+        int offer[8], n = 0;
+        auto push = [&] (int s) { if (s == ui::kNoSource || n >= 8) return; for (int i = 0; i < n; ++i) if (offer[i] == s) return; offer[n++] = s; };
+        push (selectedSource_);
+        for (int s : { 7, 8, 1, 2, 9, 3, 19, 20 }) push (s);
+        destNames_.clear();
+        sourceText_.clear();
+        sourceText_.reserve (8);
+        for (int i = 0; i < n; ++i)
+        {
+            sourceIds_[i] = offer[i];
+            sourceText_.push_back (uibind::sourceName (offer[i]));
+        }
+        for (const std::string& s : sourceText_)
+            destNames_.push_back (s.c_str());
+        sourceCount_ = n;
+        destList_.state.header = "ADD SOURCE";
+        destList_.state.headerBack = false;
+        destList_.state.items = destNames_.data();
+        destList_.state.count = n;
+        destList_.state.current = -1;
+        destList_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        destList_.showCurrent();
+        pickingSource_ = true;
+    }
+
+    // ---- the modulations page of one control
 
     // ---- the modulations page of one control
     bool modsDestinationValid (const IInstanceView& inst) const noexcept
@@ -1610,41 +1778,51 @@ private:
             && on >= 0 && inst.param (on) >= 0.5f
             && model >= 0 && static_cast<int> (std::lround (inst.param (model))) == modsFilterModel_;
     }
+
     bool modsContextValid (const IInstanceView& inst) const noexcept
     {
         return pageTop_ == kPageMods && modsPreset_ == inst.stateGeneration() && modsDestinationValid (inst);
     }
 
+    static const char* labelOfId (int id) noexcept
+    {
+        switch (id)
+        {
+            case kCutoff: return "CUTOFF";
+            case kResonance: return "RESO";
+            case kDrive: return "DRIVE";
+            case kMix: return "MIX";
+            case kKeytrack: return "KEYTRACK";
+            case kVar: return "VAR";
+            case kCombOffset: return "COMB";
+            case kBlend: return "BLEND";
+            case kFormantX: return "X";
+            case kFormantY: return "Y";
+            case kFormantTrans: return "TRANSPOSE";
+            case kFormantRes: return "F RESO";
+            case kFormantSpread: return "SPREAD";
+            default: return nullptr;
+        }
+    }
+
     void loadMods (const IInstanceView& v, int focusSlot = -1)
     {
         char title[13] = "MODULATIONS";
-        const ui::Knob* knob = knobOf (modsTitle_);
-        if (knob != nullptr)
-            std::snprintf (title, sizeof title, "%.12s", knob->state.label);
+        if (const char* label = labelOfId (modsTitle_))
+            std::snprintf (title, sizeof title, "%.12s", label);
         const auto window = uibind::modulationWindow (v, activeModParam_, selectedSource_, modsPageIndex_, modRows_, focusSlot);
         modsPageIndex_ = window.page;
-        if (window.total == 0)
-            uibind::fillSourceBoard (mods_.board);
-        mods_.load (window.entries, title, window.total, window.page);
+        ModRowsPage::Entry e[ModRowsPage::kPerPage];
+        const int n = std::clamp (window.entries.numMods, 0, ModRowsPage::kPerPage);
+        for (int i = 0; i < n; ++i)
+        {
+            std::snprintf (e[i].name, sizeof e[i].name, "%s", window.entries.mods[i].name);
+            e[i].source = window.entries.mods[i].source;
+            e[i].macro = window.entries.mods[i].macro;
+        }
+        mods_.load (e, n, title, 0xffffff, window.total, window.page);
         if (window.focusRow >= 0)
             mods_.selectRow (window.focusRow);
-        mods_.page.setId (kModsPage);
-        mods_.back.setId (kModsBack);
-        mods_.addSource.setId (kModsAddStep);
-        mods_.add.setId (kModsAdd);
-        for (int r = 0; r < ui::ModulationsPage::kPerPage; ++r)
-            mods_.setRowIds (r, kModsRow + 4 * r, kModsRow + 4 * r + 1, kModsRow + 4 * r + 2, kModsRow + 4 * r + 3);
-        // what "add source" offers: the selected source first, then the first envelopes and LFOs
-        int offer[8], n = 0;
-        auto push = [&] (int s) { if (s == ui::kNoSource || n >= 8) return; for (int i = 0; i < n; ++i) if (offer[i] == s) return; offer[n++] = s; };
-        push (selectedSource_);
-        for (int s : { 7, 8, 1, 2, 9, 3, 19, 20 }) push (s);
-        for (int i = 0; i < n; ++i)
-            mods_.sourceIds[i] = offer[i];
-        mods_.addSource.state.count = n;
-        mods_.addSource.state.index = std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1));
-        mods_.addSource.setItem (uibind::sourceName (offer[std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1))]));
-        modsAddOffer_ = n;
         char tv[16] = "";
         if (activeModParam_ >= 0)
             uibind::formatValue (info (activeModParam_), v.param (activeModParam_), tv, sizeof tv);
@@ -1656,19 +1834,12 @@ private:
             return;
         if (const int slot = uibind::ensureModulationSource (v, activeModParam_, source); slot >= 0)
         {
-            mods_.setPickingSource (false);
+            pickingSource_ = false;
             loadMods (v, slot);
         }
     }
     void refreshMods (IInstanceView& inst)
     {
-        // the arcs and the tabs of the knobs: the modulations of every knob of the page
-        for (ui::Knob* k : knobsOfPage())
-        {
-            const int p = paramForId (k->id(), editFilter_);
-            if (p >= 0)
-                static_cast<ui::ModInput&> (k->state) = uibind::modsOf (inst, p, selectedSource_, nullptr);
-        }
         // the dots of the selector: F1 / F2 are on, NOTE / VELO are used by a modulation slot
         ui::ScalarCurveEditor::UsedBy used;
         ScalarCurveUi::scanUsedBy (inst, 24, used);
@@ -1679,25 +1850,12 @@ private:
         const bool f2 = on2 >= 0 && inst.param (on2) >= 0.5f;
         const bool velo = used.total > 0;
         nativeUsedMask_ = static_cast<int> (f1) | (f2 << 1) | (noteUsed << 2) | (velo << 3);
-        full_.setViewCells (f1, f2, noteUsed, velo);
-        full_.setScalarCells (noteUsed, velo);
         if (pageTop_ == kPageTargets || pageTop_ == kPageDest)
             loadTargets (inst, false);
         if (pageTop_ == kPageMods && activeModParam_ >= 0)
             loadMods (inst);
     }
-    std::vector<ui::Knob*> knobsOfPage()
-    {
-        return { &full_.cutoff, &full_.resonance, &full_.drive, &full_.mix, &full_.keytrack, &full_.var, &full_.combOffset, &full_.blend,
-                 &full_.formantX, &full_.formantY, &full_.formantTrans, &full_.formantRes, &full_.formantSpread };
-    }
-    const ui::Knob* knobOf (int id)
-    {
-        for (const ui::Knob* k : knobsOfPage())
-            if (k->id() == id)
-                return k;
-        return nullptr;
-    }
+
 
     void computeCombinedCurve (IInstanceView& inst)
     {
@@ -1740,7 +1898,7 @@ private:
 
     void updateDisplayData (IInstanceView& inst, const synthyboy::LiveValues* live)
     {
-        ui::FilterDisplay& d = full_.display;
+        ui::FilterDisplay& d = display_;
         d.state.dual = isDual();
         d.state.activeFilter = editFilter_;
         const int mIdx = paramForId (kModel, editFilter_);
@@ -1799,137 +1957,99 @@ private:
         }
     }
 
-    /** A knob from its parameter: the value, the text (the parameter's own format), the default and the bipolar mark. */
-    void pullKnob (IInstanceView& v, ui::Knob& k, int id)
-    {
-        const int p = paramForId (id, editFilter_);
-        if (p < 0)
-        {
-            k.setEnabled (false);
-            return;
-        }
-        const synthyboy::ParamInfo& pi = info (p);
-        const float plain = v.param (p);
-        k.state.value = k.state.modValue = uibind::normOf (p, plain);
-        k.state.defaultValue = uibind::normOf (p, pi.def);
-        k.state.bipolar = pi.min < 0.0f && pi.max > 0.0f;
-        if (pi.numChoices > 0)   // a knob over a choice (ROUTING): the name of the choice
-        {
-            const int n = std::clamp (static_cast<int> (std::lround (plain)), 0, pi.numChoices - 1);
-            ui::setText (k.state.valueText, sizeof k.state.valueText, pi.choices[n]);
-            k.state.bipolar = false;
-        }
-        else
-            uibind::formatValue (pi, plain, k.state.valueText, sizeof k.state.valueText);
-    }
-    void pullToggle (IInstanceView& v, ui::ToggleIcon& t, int id)
-    {
-        const int p = paramForId (id, editFilter_);
-        t.setEnabled (p >= 0);
-        if (p >= 0)
-            t.state.on = v.param (p) >= 0.5f;
-    }
-    void pullList (IInstanceView& v, ui::LedList& l, int id)
-    {
-        const int p = paramForId (id, editFilter_);
-        l.setEnabled (p >= 0);
-        if (p < 0)
-            return;
-        const synthyboy::ParamInfo& pi = info (p);
-        l.setOptions (pi.choices, pi.numChoices);
-        l.state.index = std::clamp (static_cast<int> (std::lround (v.param (p))), 0, std::max (0, l.state.count - 1));
-    }
-    void pullStepper (IInstanceView& v, ui::Stepper& s, int id)
-    {
-        const int p = paramForId (id, editFilter_);
-        if (p < 0)
-        {
-            s.setEnabled (false);
-            return;
-        }
-        const synthyboy::ParamInfo& pi = info (p);
-        const int n = std::clamp (static_cast<int> (std::lround (v.param (p))), 0, std::max (0, pi.numChoices - 1));
-        s.state.count = pi.numChoices;
-        s.state.index = n;
-        s.setItem (pi.numChoices > 0 ? pi.choices[n] : "");
-    }
-
+    /** The state of the page from the parameters: the model (the Formant / Comb layout), the number of styles, the switches (a filter that is off dims the display and takes no edit). */
     void pullControls (IInstanceView& inst)
     {
         const int f = editFilter_;
         const int mIdx = paramForId (kModel, f);
         const int model = mIdx >= 0 ? static_cast<int> (std::lround (inst.param (mIdx))) : 0;
         const bool formant = model == kModelFormant;
-        if (full_.formantMode() != formant)
-            full_.setFormantMode (formant);
-        full_.setCombMode (model == kModelComb);   // COMB is shown for the Comb model only (hidden, not dimmed); VAR and CLEAN are hidden with the Formant model, CLEAN with the Comb model
-        pullStepper (inst, full_.model, kModel);
-
-        const int sIdx = paramForId (kStyle, f);
-        const int styleCount = synthyboy::filters::filterModelStyleCount (model);
-        const char* const* styleNames = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
-        if (sIdx >= 0)
+        if (geo_.formantMode() != formant)
         {
-            const int curStyle = static_cast<int> (std::lround (inst.param (sIdx)));
-            const int n = std::clamp (curStyle, 0, std::max (0, styleCount - 1));
-            // Pulling a preset is read-only.  An out-of-range legacy style is
-            // displayed clamped; writeChoice() performs the documented clamp
-            // only when the user actually changes MODEL.
-            full_.style.setEnabled (true);
-            full_.style.state.count = styleCount;
-            full_.style.state.index = n;
-            full_.style.setItem (styleNames != nullptr && n < styleCount ? styleNames[n] : "");
-
-            // One-style rule: a model with one style shows the style control dim / as a plain label
-            if (styleCount <= 1)
-            {
-                full_.style.state.dim = true;
-                full_.style.listable = false;
-            }
-            else
-            {
-                full_.style.state.dim = false;
-                full_.style.listable = true;
-            }
+            geo_.setFormantMode (formant);
+            if (! formant && activeGroup_ == 3)
+                setActiveGroup (0);
         }
-        else
-        {
-            full_.style.setEnabled (false);
-        }
-        pullToggle (inst, full_.power, kPower);
-        pullToggle (inst, full_.clean, kClean);
-        pullToggle (inst, full_.env1, kEnv1);
-        pullList (inst, full_.routing, kRouting);
-        for (const auto& kid : { std::make_pair (&full_.cutoff, static_cast<int> (kCutoff)), std::make_pair (&full_.resonance, static_cast<int> (kResonance)), std::make_pair (&full_.drive, static_cast<int> (kDrive)),
-                                 std::make_pair (&full_.mix, static_cast<int> (kMix)), std::make_pair (&full_.keytrack, static_cast<int> (kKeytrack)), std::make_pair (&full_.var, static_cast<int> (kVar)),
-                                 std::make_pair (&full_.combOffset, static_cast<int> (kCombOffset)),
-                                 std::make_pair (&full_.blend, static_cast<int> (kBlend)), std::make_pair (&full_.formantX, static_cast<int> (kFormantX)), std::make_pair (&full_.formantY, static_cast<int> (kFormantY)),
-                                 std::make_pair (&full_.formantTrans, static_cast<int> (kFormantTrans)), std::make_pair (&full_.formantRes, static_cast<int> (kFormantRes)),
-                                 std::make_pair (&full_.formantSpread, static_cast<int> (kFormantSpread)) })
-            pullKnob (inst, *kid.first, kid.second);
-        full_.setModuleEnabled (full_.power.state.on, anyFilterOn (inst));
+        display_.state.isFormant = formant;
+        geo_.setCombMode (model == kModelComb);   // COMB is shown for the Comb model only (hidden, not dimmed); VAR and CLEAN are hidden with the Formant model, CLEAN with the Comb model
+        syncDisplayGeometry();
+        styleCount_ = paramForId (kStyle, f) >= 0 ? synthyboy::filters::filterModelStyleCount (model) : 0;
+        const int pIdx = paramForId (kPower, f);
+        powerOn_ = pIdx >= 0 && inst.param (pIdx) >= 0.5f;
+        anyOn_ = anyFilterOn (inst);
+        display_.setEnabled (powerOn_);
+        display_.setInactive (! powerOn_);
     }
 
-    /** The read-only part of the OUT block: where the filter sends its signal and how much (the Mixer strip F1 / F2 is the place to edit it). The texts are the ones of the Mixer strip: the parameter's own format. */
+    /** The picture of the filter page: the response display, the titles of the blocks, the frame of the active Q bank. */
+    void drawFilterPage (gpu::SceneBuilder& sb) const
+    {
+        if (curveView())
+            return;   // the NOTE / VELO page title is drawn after the curve editor frame (drawCurvePageTitle)
+        display_.draw (sb);
+        {
+            ui::Pen p (sb, true, ! powerOn_);
+            ui::Cell cell (sb, geo_.rect());
+            drawLabels (p);
+        }
+        const bool formantBank = geo_.formantMode() && ! geo_.splitMode();
+        const int maxG = formantBank ? kGroups : 3;
+        if (ui::QGroup::wideDevice() || activeGroup_ < 0 || activeGroup_ >= maxG || activeGroup_ == 2)   // the OUT group is frameless: its members stand in two places
+            return;
+        const ui::Rect b = geo_.block (activeGroup_);
+        if (b.empty())
+            return;
+        const ui::Rect frame = geo_.splitMode() ? b.inset (-1) : b;
+        ui::Pen pen (sb, true, ! powerOn_);
+        ui::Cell cell (sb, ui::Rect::unite (frame, ui::Pen::qMarkerRect (frame)));
+        pen.qFocus (frame);
+    }
+    void drawLabels (ui::Pen& p) const
+    {
+        const ui::theme::Look& T = ui::theme::L();
+        const ui::Rect g = geo_.displayRect();
+        if (! g.empty())
+        {
+            const char* hdr = ! powerOn_
+                ? (view_ == kViewF2 ? "FILTER 2 Â· OFF (BYPASSED)" : "FILTER 1 Â· OFF (BYPASSED)")
+                : (geo_.formantMode() ? (view_ == kViewF2 ? "FILTER 2 Â· FORMANT XY" : "FILTER 1 Â· FORMANT XY")
+                                      : (view_ == kViewF2 ? "FILTER 2 Â· RESPONSE" : "FILTER 1 Â· RESPONSE"));
+            p.textLeft ({ g.x + 74, g.y + 4, std::max (0, g.w - 204), 56 },
+                        hdr, ui::theme::kPageTitleSize, p.c (powerOn_ ? T.text : T.textFaint, 255), T.fMin);   // the page title: the size of every page (static-native-captions.json filter1 / filter2 draws the same rect on the host layer)
+        }
+        // "SET ON MIXER" above the OUT readouts is a host-layer caption (static-native-captions.json filter1 / filter2): one copy, no overlay twin.
+        for (int i = 0; i < kGroups; ++i)
+        {
+            const ui::Rect b = geo_.block (i);
+            if ((i != 3 || (geo_.formantMode() && ! geo_.splitMode())) && ! b.empty())
+                p.textLeft ({ b.x + FilterGeometry::kBlockPad + 4, b.y + 3, std::max (0, b.w - 2 * FilterGeometry::kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (activeGroup_ == i ? T.q : T.textDim, 255), T.fMin);
+        }
+    }
+    /** The page title of the NOTE / VELO sub-tab (static-native-captions.json filternote / filtervelo draws the same rect on the host layer). It is drawn AFTER the curve editor: its graph frame is opaque and covers the top
+        strip of the page, so a title drawn with the page never showed on the overlay plane. */
+    void drawCurvePageTitle (gpu::SceneBuilder& sb) const
+    {
+        if (! curveView() || ! geo_.subTabPage() || geo_.rect().w <= 0)
+            return;
+        ui::Pen p (sb, true, false);
+        p.textLeft ({ geo_.rect().x + 22, geo_.rect().y + 4, 400, 56 }, view_ == kViewNote ? "FILTER NOTE" : "FILTER VELO", ui::theme::kPageTitleSize, p.c (ui::theme::L().text, 255), ui::theme::L().fMin);
+    }
 
     static int paramForKey (int f, const char* key) { return uibind::indexOfKey ("filter" + std::to_string (f) + "." + key); }
 
-    /** The groups of the page in reading order: the filter screen has MAIN, TRACK, OUT (and FORMANT with the Formant model); the output panel has one, the modulation list one per row. The active group is on Q 1 .. 4, the
+    /** The groups of the page in reading order: the filter screen has MAIN, TRACK, OUT (and FORMANT with the Formant model); the modulation list one per row. The active group is on Q 1 .. 4, the
         next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& v)
     {
         const char* name = "";
-        if (pageTop_ == kPageMods)
+        if (pageTop_ == kPageMods || pageTop_ == kPageTargets)
         {
-            name = "Mods";
-            qSlots_.publish (v, mods_.numRows(), mods_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModulationsPage::kPerPage ? modRows_[row].slot : -1, t); });
-            setRowBlocks (mods_, ui::ModulationsPage::kPerPage, mods_.numRows(), mods_.activeRow());
-        }
-        else if (pageTop_ == kPageTargets)
-        {
-            name = "Targets";
-            qSlots_.publish (v, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row >= 0 && row < ui::ModTargetsPage::kPerPage ? targetRows_[row].slot : -1, t); });
-            setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, targets_.numRows(), targets_.activeRow());
+            const bool md = pageTop_ == kPageMods;
+            name = md ? "Mods" : "Targets";
+            ModRowsPage& pg = md ? mods_ : targets_;
+            const ModRow* rows = md ? modRows_ : targetRows_;
+            qSlots_.publish (v, pg.numRows(), pg.activeRow(), [rows] (int row, int* t) { modRowTargets (row >= 0 && row < ModRowsPage::kPerPage ? rows[row].slot : -1, t); });
+            setRowBlocks (pg, ModRowsPage::kPerPage, pg.numRows(), pg.activeRow());
         }
         else if (pageTop_ == 0 && curveView())
         {
@@ -1938,15 +2058,11 @@ private:
             const int ag = std::clamp (cu.screen.activeGroup(), 0, ui::ScalarCurveEditor::kMaxGroups - 1);
             name = ui::ScalarCurveEditor::groupName (ag);
             qSlots_.publish (v, ui::ScalarCurveEditor::kMaxGroups, ag, [&cu] (int g, int* t) { cu.qTargets (g, t); });
-            const int ids[ui::ScalarCurveEditor::kMaxGroups] = { 0, 1 };
-            setBlocks (cu.screen.groups, ui::ScalarCurveEditor::kMaxGroups, ids, ui::ScalarCurveEditor::kMaxGroups, ag);
         }
         else if (pageTop_ == 0 && isSplit())
         {
-            const bool selOn = full_.power.state.on;
-            const bool anyOn = full_.anyFilterOn();
             const int pos = std::clamp (splitQBank_, 0, 3);
-            name = pos == 3 ? ui::ScalarCurveEditor::groupName (0) : ui::FilterFullScreen::groupName (pos);
+            name = pos == 3 ? ui::ScalarCurveEditor::groupName (0) : groupName (pos);
             ScalarCurveUi& cu = curveUi();
             qSlots_.publish (v, 4, pos, [&] (int k, int* t)
             {
@@ -1955,72 +2071,49 @@ private:
                     cu.qTargets (0, t);
                     return;
                 }
-                for (int i = 0; i < 4; ++i)
-                {
-                    const ui::ControlModel* m = full_.groups[k].member (i);
-                    const bool allow = (k == 2 && i == 1) ? anyOn : selOn;
-                    t[i] = (allow && m != nullptr) ? paramOfMember (m) : -1;
-                }
+                memberTargets (k, t);
             });
-            for (int g = 0; g < 3; ++g)
-                full_.groups[g].setBlock ((g - pos + 4) % 4);
-            full_.groups[3].setBlock (-1);
-            cu.screen.groups[0].setBlock ((3 - pos + 4) % 4);
             syncSplitQFocus();
         }
         else if (pageTop_ == 0)
         {
-            const int ag = full_.activeGroup();
-            name = ui::FilterFullScreen::groupName (ag);
-            const bool selOn = full_.power.state.on;
-            const bool anyOn = full_.anyFilterOn();
+            const int ag = activeGroup_;
+            name = groupName (ag);
             // When both filters are OFF, filter Q-Link exposes no targets. When only
             // one filter is OFF, shared filter.routing in OUT stays active/writable.
-            if (! selOn && ! anyOn)
+            if (! powerOn_ && ! anyOn_)
             {
                 qSlots_.publish (v, 0, 0, [] (int, int*) {});
-                for (ui::QGroup& g : full_.groups)
-                    g.setBlock (-1);
                 ui::setText (qName_, sizeof qName_, name);
                 return;
             }
-            int ids[ui::FilterFullScreen::kMaxGroups], pos = -1;
-            int used = 0;
-            for (int g = 0; g < ui::FilterFullScreen::kMaxGroups; ++g)
-                if (g != 3 || full_.formantMode())
+            int ids[kGroups], pos = -1, used = 0;
+            for (int g = 0; g < kGroups; ++g)
+                if (g != 3 || geo_.formantMode())
                 {
                     if (g == ag)
                         pos = used;
                     ids[used++] = g;
                 }
-            qSlots_.publish (v, used, pos, [&] (int k, int* t)
-            {
-                for (int i = 0; i < 4; ++i)
-                {
-                    const ui::ControlModel* m = full_.groups[ids[k]].member (i);
-                    const bool allow = (ids[k] == 2 && i == 1) ? anyOn : selOn;
-                    t[i] = (allow && m != nullptr) ? paramOfMember (m) : -1;
-                }
-            });
-            setBlocks (full_.groups, ui::FilterFullScreen::kMaxGroups, ids, used, pos);
+            qSlots_.publish (v, used, pos, [&] (int k, int* t) { memberTargets (ids[k], t); });
         }
         else
             qSlots_.publish (v, 0, 0, [] (int, int*) {});
         ui::setText (qName_, sizeof qName_, name);
     }
-    int paramOfMember (const ui::ControlModel* m) const noexcept
+    /** The four targets of Q group g of the filter page (a filter that is off has none; ROUTING needs any filter on). */
+    void memberTargets (int g, int* t) const noexcept
     {
-        while (m != nullptr)
+        for (int i = 0; i < 4; ++i)
         {
-            if (m->id() > 0)
-                return paramForId (m->id(), editFilter_);
-            m = m->primaryModel();
+            const int slot = qMember (g, i);
+            const bool allow = (g == 2 && i == 1) ? anyOn_ : powerOn_;
+            t[i] = (allow && slot >= 0) ? params_[editFilter_ - 1][slot] : -1;
         }
-        return -1;
     }
 
     int w_ = kCanvasW, h_ = kCanvasH;
-    ui::MenuButton pzOpen_ { "", ui::MenuButton::Icon::Expand };
+    ui::ControlModel pzOpen_;
     ui::PzCurveEditor pzEditor_;
     const IInstanceView* pzOwner_ = nullptr;
     uint64_t pzGeneration_ = 0;
@@ -2035,32 +2128,39 @@ private:
     int nativeTouchSlot_ = -1, blockedNativeSlot_ = -1, nativeModControl_ = -1, nativeTouchX_ = 0, nativeTouchY_ = 0;
     double nativeTouchAt_ = 0.0;
     int stackDepth_ = 0, pageTop_ = 0;
-    int view_ = 0, filterSel_ = 0, scalarSel_ = 0, expandMode_ = tabview::kFilterSplit, splitQBank_ = 0, editFilter_ = 1;
+    int view_ = 0, filterSel_ = 0, scalarSel_ = 0, expandMode_ = tabview::kFilterSplit, splitQBank_ = 0, editFilter_ = 1, activeGroup_ = 0;
     bool dual_ = false;               // the F1+F2 view toggle (view only)
     bool started_ = false;
+    bool powerOn_ = false, anyOn_ = true;   // the selected filter is on; any filter is on
+    int styleCount_ = 0;                    // the styles of the model shown
     double nowMs_ = 0.0;
+    int params_[2][kRowsPerFilter] = {};    // the engine parameter index of every row of filter 1 and 2 (-1: none)
 
     double sampleRate_ = 48000.0;
     std::unique_ptr<CurveSource> curve1_, curve2_;
     std::vector<float> curveResult_;
 
-    ui::FilterFullScreen full_;
+    FilterGeometry geo_;
+    ui::FilterDisplay display_;
     ScalarCurveUi curve_[2];   // [0] velocity (VELO), [1] note (NOTE)
     ui::ListPopup destList_;
-    ui::ModulationsPage mods_;
-    ui::ModTargetsPage targets_;
+    ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
+    ModRowsPage targets_ { ModRowsPage::Kind::Targets };
     NativeModTargets nativeTargets_;
-    ModRow targetRows_[ui::ModTargetsPage::kPerPage];
+    ModRow targetRows_[ModRowsPage::kPerPage];
     int targetTotal_ = 0, targetsPageIndex_ = 0, destGroup_ = -1;
     std::vector<const char*> destNames_;
+    std::vector<std::string> sourceText_;
+    int sourceIds_[8] = {}, sourceCount_ = 0;
+    bool pickingSource_ = false;      // the add-source choice of the modulations page is open (the host list over it)
 
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
-    int activeModParam_ = -1, modsTitle_ = 0, modsAddOffer_ = 0;
+    int activeModParam_ = -1, modsTitle_ = 0;
     bool modsDirty_ = true;
     double modsAtMs_ = -1000.0;
-    ModRow modRows_[ui::ModulationsPage::kPerPage];
+    ModRow modRows_[ModRowsPage::kPerPage];
     NativeModTargets nativeModulations_;
     int modsPageIndex_ = 0, modsFilterModel_ = -1;
     uint64_t modsPreset_ = 0;
