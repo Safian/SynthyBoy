@@ -1,18 +1,18 @@
 // SynthyBoy - MPC overlay: the DETAIL PAGES of the oscillator types that hold the parameters the full screen has no room for (docs/MPC.md "Oscillator UI", table "type -> page -> block -> controls").
-// A page is DATA (a Spec: title, whether the display of the type is above it, blocks, controls with the key of the parameter, the state in which the control is shown); `OscSpecPage` is the one
-// component that lays any spec out: titled blocks (each one Q group of up to four controls in reading order), a control that does not apply in the current state is hidden and its room goes to the
-// others, a block with nothing to show is left out. Pure: no OS headers; the owner (OscUi) binds the controls to the parameters and says which controls are visible.
+// A page is DATA (a Spec: title, whether the display of the type is above it, blocks, controls with the key of the parameter, the state in which the control is shown). The controls are native cells of the host skin (owner decision
+// 2026-11-27: the C++ layer has no UI elements); `OscSpecPage` is plain data: which controls apply in the current state, the Q groups (each titled block with a visible control is one group of up to four controls in reading order, a
+// block with nothing to show is left out) and the rectangle of the display. Pure: no OS headers; the owner (OscUi) binds the controls to the parameters and says which controls are visible.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
 #include <algorithm>
 
-#include "../ui/ui.h"
+#include "../ui/model.h"
 
 namespace synthyboy_mpc { namespace overlay { namespace oscspec {
 
-enum class K : uint8_t { Knob, Stepper, Toggle, Number, List, Mask, Page };   // List: a LedList (a short list, all options visible); Mask: the twelve notes of the transpose snap (NoteMask); Page: a button that opens another detail page (`key` is its token, osc_ui.h pageOfToken; no parameter, no Q slot)
+enum class K : uint8_t { Knob, Stepper, Toggle, Number, List, Mask, Page };   // List: a short list (all options visible); Mask: the twelve notes of the transpose snap; Page: a button that opens another detail page (`key` is its token, osc_ui.h pageOfToken; no parameter, no Q slot)
 /** The state a control is shown in (Always: every state); the owner evaluates them from the parameters of the oscillator. */
 enum class Cond : uint8_t { Always, LoopOn, SliceAuto, SliceManual, SliceAny, KeytrackOn, DensSync, DensGrains, LenSync, LenPercent, RemapOn, FltOn, SpecYAxis, GranYAxis, TrackOff, TempoLen,
                             // the type of the oscillator (the bold cut: one MORE page for the five types, a control of another type is hidden, not dimmed) and the warps that are not Off
@@ -117,65 +117,26 @@ inline const Spec* specOf (int page) noexcept { for (const Spec& s : kSpecs) if 
 inline bool isSpecPage (int page) noexcept { return specOf (page) != nullptr; }
 
 // ===============================================================================================================================================================
-class OscSpecPage : public ui::Composite
+class OscSpecPage
 {
 public:
-    static constexpr int kBarH = 64, kDisplayH = 244, kMaxCtl = 32, kMaxBlocks = 8, kBlockGap = 8, kBlockPad = 4, kTitleH = 32, kMaxExtra = 60;
-    ui::MenuButton back { "BACK", ui::MenuButton::Icon::None };
-    ui::MenuButton load { "LOAD SAMPLE", ui::MenuButton::Icon::None };   // the empty state of a type with a file: one tap to the browser (the owner shows it, places it over the display)
-    ui::QGroup groups[kMaxBlocks];
+    static constexpr int kBarH = 64, kDisplayH = 244, kMaxCtl = 32, kMaxBlocks = 8;
 
-    OscSpecPage() { addKid (back); addKid (load, false); }
+    void place (const ui::Rect& r) { rect_ = r; relayout(); }
+    ui::Rect rect() const noexcept { return rect_; }
 
-    /** Takes the spec: the controls come back to their defaults (labels from the table), all shown. */
+    /** Takes the spec: all its controls apply (the owner says which do not, `setVisible`). */
     void loadSpec (const Spec& s)
     {
         spec_ = &s;
-        clearKids();
-        addKid (back);
-        addKid (load, loadShown_);
-        for (int i = 0; i < s.numCtls && i < kMaxCtl; ++i)
-            addKid (*compOf (i), false);
         for (int i = 0; i < kMaxCtl; ++i)
-        {
             vis_[i] = i < s.numCtls;
-            if (i >= s.numCtls)
-                continue;
-            const Ctl& c = s.ctls[i];
-            switch (c.kind)
-            {
-                case K::Knob: { ui::Knob& k = knobs_[i]; k.state = ui::Knob::State {}; k.setLabel (c.label); break; }
-                case K::Stepper: { ui::Stepper& st = steppers_[i]; st.state = ui::Stepper::State {}; st.setCaption (c.label); st.setItem (c.label); st.minWidth = 100; break; }
-                case K::Toggle: { ui::LedToggle& t = toggles_[i]; t.state = ui::ToggleIcon::State {}; t.state.icon = ui::ToggleIcon::Icon::Generic; t.setLabel (c.label); break; }
-                case K::List: { ui::LedList& l = lists_[i]; l.state = ui::LedList::State {}; l.setTitle (c.label); l.state.titleInLane = true; break; }
-                case K::Mask: { ui::NoteMask& m = masks_[i]; m.state = ui::NoteMask::State {}; m.setLabel (c.label); break; }
-                case K::Number: { ui::NumberField& n = numbers_[i]; n.state = ui::NumberField::State {}; n.state.format = ui::NumberField::Format::IntPlain; n.setLabel (c.label); break; }
-                case K::Page: { ui::MenuButton& b = pageButtons_[i]; b.state = ui::MenuButton::State {}; b.state.icon = ui::MenuButton::Icon::None; b.setLabel (c.label); break; }
-            }
-        }
         relayout();
     }
     const Spec* spec() const noexcept { return spec_; }
-    /** The options of a List control (names, at most 8); the page lays out again with them (the lines of a list decide the height of its block). */
-    void setListOptions (int i, const char* const* names, int n)
-    {
-        if (spec_ != nullptr && i >= 0 && i < spec_->numCtls && spec_->ctls[i].kind == K::List)
-        {
-            lists_[i].setOptions (names, n);
-            lists_[i].state.index = std::clamp (lists_[i].state.index, 0, std::max (0, n - 1));
-        }
-    }
-    /** The title of a List control (where the shown label differs from the table's). */
-    void setListTitle (int i, const char* t)
-    {
-        if (spec_ != nullptr && i >= 0 && i < spec_->numCtls && spec_->ctls[i].kind == K::List)
-            lists_[i].setTitle (t);
-    }
-    void relayoutNow() { layout(); }
-    ui::ControlModel* control (int i) noexcept { return i >= 0 && spec_ != nullptr && i < spec_->numCtls ? compOf (i) : nullptr; }
+    void relayoutNow() { relayout(); }
     bool visible (int i) const noexcept { return spec_ != nullptr && i >= 0 && i < spec_->numCtls && vis_[i]; }
-    using ui::Composite::setVisible;
-    /** The owner says which controls apply now; the page is laid out again when the set changed. */
+    /** The owner says which controls apply now; the groups are made again when the set changed. */
     void setVisible (const bool* v)
     {
         if (spec_ == nullptr)
@@ -187,295 +148,57 @@ public:
             relayout();
     }
     ui::Rect displayRect() const noexcept { return display_; }
-    ui::Rect blockRect (int b) const noexcept { return b >= 0 && b < kMaxBlocks ? blockRect_[b] : ui::Rect {}; }
-    /** The blocks that are on the page now (a block with no visible control is left out), the Q groups are theirs in this order. */
+    ui::Rect backRect() const noexcept { return { rect_.x + 4, rect_.y + 4, 120, kBarH - 8 }; }
+
+    /** The blocks that are on the page now (a block with no visible control, or with page buttons only, is left out): the Q groups are theirs in this order. */
     int numGroups() const noexcept { return nGroups_; }
     const char* groupTitle (int g) const noexcept { return g >= 0 && g < nGroups_ ? spec_->blocks[groupBlock_[g]].title : ""; }
+    /** The index of the control that is member `slot` (0 .. 3) of group `g` (-1: none). */
+    int member (int g, int slot) const noexcept { return g >= 0 && g < nGroups_ && slot >= 0 && slot < 4 ? members_[g][slot] : -1; }
+    int groupOf (int ctl, int* slot = nullptr) const noexcept
+    {
+        for (int g = 0; g < nGroups_; ++g)
+            for (int k = 0; k < 4; ++k)
+                if (members_[g][k] == ctl && ctl >= 0)
+                {
+                    if (slot != nullptr)
+                        *slot = k;
+                    return g;
+                }
+        return -1;
+    }
     int activeGroup() const noexcept { return active_; }
-    void setActiveGroup (int g)
-    {
-        for (int k = 0; k < nGroups_; ++k)
-            groups[k].setActive (k == g);
-        active_ = g >= 0 && g < nGroups_ ? g : -1;
-    }
-    ui::Change turnQ (int knob, double delta) { return active_ >= 0 ? groups[active_].turn (knob, delta) : ui::Change::none(); }
-    void setLoadShown (bool s)
-    {
-        if (loadShown_ == s)
-            return;
-        loadShown_ = s;
-        show (load, s);
-        layout();
-    }
-    bool loadShown() const noexcept { return loadShown_; }
-    ui::Size minSize() const override { return { 1280, 628 }; }
+    void setActiveGroup (int g) noexcept { active_ = g >= 0 && g < nGroups_ ? g : -1; }
 
-    ui::Change touchDown (int x, int y, double nowMs) override
+private:
+    void relayout()
     {
-        const ui::Change c = Composite::touchDown (x, y, nowMs);
-        if (cap_)
-            for (int i = 0; i < nGroups_; ++i)
-                if (blockRect_[groupBlock_[i]].contains (x, y))
-                {
-                    setActiveGroup (i);
-                    break;
-                }
-        return c;
-    }
-    void draw (gpu::SceneBuilder& sb) const override
-    {
-        // the blocks, the controls, the chips of the Q groups, and the titles last (a chip drawn after a title would count as part of the title's cache cell)
-        ui::Pen pen (sb, enabled_);
-        {
-            ui::Cell cell (sb, rect_);
-            drawUnder (pen);
-        }
-        drawChildren (sb);
-        for (int i = 0; i < nGroups_; ++i)
-            groups[i].draw (sb);
-        for (int i = 0; i < nGroups_; ++i)
-            if (i != active_)
-                groups[i].drawMapped (sb);
-        ui::Cell cell (sb, rect_);
-        drawExtra (pen);
-    }
-
-protected:
-    ui::ControlModel* compOf (int i) noexcept
-    {
-        // every index has all four component kinds; the spec says which is the real one
-        if (spec_ != nullptr && i < spec_->numCtls)
-            switch (spec_->ctls[i].kind)
-            {
-                case K::Knob: return &knobs_[i];
-                case K::Stepper: return &steppers_[i];
-                case K::Toggle: return &toggles_[i];
-                case K::Number: return &numbers_[i];
-                case K::List: return &lists_[i];
-                case K::Mask: return &masks_[i];
-                case K::Page: return &pageButtons_[i];
-            }
-        return &knobs_[i];
-    }
-    void layout() override
-    {
-        back.place ({ rect_.x + 4, rect_.y + 4, 120, kBarH - 8 });
         display_ = spec_ != nullptr && spec_->display ? ui::Rect { rect_.x + 4, rect_.y + kBarH + 4, rect_.w - 8, kDisplayH } : ui::Rect {};
-        load.place (display_.empty() ? ui::Rect {} : ui::Rect { display_.x + display_.w / 2 - 130, display_.y + display_.h / 2 - 32, 260, 64 });
-        if (spec_ == nullptr)
-            return;
-        const int top = rect_.y + kBarH + (display_.empty() ? 8 : kDisplayH + 12), bottom = rect_.bottom() - 4;
-        const int rows = std::max (1, spec_->rows);
-        // which controls and blocks are on the page
-        int nvis[kMaxBlocks] = {}, wsum[kMaxBlocks] = {};
         nGroups_ = 0;
-        for (int b = 0; b < spec_->numBlocks && b < kMaxBlocks; ++b)
-        {
-            const Block& bl = spec_->blocks[b];
-            for (int k = 0; k < bl.n; ++k)
-                if (vis_[bl.first + k]) { ++nvis[b]; wsum[b] += spec_->ctls[bl.first + k].weight; }
-            blockRect_[b] = {};
-        }
-        for (int i = 0; i < spec_->numCtls; ++i)
-            show (*compOf (i), false);
-        // the rows of blocks: only rows that have a block are given room
-        int usedRow[4] = {}, nUsedRows = 0;
-        for (int r = 0; r < rows && r < 4; ++r)
-            for (int b = 0; b < spec_->numBlocks; ++b)
-                if (spec_->blocks[b].row == r && nvis[b] > 0) { usedRow[r] = 1; break; }
-        for (int r = 0; r < rows && r < 4; ++r)
-            nUsedRows += usedRow[r];
-        // pass 1: the x and width of every block of a row, and what height its controls need (a short list needs a row of 56 px per line of options)
-        int rowNeed[4] = {}, rowTop[4] = {}, rowHeight[4] = {};
-        for (int r = 0; r < rows && r < 4; ++r)
-        {
-            if (! usedRow[r])
-                continue;
-            int total = 0, count = 0;
-            for (int b = 0; b < spec_->numBlocks; ++b)
-                if (spec_->blocks[b].row == r && nvis[b] > 0) { total += std::max (2, wsum[b]) + 1; ++count; }
-            const int avail = rect_.w - 8 - kBlockGap * (count - 1);
-            int x = rect_.x + 4, used = 0;
-            for (int b = 0; b < spec_->numBlocks; ++b)
-            {
-                if (spec_->blocks[b].row != r || nvis[b] == 0)
-                    continue;
-                const int before = avail * used / total;
-                used += std::max (2, wsum[b]) + 1;
-                const int w = avail * used / total - before;
-                blockRect_[b] = { x, 0, w, 0 };
-                x += w + kBlockGap;
-                rowNeed[r] = std::max (rowNeed[r], needOf (b, w) + kTitleH + kBlockPad);
-            }
-        }
-        int sumNeed = 0;
-        for (int r = 0; r < rows && r < 4; ++r)
-            sumNeed += usedRow[r] ? rowNeed[r] : 0;
-        const int surplus = std::max (0, bottom - top - sumNeed - kBlockGap * std::max (0, nUsedRows - 1));
-        const int extra = nUsedRows > 0 ? std::min (surplus / nUsedRows, kMaxExtra) : 0;
-        int yy = top;
-        for (int r = 0; r < rows && r < 4; ++r)
-            if (usedRow[r])
-            {
-                rowTop[r] = yy;
-                rowHeight[r] = rowNeed[r] + extra;
-                yy += rowHeight[r] + kBlockGap;
-            }
-        // pass 2: the blocks get their height and place their controls
-        for (int b = 0; b < spec_->numBlocks && b < kMaxBlocks; ++b)
-            if (nvis[b] > 0)
-            {
-                const int r = std::min<int> (spec_->blocks[b].row, 3);
-                blockRect_[b].y = rowTop[r];
-                blockRect_[b].h = rowHeight[r];
-                layoutBlock (b);
-            }
-        // the Q groups: one per block on the page, the visible controls in reading order
-        for (ui::QGroup& g : groups)
-            for (int i = 0; i < 4; ++i)
-                g.set (i, nullptr);
-        nGroups_ = 0;
-        for (int b = 0; b < spec_->numBlocks && b < kMaxBlocks; ++b)
-        {
-            if (nvis[b] == 0)
-                continue;
-            const Block& bl = spec_->blocks[b];
-            int m = 0;
-            for (int k = 0; k < bl.n && m < 4; ++k)
-                if (vis_[bl.first + k] && spec_->ctls[bl.first + k].kind != K::Page)   // a page button has no parameter: no Q slot
-                    groups[nGroups_].set (m++, compOf (bl.first + k));
-            if (m == 0)
-                continue;   // a block of page buttons only: no Q group
-            groupBlock_[nGroups_++] = b;
-        }
-        const int keep = active_ >= 0 && active_ < nGroups_ ? active_ : (nGroups_ > 0 ? 0 : -1);
-        active_ = -1;
-        setActiveGroup (keep);
-    }
-    bool blockHasVisible (int b) const noexcept
-    {
-        const Block& bl = spec_->blocks[b];
-        for (int k = 0; k < bl.n; ++k)
-            if (vis_[bl.first + k])
-                return true;
-        return false;
-    }
-    /** The columns a short list of n options takes in a cell of width w (the most that keep the columns as wide as the longest name needs) and so the lines it has. */
-    static int listColumns (const ui::LedList& l, int n, int w) noexcept
-    {
-        int best = 1;
-        for (int c = 2; c <= std::min (ui::LedList::kMaxColumns, n); ++c)
-            if (w / c >= l.columnNeed())
-                best = c;
-        return best;
-    }
-    /** The cells of the visible controls of block b (indices in idx, n of them) in a block of width w. */
-    void cellsOf (int b, int w, int* idx, int& n, ui::Rect* cells) const
-    {
-        const Block& bl = spec_->blocks[b];
-        n = 0;
-        for (int k = 0; k < bl.n && n < 8; ++k)
-            if (vis_[bl.first + k])
-                idx[n++] = bl.first + k;
-        int fixed[8] = {}, weight[8] = {};
-        for (int k = 0; k < n; ++k)
-            weight[k] = spec_->ctls[idx[k]].weight;
-        ui::layoutRow ({ 0, 0, std::max (0, w - 2 * kBlockPad), 100 }, fixed, weight, n, ui::kGap, cells);
-    }
-    int needOf (int b, int w) const
-    {
-        int idx[8], n;
-        ui::Rect cells[8];
-        cellsOf (b, w, idx, n, cells);
-        int need = 0;
-        for (int k = 0; k < n; ++k)
-        {
-            const int ci = idx[k];
-            switch (spec_->ctls[ci].kind)
-            {
-                case K::Knob: need = std::max (need, 84); break;
-                case K::Stepper: case K::Number: need = std::max (need, 64); break;
-                case K::Toggle: need = std::max (need, 56); break;
-                case K::Page: need = std::max (need, 64); break;
-                case K::Mask: need = std::max (need, 120); break;
-                case K::List:
-                {
-                    const int cnt = std::max (1, lists_[ci].state.count), c = listColumns (lists_[ci], cnt, cells[k].w);
-                    need = std::max (need, ui::led::kRowH * ((cnt + c - 1) / c));
-                    break;
-                }
-            }
-        }
-        return need;
-    }
-    void layoutBlock (int b)
-    {
-        const ui::Rect br = blockRect_[b];
-        const ui::Rect in { br.x + kBlockPad, br.y + kTitleH, std::max (0, br.w - 2 * kBlockPad), std::max (0, br.h - kTitleH - kBlockPad) };
-        int idx[8], n;
-        ui::Rect cells[8];
-        cellsOf (b, br.w, idx, n, cells);
-        // one row of controls per block (a Q group is one row: its chips sit on the lane above the first row), all with the same top
-        for (int k = 0; k < n; ++k)
-        {
-            const int ci = idx[k];
-            const Ctl& c = spec_->ctls[ci];
-            ui::Rect cr = cells[k];
-            cr.x += in.x; cr.y = in.y; cr.h = in.h;
-            int cap = 0;
-            switch (c.kind)
-            {
-                case K::Stepper: case K::Number: cap = 110; break;   // (a page button has no cap: it fills its block)
-                case K::Mask: cap = 120; break;
-                case K::List:
-                {
-                    const int cnt = std::max (1, lists_[ci].state.count), cols = listColumns (lists_[ci], cnt, cr.w);
-                    cap = ui::led::kRowH * ((cnt + cols - 1) / cols);
-                    break;
-                }
-                default: break;
-            }
-            if (cap > 0 && cr.h > cap && n > 1)   // a lone control fills its block
-                cr.h = cap;
-            if (c.kind == K::Knob)
-                knobs_[ci].state.side = cr.w >= 172;
-            show (*compOf (ci), true);
-            compOf (ci)->place (cr);
-        }
-    }
-    void drawUnder (ui::Pen& p) const override
-    {
-        if (! display_.empty())
-            p.block (display_);
-        for (int b = 0; b < kMaxBlocks; ++b)
-            if (! blockRect_[b].empty())
-                p.block (blockRect_[b]);
-    }
-    void drawExtra (ui::Pen& p) const override
-    {
-        const ui::theme::Look& T = ui::theme::L();
-        p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (T.keyline, 255));
         if (spec_ != nullptr)
-            p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, rect_.w - 150), kBarH - 8 }, spec_->title, T.fTitle, p.c (T.text, 255), T.fMin);
-        for (int b = 0; b < kMaxBlocks && spec_ != nullptr && b < spec_->numBlocks; ++b)
-            if (! blockRect_[b].empty())
-                p.textLeft ({ blockRect_[b].x + kBlockPad + 4, blockRect_[b].y + 3, std::max (0, blockRect_[b].w - 2 * kBlockPad - 4), 16 }, spec_->blocks[b].title, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+            for (int b = 0; b < spec_->numBlocks && b < kMaxBlocks; ++b)
+            {
+                const Block& bl = spec_->blocks[b];
+                int m[4] = { -1, -1, -1, -1 }, n = 0;
+                for (int k = 0; k < bl.n && n < 4; ++k)
+                    if (vis_[bl.first + k] && spec_->ctls[bl.first + k].kind != K::Page)   // a page button has no parameter: no Q slot
+                        m[n++] = bl.first + k;
+                if (n == 0)
+                    continue;   // a block of page buttons only, or with nothing to show: no Q group
+                for (int k = 0; k < 4; ++k)
+                    members_[nGroups_][k] = m[k];
+                groupBlock_[nGroups_++] = b;
+            }
+        const int keep = active_ >= 0 && active_ < nGroups_ ? active_ : (nGroups_ > 0 ? 0 : -1);
+        active_ = keep;
     }
-    void relayout() { layout(); }
 
+    ui::Rect rect_ {}, display_ {};
     const Spec* spec_ = nullptr;
-    ui::Knob knobs_[kMaxCtl];
-    ui::Stepper steppers_[kMaxCtl];
-    ui::LedToggle toggles_[kMaxCtl];
-    ui::LedList lists_[kMaxCtl];
-    ui::NoteMask masks_[kMaxCtl];
-    ui::NumberField numbers_[kMaxCtl];
-    ui::MenuButton pageButtons_[kMaxCtl];
     bool vis_[kMaxCtl] = {};
-    ui::Rect display_, blockRect_[kMaxBlocks];
+    int members_[kMaxBlocks][4] = {};
     int groupBlock_[kMaxBlocks] = {};
     int nGroups_ = 0, active_ = -1;
-    bool loadShown_ = false;
 };
 
 }}} // namespace synthyboy_mpc::overlay::oscspec
