@@ -784,7 +784,7 @@ public:
 
     static constexpr int kNativeFields = 8;
     static constexpr int kNativeButtons = 4;
-    std::array<const Component*, kNativeFields + kNativeButtons> nativeControls() const noexcept
+    std::array<const ControlModel*, kNativeFields + kNativeButtons> nativeControls() const noexcept
     {
         return { &point, &xField, &yField, &curveField, &gridX, &gridY, &snap, &legato,
                  &init, &undoButton, &del, &targets };
@@ -833,7 +833,7 @@ protected:
         const int bwid = (rect_.w - 3 * m) / 2;
         blocks_[0] = { rect_.x + m, bandY, bwid, kBandH };
         blocks_[1] = { rect_.x + 2 * m + bwid, bandY, rect_.w - 3 * m - bwid, kBandH };
-        auto inner = [&] (int b, Component* const* c)
+        auto inner = [&] (int b, ControlModel* const* c)
         {
             const Rect in { blocks_[b].x + 6, blocks_[b].y + kTitleH, blocks_[b].w - 12, blocks_[b].h - kTitleH - 6 };
             const int cw = (in.w - 3 * kGap) / 4;
@@ -841,8 +841,8 @@ protected:
                 c[i]->place ({ in.x + i * (cw + kGap), in.y, i == 3 ? in.w - 3 * (cw + kGap) : cw, in.h });
             groups[b].setFrameRect (blocks_[b]);
         };
-        Component* edit[4] = { &point, &xField, &yField, &curveField };
-        Component* opts[4] = { &legato, &gridX, &gridY, &snap };
+        ControlModel* edit[4] = { &point, &xField, &yField, &curveField };
+        ControlModel* opts[4] = { &legato, &gridX, &gridY, &snap };
         inner (0, edit);
         inner (1, opts);
     }
@@ -868,13 +868,13 @@ protected:
         blocks_[1] = {};
         const int editPad = 4, editGap = 5, editInW = W - 2 * editPad;
         const int ew = (editInW - 3 * editGap) / 4;
-        Component* edit[4] = { &point, &xField, &yField, &curveField };
+        ControlModel* edit[4] = { &point, &xField, &yField, &curveField };
         for (int i = 0; i < 4; ++i)
             edit[i]->place ({ X + editPad + i * (ew + editGap), editY + 28, i == 3 ? editInW - 3 * (ew + editGap) : ew, 56 });
         groups[0].setFrameRect (blocks_[0]);
 
         const int og = 6, ow = (W - 3 * og) / 4;
-        Component* opts[4] = { &gridX, &gridY, &snap, &legato };
+        ControlModel* opts[4] = { &gridX, &gridY, &snap, &legato };
         for (int i = 0; i < 4; ++i)
             opts[i]->place ({ X + i * (ow + og), optY, i == 3 ? W - 3 * (ow + og) : ow, optRowH });
 

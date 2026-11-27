@@ -108,7 +108,7 @@ public:
         }
         for (int i = 0; i < n_; ++i)
             if (shown_[i] && kids_[i] != &full)
-                kids_[i]->draw (sb);
+                drawChild (sb, i);
         full.draw (sb);
         group.draw (sb);
     }
@@ -291,8 +291,8 @@ public:
 
     std::array<Rect, 14> nativeApertures() const noexcept
     {
-        const Component* cells[] { &attack, &decay, &sustain, &release, &aCurve, &dCurve, &rCurve,
-                                   &delay, &hold, &beats, &legato, &selector, &targets, &close };
+        const ControlModel* cells[] { &attack, &decay, &sustain, &release, &aCurve, &dCurve, &rCurve,
+                                      &delay, &hold, &beats, &legato, &selector, &targets, &close };
         std::array<Rect, 14> areas {};
         for (size_t i = 0; i < areas.size(); ++i)
             if (isNativeComponent (cells[i]))
@@ -337,7 +337,7 @@ public:
                isNativeSelector (x, y) || isNativeTargets (x, y) || (nativePlayEditor_ && close.rect().contains (x, y));
     }
 
-    bool isNativeComponent (const Component* c) const noexcept
+    bool isNativeComponent (const ControlModel* c) const noexcept
     {
         if (! c)
             return false;
@@ -557,19 +557,19 @@ protected:
             bx += bw[i] + kBlockGap;
         }
         const int kt = KnobPanel::kBlockTitleH, pad = KnobPanel::kBlockPad;
-        auto inner = [&] (int b, int n, Component** c, int cnt)
+        auto inner = [&] (int b, int n, ControlModel** c, int cnt)
         {
             const Rect in { blocks_[b].x + pad, blocks_[b].y + kt, blocks_[b].w - 2 * pad, blocks_[b].h - kt - pad };
             const int cw = (in.w - kGap * (n - 1)) / n;
             for (int i = 0; i < cnt; ++i)
             {
-                Component* k = c[i];
+                ControlModel* k = c[i];
                 k->place ({ in.x + i * (cw + kGap), in.y, i == n - 1 ? in.w - i * (cw + kGap) : cw, in.h });
             }
         };
-        Component* adsr[4] = { &attack, &decay, &sustain, &release };
-        Component* shape[3] = { &aCurve, &dCurve, &rCurve };
-        Component* time[4] = { &delay, &hold, &beats, &legato };
+        ControlModel* adsr[4] = { &attack, &decay, &sustain, &release };
+        ControlModel* shape[3] = { &aCurve, &dCurve, &rCurve };
+        ControlModel* time[4] = { &delay, &hold, &beats, &legato };
         inner (0, 4, adsr, 4); inner (1, 3, shape, 3); inner (2, 4, time, 4);
         for (int i = 0; i < kMaxGroups; ++i)
             groups[i].setFrameRect (blocks_[i]);

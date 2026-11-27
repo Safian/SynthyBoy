@@ -105,7 +105,7 @@ public:
     struct Item
     {
         int id = 0;
-        ui::Component* c = nullptr;
+        ui::ControlModel* c = nullptr;
         T type = T::Inert;
         int param = -1;
     };
@@ -602,7 +602,7 @@ public:
         namespace n = nativeui::playenvlfo;
         for (int field = n::LfoExpand; field < n::Count; ++field)
             if (auto* control = compactNativePart (*this, field))
-                control->setHostPainted (view.fields[field].target >= 0);
+                ui::setHostPainted (control, view.fields[field].target >= 0);
         compact_.rate.setModeCellsVisible (view.fields[n::StandardSync].target < 0);
         compactNativeKey_ = view.context.view == n::LfoKey || view.context.view == n::RndKey;
     }
@@ -804,13 +804,16 @@ private:
 
     // ======================================================================================================================================================================
     // building: the selected LFO (the type and the number) decides the parameters behind the ids
-    void bind (int id, ui::Component* c, T type, const char* suffix)
+    void bind (int id, ui::ControlModel* c, T type, const char* suffix)
     {
         Item it;
         it.id = id; it.c = c; it.type = type;
         it.param = suffix != nullptr && suffix[0] != '\0' ? uibind::indexOfKey (prefix_ + suffix) : -1;
         if (c != nullptr)
+        {
             c->setId (id);
+            c->setParam (it.param);
+        }
         items_.push_back (it);
     }
     /** Paint the corresponding slice of the same gradient exported for the host skin. */
@@ -2075,7 +2078,7 @@ private:
     }
     template <class Self>
     static auto editorFields (Self& self) noexcept
-        -> std::array<std::conditional_t<std::is_const_v<Self>, const ui::Component*, ui::Component*>, nativeui::lfoeditor::kCount>
+        -> std::array<std::conditional_t<std::is_const_v<Self>, const ui::ControlModel*, ui::ControlModel*>, nativeui::lfoeditor::kCount>
     {
         return {
             &self.editor_.back, &self.editor_.tools, &self.editor_.shapes, &self.editor_.more,
@@ -2903,7 +2906,7 @@ private:
     }
     template <class Self>
     static auto pointModFields (Self& self) noexcept
-        -> std::array<std::conditional_t<std::is_const_v<Self>, const ui::Component*, ui::Component*>, nativeui::lfodetail::Header>
+        -> std::array<std::conditional_t<std::is_const_v<Self>, const ui::ControlModel*, ui::ControlModel*>, nativeui::lfodetail::Header>
     {
         auto& page = self.pointMod_;
         return { &page.back, &page.target, &page.amount, &page.remove };
@@ -3461,7 +3464,7 @@ private:
     // the Q group: the four targets the hardware knobs are mapped to
     template <class Self>
     static auto compactNativePart (Self& self, int field) noexcept
-        -> std::conditional_t<std::is_const_v<Self>, const ui::Component*, ui::Component*>
+        -> std::conditional_t<std::is_const_v<Self>, const ui::ControlModel*, ui::ControlModel*>
     {
         namespace n = nativeui::playenvlfo;
         auto& compact = self.compact_;
@@ -3491,7 +3494,7 @@ public:   // the Play view reads the targets of the compact group and sets its b
     }
     void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
 private:
-    int paramOfMember (const ui::Component* m) const noexcept
+    int paramOfMember (const ui::ControlModel* m) const noexcept
     {
         while (m != nullptr)
         {
@@ -3500,7 +3503,7 @@ private:
             for (const Item& it : items_)
                 if (it.c == m && it.type != T::Inert)
                     return it.param;
-            m = m->primaryChild();
+            m = m->primaryModel();
         }
         return -1;
     }

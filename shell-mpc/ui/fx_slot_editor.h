@@ -374,7 +374,7 @@ public:
     }
     /** The kind of the cell now (a list that does not fit its cell is a stepper: decided by the layout). */
     Kind kindOf (int p) const noexcept { return p >= 0 && p < kMaxParams ? ctl_[p].kind : Kind::Knob; }
-    Component* memberOf (int p) noexcept
+    ControlModel* memberOf (int p) noexcept
     {
         switch (kindOf (p))
         {

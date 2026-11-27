@@ -50,10 +50,10 @@ public:
         show (style, random); show (sync, random); show (stereo, random);
         for (int i = 0; i < 4; ++i)
             group.set (i, nullptr);
-        group.set (0, random ? static_cast<Component*> (&style) : &shape);
+        group.set (0, random ? static_cast<ControlModel*> (&style) : &shape);
         group.set (1, &rate);
-        group.set (2, random ? static_cast<Component*> (&sync) : &rise);
-        group.set (3, random ? static_cast<Component*> (&stereo) : &smoothTime);
+        group.set (2, random ? static_cast<ControlModel*> (&sync) : &rise);
+        group.set (3, random ? static_cast<ControlModel*> (&stereo) : &smoothTime);
         group.setActive (true);
         layout();
     }
@@ -426,7 +426,7 @@ protected:
         if (! random_)
         {
             QGroup& r = next ("Rate", 0);
-            r.set (0, pageMode_ ? static_cast<Component*> (&namedPicker) : static_cast<Component*> (&picker)); r.set (1, keyActive_ ? nullptr : static_cast<Component*> (&rate)); r.set (2, &rise); r.set (3, &smoothTime);
+            r.set (0, pageMode_ ? static_cast<ControlModel*> (&namedPicker) : static_cast<ControlModel*> (&picker)); r.set (1, keyActive_ ? nullptr : static_cast<ControlModel*> (&rate)); r.set (2, &rise); r.set (3, &smoothTime);
             r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
             auto smoothGroup = [&]
             {
@@ -448,7 +448,7 @@ protected:
         else
         {
             QGroup& r = next ("Random", 0);
-            r.set (0, pageMode_ ? static_cast<Component*> (&namedPicker) : static_cast<Component*> (&picker)); r.set (1, keyActive_ ? nullptr : static_cast<Component*> (&rate)); r.set (2, &syncSwitch.mode); r.set (3, &stereoToggle);
+            r.set (0, pageMode_ ? static_cast<ControlModel*> (&namedPicker) : static_cast<ControlModel*> (&picker)); r.set (1, keyActive_ ? nullptr : static_cast<ControlModel*> (&rate)); r.set (2, &syncSwitch.mode); r.set (3, &stereoToggle);
             r.setFrameless (true);   // the style grid (Q 1) lies apart from the block: marked by its chips
             key (0);
             QGroup& t = next ("Trigger", 0);
@@ -534,7 +534,7 @@ protected:
         }
         const int pad = 6, titleH = 22, th = led::kRowH;
         auto inner = [&] (int i) { return Rect { blocks_[i].x + pad, blocks_[i].y + titleH + kQLane, blocks_[i].w - 2 * pad, blocks_[i].h - titleH - kQLane - pad }; };
-        auto stack2 = [&] (const Rect& cell, Component& a, Component& b)   // two fields one above the other, as tall as the block lets them be (at most 96)
+        auto stack2 = [&] (const Rect& cell, ControlModel& a, ControlModel& b)   // two fields one above the other, as tall as the block lets them be (at most 96)
         {
             const int h = std::min (96, (cell.h - kQLane) / 2);
             a.place ({ cell.x, cell.y, cell.w, h });
@@ -621,7 +621,7 @@ protected:
         // Keep the established control/group geometry shared by both full-screen modes.
         const int pad = 6, titleH = 22, th = led::kRowH;
         auto inner = [&] (int i) { return Rect { blocks_[i].x + pad, blocks_[i].y + titleH + kQLane, blocks_[i].w - 2 * pad, blocks_[i].h - titleH - kQLane - pad }; };
-        auto stack2 = [&] (const Rect& cell, Component& a, Component& b)
+        auto stack2 = [&] (const Rect& cell, ControlModel& a, ControlModel& b)
         {
             const int h = std::min (96, (cell.h - kQLane) / 2);
             a.place ({ cell.x, cell.y, cell.w, h }); b.place ({ cell.x, cell.y + h + kQLane, cell.w, h });
@@ -701,8 +701,8 @@ protected:
         show (keyTranspose, overlay && keyActive_);
         show (keyTune, overlay && keyActive_);
         show (syncSwitch.mode, overlay);
-        Component* standard[] = { &rise, &phase, &delay, &hostPick, &mode, &direction, &swing, &stereo, &monoQ };
-        for (Component* control : standard)
+        ControlModel* standard[] = { &rise, &phase, &delay, &hostPick, &mode, &direction, &swing, &stereo, &monoQ };
+        for (ControlModel* control : standard)
             show (*control, overlay && ! random_);
         show (stereoToggle, overlay && random_);
         show (modeList, overlay && random_);

@@ -60,7 +60,7 @@ public:
     struct Item
     {
         int id = 0;
-        ui::Component* c = nullptr;
+        ui::ControlModel* c = nullptr;
         T type = T::Inert;
         std::string key;
         int param = -1;
@@ -272,13 +272,16 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
 
 private:
-    void bind (int id, ui::Component* c, T type, const std::string& key)
+    void bind (int id, ui::ControlModel* c, T type, const std::string& key)
     {
         Item it;
         it.id = id; it.c = c; it.type = type; it.key = key;
         it.param = uibind::indexOfKey (key);
         if (c != nullptr)
+        {
             c->setId (id);
+            c->setParam (it.param);
+        }
         items_.push_back (it);
     }
 
@@ -434,7 +437,7 @@ private:
 
     /** The groups of the page are the groups of the side that is up (Main: OUTPUT .. GLIDE, Tuning: SCALE .. MPE Y) in reading order; the active group is on Q 1 .. 4, the next three (wrapping inside the side) on 5 .. 16.
         The targets of a group are the parameters of its LIVE members (MasterScreen closes the groups up: a hidden control and the touch-only LINK are no member, so no slot is wasted on them). */
-    int paramOf (const ui::Component* c) const noexcept
+    int paramOf (const ui::ControlModel* c) const noexcept
     {
         for (const Item& it : items_)
             if (it.c == c)
@@ -470,7 +473,7 @@ private:
             {
                 for (int i = 0; i < 4; ++i)
                 {
-                    const ui::Component* m = full_.groups[first + ids[k]].member (i);
+                    const ui::ControlModel* m = full_.groups[first + ids[k]].member (i);
                     t[i] = m != nullptr ? paramOf (m) : -1;
                 }
             });

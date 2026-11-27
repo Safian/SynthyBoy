@@ -67,7 +67,7 @@ public:
     struct Item
     {
         int id = 0;
-        ui::Component* c = nullptr;
+        ui::ControlModel* c = nullptr;
         T type = T::Inert;
         int param = -1;        // the table index (milliseconds / the only one)
         int paramBeats = -1;   // the table index in beats (-1: the value has no beats version)
@@ -666,14 +666,17 @@ private:
     static constexpr int kGroundX0 = 434, kGroundX1 = 848;
     // ======================================================================================================================================================================
     // building: the selected envelope decides the parameters behind the ids
-    void bind (int id, ui::Component* c, T type, const std::string& suffix, const std::string& suffixBeats = std::string(), int slot = -1)
+    void bind (int id, ui::ControlModel* c, T type, const std::string& suffix, const std::string& suffixBeats = std::string(), int slot = -1)
     {
         Item it;
         it.id = id; it.c = c; it.type = type; it.slot = slot;
         it.param = suffix.empty() ? -1 : uibind::indexOfKey (prefix_ + suffix);
         it.paramBeats = suffixBeats.empty() ? -1 : uibind::indexOfKey (prefix_ + suffixBeats);
         if (c != nullptr)
+        {
             c->setId (id);
+            c->setParam (it.param);
+        }
         items_.push_back (it);
     }
     void configure (int sel)
@@ -1501,14 +1504,14 @@ public:   // the Play view reads the targets of the compact group and sets its b
     void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.group.member (i)); }
     void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
 private:
-    int paramOfMember (const ui::Component* m) const noexcept
+    int paramOfMember (const ui::ControlModel* m) const noexcept
     {
         while (m != nullptr)
         {
             for (const Item& it : items_)
                 if (it.c == m && (it.type == T::Knob || it.type == T::Toggle))
                     return it.active (beats_);
-            m = m->primaryChild();
+            m = m->primaryModel();
         }
         return -1;
     }

@@ -221,15 +221,15 @@ public:
     void setEnabled (bool on) override
     {
         Composite::setEnabled (on);
-        for (Component* c : sideMainComponents()) c->setEnabled (on);
-        for (Component* c : sideTuningComponents()) c->setEnabled (on);
+        for (ControlModel* c : sideMainComponents()) c->setEnabled (on);
+        for (ControlModel* c : sideTuningComponents()) c->setEnabled (on);
         applyConditions();
     }
     void setInactive (bool inactive) override
     {
         Composite::setInactive (inactive);
-        for (Component* c : sideMainComponents()) c->setInactive (inactive);
-        for (Component* c : sideTuningComponents()) c->setInactive (inactive);
+        for (ControlModel* c : sideMainComponents()) c->setInactive (inactive);
+        for (ControlModel* c : sideTuningComponents()) c->setInactive (inactive);
     }
 
     Size minSize() const override { return { 1280, 628 }; }
@@ -306,7 +306,7 @@ public:
         return c;
     }
 
-    void activateGroupAt (int x, int y, const Component* captured = nullptr)
+    void activateGroupAt (int x, int y, const ControlModel* captured = nullptr)
     {
         for (int i = 0; i < kMaxGroups; ++i)
         {
@@ -407,12 +407,12 @@ public:
     Rect at (Rect r) const noexcept { return { rect_.x + r.x, rect_.y + r.y, r.w, r.h }; }
 
 protected:
-    std::vector<Component*> sideMainComponents()
+    std::vector<ControlModel*> sideMainComponents()
     {
         return { &volume, &spread, &stereoRouting, &voiceOverride, &outputLimiter, &noSmoothing, &oversample4x, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &padPressure, &padAmount,
                  &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
     }
-    std::vector<Component*> sideTuningComponents()
+    std::vector<ControlModel*> sideTuningComponents()
     {
         return { &scaleType, &scaleKey, &scaleMode, &tuningA4, &tuningScale, &mtsEsp, &mtsNoteOn, &mpeOn, &mpeBend, &mpeMacro, &mpeYModwheel, &mpeBendToX, &mpeYBipolar };
     }
@@ -487,12 +487,12 @@ private:
 
     void buildGroups()
     {
-        auto close = [] (QGroup& g, std::initializer_list<Component*> live)   // the live members from slot 0 on, the rest empty
+        auto close = [] (QGroup& g, std::initializer_list<ControlModel*> live)   // the live members from slot 0 on, the rest empty
         {
             for (int k = 0; k < QGroup::kSlots; ++k)   // first empty every slot (a member that moves to another slot keeps its Q mark), then fill from slot 0
                 g.set (k, nullptr);
             int k = 0;
-            for (Component* c : live)
+            for (ControlModel* c : live)
                 g.set (k++, c);
         };
         close (groups[0], { &volume, &spread, &stereoRouting, &voiceOverride });

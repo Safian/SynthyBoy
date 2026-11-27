@@ -926,7 +926,7 @@ public:
         Composite::setInactive (i);
         for (auto* control : nativeControls()) control->setInactive (i);
     }
-    std::array<Component*, 22> nativeControls() noexcept
+    std::array<ControlModel*, 22> nativeControls() noexcept
     {
         return { &back, &tools, &shapes, &more, &undoButton, &redoButton, &del, &modButton,
                  &snap, &loop, &smooth, &cycleLink, &loopLink, &fpoint, &fx, &fy, &fcurve,
@@ -1071,13 +1071,13 @@ public:
     void setEnabled (bool e) override
     {
         Composite::setEnabled (e);
-        for (auto* control : std::array<Component*, 4> { &back, &target, &amount, &remove })
+        for (auto* control : std::array<ControlModel*, 4> { &back, &target, &amount, &remove })
             control->setEnabled (e);
     }
     void setInactive (bool i) override
     {
         Composite::setInactive (i);
-        for (auto* control : std::array<Component*, 4> { &back, &target, &amount, &remove })
+        for (auto* control : std::array<ControlModel*, 4> { &back, &target, &amount, &remove })
             control->setInactive (i);
     }
 

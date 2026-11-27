@@ -597,10 +597,6 @@ class FilterKnob : public Knob
 {
 public:
     using Knob::Knob;
-    void draw (gpu::SceneBuilder&) const override {}
-    Change touchDown (int, int, double) override { return Change::none(); }
-    Change touchMove (int, int) override { return Change::none(); }
-    Change touchUp (int, int) override { return Change::none(); }
 };
 
 // ===============================================================================================================================
@@ -926,8 +922,8 @@ protected:
             const int x = row.x + pad + column * (slotWidth + gap);
             return Rect { x, row.y + 20, column == 3 ? row.right() - pad - x : slotWidth, 60 };
         };
-        Component* main[] = { &cutoff, &resonance, &drive, &mix };
-        Component* track[] = { &keytrack, &env1, &var, &combOffset };
+        ControlModel* main[] = { &cutoff, &resonance, &drive, &mix };
+        ControlModel* track[] = { &keytrack, &env1, &var, &combOffset };
         for (int i = 0; i < 4; ++i)
         {
             main[i]->place (slot (mainBlock_, i));
@@ -938,7 +934,7 @@ protected:
         routing.place ({ outBlock_.x + pad, trackBlock_.y + 24, outWidth - 2 * pad, 48 });
         outReadout.place ({});
         formantBlock_ = {};
-        for (Component* c : { static_cast<Component*> (&formantX), static_cast<Component*> (&formantY), static_cast<Component*> (&formantTrans), static_cast<Component*> (&formantSpread) })
+        for (ControlModel* c : { static_cast<ControlModel*> (&formantX), static_cast<ControlModel*> (&formantY), static_cast<ControlModel*> (&formantTrans), static_cast<ControlModel*> (&formantSpread) })
             c->place ({});
     }
 
@@ -985,7 +981,7 @@ protected:
         outBlock_ = { trackBlock_.right() + kBlockGap, bandY, rect_.right() - kBandMargin - (trackBlock_.right() + kBlockGap), kBandH };
         auto inner = [&] (const Rect& b) { return Rect { b.x + kBlockPad, b.y + kBlockTitleH, std::max (0, b.w - 2 * kBlockPad), std::max (0, b.h - kBlockTitleH - kBlockPad) }; };
         // four slots side by side; `fixedW[i]` > 0: that slot has exactly that width, the others share the rest equally
-        auto fourSlots = [&] (const Rect& b, Component* c0, Component* c1, Component* c2, Component* c3, const int* fixedW)
+        auto fourSlots = [&] (const Rect& b, ControlModel* c0, ControlModel* c1, ControlModel* c2, ControlModel* c3, const int* fixedW)
         {
             const Rect in = inner (b);
             int fixedSum = 0, nFree = 0;
@@ -997,7 +993,7 @@ protected:
                     ++nFree;
             }
             const int cw = nFree > 0 ? (in.w - 3 * kSlotGap - fixedSum) / nFree : 0;
-            Component* cs[4] = { c0, c1, c2, c3 };
+            ControlModel* cs[4] = { c0, c1, c2, c3 };
             int x = in.x;
             for (int i = 0; i < 4; ++i)
             {
@@ -1008,7 +1004,7 @@ protected:
         };
         const int noFixed[4] = { 0, 0, 0, 0 }, trackFixed[4] = { 0, togW, 0, 0 };
         fourSlots (mainBlock_, &cutoff, &resonance, &drive, &mix, noFixed);
-        fourSlots (trackBlock_, &keytrack, &env1, isFormant_ ? static_cast<Component*> (&formantRes) : static_cast<Component*> (&var), &combOffset, trackFixed);
+        fourSlots (trackBlock_, &keytrack, &env1, isFormant_ ? static_cast<ControlModel*> (&formantRes) : static_cast<ControlModel*> (&var), &combOffset, trackFixed);
         {
             const Rect third = (isFormant_ ? formantRes : var).rect();   // VAR and the formant RESONANCE share the third slot (only one of them is shown)
             var.place (third);
@@ -1049,7 +1045,7 @@ protected:
 
     /** Which parts are shown: NOTE / VELO hide the filter; hidden, not dimmed, what does not apply (VAR with the Formant model, COMB without the Comb model, the FORMANT block and its RESONANCE without the Formant model). */
 public:
-    std::array<const Component*, nativeui::FilterPoint> nativeControls() const noexcept
+    std::array<const ControlModel*, nativeui::FilterPoint> nativeControls() const noexcept
     {
         return { &power, &cutoff, &resonance, &drive, &mix, &keytrack, &env1, &var, &combOffset, &blend, &routing,
                  &formantX, &formantY, &formantTrans, &formantRes, &formantSpread, &clean, &model, &style };
@@ -1131,7 +1127,7 @@ protected:
 
         groups[1].set (0, &keytrack);
         groups[1].set (1, &env1);
-        groups[1].set (2, isFormant_ ? static_cast<Component*> (&formantRes) : static_cast<Component*> (&var));
+        groups[1].set (2, isFormant_ ? static_cast<ControlModel*> (&formantRes) : static_cast<ControlModel*> (&var));
         groups[1].set (3, combMode_ ? &combOffset : nullptr);
 
         groups[2].set (0, &blend);   // the OUT group: BLEND and ROUTING in the block, MODEL and STYLE in the top bar: frameless (the chips mark it)

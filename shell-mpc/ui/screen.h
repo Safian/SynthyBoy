@@ -186,7 +186,7 @@ public:
         show (selector, ! noise); show (source, abc); show (oct, ! noise); show (pos, abc); show (crs, false); show (phase, false);
         show (kind, noise); show (sound, noise && ! noiseSample); show (filter, false); show (stereo, false);
         n_row_ = 0;
-        auto add = [&] (Component* c) { if (n_row_ < 4) row_[n_row_++] = c; };
+        auto add = [&] (ControlModel* c) { if (n_row_ < 4) row_[n_row_++] = c; };
         if (abc) { add (&selector); add (&source); add (&pos); add (&oct); }
         else if (sub) { add (&selector); add (&oct); }
         else { add (&kind); if (! noiseSample) add (&sound); }
@@ -205,7 +205,7 @@ public:
     }
     OscInstance instance() const noexcept { return inst_; }
     int numRow() const noexcept { return n_row_; }
-    Component* rowMember (int i) const noexcept { return i >= 0 && i < n_row_ ? row_[i] : nullptr; }
+    ControlModel* rowMember (int i) const noexcept { return i >= 0 && i < n_row_ ? row_[i] : nullptr; }
     /** The ids of the parts (the owner overrides the ones that differ): selector base, source stepper +1, dropdown +2, OCT +3, FILTER +4, SOUND +5. */
     void assignIds (int base)
     {
@@ -259,7 +259,7 @@ protected:
     OscInstance inst_ = OscInstance::A;
     OscKind kind_ = OscKind::Wavetable;
     bool noiseSample_ = false;
-    Component* row_[4] = {};
+    ControlModel* row_[4] = {};
     int n_row_ = 0;
 };
 
@@ -464,7 +464,7 @@ public:
                     if (kids_[i] == &panel)
                         panel.drawNativePanel (sb);
                     else
-                        kids_[i]->draw (sb);
+                        drawChild (sb, i);
                 }
             Cell cell (sb, rect_);
             drawExtra (pen);

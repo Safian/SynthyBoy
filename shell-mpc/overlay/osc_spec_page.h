@@ -172,8 +172,9 @@ public:
             lists_[i].setTitle (t);
     }
     void relayoutNow() { layout(); }
-    ui::Component* control (int i) noexcept { return i >= 0 && spec_ != nullptr && i < spec_->numCtls ? compOf (i) : nullptr; }
+    ui::ControlModel* control (int i) noexcept { return i >= 0 && spec_ != nullptr && i < spec_->numCtls ? compOf (i) : nullptr; }
     bool visible (int i) const noexcept { return spec_ != nullptr && i >= 0 && i < spec_->numCtls && vis_[i]; }
+    using ui::Composite::setVisible;
     /** The owner says which controls apply now; the page is laid out again when the set changed. */
     void setVisible (const bool* v)
     {
@@ -229,9 +230,7 @@ public:
             ui::Cell cell (sb, rect_);
             drawUnder (pen);
         }
-        for (int i = 0; i < n_; ++i)
-            if (shown_[i])
-                kids_[i]->draw (sb);
+        drawChildren (sb);
         for (int i = 0; i < nGroups_; ++i)
             groups[i].draw (sb);
         for (int i = 0; i < nGroups_; ++i)
@@ -242,7 +241,7 @@ public:
     }
 
 protected:
-    ui::Component* compOf (int i) noexcept
+    ui::ControlModel* compOf (int i) noexcept
     {
         // every index has all four component kinds; the spec says which is the real one
         if (spec_ != nullptr && i < spec_->numCtls)
