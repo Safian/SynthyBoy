@@ -102,7 +102,7 @@ def render_button_face(
 
     if state == STATE_DISABLED:
         from components.style import dim_artwork
-        return dim_artwork(render_button_face(text, STATE_NEUTRAL, w, h, font_size=font_size, radius=radius))
+        return dim_artwork(render_button_face(text, STATE_NEUTRAL, w, h, font_size=font_size))
 
     image = Image.new("RGBA", (w, h), _style_rgba("ink.black", 0))
     pen = ImageDraw.Draw(image)
