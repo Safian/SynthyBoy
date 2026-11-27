@@ -33,6 +33,7 @@ except ImportError:
     Image = ImageDraw = ImageFont = None
 
 OVERLAY_NAME = "native keyboard overlay"
+NATIVE_KEYBOARD_OVERLAY_NAME = OVERLAY_NAME
 OVERLAY_WIDTH = 1280
 OVERLAY_HEIGHT = 800
 
