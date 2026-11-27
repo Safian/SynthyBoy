@@ -129,6 +129,22 @@ def render_button_cards():
         print(f"Rendered {name} samples")
 
 
+def render_sample_cards(name, samples_of):
+    """Render every sample of components/native/<name>/catalog.json with the component's own module."""
+    import importlib
+    module = importlib.import_module(f"components.native.{name}.{name}")
+    directory = REPO_ROOT / "components/native" / name
+    entry = json.loads((directory / "catalog.json").read_text(encoding="utf-8"))[name]
+    (directory / "img").mkdir(exist_ok=True)
+    for sample in getattr(module, samples_of)(entry):
+        module.render_sample(sample).save(directory / "img" / sample["file"])
+    print(f"Rendered {name} samples")
+
+
+def render_radio_list_cards():
+    render_sample_cards("radio_list", "radio_samples")
+
+
 def render_radio_cards():
     """Render the 56 px segmented style used by ENV, Voice and FX."""
     out_dir = REPO_ROOT / "components/native/radio_button/img"
