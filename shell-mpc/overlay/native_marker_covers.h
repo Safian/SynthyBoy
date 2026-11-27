@@ -32,14 +32,12 @@ inline void drawNativeMarkerCovers (gpu::SceneBuilder& sb, const char* name) noe
         const float top = static_cast<float> (r.y - 1), bottom = static_cast<float> (r.y + r.h + 1);
         sb.rect (left, top, right, bottom, gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
     }
-    // The sentinel of a view that lies in the flat canvas strip above the page content (tab y < 10) is covered too; one lower in the page is
-    // close to the colour of the panel it lies on (99_backgrounds.py), and a canvas patch there would be a visible dark square.
+    // Every sentinel lies in the flat canvas strip above the page content (tab y 2, 99_backgrounds.py), so the canvas colour hides it completely.
     if (const BackgroundTab* bg = backgroundOf (name))
-        if (bg->sentinelY < 10)
-        {
-            const int x = bg->sentinelX, y = layout::kTabOriginY + bg->sentinelY;
-            sb.rect (static_cast<float> (x), static_cast<float> (y), static_cast<float> (x + 5), static_cast<float> (y + 5), gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
-        }
+    {
+        const int x = bg->sentinelX, y = layout::kTabOriginY + bg->sentinelY;
+        sb.rect (static_cast<float> (x), static_cast<float> (y), static_cast<float> (x + 5), static_cast<float> (y + 5), gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
+    }
 }
 
 }} // namespace synthyboy_mpc::overlay

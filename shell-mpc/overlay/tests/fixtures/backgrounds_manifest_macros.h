@@ -19,7 +19,7 @@ struct BackgroundTab
 
 // The tabs of scripts/mpc-skin-extras/overlay-backgrounds/manifest.json (EMPTY: no host background in the build); the last entry is a terminator that keeps the array non-empty.
 inline constexpr BackgroundTab kBackgroundTabs[] = {
-    { "macros", "Macros", "overlay_canvas.png", 900, 20, 0x0b1028u },
+    { "macros", "Macros", "overlay_canvas.png", 900, 2, 0x0b1c5fu },
     { nullptr, nullptr, nullptr, 0, 0, 0u },
 };
 

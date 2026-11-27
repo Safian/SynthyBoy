@@ -586,11 +586,6 @@ private:
     static void coverRootMarkers (gpu::SceneBuilder& sb) noexcept
     {
         drawNativeMarkerCovers (sb, "filter1");
-        if (const auto* bg = backgroundOf ("filter1"))
-        {
-            const int x = bg->sentinelX, y = kTabY + bg->sentinelY;
-            sb.rect (x, y, x + 5, y + 5, gpu::rgba8FromRgb (ui::theme::kNativeCanvas, 255));
-        }
     }
 
     bool nativePzOpen() const noexcept { return pzButtonShown_ && full_.power.state.on && nativeControlsActive(); }
