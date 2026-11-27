@@ -135,3 +135,66 @@ All **11** colour tokens added to `components/colors.json` on 2026-11-27, their 
   - `scripts/render_mod_screen_preview.py:372` calls `style.size("selector.dropdown.font")` — **missing** (`selector.dropdown` at `sizes.json:151` is a dict containing `"font"`).
   - `docs/ui-components/native-mixer-strip.md:152` cites `focus.field` — **missing** from `components/colors.json` (`field.focus` exists at `colors.json:20`).
   - (`scripts/tests/test_native_header_catalog.py:30` references `"header.side"` inside `assertRaises(ValueError)` — intentional negative check, not a bug.)
+
+---
+
+## 3. Docs vs Code Accuracy & Orphaned Files
+
+### 3.1 Wrong or Stale Statements in `docs/ui-components/*.md` (and Module Docstrings)
+
+- **`docs/ui-components/button.md:3,5-9`**:
+  - Lines 3 & 9 claim "The skin keeps its flat buttons for now (the skin switch is a separate, later round)" and "`flat` (default; today's skin face...)". **WRONG/STALE**: `components/sizes.json:154` sets `control.look = "legacy"`, and `components/native/button/button.py:87,98` defaults `look=None` to `_control_look()` = `"legacy"`.
+  - Lines 5–9 omit `look="active"` (`components/native/button/button.py:79,90-91,115-117`), which is already used by `RadioGrid` and choice drawers.
+  - Line 7 calls `button.gradient.border` (`#151c3a`) → `button.gradient.border.bottom` (`#161e42`) a "light-blue keyline", and `button.py:61` comments "bright top edge, dark bottom edge", whereas `#161e42` is brighter than `#151c3a`.
+- **`docs/ui-components/header.md:29,33,44` (plus `components/native/header/header.py:5,69`)**:
+  - `header.md:44` claims "The skin's dropdowns keep the `neon` look." **WRONG/STALE**: `components/native/selector/selector.py:353-354` redirects default `look="neon"` to `"legacy"` whenever `control.look == "legacy"`.
+  - `header.md:29` ends with a dangling fragment `` `font.page_title` title text. `` after the parenthetical.
+  - `header.md:33` lists `name?` as a `centre` field (`{kind: dropdown|button, name?, value?, ...}`), which `header.py:85-99` never reads, while omitting the supported `fill?` and `height?` fields (`header.py:93,140`).
+  - `components/native/header/header.py:5` docstring says `LEFT = POWER ... and the page title` (reversed order; `header.py:122-127` puts title first, then POWER); line `69` says `POWER 48 x 48` (stale; `power_face` renders at `height` = `40` px).
+- **`docs/ui-components/label.md:3,10-11,21-27` (plus `components/native/label/catalog.json:43-74`)**:
+  - `label.md:3` states "No screen uses this module"; commit `194e84a8` updated `mixer_strip.py:222-246` to follow shared Label styles (`font.value.large` / `DIAL_TEXT_STYLE`), though via tokens rather than importing `label.py`.
+  - `label.md:10-11,24,27` claim `pan.sub_dial_definition` (`15`/`24`, `text.caption`/`text.value`) and `pan.compact_pan_definition` (`14`/`16`) are currently "in use". **STALE**: commit `3328da40` (`level.py:172-184,333,492,496,524,553,558,1114-1140` and `pan.py:142,146,174,203,208`) unified all skin dial captions and values onto `DIAL_TEXT_STYLE` (`font.value = 20`, `text.value = #eef1ff`). `label/catalog.json:43-74` still shows the superseded `15`/`24` sizes as `Tárcsa-felirat` / `Tárcsa-érték`.
+- **`docs/ui-components/on_off_label.md:8` (plus `components/native/on_off_label/on_off_label.py:3`)**:
+  - Claims "Smooth: the SMOOTH caption of the Smooth dial will be an instance of this component. The smooth tokens (`smooth.*`) stay until that switch is made." **STALE**: commits `0a1c8eeb` and `4d466bd2` already added `on_off_label_definition` (`on_off_label.py:67-108`) and wired `scripts/mpc-skin-extras/53_lfo_smooth.py` to use it.
+- **`docs/ui-components/filter_selector.md:7`**:
+  - Claims the chip face uses "`theme.neon` panel gradient, keyline". **STALE**: `components/native/selector/selector.py:786` calls `render_dropdown_face(*size, chevron=False)` with default `look="neon"`, which `selector.py:353-354` upgrades to `"legacy"` (`selector.dropdown.top/bottom/border`); the stored PNGs were regenerated in `ca1ad4b0`.
+- **`docs/ui-components/radio_list.md:3`**:
+  - Claims "The existing RadioButton entry is unchanged." **STALE**: `components/native/radio_button/catalog.json:4-5,38-47` was modified in `dd609247` (`order: 51`, title `"RadioButton (KIVEZETÉSRE)"`, footprint table added).
+- **`docs/ui-components/radio_grid.md:3`**:
+  - Claims "the skin switch is a separate round" and calls `radio_button.py` "flat segmented faces". **STALE**: `ca1ad4b0` switched `radio_button.py` to legacy gradient, and `3328da40` already switched LFO/Play HZ/BPM/KEY in the skin to `render_grid_cell_art` (RadioGrid cells).
+- **`docs/ui-components/radio_family.md:3,30`**:
+  - Line `3` calls `radio_button.py` "flat cells" (now legacy gradient) and claims "the catalogue pages keep the old RadioButton at the end of the list" — **WRONG**: `order: 51` places it at #17 of 23 (in the middle, before `NameValue`, `MacroCard`, `ActiveText`, `Tune`, `Meter`, `Header`).
+  - Line `30` says "Every example of the four new entries has its own 'Helyigény' table" — **WRONG**: there are **five** new entries listed above (`RadioList`, `RadioGrid`, `SlideSwitch`, `SteppedDial`, `RotarySelector`), and all five have a `Helyigény` table. (All 8 numeric footprint rows at `radio_family.md:21-28` were verified against `sample_size()` and are accurate.)
+- **`docs/ui-components/rotary_selector.md:30`**:
+  - Native skin recipe states `render_dial_frame(diameter, i / (N - 1))` — **WRONG**: omits `value_arc=False, stops=N` (or `stepped_dial.render_frame(diameter, i, N)`), which would draw a continuous gradient value arc without stop dots.
+- **`docs/ui-components/mixer_strip.md:16,38`**:
+  - Line `16` claims MASTER fader height is **442 px** ("254 px with variant A, 294 px with B, 442 px on MASTER"). **WRONG**: `mixer_strip.layout(master)` produces `track = (91, 88, 8, 478)` (**478 px**, off by 36 px; 254 and 294 are accurate).
+  - Line `38` states MASTER scale is `(+6, 0, -12, -24, -60)` — matches `fader.py:258` labels, but `fader.py:258` misplaces `-12` and `-24` using `unity_n * 0.7` and `unity_n * 0.45` instead of `skew_db`, whereas `mixer_strip.py:442` draws `(-60, -30, -18, -6, 0, 6)` with true `skew_db`.
+- **`docs/ui-components/native-mixer-strip.md:37-39,152,178`**:
+  - Stale pre-2026-11-27 doc: claims `mixer_strip/catalog.json` has `approved: false` (`:178`, actually `approved: true`), describes amber Solo `#e5a93c` (`:37`, actually `accent.cyan` in `solo_mute.py:113`), references non-existent token `focus.field` (`:152`), and links old `catalog-mixer-strip.png` (`:111`).
+- **`docs/ui-components/icon_button.md`, `slide_switch.md`, `stepped_dial.md`, `wave_icons.md`, `hslider.md`**: Verified accurate against their implementations.
+- **`docs/ui-components/README.md:23,57,172-188`**:
+  - Line `23`: Lists `catalog-order.json` `first` as only 6 items (`Label, On/Off label, Pan, Level, Button, Selector`); `components/native/catalog-order.json:2-13` actually has **10** items (adds `icon_button`, `filter_selector`, `mixer_strip`, `hslider`).
+  - Line `23`: Lists `catalog_sections(entry)` keys as only 4 (`label, on_off, dropdown, header`); `scripts/gen-native-component-catalog.py:24` has **14** keys in `EXAMPLE_KEYS`.
+  - Line `57`: Claims `scripts/templates/native-component-catalog.html` contains no copied palette; line `29` has literal `#465064`.
+  - Lines `172-188`: Still documents the old `Selector` with optional inside `name` caption and `build_titled_selector` (which centre-aligns the title).
+- **`scripts/render_native_catalog_cards.py:263-277`**: `main()` does NOT call 8 of the new 2026-11-27 renderers (`render_radio_list_cards`, `render_slide_switch_cards`, `render_wave_icons_cards`, `render_stepped_dial_cards`, `render_rotary_selector_cards`, `render_radio_grid_cards`, `mixer_strip.render_catalog`, `hslider.render_catalog`), despite `docs/ui-components/README.md:59` presenting it as the single card-refresh script.
+
+### 3.2 Dropdown Docs & the `10 px` vs `4 px` Chevron Gap
+
+- **Missing dedicated dropdown doc**: Unlike every other 2026-11-27 component, there is **no `docs/ui-components/selector.md` or `dropdown.md`**; dropdown documentation is scattered across `docs/ui-components/header.md:42-48` and `docs/ui-components/README.md:23,170-201`.
+- **`10 px` vs `4 px` chevron gap**: `components/sizes.json:153` was updated from `10` (`f5460dbe`) to `4` (`d6a3032b`), `docs/ui-components/header.md:48` matches (`4 px`), and `components/native/selector/catalog.json:50,73` substitutes `{size:selector.dropdown.chevron_gap}` (`4 px`). No active doc still says `10 px`. **However**, `selector.py:402` subtracts `chevron_gap` (`4 px`) from the *chevron lane* (`chevron_lane = 28 px`, starting at `width - 28 = 192`), NOT from the chevron glyph ink (`width - 14 - chevron_width/2 = 199.5` at 40 px). Thus the actual minimum clearance to chevron ink is **10–13 px** (`11.5 px` at 40 px; measured `16.5 px` in `dropdown-center-none-40-long.png` and `18.0 px` at 32 px), and `scripts/tests/test_native_label_catalog.py:153,157` tests against chevron ink (`199.5`) rather than the lane edge (`192`).
+
+### 3.3 Orphaned Files, Broken Symlinks, Dead Code & Stale Test References
+
+- **10 broken symlinks in `docs/ui-components/komponensek/`**:
+  `level-90.png`, `level-native-{32,40,48,56}.png`, `pan-90.png`, and `pan-native-{32,40,48,56}.png` point to removed files in `components/native/{level,pan}/img/` — and all 10 are still listed in `scripts/screen-assets.json:5-9,14,16-19`.
+- **25 orphaned images in `components/native/*/img/` (not in any `catalog.json` and 0 code/doc references)**:
+  - `components/native/selector/img/osc_routing_frame.png`, `osc_routing_frame_48.png` (2 files)
+  - `components/native/meter/img/mixer_meter_{192,408}_{idle,peak}.png` (4 files)
+  - `components/native/meter_block/img/mixer_meter_{192,408}_{idle,peak}.png` (4 files; `meter_block/img/` also duplicates all 8 files of `meter/img/`)
+  - `components/native/solo_mute/img/solo_mute_{fx,m,s}_{disabled,off,on,implicit}.png` (11 files, superseded by filmstrips)
+  - `components/native/mod_row/img/mod_amount_464x56.png`, `mod_slider_revealed_{348,392}x56.png`, `mod_slider_track_348x56.png` (4 files)
+- **Superseded preview images in `mixer_strip/img/`**: `catalog-mixer-strip.png`, `source_strip_before_after.png`, `variants_comparison.png` (only referenced by stale `native-mixer-strip.md` / `render_native_mixer_strip_preview.py`), plus duplicate `mixer_fader_cap.png` (same asset as `fader/img/mixer_fader_cap.png`).
+- **Stale test referencing removed/shrunk file & defunct worktree**: `scripts/tests/test_native_katalogus.py:11-12,40` targets `docs/ui-components/native-katalogus.html` (which is only 7,303 bytes while line 40 asserts `> 50000` bytes) and hardcodes `/Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-pan-level-lfo-preview/docs/ui-components/native-katalogus.html`.
+- **Dead function**: `components/native/filter_selector/filter_selector.py:46-51` defines `catalog_sections()` taking 0 args; it is not in `gen-native-component-catalog.py:24` `EXAMPLE_KEYS` and is never called by the generator (only compared against static `filter_selector/catalog.json` in `test_native_filter_selector.py:47`).
