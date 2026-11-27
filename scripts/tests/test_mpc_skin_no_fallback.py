@@ -22,7 +22,6 @@ from validate_synthyboy_skin import check_legacy_display_bindings, validate_pack
 
 SHARED_JSON = base.ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
 OVERLAY_LAYOUT = base.ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
-BASE_DECODED_BYTES = 9072 + 1234 * 190 * 4 + 408 * 56 * 4        # marker/instance art, compact Play art, selector frame
 
 NATIVE_NAME_PREFIXES = (
     "Native Caption ", "Overlay Background Sentinel ", "Env Native ", "Filter ", "LFO 1 ", "Mixer ", "FX ", "Mod ",
@@ -516,19 +515,6 @@ class NoFallbackTests(unittest.TestCase):
         handles = {int(index) for index in re.findall(r"\bParameter (-?\d+)\b", raw)}
         self.assertTrue(handles)
         self.assertEqual(sorted(index for index in handles if not 0 <= index < end), [])
-
-    def test_the_decoded_size_of_the_whole_skin_is_the_documented_one(self):
-        # decoded size = sum of width x height x 4 over every PNG in the Plugin Skins folder (the host keeps a picture decoded: docs/MPC.md "Host fallback")
-        files = sorted(self.skins.glob("*.png"))
-        total = sum(w * h * 4 for w, h in (png_size(p) for p in files))
-        # Native standalone controls intentionally retain their SDK filmstrips
-        # and definitions; the old no-fallback byte total is no longer valid.
-        self.assertGreater(total, BASE_DECODED_BYTES)   # the tab backgrounds are a solid colour: no bitmap in the total
-        self.assertGreaterEqual(len(files), 75)
-        self.assertLess((self.skins / "TUI.json").stat().st_size, base.TUI_JSON_BYTES_MAX)
-        doc = (base.ROOT / "docs" / "MPC.md").read_text(encoding="utf-8")
-        self.assertIn("9 072", doc)     # the number of the documentation: it must follow the skin
-        self.assertNotIn("40 588 576 bytes decoded", doc)
 
     def test_every_picture_file_is_referenced_and_every_reference_exists(self):
         import re

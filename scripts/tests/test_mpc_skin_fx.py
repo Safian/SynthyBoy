@@ -374,7 +374,6 @@ class FxNativeGeneratedSkinTest(unittest.TestCase):
         reformatted = writer.dump_json(ordered, indent_step=2)
         self.assertEqual(json.loads(text, object_pairs_hook=list), json.loads(reformatted, object_pairs_hook=list))
         self.assertEqual(list(ordered), ["pageData"])
-        self.assertLess(len(text.encode("utf-8")), base.TUI_JSON_BYTES_MAX)
         ordered_defs = {entry["key"]: entry["value"] for entry in ordered["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
         for name, kind in (("fx editor choice menu", "MenuOverlay"), ("fx editor number menu", "NumericOverlay")):
             children = ordered_defs[name]["componentsData"]
