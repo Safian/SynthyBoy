@@ -27,6 +27,58 @@
         "file": "pan-dial-compact.png",
         "alt": "Pan, kompakt méret: minimum, közép, maximum"
       }
-    ]
+    ],
+    "state_images": [
+      {
+        "id": "min",
+        "label": "Minimum",
+        "state": 0.0,
+        "file": "pan-dial-min.png",
+        "alt": "Pan, minimum állapot, szöveg nélkül"
+      },
+      {
+        "id": "mid",
+        "label": "Közép",
+        "state": 0.5,
+        "file": "pan-dial-mid.png",
+        "alt": "Pan, közép állapot, szöveg nélkül"
+      },
+      {
+        "id": "max",
+        "label": "Maximum",
+        "state": 1.0,
+        "file": "pan-dial-max.png",
+        "alt": "Pan, maximum állapot, szöveg nélkül"
+      }
+    ],
+    "text": {
+      "caption": "PAN",
+      "value": "L 100",
+      "state": 0.0,
+      "diameter": "dial.diameter",
+      "variants": [
+        {
+          "id": "right",
+          "label": "Jobbra: felirat és alatta az érték",
+          "layout": "right",
+          "file": "pan-dial-text-right.png",
+          "alt": "Pan, felirat és érték a tárcsa mellett jobbra"
+        },
+        {
+          "id": "bottom",
+          "label": "Lent: csak az érték",
+          "layout": "bottom",
+          "file": "pan-dial-text-bottom.png",
+          "alt": "Pan, csak az érték a tárcsa alatt"
+        },
+        {
+          "id": "top",
+          "label": "Fent: felirat, lent az érték",
+          "layout": "top",
+          "file": "pan-dial-text-top.png",
+          "alt": "Pan, felirat felül, érték alul"
+        }
+      ]
+    }
   }
 }

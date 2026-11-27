@@ -13,7 +13,10 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from components import style
-from components.native.level.level import FRAMES, dial_variants, render_dial_frame, render_dial_preview
+from components.native.level.level import (
+    DIAL_TEXT_STYLE, FRAMES, dial_state_images, dial_text_variants, dial_variants, render_dial_frame,
+    render_dial_labelled, render_dial_preview,
+)
 
 HTML = ROOT / "docs/ui-components/kepes-katalogus.html"
 
@@ -39,6 +42,38 @@ class DialCatalogTests(unittest.TestCase):
                     expected = render_dial_frame(d, state, bipolar=dial["bipolar"])
                     self.assertEqual(cell.tobytes(), expected.tobytes(), f"{name} {variant['id']} state {state}")
 
+    def test_one_text_free_picture_per_state_at_normal_size(self):
+        for name in ("pan", "level"):
+            dial = entry(name)
+            images = dial_state_images(dial)
+            self.assertEqual([i["id"] for i in images], ["min", "mid", "max"])
+            for item in images:
+                with Image.open(ROOT / f"components/native/{name}/img/{item['file']}") as image:
+                    expected = render_dial_frame(style.size("dial.diameter"), item["state"], bipolar=dial["bipolar"])
+                    self.assertEqual(image.convert("RGBA").tobytes(), expected.tobytes())
+
+    def test_labelled_layouts_share_one_text_style_and_the_dial_recipe(self):
+        self.assertEqual(DIAL_TEXT_STYLE, {"font": "font.value", "colour": "text.value"})
+        for name in ("pan", "level"):
+            dial = entry(name)
+            text, variants = dial_text_variants(dial)
+            self.assertEqual([v["layout"] for v in variants], ["right", "bottom", "top"])
+            d = text["diameter_px"]
+            for variant in variants:
+                expected = render_dial_labelled(d, text["state"], text["caption"], text["value"], variant["layout"],
+                                                bipolar=dial["bipolar"], gap=style.size(dial["state_gap"]))
+                with Image.open(ROOT / f"components/native/{name}/img/{variant['file']}") as image:
+                    self.assertEqual(image.convert("RGBA").tobytes(), expected.tobytes(), variant["file"])
+                self.assertGreaterEqual(expected.width, d)
+            # the dial itself is the recipe's frame: the bottom layout keeps it at the top, uncropped
+            bottom = render_dial_labelled(d, text["state"], text["caption"], text["value"], "bottom",
+                                          bipolar=dial["bipolar"], gap=2)
+            dial_frame = render_dial_frame(d, text["state"], bipolar=dial["bipolar"])
+            x = (bottom.width - d) // 2
+            self.assertEqual(bottom.crop((x, 0, x + d, d)).tobytes(), dial_frame.tobytes())
+        with self.assertRaises(ValueError):
+            render_dial_labelled(90, 0.5, "PAN", "L 100", "left")
+
     def test_picture_is_rendered_text_free_by_parameter(self):
         picture = render_dial_preview(40, [0.5], bipolar=False)
         self.assertEqual(picture.tobytes(), render_dial_frame(40, 0.5).tobytes())
@@ -53,6 +88,11 @@ class DialCatalogTests(unittest.TestCase):
                 d = style.size(token)
                 self.assertIn(f"<figcaption>{kind} · {d} × {d} px</figcaption>", content)
                 self.assertIn(f"{name}-dial-{ident}.png?v=", content)
+        for name in ("pan", "level"):
+            for ident in ("min", "mid", "max"):
+                self.assertIn(f"{name}-dial-{ident}.png?v=", content)
+            for ident in ("right", "bottom", "top"):
+                self.assertIn(f"{name}-dial-text-{ident}.png?v=", content)
         self.assertNotIn("pan-90.png", content)
         self.assertNotIn("level-native-40.png", content)
 

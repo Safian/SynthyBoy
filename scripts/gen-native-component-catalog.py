@@ -91,11 +91,24 @@ def component_markup(component, metadata):
     sections = list(metadata["sections"])
     if "dial" in metadata:
         # A dial entry yields one text-free size variant per entry, captioned here (never inside the image).
-        from components.native.level.level import dial_variants
+        from components.native.level.level import dial_state_images, dial_text_variants, dial_variants
+        dial = metadata["dial"]
         sections.append({"images": [
             {"presentation": "sample", "file": v["file"], "alt": v["alt"],
              "caption": f"{v['label']} · {{size:{v['token']}}} × {{size:{v['token']}}} px"}
-            for v in dial_variants(metadata["dial"])]})
+            for v in dial_variants(dial)]})
+        states = dial_state_images(dial)
+        if states:
+            token = dial_variants(dial)[0]["token"]
+            sections.append({"heading": "Állapotok, szöveg nélkül", "images": [
+                {"presentation": "sample", "file": v["file"], "alt": v["alt"],
+                 "caption": f"{v['label']} · {{size:{token}}} × {{size:{token}}} px"} for v in states]})
+        labelled, variants = dial_text_variants(dial)
+        if variants:
+            sections.append({"heading": "Szöveges változatok", "images": [
+                {"presentation": "sample", "file": v["file"], "alt": v["alt"],
+                 "caption": f"{v['label']} · tárcsa {{size:{labelled['token']}}} × {{size:{labelled['token']}}} px"}
+                for v in variants]})
     require(sections, "sections must be a nonempty list")
     lines = [f"    <article>\n      <h3>{text(metadata['title'])}</h3>"]
     for section in sections:

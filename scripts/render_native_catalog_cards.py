@@ -53,6 +53,14 @@ def render_dial_cards():
         for variant in level.dial_variants(dial):
             level.render_dial_preview(variant["diameter"], dial["states"], bipolar=dial["bipolar"],
                                       gap=_style_size(dial["state_gap"])).save(directory / variant["file"])
+        for item in level.dial_state_images(dial):
+            level.render_dial_preview(level.dial_variants(dial)[0]["diameter"], [item["state"]],
+                                      bipolar=dial["bipolar"]).save(directory / item["file"])
+        text, variants = level.dial_text_variants(dial)
+        for item in variants:
+            level.render_dial_labelled(text["diameter_px"], text["state"], text["caption"], text["value"],
+                                       item["layout"], bipolar=dial["bipolar"],
+                                       gap=_style_size(dial["state_gap"])).save(directory / item["file"])
         print(f"Refreshed native {name} strips and catalogue previews")
 
 

@@ -27,6 +27,58 @@
         "file": "level-dial-compact.png",
         "alt": "Level, kompakt méret: minimum, közép, maximum"
       }
-    ]
+    ],
+    "state_images": [
+      {
+        "id": "min",
+        "label": "Minimum",
+        "state": 0.0,
+        "file": "level-dial-min.png",
+        "alt": "Level, minimum állapot, szöveg nélkül"
+      },
+      {
+        "id": "mid",
+        "label": "Közép",
+        "state": 0.5,
+        "file": "level-dial-mid.png",
+        "alt": "Level, közép állapot, szöveg nélkül"
+      },
+      {
+        "id": "max",
+        "label": "Maximum",
+        "state": 1.0,
+        "file": "level-dial-max.png",
+        "alt": "Level, maximum állapot, szöveg nélkül"
+      }
+    ],
+    "text": {
+      "caption": "LEVEL",
+      "value": "50%",
+      "state": 0.5,
+      "diameter": "dial.diameter",
+      "variants": [
+        {
+          "id": "right",
+          "label": "Jobbra: felirat és alatta az érték",
+          "layout": "right",
+          "file": "level-dial-text-right.png",
+          "alt": "Level, felirat és érték a tárcsa mellett jobbra"
+        },
+        {
+          "id": "bottom",
+          "label": "Lent: csak az érték",
+          "layout": "bottom",
+          "file": "level-dial-text-bottom.png",
+          "alt": "Level, csak az érték a tárcsa alatt"
+        },
+        {
+          "id": "top",
+          "label": "Fent: felirat, lent az érték",
+          "layout": "top",
+          "file": "level-dial-text-top.png",
+          "alt": "Level, felirat felül, érték alul"
+        }
+      ]
+    }
   }
 }

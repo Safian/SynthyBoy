@@ -291,8 +291,8 @@ def dial_variants(dial):
     Adding another size is adding one entry to "variants"; the picture renderer and the HTML generator both use this.
     """
     keys = {"bipolar", "states", "state_gap", "variants"}
-    if not isinstance(dial, dict) or set(dial) != keys:
-        raise ValueError(f"dial entry needs exactly the fields {sorted(keys)}")
+    if not isinstance(dial, dict) or not keys <= set(dial) or not set(dial) <= keys | {"state_images", "text"}:
+        raise ValueError(f"dial entry needs the fields {sorted(keys)} and may add state_images, text")
     if not dial["states"] or not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in dial["states"]):
         raise ValueError("dial states must be a nonempty list of values in 0..1")
     if not dial["variants"] or len({v.get("id") for v in dial["variants"]}) != len(dial["variants"]):
@@ -306,6 +306,91 @@ def dial_variants(dial):
             raise ValueError(f"dial variant diameter must be a positive integer size token: {variant['diameter']}")
         result.append(dict(variant, token=variant["diameter"], diameter=diameter))
     return result
+
+
+# The one text style of every labelled catalogue dial: the caption and the value are drawn alike (the "bottom" look,
+# the value style text.value). Change the two tokens here to restyle all labelled variants at once.
+DIAL_TEXT_STYLE = {"font": "font.value", "colour": "text.value"}
+DIAL_TEXT_LAYOUTS = ("right", "bottom", "top")
+
+
+def dial_state_images(dial):
+    """One text-free picture per state: [{id, label, state, file, alt}], at the normal size."""
+    result = []
+    for item in dial.get("state_images", []):
+        if set(item) != {"id", "label", "state", "file", "alt"} or not 0 <= item["state"] <= 1:
+            raise ValueError("dial state image needs exactly id, label, state (0..1), file, alt")
+        result.append(dict(item))
+    return result
+
+
+def dial_text_variants(dial):
+    """The labelled layouts of a dial entry: (text, [{id, label, layout, file, alt}]); ([], []) when absent."""
+    text = dial.get("text")
+    if text is None:
+        return None, []
+    if set(text) != {"caption", "value", "state", "diameter", "variants"}:
+        raise ValueError("dial text needs exactly caption, value, state, diameter, variants")
+    diameter = _style_size(text["diameter"])
+    if type(diameter) is not int or diameter <= 0:
+        raise ValueError(f"dial text diameter must be a positive integer size token: {text['diameter']}")
+    result = []
+    for item in text["variants"]:
+        if set(item) != {"id", "label", "layout", "file", "alt"} or item["layout"] not in DIAL_TEXT_LAYOUTS:
+            raise ValueError(f"dial text variant needs id, label, file, alt and layout in {DIAL_TEXT_LAYOUTS}")
+        result.append(dict(item))
+    if len({v["id"] for v in result}) != len(result):
+        raise ValueError("dial text variants need unique ids")
+    return dict(text, diameter_px=diameter, token=text["diameter"]), result
+
+
+def render_dial_labelled(diameter, state, caption, value, layout, *, bipolar=False, active=True, gap=0,
+                         text_style=None):
+    """One dial (render_dial_frame at its real size) with its caption and value text, for the catalogue only.
+
+    layout: "right"  caption, with the value under it, to the right of the dial;
+            "bottom" only the value under the dial;
+            "top"    caption above, the dial, the value below.
+    The caption and the value use the same text_style (default DIAL_TEXT_STYLE: font and colour tokens).
+    """
+    if Image is None:
+        raise RuntimeError("Pillow is required to render dial previews")
+    if layout not in DIAL_TEXT_LAYOUTS:
+        raise ValueError(f"unknown dial text layout: {layout!r}")
+    from components.style import native_font_em
+    text_style = text_style or DIAL_TEXT_STYLE
+    font_file = Path(__file__).with_name("img") / _style_size("font.file.semibold")
+    font = ImageFont.truetype(str(font_file), round(native_font_em(_style_size(text_style["font"]))))
+    colour = _style_color(text_style["colour"])
+    diameter, gap = int(diameter), int(gap)
+    dial = render_dial_frame(diameter, state, bipolar=bipolar, active=active)
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    boxes = {text: probe.textbbox((0, 0), text, font=font) for text in (caption, value)}
+    size = {text: (box[2] - box[0], box[3] - box[1]) for text, box in boxes.items()}
+
+    def put(canvas, text, x, y):
+        box = boxes[text]
+        ImageDraw.Draw(canvas).text((x - box[0], y - box[1]), text, font=font, fill=colour)
+
+    cw, ch = size[caption]
+    vw, vh = size[value]
+    if layout == "right":
+        block_h = ch + gap + vh
+        canvas = Image.new("RGBA", (diameter + gap + max(cw, vw), max(diameter, block_h)))
+        top = (canvas.height - block_h) // 2
+        canvas.alpha_composite(dial, (0, (canvas.height - diameter) // 2))
+        put(canvas, caption, diameter + gap, top)
+        put(canvas, value, diameter + gap, top + ch + gap)
+    elif layout == "bottom":
+        canvas = Image.new("RGBA", (max(diameter, vw), diameter + gap + vh))
+        canvas.alpha_composite(dial, ((canvas.width - diameter) // 2, 0))
+        put(canvas, value, (canvas.width - vw) // 2, diameter + gap)
+    else:
+        canvas = Image.new("RGBA", (max(diameter, cw, vw), ch + gap + diameter + gap + vh))
+        put(canvas, caption, (canvas.width - cw) // 2, 0)
+        canvas.alpha_composite(dial, ((canvas.width - diameter) // 2, ch + gap))
+        put(canvas, value, (canvas.width - vw) // 2, ch + gap + diameter + gap)
+    return canvas
 
 
 def render_dial_preview(diameter, states, *, bipolar=False, active=True, gap=0, caption=False, value_text=None):
