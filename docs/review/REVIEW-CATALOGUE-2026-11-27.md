@@ -286,3 +286,70 @@ From `components/native/catalog-order.json` and each `catalog.json`'s `order` fi
 11. **`SteppedDial` 2-stop & `RotarySelector` `sh` / `pipa` samples**: `stepped_dial/catalog.json` omits 2 stops (`2..8` supported) and `rotary_selector/catalog.json` omits `sh` and `pipa` (`rotary_selector.py:30` registers `"pipa"`).
 12. **Pending sub-component approval decisions (`approved: false`)**: `fader`, `meter_block`, `solo_mute`, `mod_row`, and `panel` all have `approved: false` in their `catalog.json` (`TODO.md:355` tracks `panel`).
 13. **Automated token-mutation check for catalogue/skin controls** (`AGENTS.md:65`): No test in `scripts/tests/test_native_*catalog*.py` verifies that mutating `colors.json` / `sizes.json` tokens propagates to every rendered control.
+
+---
+
+## 7. Prioritized Fix List
+
+### MUST FIX
+
+1. **Duplicate JSON key `control.look`** — `components/sizes.json:154-155`
+   - **Fix**: Delete the duplicate `"control.look": "legacy"` line at `components/sizes.json:155`.
+2. **Duplicate `CONTROL_LOOKS` and `control_look()`** — `components/style.py:39-64`
+   - **Fix**: Delete the duplicate block at `components/style.py:53-64`.
+3. **Tautological assertion (`X == X`) in Header fill test** — `scripts/tests/test_native_header_catalog.py:138-141`
+   - **Fix**: Replace the ternary expression with `self.assertEqual(centre[-1].x + centre[-1].face.width + m["gap"], right[0].x, example["id"])` whenever `fills and right`.
+4. **MASTER fader `-12 dB` / `-24 dB` ticks misaligned with thumb** — `components/native/fader/fader.py:258`
+   - **Fix**: Replace `unity_n * 0.7` and `unity_n * 0.45` with `math.pow((-12 + 60.0) / 66.0, 2.5)` and `math.pow((-24 + 60.0) / 66.0, 2.5)` (matching `unity_normalized` and `components/native/mixer_strip/mixer_strip.py:448`), then re-render `components/native/mixer_strip/img/mixer-strip-master.png`.
+5. **10 broken symlinks & stale registry entries** — `docs/ui-components/komponensek/{level-90,level-native-{32,40,48,56},pan-90,pan-native-{32,40,48,56}}.png`, `scripts/screen-assets.json:5-9,14,16-19`
+   - **Fix**: Delete the 10 dangling symlinks and remove their 10 paths from `scripts/screen-assets.json`.
+6. **Stale flat button in `MacroCard` & stale `RadioButton` / `Tune` cards** — `components/native/macro_card/img/catalog-macro-card.png`, `components/native/tune/img/osc-tune-compact-card.png`, `components/native/radio_button/img/catalog-radio-{56,env-group,voice-group}.png`
+   - **Fix**: Re-render `MacroCard`, `Tune`, and `RadioButton` catalogue cards with `scripts/render_native_catalog_cards.py` under `control.look = "legacy"`, then regenerate `docs/ui-components/kepes-katalogus.html`.
+7. **Broken/obsolete test `test_native_katalogus.py`** — `scripts/tests/test_native_katalogus.py:11-12,40`
+   - **Fix**: Remove the hardcoded machine-specific `PAN_LEVEL_WORKTREE_PATH` (`:12`), and either update `test_native_katalogus.py` to match the current `native-katalogus.html` structure or retire both if superseded by `kepes-katalogus.html`.
+8. **Missing tokens referenced in docs/code** — `AGENTS.md:53` (`selector.border`), `scripts/render_mod_screen_preview.py:372` (`selector.dropdown.font`), `components/native/solo_mute/solo_mute.py:101` (`scale.half`)
+   - **Fix**: Update `AGENTS.md:53` to cite the actual tokens (`button.gradient.*` / `selector.dropdown.*`); change `scripts/render_mod_screen_preview.py:372` to `style.size("selector.dropdown")["font"]`; remove the dead `_style_size("scale.half") if False else 2` in `solo_mute.py:101`.
+9. **Stale/wrong statements in component docs** — `docs/ui-components/button.md:3,5-9`, `docs/ui-components/header.md:29,33,44`, `docs/ui-components/label.md:3,10-11,24,27`, `docs/ui-components/on_off_label.md:8`, `docs/ui-components/filter_selector.md:7`, `docs/ui-components/radio_list.md:3`, `docs/ui-components/radio_grid.md:3`, `docs/ui-components/radio_family.md:3,30`, `docs/ui-components/rotary_selector.md:30`, `docs/ui-components/mixer_strip.md:16,38`, `docs/ui-components/native-mixer-strip.md:37-39,152,178`
+   - **Fix**: Update `button.md` (`control.look="legacy"` default, add `look="active"`), `header.md` (fix `neon` claim, remove dangling `font.page_title`, fix `centre` fields `fill?`/`height?`), `label.md` (reflect `DIAL_TEXT_STYLE` in use on dials), `on_off_label.md` (Smooth already wired), `filter_selector.md` (`legacy` look), `radio_list.md`/`radio_grid.md`/`radio_family.md` (RadioButton updated, 5 new components, #17 order), `rotary_selector.md:30` (specify `value_arc=False, stops=N` or `stepped_dial.render_frame`), `mixer_strip.md:16` (`478 px` MASTER fader), and archive/update `native-mixer-strip.md`.
+10. **Skin factory `build_titled_selector` centre-aligns title** — `components/native/selector/selector.py:742`
+    - **Fix**: Change `"justification": "horizontallyCentred verticallyCentred"` to `"left verticallyCentred"` per `AGENTS.md:57` (and check `selector.py:577` default value alignment).
+11. **Pan & Level catalogues missing `36 / 48 / 56 px` dial sizes & disabled states** — `components/native/pan/catalog.json:15-82`, `components/native/level/catalog.json:15-82`
+    - **Fix**: Add `36 / 48 / 56 px` entries to `dial.variants` and disabled examples for `state_images` / `text.variants`, then re-render and regenerate HTML.
+12. **Hardcoded `#465064` hex colour in catalogue HTML template** — `scripts/templates/native-component-catalog.html:29`
+    - **Fix**: Replace `#465064` with `{{COLOR:catalog.divider}}` and move the literal CSS pixel sizes (`1px`, `320px`, `12px`, `8px`, `16px` at `:29,33,34,37`) into `components/sizes.json`.
+
+### SHOULD FIX
+
+1. **Deduplicate the 10/11 near-duplicate new colour tokens** — `components/colors.json:42-49,116-117`
+   - **Fix**: Remove redundant `selector.dropdown.border.bottom` (`:49`, exact duplicate of `selector.dropdown.border`), collapse `selector.dropdown.top`/`border` into `theme.neon.panel0`/`keyline` (or align `#131930`/`#0d1122` with `button.gradient.*`), and reuse `catalog.text`/`text.value` and `surface.focus`/`menu.row` instead of `fader.thumb.edge`/`fader.thumb.line` (keeping distinct `fader.thumb.fill` `#c2d1e8`).
+2. **Add dedicated `docs/ui-components/selector.md` & clarify `chevron_gap`** — `components/native/selector/selector.py:374,402`, `scripts/tests/test_native_label_catalog.py:153-162`
+   - **Fix**: Create `docs/ui-components/selector.md` documenting sizes `32/40/48`, `chevron_gap = 4 px`, alignment/truncation, and `KIVEZETÉSRE` variant 3; clarify whether `4 px` measures to the `chevron_lane` (`192`) or chevron ink (`199.5`) and align `selector.py:402` and `test_native_label_catalog.py:153-162` to the same reference edge.
+3. **Include all 2026-11-27 card renderers in `render_native_catalog_cards.py:main()`** — `scripts/render_native_catalog_cards.py:263-277`
+   - **Fix**: Add calls to `render_radio_list_cards()`, `render_slide_switch_cards()`, `render_wave_icons_cards()`, `render_stepped_dial_cards()`, `render_rotary_selector_cards()`, `render_radio_grid_cards()`, `mixer_strip.render_catalog()`, and `hslider.render_catalog()`.
+4. **Fix `mixer_strip.py:1062-1073` (`sm_face`) re-upscaling & hardcoded `"button.size.32"`** — `components/native/mixer_strip/mixer_strip.py:1062-1073`
+   - **Fix**: Support an optional border-colour override in `button.action_art` (like `text_face(..., accent=...)`) so `sm_face` draws cleanly at supersampled resolution without downscale→upscale→downscale or hardcoding `"button.size.32"`.
+5. **Fix `icon_button.py:43-45` overlapping group filters & add missing catalogue samples** — `components/native/icon_button/icon_button.py:43-45`, `icon_button/catalog.json`, `button/catalog.json`, `selector/catalog.json`, `mixer_strip/catalog.json`
+   - **Fix**: Filter `Ghost` with `i["look"] == "ghost" and i["state"] != "disabled"` (or add `ghost` + `disabled` cleanly); add ghost `32 px` POWER, ghost EXPAND, ghost disabled, Button `look="active"` + `32/40/56` disabled, Dropdown disabled, and `MixerStrip` `BUS` samples.
+6. **Improve catalogue test coverage & remove side effects** — `scripts/tests/test_native_{wave_icons,button,header,rotary_selector,slide_switch}_catalog.py`, `test_native_filter_selector.py`, `test_native_mixer_strip_design.py`, `test_native_label_catalog.py:183-184`, `test_native_dial_catalog.py:106-109`
+   - **Fix**: Add `assertRaises` negative tests to `wave_icons`, `filter_selector`, `mixer_strip`, `button`, `header`, and `slide_switch` tests; assert active-pictogram colour in `rotary_selector`; check bottom pixel `#0c1026` vs `#0b0f24` in `test_native_label_catalog.py:183-184`; stop `test_native_dial_catalog.py:106-109` from mutating tracked HTML in place; add a token-mutation test per `AGENTS.md:65`.
+7. **Remove 25 orphaned images & deduplicate `meter`/`meter_block`/`mixer_fader_cap.png`** — `components/native/{selector,meter,meter_block,solo_mute,mod_row,mixer_strip}/img/`
+   - **Fix**: Delete the 25 zero-reference PNGs listed in Section 3.3, reconcile/remove `mixer_strip/img/{catalog-mixer-strip,source_strip_before_after,variants_comparison}.png`, and reuse `fader/img/mixer_fader_cap.png` and `meter/img/` instead of duplicating assets.
+8. **Replace remaining renderer/metadata literals with tokens** — `components/native/selector/selector.py:789,979,1343,1353-1356`, `mixer_strip/mixer_strip.py:1083,1097,1110,1117`, `hslider/hslider.py:78,115`, `filter_selector/catalog.json:14,20,26,32`, `fader/fader.py:260-268`, `active_text/active_text.py:69`
+   - **Fix**: Read `stroke.hair`, `height.medium`, `screen.height`, `hslider.width`, `filter.chain.*`, and `native_color("transparent")` from `style.py`.
+9. **Wire `filter_selector` into `gen-native-component-catalog.py:24` `EXAMPLE_KEYS`** — `scripts/gen-native-component-catalog.py:24`, `components/native/filter_selector/filter_selector.py:46`
+   - **Fix**: Accept `entry` in `filter_selector.catalog_sections(entry)` and register `"filter_selector"` in `EXAMPLE_KEYS`, removing duplicated static section data from `filter_selector/catalog.json`.
+10. **Update `docs/ui-components/README.md:23,57,172`, `components/colors.json:271-308`, and `components/sizes.json:1442-1455`**
+    - **Fix**: Sync `README.md` with the 10-item `catalog-order.json` and 14 `EXAMPLE_KEYS`, add legacy gradient tokens to `colors.json["palette"]` (marking flat `button.surface`/`border` as `KIVEZETÉSRE` or replacing them), and add `height.intermediate` (`40 px`) to `sizes.json["named_sizes"]`.
+
+### NOTE
+
+1. **Catalogue card order polish** — `components/native/catalog-order.json:2-16`, `components/native/{active_text,tune}/catalog.json:4`
+   - Consider moving `mixer_strip` and `hslider` after the Radio family so `Selector`, `FilterSelector`, `Hullámforma ikonok`, and the Radio family remain contiguous; resolve duplicate `"order": 90` between `active_text` and `tune`; clarify/merge `active_text` (`Állapotszöveg`) vs `on_off_label` (`On/Off label`).
+2. **Button border gradient direction** — `components/colors.json:44-45`, `components/native/button/button.py:61`
+   - `button.gradient.border` (`#151c3a`) → `button.gradient.border.bottom` (`#161e42`) gets slightly lighter downward, contrary to `button.py:61` comment ("bright top edge, dark bottom edge"). Verify against original "+ ADD" crop.
+3. **Unused imports & stale module docstrings** — `components/native/header/header.py:5,10,16,19,69`, `components/native/on_off_label/on_off_label.py:3`
+   - Remove unused `math`, `_style_color`, `ImageDraw` in `header.py` and fix docstrings (`title` before `POWER`, `40 px` not `48 x 48`, `on_off_label` Smooth integration).
+4. **Missing catalogue entry for factory `MenuOverlay` list & unapproved sub-components** — `AGENTS.md:67-70`, `components/native/{fader,meter_block,solo_mute,mod_row,panel}/catalog.json`
+   - Add a `MenuOverlay` list entry illustrating `AGENTS.md:67-70`, confirm `MASTER` `"destination": "OUT"` in `mixer_strip/catalog.json:102`, and decide approval status of `fader`/`meter_block`/`solo_mute`/`mod_row`/`panel`.
+5. **Hardcoded size tuples in radio modules** — `components/native/radio_list/radio_list.py:24`, `radio_grid/radio_grid.py:22`, `slide_switch/slide_switch.py:25`, `rotary_selector/rotary_selector.py:28`
+   - Derive `HEIGHTS`/`SIZES`/`DIAMETERS` from `height.*` tokens in `sizes.json` (consistent with `stepped_dial.py:27`).
