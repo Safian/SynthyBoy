@@ -1,5 +1,6 @@
-// SynthyBoy Voice page. The host owns the native controls and readouts.
-// The overlay publishes Q-Link bindings and draws live sounding-step indicators.
+// SynthyBoy Voice page as BINDING DATA (owner decision 2026-11-27: the C++ layer has no UI elements). Every control (the step selector, the row list, the step grid dials, the value, the random / scaling knobs, the oscillator targets)
+// is a native cell of the host skin (components/native, scripts/native_voice); this page holds the parameter rows (id, engine key, kind, range, format, Q slot), the four Q banks, the rectangles of the native cells, the sequence
+// selection that the native bridge reports (takeNativeVoice) and the live sounding-step indicators (a display, drawn by the overlay). Pure: no OS headers, no threads of its own.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -8,16 +9,17 @@
 #include "native_marker_covers.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <limits>
-#include <string>
-#include <vector>
 
 #include "../q_router.h"
+#include "../ui/binding.h"
+#include "../ui/qgroup.h"
 #include "../ui/theme.h"
-#include "../ui/voice_screen.h"
+#include "../ui/voice_native_layout.h"
 #include "instance_view.h"
 #include "page_view.h"
 #include "q_publish.h"
@@ -36,44 +38,128 @@ public:
     static constexpr int kElementVoice = kElementPage;
     static constexpr int kVirtualStep = 0, kVirtualRow = 1;   // the virtual Q targets of the group STEP
 
+    static constexpr int kNumRows = 6, kNumSteps = 8, kMaxGroups = 4;
+    static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
+
+    /** The page-local ids of the rows (the cell ids of the native bridge). */
     enum Id : int
     {
         kLength = 2, kStepSelect = 3, kRowSelect = 4, kStepValue = 5,
-        // Step Grid: 6 rows * 8 steps = 48 values -> 100 .. 147
+        // Step Grid: 6 rows * 8 steps = 48 values -> 100 .. 147 (id = kGridBase + row * 8 + step)
         kGridBase = 100,
         kRandPan = 200, kRandDetune, kRandCutoff, kRandEnv, kRandDetune10x,
         kScaleEnv = 210, kScaleLfo, kScaleLfoMode,
         kOscA = 220, kOscB, kOscC, kOscSub, kOscNoise
     };
 
-    enum class T : uint8_t { Knob, Number, Toggle, List, GridStep, Inert };
+    static constexpr const char* const kRowNames[kNumRows] = { "PAN", "DETUNE", "CUTOFF", "ENV", "MOD 1", "MOD 2" };
+    static constexpr const char* const kLfoModeNames[2] = { "PERCENT", "RATE" };
 
-    struct Item
-    {
-        int id = 0;
-        ui::ControlModel* c = nullptr;
-        T type = T::Inert;
-        std::string key;
-        int param = -1;
-        float presentedValue = std::numeric_limits<float>::quiet_NaN();
+    // ---- the parameter rows (row index = position in this table). The first four are the header; the 48 grid rows follow STEP-major (index = kGridFirst + 6 * step + row); then the blocks RANDOM, SCALING, TARGETS.
+    //                                          id, key, kind, min, max, step, def, format, choices, numChoices, qGroup, qSlot, inverted
+#define SB_VOICE_ROW(ID, KEY, KIND, MIN, MAX, STEP, FMT, QG, QS) binding::Row { ID, KEY, binding::Kind::KIND, MIN, MAX, STEP, 0, binding::Format::FMT, nullptr, 0, QG, QS, false }
+#define SB_VOICE_STEP(N) \
+    SB_VOICE_ROW (100 + 0 * 8 + (N) - 1, "voicectl.s" #N ".pan",    Continuous, -100, 100, 1, IntSigned, -1, -1), \
+    SB_VOICE_ROW (100 + 1 * 8 + (N) - 1, "voicectl.s" #N ".detune", Continuous, -100, 100, 1, IntSigned, -1, -1), \
+    SB_VOICE_ROW (100 + 2 * 8 + (N) - 1, "voicectl.s" #N ".cutoff", Continuous, -100, 100, 1, IntSigned, -1, -1), \
+    SB_VOICE_ROW (100 + 3 * 8 + (N) - 1, "voicectl.s" #N ".env",    Continuous, -100, 100, 1, IntSigned, -1, -1), \
+    SB_VOICE_ROW (100 + 4 * 8 + (N) - 1, "voicectl.s" #N ".mod1",   Continuous, -100, 100, 1, IntSigned, -1, -1), \
+    SB_VOICE_ROW (100 + 5 * 8 + (N) - 1, "voicectl.s" #N ".mod2",   Continuous, -100, 100, 1, IntSigned, -1, -1)
+    static constexpr int kGridFirst = 4;
+    static constexpr int kNumRowsTotal = 4 + kNumRows * kNumSteps + 5 + 3 + 5;
+    static constexpr binding::Row kRows[kNumRowsTotal] = {
+        SB_VOICE_ROW (kLength, "voicectl.length", Continuous, 0, 0, 1, IntPlain, 0, 2),
+        binding::Row { kStepSelect, "", binding::Kind::Choice, 0, kNumSteps - 1, 1, 0, binding::Format::IntPlain, nullptr, kNumSteps, 0, 0, false },      // virtual Q target (kVirtualStep)
+        binding::Row { kRowSelect, "", binding::Kind::Choice, 0, kNumRows - 1, 1, 0, binding::Format::ChoiceName, kRowNames, kNumRows, 0, 1, false },     // virtual Q target (kVirtualRow)
+        SB_VOICE_ROW (kStepValue, "", Continuous, -100, 100, 1, IntSigned, 0, 3),                                                                        // the value of the selected step: the target follows the selection
+        SB_VOICE_STEP (1), SB_VOICE_STEP (2), SB_VOICE_STEP (3), SB_VOICE_STEP (4), SB_VOICE_STEP (5), SB_VOICE_STEP (6), SB_VOICE_STEP (7), SB_VOICE_STEP (8),
+        SB_VOICE_ROW (kRandPan, "voicectl.rand.pan", Continuous, 0, 0, 0, Engine, 1, 0),
+        SB_VOICE_ROW (kRandDetune, "voicectl.rand.detune", Continuous, 0, 0, 0, Engine, 1, 1),
+        SB_VOICE_ROW (kRandCutoff, "voicectl.rand.cutoff", Continuous, 0, 0, 0, Engine, 1, 2),
+        SB_VOICE_ROW (kRandEnv, "voicectl.rand.env", Continuous, 0, 0, 0, Engine, 1, 3),
+        SB_VOICE_ROW (kRandDetune10x, "voicectl.rand.detune10x", Toggle, 0, 0, 0, Engine, 2, 0),
+        SB_VOICE_ROW (kScaleEnv, "voicectl.scale.env", Continuous, 0, 0, 0, Engine, 2, 1),
+        SB_VOICE_ROW (kScaleLfo, "voicectl.scale.lfo", Continuous, 0, 0, 0, Engine, 2, 2),
+        binding::Row { kScaleLfoMode, "voicectl.scale.lfo_mode", binding::Kind::Choice, 0, 0, 0, 0, binding::Format::ChoiceName, nullptr, 0, 2, 3, false },
+        SB_VOICE_ROW (kOscA, "voicectl.osc.a", Toggle, 0, 0, 0, Engine, 3, 0),
+        SB_VOICE_ROW (kOscB, "voicectl.osc.b", Toggle, 0, 0, 0, Engine, 3, 1),
+        SB_VOICE_ROW (kOscC, "voicectl.osc.c", Toggle, 0, 0, 0, Engine, 3, 2),
+        SB_VOICE_ROW (kOscSub, "voicectl.osc.sub", Toggle, 0, 0, 0, Engine, 3, 3),
+        SB_VOICE_ROW (kOscNoise, "voicectl.osc.noise", Toggle, 0, 0, 0, Engine, -1, -1)   // touch only (the 17th value)
     };
+#undef SB_VOICE_STEP
+#undef SB_VOICE_ROW
+    static constexpr int rowCount() noexcept { return kNumRowsTotal; }
+    static constexpr int gridRowIndex (int row, int step) noexcept { return kGridFirst + step * kNumRows + row; }
+    static int rowIndexOfId (int id) noexcept
+    {
+        if (id >= kGridBase && id < kGridBase + kNumRows * kNumSteps)
+            return gridRowIndex ((id - kGridBase) / kNumSteps, (id - kGridBase) % kNumSteps);
+        for (int i = 0; i < kNumRowsTotal; ++i)
+            if (kRows[i].id == id)
+                return i;
+        return -1;
+    }
 
-    static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
+    /** The four Q banks as row indices, in reading order: STEP, RANDOM, SCALING (the 10x switch of RANDOM and the SCALING block), TARGETS. NOISE (the 17th value) is touch only. */
+    enum RowIndex : int { kRowLength = 0, kRowStepSelect = 1, kRowRowSelect = 2, kRowStepValue = 3, kRowRandPan = kGridFirst + kNumRows * kNumSteps, kRowRandDetune, kRowRandCutoff, kRowRandEnv, kRowRandDetune10x,
+                          kRowScaleEnv, kRowScaleLfo, kRowScaleLfoMode, kRowOscA, kRowOscB, kRowOscC, kRowOscSub, kRowOscNoise };
+    static_assert (kRowOscNoise == kNumRowsTotal - 1, "the row table and the row indices agree");
+    static constexpr binding::QTable<kMaxGroups> kQ { { { kRowStepSelect, kRowRowSelect, kRowLength, kRowStepValue },
+                                                     { kRowRandPan, kRowRandDetune, kRowRandCutoff, kRowRandEnv },
+                                                     { kRowRandDetune10x, kRowScaleEnv, kRowScaleLfo, kRowScaleLfoMode },
+                                                     { kRowOscA, kRowOscB, kRowOscC, kRowOscSub } } };
+    static const char* groupName (int g) noexcept
+    {
+        static const char* const kNames[kMaxGroups] = { "STEP", "RANDOM", "SCALING", "TARGETS" };
+        return g >= 0 && g < kMaxGroups ? kNames[g] : "";
+    }
+
+    // ---- the geometry of the native cells (voice_native_layout.h, tab coordinates; the page is placed at kTabY) --------------------------------------------------------------------------------------------
+    static ui::Rect at (const ui::Rect& r) noexcept { return { r.x, kTabY + r.y, r.w, r.h }; }
+    static ui::Rect sequenceGrid() noexcept { return at (ui::voicelayout::kSequenceGrid); }
+    static ui::Rect blockSequence() noexcept { return at (ui::voicelayout::kBlockSequence); }
+    static ui::Rect blockRect (int b) noexcept
+    {
+        return at (b == 0 ? ui::voicelayout::kBlockRandom : b == 1 ? ui::voicelayout::kBlockScaling : ui::voicelayout::kBlockTargets);
+    }
+    /** The rectangles of the native cells (everything the skin owns on the tab: the touch passes through). */
+    static std::array<ui::Rect, 18> nativeCells() noexcept
+    {
+        namespace L = ui::voicelayout;
+        return { at (L::kSequenceGrid), at (L::kRowList), at (L::kStepSelect), at (L::kStepValue), at (L::kLength),
+                 at (L::kRandPan), at (L::kRandDetune), at (L::kRandCutoff), at (L::kRandEnv), at (L::kRandDetune10x),
+                 at (L::kScaleEnv), at (L::kScaleLFO), at (L::kScaleLFOMode),
+                 at (L::kOscA), at (L::kOscB), at (L::kOscC), at (L::kOscSub), at (L::kOscNoise) };
+    }
+    static bool isNativeControl (int x, int y) noexcept
+    {
+        for (const ui::Rect& r : nativeCells())
+            if (r.contains (x, y))
+                return true;
+        return false;
+    }
+    /** The column of step s of the grid (the sounding-step dot lies in its upper right corner). */
+    static ui::Rect stepColumn (int s) noexcept
+    {
+        if (s < 0 || s >= kNumSteps)
+            return {};
+        const ui::Rect area { sequenceGrid().x + ui::voicelayout::kStepPad, sequenceGrid().y + ui::voicelayout::kStepPad,
+                              std::max (0, sequenceGrid().w - 2 * ui::voicelayout::kStepPad), std::max (0, sequenceGrid().h - 2 * ui::voicelayout::kStepPad) };
+        const int colW = std::max (10, (area.w - (kNumSteps - 1) * ui::voicelayout::kStepGap) / kNumSteps);
+        return { area.x + s * (colW + ui::voicelayout::kStepGap), area.y, colW, area.h };
+    }
 
     VoiceUi()
     {
+        for (int i = 0; i < kNumRowsTotal; ++i)
+            params_[i] = kRows[i].hasParam() ? uibind::indexOfKey (kRows[i].key) : -1;
         setCanvas (kCanvasW, kCanvasH);
-        configure();
     }
 
-    void setCanvas (int w, int)
-    {
-        w_ = w;
-        const ui::Rect tab { 0, kTabY, w, kTabH };
-        full_.place (tab);
-    }
+    void setCanvas (int w, int) { w_ = w; }
 
-    /** Reads the instance: every value, the step a voice plays, the virtual Q targets (step, row), the pages of the stack, the Q group. */
+    /** Reads the instance: the step a voice plays, the virtual Q targets (step, row), the pages of the stack, the Q group. */
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
@@ -87,12 +173,12 @@ public:
         // the host writes the virtual targets: the Q-Link of the step and of the row
         float x;
         if (inst.takeQVirtual (kVirtualStep, x))
-            selectStep (std::lround (x * (ui::VoiceGrid::kNumSteps - 1)));
+            selectStep (std::lround (x * (kNumSteps - 1)));
         if (inst.takeQVirtual (kVirtualRow, x))
-            selectRow (std::lround (x * (ui::VoiceGrid::kNumRows - 1)));
+            selectRow (std::lround (x * (kNumRows - 1)));
         if (native)
             takeNativeSequence (inst);
-        pull (inst);
+        length_ = std::clamp (static_cast<int> (std::lround (params_[0] >= 0 ? inst.param (params_[0]) : 8.0f)), 1, kNumSteps);
 
         // the steps the newest voices play, lit in the grid
         uint8_t mask = 0;
@@ -100,362 +186,237 @@ public:
             for (int v = 0; v < synthyboy::LiveValues::kReadVoices; ++v)
             {
                 const int s = static_cast<int> (std::lround (in.live->voiceStep[v]));
-                if (in.live->voiceStep[v] >= 0.0f && s < 8 && s < std::max (1, full_.grid.state.length))
+                if (in.live->voiceStep[v] >= 0.0f && s < kNumSteps && s < std::max (1, length_))
                     mask = static_cast<uint8_t> (mask | (1u << s));
             }
-        full_.grid.state.voiceStepMask = mask;
+        voiceStepMask_ = mask;
 
-        // the step and the row of the header: the selectors, the value of the step
-        const int step = full_.grid.state.selectedStep, row = full_.grid.state.activeRow;
-        full_.qStepSelect.state.count = ui::VoiceGrid::kNumSteps;
-        full_.qStepSelect.state.index = step;
-        full_.rowList.state.index = row;
-        full_.stepValue.state.value = inst.param (stepParam (row, step));
-        inst.setQVirtual (kVirtualStep, static_cast<float> (full_.grid.state.selectedStep) / 7.0f);
-        inst.setQVirtual (kVirtualRow, static_cast<float> (full_.grid.state.activeRow) / 5.0f);
-
+        inst.setQVirtual (kVirtualStep, static_cast<float> (selectedStep_) / static_cast<float> (kNumSteps - 1));
+        inst.setQVirtual (kVirtualRow, static_cast<float> (activeRow_) / static_cast<float> (kNumRows - 1));
         inst.setNativeVoiceState (sequenceState (inst));
         inst.setUiFullOpen (pageTop_ != 0);
         publishQGroup (inst);
     }
 
+    /** The overlay claims the tab outside the native cells (a touch there selects the block's Q group). */
     bool covers (int x, int y) const noexcept
     {
         if (! ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y))
             return false;
-        if (pageTop_ == 0 && full_.isNativeControl (x, y))
-            return false;
-        return true;
+        return pageTop_ != 0 || ! isNativeControl (x, y);
     }
 
-    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
+    bool touch (const TouchEvent& ev, UiStack&, IInstanceView& inst, double)
     {
-        const int x = ev.x, y = ev.y;
-        ui::Component* top = topComponent();
         if (ev.kind == TouchEvent::Down)
         {
-            gesture_ = nullptr;
-            if (! covers (x, y) || ! top)
+            gestureDown_ = false;
+            if (! covers (ev.x, ev.y))
                 return false;
-            gesture_ = top;
             gestureDown_ = true;
             gesturePreset_ = inst.stateGeneration();
-            handle (top->touchDown (x, y, nowMs), stack, inst);
+            if (pageTop_ == 0)
+                activateGroupAt (ev.x, ev.y);
             inst.setNativeVoiceState (sequenceState (inst));
             return true;
         }
-        if (! gesture_ || ! gestureDown_)
+        if (! gestureDown_)
             return false;
         if (gesturePreset_ != inst.stateGeneration())
         {
             dropGesture();
             return true;
         }
-        if (ev.kind == TouchEvent::Move)
-        {
-            const ui::Change moved = gesture_->touchMove (x, y);
-            handle (moved, stack, inst);
-        }
-        else
-        {
-            handle (gesture_->touchUp (x, y), stack, inst);
+        if (ev.kind != TouchEvent::Move)
             gestureDown_ = false;
-            gesture_ = nullptr;
-        }
         inst.setNativeVoiceState (sequenceState (inst));
         return true;
     }
 
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
-    {
-        if (gesture_ && gestureDown_)
-            handle (gesture_->tick (nowMs), stack, inst);
-    }
-
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
-        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
-    {
-        ui::Component* top = topComponent();
-        if (gestureDown_ || ! top || ! covers (x, y))
-            return false;
-        ui::Change ch;
-        if (! top->wheelOver (x, y, notches, ch))
-            return false;
-        handle (ch, stack, inst);
-        inst.setNativeVoiceState (sequenceState (inst));
-        (void) nowMs;
-        return true;
-    }
+    void tick (double, UiStack&, IInstanceView&) {}
+    bool wheel (int, int, int, UiStack&, IInstanceView&, double) { return false; }
 
     bool fingerDown() const noexcept { return gestureDown_; }
-    void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    void dropGesture() noexcept { gestureDown_ = false; }
     void forgetQGroup() noexcept
     {
-        full_.setActiveGroup (0);
+        activeGroup_ = 0;
         qSlots_.forget();
     }
     int topPage() const noexcept { return pageTop_; }
     void leftTab (IInstanceView& inst) noexcept { inst.setNativeVoiceState ({}); }
 
-    ui::Change turnQ (int slot, double delta, UiStack& stack, IInstanceView& inst)
+    /** A touch on the page outside the native cells selects the group of the block it lies in. */
+    void activateGroupAt (int x, int y) noexcept
+    {
+        if (blockSequence().contains (x, y))
+            setActiveGroup (0);
+        else if (blockRect (0).contains (x, y))
+            setActiveGroup (y >= at (ui::voicelayout::kRandDetune10x).y - 4 ? 2 : 1);   // the 10x switch under the knobs is the first member of SCALING's group
+        else if (blockRect (1).contains (x, y))
+            setActiveGroup (2);
+        else if (blockRect (2).contains (x, y))
+            setActiveGroup (3);
+    }
+
+    /** The hardware knob `slot` (0 .. 3) of the active group turned by `delta` (normalised units): the row in that slot takes it by its kind (the step and row selectors are virtual targets, the value is the selected step's). */
+    void turnQ (int slot, double delta, UiStack&, IInstanceView& inst)
     {
         if (pageTop_ != 0)
-            return ui::Change::none();
-        const ui::Change ch = full_.turnQ (slot, delta);
-        handle (ch, stack, inst);
+            return;
+        const int r = kQ.row (activeGroup_, slot);
+        if (r < 0)
+            return;
+        const binding::Row& row = kRows[r];
+        const int n = detents (delta);
+        if (row.id == kStepSelect)
+            selectStep (binding::turnChoice (selectedStep_, n, kNumSteps));
+        else if (row.id == kRowSelect)
+            selectRow (binding::turnChoice (activeRow_, n, kNumRows));
+        else
+        {
+            const int p = row.id == kStepValue ? stepParam (activeRow_, selectedStep_) : params_[r];
+            if (p < 0)
+                return;
+            switch (row.kind)
+            {
+                case binding::Kind::Toggle: uibind::writePlain (inst, p, delta > 0.0 ? 1.0 : 0.0); break;
+                case binding::Kind::Choice:
+                {
+                    const synthyboy::ParamInfo& pi = uibind::info (p);
+                    uibind::writePlain (inst, p, binding::turnChoice (static_cast<int> (std::lround (inst.param (p))), n, pi.numChoices));
+                    break;
+                }
+                default:
+                    if (row.step > 0.0f)   // a whole-number value (the length, the value of a step): one detent = one step
+                        uibind::writePlain (inst, p, std::clamp (static_cast<double> (inst.param (p)) + n * row.step,
+                                                                   static_cast<double> (uibind::info (p).min), static_cast<double> (uibind::info (p).max)));
+                    else
+                        uibind::writeNorm (inst, p, binding::turnNorm (uibind::normOf (p, inst.param (p)), delta));
+                    break;
+            }
+        }
         inst.setNativeVoiceState (sequenceState (inst));
-        return ch;
     }
 
     void setHostBackground (bool) noexcept {}
     bool hostBackground() const noexcept { return true; }
 
+    /** The picture: the marker covers of the host skin and the sounding-step dots in the grid (a live display). */
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (pageTop_ == 0)
-        {
-            drawNativeMarkerCovers (sb, "voice");
-            full_.draw (sb);
-        }
+        if (pageTop_ != 0)
+            return;
+        drawNativeMarkerCovers (sb, "voice");
+        const ui::theme::Look& T = ui::theme::L();
+        ui::Cell cell (sb, sequenceGrid(), 0);
+        ui::Pen p (sb, true);
+        for (int s = 0; s < kNumSteps; ++s)
+            if (voiceStepMask_ & (1 << s))
+            {
+                const ui::Rect col = stepColumn (s);
+                p.disc (static_cast<float> (col.right() - 12), static_cast<float> (col.y + 14), 4.5f, p.c (T.flow[0], 255));
+            }
     }
 
-    // ---- access for the tests
-    ui::VoiceScreen& screen() noexcept { return full_; }
-    const std::vector<Item>& items() const noexcept { return items_; }
-    const Item* item (int id) const noexcept
-    {
-        for (const Item& it : items_)
-            if (it.id == id)
-                return &it;
-        return nullptr;
-    }
-    int activeQ() const noexcept { return full_.activeGroup(); }
+    // ---- access
+    int activeQ() const noexcept { return activeGroup_; }
+    int activeGroup() const noexcept { return activeGroup_; }
+    void setActiveGroup (int g) noexcept { activeGroup_ = std::clamp (g, 0, kMaxGroups - 1); }
+    int selectedStep() const noexcept { return selectedStep_; }
+    int activeRow() const noexcept { return activeRow_; }
+    int length() const noexcept { return length_; }
+    uint8_t voiceStepMask() const noexcept { return voiceStepMask_; }
+    int paramOfRow (int rowIndex) const noexcept { return rowIndex >= 0 && rowIndex < kNumRowsTotal ? params_[rowIndex] : -1; }
+    int qTarget (int group, int slot) const noexcept { return groupTarget (group, slot); }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
 
+    /** The engine parameter of the grid value (row 0 .. 5, step 0 .. 7). */
+    int stepParam (int row, int step) const noexcept
+    {
+        return params_[gridRowIndex (std::clamp (row, 0, kNumRows - 1), std::clamp (step, 0, kNumSteps - 1))];
+    }
+
 private:
-    void bind (int id, ui::ControlModel* c, T type, const std::string& key)
+    /** Whole detents of a Q-Link turn (delta in normalised units, one detent = binding::kQStep); a turn that is not zero is at least one. */
+    static int detents (double delta) noexcept
     {
-        Item it;
-        it.id = id; it.c = c; it.type = type;
-        it.key = key;
-        it.param = uibind::indexOfKey (key);
-        if (c != nullptr)
-        {
-            c->setId (id);
-            c->setParam (it.param);
-        }
-        items_.push_back (it);
+        const long n = std::lround (delta / binding::kQStep);
+        return n != 0 ? static_cast<int> (n) : (delta > 0.0 ? 1 : delta < 0.0 ? -1 : 0);
     }
 
-    void configure()
-    {
-        items_.clear();
-        bind (kLength, &full_.length, T::Number, "voicectl.length");
-        bind (kStepSelect, &full_.qStepSelect, T::Inert, "");
-        bind (kRowSelect, &full_.rowList, T::Inert, "");
-        bind (kStepValue, &full_.stepValue, T::Inert, "");
-
-        static const char* const kRows[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
-        for (int row = 0; row < ui::VoiceGrid::kNumRows; ++row)
-            for (int step = 0; step < ui::VoiceGrid::kNumSteps; ++step)
-            {
-                bind (kGridBase + row * ui::VoiceGrid::kNumSteps + step, nullptr, T::GridStep,
-                      "voicectl.s" + std::to_string (step + 1) + "." + kRows[row]);
-                gridParams_[row][step] = items_.back().param;
-            }
-
-        bind (kRandPan, &full_.randPan, T::Knob, "voicectl.rand.pan");
-        bind (kRandDetune, &full_.randDetune, T::Knob, "voicectl.rand.detune");
-        bind (kRandCutoff, &full_.randCutoff, T::Knob, "voicectl.rand.cutoff");
-        bind (kRandEnv, &full_.randEnv, T::Knob, "voicectl.rand.env");
-        bind (kRandDetune10x, &full_.randDetune10x, T::Toggle, "voicectl.rand.detune10x");
-        bind (kScaleEnv, &full_.scaleEnv, T::Knob, "voicectl.scale.env");
-        bind (kScaleLfo, &full_.scaleLfo, T::Knob, "voicectl.scale.lfo");
-        bind (kScaleLfoMode, &full_.scaleLfoMode, T::List, "voicectl.scale.lfo_mode");
-        bind (kOscA, &full_.oscA, T::Toggle, "voicectl.osc.a");
-        bind (kOscB, &full_.oscB, T::Toggle, "voicectl.osc.b");
-        bind (kOscC, &full_.oscC, T::Toggle, "voicectl.osc.c");
-        bind (kOscSub, &full_.oscSub, T::Toggle, "voicectl.osc.sub");
-        bind (kOscNoise, &full_.oscNoise, T::Toggle, "voicectl.osc.noise");
-
-        for (int group = 0; group < ui::VoiceScreen::kMaxGroups; ++group)
-            for (int slot = 0; slot < ui::QGroup::kSlots; ++slot)
-            {
-                const auto* member = full_.groups[group].member (slot);
-                const auto* binding = member ? item (member->id()) : nullptr;
-                groupTargets_[group][slot] = binding ? binding->param : -1;
-            }
-        groupTargets_[0][0] = QRouter::encode (kVirtualStep, QRouter::kVirtual);
-        groupTargets_[0][1] = QRouter::encode (kVirtualRow, QRouter::kVirtual);
-    }
-
-    void pull (IInstanceView& inst)
-    {
-        for (Item& it : items_)
-        {
-            if (it.param < 0 || ! it.c)
-                continue;
-            const float val = inst.param (it.param);
-            if (! resyncAfterInput_ && it.presentedValue == val)
-                continue;
-            it.presentedValue = val;
-            const synthyboy::ParamInfo& p = uibind::info (it.param);
-            switch (it.type)
-            {
-                case T::Knob:
-                {
-                    ui::Knob* kn = static_cast<ui::Knob*> (it.c);
-                    kn->state.value = kn->state.modValue = uibind::normOf (it.param, val);
-                    kn->state.defaultValue = uibind::normOf (it.param, p.def);
-                    break;
-                }
-                case T::Number:
-                {
-                    ui::NumberField* nf = static_cast<ui::NumberField*> (it.c);
-                    nf->state.value = val;
-                    nf->state.min = p.min; nf->state.max = p.max; nf->state.step = 1.0; nf->state.defaultValue = p.def; nf->state.pxPerStep = 8;
-                    if (it.id == kLength)
-                        full_.grid.state.length = static_cast<int> (std::lround (val));
-                    break;
-                }
-                case T::Toggle:
-                    static_cast<ui::ToggleIcon*> (it.c)->state.on = val > 0.5f;
-                    break;
-                case T::List:
-                {
-                    ui::LedList* ll = static_cast<ui::LedList*> (it.c);
-                    ll->setOptions (p.choices, p.numChoices > 0 ? p.numChoices : 0);
-                    ll->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, std::max (0, ll->state.count - 1));
-                    break;
-                }
-                case T::GridStep:
-                case T::Inert:
-                    break;
-            }
-        }
-        resyncAfterInput_ = false;
-    }
-
-    void handle (const ui::Change& ch, UiStack&, IInstanceView& inst)
-    {
-        // Local controls can edit their own presentation before the host confirms a write.
-        resyncAfterInput_ = true;
-        if (ch.kind == ui::ChangeKind::None)
-            return;
-        if (ch.id == kStepSelect && ch.kind == ui::ChangeKind::Index)
-        {
-            selectStep (ch.index);
-            return;
-        }
-        if (ch.id == kRowSelect && ch.kind == ui::ChangeKind::Index)
-        {
-            selectRow (ch.index);
-            return;
-        }
-        if (ch.id == kStepValue && ch.kind == ui::ChangeKind::Index)   // the value of the selected step as a number
-        {
-            const int idx = stepParam (full_.grid.state.activeRow, full_.grid.state.selectedStep);
-            if (idx >= 0)
-                uibind::writePlain (inst, idx, std::clamp (ch.value, -100.0, 100.0));
-            return;
-        }
-        const Item* it = item (ch.id);
-        if (! it || it->param < 0)
-            return;
-        switch (ch.kind)
-        {
-            case ui::ChangeKind::Value:
-                if (it->type == T::Knob)
-                    uibind::writeNorm (inst, it->param, ch.value);
-                else
-                    uibind::writePlain (inst, it->param, ch.value);
-                break;
-            case ui::ChangeKind::Index:
-                uibind::writePlain (inst, it->param, it->type == T::Number ? ch.value : ch.index);
-                break;
-            default:
-                break;
-        }
-    }
-
-    void selectRow (int row) { full_.grid.state.activeRow = std::clamp (row, 0, ui::VoiceGrid::kNumRows - 1); }
-    void selectStep (int step) { full_.grid.state.selectedStep = std::clamp (step, 0, ui::VoiceGrid::kNumSteps - 1); }
+    void selectRow (long row) { activeRow_ = static_cast<int> (std::clamp (row, 0L, static_cast<long> (kNumRows - 1))); }
+    void selectStep (long step) { selectedStep_ = static_cast<int> (std::clamp (step, 0L, static_cast<long> (kNumSteps - 1))); }
 
     nativeui::voice::ViewState sequenceState (const IInstanceView& inst) const
     {
         if (! sequenceAvailable_ || pageTop_ != 0)
             return {};
-        const int row = full_.grid.state.activeRow, step = full_.grid.state.selectedStep;
-        return { true, row, step, stepParam (row, step), inst.stateGeneration() };
+        return { true, activeRow_, selectedStep_, stepParam (activeRow_, selectedStep_), inst.stateGeneration() };
     }
 
     void takeNativeSequence (IInstanceView& inst)
     {
         namespace n = nativeui::voice;
-        static_assert (n::kRows == ui::VoiceGrid::kNumRows && n::kSteps == ui::VoiceGrid::kNumSteps);
+        static_assert (n::kRows == kNumRows && n::kSteps == kNumSteps);
         const auto before = sequenceState (inst);
         float value;
         if (inst.takeNativeVoice (before, n::kRow, value))
         {
             selectRow (std::lround (value * (n::kRows - 1)));
-            full_.setActiveGroup (0);
+            setActiveGroup (0);
         }
         if (inst.takeNativeVoice (before, n::kStep, value))
         {
             selectStep (std::lround (value * (n::kSteps - 1)));
-            full_.setActiveGroup (0);
+            setActiveGroup (0);
         }
         // Selection wins over a write queued for the previously displayed cell.
         const auto current = sequenceState (inst);
         if (inst.takeNativeVoice (current, n::kValue, value) && current.target >= 0 && current.preset == inst.stateGeneration())
         {
-            full_.setActiveGroup (0);
+            setActiveGroup (0);
             const float plain = static_cast<float> (std::lround (synthyboy::fromNormalised (uibind::info (current.target), value)));
             if (inst.param (current.target) != plain)
                 uibind::writePlain (inst, current.target, plain);
         }
     }
 
-    int stepParam (int row, int step) const noexcept
+    /** The Q target of slot `slot` of group `group`: the engine parameter of the row, the virtual targets of STEP and ROW, the selected step's value (-1: empty). */
+    int groupTarget (int group, int slot) const noexcept
     {
-        return gridParams_[std::clamp (row, 0, ui::VoiceGrid::kNumRows - 1)][std::clamp (step, 0, ui::VoiceGrid::kNumSteps - 1)];
+        const int r = kQ.row (group, slot);
+        if (r < 0)
+            return -1;
+        switch (kRows[r].id)
+        {
+            case kStepSelect: return QRouter::encode (kVirtualStep, QRouter::kVirtual);
+            case kRowSelect: return QRouter::encode (kVirtualRow, QRouter::kVirtual);
+            case kStepValue: return stepParam (activeRow_, selectedStep_);
+            default: return params_[r];
+        }
     }
 
     /** The groups of the page are four, in reading order (STEP, RANDOM, SCALING with the 10x switch, TARGETS): the active one is on Q 1 .. 4, the next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& inst)
     {
-        const int g = full_.activeGroup();
-        constexpr int kN = ui::VoiceScreen::kMaxGroups;
         const bool list = pageTop_ != 0;
-        qSlots_.publish (inst, list ? 0 : kN, g, [this] (int k, int* t)
+        qSlots_.publish (inst, list ? 0 : kMaxGroups, activeGroup_, [this] (int k, int* t)
         {
-            std::copy_n (groupTargets_[k], ui::QGroup::kSlots, t);
-            if (k == 0)
-                t[3] = stepParam (full_.grid.state.activeRow, full_.grid.state.selectedStep);
+            for (int s = 0; s < binding::QTable<kMaxGroups>::kSlots; ++s)
+                t[s] = groupTarget (k, s);
         });
-        for (int i = 0; i < kN; ++i)
-            full_.groups[i].setBlock (list ? -1 : QRouter::blockOfGroup (kN, g, i));
     }
 
-    ui::Component* topComponent() noexcept
-    {
-        return pageTop_ == 0 ? &full_ : nullptr;
-    }
-
-    ui::VoiceScreen full_;
+    int params_[kNumRowsTotal] {};
     bool sequenceAvailable_ = false;
-    std::vector<Item> items_;
-    bool resyncAfterInput_ = false;
-    int groupTargets_[ui::VoiceScreen::kMaxGroups][ui::QGroup::kSlots] {};
-    int gridParams_[ui::VoiceGrid::kNumRows][ui::VoiceGrid::kNumSteps] {};
+    int activeGroup_ = 0, activeRow_ = 0, selectedStep_ = 0, length_ = 8;
+    uint8_t voiceStepMask_ = 0;
 
     uint64_t gesturePreset_ = 0;
     int w_ = kCanvasW;
     int pageTop_ = 0;
-
-    ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
     QSlots qSlots_;
