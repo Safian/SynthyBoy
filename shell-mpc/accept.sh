@@ -326,8 +326,8 @@ $B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
 $B/play_host "$OVLON" > $B/play.log 2>&1 || { grep -E "^FAIL" $B/play.log; echo "ACCEPT FAIL: play_host (the Play page's parameters)"; exit 1; }
 # Build the native Play, Mixer and FX host checks together.
-cmake --build "$B" --target play_env_lfo_host mixer_native_ui_host fx_native_ui_host > "$B/native-ui-build.log" 2>&1 || { tail -40 "$B/native-ui-build.log"; exit 1; }
-for t in play_env_lfo_host mixer_native_ui_host fx_native_ui_host; do
+cmake --build "$B" --target play_env_lfo_host mixer_binding_host fx_native_ui_host > "$B/native-ui-build.log" 2>&1 || { tail -40 "$B/native-ui-build.log"; exit 1; }
+for t in play_env_lfo_host mixer_binding_host fx_native_ui_host; do
     ctest --test-dir "$B" -R "^${t}$" --output-on-failure --no-tests=error || exit 1
 done
 SYNTHYBOY_FX_NATIVE_HOST="$B/shell-mpc/fx_native_ui_host" python3 scripts/tests/test_mpc_skin_fx.py > "$B/native-fx-skin.log" 2>&1 || { tail -40 "$B/native-fx-skin.log"; exit 1; }

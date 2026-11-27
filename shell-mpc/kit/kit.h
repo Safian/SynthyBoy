@@ -3,11 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
-#include "binder.h"
 #include "branding.h"
 #include "content_source.h"
 #include "instance.h"
-#include "page_base.h"
+#include "page_input.h"
 #include "page_set.h"
 #include "param_source.h"
 #include "q_targets.h"

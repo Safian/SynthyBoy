@@ -134,4 +134,76 @@ inline bool formatPlain (Format f, double plain, char* out, size_t cap) noexcept
     return false;
 }
 
+// ---- the "used + one free" candidate set of the merged Env / LFO tabs (docs/ui-map/env-filter-lfo-plan.md section (b)): the DATA behind the native instance selector, no control -----------------------------------
+/** Every candidate that is USED, the SELECTED one and a candidate marked `always`, in the order given, then ONE "+" cell while a candidate is neither used, always nor selected. A candidate has a `group` (0 standard, 1 random LFO): the
+    "+" offers the lowest free candidate of each group (at most kMaxChoices). Pure: the same input gives the same cells. */
+struct SelectorSet
+{
+    static constexpr int kMaxCandidates = 16, kMaxCells = kMaxCandidates + 1, kLabelLen = 8, kMaxChoices = 4;
+    static constexpr int kPlus = -1;   // the value of a cell that is the "+" cell
+    struct Candidate
+    {
+        int id = 0;                    // Env 1 .. 6; LFO 1 .. 10, random LFO 11 .. 14
+        char label[kLabelLen] = {};
+        bool used = false, always = false;
+        int group = 0;
+    };
+    struct State
+    {
+        int count = 0;
+        Candidate items[kMaxCandidates];
+        int selected = 0;              // the id of the selected candidate (shown even when unused; 0 = none)
+    };
+    State state;
+
+    void clear() noexcept { state.count = 0; }
+    void add (int id, const char* label, bool used, bool always = false, int group = 0)
+    {
+        if (state.count >= kMaxCandidates)
+            return;
+        Candidate& c = state.items[state.count++];
+        c.id = id; c.used = used; c.always = always; c.group = group;
+        std::snprintf (c.label, sizeof c.label, "%s", label);
+    }
+    void setSelected (int id) noexcept { state.selected = id; }
+    static bool isShown (const State& s, int i) noexcept { return i >= 0 && i < s.count && (s.items[i].used || s.items[i].always || s.items[i].id == s.selected); }
+    /** The cells in order: the index of every shown candidate, then kPlus when a free candidate is left; returns the count (at most `max`). */
+    static int cellsOf (const State& s, int* out, int max) noexcept
+    {
+        int n = 0, free = 0;
+        for (int i = 0; i < std::min (s.count, kMaxCandidates); ++i)
+            if (isShown (s, i))
+            {
+                if (n < max)
+                    out[n++] = i;
+            }
+            else
+                ++free;
+        if (free > 0 && n < max)
+            out[n++] = kPlus;
+        return n;
+    }
+    /** What a tap on "+" offers: the index of the lowest free candidate of each group, groups in the order they first appear. */
+    static int choicesOf (const State& s, int* out, int max) noexcept
+    {
+        int groups[kMaxChoices], ng = 0, n = 0;
+        for (int i = 0; i < std::min (s.count, kMaxCandidates); ++i)
+            if (! isShown (s, i))
+            {
+                bool seen = false;
+                for (int g = 0; g < ng; ++g)
+                    seen = seen || groups[g] == s.items[i].group;
+                if (seen || ng >= kMaxChoices)
+                    continue;
+                groups[ng++] = s.items[i].group;
+                if (n < max)
+                    out[n++] = i;
+            }
+        return n;
+    }
+    int cells (int* out, int max) const noexcept { return cellsOf (state, out, max); }
+    int plusChoices (int* out, int max) const noexcept { return choicesOf (state, out, max); }
+    int numCells() const noexcept { int c[kMaxCells]; return cells (c, kMaxCells); }
+};
+
 }} // namespace synthyboy_mpc::binding

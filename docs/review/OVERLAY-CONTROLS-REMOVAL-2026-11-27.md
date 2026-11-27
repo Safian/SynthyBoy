@@ -98,3 +98,14 @@ Everything above that says NOT VERIFIED, plus the Mixer claim that `listOpen_` i
 Filled per row in the table above ("Native replacement: where / which component"). New native elements were NOT built:
 the replacements exist for the DUP rows already; for the LIVE-ONLY rows no skin construction exists (TextEntry) or the
 binding needs device work (PointMod board, curve-editor buttons). Per the instruction, those are not deleted and are in TODO.md.
+
+## 8. Running table: control, page, case, native component (branch `delete-ui-library`)
+
+Owner decision 2026-11-27: the C++ layer has no UI elements; the plugin holds parameter binding rows (`shell-mpc/ui/binding.h`). Case (a) = a native component already exists in the skin, only the C++ use is removed and the row kept;
+(b) = a native component was added; (c) = kept, blocker documented.
+
+| Control | Page | Case | Native component / where |
+|---|---|---|---|
+| Strip power (StripPower), destination (RouteDropdown), pan / send (SliderBar), level (Fader), destination ListPopup | Mixer (`overlay/mixer_ui.h`) | (a) | native strip cells of the Mixer skin (`scripts/mpc-skin-extras`, `components/native` level / pan / selector); rows = `MixerUi::kRows` (60 rows, id = 1000 + 10 * strip + type), Q banks = `MixerUi::kQ4` / `kQ16` (tables of row indices) |
+| kit `Binder` / `PageBase` (generic widget page framework) | `shell-mpc/kit` | deleted | no page of SynthyBoy used it; `PageInput` moved to `kit/page_input.h`; `template-mpc` pages still derive from `PageBase` and must be rewritten or deleted (open) |
+| UsedSelector logic (used + one free) | Env / Lfo | data kept | `binding::SelectorSet` (pure data, `ui/binding.h`), used by `uibind::fillSelector` for the native instance selector |

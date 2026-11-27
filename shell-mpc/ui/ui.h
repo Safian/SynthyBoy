@@ -6,10 +6,3 @@
 
 #include "ui_generic.h"
 
-#include "filter_display.h"
-#include "panel.h"
-#include "screen.h"
-#include "mixer_screen.h"
-#include "fx_screen.h"
-#include "voice_master.h"
-#include "voice_screen.h"

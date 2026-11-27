@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "../kit/page_base.h"
+#include "../kit/page_input.h"
 #include "../ui/theme.h"
 #include "page_detector.h"
 #include "scene_cpu.h"

@@ -326,15 +326,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(mixfx_ui_host PRIVATE cxx_std_17)
     target_compile_options(mixfx_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(mixer_native_ui_host EXCLUDE_FROM_ALL overlay/tests/mixer_native_ui_host.cpp)
-    target_include_directories(mixer_native_ui_host PRIVATE
+    add_executable(mixer_binding_host EXCLUDE_FROM_ALL overlay/tests/mixer_binding_host.cpp)
+    target_include_directories(mixer_binding_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
         "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(mixer_native_ui_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(mixer_native_ui_host PRIVATE cxx_std_17)
-    # This test exercises gestures inside assert expressions, including in Release.
-    target_compile_options(mixer_native_ui_host PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
+    target_link_libraries(mixer_binding_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(mixer_binding_host PRIVATE cxx_std_17)
+    target_compile_options(mixer_binding_host PRIVATE -Wall -Wextra -Wpedantic)
 
     add_executable(mod_ui_host EXCLUDE_FROM_ALL overlay/tests/mod_ui_host.cpp)
     target_include_directories(mod_ui_host PRIVATE
@@ -386,13 +385,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(qchip_jump_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME qchip_jump_host COMMAND qchip_jump_host)
 
-    add_executable(ui_env_host EXCLUDE_FROM_ALL ui/tests/ui_env_host.cpp)
-    target_include_directories(ui_env_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_features(ui_env_host PRIVATE cxx_std_17)
-    target_compile_options(ui_env_host PRIVATE -Wall -Wextra -Wpedantic)
 
     add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
     target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -412,14 +404,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_time_ruler_host PRIVATE cxx_std_17)
     target_compile_options(ui_time_ruler_host PRIVATE -Wall -Wextra -Wpedantic)
 
-    add_executable(ui_lfo_host EXCLUDE_FROM_ALL ui/tests/ui_lfo_host.cpp)
-    target_include_directories(ui_lfo_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(ui_lfo_host PRIVATE synthyboy_filters_serum)
-    target_compile_features(ui_lfo_host PRIVATE cxx_std_17)
-    target_compile_options(ui_lfo_host PRIVATE -Wall -Wextra -Wpedantic)
 
     # The NOTE / VELO curve editor (ui/scalar_curve_editor.h, overlay/scalar_curve_ui.h): component, page logic, content round trip against the engine's own evaluation
     foreach(t ui_scalar_curve_host scalar_curve_ui_host)
@@ -452,13 +436,11 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(qslots_host PRIVATE cxx_std_17)
     target_compile_options(qslots_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME qslots_host COMMAND qslots_host)
-    add_test(NAME ui_env_host COMMAND ui_env_host)
-    add_test(NAME ui_lfo_host COMMAND ui_lfo_host)
     add_test(NAME ui_time_ruler_host COMMAND ui_time_ruler_host)
 
     add_test(NAME mod_ui_host COMMAND mod_ui_host)
     add_test(NAME mixfx_ui_host COMMAND mixfx_ui_host)
-    add_test(NAME mixer_native_ui_host COMMAND mixer_native_ui_host)
+    add_test(NAME mixer_binding_host COMMAND mixer_binding_host)
 
     add_executable(mastervoice_ui_host EXCLUDE_FROM_ALL overlay/tests/mastervoice_ui_host.cpp)
     target_include_directories(mastervoice_ui_host PRIVATE
@@ -562,34 +544,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(macro_names_ui_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME macro_names_ui_host COMMAND macro_names_ui_host)
 
-    add_executable(ui_led_host EXCLUDE_FROM_ALL ui/tests/ui_led_host.cpp)
-    target_include_directories(ui_led_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_features(ui_led_host PRIVATE cxx_std_17)
-    target_compile_options(ui_led_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_led_host COMMAND ui_led_host)
 
-    add_executable(ui_carousel_host EXCLUDE_FROM_ALL ui/tests/ui_carousel_host.cpp)
-    target_include_directories(ui_carousel_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_features(ui_carousel_host PRIVATE cxx_std_17)
-    target_compile_options(ui_carousel_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_carousel_host COMMAND ui_carousel_host)
 
     # the FX slot editor driven by the tables of the effects (ui/fx_layout.h): the tables against the engine, the one rule for what does nothing, the pages, the number field kind
-    add_executable(ui_fx_editor_host EXCLUDE_FROM_ALL ui/tests/ui_fx_editor_host.cpp)
-    target_include_directories(ui_fx_editor_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(ui_fx_editor_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(ui_fx_editor_host PRIVATE cxx_std_17)
-    target_compile_options(ui_fx_editor_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_fx_editor_host COMMAND ui_fx_editor_host)
 
     # Standalone native FX aperture/ownership regression.  This deliberately
     # remains separate from the broad Mixer+FX legacy host executable so a
@@ -740,30 +697,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME controller_review_host COMMAND controller_review_host)
 
     # --- UI Component Library Coverage Tests ---
-    set(UI_COV_TARGETS
-        ui_cov_knobs_values_host
-        ui_cov_steppers_lists_host
-        ui_cov_toggles_buttons_host
-        ui_cov_popups_scroll_host
-        ui_cov_composites_panels_host
-        ui_cov_qgroups_chips_host
-        ui_cov_layout_text_host)
 
-    foreach(cov_target IN LISTS UI_COV_TARGETS)
-        add_executable(${cov_target} ui/tests/${cov_target}.cpp)
-        target_include_directories(${cov_target} PRIVATE
-            "${CMAKE_SOURCE_DIR}/core/include"
-            "${CMAKE_SOURCE_DIR}/core/filters-serum/include"
-            "${CMAKE_SOURCE_DIR}/core/shapes/include"
-            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-        target_compile_definitions(${cov_target} PRIVATE
-            SYNTHYBOY_MPC_UI_GEN=${SYNTHYBOY_MPC_UI_GEN_N}
-            SYNTHYBOY_MPC_QFRAME_ENABLED=${SYNTHYBOY_MPC_QFRAME_ENABLED_N})
-        target_compile_features(${cov_target} PRIVATE cxx_std_17)
-        target_compile_options(${cov_target} PRIVATE -Wall -Wextra -Wpedantic)
-        add_test(NAME ${cov_target} COMMAND ${cov_target})
-    endforeach()
 
     # --- Q-Link Visual Build Policy Tests and Fixtures ---
     add_executable(q_visual_policy_host ui/tests/q_visual_policy_host.cpp)
@@ -822,25 +756,8 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME device_profile_host COMMAND device_profile_host)
 
     # Data consistency tests for the FX page tables (ui/fx_layout.h, ui/choice_names.h)
-    add_executable(ui_fx_tables_host EXCLUDE_FROM_ALL ui/tests/ui_fx_tables_host.cpp)
-    target_include_directories(ui_fx_tables_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(ui_fx_tables_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(ui_fx_tables_host PRIVATE cxx_std_17)
-    target_compile_options(ui_fx_tables_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_fx_tables_host COMMAND ui_fx_tables_host)
 
     # UI component library coverage: new parts host tests (NoteMask, FxBandBoard, Knob LED/dialMax, NumberField maxBox/text, LedList 2-digit chips)
-    add_executable(ui_cov_new_parts_host ui/tests/ui_cov_new_parts_host.cpp)
-    target_include_directories(ui_cov_new_parts_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_compile_features(ui_cov_new_parts_host PRIVATE cxx_std_17)
-    target_compile_options(ui_cov_new_parts_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME ui_cov_new_parts_host COMMAND ui_cov_new_parts_host)
 
 endif()
 

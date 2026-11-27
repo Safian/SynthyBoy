@@ -15,7 +15,8 @@
 
 #include "../kit/param_source.h"
 #include "../kit/synthyboy_params.h"
-#include "../ui/ui.h"
+#include "../ui/binding.h"
+#include "../ui/model.h"
 #include "instance_view.h"
 #include "macro_names.h"
 #include "synthyboy/modulation.h"
@@ -157,31 +158,13 @@ inline void boardColourName (int choice, char* out, size_t cap)
         std::snprintf (out, cap, "%s", sn);
     }
 }
-/** Fills a board with every source of the engine, in the groups of sourceGroup (the order of a group is the engine's, except that the random LFOs come after the ten LFOs); the choice numbers (the engine's indices) are what the chips carry. */
-inline void fillSourceBoard (ui::ModSourceBoard& b)
-{
-    b.clear();
-    for (int g = 1; g <= kSourceGroups; ++g)
-        b.setGroupName (g - 1, sourceGroupName (g));
-    for (int g = 1; g <= kSourceGroups; ++g)
-        for (int pass = 0; pass < 2; ++pass)
-            for (int c = 1; c <= static_cast<int> (synthyboy::modSourceCount()); ++c)
-                if (sourceGroup (c) == g && (std::strncmp (synthyboy::modSourceTable()[c - 1].key, "rlfo", 4) == 0) == (pass == 1))
-                {
-                    char label[28], colour[12];
-                    boardLabel (c, label, sizeof label);
-                    boardColourName (c, colour, sizeof colour);
-                    b.add (c, label, colour, g - 1);
-                }
-}
-
 /** The modulation source ids (the choice value of modNN.source) of envelope n (1 .. 6) and LFO n (1 .. 10); ui::kNoSource for anything else. */
 inline int envSource (int n) noexcept { return n >= 1 && n <= 6 ? n : ui::kNoSource; }
 inline int lfoSource (int n) noexcept { return n >= 1 && n <= 8 ? 6 + n : (n == 9 ? 33 : (n == 10 ? 34 : ui::kNoSource)); }
 
 inline int rndSource (int n) noexcept { return n >= 1 && n <= 4 ? 14 + n : ui::kNoSource; }   // random LFO n (1 .. 4) = source 15 .. 18
 
-// ---- the selector of the merged Env / LFO tabs ("used + one free", docs/ui-map/env-filter-lfo-plan.md section (b)); the component is ui::UsedSelector -----------------------------------------------------------------
+// ---- the selector of the merged Env / LFO tabs ("used + one free", docs/ui-map/env-filter-lfo-plan.md section (b)); the component is binding::SelectorSet -----------------------------------------------------------------
 constexpr int kSelEnvs = 6, kSelLfos = 10, kSelRnds = 4, kSourceIds = 64;   // the items; the source ids (choice values of modNN.source) are below 64
 constexpr int kRndBase = kSelLfos;   // the selector id of random LFO m (1 .. 4) is kRndBase + m (11 .. 14); LFO n and ENV n have the id n
 
@@ -215,7 +198,7 @@ struct Edited
 enum class SelKind { Env, Lfo };
 
 /** PURE. Fills `sel` with the candidates of the selector `kind` from the used sources and the edited flags: ENV 1 .. 6 (ENV 1 always shown); LFO 1 .. 10, then R1 .. R4 (group 1). The selected id is NOT set here. */
-inline void selectorCandidates (SelKind kind, const bool usedSrc[kSourceIds], const Edited& ed, ui::UsedSelector& sel)
+inline void selectorCandidates (SelKind kind, const bool usedSrc[kSourceIds], const Edited& ed, binding::SelectorSet& sel)
 {
     sel.clear();
     char label[8];
@@ -319,7 +302,7 @@ inline void chooseLfo (IInstanceView& v, int id) noexcept
         v.setTabView (IInstanceView::kTabViewRnd, id - kRndBase);
 }
 /** Fills the selector from a scan and the view state (candidates, selected id). */
-inline void fillSelector (SelKind kind, const UsedScan& sc, const IInstanceView& v, ui::UsedSelector& sel)
+inline void fillSelector (SelKind kind, const UsedScan& sc, const IInstanceView& v, binding::SelectorSet& sel)
 {
     selectorCandidates (kind, sc.used, sc.edited, sel);
     sel.setSelected (kind == SelKind::Env ? selectedEnv (v) : selectedLfo (v));
@@ -328,7 +311,7 @@ inline void fillSelector (SelKind kind, const UsedScan& sc, const IInstanceView&
     apart: the same used items, the selected one and ONE `+`. `id[k]` is the candidate of cell k, `kPlusCell` (0) for the `+` cell; `names[k]` its row name ("ENV 3", "LFO 3", "RND 2", "+"). */
 struct SelectorCells
 {
-    static constexpr int kMax = ui::UsedSelector::kMaxCells, kPlusCell = 0;
+    static constexpr int kMax = binding::SelectorSet::kMaxCells, kPlusCell = 0;
     int n = 0, selectedPos = 0;
     int id[kMax] = {};
     char text[kMax][10] = {};
@@ -344,14 +327,14 @@ struct SelectorCells
     }
 };
 inline std::string selectorRowName (SelKind kind, int id);
-inline void cellsFromSelector (SelKind kind, const ui::UsedSelector& sel, SelectorCells& out)
+inline void cellsFromSelector (SelKind kind, const binding::SelectorSet& sel, SelectorCells& out)
 {
-    int cs[ui::UsedSelector::kMaxCells];
-    out.n = sel.cells (cs, ui::UsedSelector::kMaxCells);
+    int cs[binding::SelectorSet::kMaxCells];
+    out.n = sel.cells (cs, binding::SelectorSet::kMaxCells);
     out.selectedPos = 0;
     for (int k = 0; k < out.n; ++k)
     {
-        if (cs[k] == ui::UsedSelector::kPlus)
+        if (cs[k] == binding::SelectorSet::kPlus)
         {
             out.id[k] = SelectorCells::kPlusCell;
             std::snprintf (out.text[k], sizeof out.text[k], "+");
@@ -368,18 +351,18 @@ inline void cellsFromSelector (SelKind kind, const ui::UsedSelector& sel, Select
 }
 /** The id a tap on cell `pos` selects: the candidate of the cell, or for the `+` cell the lowest free one of the FIRST group (the only one for an envelope; for the LFO with two free kinds the owner opens the list instead: `plusChoices`);
     0 when there is nothing to select. */
-inline int cellChoice (const ui::UsedSelector& sel, const SelectorCells& cells, int pos) noexcept
+inline int cellChoice (const binding::SelectorSet& sel, const SelectorCells& cells, int pos) noexcept
 {
     if (pos < 0 || pos >= cells.n)
         return 0;
     if (cells.id[pos] != SelectorCells::kPlusCell)
         return cells.id[pos];
-    int ch[ui::UsedSelector::kMaxChoices];
-    return sel.plusChoices (ch, ui::UsedSelector::kMaxChoices) > 0 ? sel.state.items[ch[0]].id : 0;
+    int ch[binding::SelectorSet::kMaxChoices];
+    return sel.plusChoices (ch, binding::SelectorSet::kMaxChoices) > 0 ? sel.state.items[ch[0]].id : 0;
 }
 /** The id the selection falls back to when the tab is LEFT while an item that is neither used nor edited is selected (a `+` pick the user did not edit; decided 2026-11-21, `docs/ui-map/osc-play-bold-cut/README.md`): the last used item
     in number order before it, else the first used one after it, else the first candidate (ENV 1, LFO 1). 0: the selection is used (or `always`): nothing changes. Pure: no parameter is written, the owner changes the view state only. */
-inline int fallbackSelection (const ui::UsedSelector& sel) noexcept
+inline int fallbackSelection (const binding::SelectorSet& sel) noexcept
 {
     int cur = -1;
     for (int i = 0; i < sel.state.count; ++i)
@@ -398,7 +381,7 @@ inline int fallbackSelection (const ui::UsedSelector& sel) noexcept
 /** The tab was left: an unused, unedited selection falls back (see `fallbackSelection`); the scan is made here (once, not per frame). */
 inline void leaveSelector (SelKind kind, IInstanceView& v)
 {
-    ui::UsedSelector sel;
+    binding::SelectorSet sel;
     fillSelector (kind, scanUsed (v), v, sel);
     const int id = fallbackSelection (sel);
     if (id <= 0)
