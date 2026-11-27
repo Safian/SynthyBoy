@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 86,
+  "title": "HSlider",
+  "sections": [],
+  "hslider": {
+    "examples": [
+      {"id": "pan-centre", "file": "hslider-pan-centre.png", "title": "PAN", "value": 0.5, "text": "C", "bipolar": true, "state": "enabled",
+       "caption": "1 · PAN középen: kétpólusú, középjel a pálya felénél, érték C", "alt": "PAN vízszintes csúszka középen"},
+      {"id": "pan-left-50", "file": "hslider-pan-left-50.png", "title": "PAN", "value": 0.25, "text": "L50", "bipolar": true, "state": "enabled",
+       "caption": "2 · PAN L50: a húzogató a bal oldali negyedben", "alt": "PAN vízszintes csúszka L50"},
+      {"id": "send-60", "file": "hslider-send-60.png", "title": "B1", "value": 0.6, "text": "60%", "bipolar": false, "state": "enabled",
+       "caption": "3 · B1 60%: egypólusú 0..100%, középjel nincs", "alt": "B1 vízszintes csúszka 60%"},
+      {"id": "send-disabled", "file": "hslider-send-disabled.png", "title": "B2", "value": 0.6, "text": "60%", "bipolar": false, "state": "disabled",
+       "caption": "4 · Tiltott (disabled) állapot: a közös tiltott kinézet", "alt": "B2 vízszintes csúszka tiltva"}
+    ]
+  }
+}

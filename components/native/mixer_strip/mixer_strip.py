@@ -945,3 +945,189 @@ __all__ = [
     "write_mixer_strip_assets",
     "render_mixer_strip",
 ]
+
+
+# ----------------------------------------------------------------------------------------------------
+# CATALOGUE DESIGN: one 160 px channel strip composed from the existing recipes (docs/ui-components/mixer_strip.md).
+# Top to bottom: name (Label) with the POWER ghost IconButton, S and M (Button recipe, 32 px; not on MASTER), the
+# destination dropdown, the level fader (scale, contrasty thumb) with the stereo meter and the readout under it, and
+# at the bottom the old rotary cells (variant "knobs") or three HSliders (variant "sliders"). Geometry only from
+# components/sizes.json (mixer_strip.design.*, hslider.*), colours from colors.json.
+# ----------------------------------------------------------------------------------------------------
+import json
+from components.native.button.button import action_art
+from components.native.hslider.hslider import render_hslider, thumb_face
+from components.native.icon_button import icon_button as _icon_button
+from components.native.label.label import render_label
+from components.native.level.level import render_dial_labelled
+from components.native.selector.selector import render_dropdown_variant
+from components.style import color as _color, dim_artwork, native_font_em, rgb as _rgb, size as _size
+
+DIRECTORY = Path(__file__).resolve().parent
+SCALES = {"percent": SCALE_PERCENT, "linear_db": SCALE_LINEAR_DB, "skew_db": SCALE_SKEW_DB}
+BOTTOMS = ("knobs", "sliders", "none")
+POWER_STATES = ("on", "off")
+REQUIRED = {"id", "file", "alt", "caption", "section", "name", "power", "scale", "level", "level_text", "meter", "bottom"}
+OPTIONAL = {"destination", "buttons", "sends"}
+SEND_KEYS = {"name", "norm", "text", "bipolar"}
+
+
+def metrics():
+    inner_pad = _size("mixer_strip.design.padding")
+    width = _size("mixer_strip.design.width")
+    return {"width": width, "height": _size("mixer_strip.height"), "pad": inner_pad, "gap": _size("mixer_strip.design.gap"),
+            "row": _size("mixer_strip.design.row"), "inner": width - 2 * inner_pad}
+
+
+def _bottom_height(bottom, count):
+    m = metrics()
+    if bottom == "none" or not count:
+        return 0
+    if bottom == "knobs":
+        cell, gap = _size("mixer_strip.control.height_56"), _size("mixer_strip.design.cell_gap")
+    else:
+        cell, gap = _size("hslider.height"), m["gap"]
+    return count * cell + (count - 1) * gap
+
+
+def layout(example):
+    """All rectangles (x, y, w, h) of one example, from the tokens: the strip is metrics()['height'] high."""
+    m = metrics()
+    pad, gap, row, inner = m["pad"], m["gap"], m["row"], m["inner"]
+    rects, y = {}, pad
+    name = render_label(example["name"], "font.value.large", "text.value", unit="tui")
+    rects["name"] = (pad, y + (row - name.height) // 2, name.width, name.height)
+    rects["power"] = (pad + inner - row, y, row, row)
+    y += row + gap
+    if example.get("buttons") is not None:
+        half = (inner - gap) // 2
+        rects["solo"], rects["mute"] = (pad, y, half, row), (pad + inner - half, y, half, row)
+        y += row + gap
+    if example.get("destination"):
+        rects["destination"] = (pad, y, inner, row)
+        y += row + gap
+    sends = example.get("sends", []) if example["bottom"] != "none" else []
+    bottom = _bottom_height(example["bottom"], len(sends))
+    readout = _size("mixer_strip.design.readout")
+    area = m["height"] - pad - (bottom + gap if bottom else 0) - readout - gap - y
+    thumb = _size("mixer_strip.design.thumb")
+    meter_w = _size("mixer_strip.meter.width")
+    scale_w, meter_gap = _size("mixer_strip.design.scale_width"), _size("mixer_strip.design.meter_gap")
+    group_x = pad + (inner - (scale_w + thumb["width"] + meter_gap + meter_w)) // 2
+    track_x = group_x + scale_w + thumb["width"] // 2
+    rects["scale"] = (group_x, y, scale_w, area)
+    rects["track"] = (track_x - _size("mixer_strip.fader.track_width") // 2, y, _size("mixer_strip.fader.track_width"), area)
+    top, low = y + thumb["height"] // 2, y + area - thumb["height"] // 2
+    centre = round(low - max(0.0, min(1.0, example["level"])) * (low - top))
+    rects["thumb"] = (track_x - thumb["width"] // 2, centre - thumb["height"] // 2, thumb["width"], thumb["height"])
+    rects["meter"] = (group_x + scale_w + thumb["width"] + meter_gap, y, meter_w, area)
+    y += area + gap
+    rects["readout"] = (pad, y, inner, readout)
+    y += readout + gap
+    if bottom:
+        cell = _size("mixer_strip.control.height_56") if example["bottom"] == "knobs" else _size("hslider.height")
+        step = cell + (_size("mixer_strip.design.cell_gap") if example["bottom"] == "knobs" else gap)
+        for index in range(len(sends)):
+            rects[f"send{index}"] = (pad, y + index * step, inner, cell)
+    return rects
+
+
+def _text(draw, xy, text, size, colour, anchor):
+    draw.text(xy, text, font=semibold(round(native_font_em(_size(size)))), fill=_rgb(colour), anchor=anchor)
+
+
+def sm_face(letter, state, width):
+    """S or M: the Button recipe (legacy look, 32 px); active states take the solo_mute colours (solo cyan, mute red) in text and keyline."""
+    height = _size("mixer_strip.design.row")
+    colour = {"solo": "accent.cyan", "mute": "accent.red"}.get(state, "text.icon")
+    face = action_art(text=letter, width=width, height=height, colour=_color(colour), look="legacy")
+    if state in ("solo", "mute"):
+        scale = _size("knob.supersample")
+        big = face.resize((width * scale, height * scale), Image.Resampling.LANCZOS)
+        ImageDraw.Draw(big).rounded_rectangle((0, 0, big.width - 1, big.height - 1), radius=_size("button.size.32")["radius"] * scale,
+                                              outline=_rgb(colour), width=scale)
+        face = big.resize((width, height), Image.Resampling.LANCZOS)
+    return face
+
+
+def render_strip(example):
+    """One strip as a picture of metrics()['width'] x metrics()['height'] (transparent corners)."""
+    if Image is None:
+        raise RuntimeError("Pillow is required for the mixer strip")
+    m, r = metrics(), layout(example)
+    strip = Image.new("RGBA", (m["width"], m["height"]))
+    ImageDraw.Draw(strip).rounded_rectangle((0, 0, m["width"] - 1, m["height"] - 1), radius=_size("radius.control"),
+                                            fill=_rgb("surface.panel"), outline=_rgb("button.border"), width=1)
+    on = example["power"] == "on"
+    strip.alpha_composite(render_label(example["name"], "font.value.large", "text.value", unit="tui"), r["name"][:2])
+    strip.alpha_composite(_icon_button.render_sample({"icon": "power", "height": m["row"], "state": "on" if on else "off", "look": "ghost"}), r["power"][:2])
+
+    body = Image.new("RGBA", strip.size)
+    pen = ImageDraw.Draw(body)
+    if example.get("buttons") is not None:
+        for key, letter in (("solo", "S"), ("mute", "M")):
+            body.alpha_composite(sm_face(letter, key if example["buttons"].get(key) else "off", r[key][2]), r[key][:2])
+    if example.get("destination"):
+        body.alpha_composite(render_dropdown_variant(r["destination"][2], m["row"], example["destination"]), r["destination"][:2])
+    # Fader: groove, scale, contrasty thumb; stereo meter beside it; readout under it.
+    tx, ty, tw, th = r["track"]
+    pen.rounded_rectangle((tx, ty, tx + tw - 1, ty + th - 1), radius=tw // 2, fill=_rgb("surface.control"), outline=_rgb("field.border"), width=1)
+    sx, sy, sw, sh = r["scale"]
+    thumb = _size("mixer_strip.design.thumb")
+    top, low = sy + thumb["height"] // 2, sy + sh - thumb["height"] // 2
+    render_fader_scale(pen, sx, top - _size("mixer_strip.fader.scale_pad_top"),
+                       sw, low - top + _size("mixer_strip.fader.scale_pad_top") + _size("mixer_strip.fader.scale_pad_bottom"),
+                       SCALES[example["scale"]], semibold(_size("mixer_strip.font.scale")))
+    body.alpha_composite(thumb_face(thumb["width"], thumb["height"], "horizontal", radius=thumb["radius"], edge=thumb["edge"],
+                                    line=thumb["line"], line_inset=thumb["line_inset"]), r["thumb"][:2])
+    left, right = example["meter"]
+    body.alpha_composite(render_stereo_meter(r["meter"][3], {"PeakL": left, "PeakR": right, "HoldL": 0, "HoldR": 0}), r["meter"][:2])
+    x, y, w, h = r["readout"]
+    pen.rounded_rectangle((x, y, x + w - 1, y + h - 1), radius=_size("mixer_strip.header.radius"), fill=_rgb("surface.control"),
+                          outline=_rgb("field.border"), width=1)
+    _text(pen, (x + w / 2, y + h / 2), example["level_text"], "font.value", "text.value", "mm")
+    # Bottom: old rotary cells or HSliders.
+    for index, send in enumerate(example.get("sends", []) if example["bottom"] != "none" else []):
+        x, y, w, h = r[f"send{index}"]
+        if example["bottom"] == "knobs":
+            pen.rounded_rectangle((x, y, x + w - 1, y + h - 1), radius=_size("radius.control"), fill=_rgb("voice.surface"),
+                                  outline=_rgb("voice.border"), width=1)
+            dial = render_dial_labelled(_size("mixer_strip.design.dial"), send["norm"], send["name"], send["text"], "right",
+                                        bipolar=send["bipolar"], gap=_size("gap.field"))
+            body.alpha_composite(dial, (x + _size("mixer_strip.design.cell_gap") * 2, y + (h - dial.height) // 2))
+        else:
+            body.alpha_composite(render_hslider(w, send["name"], send["norm"], send["text"], bipolar=send["bipolar"]), (x, y))
+    strip.alpha_composite(body if on else dim_artwork(body))
+    return strip
+
+
+def strip_examples(entry):
+    if not isinstance(entry, dict) or set(entry) != {"examples"} or not entry["examples"]:
+        raise ValueError("mixer_strip entry needs a nonempty examples list")
+    for e in entry["examples"]:
+        if not REQUIRED <= set(e) or not set(e) <= REQUIRED | OPTIONAL:
+            raise ValueError(f"mixer strip example {e.get('id')!r}: fields must be {sorted(REQUIRED)} plus any of {sorted(OPTIONAL)}")
+        if e["power"] not in POWER_STATES or e["bottom"] not in BOTTOMS or e["scale"] not in SCALES:
+            raise ValueError(f"mixer strip example {e['id']!r}: power {POWER_STATES}, bottom {BOTTOMS}, scale {tuple(SCALES)}")
+        if e["bottom"] != "none" and not e.get("sends"):
+            raise ValueError(f"mixer strip example {e['id']!r}: a bottom row needs sends")
+        for send in e.get("sends", []):
+            if set(send) != SEND_KEYS:
+                raise ValueError(f"mixer strip example {e['id']!r}: a send needs exactly {sorted(SEND_KEYS)}")
+    if len({e["id"] for e in entry["examples"]}) != len(entry["examples"]):
+        raise ValueError("mixer strip example ids must be unique")
+    return entry["examples"]
+
+
+def render_catalog():
+    entry = json.loads((DIRECTORY / "catalog.json").read_text(encoding="utf-8"))["mixer_strip"]
+    for example in strip_examples(entry):
+        render_strip(example).save(DIRECTORY / "img" / example["file"])
+
+
+def catalog_sections(entry):
+    """One section per distinct `section` heading, in order of first appearance; one natural-size picture per example."""
+    sections = {}
+    for e in strip_examples(entry):
+        sections.setdefault(e["section"], []).append({"presentation": "sample", "file": e["file"], "alt": e["alt"], "caption": e["caption"]})
+    return [{"heading": heading, "images": images} for heading, images in sections.items()]
