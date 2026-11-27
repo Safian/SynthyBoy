@@ -102,9 +102,9 @@ class TestUiScreenNoise(unittest.TestCase):
             # Clean Q-Link bounds (no visible box clutter)
             self.assertEqual(noise_tab.get("qlinkBoundsData", []), [])
 
-            # Root background is overlay_canvas.png
+            # Root background is the solid page colour
             root_bg = noise_tab["componentDefinition"]["backgroundData"]["focussed"].get("image")
-            self.assertEqual(root_bg, "overlay_canvas.png")
+            self.assertEqual(root_bg, "")
 
             # oscNativeSurface presence
             tab_components = noise_tab["componentDefinition"]["componentsData"]

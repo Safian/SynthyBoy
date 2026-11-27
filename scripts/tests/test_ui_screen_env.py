@@ -62,11 +62,12 @@ class UiScreenEnvTest(unittest.TestCase):
         self.assertEqual(tab.get("qlinkBoundsData"), [], "qlinkBoundsData must be [] on Env screen")
 
     def test_env_background_is_static_overlay_bg(self):
-        """The tab background must use the pre-rendered overlay_canvas.png."""
+        """The tab background is the solid page colour (no bitmap)."""
         tab = self.tab()
         bg = tab["componentDefinition"]["backgroundData"]
-        self.assertEqual(bg["focussed"].get("image"), "overlay_canvas.png")
-        self.assertEqual(bg["unfocussed"].get("image"), "overlay_canvas.png")
+        self.assertEqual(bg["focussed"].get("image"), "")
+        self.assertEqual(bg["unfocussed"].get("image"), "")
+        self.assertEqual(bg["focussed"].get("colour"), "ff090d19")
 
     def test_selector_strip_and_cells(self):
         """The Env tabs have no selector (the hardware sub-tab names the envelope); the Play page's expanded editor keeps its 6 cells with >= 56px touch targets."""

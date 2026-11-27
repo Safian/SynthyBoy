@@ -17,7 +17,8 @@ ASSETS_DIR = HERE / "overlay-backgrounds"
 # host's own picture of the tab (its native widgets on the host's tab colour 1e1d1e, or the tab before the switch) does not have, outside the three marker spots, the host's left-edge handle tab (x 0 .. 9) and the host's
 # Q-Link panel (x >= 1020). The plugin reads it from the host's primary framebuffer (shell-mpc/overlay/page_detector.h) and keeps its own plane OPAQUE until it matches (shell-mpc/overlay/host_background.h).
 # The detector colour lives in a separate fixed native Image widget; background PNGs are plain canvas.
-CANVAS_ASSET = "overlay_canvas.png"
+CANVAS_ASSET = ""   # no bitmap: every tab has a solid page colour (PAGE_COLOUR)
+PAGE_COLOUR = "ff090d19"
 OSC_SENTINEL = (900, 8, "0f253f")
 
 KNOWN = {
@@ -104,17 +105,7 @@ def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
 
-    copied = set()
     for view, tab_name, asset_name in BACKGROUND_TABS:
-        asset_src = ASSETS_DIR / asset_name
-        if not asset_src.is_file():
-            raise FileNotFoundError("Missing committed background asset: %s" % asset_src)
-
-        # Copy asset to Plugin Skins folder
-        if asset_name not in copied and hasattr(ctx, "skins_dir") and ctx.skins_dir:
-            install_background(asset_src, Path(ctx.skins_dir) / asset_name, SENTINELS[view])
-            copied.add(asset_name)
-
         tab = ctx.tab(tab_name)
         root = tab["componentDefinition"]
         marker = "sentinel_" + view + ".png"
@@ -144,4 +135,4 @@ def apply(tui, qlinks, ctx):
         children.append(sentinel)
         bg = root["backgroundData"]
         for state in ("focussed", "unfocussed"):
-            bg[state] = dict(bg[state], image=asset_name)
+            bg[state] = dict(bg[state], colour=PAGE_COLOUR, image="")   # solid colour, no bitmap (owner 2026-11-27)
