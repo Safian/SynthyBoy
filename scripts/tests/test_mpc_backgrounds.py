@@ -279,11 +279,20 @@ class PageTitleAndMarkerTests(unittest.TestCase):
     def test_every_page_title_caption_uses_the_one_page_title_size(self):
         captions = json.loads((EXTRAS_DIR / "static-native-captions.json").read_text(encoding="utf-8"))
         titles = [captions[k][0] for k in ("voice", "master_header", "tuning_header", "mod", "filter1", "filter2",
-                                            "osca", "oscb", "oscc", "oscsub", "oscnoise", *("env%d" % n for n in range(1, 7)))]
+                                            "osca", "oscb", "oscc", "oscsub", "oscnoise", "filternote", "filtervelo", *("env%d" % n for n in range(1, 7)))]
         self.assertTrue(all(t["size"] == "font.page_title" and t["colour"] == "text.value" for t in titles), titles)
         sys.path.insert(0, str(ROOT))
         from components import style
         self.assertEqual(style.size("font.page_title"), 26)
+        # The host draws a TUI font height as ascent + descent (1.521 em): every title row must be tall enough for that height, no vertical clipping.
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from native_static_captions import host_font_height
+        height = host_font_height("font.page_title")
+        self.assertEqual(height, round(26 * style.size("font.host.height.per.em")))
+        self.assertGreaterEqual(height, 39)
+        for t in titles:
+            self.assertGreaterEqual(t["rect"][3], height, t)
+        self.assertEqual(host_font_height(13), 13)
 
     def test_every_lfo_and_rnd_tab_names_its_instance_on_the_host_layer(self):
         sys.path.insert(0, str(ROOT / "scripts"))
@@ -291,7 +300,8 @@ class PageTitleAndMarkerTests(unittest.TestCase):
         from native_static_captions import title_entry
         entry = title_entry("t", "RND 3", bg_mod.LFO_TITLE_RECT)
         self.assertEqual(entry["componentData"]["data"]["text"], "RND 3")
-        self.assertEqual(entry["componentData"]["data"]["textStyle"]["font"]["height"], 26.0)
+        self.assertEqual(entry["componentData"]["data"]["textStyle"]["font"]["height"], float(round(26 * 1.521)))
+        self.assertGreaterEqual(bg_mod.LFO_TITLE_RECT[3], 40)
         source = BACKGROUNDS_MOD_PATH.read_text(encoding="utf-8")
         self.assertIn('view[:3].upper() + " " + view[3:]', source)
         self.assertLess(source.index("children.append(sentinel)"), source.index("bg = root"))

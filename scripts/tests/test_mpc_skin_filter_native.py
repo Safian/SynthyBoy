@@ -82,7 +82,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 self.assertEqual(set(im.convert("RGB").getdata()), {colour})
         for state in ("focussed", "unfocussed"):
             self.assertEqual(self.tab["componentDefinition"]["backgroundData"][state]["image"], "overlay_canvas.png")
-        self.assertEqual(rect(sentinel), (900, 95, 5, 5))
+        self.assertEqual(rect(sentinel), (900, 2, 5, 5))
         with Image.open(self.skin / sentinel["componentData"]["data"]["image"]) as im:
             self.assertEqual(im.size, (5, 5))
             self.assertEqual(set(im.convert("RGB").getdata()), {(23, 28, 53)})

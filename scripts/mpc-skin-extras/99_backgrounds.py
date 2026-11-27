@@ -61,7 +61,7 @@ KNOWN = {
     "macros": ("Macros", CANVAS_ASSET, 900, 2, "0b1c5f"),
     "play1": ("Play", CANVAS_ASSET, 900, 2, "2a3a50"),
 }
-LFO_TITLE_RECT = (22, 82, 400, 40)   # the top left of the graph panel; shell-mpc/ui/lfo_display.h draws the page title at the same place
+LFO_TITLE_RECT = (22, 91, 400, 44)   # the top left of the graph panel; shell-mpc/ui/lfo_display.h draws the page title at the same place
 SENTINELS = {view: (v[2], v[3], v[4]) for view, v in KNOWN.items()}
 
 # The root background stays below the three named Play selector instances;

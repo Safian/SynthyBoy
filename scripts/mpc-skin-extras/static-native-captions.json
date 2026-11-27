@@ -294,9 +294,9 @@
       "text": "MOD MATRIX",
       "rect": [
         58,
-        11,
-        166,
-        42
+        4,
+        210,
+        56
       ],
       "size": "font.page_title",
       "colour": "text.value"
@@ -430,9 +430,9 @@
       "text": "OSC A",
       "rect": [
         988,
-        2,
+        0,
         282,
-        34
+        44
       ],
       "size": "font.page_title",
       "colour": "text.value"
@@ -443,9 +443,9 @@
       "text": "OSC B",
       "rect": [
         988,
-        2,
+        0,
         282,
-        34
+        44
       ],
       "size": "font.page_title",
       "colour": "text.value"
@@ -456,9 +456,9 @@
       "text": "OSC C",
       "rect": [
         988,
-        2,
+        0,
         282,
-        34
+        44
       ],
       "size": "font.page_title",
       "colour": "text.value"
@@ -469,9 +469,9 @@
       "text": "SUB",
       "rect": [
         988,
-        2,
+        0,
         282,
-        34
+        44
       ],
       "size": "font.page_title",
       "colour": "text.value"
@@ -482,9 +482,9 @@
       "text": "NOISE",
       "rect": [
         988,
-        2,
+        0,
         282,
-        34
+        44
       ],
       "size": "font.page_title",
       "colour": "text.value"
@@ -536,6 +536,32 @@
       ],
       "size": 13,
       "colour": "text.caption"
+    }
+  ],
+  "filternote": [
+    {
+      "text": "FILTER NOTE",
+      "rect": [
+        22,
+        4,
+        400,
+        56
+      ],
+      "size": "font.page_title",
+      "colour": "text.value"
+    }
+  ],
+  "filtervelo": [
+    {
+      "text": "FILTER VELO",
+      "rect": [
+        22,
+        4,
+        400,
+        56
+      ],
+      "size": "font.page_title",
+      "colour": "text.value"
     }
   ]
 }

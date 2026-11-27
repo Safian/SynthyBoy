@@ -1275,6 +1275,8 @@
     "filter.ensure_nv_definition.row_height": 56,
     "filter.ensure_nv_definition.min_width": 119,
     "filter.ensure_nv_definition.box_width": 44,
+    "filter.ensure_nv_definition.label_font": 23,
+    "filter.ensure_nv_definition.value_font": 20,
     "mod_row.build_editor_cell_definition.label_height": 24,
     "mod_row.build_editor_cell_definition.tall_threshold": 100,
     "mod_row.build_editor_cell_definition.padding": 4,

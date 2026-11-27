@@ -414,6 +414,8 @@ def _ensure_nv_definition(ctx, w, h):
         name=kind, rect=(0, 0, w, h), skins_dir=ctx.skins_dir, box_width=bw,
         box_height=style.size("height.small"),
         handle="Data", caption_handle="Caption",
+        label_size=style.size("filter.ensure_nv_definition.label_font"),   # JUCE heights: 23 draws a 15 px em (cap height ~10), 20 a 13 px em
+        value_size=style.size("filter.ensure_nv_definition.value_font"),
     )
     ctx.add_component_definition(kind, defn)
     return kind

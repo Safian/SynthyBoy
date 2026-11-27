@@ -622,7 +622,7 @@ public:
         Cell cell (sb, rect_);
         Pen p (sb, enabled_, inactive_);
         const theme::Look& T = theme::L();
-        p.textLeft ({ rect_.x + 58, rect_.y + 4, 210, 56 }, "MOD MATRIX", T.fTitle, p.c (T.text, 255), T.fMin);
+        p.textLeft ({ rect_.x + 58, rect_.y + 4, 210, 56 }, "MOD MATRIX", theme::kPageTitleSize, p.c (T.text, 255), T.fMin);
         p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH), 1.5f, p.c (T.keyline, 255));
     }
 

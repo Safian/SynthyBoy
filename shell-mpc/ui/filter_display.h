@@ -1143,7 +1143,11 @@ protected:
     void drawExtra (Pen& p) const override
     {
         if (curveView())
+        {
+            if (subTabPage_ && rect_.w > 0)   // the page title of the NOTE / VELO sub-tab (static-native-captions.json filternote / filtervelo draws the same rect on the host layer)
+                p.textLeft ({ rect_.x + 22, rect_.y + 4, 400, 56 }, view_ == kViewNote ? "FILTER NOTE" : "FILTER VELO", theme::kPageTitleSize, p.c (theme::L().text, 255), theme::L().fMin);
             return;
+        }
         const theme::Look& T = theme::L();
         if (! graphRect_.empty())
         {
@@ -1154,12 +1158,11 @@ protected:
             p.textLeft ({ graphRect_.x + 74, graphRect_.y + 4, std::max (0, graphRect_.w - 204), 56 },
                         hdr, theme::kPageTitleSize, p.c (power.state.on ? T.text : T.textFaint, 255), T.fMin);   // the page title: the size of every page (static-native-captions.json filter1 / filter2 draws the same rect on the host layer)
         }
+        // "SET ON MIXER" above the OUT readouts is a host-layer caption (static-native-captions.json filter1 / filter2): one copy, no overlay twin.
         const Rect blocks[kMaxGroups] = { mainBlock_, trackBlock_, outBlock_, formantBlock_ };
         for (int i = 0; i < kMaxGroups; ++i)
             if ((i != 3 || (isFormant_ && ! splitMode_)) && ! blocks[i].empty())
                 p.textLeft ({ blocks[i].x + kBlockPad + 4, blocks[i].y + 3, std::max (0, blocks[i].w - 2 * kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (activeGroup_ == i ? T.q : T.textDim, 255), T.fMin);
-        if (! splitMode_ && ! outReadout.rect().empty())
-            p.textLeft ({ outReadout.rect().x + 4, outBlock_.y + 3, std::max (0, outReadout.rect().w - 4), 16 }, "SET ON MIXER", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
     }
 
     bool isFormant_ = false, combMode_ = false, pageMode_ = false, subTabPage_ = false, splitMode_ = false, anyOn_ = true;

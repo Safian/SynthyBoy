@@ -370,7 +370,7 @@ protected:
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.textLeft ({ rect_.x + macrocard::kTitleRect.x, rect_.y + macrocard::kTitleRect.y, macrocard::kTitleRect.w, macrocard::kTitleRect.h }, "MACROS", T.fTitle, p.c (T.text, 255), T.fMin);
+        p.textLeft ({ rect_.x + macrocard::kTitleRect.x, rect_.y + macrocard::kTitleRect.y, macrocard::kTitleRect.w, macrocard::kTitleRect.h }, "MACROS", theme::kPageTitleSize, p.c (T.text, 255), T.fMin);
     }
 
 private:
