@@ -74,3 +74,64 @@
   - `components/native/stepped_dial/catalog.json` omits a 2-stop example (only 3, 4, 6, 8 stops shown, though `max_stops = 8` and `2..8` is supported).
   - `components/native/rotary_selector/catalog.json` has no `sh` or `pipa` icon example (though `components/native/rotary_selector/rotary_selector.py:30` registers `"pipa"` and docs mention `sh`).
   - `components/native/wave_icons/catalog.json` has no disabled sheet.
+
+---
+
+## 2. Token Hygiene
+
+### 2.1 Duplicate Definitions / Duplicate JSON Keys (Bugs)
+
+- `components/sizes.json:154-155`: Duplicate JSON key `"control.look": "legacy"` appears twice consecutively.
+- `components/style.py:39-64`: `CONTROL_LOOKS = ("legacy", "flat")` and `def control_look():` are duplicated verbatim at lines `39-50` and lines `53-64`.
+
+### 2.2 Literals in Renderers & Templates Instead of Tokens
+
+- `scripts/templates/native-component-catalog.html:29,33,34,37`: Hardcoded hex `#465064` (literal copy of `catalog.divider`) at line 29, plus literal pixel CSS values (`1px` at line 29; `320px`, `12px`, `8px` at line 33; `8px` at line 34; `16px` at line 37). Violates `docs/ui-components/README.md:57` and `components/AGENTS.md:15`.
+- `components/native/selector/selector.py:1353-1356`: Hardcoded `height=48` and `(height - 48) // 2` in `append_choice_rows` instead of `_style_size("height.medium")`.
+- `components/native/selector/selector.py:789`: Hardcoded `font_size > 8` and `w - 8` in `filter_chain_definition`.
+- `components/native/selector/selector.py:979`: Hardcoded `800` instead of `_style_size("screen.height")`.
+- `components/native/selector/selector.py:1343`: Hardcoded `"colour": "0"` instead of `_style_native_color("transparent")`.
+- `components/native/mixer_strip/mixer_strip.py:1083,1097,1110,1117` and `components/native/hslider/hslider.py:78`: Hardcoded `width=1` instead of `_style_size("stroke.hair")` (and `mixer_strip.py:1070` hardcodes `"button.size.32"` instead of `f"button.size.{height}"`; `mixer_strip.py:1120` uses `cell_gap * 2`).
+- `components/native/hslider/hslider.py:115`: Hardcoded `"144 px széles"` in section heading instead of `{size:hslider.width}`.
+- `components/native/filter_selector/catalog.json:14,20,26,32`: Hardcoded `"56 × 48 px"` instead of `{size:...}` placeholders.
+- `components/native/label/label.py:106,127`: Hardcoded default `diameter=48` and heading `"48 px-es tárcsa"`.
+- `components/native/radio_list/radio_list.py:24`, `components/native/radio_grid/radio_grid.py:22`, `components/native/slide_switch/slide_switch.py:25`, `components/native/rotary_selector/rotary_selector.py:28`: Hardcoded height/diameter tuples `(32, 40, 48)` and `(48, 56)` instead of resolving from `height.*` tokens (unlike `components/native/stepped_dial/stepped_dial.py:27`, which reads `_style_size("stepped_dial")["diameters"]`).
+- `components/native/radio_button/radio_button.py:89`: Hardcoded `(32, 40, 48)` and `32`.
+- `components/native/fader/fader.py:260-261,265,268`: Hardcoded tick offsets `12`, `4`, `3` and stroke widths `2`/`1`.
+- `components/native/active_text/active_text.py:69`: Hardcoded `4 * scale` right padding for `anchor="rm"`.
+- `components/native/solo_mute/solo_mute.py:101`: Dead expression `_style_size("scale.half") if False else 2`.
+
+### 2.3 All New Colour Tokens Added on 2026-11-27 (vs `605ef0e2`)
+
+All **11** colour tokens added to `components/colors.json` on 2026-11-27, their stated justifications, and Euclidean RGB distance checks ($\le 6.0$) against pre-existing and sibling tokens:
+
+| Token (`components/colors.json`) | Value | Justification | Duplicate / Close Existing Tokens ($\le 6$ RGB Euclid) |
+|---|---|---|---|
+| `button.gradient.top` (`:42`) | `#131930` | Measured top fill of old "+ ADD" button (`button.md:7`) | **FLAG**: `surface.panel` / `mod_matrix.surface` / `mod_row.surface` / `mod_detail.panel` `#121930` (**1.00**), `theme.aurora.panel0` `#121a30` (**1.41**), `field.surface` / `mod_row.field_surface` `#12182d` (**3.32**), `button.surface` / `mod_row.button_surface` `#151a2d` (**3.74**), `menu.surface` `#141a34` (**4.24**), `filter.pz.active.surface` `#161d31` (**5.10**), `mixer.sentinel` `#141a35` (**5.20**), `screen.lfo_smooth.colour` `#171d32` (**6.00**) |
+| `button.gradient.bottom` (`:43`) | `#0d1122` | Measured bottom fill of old "+ ADD" button (`button.md:7`) | **FLAG**: `route.button.surface` `#0d1222` (**1.00**), `radio.surface.bottom` `#0e1220` (**2.45**), `selector.dropdown.bottom` `#0b0f24` (**3.46**, new), `theme.aurora.panel1` `#0a1020` (**3.74**), `theme.neon.panel1` `#0c1026` (**4.24**), `theme.neon.bg0` `#0b1026` (**4.58**), `theme.aurora.bg0` `#0a0f1e` (**5.39**) |
+| `button.gradient.border` (`:44`) | `#151c3a` | Measured top keyline of old "+ ADD" button (`button.md:7`) | **FLAG**: `route.surface` / `theme.neon.panel0` / `selector.dropdown.top` `#141a38` (**3.00**), `menu.row` `#161e38` (**3.00**), `fader.thumb.line` `#181f39` (**4.36**, new), `surface.focus` `#172038` (**4.90**), `mixer.sentinel` `#141a35` (**5.48**) |
+| `button.gradient.border.bottom` (`:45`) | `#161e42` | Measured bottom keyline of old "+ ADD" button (`button.md:7`) | **FLAG**: `theme.aurora.track` `#182044` (**3.46**), `theme.aurora.grid` `#182046` (**4.90**). Also only 8.31 from `button.gradient.border` (`#151c3a`) and *lighter*, not darker |
+| `selector.dropdown.top` (`:46`) | `#141a38` | Legacy dropdown top fill (`selector.py:337`) | **EXACT DUP (0.00)** of `route.surface` `#141a38` and `theme.neon.panel0` `#141a38`! Also `mixer.sentinel` `#141a35` (**3.00**), `button.gradient.border` `#151c3a` (**3.00**), `menu.surface` `#141a34` (**4.00**), `menu.row` `#161e38` (**4.47**) |
+| `selector.dropdown.bottom` (`:47`) | `#0b0f24` | Legacy dropdown bottom fill (`selector.py:337`) | **FLAG**: `theme.neon.bg0` `#0b1026` (**2.24**), `theme.neon.panel1` `#0c1026` (**2.45**), `button.gradient.bottom` `#0d1122` (**3.46**, new), `route.button.surface` `#0d1222` (**4.12**), `theme.aurora.panel1` `#0a1020` (**4.24**), `radio.surface.bottom` `#0e1220` (**5.83**) |
+| `selector.dropdown.border` (`:48`) | `#27306a` | Legacy dropdown keyline (`selector.py:337`) | **EXACT DUP (0.00)** of `dial.track`, `mod_row.track_border`, and `theme.neon.keyline` (all `#27306a`)! |
+| `selector.dropdown.border.bottom` (`:49`) | `#27306a` | Legacy dropdown bottom keyline (`selector.py:343`) | **EXACT DUP (0.00)** of `selector.dropdown.border`, `dial.track`, `mod_row.track_border`, and `theme.neon.keyline` (`#27306a`)! Redundant (top == bottom) |
+| `fader.thumb.fill` (`:115`) | `#c2d1e8` | Contrasty fader thumb body measured from `docs/screens/mixer.jpg` (`mixer_strip.md:34`) | None ($\le 6$ RGB) — genuinely distinct high-contrast thumb fill |
+| `fader.thumb.edge` (`:116`) | `#edf4fa` | Contrasty fader thumb edge (`mixer_strip.md:34`) | **FLAG**: `catalog.text` `#f0f2fa` (**3.61**), `text.value` / `mod_row.amount_thumb` / `mod_row.text_value` / `theme.neon.text` `#eef1ff` (**5.92**) |
+| `fader.thumb.line` (`:117`) | `#181f39` | Dark centre line on contrasty fader thumb (`mixer_strip.md:34`) | **FLAG**: `surface.focus` `#172038` (**1.73**), `menu.row` `#161e38` (**2.45**), `radio.surface.top` `#1a2238` (**3.74**), `route.segment.off` `#19223c` (**4.36**), `button.gradient.border` `#151c3a` (**4.36**, new) |
+
+**Summary**: **10 of 11** new colour tokens fall within 6 RGB Euclidean distance of existing tokens, and **3 of 11** (`selector.dropdown.top`, `selector.dropdown.border`, `selector.dropdown.border.bottom`) are **exact 0.0-distance duplicates** of existing `theme.neon.panel0` / `theme.neon.keyline` (with `selector.dropdown.bottom` only 2.45 away from `theme.neon.panel1`). Only `fader.thumb.fill` (`#c2d1e8`) introduces a distinct visual colour.
+
+### 2.4 Unused / Redundant Tokens Introduced Today & Missing Referenced Tokens
+
+- **Redundant / catalogue-only tokens introduced on 2026-11-27**:
+  - `components/colors.json:49` (`selector.dropdown.border.bottom`): Exact duplicate of `selector.dropdown.border`; causes `button.py:58` (`line_top == line_bottom`) to skip the border gradient completely.
+  - `components/sizes.json:157-158` (`selector.dropdown.gradient.neon`, `selector.dropdown.gradient.legacy`): Both are `{"ref": "control.gradient"}`; identical indirections.
+  - `components/sizes.json:861-865` (`label.dial.{36,40,48,56,90}`): Read ONLY by `components/native/label/label.py:86` to render the static text table in `label/catalog.json`; unused by `level.py` or `pan.py` dial renderers.
+  - Note on dynamic size tokens: `button.size.{32,40,48,56}` (`sizes.json:159-162`) and `selector.dropdown.size.{32,40,48}` (`sizes.json:169-171`) are looked up dynamically via `f"...size.{height}"`. All are referenced at runtime (`selector.dropdown.size.32` is used by `selector/catalog.json:10` and `mixer_strip.py:1094`).
+  - Note on `named_sizes` (`components/sizes.json:1442-1455`): Omits `height.intermediate` (40 px) despite 40 px being the primary size across Button, IconButton, Dropdown, Header, RadioList, RadioGrid, SlideSwitch, SteppedDial, and HSlider.
+- **Tokens referenced in docs/code but MISSING from `colors.json` / `sizes.json`**:
+  - `AGENTS.md:53` cites `selector.border` — **missing** from `components/colors.json` (`selector.surface` exists at `colors.json:41` but is unused by dropdowns).
+  - `components/native/solo_mute/solo_mute.py:101` references `"scale.half"` inside `if False` — **missing** from `components/sizes.json`.
+  - `scripts/render_mod_screen_preview.py:372` calls `style.size("selector.dropdown.font")` — **missing** (`selector.dropdown` at `sizes.json:151` is a dict containing `"font"`).
+  - `docs/ui-components/native-mixer-strip.md:152` cites `focus.field` — **missing** from `components/colors.json` (`field.focus` exists at `colors.json:20`).
+  - (`scripts/tests/test_native_header_catalog.py:30` references `"header.side"` inside `assertRaises(ValueError)` — intentional negative check, not a bug.)
