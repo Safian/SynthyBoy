@@ -70,7 +70,9 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
         self.assertEqual(sentinel["bounds"]["acceptsHWFocus"], "No")
         self.assertTrue(self.native)
         mod_editors = [c for c in self.items if c["componentData"]["type"] == "nativeModulationEditor"]
-        self.assertEqual(len(self.items), len(markers) + len(self.surfaces) + len(self.top_native) + len(self.toolbar) + len(mod_editors))
+        captions = [c for c in self.items if c["componentData"]["name"].startswith("Native Caption ")]   # FILTER 1 (the page title) and SET ON MIXER
+        self.assertEqual([c["componentData"]["data"]["text"] for c in captions], ["FILTER 1", "SET ON MIXER"])
+        self.assertEqual(len(self.items), len(markers) + len(self.surfaces) + len(self.top_native) + len(self.toolbar) + len(mod_editors) + len(captions))
         all_leaf_controls = self.native + self.tools
         for mark in (c for c in markers if c is not sentinel):
             self.assertFalse(any(overlaps(rect(mark), rect(c)) for c in all_leaf_controls), mark["componentData"]["name"])
@@ -210,7 +212,7 @@ class NativeFilterGeneratedSkinTests(unittest.TestCase):
                 expected = ("destination", "bus1_send", "bus2_send", "level", "pan")
                 self.assertEqual(out["handle remapping"]["map"], [
                     {"key": f"Readout{i}", "value": f"Parameter {ids[f'filter{f}.{key}']}"}
-                    for i, key in enumerate(expected)])
+                    for i, key in enumerate(expected)] + [{"key": "Static", "value": "Parameter 0"}])   # the constant captions of the column need a valid handle
                 definition = definitions[out["componentData"]["type"]]
                 self.assertTrue(definition["ignoreMousePresses"])
                 self.assertFalse(definition["actions"])

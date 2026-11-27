@@ -275,5 +275,34 @@ class MpcBackgroundsTests(unittest.TestCase):
                         self.assertEqual(px, expected_ground_rgb, f"{name} at ({x}, {y}) was {px}, expected {expected_ground_rgb}")
 
 
+class PageTitleAndMarkerTests(unittest.TestCase):
+    def test_every_page_title_caption_uses_the_one_page_title_size(self):
+        captions = json.loads((EXTRAS_DIR / "static-native-captions.json").read_text(encoding="utf-8"))
+        titles = [captions[k][0] for k in ("voice", "master_header", "tuning_header", "mod", "filter1", "filter2",
+                                            "osca", "oscb", "oscc", "oscsub", "oscnoise", *("env%d" % n for n in range(1, 7)))]
+        self.assertTrue(all(t["size"] == "font.page_title" and t["colour"] == "text.value" for t in titles), titles)
+        sys.path.insert(0, str(ROOT))
+        from components import style
+        self.assertEqual(style.size("font.page_title"), 26)
+
+    def test_every_lfo_and_rnd_tab_names_its_instance_on_the_host_layer(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        sys.path.insert(0, str(ROOT))
+        from native_static_captions import title_entry
+        entry = title_entry("t", "RND 3", bg_mod.LFO_TITLE_RECT)
+        self.assertEqual(entry["componentData"]["data"]["text"], "RND 3")
+        self.assertEqual(entry["componentData"]["data"]["textStyle"]["font"]["height"], 26.0)
+        source = BACKGROUNDS_MOD_PATH.read_text(encoding="utf-8")
+        self.assertIn('view[:3].upper() + " " + view[3:]', source)
+        self.assertLess(source.index("children.append(sentinel)"), source.index("bg = root"))
+
+    def test_mixer_and_fx_markers_lie_in_the_flat_canvas_strip_above_the_page_content(self):
+        views = {v["name"]: v for v in json.loads((ROOT / "shell-mpc/overlay/overlay_layout.json").read_text())["views"]}
+        for name in ("mixer", "fx"):
+            v = views[name]
+            for spot in (*v["markers"], v["instance"]):
+                self.assertLess(spot["y"] + spot["h"], 10, name)   # the strips / buttons start at tab y 10: a cover patch there is not visible
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -123,7 +123,7 @@ def apply(tui, qlinks, ctx):
         children = root["componentsData"]
         children[:] = [entry for entry in children if not entry["componentData"]["name"].startswith(
             ("Overlay Background Sentinel ", "Native Caption " + view))]
-        children.append(sentinel_entry(view, marker, SENTINELS[view]))
+        sentinel = sentinel_entry(view, marker, SENTINELS[view])   # the LAST child: nothing is drawn over the detector pixels
         # LFO captions belong to its layout-gated native hook; the page title of a sub-tab is its own caption (the 14 tabs share one surface, so only
         # the tab knows which LFO or RND it is: "LFO 3", "RND 2"; the plugin's own drawing adds the shape, shell-mpc/ui/lfo_display.h).
         if view.startswith(("lfo", "rnd")):
@@ -141,6 +141,7 @@ def apply(tui, qlinks, ctx):
                 # The block titles of both sides are part of their native panels (native_master).
                 gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)
             children.extend(caption_entries(view, prefix="Native Caption " + view, gates=gates))
+        children.append(sentinel)
         bg = root["backgroundData"]
         for state in ("focussed", "unfocussed"):
             bg[state] = dict(bg[state], image=asset_name)

@@ -155,6 +155,15 @@ class TestNativeMixerComponents(unittest.TestCase):
         self.assertEqual(format_fader_value(-60.0, SCALE_LINEAR_DB), "-inf")
         self.assertEqual(format_fader_value(0.0, SCALE_SKEW_DB), "0.0 dB")
 
+    def test_scale_labels_keep_a_minimum_gap(self):
+        from components.native.mixer_strip.mixer_strip import thin_scale_labels
+        # the F1 / F2 scale: 13.8 px between +12, +6, 0 and -6: only +12, 0, -12 ... are labelled
+        positions = [round(166 - norm * 166) for norm in ((db + 60) / 72 for db in (12, 6, 0, -6, -12, -24, -36, -60))]
+        labelled = thin_scale_labels(positions, [db == 0 for db in (12, 6, 0, -6, -12, -24, -36, -60)], 18)
+        self.assertEqual(sorted(labelled), [0, 2, 4, 5, 6, 7])
+        placed = sorted(positions[i] for i in labelled)
+        self.assertTrue(all(b - a >= 18 for a, b in zip(placed, placed[1:])))
+
     def test_meter_block_composition(self):
         for hold in (False, True):
             with self.subTest(hold=hold):
