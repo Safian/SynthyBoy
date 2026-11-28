@@ -571,6 +571,14 @@ public:
         inst.setNativeListText (nullptr);
         listPublished_ = false;
     }
+    void hideNativeNoteMask (IInstanceView& inst)
+    {
+        maskItem_ = nullptr;
+        if (! maskPublished_)
+            return;
+        inst.setNativeNoteMask (false, nullptr);
+        maskPublished_ = false;
+    }
     /** The twelve notes of the transpose snap as native toggle cells over the mask area of the OPTIONS page (nativeui::kNoteMask, the skin of 72_osc_lists.py): a tap sets or clears one bit of the parameter (bit 12, SNAP NOTE, is kept). */
     void publishNativeNoteMask (IInstanceView& inst, bool consume)
     {
@@ -645,6 +653,54 @@ public:
         if ((state.layout == nativeui::playoscui::AbcWave || state.layout == nativeui::playoscui::AbcContent) && state.powered)
             sourceName = compactSourceText();
         return state;
+    }
+
+    struct StandaloneRoot
+    {
+        nativeui::osc::SettingsView settingsView = nativeui::osc::SettingsHidden;
+        std::array<nativeui::FxCell, nativeui::osc::kSettingsAll> settingsFields {};
+        int warpMask = 0;
+        std::string sourceLabel;
+        nativeui::oscdetail::State detail;
+    };
+
+    // Prepare only the standalone root bindings and display state. Running update() here
+    // would also publish Q bindings and consume pending wavetable gestures before owning input.
+    StandaloneRoot prepareStandaloneRoot (IInstanceView& inst, int source, uint64_t preset)
+    {
+        setPage (source);
+        setNativeInstanceSelector (true);
+        setNativeRouting (true);
+        full_.setNativePower (true);
+        const int type = typeParam (source);
+        const int raw = type >= 0 ? static_cast<int> (std::lround (inst.param (type))) : 0;
+        configure (&inst, source, false, raw);
+        stackDepth_ = 1;
+        pageTop_ = 0;
+        if (sel_ == playosc::kNoise)
+        {
+            const int ti = indexOfKey ("noise.type");
+            updateNoiseType (ti >= 0 && inst.param (ti) >= 0.5f, inst);
+        }
+        pull (inst, main_);
+        applyInactive();
+        updateLoadButton (inst);
+        StandaloneRoot out;
+        out.settingsView = nativeSettingsView();
+        if (out.settingsView != nativeui::osc::SettingsHidden)
+        {
+            const auto items = nativeSettingsItems();
+            for (int slot = 0; slot < nativeui::osc::kSettingsAll; ++slot)
+                if (const auto* item = items[slot])
+                    out.settingsFields[slot] = nativeSettingsBinding (*item);
+            if (out.settingsView >= nativeui::osc::SettingsWavetable)
+            {
+                out.warpMask = nativeWarpMask();
+                out.sourceLabel = nativeSourceLabel();
+            }
+        }
+        out.detail = prepareNativeDetail (true, preset);
+        return out;
     }
 
     void publishCompactNative (IInstanceView& inst, bool shown, bool leavingTab = false)

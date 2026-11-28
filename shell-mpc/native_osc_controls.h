@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "native_fx_cells.h"
+
 namespace synthyboy_mpc::nativeui::osc
 {
 enum Field { kSource, kRouting, kVisibility, kCount };
@@ -66,6 +68,7 @@ public:
         float routingValue (int which) const noexcept { return displaysSource (which) ? value (kRouting) : 0.0f; }
         bool powered() const noexcept { return (bits & 128) != 0; }
         float powerValue (int which) const noexcept { return source() == which && powered() ? 1.0f : 0.0f; }
+        uint32_t bindingRevision() const noexcept { return static_cast<uint32_t> ((bits >> 8) & 0xffffffu); }
         uint64_t revision() const noexcept { return bits >> 32; }
         float value (int field) const noexcept
         {
@@ -77,23 +80,52 @@ public:
         }
     };
 
-    void publish (const ViewState& next) noexcept
+    void suspend() noexcept
     {
-        if (! view_.sameBinding (next) && ++revision_ == 0)
+        suspended_.store (true, std::memory_order_release);
+        for (auto& mailbox : pending_)
+            mailbox.store (0, std::memory_order_release);
+        renewInputRevision();
+    }
+
+    void publish (const ViewState& next, bool interactive = true) noexcept
+    {
+        if (! interactive)
+            suspended_.store (true, std::memory_order_release);
+        const bool wasSuspended = suspended_.load (std::memory_order_relaxed);
+        const bool bindingChanged = ! view_.sameBinding (next);
+        if (bindingChanged)
+        {
+            bindingRevision_ = (bindingRevision_ + 1) & 0xffffffu;
+            if (bindingRevision_ == 0)
+                bindingRevision_ = 1;
+        }
+        const uint64_t prevRev = revision_;
+        if ((bindingChanged || wasSuspended) && ++revision_ == 0)
             ++revision_;
         view_ = next;
         const auto source = static_cast<uint64_t> (std::clamp (next.source, 0, kLastSource));
         const auto route = static_cast<uint64_t> (std::clamp (next.destination, 0, kLastRoute));
-        const uint64_t state = source | (route << 3) | (next.routable ? 64 : 0) | (next.powered ? 128 : 0);
+        const uint64_t state = source | (route << 3) | (next.routable ? 64 : 0) | (next.powered ? 128 : 0)
+                             | (static_cast<uint64_t> (bindingRevision_) << 8);
         state_.store ((static_cast<uint64_t> (revision_) << 32) | state, std::memory_order_release);
+        if (! bindingChanged && wasSuspended)
+        {
+            uint64_t expected = prevRev;
+            reported_.compare_exchange_strong (expected, revision_, std::memory_order_acq_rel);
+        }
+        suspended_.store (! interactive, std::memory_order_release);
     }
 
+    bool suspended() const noexcept { return suspended_.load (std::memory_order_acquire); }
+    uint64_t preset() const noexcept { return view_.preset; }
     Snapshot snapshot() const noexcept { return { state_.load (std::memory_order_acquire) }; }
     void report (Snapshot current) noexcept { reported_.store (current.revision(), std::memory_order_release); }
 
     void post (int field, float value, int source = 0) noexcept
     {
-        if ((field != kSource && field != kRouting) || ! std::isfinite (value) || value < 0.0f || value > 1.0f)
+        if (suspended_.load (std::memory_order_acquire)
+            || (field != kSource && field != kRouting) || ! std::isfinite (value) || value < 0.0f || value > 1.0f)
             return;
         const auto current = snapshot();
         if (current.source() == 0 || (source != 0 && source != current.source())
@@ -107,7 +139,8 @@ public:
 
     void postPower (int source, float value) noexcept
     {
-        if (! std::isfinite (value) || value < 0.0f || value > 1.0f || source < 1 || source > kLastSource)
+        if (suspended_.load (std::memory_order_acquire)
+            || ! std::isfinite (value) || value < 0.0f || value > 1.0f || source < 1 || source > kLastSource)
             return;
         const auto current = snapshot();
         const bool on = value >= 0.5f;
@@ -117,7 +150,8 @@ public:
 
     bool take (const ViewState& expected, int field, int& choice) noexcept
     {
-        if (field != kSource && field != kRouting && field != kPower)
+        if (suspended_.load (std::memory_order_relaxed)
+            || (field != kSource && field != kRouting && field != kPower))
             return false;
         const uint64_t pending = pending_[commandSlot (field)].exchange (0, std::memory_order_acq_rel);
         if (pending == 0 || ! view_.sameBinding (expected) || (pending >> 32) != revision_)
@@ -129,20 +163,75 @@ public:
 private:
     static int commandSlot (int field) noexcept { return field == kPower ? 2 : field; }
 
+    void renewInputRevision() noexcept
+    {
+        const uint64_t old = state_.load (std::memory_order_relaxed);
+        if (old == 0)
+            return;
+        uint64_t oldRev = old >> 32;
+        if (++revision_ == 0)
+            ++revision_;
+        const uint64_t renewed = (static_cast<uint64_t> (revision_) << 32) | (old & 0xffffffffull);
+        state_.store (renewed, std::memory_order_release);
+        reported_.compare_exchange_strong (oldRev, revision_, std::memory_order_acq_rel);
+    }
+
     void enqueue (Snapshot current, int field, int choice) noexcept
     {
-        if (reported_.load (std::memory_order_acquire) != current.revision())
+        if (suspended_.load (std::memory_order_acquire)
+            || reported_.load (std::memory_order_acquire) != current.revision())
             return;
         const uint64_t command = (current.revision() << 32) | static_cast<unsigned> (choice + 1);
         auto& mailbox = pending_[commandSlot (field)];
         uint64_t pending = mailbox.load (std::memory_order_relaxed);
-        while (snapshot().revision() == current.revision()
+        while (! suspended_.load (std::memory_order_acquire) && snapshot().revision() == current.revision()
                && ! mailbox.compare_exchange_weak (pending, command, std::memory_order_release, std::memory_order_relaxed))
         {}
     }
 
+    std::atomic<bool> suspended_ { true };
     ViewState view_;
-    uint32_t revision_ = 0;
+    uint32_t revision_ = 0, bindingRevision_ = 0;
     std::atomic<uint64_t> state_ { 0 }, reported_ { 0 }, pending_[3] {};
+};
+
+/** Read-only cached settings cell bank for the standalone Osc root panels. */
+class SettingsBank : public NativeCellBank<kSettingsAll>
+{
+public:
+    void suspend() noexcept
+    {
+        suspended_.store (true, std::memory_order_release);
+        renewInputRevisions();
+    }
+
+    void publish (int view, const FxCell* fields, bool interactive = true) noexcept
+    {
+        if (! interactive)
+            suspended_.store (true, std::memory_order_release);
+        if (suspended_.load (std::memory_order_relaxed))
+            renewInputRevisions();
+        NativeCellBank<kSettingsAll>::publish (view, fields);
+        suspended_.store (! interactive, std::memory_order_release);
+    }
+
+    void post (Snapshot current, float value) noexcept
+    {
+        if (suspended_.load (std::memory_order_acquire))
+            return;
+        NativeCellBank<kSettingsAll>::post (current, value);
+    }
+
+    bool take (int slot, const FxCell& expected, float& value) noexcept
+    {
+        if (suspended_.load (std::memory_order_relaxed))
+            return false;
+        return NativeCellBank<kSettingsAll>::take (slot, expected, value);
+    }
+
+    bool suspended() const noexcept { return suspended_.load (std::memory_order_acquire); }
+
+private:
+    std::atomic<bool> suspended_ { true };
 };
 } // namespace synthyboy_mpc::nativeui::osc
