@@ -104,3 +104,13 @@ Measured with marker Images and three probe skins on the Key 61 (MPC 3.10.1.12);
 - FACT (same probes): `NonZero/Parameter 3588`, `NonZero/Parameter 3590` and `NonZero/Parameter 3584` were true both while the list was closed (the plugin reports 0 for the gate, `IndexedEnabling/0/2/Parameter 3588` true) and while it was open. `NonZero` did not act as a 0/1 gate on these plugin-written handles; use `IndexedEnabling/1/2/` on an exact 0/1 value.
 - OPEN: a row tap sometimes has no effect ("Square" twice in one opening, then "Triangle" at the first tap of the next opening). HYPOTHESIS: the rows are `Toggle Switch` cells, so a row left at 1 by an earlier tap goes to 0 on the next tap, which the plugin ignores (`value < 0.5`). Check: tap the same row twice in one opening and read the cell value.
 - Not checked: the XL; the Env and Filter instances of the list (changed the same way, not opened on the device); the Targets pages (Env TARGETS is still an empty body, `page_top: 30`).
+
+## The stock Fabric XL lists: grouping and one-tap choice (Key 61, 2026-11-28)
+
+Captures and steps: `.hw-local/mpc-perf/key61-fabric-lists-20261128/README.md` (host plane, taps injected with mtouch, one run; XL not checked).
+
+- FACT: Fabric XL groups its sounds with two separate parameters and two flat lists per layer: the category ("LAYER 1 BANK": Acoustic Guitars, Electric Guitars, Bass Guitars, Pads + Polys, Synth Hard, Synth Bass, Leads, Oscillators, FX, ...) and the preset of that category ("LAYER 1 SAMPLES"). Choosing a category replaces the content of the preset list and the preset (Synth Bass / Detune Fuzz -> Leads / Fat Square). No tree, no UP / GROUPS button, no pager; the list scrolls. Skin side: `sample1Header` holds `comboBank1` and `comboSamplesSample1`, each `Double Click` / `Enter Pressed` -> `Show Overlay` `menu overlay` (reference skin `.hw-local/mpc-ui-plans/reference-skins/MPC_-_Fabric_XL.TUI.json`).
+- FACT: the list is the host's left drawer: 426 px wide, a header with the parameter name, plain text rows 80 px high, the current row highlighted with a check mark, a thin scroll bar, the page behind blurred and dimmed. It opens on a double tap of the field (a single tap only assigns the Q-Link).
+- FACT: for this stock plugin ONE tap on a row applied the choice and closed the drawer. This differs from what the Key 61 probes A/B of 2026-11-27 measured for our VST2 skin (a row tap only moved the check mark, the header tap applied); why the same host list behaves differently for a stock plugin is not known.
+- FACT: the host plugin picker (PLUGIN field held about 900 ms) is the host's grouped list: a centred dialog with collapsible groups (+ / -) by MANUFACTURER or TYPE; there a row tap only highlights and SELECT applies.
+
