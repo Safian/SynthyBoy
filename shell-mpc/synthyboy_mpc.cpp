@@ -742,6 +742,8 @@ struct PluginInstance
                 && inst.nativeModBoard.take (field, expected, value);
         }
         void setNativeText (int line, const char* text) noexcept override { inst.nativeText.set (line, text); }
+        void setNativeMacroText (int line, const char* text) noexcept override { inst.nativeMacroText.set (line, text); }
+        void setNativeMacroSubpage (bool open) noexcept override { inst.nativeMacroSubpage.store (open ? 1.0f : 0.0f, std::memory_order_relaxed); }
         void setNativeListText (const nativeui::nativetext::ListPage* page) noexcept override
         {
             if (page != nullptr)
@@ -1609,6 +1611,7 @@ struct PluginInstance
     nativeui::lfodetail::Bank nativeLfoDetail;
     std::array<bool, nativeui::lfodetail::kCount> nativeLfoDetailAcks {};   // display thread only
     static_assert (nativeui::kLfoDetailHandles == nativeui::lfodetail::kHandles);
+    static_assert (nativeui::kMacroTextLines == nativeui::nativetext::kMacroLines);
     nativeui::lfopick::Bank nativeLfoPick;
     std::array<bool, nativeui::lfopick::kCount> nativeLfoPickAcks {};   // display thread only
     // Program/chunk restoration can run concurrently with the overlay. Both writers
@@ -1662,6 +1665,8 @@ struct PluginInstance
     nativeui::NativeCellBank<nativeui::modboard::kHandles> nativeModBoard;
     std::atomic<uint64_t> nativeModBoardPreset { 0 };
     nativeui::nativetext::Lines nativeText;           // the text lines of the Mod page (read-only native Labels)
+    nativeui::nativetext::MacroLines nativeMacroText;   // the text lines of the Macros tab: the names of the cards, the title, the count and the hint of the targets page
+    std::atomic<float> nativeMacroSubpage { 0.0f };   // exactly 0 on the cards page of the Macros tab, exactly 1 while its targets / list / keyboard page is open (the gate of the native base page)
     nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
     nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
     std::atomic<uint64_t> nativeNoteMaskPreset { 0 };
@@ -1884,6 +1889,10 @@ struct PluginInstance
     {
         if (nativeui::isNativeTextOffset (offset))
             return nativeText.value (nativeui::nativeTextLine (offset));
+        if (nativeui::isMacroTextOffset (offset))
+            return nativeMacroText.value (offset - nativeui::kMacroText);
+        if (offset == nativeui::kMacroSubpage)
+            return nativeMacroSubpage.load (std::memory_order_relaxed);
         if (nativeui::isNoteMaskOffset (offset))
         {
             const int field = offset - nativeui::kNoteMask;
@@ -2631,6 +2640,9 @@ struct PluginInstance
         }
         for (int line = 0; line < nativeui::nativetext::kLines; ++line)
             reportNativeValue (e, nativeui::nativeTextHandle (line), nativeText.value (line));
+        for (int line = 0; line < nativeui::nativetext::kMacroLines; ++line)
+            reportNativeValue (e, nativeui::kMacroText + line, nativeMacroText.value (line));
+        reportNativeValue (e, nativeui::kMacroSubpage, nativeMacroSubpage.load (std::memory_order_relaxed));
         if (nativeNoteMask.layout() != 0 || nativeNoteMaskDue.exchange (false, std::memory_order_acq_rel))
         {
             for (int i = 0; i < nativeui::kNoteMaskHandles; ++i)
@@ -3792,6 +3804,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     std::snprintf (buf, kCap, "Mod Text %d", line + 1);
                 else if (opcode == effGetParamDisplay)
                     inst->nativeText.copy (line, buf, kCap);
+                return 1;
+            }
+            if (nativeui::isMacroTextOffset (offset) || offset == nativeui::kMacroSubpage)
+            {
+                const int line = offset - nativeui::kMacroText;
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, kCap, offset == nativeui::kMacroSubpage ? "Macro Subpage" : "Macro Text %d", line + 1);
+                else if (opcode == effGetParamDisplay && offset != nativeui::kMacroSubpage)
+                    inst->nativeMacroText.copy (line, buf, kCap);
                 return 1;
             }
             if (nativeui::isNoteMaskOffset (offset))
@@ -5206,7 +5227,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!props || index < 0) return 0;
 
         const int nativeOffset = index - PluginInstance::nativeUiBase();
-        if (nativeui::isNativeTextOffset (nativeOffset))
+        if (nativeui::isNativeTextOffset (nativeOffset) || nativeui::isMacroTextOffset (nativeOffset) || nativeOffset == nativeui::kMacroSubpage)
         {
             std::memset (props, 0, sizeof (*props));
             return 1;
@@ -6029,7 +6050,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
-                if (nativeui::isNativeTextOffset (offset))
+                if (nativeui::isNativeTextOffset (offset) || nativeui::isMacroTextOffset (offset) || offset == nativeui::kMacroSubpage)
                     return;
                 if (nativeui::isNoteMaskOffset (offset))
                 {

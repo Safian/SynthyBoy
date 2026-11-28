@@ -99,3 +99,101 @@ in the inspected SDK. It did not run another ELF check or a device round trip.
 Its conclusion remains scoped to the inspected path: a documented alternative
 callback or a demonstrated full string returning to the owning plugin instance
 would change the result. The physical numeric keypad is documented separately.
+
+## Expert review 2026-11-28: every host text path to a third-party VST2 (sources only, no device)
+
+Question: can the host's own keyboard (Key 61, XL) deliver text to SynthyBoy, so
+`ui/text_entry.h` can go? SDK commit `febd2ca5` (active `ext/mpc-sdk`); manual v3.10.1.
+Verdict per path (FACT = documented or seen in source; HYPOTHESIS = unproven):
+
+1. **Skin `TextEditOverlay` on a plugin parameter: NOT USABLE on XL, UNKNOWN on Key 61.**
+   FACT: SDK `docs/ui-reference.md:1201-1206` (6.12, "less tested"): meaningful only for
+   text-valued handles, "which third-party VST parameters are not"; parameters are floats
+   0..1 (`docs/host-contract.md:55`). FACT: XL 3.10.1.12 gate above (setter slot is a no-op).
+   HYPOTHESIS: Key 61 3.10.1.x has the same code; no binary inspected, no on-device run.
+2. **`effString2Parameter`: NOT USABLE.** FACT: `docs/host-contract.md:59` "it does not call
+   the text-to-value opcode either"; SDK `framework/mpc_plugin.h:679` parses it as
+   choice/number only. The host never sends it, so a text parameter display cannot take input.
+3. **Program/preset name: NOT USABLE as a channel.** FACT: the host only reads program names
+   (`effGetProgramNameIndexed`/`effGetProgramName`, `host-contract.md:33`, `tools/host-sim/README.md:88`);
+   `framework/mpc_plugin.h:662` ignores `effSetProgramName`; the community wrapper
+   (`docs-community/open-mpc/wrapper/vst2_wrap.c:927-930`) does not handle opcode 4 either,
+   and its NOTES never record a host call to it (absence of evidence only). The manual's
+   "Save Plugin Preset" is the disk icon on the Plugin Track page (v3.10.1 XL manual p278,
+   txt line 7702): the host writes an `.xpl` with its own `<preset>` name and the plugin's
+   state chunk (`ext/mpc-sdk/docs/presets.md:17-37`); the plugin only sees `effGetChunk`,
+   never the name. FACT: a skin can trigger only four handlers: `Q-Link`, `Show Overlay`,
+   `Toggle Switch`, `Focus Lost` (`ui-reference.md:512-517`); none opens the save dialog.
+   HYPOTHESIS (unproven either way): the host might call `effSetProgramName` on a rename;
+   nothing documents such a rename UI for plugin programs.
+4. **Host-internal rename keyboards (track/program/macro/MIDI-CC names): NOT USABLE.** FACT:
+   the manual lists many (p279 MIDI CC rename, p343 macro rename), all host-owned names.
+   The XL factory MIDI page uses a host-side name element (`ParameterMapNameSetter`,
+   `vtables.txt`) that has a working string setter; there is no skin handle that binds it to
+   a plugin (`ui-reference.md` section 7.1 lists no text handle).
+5. **Plugin-drawn keyboard from skin Buttons: USABLE, proven in the community.** FACT
+   (community, Live III OS 3.9.1, 2026-10-30): the OpenMPC Plugin Manager types text with a
+   keyboard drawn from skin Buttons and display-string Labels (`docs-community/open-mpc/docs/NOTES.md:136`
+   "dynamic text works through parameter display strings"; `NOTES.md:2054`, `PORTING.md:119`).
+   FACT, important for our plan: there each tap arrived as TWO `set key=1` events 30-140 ms
+   apart with no `=0` between; the fix is a per-key debounce (250 ms) in the plugin. Our
+   REPORT (`textentry-research`) assumed a clean `k, 0` pair from `ResetOnGestureEnd`; that
+   is unproven and the community evidence argues for a plugin-side debounce plus a
+   no-edge-reliance design. Same-key repeats within the debounce window are then lost
+   (accept, or alternate two key parameters).
+
+**Minimal measurement that would settle the only open point (Key 61, point 1):** a throw-away
+SDK plugin with one float parameter, skin Button with `Show Overlay` / additionalData
+`text edit overlay` bound to it (factory syntax, `midi-TUI.json:193-209`); open it, type, Enter;
+count `setParameter` and opcode 27 calls in a log. Expected from the XL result: zero calls.
+It is not needed for the decision: path 5 does not depend on it.
+
+**Recommendation:** no host-provided text path reaches a third-party plugin; keep text entry
+plugin-side. The host keyboard cannot replace `ui/text_entry.h` on the XL (fact) and no
+source shows it on the Key 61; the only supported route is the Button/Label keyboard of path 5.
+
+## Owner decision 2026-11-28: use the host keyboard; the one indirect route found
+
+Owner decision: text input uses the host's own keyboard. Every route was searched again
+(SDK `ui-reference.md` 4.2/6.12/7, `host-contract.md`, factory `midi-TUI.json`, XL vtable
+evidence, manuals v3.10.1, community NOTES/PORTING, `mpc-perf/host-presets/EREDMENY.md`).
+
+**Direct routes are closed (FACT, see the sections above):** a skin `TextEditOverlay` on a
+plugin handle (XL: setter no-op; Key 61 unmeasured), `effString2Parameter` (never sent),
+`effSetProgramName` (no source shows the host calling it; our dispatcher `synthyboy_mpc.cpp:4172`
+returns 0 and logs nothing), host rename keyboards bound to host-owned names only.
+
+**Indirect route (the only one with measured evidence): the host's Save Plugin Preset dialog
+is the keyboard, the file name is the channel.**
+- FACT (Key 61, 3.10.x, measured 2026-11-14, `.hw-local/mpc-perf/host-presets/EREDMENY.md`
+  "Mentés a host saját funkciójával"): the disk icon (1210,52) on the plugin page opens the
+  host "Save" window with a FILE NAME field and keyboard icon; typing a name and SAVE writes
+  `<name>.xpl` into `MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/`
+  (XML; `<preset>` = our `effGetProgramName`, `<state>` = our `effGetChunk`). The file-name
+  keyboard rejects `_` (only `#` and `-` special characters were active).
+- FACT (XL): a host-saved SynthyBoy preset from the XL exists
+  (`mpc-knowledge/device-observed/xpl/synthyboy-host-saved-Space-Wobble-Bass.xpl`, aarch64
+  path), so the same dialog works there. SDK `docs/presets.md:17` documents the folder.
+- FACT: a skin cannot open that dialog (handlers: `Q-Link`, `Show Overlay`, `Toggle Switch`,
+  `Focus Lost`, `ui-reference.md:512-517`); the user must tap the host's disk icon.
+- HYPOTHESIS (unmeasured): the plugin learns the typed name by watching that folder
+  (poll or inotify on a worker thread; the plugin already runs file code), reading the new
+  `*.xpl` file name, deleting the file, and applying the name to the pending context
+  (Macro N rename, LFO shape save as/rename). The UI shows "tap the disk icon, type the
+  name, SAVE" while the context is open. Also unmeasured: that the host does not call
+  `effSetProgramName` (a log line in the dispatcher would also show it), the folder path on
+  the XL (`/sdcard` vs `/nvme`, resolve by the `[User]` root), overwrite prompts, the
+  allowed character set on the XL, a project/preset side effect of the host save.
+- Trade-offs (FACT from the above): the host writes a 67 KB preset per rename (the plugin
+  deletes it), the dialog is not triggerable and not reachable from the Macros/LFO cards, the
+  name cannot contain `_`, the name is the file name not UTF-8 free text.
+
+**Minimal on-device check (do not run here):** a build with (a) a log line in the
+`effSetProgramName` case and in `effString2Parameter` (27), and (b) a 1 s poll of the
+Plugin Presets folder logging new file names. On the Key 61 and the XL: tap the disk icon,
+clear the name, type `Test-1`, SAVE. Pass: the log shows the new name within 1 s on both
+devices. The same run answers whether opcode 4 is ever sent.
+
+Recommendation: the Save-dialog route is the only route that uses the host keyboard; it is a
+workaround with a poor UX and no documented contract. The documented and community-proven
+route remains the Button/Label keyboard (path 5 above).

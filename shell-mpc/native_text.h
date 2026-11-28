@@ -32,15 +32,18 @@ enum Line
     kLines
 };
 constexpr int kDrawLines = kLines - kLegacyLines;
+/** The text lines of the Macros tab (ng/drawvmm): the names of the eight cards, then the title, the count and the empty hint of the targets page of a macro. */
+enum MacroLine { MacroName0, MacroName7 = MacroName0 + 7, MacroTargetsTitle, MacroTargetsCount, MacroTargetsEmpty, kMacroLines };
 constexpr int kLineLen = 80;
 
-class Lines
+template <int N>
+class BasicLines
 {
 public:
     /** Set a line; the revision (and with it the value the host sees) changes only when the text does. */
     void set (int line, const char* text) noexcept
     {
-        if (line < 0 || line >= kLines)
+        if (line < 0 || line >= N)
             return;
         if (text == nullptr)
             text = "";
@@ -58,7 +61,7 @@ public:
         if (out == nullptr || cap == 0)
             return;
         out[0] = '\0';
-        if (line < 0 || line >= kLines)
+        if (line < 0 || line >= N)
             return;
         std::lock_guard<std::mutex> guard (mutex_);
         std::strncpy (out, text_[line], cap - 1);
@@ -67,7 +70,7 @@ public:
     /** 0 while the line is empty (the skin uses that as a gate: a native cell that belongs to the line shows only while it has text); otherwise a value in (0, 1] that differs from the one before at every new text. */
     float value (int line) const noexcept
     {
-        if (line < 0 || line >= kLines)
+        if (line < 0 || line >= N)
             return 0.0f;
         std::lock_guard<std::mutex> guard (mutex_);
         return text_[line][0] == '\0' ? 0.0f : static_cast<float> ((revision_[line] - 1) % 250 + 1) / 251.0f;
@@ -75,9 +78,12 @@ public:
 
 private:
     mutable std::mutex mutex_;
-    char text_[kLines][kLineLen] {};
-    uint32_t revision_[kLines] {};
+    char text_[N][kLineLen] {};
+    uint32_t revision_[N] {};
 };
+
+using Lines = BasicLines<kLines>;
+using MacroLines = BasicLines<kMacroLines>;
 
 constexpr int kRowLen = 64;
 

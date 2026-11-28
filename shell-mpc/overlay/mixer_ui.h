@@ -259,10 +259,9 @@ public:
         publishQGroup (inst);
     }
 
-    // The Mixer paints its own ground with native cut-outs.
-    void drawPageGround (gpu::SceneBuilder&) const noexcept {}
-
-    void draw (gpu::SceneBuilder& sb) const
+    /** The cover of the host's stale pixels (page_view_base.h drawGround; it is no drawing of the page): until the sentinel of the host's background is read the tab is covered by the canvas colour around the native strips, and the marker
+        squares and the instance picture of the skin (they lie under the transparent plane) always. */
+    void drawPageGround (gpu::SceneBuilder& sb) const
     {
         if (! nativeBase())
             page::ground (sb);
@@ -277,6 +276,9 @@ public:
         if (nativeBase())
             drawNativeMarkerCovers (sb, "mixer");
     }
+
+    /** Nothing is drawn by the page itself: the strips, their names, the meters and the destinations are native cells of the skin. */
+    void draw (gpu::SceneBuilder&) const {}
 
     /** Every control of the page is a native cell of the host skin: the overlay claims no touch of the tab. */
     bool covers (int, int) const noexcept { return false; }

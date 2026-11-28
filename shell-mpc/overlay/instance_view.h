@@ -168,6 +168,10 @@ public:
     virtual bool takeNativeModBoard (int /*field*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
     /** The text lines of the Mod page (nativeui::nativetext::Line) the host skin shows with native Labels. */
     virtual void setNativeText (int /*line*/, const char* /*text*/) noexcept {}
+    /** The text lines of the Macros tab (nativeui::nativetext::MacroLine): the names of the eight cards, the title, the count and the empty hint of the targets page. */
+    virtual void setNativeMacroText (int /*line*/, const char* /*text*/) noexcept {}
+    /** The gate of the Macros tab: true while the targets, the add-target list or the rename keyboard is open (the native cards and texts of the cards page are hidden by it). */
+    virtual void setNativeMacroSubpage (bool /*open*/) noexcept {}
     /** The names of the rows of the list the modulation picker's native cells show (the file browsers and the source of a new modulation of the oscillator pages); nullptr: the picker's own names. */
     virtual void setNativeListText (const nativeui::nativetext::ListPage* /*page*/) noexcept {}
     /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */

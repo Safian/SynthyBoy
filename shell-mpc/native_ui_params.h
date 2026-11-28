@@ -144,15 +144,20 @@ constexpr int kNoteMask = kNativeText + kNativeTextLines;
 constexpr int kNoteMaskHandles = 13;   // 12 notes (bit 0 = C .. bit 11 = B) and the gate (1 while the mask is on the page)
 constexpr bool isLfoPickOffset (int offset) noexcept { return offset >= kLfoPick && offset < kNativeText; }
 constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kNativeText; }
-
+// Appended 2026-11-28 (ng/drawvmm): read-only text lines of the Macros tab (nativetext::MacroLine: the names of the eight cards, the title, the count and the empty hint of the targets page) and the gate of its sub pages
+// (exactly 0 on the macro cards page, exactly 1 while the targets, the add-target list or the rename keyboard is open: the native cards and texts of the base page are gated by it).
+constexpr int kMacroText = kNoteMask + kNoteMaskHandles;
+constexpr int kMacroTextLines = 11;
+constexpr int kMacroSubpage = kMacroText + kMacroTextLines;
+constexpr bool isMacroTextOffset (int offset) noexcept { return offset >= kMacroText && offset < kMacroSubpage; }
 // Appended 2026-11-28 (ng/drawlfomod): the further text lines (nativetext::kLegacyLines ..): the texts the pages used to draw themselves; the handle of line `line` is nativeTextHandle (line).
-constexpr int kDrawText = kNoteMask + kNoteMaskHandles;
+constexpr int kDrawText = kMacroSubpage + 1;
 constexpr int kCount = kDrawText + nativetext::kDrawLines;
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
 constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kCount; }
 constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
 constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
-constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kDrawText; }
+constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }

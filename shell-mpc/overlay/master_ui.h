@@ -382,10 +382,15 @@ public:
 
     bool hostBackground() const noexcept { return true; }
 
-    /** The picture: the marker covers of the host skin and the glide curve (a live display, MAIN side). */
-    void draw (gpu::SceneBuilder& sb) const
+    /** The cover of the skin's marker squares and instance picture (page_view_base.h drawGround; no drawing of the page: they lie under the transparent plane). */
+    void drawPageGround (gpu::SceneBuilder& sb) const
     {
         drawNativeMarkerCovers (sb, "master");
+    }
+
+    /** The picture: the glide curve (a live display, MAIN side). Its panel, frame, axes and caption are the native masterGlideFrame of the skin (the same rectangle). */
+    void draw (gpu::SceneBuilder& sb) const
+    {
         if (pageTop_ == 0 && side_ == SideMain)
             drawGlideCurve (sb, at (ui::masterlayout::kGlideCurve), slope_);
     }
@@ -396,13 +401,9 @@ public:
         const ui::theme::Look& T = ui::theme::L();
         ui::Cell cell (sb, rect);
         ui::Pen p (sb, true);
-        p.rrect (rect, T.rControl, p.c (T.panel1, 200));
-        p.rrect (rect, T.rControl, p.c (T.keyline, 160), 1.0f);
         const int m = 6;
         const float x0 = static_cast<float> (rect.x + m), y0 = static_cast<float> (rect.bottom() - m);
         const float w = static_cast<float> (rect.w - 2 * m), h = static_cast<float> (rect.h - 2 * m);
-        p.line (x0, y0 - h * 0.5f, x0 + w, y0 - h * 0.5f, 0.8f, p.c (T.track, 100));
-        p.line (x0 + w * 0.5f, y0, x0 + w * 0.5f, y0 - h, 0.8f, p.c (T.track, 100));
         constexpr int kPoints = 32;
         float prevX = x0, prevY = y0;
         const float k = std::clamp (slope, -8.0f, 8.0f);
@@ -417,7 +418,6 @@ public:
             prevX = px;
             prevY = py;
         }
-        p.textCentered ({ rect.x + 4, rect.y + 2, rect.w - 8, 18 }, "GLIDE CURVE", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
     }
 
     // ---- access
