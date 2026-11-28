@@ -123,36 +123,8 @@ public:
             && w_ == page::kW && h_ == page::kH && &ui::theme::L() == &ui::theme::kLook1;
     }
 
-    void drawPageGround (gpu::SceneBuilder&) const noexcept {}
     bool isNativeControl (int x, int y) const noexcept { return listShown() || nativeCellAt (x, y); }
 
-    // ---- standalone native instance choice and navigation helpers
-    static const char* const* instanceNames() noexcept
-    {
-        static const char* const n[kEnvs] = { "ENV 1", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6" };
-        return n;
-    }
-    static const char* instanceName (int sel) noexcept
-    {
-        return sel >= 1 && sel <= kEnvs ? instanceNames()[sel - 1] : "";
-    }
-    static std::string choiceLabel (const IInstanceView& inst, int sel)
-    {
-        const char* name = instanceName (sel);
-        if (! name || name[0] == '\0')
-            return "";
-        (void) inst;
-        return std::string (name);
-    }
-    std::string currentChoiceLabel (const IInstanceView& inst) const
-    {
-        return choiceLabel (inst, sel_);
-    }
-    void setSelection (IInstanceView& inst, int sel)
-    {
-        if (sel >= 1 && sel <= kEnvs)
-            uibind::chooseEnv (inst, sel);
-    }
     /** The envelope this UI shows: on the page of a tab (page_view.h) the one the hardware sub-tab names (Env 1 .. Env 6: the view's own instance number, no selector on the screen, nothing shared with the Play page); on the compact
         view of the Play page the shared Play selection (Play Env, chunk saved). */
     int shownEnv (const IInstanceView& inst) const noexcept { return pageEnv_ > 0 ? pageEnv_ : uibind::selectedEnv (inst); }
