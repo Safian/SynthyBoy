@@ -4219,6 +4219,10 @@
          {
           "key": "Data",
           "value": "Parameter 2676"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4252,6 +4256,10 @@
          {
           "key": "Data",
           "value": "Parameter 2676"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4285,6 +4293,10 @@
          {
           "key": "Data",
           "value": "Parameter 2677"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4678,6 +4690,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3303"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4724,6 +4740,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3303"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4897,6 +4917,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3309"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4939,6 +4963,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3309"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5207,6 +5235,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3315"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5249,6 +5281,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3315"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5517,6 +5553,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3321"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5559,6 +5599,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3321"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5873,6 +5917,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3327"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -6338,6 +6386,10 @@
          {
           "key": "Data",
           "value": "Parameter 3298"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -6371,6 +6423,10 @@
          {
           "key": "Data",
           "value": "Parameter 3299"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
