@@ -6,7 +6,6 @@
 #pragma once
 
 #include "display.h"
-#include "text_entry.h"
 #include "clip_hold.h"
 #include "env_graph.h"
 #include "qgroup.h"

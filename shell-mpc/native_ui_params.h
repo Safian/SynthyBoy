@@ -152,9 +152,15 @@ constexpr int kMacroSubpage = kMacroText + kMacroTextLines;
 constexpr bool isMacroTextOffset (int offset) noexcept { return offset >= kMacroText && offset < kMacroSubpage; }
 // Appended 2026-11-28 (ng/drawlfomod): the further text lines (nativetext::kLegacyLines ..): the texts the pages used to draw themselves; the handle of line `line` is nativeTextHandle (line).
 constexpr int kDrawText = kMacroSubpage + 1;
-constexpr int kCount = kDrawText + nativetext::kDrawLines;
+// Appended 2026-11-28 (ng/kbd): the native text keyboard (components/native/keyboard, shell-mpc/native_text_entry.h): the context (0 closed, 1..8 the name of macro 1..8, 9 the name of a new LFO shape, 10 the new
+// name of a saved one; the host shows its display string, the title, while the keyboard is open), the key code the skin buttons write (0 idle .. 99, ResetOnGestureEnd) and the text shown by a Label (its display string).
+constexpr int kTextEdit = kDrawText + nativetext::kDrawLines;
+constexpr int kTextEditContext = kTextEdit, kTextEditKey = kTextEdit + 1, kTextEditText = kTextEdit + 2;
+constexpr int kTextEditContexts = 11, kTextEditKeys = 100;
+constexpr int kCount = kTextEdit + 3;
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
-constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kCount; }
+constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kTextEdit; }
+constexpr bool isTextEditOffset (int offset) noexcept { return offset >= kTextEdit && offset < kCount; }
 constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
 constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
 constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }

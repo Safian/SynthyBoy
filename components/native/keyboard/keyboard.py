@@ -3,7 +3,7 @@
 """Native on-screen touch keyboard for Macro rename and LFO shape naming.
 
 Follows the design verified in docs/review/TEXT-ENTRY-NATIVE-KEYBOARD-2026-11-27.md:
-- Full-screen 1280 x 800 overlay opened via Show Overlay ("native keyboard overlay").
+- One modal component ("native keyboard overlay"), instanced full tab (1280 x 628) on the Macros, LFO, RND and Play tabs and shown by the instance bounds while TextEdit Context is in range.
 - 4 key rows in standard QWERTY layout.
 - Keys 40 px high with 8 px gaps, composed from shared Button recipe (components.native.button).
 - 3 layers switched via Local/3/layer radio group:
@@ -155,9 +155,9 @@ def _key_button(name, rect, on_img, off_img, key_code, num_buttons=NUM_KEY_BUTTO
 
 def build_keyboard_overlay_definition(
     skins_dir=None,
-    context_param="Parameter 963",
-    key_param="Parameter 964",
-    text_param="Parameter 965",
+    context_param="Parameter 3887",
+    key_param="ResetOnGestureEnd/Parameter 3888",
+    text_param="Parameter 3889",
 ):
     """Construct the native MPC keyboard component definition.
 
@@ -469,25 +469,17 @@ def build_keyboard_overlay_definition(
         NUM_KEY_BUTTONS, handle="Data", remaps=[("Data", key_handle)],
     ))
 
-    # Root overlay definition matching SDK 6.12 modal overlay
+    # An inline modal component: the instance covers the whole tab and consumes the touches the keys do not take; the tab shows it while "TextEdit Context" is in range (the instance bounds).
     background = {"version": 1, "colour": "c0000000", "image": ""}
     return {
         "version": 2,
-        "actions": [
-            {
-                "version": 1,
-                "onAction": "Focus Lost",
-                "handler": "Focus Lost",
-                "handleName": "Focus Lost",
-                "additionalData": "",
-            }
-        ],
+        "actions": [],
         "backgroundData": {
             "version": 1,
             "focussed": background.copy(),
             "unfocussed": background.copy(),
         },
-        "ignoreMousePresses": True,
+        "ignoreMousePresses": False,
         "disableCoarseDataWheel": False,
         "componentsData": components_data,
     }

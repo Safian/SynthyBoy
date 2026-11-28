@@ -6,7 +6,7 @@ For AI coding agents. Imperative and terse. Native components and their catalogu
 Header-only C++17, namespace `synthyboy_mpc::ui`. It holds only what the host cannot draw (graphs, meters, curve and spectrum displays, animation, indicators) and the parameter / Q-Link model of the native cells. Every control is a native component (`components/native/<name>`).
 - Contract and drawing: `core.h` (`Component`, `Pen`, `Cell`, `TapGesture`), `model.h` (`ControlModel`, `NumberFieldModel`, `ModInput`: the pure parameter / Q-Link model, no drawing), `theme.h` + `theme_tokens.h` (`Look`, three tables), `qgroup.h` (`QGroup`: the four values of one Q-Link set), `q_visual_policy.h`.
 - Displays: `display.h` (oscillator), `lfo_display.h` (LFO), `env_graph.h` (`EnvGraph`, with `time_ruler.h`), `filter_display.h` (`FilterDisplay`), `fx_display.h` + `fx_gallery_picture.h` + `fx_layout.h` (effect pictures and the tables of the effect pages), `voice_grid.h`, `clip_hold.h`.
-- Editors: `scalar_curve_editor.h` (NOTE / VELO curve), `pz_curve_editor.h` (PZ content curve), `shape_editor.h` + `lfo_model.h` (drawn LFO shape), `list.h` (`ListPopup`), `text_entry.h` (`TextEntry`, the on-screen keyboard).
+- Editors: `scalar_curve_editor.h` (NOTE / VELO curve), `pz_curve_editor.h` (PZ content curve), `shape_editor.h` + `lfo_model.h` (drawn LFO shape), `list.h` (`ListPopup`). The on-screen keyboard is the native component `components/native/keyboard` (no C++ keyboard).
 - Data and layout contracts of the native cells: `binding.h`, `native_apertures.h`, `play_rows.h`, `macro_card_contract.h`, `master_native_layout.h`, `voice_native_layout.h`, `choice_names.h`, `content_name.h`, `lfo_names.h`.
 - `ui.h` / `ui_generic.h`: umbrella includes.
 
@@ -31,7 +31,7 @@ Header-only C++17, namespace `synthyboy_mpc::ui`. It holds only what the host ca
 
 ## Where things are
 - Library: `shell-mpc/ui/*.h`. Pages: `shell-mpc/overlay/*_ui.h` (one per tab; parameter binding rows, Q groups, the native bridge, the graph), `page_view.h` (hosts a page), `ui_bind.h` (binding helpers), `ui_stack.h`, `q_publish.h` (Q slots), `pages.h` (factory), `overlay_layout.json` (views).
-- Tests: `shell-mpc/ui/tests/` (`ui_list_host`, `ui_text_entry_host`, `ui_time_ruler_host`), `shell-mpc/overlay/tests/`.
+- Tests: `shell-mpc/ui/tests/` (`ui_list_host`, `ui_time_ruler_host`), `shell-mpc/overlay/tests/`.
 
 ## How changes are verified in this project
 - The WORKER does targeted checks only: the one test file of the one component, once, not after every edit.

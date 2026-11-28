@@ -9,8 +9,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // What it shows (UiStack, ui_stack.h; the element id of this UI is kElementLfo, the pages above it are ours): main = the compact view in the right third of the Play page; full = the full screen over the whole plugin area
-// of the Play page or the page of the LFO tab; detail pages above it: the shape editor, the modulation of the selected points (PointModModel) and the name keyboard of a saved shape (TextEntry, kept until the native keyboard
-// is wired) above that, the targets of the LFO (the modulation matrix seen from the source), the list menu (the destination to add, the source to add, the SHAPES and MORE lists of the editor) and the modulations of a
+// of the Play page or the page of the LFO tab; detail pages above it: the shape editor, the modulation of the selected points (PointModModel) and the name keyboard of a saved shape (the native keyboard of the skin, components/native/keyboard; the page only holds
+// the text model) above that, the targets of the LFO (the modulation matrix seen from the source), the list menu (the destination to add, the source to add, the SHAPES and MORE lists of the editor) and the modulations of a
 // control. The editor's file work (the saved shapes in SynthyBoy/LFO Shapes/ on the card, lfo_shape_files.h) happens in the touch handler on the overlay thread, never in draw.
 // What it does with an edit of the host: the native cell reports { field, value }; the row of the field says which parameter and how the value converts; the write goes through IInstanceView::writeParam (normalised; the
 // plugin tells the host). The drawn shape is not a parameter: the editor changes a shape model, which goes to the content state through IInstanceView::setLfoShape (at most every kShapeSendMs while a finger is down, and
@@ -40,7 +40,7 @@
 #include "../ui/native_apertures.h"
 #include "../ui/play_rows.h"
 #include "../ui/shape_editor.h"
-#include "../ui/text_entry.h"
+#include "../native_text_entry.h"
 #include "../safe_file.h"
 #include "../q_router.h"
 #include "backgrounds_manifest.h"
@@ -87,7 +87,7 @@ public:
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
         kTgBack = 300, kTgAdd, kTgPage, kTgRow = 310,    // the cells of the targets page (310 + 4 * row + 0 depth, 1 polarity, 2 on / off, 3 remove)
         kMdBack = 340, kMdAdd, kMdPage, kMdRow = 350,    // the cells of the modulations page (same numbering)
-        kMpBack = 230, kMpTarget, kMpAmount, kMpRemove, kMpBoard, kKbOk = 250, kKbCancel,
+        kMpBack = 230, kMpTarget, kMpAmount, kMpRemove, kMpBoard,
         kMemberRate = 900, kMemberSync   // the members of a Q group that are no row: the rate (the rate, or the division in the BPM sync) and the sync mode list
     };
 
@@ -354,10 +354,7 @@ public:
         if (pageTop_ == kPagePointMod)
             return;
         if (pageTop_ == kPageKeyboard)
-        {
-            entry_.draw (sb);
-            return;
-        }
+            return;   // the native keyboard of the skin
         if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
             targetsView_.draw (sb);
         else if (pageTop_ == kPageMods || (pageTop_ == kPageList && underList_ == kPageMods))
@@ -408,6 +405,8 @@ public:
     /** The touch hit this UI's drawing (the main state: the right third; any other state: the whole tab). */
     bool covers (int x, int y) const noexcept
     {
+        if (pageTop_ == kPageKeyboard)
+            return false;   // the keyboard is the host's (native keys of the skin)
         if ((pageTop_ == kPageTargets && targetsView_.nativeHit (x, y))
             || (pageTop_ == kPageMods && modsView_.nativeHit (x, y)))
             return false;
@@ -617,7 +616,6 @@ public:
         hideNativePick (inst);
     }
     LfoShapeLibrary& library() noexcept { return lib_; }
-    ui::TextEntry& keyboard() noexcept { return entry_; }
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
     const ui::lfodisplay::Data& displayData() const noexcept { return data_; }
@@ -722,7 +720,7 @@ public:
 private:
     static constexpr int kGroundX0 = 852, kGroundX1 = 1280;
     using ModRow = uibind::ModRow;
-    enum class Gesture : uint8_t { None, Canvas, Keyboard, Menu, Ground };
+    enum class Gesture : uint8_t { None, Canvas, Menu, Ground };
     enum class SyncPart : uint8_t { Mode, Trip, Dot };
 
     // ======================================================================================================================================================================
@@ -806,6 +804,7 @@ private:
         updateNativeEditor (inst, stack, nowMs);
         updateNativeDetail (inst, stack, nowMs);
         updateNativePick (inst, stack);
+        updateKeyboard (inst, stack);
         if (stack.changes() != changes)
         {
             pull();
@@ -1000,6 +999,8 @@ private:
         if (top == kPageList && pageTop_ != kPageList)
             underList_ = stack.depth() >= 3 ? stack.id (stack.depth() - 2) : 0;   // the page the list lies over (the stack knows it: a page may have been closed and the list opened in one step)
         const bool fromTargetsList = pageTop_ == kPageList && underList_ == kPageTargets;
+        if (pageTop_ == kPageKeyboard && top != kPageKeyboard)
+            closeKeyboard (inst);
         pageTop_ = top;
         pageSig_ = sig;
         switch (top)
@@ -1008,7 +1009,7 @@ private:
             case kPageMods: loadMods (inst); break;
             case kPageEditor: syncEditor (inst); break;
             case kPagePointMod: loadPointMod (inst, true); break;
-            case kPageKeyboard: beginKeyboard(); break;
+            case kPageKeyboard: beginKeyboard (inst); break;
             default: break;
         }
         modsDirty_ = true;
@@ -2303,9 +2304,47 @@ private:
         kbInitial_ = initial;
         stack.openDetail (kPageKeyboard);
     }
-    void beginKeyboard()
+    // the name keyboard: the native keyboard of the skin (components/native/keyboard); the text and the OK / CANCEL logic are plain data (kb_), the keys arrive as codes (native_text_entry.h)
+    void beginKeyboard (IInstanceView& inst)
     {
-        entry_.begin (kbPurpose_ == Kb::SaveAs ? "NAME OF THE SHAPE" : "NEW NAME OF THE SHAPE", kbInitial_.c_str(), kMaxShapeName, kKbOk, kKbCancel);
+        kb_.begin (kbPurpose_ == Kb::SaveAs ? "NAME OF THE SHAPE" : "NEW NAME OF THE SHAPE", kbInitial_.c_str(), kMaxShapeName);
+        inst.clearNativeTextKeys();
+        publishKeyboard (inst);
+    }
+    void closeKeyboard (IInstanceView& inst)
+    {
+        kb_.close();
+        inst.clearNativeTextKeys();
+        inst.setNativeTextEntry (0, "", "");
+    }
+    void publishKeyboard (IInstanceView& inst) const
+    {
+        inst.setNativeTextEntry (kbPurpose_ == Kb::SaveAs ? textentry::kCtxShapeSaveAs : textentry::kCtxShapeRename, kb_.title().c_str(),
+                                 kb_.display (nativeui::nativetext::kLineLen).c_str());
+    }
+    void updateKeyboard (IInstanceView& inst, UiStack& stack)
+    {
+        if (pageTop_ != kPageKeyboard || ! kb_.open())
+            return;
+        bool edited = false;
+        for (int key; (key = inst.takeNativeTextKey()) != 0;)
+        {
+            const auto outcome = kb_.press (key);
+            if (outcome == textentry::Outcome::Edited)
+                edited = true;
+            else if (outcome == textentry::Outcome::Ok)
+            {
+                keyboardOk (stack);
+                return;
+            }
+            else if (outcome == textentry::Outcome::Cancel)
+            {
+                stack.back();
+                return;
+            }
+        }
+        if (edited)
+            publishKeyboard (inst);
     }
     void doSave (const std::string& name, bool overwrite)
     {
@@ -2316,7 +2355,7 @@ private:
     }
     void keyboardOk (UiStack& stack)
     {
-        const std::string name = entry_.text();
+        const std::string name = kb_.text();
         stack.back();
         if (kbPurpose_ == Kb::Rename)
         {
@@ -2964,8 +3003,6 @@ private:
             return Gesture::Ground;
         if (pageTop_ == kPageEditor)
             return Gesture::Canvas;
-        if (pageTop_ == kPageKeyboard)
-            return Gesture::Keyboard;
         if (pageTop_ == kPageList)
             return Gesture::Menu;
         return Gesture::Ground;
@@ -2975,7 +3012,6 @@ private:
         switch (gesture_)
         {
             case Gesture::Canvas: editor_.canvas.setId (kEdCanvas); handle (editor_.canvas.touchDown (x, y, nowMs), stack, v, nowMs); break;
-            case Gesture::Keyboard: handle (entry_.touchDown (x, y, nowMs), stack, v, nowMs); break;
             case Gesture::Menu:
             {
                 const ui::Rect box = menu_.box();
@@ -2994,7 +3030,6 @@ private:
         switch (gesture_)
         {
             case Gesture::Canvas: handle (editor_.canvas.touchMove (x, y), stack, v, nowMs); break;
-            case Gesture::Keyboard: handle (entry_.touchMove (x, y), stack, v, nowMs); break;
             case Gesture::Menu:
                 if (menuMode_ == MenuTouch::Zone)
                     menu_.dragThumb (y);
@@ -3009,7 +3044,6 @@ private:
         switch (gesture_)
         {
             case Gesture::Canvas: handle (editor_.canvas.touchUp (x, y), stack, v, nowMs); break;
-            case Gesture::Keyboard: handle (entry_.touchUp (x, y), stack, v, nowMs); break;
             case Gesture::Menu:
                 if (menuMode_ == MenuTouch::Backdrop && std::abs (x - menuX0_) <= 12 && std::abs (y - menuY0_) <= 12)
                     stack.back();   // a tap on the dimmed ground closes the list
@@ -3048,15 +3082,6 @@ private:
         {
             pointModChange (c, stack, v);
             return;
-        }
-        if (c.kind == K::Request)
-        {
-            switch (id)
-            {
-                case kKbOk: if (pageTop_ == kPageKeyboard) keyboardOk (stack); return;
-                case kKbCancel: if (pageTop_ == kPageKeyboard) stack.back(); return;
-                default: break;
-            }
         }
     }
     void write (const Item& it, const ui::Change& c, IInstanceView& v)
@@ -3370,7 +3395,7 @@ private:
     uint32_t geomKey_ = ~0u;
     ui::ShapeEditorModel editor_;
     ui::PointModModel pointMod_;
-    ui::TextEntry entry_;
+    textentry::Model kb_;
     ModRowsPage targetsView_ { ModRowsPage::Kind::Targets }, modsView_ { ModRowsPage::Kind::Modulations };
     lfolayout::Menu menu_;
     LfoShapeLibrary lib_;

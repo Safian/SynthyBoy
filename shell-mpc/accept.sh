@@ -184,7 +184,7 @@ $B/page_detector_host_asan > $B/page-detector-asan.log 2>&1 || { grep -E "^FAIL|
 # the plugin-drawn layer (shell-mpc/ui/, header only): its tests under AddressSanitizer + UBSan; the tests write PNGs
 # into $B/ui-images (for a human; not compared)
 mkdir -p $B/ui-images
-for t in ui_list_host ui_time_ruler_host ui_text_entry_host; do   # ui_cov_findings_host is NOT here on purpose: it demonstrates findings (its own header says it is not an acceptance test)
+for t in ui_list_host ui_time_ruler_host; do   # ui_cov_findings_host is NOT here on purpose: it demonstrates findings (its own header says it is not an acceptance test)
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I core/shapes/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
     UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }

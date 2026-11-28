@@ -71,10 +71,9 @@ class TestNativeKeyboard(unittest.TestCase):
         )
 
         self.assertEqual(defn.get("version"), 2)
-        self.assertTrue(defn.get("ignoreMousePresses"))
+        self.assertFalse(defn.get("ignoreMousePresses"))
         self.assertFalse(defn.get("disableCoarseDataWheel"))
-        self.assertEqual(len(defn.get("actions", [])), 1)
-        self.assertEqual(defn["actions"][0]["handler"], "Focus Lost")
+        self.assertEqual(defn.get("actions"), [])
 
         comps = defn["componentsData"]
         self.assertTrue(len(comps) > 50)

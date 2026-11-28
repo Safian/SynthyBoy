@@ -172,6 +172,12 @@ public:
     virtual void setNativeMacroText (int /*line*/, const char* /*text*/) noexcept {}
     /** The gate of the Macros tab: true while the targets, the add-target list or the rename keyboard is open (the native cards and texts of the cards page are hidden by it). */
     virtual void setNativeMacroSubpage (bool /*open*/) noexcept {}
+    /** The native text keyboard of the skin (components/native/keyboard): `context` 0 closes it, 1..8 names macro 1..8, 9 / 10 the LFO shape name (textentry::kCtx*); `title` is the host display string of the context, `text` (caret included) the one of the text parameter. */
+    virtual void setNativeTextEntry (int /*context*/, const char* /*title*/, const char* /*text*/) noexcept {}
+    /** The next key code the host wrote into "TextEdit Key" (debounced, textentry::kKey*), 0 when there is none. */
+    virtual int takeNativeTextKey() noexcept { return 0; }
+    /** Forgets the keys queued so far (the keyboard opens). */
+    virtual void clearNativeTextKeys() noexcept {}
     /** The names of the rows of the list the modulation picker's native cells show (the file browsers and the source of a new modulation of the oscillator pages); nullptr: the picker's own names. */
     virtual void setNativeListText (const nativeui::nativetext::ListPage* /*page*/) noexcept {}
     /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */

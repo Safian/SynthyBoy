@@ -8,8 +8,7 @@
 // Q groups: fixed hardware mapping: Bank 1 (Q 1..4) = macro.1 .. macro.4, Bank 2 (Q 5..8) = macro.5 .. macro.8 (16-knob XL maps all 8 directly; 4-knob devices switch physically between Bank 1 and Bank 2). Touching a card or turning
 // a hardware bank knob on a 4-knob device moves the visual bank focus without swapping Bank 1/2 Q-Link slot targets. On the targets page: the depth, polarity and switch of the active row.
 //
-// Kept until the native replacements are proven (docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md section 8): the rename keyboard page (ui/text_entry.h, owner decision 2026-11-27: the C++ keyboard stays until the native keyboard is proven)
-// and the ADD TARGET list (kPageList with listCount () / listName () / listPick (): the data of the native two-level picker, the shared picker of the Mod tab (nativeui::modboard) published from here).
+// Kept until the native replacements are proven (docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md section 8): the ADD TARGET list (kPageList with listCount () / listName () / listPick (): the data of the native two-level picker, the shared picker of the Mod tab (nativeui::modboard) published from here).
 #pragma once
 
 #include <algorithm>
@@ -29,7 +28,7 @@
 #include "../ui/macro_card_contract.h"
 #include "../ui/native_apertures.h"
 #include "../ui/qgroup.h"
-#include "../ui/text_entry.h"
+#include "../native_text_entry.h"
 #include "../ui/theme.h"
 #include "instance_view.h"
 #include "native_marker_covers.h"
@@ -60,8 +59,7 @@ public:
         kMacroCardBase = 200,    // 200 .. 207: the chips/target of a card ask for the targets of the macro
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kList = 400, kListBackdrop, kListHeader,
-        kMacroNameBase = 500,    // 500 .. 507: the name of a card (a tap opens the keyboard page)
-        kKeyboardOk = 520, kKeyboardCancel
+        kMacroNameBase = 500    // 500 .. 507: the name of a card (a tap opens the keyboard page)
     };
     using ModRow = uibind::ModRow;
 
@@ -163,7 +161,6 @@ public:
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
-        entry_.place ({ 0, kTabY, w, kTabH });
     }
 
     /** Reads the instance: the eight macros, what each drives, the spectrum of the output, the pages of the stack, the Q group. */
@@ -208,10 +205,14 @@ public:
             }
             else if (top == kPageKeyboard)
                 beginKeyboard (inst);
+            if (pageTop_ == kPageKeyboard && top != kPageKeyboard)
+                closeKeyboard (inst);
             pageTop_ = top;
             qSlots_.forget();
             modsDirty_ = true;
         }
+        if (pageTop_ == kPageKeyboard)
+            updateKeyboard (inst, stack);
         const bool namesChanged = names_.load (inst.content().get());
         (void) namesChanged;
         const unsigned long qWrites = inst.qWriteCount();
@@ -271,12 +272,10 @@ public:
         drawNativeMarkerCovers (sb, "macros");
     }
 
-    /** The picture: the live line of the spectrum (a display) and, until the native keyboard replaces it (owner decision 2026-11-27), the C++ rename keyboard. */
+    /** The picture: the live line of the spectrum (a display). The rename keyboard is the native one of the skin. */
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (pageTop_ == kPageKeyboard)
-            entry_.draw (sb);
-        else if (pageTop_ == 0)
+        if (pageTop_ == 0)
             drawSpectrumLive (sb, spectrumRect(), spectrumLevels_);
     }
 
@@ -301,6 +300,8 @@ public:
 
     bool covers (int x, int y) const noexcept
     {
+        if (pageTop_ == kPageKeyboard)
+            return false;   // the keyboard is the host's (native keys of the skin)
         if (pageTop_ == kPageList && listNative_)
             return false;   // the picker is the host's
         if (pageTop_ == kPageTargets && targetsNativeHit (x, y))
@@ -340,9 +341,7 @@ public:
             if (! covers (x, y))
                 return false;
             gestureDown_ = true;
-            if (pageTop_ == kPageKeyboard)
-                handleKeyboard (entry_.touchDown (x, y, nowMs), stack, inst);
-            else if (pageTop_ == kPageList)
+            if (pageTop_ == kPageList)
                 listBackdrop (stack);   // a host without the native picker draws no list: a tap closes the page, as a tap on the backdrop did
             else if (pageTop_ == kPageTargets)
             {
@@ -368,17 +367,6 @@ public:
         }
         if (! gestureDown_)
             return false;
-        if (pageTop_ == kPageKeyboard)
-        {
-            if (ev.kind == TouchEvent::Move)
-                handleKeyboard (entry_.touchMove (x, y), stack, inst);
-            else
-            {
-                handleKeyboard (entry_.touchUp (x, y), stack, inst);
-                gestureDown_ = false;
-            }
-            return true;
-        }
         if (ev.kind != TouchEvent::Move)
         {
             const int m = nameDown_;
@@ -393,11 +381,7 @@ public:
         return true;
     }
 
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
-    {
-        if (gestureDown_ && pageTop_ == kPageKeyboard)
-            handleKeyboard (entry_.tick (nowMs), stack, inst);
-    }
+    void tick (double, UiStack&, IInstanceView&) {}
 
     bool wheel (int, int, int, UiStack&, IInstanceView&, double) { return false; }
 
@@ -458,7 +442,6 @@ public:
     /** The macro whose targets page is open (0 .. 7), -1 none. */
     int targetsOf() const noexcept { return pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets) ? targetMacro_ : -1; }
 
-    ui::TextEntry& keyboard() noexcept { return entry_; }
     /** The text a card carries as its name: "MACRO n" for the default, else the name in capitals (the style of the labels of the pages). */
     std::string cardName (int m) const
     {
@@ -818,25 +801,48 @@ private:
         }
     }
 
-    // ---- the keyboard page (the C++ keyboard stays until the native one is proven)
-    void handleKeyboard (const ui::Change& c, UiStack& stack, IInstanceView& v)
-    {
-        if (! c || c.kind != ui::ChangeKind::Request || v.stateGeneration() != presetGeneration_)
-            return;
-        if (c.id == kKeyboardOk)   // the trimmed name is the macro's from now on ("" is the default name)
-            v.setMacroName (editMacro_, synthyboy::sanitizeMacroName (entry_.text(), editMacro_), presetGeneration_);
-        if (c.id == kKeyboardOk || c.id == kKeyboardCancel)
-            stack.back();
-    }
-
-    /** The keyboard page opens with the macro's own name (empty for the default: a new name starts with a capital). */
+    // ---- the keyboard page: the native keyboard of the skin (components/native/keyboard); the keys arrive as codes (native_text_entry.h), the text and the OK / CANCEL logic are plain data (kb_)
+    /** The keyboard opens with the macro's own name (empty for the default). */
     void beginKeyboard (IInstanceView& inst)
     {
         const auto content = inst.content();
         const std::string current = content != nullptr && editMacro_ >= 0 && editMacro_ < synthyboy::kNumMacros ? content->macroNames[editMacro_] : std::string();
         char title[40];
-        std::snprintf (title, sizeof title, "NAME OF MACRO %d", editMacro_ + 1);
-        entry_.begin (title, current.c_str(), synthyboy::kMaxMacroNameChars, kKeyboardOk, kKeyboardCancel);
+        std::snprintf (title, sizeof title, "NAME MACRO %d", editMacro_ + 1);
+        kb_.begin (title, current.c_str(), synthyboy::kMaxMacroNameChars);
+        inst.clearNativeTextKeys();
+        publishKeyboard (inst);
+    }
+    void closeKeyboard (IInstanceView& inst)
+    {
+        kb_.close();
+        inst.clearNativeTextKeys();
+        inst.setNativeTextEntry (0, "", "");
+    }
+    void publishKeyboard (IInstanceView& inst) const
+    {
+        inst.setNativeTextEntry (textentry::kCtxMacroFirst + editMacro_, kb_.title().c_str(), kb_.display (nativeui::nativetext::kLineLen).c_str());
+    }
+    /** Applies the keys the host delivered: the text, then OK (the name is the macro's from now on, "" is the default name) or CANCEL (the page closes either way). */
+    void updateKeyboard (IInstanceView& inst, UiStack& stack)
+    {
+        bool edited = false;
+        for (int key; (key = inst.takeNativeTextKey()) != 0;)
+        {
+            const auto outcome = kb_.press (key);
+            if (outcome == textentry::Outcome::Edited)
+                edited = true;
+            else if (outcome == textentry::Outcome::Ok || outcome == textentry::Outcome::Cancel)
+            {
+                if (outcome == textentry::Outcome::Ok && inst.stateGeneration() == presetGeneration_)
+                    inst.setMacroName (editMacro_, synthyboy::sanitizeMacroName (kb_.text(), editMacro_), presetGeneration_);
+                closeKeyboard (inst);
+                stack.back();
+                return;
+            }
+        }
+        if (edited)
+            publishKeyboard (inst);
     }
 
     /** Fixed hardware Q-Link mapping: Bank 1 (Q 1..4) = macro.1..4, Bank 2 (Q 5..8) = macro.5..8 on both 4-knob and 16-knob devices; touching a card or focusing Bank 2 never swaps Bank 1/2 slots. */
@@ -877,7 +883,7 @@ private:
 
     MacroNames names_;
     int editMacro_ = 0, nameDown_ = -1;
-    ui::TextEntry entry_;
+    textentry::Model kb_;
     std::unique_ptr<SpectrumCurve> curve_;
     const float* spectrumLevels_ = nullptr;
     double lastSpectrumMs_ = -1.0, modsAtMs_ = -1000.0;
