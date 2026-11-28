@@ -7,7 +7,7 @@ The tabs of the overlay skin and the code behind each. The views are defined in 
 | Play (`play1`) | `play.jpg` | `play_view.h`, `play_osc.h`, `play_env_lfo.h` |
 | Macros (`macros`) | `macros.jpg` | `macro_ui.h`, `spectrum_curve.h` |
 | Sub, Osc A, Osc B, Osc C, Noise (`oscsub`, `osca`, `oscb`, `oscc`, `oscnoise`) | `sub.jpg`, `osc_a.jpg`, `osc_b.jpg`, `osc_c.jpg`, `noise.jpg` | `osc_ui.h`, `osc_model.h`, `osc_page.h`, `osc_spec_page.h` |
-| Env, Env 2 .. Env 6 (`env1` .. `env6`) | `env.jpg` | `env_ui.h`, `env_geometry.h` |
+| Env, Env 2 .. Env 6 (`env1` .. `env6`) | `env.jpg` | `env_ui.h` |
 | LFO, LFO 2 .. LFO 10 (`lfo1` .. `lfo10`), RND 1 .. RND 4 (`rnd1` .. `rnd4`) | `lfo.jpg`, `rnd.jpg` | `lfo_ui.h`, `lfo_layout.h` |
 | FX (`fx`) | `fx.jpg` | `fx_ui.h`, `fx_editor_model.h` |
 | Mixer (`mixer`) | `mixer.jpg` | `mixer_ui.h` |

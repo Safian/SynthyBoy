@@ -7,7 +7,7 @@
 namespace synthyboy_mpc { namespace overlay { namespace layout {
 struct Rect { int x, y, w, h; };
 struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)
-constexpr int kKindFilter = 0, kKindLfo = 1, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5, kKindFilterUi = 6, kKindMixer = 7, kKindFx = 8, kKindMod = 9, kKindMacros = 10, kKindMaster = 11, kKindVoice = 12, kKindEnvUi = 13, kKindLfoUi = 14, kKindOscUi = 15;
+constexpr int kKindFilter = 0, kKindLfo = 1, kKindSpectrum = 4, kKindPlay = 5, kKindFilterUi = 6, kKindMixer = 7, kKindFx = 8, kKindMod = 9, kKindMacros = 10, kKindMaster = 11, kKindVoice = 12, kKindEnvUi = 13, kKindLfoUi = 14, kKindOscUi = 15;
 constexpr bool isPageKind (int kind) { return kind == kKindPlay || kind >= kKindFilterUi; }   // a page the plugin draws entirely (its own touch handling, the host widgets hidden under it)
 struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter "Overlay Instance" (one frame = this size)
 constexpr int kScreenW = 1280;

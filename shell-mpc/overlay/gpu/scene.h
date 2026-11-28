@@ -46,7 +46,7 @@ inline bool curveSpan (float firstF, float nF, int& first, int& n) noexcept
     return true;
 }
 
-enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5, kKindPlay = 6, kKindUi = 7 };
+enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindSpectrum = 5, kKindPlay = 6, kKindUi = 7 };
 
 /** The display list. Drawn in order, source over, onto the cleared canvas. "Op alpha" is the alpha byte of `rgba`.
     Clear   rgba: the whole canvas is set to this colour (replaces everything; alpha 0 = transparent)

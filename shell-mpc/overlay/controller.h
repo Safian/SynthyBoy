@@ -1247,7 +1247,6 @@ private:
         in.targets = haveLive ? factory_.viewTargets (liveBuf_.data(), base, targetCount_[current_]) : nullptr;
         view.setHostBackground (hostBgOn_);   // (host_background.h: transparent only while the sentinel of the host's background is read)
         in.nowMs = nowMs;
-        in.frames = &frames_;
         in.rotation = rotation_;
         in.panelEdgeX = keyEdge_;
         in.io = v;

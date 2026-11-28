@@ -101,17 +101,6 @@ inline std::unique_ptr<IView> make (const char* name, int kind, int index)
 /** The same for an entry of the generated table (the pictures of the gallery test). */
 inline std::unique_ptr<IView> make (const layout::View& v) { return make (v.name, v.kind, v.index); }
 
-/** The entry of the generated table that a PageDef was made from (the views of the first overlay take their own region and markers). */
-inline layout::View layoutViewOf (const mpckit::PageDef& d) noexcept
-{
-    layout::View v {};
-    v.name = d.name; v.kind = d.kind; v.index = d.index; v.opaque = d.opaque;
-    v.region = { d.region.x, d.region.y, d.region.w, d.region.h };
-    v.instance = { d.instance.x, d.instance.y, d.instance.w, d.instance.h };
-    for (int m = 0; m < 2; ++m)
-        v.markers[m] = { { d.markers[m].rect.x, d.markers[m].rect.y, d.markers[m].rect.w, d.markers[m].rect.h }, d.markers[m].rgb, d.markers[m].cover };
-    return v;
-}
 } // namespace pages
 
 /** SynthyBoy's view factory (mpckit::IPageFactory): `make (PageDef)` is the switch over the view kinds of overlay_layout.json - the views of the first overlay (the filter curve, the LFO shape, the envelope marker, the
@@ -129,7 +118,6 @@ public:
         {
             case layout::kKindFilter: return std::make_unique<FilterView> (renderer_, fixedCost_);
             case layout::kKindLfo: return std::make_unique<LfoView> (d.index, fixedCost_);
-            case layout::kKindEnv: return std::make_unique<EnvView> (d.index, pages::layoutViewOf (d));
             case layout::kKindSpectrum: return std::make_unique<SpectrumView>();
             case layout::kKindPlay:
             {

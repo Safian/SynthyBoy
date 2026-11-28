@@ -23,7 +23,6 @@ struct ViewInput
     const void* live = nullptr;                    // the plugin's live block (IInstance::readLive; SynthyBoy: synthyboy::LiveValues), opaque here; null: the engine has written nothing yet
     const float* targets = nullptr;                // the readout values of this view's targets (null with `live`), in the order of IView::targets ()
     double nowMs = 0.0;
-    IFrameSource* frames = nullptr;                // the application's primary framebuffer (the envelope view checks the line colour with it)
     int rotation = 90;
     int panelEdgeX = 1280;                         // the x the picture is cut at: right of it the host shows through (its Q-Link panel, which slides in and out; panel_key.h); 1280: nothing of the host over the tab
     mpckit::IInstance* io = nullptr;               // the same instance, writable: the overlay pages write parameters through it (null in a test that has none)
