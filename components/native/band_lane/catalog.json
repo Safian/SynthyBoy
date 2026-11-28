@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "approved": true,
+  "order": 76,
+  "title": "BandLane",
+  "sections": [
+    {
+      "images": [
+        {
+          "presentation": "sample",
+          "caption": "Splitter L/M/H: sávcsík (3 soros lap, sávszín), FX kártyák (power, név, MOVE fogantyú), + ADD ({size:band_lane.height} px magas sávok)",
+          "file": "catalog-band-lane.png",
+          "alt": "BandLane, három sáv"
+        }
+      ]
+    }
+  ]
+}

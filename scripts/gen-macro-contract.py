@@ -42,6 +42,10 @@ def render_header():
     spectrum_rect = style_size("macros.spectrum_rect")
     positions = style_size("macros.card_positions")
 
+    picker = {k: style_size("mod_picker." + k) for k in ("row", "title", "back", "groups", "prev", "next")}
+    picker_rows = int(style_size("mod_picker.rows"))
+    picker_step = int(style_size("mod_picker.row_step"))
+
     pos_lines = ",\n    ".join("{ %d, %d }" % (int(p[0]), int(p[1])) for p in positions)
 
     return f"""// Generated from components/sizes.json by scripts/gen-macro-contract.py. Do not edit by hand.
@@ -77,6 +81,16 @@ inline constexpr int kGap = {gap};
 inline constexpr int kBankGap = {bank_gap};
 inline constexpr Rect kTitleRect {_rect_lit(title_rect)};
 inline constexpr Rect kSpectrumRect {_rect_lit(spectrum_rect)};
+
+// The add-target list of the Macros tab: the shared native picker of the Mod tab (mod_picker.* tokens, tab coordinates).
+inline constexpr int kPickerRows = {picker_rows};
+inline constexpr int kPickerRowStep = {picker_step};
+inline constexpr Rect kPickerRow {_rect_lit(picker["row"])};
+inline constexpr Rect kPickerTitle {_rect_lit(picker["title"])};
+inline constexpr Rect kPickerBack {_rect_lit(picker["back"])};
+inline constexpr Rect kPickerGroups {_rect_lit(picker["groups"])};
+inline constexpr Rect kPickerPrev {_rect_lit(picker["prev"])};
+inline constexpr Rect kPickerNext {_rect_lit(picker["next"])};
 
 inline constexpr std::array<Point, 8> kCardPositions {{{{
     {pos_lines}

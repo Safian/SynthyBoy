@@ -9,7 +9,7 @@
 // a hardware bank knob on a 4-knob device moves the visual bank focus without swapping Bank 1/2 Q-Link slot targets. On the targets page: the depth, polarity and switch of the active row.
 //
 // Kept until the native replacements are proven (docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md section 8): the rename keyboard page (ui/text_entry.h, owner decision 2026-11-27: the C++ keyboard stays until the native keyboard is proven)
-// and the ADD TARGET list (data only here: kPageList with listCount () / listPick (); no native two-level destination list exists yet).
+// and the ADD TARGET list (kPageList with listCount () / listName () / listPick (): the data of the native two-level picker, the shared picker of the Mod tab (nativeui::modboard) published from here).
 #pragma once
 
 #include <algorithm>
@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "../native_mod_targets.h"
+#include "../native_ui_params.h"
 #include "../q_router.h"
 #include "../ui/binding.h"
 #include "../ui/macro_card_contract.h"
@@ -103,6 +104,13 @@ public:
             if (nativeKnobArea (m).contains (x, y))
                 return m;
         return -1;
+    }
+    // ---- the native picker of the add-target list (tokens mod_picker.*, generated into ui/macro_card_contract.h; tab coordinates, the page is placed at kTabY)
+    static ui::Rect pickerRect (const ui::Rect& r) noexcept { return { r.x, kTabY + r.y, r.w, r.h }; }
+    static ui::Rect pickerRow (int row) noexcept
+    {
+        const ui::Rect& r = ui::macrocard::kPickerRow;
+        return pickerRect ({ r.x, r.y + row * ui::macrocard::kPickerRowStep, r.w, r.h });
     }
     static bool isNativeControl (int x, int y) noexcept
     {
@@ -194,7 +202,10 @@ public:
             if (top == kPageTargets && ! (pageTop_ == kPageList && underList_ == kPageTargets))
                 targetsPageIndex_ = 0;
             else if (top == kPageList)
+            {
                 listGroup_ = -1;
+                listFirst_ = 0;
+            }
             else if (top == kPageKeyboard)
                 beginKeyboard (inst);
             pageTop_ = top;
@@ -239,6 +250,7 @@ public:
             if (pageTop_ == kPageList)
                 listGroup_ = -1;
         }
+        updateNativeList (inst, stack);
         if (pageTop_ == 0)
             updateSpectrum (inst, nowMs);
         inst.setUiFullOpen (pageTop_ != 0 || ! nativeControls_);
@@ -271,7 +283,9 @@ public:
 
         if (pageTop_ == kPageKeyboard)
             entry_.draw (sb);
-        else if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
+        else if (pageTop_ == kPageList)
+            drawList (sb);
+        else if (pageTop_ == kPageTargets)
             drawTargets (sb);
         else
             drawMacros (sb);
@@ -298,6 +312,8 @@ public:
 
     bool covers (int x, int y) const noexcept
     {
+        if (pageTop_ == kPageList && listNative_)
+            return false;   // the picker is the host's
         if (pageTop_ == kPageTargets && targetsNativeHit (x, y))
             return false;
         if (! ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y))
@@ -338,7 +354,7 @@ public:
             if (pageTop_ == kPageKeyboard)
                 handleKeyboard (entry_.touchDown (x, y, nowMs), stack, inst);
             else if (pageTop_ == kPageList)
-                listBackdrop (stack);   // no list is drawn here (no native one yet): a tap closes the page, as a tap on the backdrop did
+                listBackdrop (stack);   // a host without the native picker draws no list: a tap closes the page, as a tap on the backdrop did
             else if (pageTop_ == kPageTargets)
             {
                 for (int i = 0; i < targets_.numRows; ++i)
@@ -402,6 +418,7 @@ public:
     {
         inst.publishNativeMacroTargets (false);
         hideNativeTargets (inst);
+        hideNativeList (inst);
         resetSpectrum();
         inst.setUiFullOpen (false);
     }
@@ -487,6 +504,14 @@ public:
         return listGroup_ < 0 ? d.groups[static_cast<size_t> (i)].c_str()
                               : uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (d.choices[static_cast<size_t> (listGroup_)][static_cast<size_t> (i)]))).name;
     }
+    /** The choice value of entry `i` for the picker (ModUi's coding: a group is -1 - group, a destination its choice). */
+    int listChoice (int i) const noexcept
+    {
+        const uibind::DestIndex& d = uibind::DestIndex::get();
+        if (i < 0 || i >= listCount())
+            return 0;
+        return listGroup_ < 0 ? -1 - i : d.choices[static_cast<size_t> (listGroup_)][static_cast<size_t> (i)];
+    }
     /** An entry of the list picked: a group opens its parameters, a parameter makes a new slot for the macro and returns to the targets page. */
     void listPick (int index, UiStack& stack, IInstanceView& v)
     {
@@ -495,16 +520,78 @@ public:
         if (listGroup_ < 0)
         {
             listGroup_ = index;
+            listFirst_ = 0;
             return;
         }
         addTarget (v, uibind::DestIndex::get().choices[static_cast<size_t> (listGroup_)][static_cast<size_t> (index)]);
         stack.back();
     }
     /** The header of the list (back to the groups) or the backdrop (close). */
-    void listHeader() noexcept { listGroup_ = -1; }
+    void listHeader() noexcept { listGroup_ = -1; listFirst_ = 0; }
     void listBackdrop (UiStack& stack) { stack.back(); }
 
 private:
+    // ---- the native add-target list: the picker of the Mod tab (nativeui::modboard) published for this page, its taps applied through listPick / listHeader / listBackdrop
+    void hideNativeList (IInstanceView& inst)
+    {
+        if (! listNative_)
+            return;
+        listNative_ = false;
+        inst.setNativeModBoard (0, nullptr);
+    }
+
+    void updateNativeList (IInstanceView& inst, UiStack& stack)
+    {
+        namespace nb = nativeui::modboard;
+        if (pageTop_ != kPageList || underList_ != kPageTargets || ! nativeControls_ || ! inst.nativeModTargetsSupported())
+        {
+            hideNativeList (inst);
+            return;
+        }
+        const int count = listCount();
+        listFirst_ = std::clamp (listFirst_, 0, std::max (0, count - 1));
+        const int identity = macroSource_[std::clamp (targetMacro_, 0, kNumMacros - 1)] + 4000;
+        std::array<nativeui::FxCell, nb::kHandles> fields {};
+        for (int row = 0; row < nb::kListRows && listFirst_ + row < count; ++row)
+        {
+            fields[nb::ListRow + row] = { nb::kChoiceBias + listChoice (listFirst_ + row), identity, nativeui::kFxToggle };
+            fields[nb::ListRowGate + row] = { 1, 1, nativeui::kFxToggle };
+        }
+        for (int field : { nb::ListBack, nb::ListPrev, nb::ListNext, nb::ListGroups, nb::ListGate, nb::ListTitle })
+            fields[field] = { listGroup_ + 1, identity + listFirst_, nativeui::kFxToggle };
+        inst.setNativeModBoard (2, fields.data());
+        listNative_ = true;
+        for (int field = nb::ListRow; field < nb::ListGate; ++field)
+        {
+            float value = 0.0f;
+            if (! inst.takeNativeModBoard (field, fields[field], value) || value < 0.5f)
+                continue;
+            if (field < nb::ListBack)
+                listPick (listFirst_ + field - nb::ListRow, stack, inst);
+            else if (field == nb::ListBack)
+                listBackdrop (stack);
+            else if (field == nb::ListGroups)
+                listHeader();
+            else
+                listFirst_ = std::clamp (listFirst_ + (field == nb::ListPrev ? -nb::kListRows : nb::kListRows), 0, std::max (0, ((count - 1) / nb::kListRows) * nb::kListRows));
+            inst.setNativeModBoard (0, nullptr);   // the next update publishes the new rows
+            return;
+        }
+    }
+
+    /** The list page: the ground, with the cells of the native picker cleared (the skin draws them). */
+    void drawList (gpu::SceneBuilder& sb) const
+    {
+        if (! listNative_)
+            return;
+        namespace nb = nativeui::modboard;
+        const int count = listCount();
+        for (int row = 0; row < nb::kListRows && listFirst_ + row < count; ++row)
+            ui::clearNativeCell (sb, pickerRow (row));
+        for (const ui::Rect& r : { ui::macrocard::kPickerTitle, ui::macrocard::kPickerBack, ui::macrocard::kPickerGroups, ui::macrocard::kPickerPrev, ui::macrocard::kPickerNext })
+            ui::clearNativeCell (sb, pickerRect (r));
+    }
+
     // ---- the displays the overlay draws itself ------------------------------------------------------------------------------------------------------------------------------------------------------
     void drawNativeFallback (gpu::SceneBuilder& sb) const
     {
@@ -906,6 +993,8 @@ private:
     double lastSpectrumMs_ = -1.0, modsAtMs_ = -1000.0;
     bool modsDirty_ = true;
     bool gestureDown_ = false;
+    bool listNative_ = false;
+    int listFirst_ = 0;
 
     QSlots qSlots_;
     char qName_[32] = "MACROS 1-4";
