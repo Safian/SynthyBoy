@@ -20,11 +20,10 @@ constexpr int kRootLoad = kLoad + 1, kRootLoads = 3, kBindings = kRootLoad + kRo
 constexpr int kView = 0, kValue = 1, kStep = kValue + kCells, kKind = kStep + kCells;
 constexpr int kNavigation = kKind + kCells, kMenusBase = kNavigation + 3, kHandles = kMenusBase + kMenus;
 static_assert (kHandles == kOscDetailHandles && kOscRootLoad + kRootLoads == kOscRootLoadView);
-constexpr int kLeft = 8, kWidth = 158, kHeight = 92, kPlainTop = 80, kGraphTop = 312;
-constexpr int kPlainStep = 128, kGraphStep = 104;
-constexpr int kGraphY = 68, kGraphHeight = 212;
+constexpr int kLeft = 8, kWidth = 158, kHeight = 92, kTop = 172, kStep = 116;
+constexpr int kGraphY = 68, kGraphHeight = 200;
 constexpr int kBackX = 4, kBackY = 4, kBackW = 120, kBackH = 56;
-constexpr int kLoadX = 490, kLoadY = 204, kLoadW = 300, kLoadH = 64;
+constexpr int kLoadX = 490, kLoadY = 196, kLoadW = 300, kLoadH = 64;
 
 constexpr int slot (int column, int row) noexcept { return column * kRows + row; }
 constexpr int kind (int code) noexcept

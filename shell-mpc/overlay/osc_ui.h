@@ -911,11 +911,11 @@ public:
             || item.id == kPanel + static_cast<int> (oscmodel::PanelSlot::NoiseType);
     }
 
-    static ui::Rect nativeDetailCell (int slot, bool graph) noexcept
+    static ui::Rect nativeDetailCell (int slot) noexcept
     {
         namespace n = nativeui::oscdetail;
         return { n::kLeft + (slot / n::kRows) * n::kWidth,
-                 kTabY + (graph ? n::kGraphTop : n::kPlainTop) + (slot % n::kRows) * (graph ? n::kGraphStep : n::kPlainStep),
+                 kTabY + n::kTop + (slot % n::kRows) * n::kStep,
                  n::kWidth, n::kHeight };
     }
 
@@ -932,7 +932,7 @@ public:
         if (field == n::kBack) return { n::kBackX, kTabY + n::kBackY, n::kBackW, n::kBackH };
         if (field == n::kLoad) return { n::kLoadX, kTabY + n::kLoadY, n::kLoadW, n::kLoadH };
         if (field >= n::kRootLoad) return loadRect_;
-        return nativeDetailCell (field % n::kCells, nativeDetail_ >= n::Graph);
+        return nativeDetailCell (field % n::kCells);
     }
 
     const nativeui::oscdetail::State& prepareNativeDetail (bool enabled, uint64_t preset)
@@ -996,7 +996,7 @@ public:
             const int rows = graph ? n::kRows - 1 : n::kRows;
             if (item == nullptr || ! item->hasCell || item->alwaysOff || cell >= 4 || block >= rows * 2)
                 return;
-            const int field = n::slot ((block % 2) * 4 + cell, block / 2);
+            const int field = n::slot ((block % 2) * 4 + cell, block / 2 + (graph ? 1 : 0));
             nativeDetailItems_[field] = item;
             if (item->type == T::Mask)
             {
@@ -1323,10 +1323,10 @@ private:
         v.setNativeText (t::OscDetailTitle, detailUp ? nativeDetailTitle_ : "");
         for (int b = 0; b < static_cast<int> (nativeDetailBlocks_.size()); ++b)
         {
-            const char* title = detailUp && nativeDetailBlocks_[b] != nullptr ? nativeDetailBlocks_[b] : "";
             const bool graph = nativeDetail_ >= n::Graph;
-            v.setNativeText (t::OscDetailBlock0 + b, graph ? "" : title);
-            v.setNativeText (t::OscDetailGraphBlock0 + b, graph ? title : "");
+            const int src = graph ? b - 2 : b;
+            const char* title = detailUp && src >= 0 && nativeDetailBlocks_[src] != nullptr ? nativeDetailBlocks_[src] : "";
+            v.setNativeText (t::OscDetailBlock0 + b, title);
         }
         v.setNativeText (t::OscDetailGraph, detailUp && nativeDetail_ >= n::Graph ? "1" : "");
         const std::string missing = missingText_;
