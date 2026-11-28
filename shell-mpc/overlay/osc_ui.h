@@ -445,8 +445,6 @@ public:
         namespace n = nativeui::playoscui;
         return { compactNativeCells_[n::Power], compactNativeCells_[n::Route] };
     }
-    /** The label rectangle of the display band of the compact view. */
-    ui::Rect compactLabelRect() const noexcept { return oscmodel::compactLabelRect (cl_, instance()); }
     /** Standalone oscillator tabs expose the instance choice to the host; the
         page wrapper owns the aperture and touch pass-through. */
     void setNativeInstanceSelector (bool shown) noexcept

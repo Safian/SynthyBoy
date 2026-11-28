@@ -289,8 +289,6 @@ inline CompactLayout layoutCompact (const Rect& third, Instance inst) noexcept
     c.level = { c.basic.x + cw + g, row2Y, c.basic.w - cw - g, bRowH };
     return c;
 }
-/** The line of text over the picture of the compact view (the warning of a missing content): the top strip of the display, over the plot (the band of the buttons is the header band above the display since phase 2). */
-inline Rect compactLabelRect (const CompactLayout& c, Instance) noexcept { return { c.display.x + 14, c.display.y + 4, std::max (0, c.display.w - 28), 32 }; }
 
 // =============================================================================================================================================================
 // the full screen
