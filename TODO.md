@@ -65,6 +65,7 @@
 
 - [ ] A Play lapon (és valószínűleg minden lapon, ahol van `Native Targets Keyline`) egy vékony vízszintes vonal látszik a kijelzők felett (y≈202), pedig csak célok megjelenésekor kellene (kapu: `NonZero/Parameter 3855`). Kész, ha csak akkor látszik, amikor a Targets-cím látszik; ellenőrzendő a kapu jelentése szöveges (kijelző-string) paraméteren. A kód kész (ng/keyline: a kapu mostantól az `IndexedEnabling/1/2/Parameter 3919` / `3920` pontos 0/1 jelzés, `nativeui::kTextGate`); hátra: Key 61 ellenőrzés, hogy a vonal Playen eltűnt, és a mérés rögzítése a `docs/dsp-knowledge/skin-host-behaviour.md`-ben (fut: ng/keyline)
 - [ ] Env 1-6 lapokon három világos pont látszik a cím és a TARGETS között (üres célcímke-pontok, `Native Env Tag Dot`-ok), pedig csak akkor kellene, ha van cél. Kész, ha a pont csak a hozzá tartozó címkével együtt látszik (kapuzás a szöveg-sor jelenlétére, mint a keylineoknál).
+- [ ] Mod `synthyboy_mpc.cpp` page-load kiegészítés: `reportNativeValue` (`shell-mpc/synthyboy_mpc.cpp:2168-2174`) `enteringLayout` védje a `kModView`/`kModNavigation`/`kModBoardControl` váltásokat (`nativePagePaintUntil`), `nativeMod*` bankok (`1647-1650`) kapjanak hideg előtöltést és `renewInputRevisions()` hívást visszatéréskor (P1/P2/P4). Kész, ha Mod visszatéréskor és nézetváltáskor nem tör át késői gesztus vagy névfrissítés a festési ablakon.
 ## Eszközellenőrzések (Key 61 és XL), egy közös készülékteszt
 
 - [ ] Egyeztesd a `docs/release/DEVICE-CHECKLIST.md` nyitott próbáit a végleges csomag jegyzőkönyvével.

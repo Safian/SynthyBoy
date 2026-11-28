@@ -16,7 +16,7 @@ Three blocks: SCALE (`masterNativeBlock_scale`: type, key, mode selectors and th
 
 ## Data
 
-Blocks of `shell-mpc/native_ui_params.h`: `kMasterView` (`master::View`: Hidden, Main, Tuning; `native_master_controls.h`), `kMasterOutput` (`master::kOutputFields`), `kMasterScaleInput`. The rest are engine parameters bound by the cells.
+Blocks of `shell-mpc/native_ui_params.h`: `kMasterOutput` (`master::kOutputFields`), `kMasterScaleInput` (`Parameter 3657`), and legacy `kMasterView` (`master::View`: Hidden, Main, Tuning; `native_master_controls.h`). Both `Master` and `Tuning` tabs bind their root controls directly to always-valid engine, shell, meter, and scale-input handles without a cross-tab `kMasterView` (`Parameter 2879`) gate (`Tuning Header` `HdrView` binds to the root frame gate `RangedEnabling/0/18/33/Parameter 2675`). On the plugin side, `MasterUi` still calls `setNativeMasterView` / `leaveNativeMasterView` so `synthyboy_mpc.cpp` (`nativeMasterView`) gates `Limiter`/`ClearClip`/`scaleInput` writes and `PeakL..VoiceCount` output updates only when the corresponding tab is active.
 
 ## Q groups
 

@@ -97,13 +97,8 @@ public:
 
     void leftTab (IInstanceView& inst) noexcept
     {
-        nativeTargets_.hide (inst, targets_);
-        inst.setNativeModMatrix (nativeui::mod::Hidden, nullptr, nullptr);
-        inst.setNativeModNavigation (0, 0, 0, nullptr);
-        inst.setNativeModDetailNavigation (nullptr);
-        inst.setNativeModBoard (0, nullptr);
-        for (int line = 0; line < nativeui::nativetext::kLines; ++line)
-            inst.setNativeText (line, "");
+        dropGesture();
+        suspendNative (inst);
     }
 
     bool isNativeControl (int x, int y) const noexcept
@@ -156,7 +151,7 @@ public:
         {
             stateGeneration_ = gen;
             if (nativeControls_)
-                leftTab (inst);
+                suspendNative (inst);
             if (stack.depth() >= 2 && stack.top() == kPageList)
             {
                 stack.back();
@@ -168,6 +163,10 @@ public:
                 openSlot_ = -1;
             matrix_.rebuildVisibleList();
         }
+        const bool resuming = suspended_;
+        suspended_ = false;
+        if (resuming)
+            drainNativePending (inst);
 
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
         if (pageTop_ != kPageDetail && pageTop_ != kPageList && pageTop_ != kPageTargets)
@@ -200,13 +199,14 @@ public:
 
         // the virtual Q target of the rows: a write of the host moves the selected row
         float x;
-        if (pageTop_ == 0 && inst.takeQVirtual (kVirtualRow, x) && matrix_.visibleSlotCount() > 0)
+        if (pageTop_ == 0 && inst.takeQVirtual (kVirtualRow, x) && ! resuming && matrix_.visibleSlotCount() > 0)
             matrix_.selectRow (static_cast<int> (std::lround (x * static_cast<float> (std::max (1, matrix_.visibleSlotCount() - 1)))));
         inst.setQVirtual (kVirtualRow, matrix_.visibleSlotCount() > 1 ? static_cast<float> (matrix_.selectedRow()) / static_cast<float> (matrix_.visibleSlotCount() - 1) : 0.0f);
 
-        publishNativeNavigation (inst, stack, true);
-        publishNativeMatrix (inst, true);
-        publishNativeBoard (inst, stack, true);
+        const bool consume = ! resuming;
+        publishNativeNavigation (inst, stack, consume);
+        publishNativeMatrix (inst, consume);
+        publishNativeBoard (inst, stack, consume);
         publishNativeText (inst);
         const bool full = nativeView() == nativeui::mod::Hidden && (! nativeControls_ || (pageTop_ != 0 && pageTop_ != kPageTargets && pageTop_ != kPageList));
         inst.setUiFullOpen (full);
@@ -237,6 +237,8 @@ public:
 
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double)
     {
+        if (suspended_)
+            return false;
         const int x = ev.x, y = ev.y;
         (void) stack;
         if (pageTop_ == kPageList && inst.stateGeneration() != stateGeneration_)
@@ -339,7 +341,7 @@ public:
     /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the list of the matrix scrolls a row a notch. false: nothing of this page lies there, or a finger is down on it. */
     bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double)
     {
-        if (gestureDown_ || pageTop_ != 0 || ! covers (x, y) || ! matrix_.wheel (x, y, notches))
+        if (suspended_ || gestureDown_ || pageTop_ != 0 || ! covers (x, y) || ! matrix_.wheel (x, y, notches))
             return false;
         publishQGroup (inst);
         publishNativeNavigation (inst, stack, false);
@@ -354,6 +356,8 @@ public:
 
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
+        if (suspended_)
+            return;
         handle (turnChange (knobIndex, delta), stack, inst);
         publishNativeMatrix (inst, false);
     }
@@ -1239,8 +1243,32 @@ private:
     bool nativeControls_ = false;
     bool nativeGround_ = false;
     std::array<nativeui::FxCell, nativeui::mod::kFields> nativeCells_ {};
+    void suspendNative (IInstanceView& inst) noexcept
+    {
+        suspended_ = true;
+        nativeTargets_.hide (inst, targets_);
+        // ListGate (kModBoardControl + ListGate) is shared across tabs' oscNativeList: never leave a modal picker open on exit.
+        if (pageTop_ == kPageList)
+            inst.setNativeModBoard (0, nullptr);
+        inst.setUiFullOpen (false);
+    }
+
+    void drainNativePending (IInstanceView& inst) noexcept
+    {
+        float discarded = 0.0f;
+        for (int field = 0; field < nativeui::mod::kFields; ++field)
+            inst.takeNativeModField (field, {}, discarded);
+        for (int field = 0; field < nativeui::mod::kNavigation; ++field)
+            inst.takeNativeModNavigation (field, {}, discarded);
+        for (int field = 0; field < nativeui::moddetail::kHandles; ++field)
+            inst.takeNativeModDetailNavigation (field, {}, discarded);
+        for (int field = 0; field < nativeui::modboard::kHandles; ++field)
+            inst.takeNativeModBoard (field, {}, discarded);
+    }
+
     int nativeGestureField_ = -1, nativeGestureTarget_ = -1;
     bool nativeGestureBlocked_ = false;
+    bool suspended_ = false;
     uint64_t stateGeneration_ = 0;
 };
 
