@@ -28334,6 +28334,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2942"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2888"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2889"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2890"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2940"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2941"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2942"
          }
         ]
        },
@@ -28435,6 +28459,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2945"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2891"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2892"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2893"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2943"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2944"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2945"
          }
         ]
        },
@@ -28536,6 +28584,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2948"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2894"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2895"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2896"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2946"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2947"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2948"
          }
         ]
        },
@@ -28637,6 +28709,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2951"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2897"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2898"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2899"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2949"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2950"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2951"
          }
         ]
        },
@@ -28738,6 +28834,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2954"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2900"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2901"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2902"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2952"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2953"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2954"
          }
         ]
        },
@@ -28839,6 +28959,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2957"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2903"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2904"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2905"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2955"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2956"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2957"
          }
         ]
        },
@@ -28940,6 +29084,30 @@
          {
           "key": "OpenMore",
           "value": "Parameter 2960"
+         },
+         {
+          "key": "CapAmount",
+          "value": "WithName[AMOUNT]/Parameter 2906"
+         },
+         {
+          "key": "CapPolarity",
+          "value": "WithName[POLARITY]/Parameter 2907"
+         },
+         {
+          "key": "CapRoute",
+          "value": "WithName[ROUTE]/Parameter 2908"
+         },
+         {
+          "key": "CapSource",
+          "value": "WithName[SOURCE]/Parameter 2958"
+         },
+         {
+          "key": "CapTarget",
+          "value": "WithName[TARGET]/Parameter 2959"
+         },
+         {
+          "key": "CapEdit",
+          "value": "WithName[EDIT]/Parameter 2960"
          }
         ]
        },
