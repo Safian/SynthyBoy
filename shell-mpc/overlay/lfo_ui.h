@@ -574,7 +574,7 @@ public:
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
     const ui::lfodisplay::Data& displayData() const noexcept { return data_; }
-    /** The data of the full page: the picture of the LFO below the edit button and the page title. */
+    /** The data of the full page: the picture of the LFO below the edit button. */
     ui::lfodisplay::Data fullDisplayData() const noexcept
     {
         auto data = data_;
@@ -582,8 +582,7 @@ public:
         if (! edit.empty())
         {
             const auto graph = fullG_.display.inset (8);
-            const int top = std::max (edit.bottom() + 8, graph.y + ui::lfodisplay::titleRoom (data));   // below the edit button and the page title (inner margin to the border)
-            data.pageTitle = true;
+            const int top = std::max (edit.bottom() + 8, graph.y + 22);   // below the edit button; the 22 px band is the old title room, kept so the plot does not move (the Header carries the title)
             data.area = { graph.x, top, graph.w, std::max (0, graph.bottom() - 6 - top) };
             data.aperture = edit;
         }
@@ -1284,9 +1283,6 @@ private:
         relayout();
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
             syncEditor (v);
-        // the nameplate
-        std::snprintf (name_, sizeof name_, rnd_ != 0 ? "RND %d - %s" : "LFO %d - %s", selection(),
-                       rnd_ != 0 ? ui::styleName (shapeIdx_) : ui::lfoglyph::name (shapeIdx_));
     }
 
 
@@ -1314,8 +1310,6 @@ private:
     {
         lastNowMs_ = nowMs;
         ui::lfodisplay::Data d;
-        std::snprintf (label_, sizeof label_, "%s", name_);
-        d.label = label_;
         d.dim = false;
         bool changed = false;
         const uint64_t generation = v.stateGeneration();
@@ -1429,7 +1423,6 @@ private:
         displayHot_ = nowMs - displayChangedMs_ < 350.0;
         d.traceMarkerCached = ! displayHot_;
         data_ = d;
-        data_.label = label_;
     }
     // ======================================================================================================================================================================
     // the shape editor
@@ -3369,7 +3362,7 @@ private:
     static constexpr int kCache = 16;
     mutable const char* cacheKey_[kCache] = {};
     mutable int cacheIdx_[kCache] = {}, nCache_ = 0;
-    char qName_[16] = {}, name_[40] = {}, label_[40] = {};
+    char qName_[16] = {};
     QSlots qSlots_;
     // the display
     synthyboy::ParamValues values_ = synthyboy::ParamValues::defaults();

@@ -55,12 +55,10 @@ struct Data
     bool traceHasSignal = false;    // even a flat trace can be actual signal
     bool traceMarkerCached = false; // keep the marker with a settled trace
     int style = -1;              // Random: the style 0 .. 4 (Perlin, S & H, sine interpolation, Lorenz, Rossler): while the trace is flat (nothing sounds) a dim representative path of the style is drawn instead of a bare line
-    const char* label = "";      // the name in the corner (the shape, the style); the compact view writes it in its header band
     bool dim = false;            // the LFO does nothing (the picture stays, faint)
     Rect area;                   // optional explicit plot area below the header controls
     Rect aperture;               // a host-owned button inside the graph frame
-    bool pageTitle = false;      // the full page: the label is the large page title (theme::kPageTitleSize), even when the plot area is given below the edit button
-    bool editing = false;        // the shape editor has the same ground and curve under its handles: no lead-in, no label
+    bool editing = false;        // the shape editor has the same ground and curve under its handles: no lead-in
 };
 
 inline uint32_t a (uint32_t rgb, int alpha) noexcept { return (rgb << 8) | static_cast<uint32_t> (std::min (255, std::max (0, alpha))); }
@@ -72,8 +70,6 @@ inline bool hasLeadStrip (const Data& d) noexcept
 /** The compact view (the third of the Play page, playrows.h) is the one whose owner gave the plot area (Data::area, not empty). The buttons stand in the header band of the third above the display (playrows::headerBandRect), the plot area
     fills the display (playrows::compactPlotRect: the same for the oscillator wave, the envelope graph and the LFO curve). */
 inline bool isCompact (const Rect&, const Data& d) noexcept { return ! d.editing && ! d.area.empty(); }
-/** The room the page title takes at the top of a non-compact display (it has an inner margin to the border and lies above the strip and the curve). */
-inline int titleRoom (const Data& d) noexcept { return d.label[0] != '\0' && ! d.editing ? 22 : 0; }
 inline Rect stripRect (const Rect& r, const Data& d) noexcept
 {
     if (! hasLeadStrip (d))
@@ -84,7 +80,7 @@ inline Rect stripRect (const Rect& r, const Data& d) noexcept
         return { area.x, area.y, area.w, 18 };
     }
     const Rect in = r.inset (8);
-    return { in.x, in.y + 2 + titleRoom (d), in.w, 18 };
+    return { in.x, in.y + 2, in.w, 18 };
 }
 /** The rectangle of the curve inside the block: the shape graph is one clean cycle. With delay or rise > 0 a small separate strip sits above the graph. The compact view: inside playrows::plotRect (below the header band), the
     strip at its top; the other views (the full page, the shape editor) as before. */
@@ -97,7 +93,7 @@ inline Rect plotRect (const Rect& r, const Data& d) noexcept
         return { area.x, area.y + stripH, area.w, std::max (0, area.h - stripH) };
     }
     const Rect in = r.inset (8);
-    const int topPad = (hasLeadStrip (d) ? 24 : 6) + titleRoom (d);   // the page title keeps an inner margin to the border and stays above the strip and the curve
+    const int topPad = (hasLeadStrip (d) ? 24 : 6);
     return { in.x, in.y + topPad, in.w, std::max (0, in.h - topPad - 6) };
 }
 /** The row of the value v (-1 .. 1) in a plot rectangle. */
@@ -287,15 +283,6 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     }
     sb.style (1.0f, false);
     sb.paintOff();
-    if (d.label[0] != '\0' && ! d.editing)
-    {
-        if (isCompact (r, d) && ! d.pageTitle)
-        {
-            // Play phase 2: the compact view has no header band in its display; the name of the shape / style stands in the SHAPE / STYLE dropdown below it, so the label is not drawn over the plot
-        }
-        else
-            sb.text (static_cast<float> (r.x + 14), static_cast<float> (r.y + 28), theme::kPageTitleSize, d.label, a (T.text, 255));   // the page title (the host layer draws "LFO n" / "RND n" in the same place, 99_backgrounds.py)
-    }
     if (d.kind == Data::Kind::Random && d.traceMarkerCached && ! d.dim && d.trace != nullptr && d.traceN >= 2)
         drawTraceMarker (sb, plot, d, st[3]);
 }
