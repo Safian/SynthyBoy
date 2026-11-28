@@ -204,6 +204,7 @@ Host Atomic Commit (Flip Event)
 
 2. **Marker Pixel Inspection**:
    - The published page index selects both marker centers from the skin layout. Play uses `(36, 137)` and `(1244, 137)`. The LFO tab uses `(36, 114)` and `(1244, 114)`. The Mac shim host test paints both pairs at their actual locations and checks that a matching flip preserves the overlay.
+   - The five Osc views (osca, oscb, oscc, oscsub, oscnoise) keep their markers on flat ground below the page content, not in the header row (the Header component's Route dropdown covers tab y 8..48): left marker (12, 616), instance picture (24, 616), right marker (1250, 556) in tab coordinates (page y +110). The cover patches are drawn first, so a marker spot must hold only flat ground colour; the spots were chosen by checking the skin instances' bounds of `oscScreen`/`oscScreenTop` (4 px or more clearance) and the C++ rects of `osc_model.h`. Other views keep their positions. Device check of the detection: open.
    - Coordinate transformation to physical panel coordinates:
      - XL ($270^\circ$ rotation, panel 800x1280): $P_x = 800 - 1 - Y_{ui}$, $P_y = X_{ui}$.
      - Key 61 ($90^\circ$ rotation, panel 800x1280): $P_x = Y_{ui}$, $P_y = 1280 - 1 - X_{ui}$.
