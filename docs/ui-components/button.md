@@ -22,4 +22,4 @@ The disabled look is `style.dim_artwork` of the face (existing `inactive.preview
 
 Add an object to `button.samples` (`id`, `file`, `alt`, `caption`, `height` token, `text`, `state` = `enabled`|`disabled`), then:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.

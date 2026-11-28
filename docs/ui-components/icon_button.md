@@ -12,4 +12,4 @@ The Button recipe with an icon where the text is: square (width = height) at 32 
 
 POWER on and off, EXPAND and CLOSE at 32 / 40 / 48 / 56; POWER, EXPAND and CLOSE disabled at 48; POWER on and off and CLOSE in ghost at 40 and 48. The list is the catalogue data: a new state or size is one more entry (`id`, `file`, `alt`, `caption`, `icon` = `power`|`expand`|`close`, `height` token, `state` = `on`|`off`|`disabled`, `look` = `filled`|`ghost`), then:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.

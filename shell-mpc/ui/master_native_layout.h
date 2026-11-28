@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly.
+// Edit this file directly.
 // Tab coordinates (1280 x 628). The skin (skin/TUI.json) places the native controls at the same rectangles.
 #pragma once
 #include "core.h"

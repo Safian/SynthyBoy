@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly.
+// Edit this file directly.
 #pragma once
 #include "core.h"
 namespace synthyboy_mpc::ui::voicelayout {

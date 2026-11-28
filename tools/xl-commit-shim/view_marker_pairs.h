@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly; the marker colours are those of shell-mpc/overlay/overlay_layout.h.
+// Edit this file directly; the marker colours are those of shell-mpc/overlay/overlay_layout.h.
 #pragma once
 #include <stdint.h>
 static const uint32_t shim_marker_pairs[][2] = {

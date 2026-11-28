@@ -23,7 +23,7 @@ New colours: none. New size tokens (`components/sizes.json`, `radio_list`): `sca
 
 six rows TRI SIN SAW SQR S&H RND with TRI selected at 40 px; the same at 32 and 48 px with SAW selected; disabled six rows; horizontal HZ BPM KEY FREE with BPM selected at 40 px; two rows Mono / Poly. A new example is one more entry (`id`, `file`, `alt`, `caption`, `orientation`, `items`, `selected`, `height` token, `width`, `state`), then:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.
 
 ## Native skin item (not implemented)
 

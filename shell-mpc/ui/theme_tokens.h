@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly; the single place of the colours and sizes of the overlay display layer.
+// Edit this file directly; the single place of the colours and sizes of the overlay display layer.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Included by theme.h inside its namespace, after the Look structure.

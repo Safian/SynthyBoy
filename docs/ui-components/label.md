@@ -44,4 +44,4 @@ Title and value share one text style (`level.DIAL_TEXT_STYLE`). `disabled` = the
 
 Add an object to `label.variants` (`id`, `label`, `text`, `font`, `unit` = `tui` or `em`, `colour`, `case`, `file`, `alt`), then:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.

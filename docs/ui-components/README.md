@@ -36,7 +36,7 @@ A `components/native/header/` bejegyzés a fejléc-sor nyolc példáját mutatja
 
 A HTML generált fájl; közvetlenül ne szerkeszd. Újragenerálás a repó gyökeréből:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.
 
 Nincs pre-commit hook és nincs generátor: a katalógus-HTML-t kézzel szerkesztjük.
 

@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly.
+// Edit this file directly.
 // SynthyBoy - MPC overlay: the manifest of tabs that have pre-rendered static host page backgrounds in the skin.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

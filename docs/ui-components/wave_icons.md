@@ -12,7 +12,7 @@ The waveform pictograms: sine, saw, square, pulse (narrow square), triangle, sh 
 
 Two sheets with all seven icons in the order sine, saw, square, pulse, triangle, sh, noise: 1:1 (the saw selected) and magnified 4 times (nearest neighbour, the real pixels). Footprints in the catalogue table. A new sheet is one more entry (`id`, `file`, `alt`, `caption`, `zoom`, `selected` index or null), then:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.
 
 ## Native skin use
 

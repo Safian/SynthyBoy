@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly; overlay_layout.json holds the same numbers for the skin validator.
+// Edit this file directly; overlay_layout.json holds the same numbers for the skin validator.
 // SynthyBoy - MPC overlay: the views (region of a tab + two marker squares + the instance picture each) of the overlay skin, in SCREEN coordinates (landscape UI, 1280 x 800).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

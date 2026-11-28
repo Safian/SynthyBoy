@@ -18,7 +18,7 @@ enabled: as above; disabled: `style.dim_artwork` of the whole picture (existing 
 
 L M H horizontal at all three positions (40 px track, 160 wide); Mono / Poly at both positions (32 px, 112 wide); 1 2 3 4 at position 3 (48 px, 240 wide); vertical PWM LFO / MAN / ENV at all three positions (40 px, 120 high); vertical two positions (VOICE); disabled horizontal and vertical. The footprint of every example is in the catalogue table. A new example is one more entry (`id`, `file`, `alt`, `caption`, `orientation`, `labels`, `position`, `size` token, `length`, `title`, `state`), then:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.
 
 ## Native skin item (not implemented)
 
