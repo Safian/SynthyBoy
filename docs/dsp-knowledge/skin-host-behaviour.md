@@ -71,3 +71,11 @@ Layout in use: `TUI.json` keeps `pageData.tabs`, `info`, `replacementStrings` an
 - Open: confirm on the Key 61 that the Play line is gone (`TODO.md`).
 
 - FACT (Key 61 and XL, 2026-11-28, package of develop e3693360+): the full skin split into 13 wrapped import files at the skin root (`skin/defs_<family>.json`, 539 definitions, `TUI.json` keeps tabs, info and an `importFiles` list) loads and renders on both devices: Play on both, LFO 1 on the Key 61; the XL resolved the imports as well. The SDK `tools/validate.py` does not follow `importFiles` (it reads only TUI.json), so it cannot catch a missing import file: `scripts/validate_synthyboy_skin.py` merges and checks the files.
+
+
+## Tab switch cost follows the tab entered, not the other tabs (Key 61, 2026-11-28)
+
+- Measured: Env 1 <-> LFO 1 takes the same time (0.42-0.50 s / 0.31-0.41 s) whether the Osc tab is full (about 2600 expanded nodes) or has its two big layers emptied, so a plugin-wide cache or a smaller tree in OTHER tabs does not speed a switch; only the tree of the tab being entered does. Evidence: `.hw-local/mpc-perf/key61-inactive-tab-cost-20261128/README.md`.
+- The cost of entering a tab is the host building its expanded tree: closed (hidden) layers count in full, and a definition with `"repeats": N` counts N times. The Osc tab: ~0.7 s of ~1.3 s was the closed Detail layer (`.hw-local/mpc-perf/key61-osc-pattern-20261128/README.md`).
+- A plugin-side state mirror (read-only cache on leaving a tab) only removes the blank first frame; it does not shorten the host's build.
+- Open (no source, not measured): whether a skin mechanism exists that does not build the closed parts of a tab (`SubTab/N`, `PageIndex`, the `Local/.../layer` state): `Local` layer id other than `synthyboyWarpPage` is not proven (validator warning).
