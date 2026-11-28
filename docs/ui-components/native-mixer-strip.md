@@ -67,11 +67,9 @@ Understated blue/white SynthyBoy console styling places all static furniture ont
 
 Following explicit owner directive, the normal Mixer tab is rendered **100% by the MPC native host JSON + static background image**:
 - **Zero Overlay Graphics on Normal Mixer**:
-  In `shell-mpc/overlay/mixer_ui.h`, when `nativeBase()` and `hostBackground()` are active, overlay rendering (`drawNativeMarkerCovers`, `drawStaticFurniture`, `drawNativeBaseScreen`) is completely disabled. The normal Mixer tab overlay scene contains 0 draw commands, 0 vertices, and 0 overlay pixels.
+  In `shell-mpc/overlay/mixer_ui.h`, when `nativeBase()` and `hostBackground()` are active, the overlay draws nothing on the strips. The normal Mixer tab overlay scene contains 0 draw commands, 0 vertices, and 0 overlay pixels.
 - **Direct Touch Routing**:
   `covers(x, y)` returns `false` on the normal mixer tab, so 100% of touch and wheel events pass directly to host native widgets without overlay interception or touch stealing.
-- **Modal Popup Isolation Preserved**:
-  Transient destination dropdown lists (`listOpen_`) retain full overlay coverage, preventing touch leakage to underlying base widgets.
 
 ## Real Native Vertical Fader & Below-Track Value
 
