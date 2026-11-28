@@ -193,20 +193,18 @@ int main (int argc, char** argv)
     // ---- the overrides and their order ---------------------------------------------------------------------------------------------------------------
     {
         const std::string xl = "Akai Professional MPC XL";
-        ProfileChoice c = chooseProfile (xl, true, "", "/tmp/f", "", "");
+        ProfileChoice c = chooseProfile (xl, true, "", "/tmp/f", "");
         check (c.source == "table: " + xl && c.skipped.empty(), "no override: the table");
-        c = chooseProfile (xl, true, "", "/tmp/f", "", "medium");
-        check (c.profile == profileMedium() && c.source == "build option SYNTHYBOY_MPC_PROFILE" && c.text == "medium", "the build option replaces the table");
-        c = chooseProfile (xl, true, "", "/tmp/f", "high", "medium");
-        check (c.profile == profileHigh() && c.source == "environment SYNTHYBOY_MPC_PROFILE", "the environment variable goes before the build option");
-        c = chooseProfile (xl, true, "low,unison=7", "/tmp/f", "high", "medium");
+        c = chooseProfile (xl, true, "", "/tmp/f", "medium");
+        check (c.profile == profileMedium() && c.source == "environment SYNTHYBOY_MPC_PROFILE" && c.text == "medium", "the environment variable replaces the table");
+        c = chooseProfile (xl, true, "low,unison=7", "/tmp/f", "high");
         check (c.profile.unison == 7 && c.source == "file /tmp/f", "the debug file goes before the environment variable");
-        c = chooseProfile (xl, true, "nonsense", "/tmp/f", "high", "medium");
+        c = chooseProfile (xl, true, "nonsense", "/tmp/f", "high");
         check (c.profile == profileHigh() && c.source == "environment SYNTHYBOY_MPC_PROFILE" && c.skipped.find ("file /tmp/f") != std::string::npos,
                "a debug file that does not parse is skipped and named: " + c.skipped);
-        c = chooseProfile (xl, true, "nonsense", "/tmp/f", "low,unison=99", "also bad");
-        check (c.source == "table: " + xl && c.skipped.find ("file /tmp/f") != std::string::npos && c.skipped.find ("environment") != std::string::npos
-               && c.skipped.find ("build option") != std::string::npos, "three bad overrides: the table, all three named: " + c.skipped);
+        c = chooseProfile (xl, true, "nonsense", "/tmp/f", "low,unison=99");
+        check (c.source == "table: " + xl && c.skipped.find ("file /tmp/f") != std::string::npos && c.skipped.find ("environment") != std::string::npos,
+               "two bad overrides: the table, both named: " + c.skipped);
         const std::string report = profileReport (c, xl, true);
         check (report.find ("profile: ") == 0 && report.find ("\nprofile_settings: " + describeProfile (c.profile) + "\n") != std::string::npos
                && report.find ("\nprofile_source: table: " + xl + "\n") != std::string::npos && report.find ("\nprofile_skipped: file /tmp/f") != std::string::npos

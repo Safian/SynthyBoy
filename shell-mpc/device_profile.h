@@ -221,7 +221,7 @@ struct ProfileChoice
 {
     Profile profile;
     std::string text;    // the profile text that was taken (as written in its source)
-    std::string source;  // "table: <model>", "table: unknown device <model>", "table: no device name, 64-bit build", "file <path>", "environment", "build option"
+    std::string source;  // "table: <model>", "table: unknown device <model>", "table: no device name, 64-bit build", "file <path>", "environment"
     std::string skipped; // overrides that did not parse, with the reason ("" when none)
 };
 
@@ -248,11 +248,10 @@ inline ProfileChoice profileFromTable (const std::string& model, bool build64)
 }
 
 /** The whole rule, pure: the overrides in their order (an empty text = not given), then the table. */
-inline ProfileChoice chooseProfile (const std::string& model, bool build64, const std::string& fileLine, const std::string& filePath, const std::string& environment,
-                                    const std::string& buildOption)
+inline ProfileChoice chooseProfile (const std::string& model, bool build64, const std::string& fileLine, const std::string& filePath, const std::string& environment)
 {
     struct Candidate { const std::string* text; std::string source; };
-    const Candidate candidates[] = { { &fileLine, "file " + filePath }, { &environment, "environment SYNTHYBOY_MPC_PROFILE" }, { &buildOption, "build option SYNTHYBOY_MPC_PROFILE" } };
+    const Candidate candidates[] = { { &fileLine, "file " + filePath }, { &environment, "environment SYNTHYBOY_MPC_PROFILE" } };
     std::string skipped;
     for (const Candidate& cand : candidates)
     {
@@ -311,7 +310,7 @@ inline const ProfileChoice& profileInForce()
 #endif
         const std::string model = firstLine ("/proc/device-tree/model", 255);
         const std::string filePath = env ("SYNTHYBOY_MPC_PROFILE_FILE", "/tmp/synthyboy-mpc-profile");
-        ProfileChoice c = chooseProfile (model, kBuild64, firstLine (filePath, 255), filePath, env ("SYNTHYBOY_MPC_PROFILE", ""), "");
+        ProfileChoice c = chooseProfile (model, kBuild64, firstLine (filePath, 255), filePath, env ("SYNTHYBOY_MPC_PROFILE", ""));
 #if SYNTHYBOY_MPC_WRITE_FILES   // the release build (write_files.h) writes no report file
         if (FILE* f = std::fopen (env ("SYNTHYBOY_MPC_PROFILE_REPORT", "/tmp/synthyboy-mpc-profile.txt").c_str(), "w"))
         {

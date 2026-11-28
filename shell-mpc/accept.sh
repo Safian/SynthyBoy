@@ -9,7 +9,7 @@ B=$build_root/build-mpc
 # The build options of the shipped plugin (what the package has: overlay, live LFO and spectrum display, pad pressure; the developer log is ON here, the release proof below builds it OFF).
 # Every option is named so that a build directory that keeps the entries of earlier runs in its CMake cache cannot change the configuration.
 BASE_OPTS="-DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_DEV_LOG=ON"
-cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
+cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc dump_mpc_chunks synthyboy_sound_lab > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
 LIB=$(find $B -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
@@ -86,7 +86,7 @@ INC="-I core/include -I core/filters-serum/include -I core/shapes/include -I $MP
 c++ -std=c++17 -O1 $INC -o $B/stub_host shell-mpc/tests/stub_host.cpp $B/core/libsynthyboy_core.a $B/core/shapes/libsynthyboy_shapes.a || { echo "ACCEPT FAIL: stub_host build"; exit 1; }
 $B/stub_host "$LIB" > $B/stub.log 2>&1 || { tail -15 $B/stub.log; echo "ACCEPT FAIL: stub_host"; exit 1; }
 T=${B}-tsan
-cmake -S . -B $T -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $T.configure.log 2>&1 && cmake --build $T --target synthyboy_mpc > $T.build.log 2>&1 || { tail -30 $T.build.log; echo "ACCEPT FAIL: ThreadSanitizer build"; exit 1; }
+cmake -S . -B $T -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $T.configure.log 2>&1 && cmake --build $T --target synthyboy_mpc > $T.build.log 2>&1 || { tail -30 $T.build.log; echo "ACCEPT FAIL: ThreadSanitizer build"; exit 1; }
 TLIB=$(find $T -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $INC -o $T/stub_host shell-mpc/tests/stub_host.cpp $T/core/libsynthyboy_core.a $T/core/shapes/libsynthyboy_shapes.a || { echo "ACCEPT FAIL: tsan stub_host build"; exit 1; }
 run_tsan() {
@@ -121,7 +121,7 @@ grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/prog
 LIVEINC="-I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework"
 live_build() { # name, cmake options...
     n=$1; shift
-    cmake -S . -B ${B}-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "$@" > ${B}-live-$n.configure.log 2>&1 && cmake --build ${B}-live-$n --target synthyboy_mpc > ${B}-live-$n.build.log 2>&1 || { tail -30 ${B}-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
+    cmake -S . -B ${B}-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "$@" > ${B}-live-$n.configure.log 2>&1 && cmake --build ${B}-live-$n --target synthyboy_mpc > ${B}-live-$n.build.log 2>&1 || { tail -30 ${B}-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
 }
 # nolog: the release mode (SYNTHYBOY_MPC_DEV_LOG=OFF, what build-mpc.sh --release passes): it must compile, and its binary holds no log strings (docs/ui-components/LOGGING.md, "Release proof")
 live_build nolog -DSYNTHYBOY_MPC_DEV_LOG=OFF
@@ -165,7 +165,7 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/g
 $B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock-host.log; echo "ACCEPT FAIL: gpu_clock_host (the GPU clock hint)"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
 A=${B}-asan
-cmake -S . -B "$A" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined" > "$A.configure.log" 2>&1 &&
+cmake -S . -B "$A" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_TESTS=OFF "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined" > "$A.configure.log" 2>&1 &&
     cmake --build "$A" --target synthyboy_core > "$A.build.log" 2>&1 || { echo "ACCEPT FAIL: sanitized core build (see $A.configure.log and $A.build.log)"; exit 1; }
 ASAN_CORE=$(find "$A/core" -name '*.a' | tr '\n' ' ')
 for t in qlink_panel_host views_host gpu_backend_host spectrum_view_host display_host cell_plan_host cell_cache_host controller_review_host; do
@@ -219,7 +219,7 @@ grep -E "^INFO" $B/pad-pressure-own.log
 # (the names are asked of the built plugin: the compiler may fold the literal into the copy, so no string of the binary says it)
 $B/host_sim "$LIB" dump 2>/dev/null | grep -q "Pad Pressure Amount" || { echo "ACCEPT FAIL: the build has no pad pressure code"; exit 1; }
 TL=${B}-live-tsan
-cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 # the spectrum ring (audio thread writes, display thread reads) and the plugin with the spectrum under ThreadSanitizer
 c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/spectrum_host shell-mpc/tests/spectrum_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan spectrum_host build"; exit 1; }
@@ -265,7 +265,7 @@ grep -q "WARNING: ThreadSanitizer" $TL/close-stress.log && { grep -A14 "WARNING:
 grep -q "^FAIL" $TL/close-stress.log && { grep "^FAIL" $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host"; exit 1; }
 grep -q "^OK" $TL/close-stress.log || { tail -5 $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host did not finish"; exit 1; }
 AL=${B}-live-asan
-cmake -S . -B $AL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
+cmake -S . -B $AL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
 ALIB="$(find $AL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 ASCORE=$(find $AL/core -name '*.a' | tr '\n' ' ')
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }

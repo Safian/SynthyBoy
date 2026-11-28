@@ -228,7 +228,7 @@ int main (int argc, char** argv)
         // Select program
         e->dispatcher (e, effSetProgram, 0, i, nullptr, 0.0f);
 
-        // A header entry of a grouped program list (SYNTHYBOY_MPC_PROGRAM_GROUPS=headers) loads another program: the plugin's current program is then not `i`; it is no preset, skip it
+        // A header entry of a grouped program list (mode "headers") loads another program: the plugin's current program is then not `i`; it is no preset, skip it
         if (e->dispatcher (e, effGetProgram, 0, 0, nullptr, 0.0f) != i)
             continue;
 
@@ -236,7 +236,7 @@ int main (int argc, char** argv)
         void* data = nullptr;
         const VstIntPtr n = e->dispatcher (e, effGetChunk, 0, 0, &data, 0.0f);
 
-        // The program's own name is the one in the chunk (program_list.h programNameFromChunk), not the label of the host's list (the prefix modes of SYNTHYBOY_MPC_PROGRAM_GROUPS change that)
+        // The program's own name is the one in the chunk (program_list.h programNameFromChunk), not the label of the host's list (the prefix modes change that)
         char nameBuf[256] = {};
         e->dispatcher (e, effGetProgramNameIndexed, i, 0, nameBuf, 0.0f);
         std::string progName = nameBuf;
