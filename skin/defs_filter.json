@@ -482,7 +482,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Back]/FromGesture/Data"
+          "value": "Back"
          }
         ]
        },
@@ -516,7 +516,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Reset]/FromGesture/Data"
+          "value": "Reset"
          }
         ]
        },
@@ -550,7 +550,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Delete Point]/FromGesture/Data"
+          "value": "Delete"
          }
         ]
        },
@@ -587,7 +587,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Apply]/FromGesture/Data"
+          "value": "Apply"
          }
         ]
        },
@@ -6594,6 +6594,22 @@
          {
           "key": "Data",
           "value": "Parameter 3477"
+         },
+         {
+          "key": "Back",
+          "value": "WithName[Back]/FromGesture/Parameter 3477"
+         },
+         {
+          "key": "Reset",
+          "value": "WithName[Reset]/FromGesture/Parameter 3477"
+         },
+         {
+          "key": "Delete",
+          "value": "WithName[Delete Point]/FromGesture/Parameter 3477"
+         },
+         {
+          "key": "Apply",
+          "value": "WithName[Apply]/FromGesture/Parameter 3477"
          }
         ]
        },
@@ -6626,6 +6642,22 @@
          {
           "key": "Data",
           "value": "Parameter 3478"
+         },
+         {
+          "key": "Back",
+          "value": "WithName[Back]/FromGesture/Parameter 3478"
+         },
+         {
+          "key": "Reset",
+          "value": "WithName[Reset]/FromGesture/Parameter 3478"
+         },
+         {
+          "key": "Delete",
+          "value": "WithName[Delete Point]/FromGesture/Parameter 3478"
+         },
+         {
+          "key": "Apply",
+          "value": "WithName[Apply]/FromGesture/Parameter 3478"
          }
         ]
        },
