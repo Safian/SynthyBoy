@@ -1,6 +1,6 @@
-# HEADER (design proposal v0, catalogue only)
+# HEADER (design proposal v0; the oscillator screens use it)
 
-The full-width top row of a page or of a Play third. No screen, skin or overlay uses it yet; the catalogue (`kepes-katalogus.html`) shows eight examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
+The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise) uses it in the skin (see "Skin: the oscillator headers" below); no other screen does yet. The catalogue (`kepes-katalogus.html`) shows eleven examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
 
 ## Geometry (tokens in `components/sizes.json`)
 
@@ -47,3 +47,14 @@ The Header has no left/right stepper (arrow selector, carousel): every choice is
 ## Padding setting: 8 / 40 or 4 / 48
 
 `header.padding` is the only margin token (there is no other margin token) and the header stays 56 px high, so the content row is `56 - 2 x padding`. Two settings are supported: padding 8 / content 40 (current: POWER and the buttons 40 x 40 or 40 high, dropdown 40) and padding 4 / content 48 (the buttons and the dropdown 48 high). Switching is the change of this one token; the Button, IconButton and dropdown recipes have both sizes (`button.size.40|48`, `selector.dropdown.size.40|48`). The tests assert the margin against the token, so both settings keep the same 8-or-4 px all around.
+
+## Skin: the oscillator headers (owner observation 2026-11-28)
+
+The skin definitions `oscHeaderAbc`, `oscHeaderSub`, `oscHeaderNoise`, `oscHeaderNoiseSample` (each with an `...Off` twin for POWER off) in `skin/defs_osc.json` are 1280 x 56 Header instances of the catalogue examples `osc-abc`, `osc-sub`, `osc-noise`, `osc-noise-sample`: the layout comes from `header.layout()`, the textless faces from `header.skin_parts()` (written to `skin/hdr_*.png` by the build script kept in the commit message of the change). The cells inside (`oscHeaderType`, `Table`, `Source`, `Browse`, `Waveform`, `Oct`, `Kind`, `KindWide`, `Sound`, `Route`, each in an active and an `Off` / `NativeInactive` look) are built from the former ad hoc cells' actions, overlays and handles; only the faces, the value label and the bounds follow the Header. Everything is bound by handle remap names (`HdrTitle`, `HdrPower`, `HdrType`, `HdrSource`, `HdrBrowse`, `HdrRoute`, `HdrWave`, `HdrOct`, `HdrKind`, `HdrSound`, `HdrGate1/2`, `HdrOscGate` and the matching `...Caption` names); one instance per form (and per power state) sits in `oscNativeSettingsLayer` with the gating of the former `Osc A` / `Sub` / `Noise` cells.
+
+- The page title is the header's Name label of the power parameter (`WithName[OSC A]/...`), not a tab caption any more; the three titles OSC A/B/C share one slot (`title_slot` 67 px) so POWER never moves between the pages.
+- Layout (px, row 8 px from the top): POWER 83 (Sub 63, Noise 86 by the title width), TYPE 131..351, SOURCE 359..1023, BROWSE 1031..1114, the Filter route dropdown (150 px) 1122..1272 on every form. Sub: WAVEFORM fills, OCT is a number field (name outside, 68 px value box). Noise: KIND 220 + SOUND fills; with a sample the KIND dropdown takes the whole centre.
+- SOURCE is a dropdown (value centred, chevron); its hit area is the former "Open" button (id 2 of 4). The Previous / Next arrow buttons (ids 1 and 3) are gone with the stepper (dropdowns replace left/right selectors).
+- Recipe extensions made for it: right-zone `dropdown` (the Filter route), centre `field` (name + number box), `title_slot`, and `skin_parts()` (textless faces plus the disabled look).
+- C++: `layoutFull` (`shell-mpc/overlay/osc_model.h`) follows the TYPE / SOURCE / BROWSE rectangles of the abc column case. The Sub / Noise rows of that function keep their old generic layout (plain data only).
+- The examples 7-11 of the catalogue are new and not yet approved by the owner (`approved` in `catalog.json` stays as it was).

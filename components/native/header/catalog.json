@@ -120,6 +120,157 @@
         ],
         "caption": "6 · Osc A kikapcsolt POWER-rel: a középső vezérlők tiltott kinézetűek",
         "alt": "Osc A fejléc kikapcsolt POWER-rel"
+      },
+      {
+        "id": "osc-abc",
+        "file": "header-osc-abc.png",
+        "width": "page",
+        "power": "on",
+        "title": "OSC A",
+        "title_slot": 67,
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Wavetable",
+            "width": "header.dropdown.min_width"
+          },
+          {
+            "kind": "dropdown",
+            "value": "Saw",
+            "width": "header.dropdown.min_width",
+            "fill": true
+          },
+          {
+            "kind": "button",
+            "text": "BROWSE"
+          }
+        ],
+        "right": [
+          {
+            "kind": "dropdown",
+            "value": "Filter 1",
+            "width_px": 150
+          }
+        ],
+        "caption": "7 · Oszcillátor A/B/C (a képernyő fejléce, a vázlat szerinti): cím (a három cím közül a legszélesebb helye), POWER, TYPE, SOURCE (legördülő), BROWSE; jobbra a Filter-útvonal legördülője",
+        "alt": "Osc A/B/C fejléc: OSC A, POWER, TYPE, SOURCE, BROWSE, Filter 1"
+      },
+      {
+        "id": "osc-abc-off",
+        "file": "header-osc-abc-off.png",
+        "width": "page",
+        "power": "off",
+        "title": "OSC A",
+        "title_slot": 67,
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Wavetable",
+            "width": "header.dropdown.min_width"
+          },
+          {
+            "kind": "dropdown",
+            "value": "Saw",
+            "width": "header.dropdown.min_width",
+            "fill": true
+          },
+          {
+            "kind": "button",
+            "text": "BROWSE"
+          }
+        ],
+        "right": [
+          {
+            "kind": "dropdown",
+            "value": "Filter 1",
+            "width_px": 150
+          }
+        ],
+        "caption": "8 · Oszcillátor A/B/C kikapcsolt POWER-rel: TYPE, SOURCE, BROWSE tiltott kinézetű; a Filter-útvonal marad",
+        "alt": "Osc A/B/C fejléc kikapcsolt POWER-rel"
+      },
+      {
+        "id": "osc-sub",
+        "file": "header-osc-sub.png",
+        "width": "page",
+        "power": "on",
+        "title": "SUB",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Sine",
+            "width": "header.dropdown.min_width",
+            "fill": true
+          },
+          {
+            "kind": "field",
+            "name": "OCT",
+            "value": "+0",
+            "width_px": 112
+          }
+        ],
+        "right": [
+          {
+            "kind": "dropdown",
+            "value": "Filter 1",
+            "width_px": 150
+          }
+        ],
+        "caption": "9 · Sub: cím, POWER, WAVEFORM (legördülő), OCT (számmező); jobbra a Filter-útvonal legördülője",
+        "alt": "Sub fejléc: SUB, POWER, WAVEFORM, OCT, Filter 1"
+      },
+      {
+        "id": "osc-noise",
+        "file": "header-osc-noise.png",
+        "width": "page",
+        "power": "on",
+        "title": "NOISE",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "White",
+            "width": "header.dropdown.min_width"
+          },
+          {
+            "kind": "dropdown",
+            "value": "Sample",
+            "width": "header.dropdown.min_width",
+            "fill": true
+          }
+        ],
+        "right": [
+          {
+            "kind": "dropdown",
+            "value": "Filter 1",
+            "width_px": 150
+          }
+        ],
+        "caption": "10 · Noise (generátor): cím, POWER, KIND, SOUND (legördülő); jobbra a Filter-útvonal legördülője",
+        "alt": "Noise fejléc: NOISE, POWER, KIND, SOUND, Filter 1"
+      },
+      {
+        "id": "osc-noise-sample",
+        "file": "header-osc-noise-sample.png",
+        "width": "page",
+        "power": "on",
+        "title": "NOISE",
+        "centre": [
+          {
+            "kind": "dropdown",
+            "value": "Sample",
+            "width": "header.dropdown.min_width",
+            "fill": true
+          }
+        ],
+        "right": [
+          {
+            "kind": "dropdown",
+            "value": "Filter 1",
+            "width_px": 150
+          }
+        ],
+        "caption": "11 · Noise (minta): cím, POWER, KIND (a teljes szélességen, SOUND nincs); jobbra a Filter-útvonal legördülője",
+        "alt": "Noise fejléc mintával: NOISE, POWER, KIND, Filter 1"
       }
     ]
   }

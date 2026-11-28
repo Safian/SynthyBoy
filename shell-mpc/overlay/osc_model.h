@@ -376,10 +376,11 @@ inline FullLayout layoutFull (const Rect& rect, const FullState& s, const bool* 
     if (column)
     {
         const int x = L.top.x, y = L.top.y, right = L.top.right() - 286;
-        L.tSelector = { x + 122, y + 4, 256, 56 };
-        L.tSource = { x + 386, y + 4, right - x - 394, 56 };
-        L.tSourceStepper = { L.tSource.x, L.tSource.y, L.tSource.w - 116, 56 };
-        L.tSourceDropdown = { L.tSource.right() - 112, L.tSource.y, 112, 56 };
+        // the cells of the Header component (skin: oscHeaderAbc, components/native/header, example osc-abc): content row 40 px at y + 8, TYPE 220, SOURCE 664, BROWSE 83, one 8 px gap each
+        L.tSelector = { x + 131, y + 8, 220, 40 };
+        L.tSource = { x + 359, y + 8, 755, 40 };
+        L.tSourceStepper = { L.tSource.x, L.tSource.y, 664, 40 };
+        L.tSourceDropdown = { x + 1031, y + 8, 83, 40 };
         L.tPos = { right, y + 92, waveTools ? 146 : 278, 48 };
         L.tWaveMap = { right + 150, y + 92, 128, 48 };
         L.tStartPhase = { right, y + 146, 136, 48 };
