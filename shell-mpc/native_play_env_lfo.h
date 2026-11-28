@@ -14,14 +14,9 @@ enum Field { Shape, Rate, Division, Style, Sync, Stereo, Choose, StandardSync, C
 constexpr int kOriginalHandles = 1 + StandardSync;  // StandardSync is appended after compact OSC.
 constexpr int kStandardLfos = 10, kSources = kStandardLfos + 4, kLastChoice = kSources - 1;
 constexpr float choiceValue (int source) noexcept { return static_cast<float> (std::max (1, source) - 1) / kLastChoice; }
-constexpr int kFirstPopup = 3;
-constexpr int kPopupFields[] { Choose, Shape, Division, Style, Sync };
-constexpr int popupField (int action) noexcept
-{
-    const int index = action - kFirstPopup;
-    return index >= 0 && index < static_cast<int> (std::size (kPopupFields)) ? kPopupFields[index] : -1;
-}
-constexpr bool usesPopup (int field) noexcept
+/** A field whose value is chosen only in the Play page's own list (native_play_list.h: the LFO / RND selector, the shape, the division, the style, the sync): the plugin applies the row
+    (overlay/play_view.h), the host's handle only shows the value and a host write to it is refused. */
+constexpr bool listOnly (int field) noexcept
 {
     return field == Choose || field == Shape || field == Division || field == Style || field == Sync;
 }
@@ -51,7 +46,6 @@ public:
     void suspend() noexcept
     {
         suspended_.store (true, std::memory_order_release);
-        setPopup (-1);
     }
 
     void publish (const State& state, bool interactive = true) noexcept
@@ -60,8 +54,6 @@ public:
             suspend();
         if (suspended_.load (std::memory_order_relaxed))
             renewInputRevisions();
-        if (state.context.view == Hidden)
-            setPopup (-1);
         if (! (state.context == context_))
             invalidate();
         context_ = state.context;
@@ -72,26 +64,13 @@ public:
         suspended_.store (! interactive, std::memory_order_release);
     }
 
-    void setPopup (int field) noexcept
-    {
-        if (popup_ == field)
-            return;
-        popup_ = field;
-        const auto link = at (field);
-        popupLink_.store (usesPopup (field) && link.cell().target >= 0 ? link.link : 0, std::memory_order_release);
-        popupField_.store (field, std::memory_order_release);
-    }
-
     void post (int field, float value, uint64_t preset, uint64_t selection) noexcept
     {
         if (publishedPreset_.load (std::memory_order_acquire) != preset
             || publishedSelection_.load (std::memory_order_acquire) != selection)
             return;
         const auto link = at (field);
-        if (suspended_.load (std::memory_order_acquire))
-            return;
-        if (usesPopup (field) && (popupField_.load (std::memory_order_acquire) != field
-            || popupLink_.load (std::memory_order_acquire) != link.link))
+        if (suspended_.load (std::memory_order_acquire) || listOnly (field))
             return;
         NativeCellBank<Count>::post (link, value);
     }
@@ -110,8 +89,7 @@ public:
 private:
     std::atomic<bool> suspended_ { false };
     Context context_;   // overlay thread
-    int popup_ = -1;
-    std::atomic<int> source_ { 0 }, popupField_ { -1 };
-    std::atomic<uint64_t> publishedPreset_ {}, publishedSelection_ {}, popupLink_ {};
+    std::atomic<int> source_ { 0 };
+    std::atomic<uint64_t> publishedPreset_ {}, publishedSelection_ {};
 };
 }

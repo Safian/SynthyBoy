@@ -70,10 +70,11 @@ The old RadioButton (segmented faces) takes too much room and is being phased ou
 
 A screen never draws a control face with its own code: buttons, dropdowns, selectors, fields, radios, dials and sliders are drawn by their shared component recipe (`components/native/<name>`; in the plugin-drawn layer, while any control remains there, by `Pen::control`, driven by the same tokens; the removal status is in `docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md`). Test: change the component's tokens loudly and rebuild the skin images; every control of that kind on every screen must change. A control that does not change bypasses the component and is a defect to fix (see `docs/review/BUTTON-MUTATION-AUDIT-2026-11-27.md`). If a control needs a variant the component does not have, add the variant to the component and its catalogue entry, not to the screen file.
 
-## Lists keep the factory behaviour (owner, 2026-11-27)
+## Lists: one tap chooses and closes (owner, 2026-11-28)
 
-- Lists use the host MenuOverlay as it is: a row tap marks the row, a tap on the list header applies and closes. No select-and-close, no custom badges in rows, names only.
-- Evidence: the Key 61 probes A/B closed the list but lost the selection, because the skin action triggers cannot be ordered (SDK `ui-reference.md`, section on onAction); report in `/private/tmp/claude-501/list-probe/results/`. A plugin-drawn drawer (SDK-PORTING) is the only way to get select-and-close and is not planned.
+- Every list is the plugin's own paged native list (the `nativeui::modboard` cells, `overlay/native_list_cells.h`, 7 rows a page, BACK / UP / PREVIOUS / NEXT): one row tap applies the choice and closes the list; a category or folder row opens its level. Names only, no custom badges in rows. The owner confirmed this behaviour on the XL (Play Source / LFO / Noise / Shape / Division lists) and wants it everywhere.
+- The host MenuOverlay is not used for lists: for a VST2 it draws no names (`docs/dsp-knowledge/skin-host-behaviour.md`, "Host list: who draws the names") and its row tap only marks, the header applies (the Key 61 probes A/B could not order the skin triggers for select-and-close; SDK `ui-reference.md`, onAction). This replaces the 2026-11-27 rule "Lists keep the factory behaviour".
+- How a screen opens a list: a "list open" radio Button in the field (handle remapped to `ResetOnGestureEnd/Parameter N` of the screen's list handle, buttonId = list code), the screen's C++ view opens and fills the list and applies the row through the same path as the field's own handle. The Play page is the reference (`shell-mpc/native_play_list.h`, `overlay/play_view.h`, `skin/defs_play.json` `playNativeList`). The migration of the other screens is in [TODO.md](TODO.md).
 
 ## Text input is the native keyboard (owner, 2026-11-28)
 

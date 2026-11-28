@@ -305,6 +305,71 @@ TEST (wavetable_catalogue_neighbours_step_inside_a_category_without_wrapping_and
     CHECK (! neighbourFile (c, basic, b, 1, next));
 }
 
+TEST (wavetable_catalogue_neighbour_entry_runs_across_the_categories)
+{
+    // Basic: two built-ins and a file, an empty category, Bass: a file, a refused file, a file, FX: a file
+    auto builtin = [] (int choice)
+    {
+        WavetableEntry e;
+        e.builtinChoice = choice;
+        e.title = "b" + std::to_string (choice);
+        return e;
+    };
+    auto file = [] (const char* title, const char* refusal = "")
+    {
+        WavetableEntry e;
+        e.source = WavetableEntry::Source::pack;
+        e.title = title;
+        e.ref.file = std::string (title) + ".wav";
+        e.refusal = refusal;
+        return e;
+    };
+    WavetableCatalogue c;
+    c.categories.push_back ({ "Basic", { builtin (0), builtin (1), file ("basicFile") } });
+    c.categories.push_back ({ "Empty", {} });
+    c.categories.push_back ({ "Bass", { file ("bass1"), file ("bassBad", "too short"), file ("bass2") } });
+    c.categories.push_back ({ "FX", { file ("fx1") } });
+    int cat = -1, entry = -1;
+    auto title = [&] { return c.categories[static_cast<size_t> (cat)].entries[static_cast<size_t> (entry)].title; };
+    // inside a category, a built-in to a built-in and a built-in to a file
+    CHECK (neighbourEntry (c, 0, 0, 1, cat, entry));
+    CHECK (cat == 0 && entry == 1);
+    CHECK (neighbourEntry (c, 0, 1, 1, cat, entry));
+    CHECK_EQ (title(), std::string ("basicFile"));
+    // across the boundary forward: the empty category is skipped
+    CHECK (neighbourEntry (c, 0, 2, 1, cat, entry));
+    CHECK (cat == 2 && entry == 0);
+    // the refused file is skipped
+    CHECK (neighbourEntry (c, 2, 0, 1, cat, entry));
+    CHECK_EQ (title(), std::string ("bass2"));
+    // the end of Bass continues with the first of FX ...
+    CHECK (neighbourEntry (c, 2, 2, 1, cat, entry));
+    CHECK (cat == 3 && entry == 0);
+    // ... and backwards, over the refused file, into the previous category over the empty one
+    CHECK (neighbourEntry (c, 3, 0, -1, cat, entry));
+    CHECK_EQ (title(), std::string ("bass2"));
+    CHECK (neighbourEntry (c, 2, 2, -1, cat, entry));
+    CHECK_EQ (title(), std::string ("bass1"));
+    CHECK (neighbourEntry (c, 2, 0, -1, cat, entry));
+    CHECK (cat == 0 && entry == 2);
+    // the global ends: nothing (no wrap), and the out parameters are left alone
+    cat = entry = -7;
+    CHECK (! neighbourEntry (c, 3, 0, 1, cat, entry));
+    CHECK (! neighbourEntry (c, 0, 0, -1, cat, entry));
+    CHECK (cat == -7 && entry == -7);
+    // an invalid start
+    CHECK (! neighbourEntry (c, 1, 0, 1, cat, entry));    // the empty category has no entry 0
+    CHECK (! neighbourEntry (c, 4, 0, 1, cat, entry));
+    CHECK (! neighbourEntry (c, -1, 0, 1, cat, entry));
+    CHECK (! neighbourEntry (c, 0, 3, 1, cat, entry));
+    CHECK (! neighbourEntry (c, 0, 0, 0, cat, entry));
+    // a catalogue whose last category ends with a refused file: the file before it is the global last
+    c.categories.push_back ({ "User", { file ("u1"), file ("uBad", "not a WAV file") } });
+    CHECK (neighbourEntry (c, 3, 0, 1, cat, entry));
+    CHECK_EQ (title(), std::string ("u1"));
+    CHECK (! neighbourEntry (c, 4, 0, 1, cat, entry));
+}
+
 TEST (wavetable_catalogue_prepare_reads_bounded_hashes_and_refuses_with_a_reason)
 {
     // a table file: 2 frames of 2048 samples, 16 bit

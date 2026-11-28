@@ -111,7 +111,6 @@ public:
     virtual bool takeNativeLfoPick (const nativeui::lfopick::State&, int /*field*/, float& /*value*/) noexcept { return false; }
     virtual bool nativePlayEnvLfoControls() const noexcept { return false; }
     virtual uint64_t nativePlayEnvLfoRevision() const noexcept { return 0; }
-    virtual void setNativePlayEnvLfoPopup (int /*field*/) noexcept {}
     virtual void setNativePlayEnvLfo (const nativeui::playenvlfo::State&) noexcept {}
     virtual void suspendNativePlayEnvLfo() noexcept { setNativePlayEnvLfo ({}); }
     virtual bool takeNativePlayEnvLfo (const nativeui::playenvlfo::State&, int /*field*/, float& /*value*/) noexcept { return false; }
@@ -187,6 +186,8 @@ public:
     virtual int takeNativeTextKey() noexcept { return 0; }
     /** Forgets the keys queued so far (the keyboard opens). */
     virtual void clearNativeTextKeys() noexcept {}
+    /** The latest list code a radio Button of the Play page wrote into "Play List" (debounced, nativeui::playlist::Code), 0 when there is none; the Play page opens that list (play_view.h). */
+    virtual int takePlayListRequest() noexcept { return 0; }
     /** The names of the rows of the list the modulation picker's native cells show (the file browsers and the source of a new modulation of the oscillator pages); nullptr: the picker's own names. */
     virtual void setNativeListText (const nativeui::nativetext::ListPage* /*page*/) noexcept {}
     /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */
@@ -206,7 +207,6 @@ public:
     virtual void setNativePlayOsc (const nativeui::playoscui::State&, const char* /*sourceName*/) noexcept {}
     virtual void suspendNativePlayOsc() noexcept { setNativePlayOsc ({}, ""); }
     virtual bool takeNativePlayOsc (const nativeui::playoscui::State&, int /*field*/, float& /*value*/) noexcept { return false; }
-    virtual void setNativePlayOscPopup (int /*field*/) noexcept {}
     /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
     /** The overlay compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */
@@ -238,6 +238,9 @@ public:
         gives it to the engine and then sets oscN.wavetable to "Preset table"; the old table plays until the new one is built. The latest request wins. The result is `contentLoad` (3 = refused, with "not a wavetable file: <reason>") and
         content () of a later moment. Called from the overlay thread; it only stores the request. */
     virtual void requestWavetable (int /*osc*/, const synthyboy::ContentFileRef& /*ref*/) {}
+    /** Withdraws a wavetable FILE request of oscillator `osc` (1 .. 3) that is still queued or decoding, so that it cannot set oscN.wavetable to "Preset table" after a newer built-in choice. Called from the overlay
+        thread right before it writes a built-in table; a sample or instrument request is kept. */
+    virtual void cancelWavetable (int /*osc*/) {}
     /** The steps the Q knob of oscillator `osc` made while its table is a file (-1 / +1 summed since the last call; the Q knob of the stepper does not move the parameter then): the overlay loads the previous / next file of the
         category for them. Lock free, 0 when there are none. */
     virtual int takeWavetableSteps(int /*osc*/) noexcept { return 0; }

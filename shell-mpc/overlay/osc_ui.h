@@ -185,7 +185,7 @@ public:
         Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
         SnapBit,     // the toggle for bit 12 of the same parameter (snap the played note, not the transpose)
         Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser
-        Table,       // the table of a wavetable oscillator: a built-in table (the choice parameter) or a table FILE (content); the name opens the wavetable browser, the arrows step the 15 choices or the files of the category
+        Table,       // the table of a wavetable oscillator: a built-in table (the choice parameter) or a table FILE (content); the name opens the wavetable browser, the arrows step the whole catalogue as one sequence (across the categories)
         Inert        // no value: a button
     };
 
@@ -737,24 +737,101 @@ public:
             if (target == nullptr || ! inst.takeNativePlayOsc (state, field, value)
                 || state.preset != inst.stateGeneration() || state.selection != inst.playOscSelectionRevision())
                 continue;
-            if (field == n::Route)
-            {
-                const int route = static_cast<int> (std::lround (value * nativeui::osc::kLastRoute));
-                if (inst.param (target->param) != static_cast<float> (route))
-                    writePlain (inst, target->param, static_cast<float> (route));
-            }
-            else
-                applyNativeSetting (*target, inst, stack, value);
             changed = true;
-            if (field == n::Power || field == n::First || ! stack.isMain())
-            {
-                inst.setNativePlayOsc ({}, "");
-                dropGesture();
+            if (applyCompactField (*target, field, inst, stack, value))
                 break;
-            }
         }
         return changed;
     }
+
+    /** The parameter of the compact field `field` (nativeui::playoscui::Field) of the shown oscillator while its native cell is active (the skin's NativeActive gate: the oscillator is on; the power
+        field always), -1 when the shown oscillator has no such field or it is inactive. The Play page's lists of a compact field (play_view.h) open only for such a field. */
+    int compactFieldParam (int field) const noexcept
+    {
+        namespace n = nativeui::playoscui;
+        if (field < 0 || field >= n::kFields || (field != n::Power && ! powerOn()))
+            return -1;
+        const Item* it = compactNativeItems()[field];
+        return it != nullptr && it->param >= 0 ? it->param : -1;
+    }
+    /** Writes `value` (normalised, what the host writes into the field's native handle) into the compact field `field` of the shown oscillator through the same path as a host write
+        (syncCompactNative): the route as its destination index, every other field through applyNativeSetting. false: the field is not active (compactFieldParam). */
+    bool applyCompactNativeField (IInstanceView& inst, UiStack& stack, int field, float value)
+    {
+        if (compactFieldParam (field) < 0)
+            return false;
+        applyCompactField (*compactNativeItems()[field], field, inst, stack, value);
+        return true;
+    }
+
+    /** One host value of a compact field applied (syncCompactNative, applyCompactNativeField). true: the binding changed (power, type or waveform, a full screen opened): the published compact state
+        is withdrawn until the next publish and the gesture dropped, so no further value of the old binding is taken. */
+    bool applyCompactField (const Item& target, int field, IInstanceView& inst, UiStack& stack, float value)
+    {
+        namespace n = nativeui::playoscui;
+        if (field == n::Route)
+        {
+            const int route = static_cast<int> (std::lround (value * nativeui::osc::kLastRoute));
+            if (inst.param (target.param) != static_cast<float> (route))
+                writePlain (inst, target.param, static_cast<float> (route));
+        }
+        else
+            applyNativeSetting (target, inst, stack, value);
+        if (field == n::Power || field == n::First || ! stack.isMain())
+        {
+            inst.setNativePlayOsc ({}, "");
+            dropGesture();
+            return true;
+        }
+        return false;
+    }
+
+    // ---- the lists of the Play page (play_view.h, nativeui::playlist): no stack page, the Play page shows the list with its own NativeListCells
+    /** What the Play page's Source list shows: the header (the browser's title), the rows, whether the header is a way up, the current row (-1: none). */
+    struct CompactList
+    {
+        const char* header = nullptr;
+        const char* const* items = nullptr;
+        int count = 0, current = -1;
+        bool headerBack = false;
+    };
+    /** Opens the source browser of the shown oscillator A / B / C without a list page (the same browsers and code as the list page): the wavetable categories and tables, or the content roots, folders and
+        files. false: the oscillator has no source field (Sub, Noise) or the instance offers no content root. */
+    bool openCompactSourceList (IInstanceView& v)
+    {
+        const Item* src = item (kBasic + 1);
+        if (src == nullptr || (src->type != T::Table && src->type != T::Source))
+            return false;
+        if (src->type == T::Table ? ! startWavetableBrowser (v) : ! startContentBrowser (v))
+            return false;
+        if (wtMode_)
+            fillWavetableList();
+        else
+            fillBrowserList();
+        return true;
+    }
+    CompactList compactSourceList() const noexcept
+    {
+        if (! wtMode_ && ! browseMode_)
+            return {};
+        return { listData_.header, listData_.items, listData_.count, listData_.current, listData_.headerBack };
+    }
+    /** A row of the Play page's Source list: true when a final choice was made (the list closes); false when a category or folder opened or the row was refused. */
+    bool chooseCompactSourceRow (int row, IInstanceView& v)
+    {
+        if (wtMode_)
+            return applyWavetableRow (row, v);
+        return browseMode_ && applyBrowserRow (row, v);
+    }
+    /** The way up of the Play page's Source list: false at the top level (the list closes). */
+    bool compactSourceUp (IInstanceView&) { return browserUp(); }
+    /** The Play page closed its Source list (a list page of the standalone tabs keeps its own state). */
+    void closeCompactSourceList() noexcept
+    {
+        if (pageTop_ != kPageList)
+            wtMode_ = browseMode_ = false;
+    }
+
     nativeui::osc::SettingsView nativeSettingsView() const noexcept
     {
         namespace n = nativeui::osc;
@@ -2431,10 +2508,8 @@ private:
                             fillModsSources();
                         }
                     }
-                    else if (wtMode_ && wtBrowser_.up() == WavetableBrowser::Action::Changed)
-                        fillWavetableList();
-                    else if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
-                        fillBrowserList();
+                    else
+                        browserUp();
                     return;
                 case kBasic + 1: case kBasic + 2:
                 {
@@ -2510,15 +2585,8 @@ private:
             }
             if (browseMode_)
             {
-                const ContentBrowser::Action a = browser_.tap (c.index + 1);   // the list shows the rows after the header
-                if (a == ContentBrowser::Action::Changed)
-                    fillBrowserList();
-                else if (a == ContentBrowser::Action::Chosen)
-                {
-                    lastChosen_[browser_.kind() - 1] = browser_.chosen();
-                    v.requestContent (playosc::oscNumber (sel_), browser_.kind(), browser_.chosen());
+                if (applyBrowserRow (c.index, v))
                     stack.back();
-                }
                 return;
             }
             stack.back();
@@ -2679,8 +2747,9 @@ private:
             }
         return false;
     }
-    /** The table stepper: the name of the built-in table, or the title of the file when the oscillator plays one (the parameter is "Preset table" and the content has the file). With a file the stepper has three
-        positions (previous, this, next: the arrows are the files of the category, dimmed at its ends once the catalogue says where the file is), else the 15 choices of the parameter. */
+    /** The table stepper: the name of the built-in table, or the title of the file when the oscillator plays one (the parameter is "Preset table" and the content has the file). The stepper has three positions
+        (previous, this, next: the arrows step the whole catalogue across the categories, dimmed only at its global first / last entry once the catalogue says where the table is); a table the catalogue cannot
+        place steps the 15 choices of the parameter. */
     void showTable (oscmodel::Cell& st, const Item& it, float plain, const IInstanceView& v) const
     {
         const synthyboy::ParamInfo& pi = info (it.param);
@@ -2688,24 +2757,29 @@ private:
         std::string pack, file, title;
         const bool have = contentTable (v, pack, file, title);
         showStepper (st, it.param, plain);
-        if (choice != synthyboy::kWavetablePresetTable || ! have)
-            return;
-        oscmodel::setText (st, title.c_str());
+        const bool fileTable = choice == synthyboy::kWavetablePresetTable && have;
+        if (choice == synthyboy::kWavetablePresetTable && ! have)
+            return;   // "Preset table" without a file: the catalogue has no place for it, the choices step
+        if (fileTable)
+            oscmodel::setText (st, title.c_str());
         if (! stepValid_)
         {
             st.count = 3; st.index = 1; st.wrap = false;   // the catalogue is read at the first step: both arrows are lit until then
             return;
         }
-        int entry = -1, index = 0, count = 0;
-        const int category = stepCat_.findFile (pack, file, entry);   // where the file the content names stands in the catalogue we have
-        if (category >= 0 && synthyboy::filePosition (stepCat_, category, entry, index, count))
+        int entry = -1;
+        const int category = fileTable ? stepCat_.findFile (pack, file, entry) : stepCat_.findBuiltin (choice, entry);   // where the table stands in the catalogue we have
+        if (category >= 0)
         {
-            // the position among the files of the category as three places: first (no previous), in the middle, last (no next); a category of one file has no arrow
+            // the position in the whole catalogue as three places: the global first (no previous), in the middle, the global last (no next); a catalogue of one table has no arrow
+            int c = -1, e = -1;
+            const bool prev = synthyboy::neighbourEntry (stepCat_, category, entry, -1, c, e);
+            const bool next = synthyboy::neighbourEntry (stepCat_, category, entry, 1, c, e);
             st.wrap = false;
-            st.count = count > 1 ? 3 : 1;
-            st.index = count > 1 ? (index <= 0 ? 0 : (index >= count - 1 ? 2 : 1)) : 0;
+            st.count = prev || next ? 3 : 1;
+            st.index = prev || next ? (! prev ? 0 : (! next ? 2 : 1)) : 0;
         }
-        // a file that is in no category: the arrows step the 15 choices as for a built-in table (showStepper's state)
+        // a table that is in no category: the arrows step the 15 choices (showStepper's state)
     }
     /** The catalogue and the place of the file `pack` / `file` in it, read once per file (a file that is loaded now, or the one a step asked for): the directory listing happens at the first step, not at every frame. */
     void ensureStepInfo (IInstanceView& v, const std::string& pack, const std::string& file)
@@ -2722,29 +2796,56 @@ private:
         stepFile_ = file;
         stepValid_ = true;
     }
+    /** Writes the built-in table (the plain value `plain` of the choice parameter `param`) of the shown oscillator; a file request still loading is withdrawn first, so that it cannot override this newer choice when its decode ends. */
+    void writeBuiltinTable (IInstanceView& v, int param, double plain)
+    {
+        v.cancelWavetable (playosc::oscNumber (sel_));
+        if (pendingOsc_ == playosc::oscNumber (sel_))
+            pendingOsc_ = 0;
+        writePlain (v, param, plain);
+    }
     void requestFile (IInstanceView& v, const synthyboy::WavetableEntry& e)
     {
         wtLastPack_ = e.ref.pack;
         wtLastFile_ = e.ref.file;
         v.requestWavetable (playosc::oscNumber (sel_), e.ref);
+        pendingOsc_ = playosc::oscNumber (sel_);
     }
-    /** One step to the previous / next file of the category of the file `pack` / `file`: 0 asked for it, 1 the end of the category (nothing happens: no wrap), 2 the file is in no category. */
-    int stepFileBy (IInstanceView& v, const std::string& pack, const std::string& file, int dir)
+    /** Where the table the oscillator plays now stands in the step catalogue (stepCat_): the file `pack` / `file` when `fileTable`, else the built-in table `choice`. While a table we asked for is still loading
+        our position is the one we asked for (the latest request wins). False when the catalogue cannot place the table. */
+    bool stepStart (IInstanceView& v, bool fileTable, int choice, const std::string& pack, const std::string& file, int& category, int& entry)
     {
-        ensureStepInfo (v, pack, file);
-        if (stepCategory_ < 0)
-            return 2;
-        int next = -1;
-        if (! synthyboy::neighbourFile (stepCat_, stepCategory_, stepEntry_, dir, next))
-            return 1;
-        const synthyboy::WavetableEntry& e = stepCat_.categories[static_cast<size_t> (stepCategory_)].entries[static_cast<size_t> (next)];
-        requestFile (v, e);
-        stepEntry_ = next;   // the next step starts from here, before the content shows the new file (the latest request wins in the plugin)
-        stepPack_ = e.ref.pack;
-        stepFile_ = e.ref.file;
-        return 0;
+        if (fileTable)
+        {
+            ensureStepInfo (v, pack, file);
+            category = stepCategory_;
+            entry = stepEntry_;
+            return category >= 0;
+        }
+        if (! stepValid_)
+            ensureStepInfo (v, std::string(), std::string());   // a built-in table: the catalogue is read at the first step, no file is placed yet
+        else if (v.contentLoad (nullptr) == 1 && stepCategory_ >= 0 && pendingOsc_ == playosc::oscNumber (sel_))
+        {
+            category = stepCategory_;   // a file we asked for THIS oscillator is still loading: the parameter is the old table, our position is the new one (contentLoad is instance-wide)
+            entry = stepEntry_;
+            return true;
+        }
+        category = stepCat_.findBuiltin (choice, entry);
+        return category >= 0;
     }
-    /** A step of the table: `delta` positions (the arrows: -1 / +1, the wheel: more). A file table steps the files of its category (the end: nothing), a built-in table the choices (the "Preset table" entry is skipped while the
+    /** One step to the previous / next entry of the step catalogue from `category` / `entry`, across the categories (the last table of a category is followed by the first of the next one): false at the global
+        first / last entry (nothing happens: no wrap). */
+    bool stepFileBy (int& category, int& entry, int dir) const
+    {
+        int c = -1, e = -1;
+        if (! synthyboy::neighbourEntry (stepCat_, category, entry, dir, c, e))
+            return false;
+        category = c;
+        entry = e;
+        return true;
+    }
+    /** A step of the table: `delta` positions (the arrows: -1 / +1, the wheel: more). A file table and a built-in table both step the whole catalogue as one sequence across the categories (only its global ends
+        stop: no wrap); a resulting built-in table writes the choice parameter, a resulting file is asked for. A table the catalogue cannot place steps the choices (the "Preset table" entry is skipped while the
         oscillator has no file: it would play the saw). `target`: the choice the stepper asked for. */
     void stepTable (IInstanceView& v, const Item& it, int delta, int target)
     {
@@ -2753,24 +2854,39 @@ private:
         const int cur = std::clamp (static_cast<int> (std::lround (v.param (it.param) - pi.min)), 0, last);
         std::string pack, file, title;
         const bool have = contentTable (v, pack, file, title);
-        if (cur == synthyboy::kWavetablePresetTable && have)
+        const bool fileTable = cur == synthyboy::kWavetablePresetTable && have;
+        const int dir = delta > 0 ? 1 : -1;
+        int category = -1, entry = -1;
+        if ((fileTable || cur != synthyboy::kWavetablePresetTable) && stepStart (v, fileTable, cur, pack, file, category, entry))
         {
-            const int dir = delta > 0 ? 1 : -1;
-            int result = 0;
-            for (int n = 0; n < std::min (std::abs (delta), 16); ++n)
+            int moved = 0;
+            while (moved < std::min (std::abs (delta), 16) && stepFileBy (category, entry, dir))
+                ++moved;
+            if (moved == 0)
+                return;   // the global first / last entry of the catalogue: nothing more happens
+            const synthyboy::WavetableEntry& e = stepCat_.categories[static_cast<size_t> (category)].entries[static_cast<size_t> (entry)];
+            if (e.isFile())
             {
-                result = stepFileBy (v, n == 0 ? pack : stepPack_, n == 0 ? file : stepFile_, dir);
-                if (result != 0)
-                    break;
+                requestFile (v, e);
+                stepPack_ = e.ref.pack;   // the next step starts from here, before the content shows the new file (the latest request wins in the plugin)
+                stepFile_ = e.ref.file;
             }
-            if (result != 2)
-                return;   // asked for the neighbour, or the end of the category: nothing more happens
-            target = std::clamp (cur + dir, 0, last);   // a file that is in no category: the built-in neighbour
+            else
+            {
+                writeBuiltinTable (v, it.param, pi.min + std::clamp (e.builtinChoice, 0, last));   // the old table plays until the new one is built
+                stepPack_.clear();   // no file is our position: a file shown later is placed again
+                stepFile_.clear();
+            }
+            stepCategory_ = category;
+            stepEntry_ = entry;
+            return;
         }
-        const int dir = target > cur ? 1 : -1;
+        if (fileTable)
+            target = std::clamp (cur + dir, 0, last);   // a file that is in no category: the built-in neighbour
+        const int toward = target > cur ? 1 : -1;
         if (target == synthyboy::kWavetablePresetTable && ! have)
-            target += dir;   // no file table: "Preset table" would play the saw
-        writePlain (v, it.param, pi.min + std::clamp (target, 0, last));
+            target += toward;   // no file table: "Preset table" would play the saw
+        writeBuiltinTable (v, it.param, pi.min + std::clamp (target, 0, last));
     }
     /** The arrows of the table cell (and the Q-Link): one position to the previous / next table or file; nothing at the ends of a list without wrap. */
     void turnTable (const Item& it, int d, IInstanceView& v)
@@ -2811,10 +2927,18 @@ private:
     void openWavetableBrowser (UiStack& stack, IInstanceView& v)
     {
         if (stack.depth() == 0)
-            return;   // Play has no large view and no list: only the standalone pages open the browser
-        const Item* it = item (kBasic + 1);
-        if (it == nullptr || it->param < 0)
+            return;   // the compact Play view opens no list page; the Play page opens its own list through openCompactSourceList (play_view.h)
+        if (! startWavetableBrowser (v))
             return;
+        stack.openDetail (kPageList);
+        fillWavetableList();
+    }
+    /** Opens the wavetable browser on the catalogue of the instance (shared by the list page and the Play page's list); false when the oscillator has no table field. */
+    bool startWavetableBrowser (IInstanceView& v)
+    {
+        const Item* it = item (kBasic + 1);
+        if (it == nullptr || it->type != T::Table || it->param < 0)
+            return false;
         synthyboy::CatalogueSources src;
         v.wavetableSources (src);
         synthyboy::WavetableCatalogue cat = synthyboy::buildWavetableCatalogue (synthyboy::StdCatalogueFs {}, src);
@@ -2833,8 +2957,7 @@ private:
         wtBrowser_.open (std::move (cat), fileTable ? -1 : choice, pack, file);
         wtMode_ = true;
         browseMode_ = false;
-        stack.openDetail (kPageList);
-        fillWavetableList();
+        return true;
     }
     void fillWavetableList()
     {
@@ -2848,6 +2971,12 @@ private:
     }
     void chooseWavetableRow (int row, UiStack& stack, IInstanceView& v)
     {
+        if (applyWavetableRow (row, v))
+            stack.back();
+    }
+    /** A row of the wavetable browser: a category opens (false), a table is chosen and loaded (true: the list closes), a refused file changes nothing (false). */
+    bool applyWavetableRow (int row, IInstanceView& v)
+    {
         using A = WavetableBrowser::Action;
         const Item* it = item (kBasic + 1);
         const A a = wtBrowser_.tap (row);
@@ -2855,8 +2984,8 @@ private:
             fillWavetableList();
         else if (a == A::ChoseBuiltin && it != nullptr && it->param >= 0)
         {
-            writePlain (v, it->param, info (it->param).min + wtBrowser_.chosenChoice());   // as the stepper did: the choice parameter, the old table plays until the new one is built
-            stack.back();
+            writeBuiltinTable (v, it->param, info (it->param).min + wtBrowser_.chosenChoice());   // as the stepper did: the choice parameter, the old table plays until the new one is built
+            return true;
         }
         else if (a == A::ChoseFile)
         {
@@ -2867,20 +2996,29 @@ private:
             stepPack_ = wtBrowser_.chosenEntry().ref.pack;
             stepFile_ = wtBrowser_.chosenEntry().ref.file;
             stepValid_ = true;
-            stack.back();
+            return true;
         }
         // A::Refused: the row says why, nothing changes
+        return false;
     }
 
     /** The content browser in the native list rows (over the full screen of a standalone page): the roots the instance offers, the folders, the files. */
     void openBrowser (UiStack& stack, IInstanceView& v)
     {
         if (stack.depth() == 0)
-            return;   // Play has no large view and no list: only the standalone pages open the browser
+            return;   // the compact Play view opens no list page; the Play page opens its own list through openCompactSourceList (play_view.h)
+        if (! startContentBrowser (v))
+            return;
+        stack.openDetail (kPageList);
+        fillBrowserList();
+    }
+    /** Opens the content browser on the roots the instance offers (shared by the list page and the Play page's list); false when there is none. */
+    bool startContentBrowser (IInstanceView& v)
+    {
         std::vector<IInstanceView::ContentRoot> roots;
         v.contentRoots (roots);
         if (roots.empty())
-            return;
+            return false;
         std::vector<ContentBrowser::Root> rs;
         for (const auto& r : roots)
             rs.push_back ({ r.label, r.path });
@@ -2891,8 +3029,33 @@ private:
         else
             browser_.open (kind);
         browseMode_ = true;
-        stack.openDetail (kPageList);
-        fillBrowserList();
+        wtMode_ = false;
+        return true;
+    }
+    /** A row of the content browser (the rows after its header): a folder opens (false), a file is chosen and requested (true: the list closes). */
+    bool applyBrowserRow (int row, IInstanceView& v)
+    {
+        const ContentBrowser::Action a = browser_.tap (row + 1);   // the list shows the rows after the header
+        if (a == ContentBrowser::Action::Changed)
+            fillBrowserList();
+        else if (a == ContentBrowser::Action::Chosen)
+        {
+            lastChosen_[browser_.kind() - 1] = browser_.chosen();
+            v.requestContent (playosc::oscNumber (sel_), browser_.kind(), browser_.chosen());
+            return true;
+        }
+        return false;
+    }
+    /** The way up of a browser list (its header): true when the list changed, false at the top level or when no browser is open. */
+    bool browserUp()
+    {
+        if (wtMode_ && wtBrowser_.up() == WavetableBrowser::Action::Changed)
+            fillWavetableList();
+        else if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
+            fillBrowserList();
+        else
+            return false;
+        return true;
     }
     void fillBrowserList()
     {
@@ -3113,6 +3276,7 @@ private:
     synthyboy::WavetableCatalogue stepCat_;
     std::string stepPack_, stepFile_, wtLastPack_, wtLastFile_;
     int stepCategory_ = -1, stepEntry_ = -1;
+    int pendingOsc_ = 0;   // the oscillator (1 .. 3) of the last wavetable file request (requestFile), 0 once a built-in choice withdrew it: the step cursor follows a loading file only for that oscillator
     bool stepValid_ = false;
     std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     std::vector<Item> main_, page_;

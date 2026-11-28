@@ -4,7 +4,7 @@
 //
 // No drawing and no touch of its own (owner decision 2026-11-27: the C++ layer has no UI elements; the old popup list is deleted). The page owns the data (the names, the header); this publishes them as a ListPage (the names the host
 // reads, IInstanceView::setNativeListText) and as the cells (setNativeModBoard layout 2), pages with PREVIOUS / NEXT and hands every other gesture back to the owner: a row (the index in the whole list), BACK, the groups button.
-// The same cells and names as the oscillator pages' lists (osc_ui.h publishNativeLists); the skin instance is `Osc Native List` (oscNativeList) on the tab.
+// The same cells and names as the oscillator pages' lists (osc_ui.h publishNativeLists); the skin instance is `Osc Native List` (oscNativeList) on the tab, `playNativeList` on Play (play_view.h, the Play lists).
 #pragma once
 
 #include <algorithm>
@@ -98,6 +98,8 @@ public:
 
     /** A new list (the first page again). */
     void restart() noexcept { first_ = 0; }
+    /** Shows the page that holds `row` (index in the whole list; < 0: the first page). The next publish clamps it to the list. */
+    void showRow (int row) noexcept { first_ = row > 0 ? row - row % nativeui::modboard::kListRows : 0; }
 
 private:
     int first_ = 0, serial_ = 0;

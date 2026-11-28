@@ -438,6 +438,32 @@ bool neighbourFile (const WavetableCatalogue& catalogue, int category, int entry
     return false;
 }
 
+bool neighbourEntry (const WavetableCatalogue& catalogue, int category, int entry, int dir, int& outCategory, int& outEntry) noexcept
+{
+    const int categories = static_cast<int> (catalogue.categories.size());
+    if (category < 0 || category >= categories || dir == 0)
+        return false;
+    if (entry < 0 || entry >= static_cast<int> (catalogue.categories[static_cast<size_t> (category)].entries.size()))
+        return false;
+    const int step = dir > 0 ? 1 : -1;
+    for (int c = category; c >= 0 && c < categories; c += step)
+    {
+        const auto& list = catalogue.categories[static_cast<size_t> (c)].entries;
+        const int count = static_cast<int> (list.size());
+        for (int i = c == category ? entry + step : (step > 0 ? 0 : count - 1); i >= 0 && i < count; i += step)
+        {
+            const WavetableEntry& e = list[static_cast<size_t> (i)];
+            if (! e.isFile() || e.refusal.empty())
+            {
+                outCategory = c;
+                outEntry = i;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool filePosition (const WavetableCatalogue& catalogue, int category, int entry, int& index, int& count) noexcept
 {
     if (category < 0 || category >= static_cast<int> (catalogue.categories.size()))
