@@ -62,6 +62,11 @@ builds="${MPC_BUILDS:-$safian_root/.hw-local/mpc-builds}"
 
 commit="$(git -C "$repo_root" rev-parse --short=8 HEAD)"
 branch="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD)"
+if [[ "$branch" == HEAD ]]; then   # a detached worktree: name it after a branch whose tip is this commit (develop first), else "detached"
+    tips="$(git -C "$repo_root" for-each-ref --points-at HEAD --format='%(refname:lstrip=-1)' refs/heads refs/remotes | grep -vx HEAD || true)"
+    if grep -qx develop <<< "$tips"; then branch=develop; else branch="$(head -n 1 <<< "$tips")"; fi
+    branch="${branch:-detached}"
+fi
 dirty=""
 if [[ -n "$(git -C "$repo_root" status --porcelain --untracked-files=no)" ]]; then
     dirty="-dirty-$(date +%H%M%S)"
