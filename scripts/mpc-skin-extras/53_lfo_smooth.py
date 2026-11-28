@@ -22,6 +22,7 @@ CHOICE_FIELDS = {
 TOGGLE_FIELDS = {SMOOTH, 15, 19, 20}
 NUMBER_FIELDS = {21, 22}
 LAYOUT_STEPS = 7
+POINT_SOURCE_RECT = [636, 24, 220, 56]   # the SOURCE choice of the point modulation page, right of REMOVE (native_lfo_pick.h)
 
 
 def _entry(name, kind, data, rect, handles=(), gates=(), focus=False, proportional=False):
@@ -423,9 +424,9 @@ def _apply_shape_detail(tui, items, ctx):
     payload = {"version": 1, "handleName": "Data"}
 
     detail_definitions = set()
-    def add(name, kind, rect, handle, gates, focus=True, active=True):
+    def add(name, kind, rect, handle, gates, focus=True, active=True, tag=""):
         if kind in ("lfoNativeChoice", "lfoNativeNumber"):
-            variant = kind + f"_{rect[2]}x{rect[3]}"
+            variant = kind + f"_{rect[2]}x{rect[3]}{tag}"   # the caption is part of the definition: a cell with another caption needs its own tag
             if variant not in detail_definitions:
                 ctx.add_component_definition(variant, _choice(ctx, rect[2], rect[3], caption=name,
                                                               number=kind == "lfoNativeNumber"))
@@ -485,4 +486,11 @@ def _apply_shape_detail(tui, items, ctx):
         limit = len(rects) - 5
         gate = f"RangedEnabling/{row + 1}/{limit}/{limit + 1}/{rows}"
         add(f"Row {row + 1}", "lfoDetailRow", rect, f"FromGesture/Parameter {base + 9 + row}", (list_view, gate))
-    __import__("sys").path.insert(0, str(Path(__file__).parent)); __import__("94_editor_commands").apply_pointmod_source_controls(tui, items, ctx, base, point_view)
+
+    # SOURCE of the point modulation: a host choice (the MenuOverlay of the host lists the sources); beside REMOVE, available like MODULATE (points selected)
+    from native_ui_params import LFO_PICK_SOURCE
+    source = f"Parameter {native_base_index(ctx.param_count) + LFO_PICK_SOURCE}"
+    add("SOURCE", "lfoNativeChoice", POINT_SOURCE_RECT, source, (point_view, f"RangedEnabling/1/4/5/{point}"), tag="_source")
+    add("SOURCE unavailable 0", "lfoNativeChoice", POINT_SOURCE_RECT, source,
+        (point_view, f"IndexedEnabling/0/5/{point}"), focus=False, active=False, tag="_source")
+    replacements.append({"key": source, "value": ["NONE"] + [m["name"] for m in sorted(ctx.doc["modSources"], key=lambda m: int(m["choice"]))]})

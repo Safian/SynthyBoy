@@ -33,6 +33,7 @@
 
 namespace synthyboy { namespace own { struct ContentSet; } }
 namespace synthyboy_mpc::nativeui::lfodetail { struct State; }
+namespace synthyboy_mpc::nativeui::lfopick { struct State; }
 namespace synthyboy_mpc::nativeui::oscdetail { struct State; }
 namespace synthyboy_mpc::nativeui::targets { struct State; }
 namespace synthyboy_mpc::nativeui::expandedplay { struct State; }
@@ -105,6 +106,10 @@ public:
     virtual bool nativeLfoShapeDetails() const noexcept { return false; }
     virtual void setNativeLfoDetail (const nativeui::lfodetail::State&) noexcept {}
     virtual bool takeNativeLfoDetail (const nativeui::lfodetail::State&, int /*field*/, float& /*value*/) noexcept { return false; }
+    /** The host choices of the LFO (native_lfo_pick.h): the plugin publishes the current indexes and takes the index the host applied. */
+    virtual bool nativeLfoPick() const noexcept { return false; }
+    virtual void setNativeLfoPick (const nativeui::lfopick::State&) noexcept {}
+    virtual bool takeNativeLfoPick (const nativeui::lfopick::State&, int /*field*/, float& /*value*/) noexcept { return false; }
     virtual bool nativePlayEnvLfoControls() const noexcept { return false; }
     virtual uint64_t nativePlayEnvLfoRevision() const noexcept { return 0; }
     virtual void setNativePlayEnvLfoPopup (int /*field*/) noexcept {}

@@ -527,6 +527,15 @@ struct PluginInstance
                 inst.nativeLfoDetailAcks[field] = true;
             return taken;
         }
+        bool nativeLfoPick() const noexcept override { return true; }
+        void setNativeLfoPick (const nativeui::lfopick::State& state) noexcept override { inst.nativeLfoPick.publish (state); }
+        bool takeNativeLfoPick (const nativeui::lfopick::State& state, int field, float& value) noexcept override
+        {
+            const bool taken = inst.nativeLfoPick.take (state, field, value);
+            if (taken)
+                inst.nativeLfoPickAcks[field] = true;
+            return taken;
+        }
         bool nativePlayEnvLfoControls() const noexcept override { return true; }
         uint64_t nativePlayEnvLfoRevision() const noexcept override { return inst.playEnvLfoRevision.load (std::memory_order_acquire); }
         void setNativePlayEnvLfoPopup (int field) noexcept override
@@ -1765,6 +1774,8 @@ struct PluginInstance
     nativeui::lfodetail::Bank nativeLfoDetail;
     std::array<bool, nativeui::lfodetail::kCount> nativeLfoDetailAcks {};   // display thread only
     static_assert (nativeui::kLfoDetailHandles == nativeui::lfodetail::kHandles);
+    nativeui::lfopick::Bank nativeLfoPick;
+    std::array<bool, nativeui::lfopick::kCount> nativeLfoPickAcks {};   // display thread only
     // Program/chunk restoration can run concurrently with the overlay. Both writers
     // publish complete banks here. Host parameter reads and audio callbacks never lock.
     std::mutex playPresentationMutex;
@@ -2027,6 +2038,15 @@ struct PluginInstance
 
     float nativeUiValue (int offset) const noexcept
     {
+        if (nativeui::isLfoPickOffset (offset))
+        {
+            namespace n = nativeui::lfopick;
+            const int handle = offset - nativeui::kLfoPick;
+            return handle == n::kViewHandle ? static_cast<float> (nativeLfoPick.view()) / n::LastView
+                                            : nativeLfoPick.value (n::handleField (handle));
+        }
+        if (nativeui::isTextEditReservedOffset (offset))
+            return 0.0f;
         if (offset == nativeui::kLfoTargetsAction)
             return 0.0f;
         if (offset == nativeui::kFxEditorPower)
@@ -2337,6 +2357,26 @@ struct PluginInstance
         reportNativeValue (e, base + n::kView, shown ? 1.0f : 0.0f);
         if (rebind)
             requestNativeControlNames();
+    }
+
+    void nativeLfoPickPoll (AEffect* e)
+    {
+        namespace n = nativeui::lfopick;
+        constexpr int base = nativeui::kLfoPick;
+        const auto view = nativeLfoPick.view();
+        if (view == n::Hidden && nativeUiReported[base + n::kViewHandle] == 0.0f)
+            return;
+        for (int field = 0; field < n::kCount; ++field)
+        {
+            const auto link = nativeLfoPick.at (field);
+            const bool moved = nativeLfoPick.needsReport (link);
+            const bool acknowledged = std::exchange (nativeLfoPickAcks[field], false);
+            if (moved)
+                nativeLfoPick.report (link);
+            reportNativeValue (e, base + n::fieldHandle (field), nativeLfoPick.value (field),
+                               view != n::Hidden && (moved || acknowledged));
+        }
+        reportNativeValue (e, base + n::kViewHandle, static_cast<float> (view) / n::LastView);
     }
 
     void nativeLfoDetailPoll (AEffect* e)
@@ -2686,6 +2726,7 @@ struct PluginInstance
         nativeLfoPoll (e);
         nativeLfoEditorPoll (e);
         nativeLfoDetailPoll (e);
+        nativeLfoPickPoll (e);
         nativePlayEnvLfoPoll (e);
         nativePlayOscPoll (e);
         nativeFilterPoll (e);
@@ -4233,6 +4274,28 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     synthyboy_mpc::putBounded (buf, kCap, "LFO Targets");
                 return 1;
             }
+            if (nativeui::isTextEditReservedOffset (offset))
+            {
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, kCap, "Text Edit %d", offset - nativeui::kTextEditReserved + 1);
+                return 1;
+            }
+            if (nativeui::isLfoPickOffset (offset))
+            {
+                namespace n = nativeui::lfopick;
+                const int handle = offset - nativeui::kLfoPick;
+                const int field = n::handleField (handle);
+                if (opcode == effGetParamName)
+                {
+                    if (handle == n::kViewHandle)
+                        synthyboy_mpc::putBounded (buf, kCap, "LFO Choice View");
+                    else if (field < n::FirstTarget)
+                        synthyboy_mpc::putBounded (buf, kCap, n::kNames[field]);
+                    else
+                        std::snprintf (buf, kCap, "LFO Add Target %d", field - n::FirstTarget + 1);
+                }
+                return 1;
+            }
             if (offset == nativeui::kFxEditorPower)
             {
                 if (opcode == effGetParamName)
@@ -5635,6 +5698,26 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
 #if SYNTHYBOY_MPC_OVERLAY
         const int nativeOffset = index - PluginInstance::nativeUiBase();
+        if (nativeui::isTextEditReservedOffset (nativeOffset))
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = props->stepInteger = 1;
+            return 1;
+        }
+        if (nativeui::isLfoPickOffset (nativeOffset))
+        {
+            namespace n = nativeui::lfopick;
+            const int handle = nativeOffset - nativeui::kLfoPick;
+            const int field = n::handleField (handle);
+            const int last = handle == n::kViewHandle ? static_cast<int> (n::LastView) : synthyboy_mpc::overlay::uibind::lfoPickLast (field);
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = std::max (1, last);
+            props->stepInteger = 1;
+            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+            return 1;
+        }
         if (nativeOffset == nativeui::kFxEditorPower || nativeOffset == nativeui::kLfoTargetsAction)
         {
             std::memset (props, 0, sizeof (*props));
@@ -6549,6 +6632,15 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
+                if (nativeui::isTextEditReservedOffset (offset))
+                    return;
+                if (nativeui::isLfoPickOffset (offset))
+                {
+                    const int field = nativeui::lfopick::handleField (offset - nativeui::kLfoPick);
+                    if (field >= 0 && std::isfinite (parameter) && std::fabs (parameter - inst->nativeLfoPick.value (field)) > 1.0e-6f)
+                        inst->nativeLfoPick.post (inst->nativeLfoPick.at (field), parameter);
+                    return;
+                }
                 if (offset == nativeui::kLfoTargetsAction)
                 {
                     namespace n = nativeui::lfo;

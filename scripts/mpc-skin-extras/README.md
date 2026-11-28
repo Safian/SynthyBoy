@@ -16,6 +16,7 @@ leaves everything alone; if no module changes anything the two JSON files are no
 | `ctx.param_index(key)` | 0-based parameter index of a `docs/params.json` key (the N of `Parameter N`). Unknown key: error naming the key. Never write indexes by hand. |
 | `ctx.tab(title)` | The tab object whose `tabName` is `title` (the dict inside `tui["pageData"]["tabs"]`). Unknown or ambiguous title: error listing the tab names. |
 | `ctx.param_key(index)` | The `docs/params.json` key of a parameter index (the inverse of `param_index`), or the key a module registered with `add_param_key`. |
+| `ctx.doc` | The whole parsed `docs/params.json` (`modSources`, `modDestinations`, `params`). |
 | `ctx.param_count` | Number of entries of `docs/params.json`; the plugin's own parameters (LFO cursors, spectrum columns, pad pressure) have the indexes after it. |
 | `ctx.add_param_key(index, key)` | Registers the name of a shell parameter for subsequent hooks. |
 | `ctx.meta` | The parsed `skin-meta.json` (`fnKeys`: function keys and their tab names; `tabs`: per tab the short names of its controls; `variant`: only when the layout file names a skin variant, e.g. `"overlay"`) or `None` without `--meta`; `95_subtabs.py` raises without it. A module of a variant (`50_filter_overlay.py`) returns at once unless `variant` is its own: the production skin stays byte for byte as it is. |
