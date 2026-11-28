@@ -5,7 +5,7 @@
 // cannot drift apart.
 // Every choice list of the page (the oscillator and envelope selectors, the oscillator's source, type, route, the Sub's wave and octave, the noise sound, the LFO / RND selector, the LFO shape, division, style
 // and sync, the standard LFO) is the page's own paged native list (owner, 2026-11-28: one row tap applies and closes): a skin radio Button writes a code into the "Play List" handle (native_play_list.h,
-// IInstanceView::takePlayListRequest), the page opens the list in the modulation picker's cells (NativeListCells, the skin instance playNativeList over an opaque backdrop) and applies the row tapped through
+// IInstanceView::takePlayListRequest), the page opens the list in the modulation picker's cells (NativeListCells, the skin modal nativeListModal over an opaque backdrop) and applies the row tapped through
 // the same path as the host writing that value into the field's handle; while the list is open the view draws nothing (the GPU plane is above the host's and must not cover it).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -852,7 +852,7 @@ private:
     int envDotPx_ = -1, lfoCursorPx_ = -1;
     double envDotX_ = 0.0;
     float lfoCursorX_ = -1.0f;
-    NativeListCells list_;                 // the open Play list (the modulation picker's cells, the skin instance playNativeList)
+    NativeListCells list_;                 // the open Play list (the modulation picker's cells, the skin modal nativeListModal)
     int listCode_ = 0;                     // nativeui::playlist::Code of the open list, 0: none
     IInstanceView* listIo_ = nullptr;      // the instance the list is published to
     uint64_t listPreset_ = 0;

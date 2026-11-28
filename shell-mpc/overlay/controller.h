@@ -275,7 +275,7 @@ public:
         if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
             return;
         mpckit::IInstance* v = slots_.at (activeSlot_);
-        if (v == nullptr)
+        if (v == nullptr || choiceListBlocks (*v))
             return;
         if (views_[static_cast<size_t> (current_)]->onTouch (ev, ui_[activeSlot_], *v, nowMs))
         {
@@ -309,7 +309,7 @@ public:
         if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
             return;
         mpckit::IInstance* v = slots_.at (activeSlot_);
-        if (v == nullptr)
+        if (v == nullptr || choiceListBlocks (*v))
             return;
         if (views_[static_cast<size_t> (current_)]->onWheel (x, y, notches, ui_[activeSlot_], *v, nowMs))
         {
@@ -636,6 +636,8 @@ private:
                     bandWholeSinceMs_ = -1.0;
                 }
                 viewSinceMs_ = nowMs;
+                if (view >= 0)
+                    tellScreenShown (view, slot);
                 current_ = view;
                 activeSlot_ = slot;
                 needFrame_ = true;
@@ -996,6 +998,51 @@ private:
         return factory_.make (pages_.page (i));   // (the plugin's factory: SynthyBoy's is in pages.h)
     }
 
+    /** A native choice list of the instance on screen is open (IInstance::nativeChoiceListOpen): the host plane shows that list, so the view takes no touch or wheel and a gesture it holds ends.
+        The controller's lock is held. */
+    bool choiceListBlocks (const mpckit::IInstance& v)
+    {
+        if (! v.nativeChoiceListOpen())
+            return false;
+        IView& view = *views_[static_cast<size_t> (current_)];
+        if (view.fingerDown())
+            view.dropGesture();
+        return true;
+    }
+
+    /** Before a picture: true while a native choice list of the instance on screen is open. The picture is then empty (the overlay plane lies above the host's and must not cover its list); the view's
+        own changes need no new picture meanwhile, and the open and the close each force one, so the plane is back to normal at the first picture after the close. */
+    bool choiceListModal (bool& changed)
+    {
+        bool open = false;
+        {
+            std::lock_guard<std::mutex> g (mu_);
+            const mpckit::IInstance* v = slots_.at (activeSlot_);
+            open = v != nullptr && v->nativeChoiceListOpen();
+        }
+        if (open != choiceListShown_)
+        {
+            choiceListShown_ = open;
+            needFrame_ = true;
+        }
+        if (open)
+            changed = false;
+        return open;
+    }
+
+    /** A page check identified `view` as the page of the instance in `slot` (IInstance::nativeScreenShown): it is told, and the instance that was told a page before is told another instance's page
+        came (-2) when it is another one. A failed check is never told (a list modal of the plugin may cover the markers of its page). */
+    void tellScreenShown (int view, int slot)
+    {
+        std::lock_guard<std::mutex> g (mu_);
+        if (screenSlot_ >= 0 && screenSlot_ != slot)
+            if (mpckit::IInstance* old = slots_.at (screenSlot_))
+                old->nativeScreenShown (-2);
+        screenSlot_ = slot;
+        if (mpckit::IInstance* v = slots_.at (slot))
+            v->nativeScreenShown (view);
+    }
+
     /** The touch screen is read for the overlay pages only while a view of the Play page is on screen (by what the last page check said). */
     bool touchEligible() const noexcept { return ! nativeParameterModal_ && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0 && presenter_.opened(); }
 
@@ -1284,6 +1331,7 @@ private:
         bool changed = false;
         if (! updateView (nowMs, changed))
             return;
+        const bool listModal = choiceListModal (changed);
         IView& view = *views_[static_cast<size_t> (current_)];
         if (! view.valid())
         {
@@ -1311,7 +1359,12 @@ private:
             return;
         }
         gpu::SceneBuilder sb (gpuScene_);
-        if (! view.describe (sb, current_, ui.w, ui.h))
+        if (listModal)
+        {
+            sb.begin (gpu::kKindUi, static_cast<uint32_t> (current_), ui.w, ui.h);
+            sb.clear (0u);   // transparent: the host's list shows through
+        }
+        else if (! view.describe (sb, current_, ui.w, ui.h))
         {
             gpuSkipView_ = current_;     // this view cannot be described: the CPU draws it
             hideGpu (nowMs);
@@ -1381,6 +1434,7 @@ private:
         bool changed = false;
         if (! updateView (nowMs, changed))
             return;
+        const bool listModal = choiceListModal (changed);
         IView& view = *views_[static_cast<size_t> (current_)];   // after updateView: it replaces the object when another instance's page came on screen
         if (! view.valid())
         {
@@ -1404,7 +1458,10 @@ private:
         const int w = regions_[current_].w, h = regions_[current_].h;
         canvas_.resize (static_cast<size_t> (w) * static_cast<size_t> (h));
         const auto t0 = Clock::now();
-        view.render (canvas_.data(), w, h);
+        if (listModal)
+            std::fill (canvas_.begin(), canvas_.end(), 0u);   // transparent: the host's list shows through
+        else
+            view.render (canvas_.data(), w, h);
         if (dimmed_.load() && dimFactor_.load() < kNoDarkening)
             standby::dimCanvas (canvas_.data(), canvas_.size(), dimFactor_.load());
         const auto t1 = Clock::now();
@@ -2014,6 +2071,8 @@ private:
     std::string state_ = "hidden: starting";
     std::function<double()> cpuClock_;
     bool killed_ = false, disabledHere_ = false, dumpRequested_ = false, needFrame_ = true;
+    int screenSlot_ = -1;          // the slot whose instance was told the page on screen last (tellScreenShown)
+    bool choiceListShown_ = false; // the last picture was the empty one of an open native choice list (choiceListModal)
     int current_ = -1, shownView_ = -1;   // shownView_: the view whose update () ran last (onShown () when it changes)
     uint64_t shownQRevision_ = 0;
     bool nativeParameterModal_ = false;

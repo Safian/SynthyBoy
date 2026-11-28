@@ -289,6 +289,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(display_thread_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME display_thread_host COMMAND display_thread_host)
 
+    # The plain-data half of the native choice lists (native_choice_list.h): the opener debounce, the paged session, row -> value and close, BACK.
+    add_executable(choice_list_host EXCLUDE_FROM_ALL tests/choice_list_host.cpp)
+    target_include_directories(choice_list_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(choice_list_host PRIVATE Threads::Threads)
+    target_compile_features(choice_list_host PRIVATE cxx_std_17)
+    target_compile_options(choice_list_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME choice_list_host COMMAND choice_list_host)
+
     # The start-up record and the developer log (kit/log.h): logic only, no plugin needed.
     foreach(t startup_timing_host log_host log_off_host log_rt_host)
         add_executable(${t} EXCLUDE_FROM_ALL tests/${t}.cpp)

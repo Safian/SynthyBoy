@@ -745,6 +745,9 @@ struct PluginInstance
         }
         void setNativeModBoard (int gate, const nativeui::FxCell* fields) noexcept override
         {
+            const std::lock_guard<std::mutex> owner (inst.choiceListMutex);
+            if (inst.choiceListOpen.load (std::memory_order_relaxed))
+                return;   // a native choice list owns the cells (choiceListPoll); the page publishes again after it closed
             const auto preset = stateGeneration();
             const bool newPreset = inst.nativeModBoardPreset.load (std::memory_order_relaxed) != preset;
             if (gate == 0 && inst.nativeModBoard.layout() == 0 && ! newPreset)
@@ -757,7 +760,9 @@ struct PluginInstance
         }
         bool takeNativeModBoard (int field, const nativeui::FxCell& expected, float& value) noexcept override
         {
-            return inst.nativeModBoardPreset.load (std::memory_order_acquire) == stateGeneration()
+            const std::lock_guard<std::mutex> owner (inst.choiceListMutex);
+            return ! inst.choiceListOpen.load (std::memory_order_relaxed)
+                && inst.nativeModBoardPreset.load (std::memory_order_acquire) == stateGeneration()
                 && inst.nativeModBoard.take (field, expected, value);
         }
         void setNativeText (int line, const char* text) noexcept override { inst.nativeText.set (line, text); }
@@ -771,9 +776,14 @@ struct PluginInstance
         }
         int takeNativeTextKey() noexcept override { return inst.nativeTextKeys.take(); }
         int takePlayListRequest() noexcept override { return inst.playListRequests.take(); }
+        bool nativeChoiceListOpen() const noexcept override { return inst.choiceListOpen.load (std::memory_order_acquire); }
+        void nativeScreenShown (int view) noexcept override { inst.nativeScreen.store (view, std::memory_order_relaxed); }
         void clearNativeTextKeys() noexcept override { inst.nativeTextKeys.clear(); }
         void setNativeListText (const nativeui::nativetext::ListPage* page) noexcept override
         {
+            const std::lock_guard<std::mutex> owner (inst.choiceListMutex);
+            if (inst.choiceListOpen.load (std::memory_order_relaxed))
+                return;   // a native choice list owns the names
             if (page != nullptr)
                 inst.nativeListText.set (*page);
             else
@@ -1723,6 +1733,22 @@ struct PluginInstance
     nativeui::nativetext::BasicLines<2> nativeTextEntryLines;   // line 0 the title (the display string of the context), line 1 the text with its caret (the display string of the text)
     synthyboy_mpc::textentry::KeyPort nativeTextKeys;   // the key codes the host wrote (debounced), taken by the overlay page
     synthyboy_mpc::nativeui::playlist::RequestPort playListRequests;   // the "Play List" codes the host wrote (debounced), taken by the Play page (native_play_list.h)
+    // ---- the native choice lists (native_choice_list.h): an opener's slot the host wrote (any host thread posts) is taken by choiceListPoll on the display thread, which fills the modulation picker's
+    // list cells (nativeModBoard layout 2 and nativeListText) and applies a row. While a list is open the overlay pages' modboard calls are ignored: choiceListMutex makes the driver and the overlay
+    // thread one owner at a time (neither is the audio thread; nobody calls the host under it).
+    nativeui::choicelist::RequestPort choiceListRequests;
+    std::mutex choiceListMutex;
+    std::atomic<bool> choiceListOpen { false };   // "Choice List Open": written under choiceListMutex by the display thread, read anywhere
+    std::atomic<int> nativeScreen { -1 };         // the overlay view of this instance's page on screen (IInstance::nativeScreenShown): -1 none identified yet, -2 another instance's page
+    std::unique_ptr<nativeui::choicelist::Session> choiceSession = std::make_unique<nativeui::choicelist::Session>();   // display thread only (54 KB: not on a stack)
+    std::unique_ptr<nativeui::choicelist::Items> choiceCheck = std::make_unique<nativeui::choicelist::Items>();          // display thread only: the rows again when a row is applied
+    uint64_t choiceListPreset = 0;   // display thread only: the state generation the open list was built for
+    int choiceListScreen = -1;       // display thread only: the overlay view it was opened on (-1: not known)
+    int choiceListSerial = 0;        // display thread only: a new identity of the cells per page (the host reads the names again)
+    bool choiceItems (int hostIndex, nativeui::choicelist::Items& items, int& current) const;
+    void choiceListPoll (AEffect* e);
+    void choiceListPublish() noexcept;
+    void choiceListClose() noexcept;
     std::atomic<float> nativeMacroSubpage { 0.0f };   // exactly 0 on the cards page of the Macros tab, exactly 1 while its targets / list / keyboard page is open (the gate of the native base page)
     nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
     nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
@@ -1945,8 +1971,10 @@ struct PluginInstance
             return nativeText.value (nativeui::textGateLine (offset - nativeui::kTextGate)) > 0.0f ? 1.0f : 0.0f;
         if (offset == nativeui::kTextEditContext)
             return synthyboy_mpc::textentry::valueOfContext (nativeTextEntryContext.load (std::memory_order_relaxed), nativeui::kTextEditContexts);
-        if (offset == nativeui::kTextEditKey || offset == nativeui::kPlayList)
+        if (offset == nativeui::kTextEditKey || offset == nativeui::kPlayList || nativeui::isChoiceListOffset (offset))
             return 0.0f;
+        if (offset == nativeui::kChoiceListOpen)
+            return choiceListOpen.load (std::memory_order_acquire) ? 1.0f : 0.0f;
         if (offset == nativeui::kTextEditText)
             return nativeTextEntryLines.value (1);
         if (nativeui::isNoteMaskOffset (offset))
@@ -2721,6 +2749,7 @@ struct PluginInstance
                 nativeModBoard.report (link);
             }
         }
+        reportNativeValue (e, nativeui::kChoiceListOpen, nativeUiValue (nativeui::kChoiceListOpen));   // after the rows, their gates and names of the list (choiceListPoll): the modal shows a filled list
         for (int line = 0; line < nativeui::nativetext::kLines; ++line)
             reportNativeValue (e, nativeui::nativeTextHandle (line), nativeText.value (line));
         for (int line = 0; line < nativeui::nativetext::kMacroLines; ++line)
@@ -3298,6 +3327,7 @@ struct PluginInstance
         bool readoutPublished = false;
         display.add ("overlay report", [&] { overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
         display.add ("Play proxies", [&] { playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
+        display.add ("choice list", [&] { choiceListPoll (e); });                                              // the native choice lists (native_choice_list.h): before the report of the cells it fills
         display.add ("Native UI", [&] { nativeUiPoll (e); });
         display.add ("macro name", [&] { macroNamePoll(); });
         display.add ("Q proxies", [&] { qPoll (e); });                                                          // the Q proxies after them
@@ -3661,6 +3691,44 @@ static void fillParameterProperties (const synthyboy::ParamInfo& info, VstParame
 // Dispatcher
 // ---------------------------------------------------------------------------
 
+/** The host display text of engine parameter `index` at the plain value `plain` (effGetParamDisplay of a parameter of the engine's table; the native choice lists name their rows with it, so a row
+    reads exactly as the control does once it is chosen). */
+static void engineParamDisplay (PluginInstance* inst, int index, float plain, char* buf, size_t kCap)
+{
+    const synthyboy::ParamInfo* info = synthyboy::paramTable() + index;
+    static const auto* firstStep = synthyboy::findParamByKey ("voicectl.s1.pan");
+    static const auto* lastStep = synthyboy::findParamByKey ("voicectl.s8.mod2");
+    if (firstStep && lastStep && info >= firstStep && info <= lastStep)
+    {
+        const int row = static_cast<int> (info - firstStep) % synthyboy_mpc::ui::voicegrid::kNumRows;
+        synthyboy_mpc::ui::voicegrid::formatValue (row, plain * 0.01f, buf, kCap);
+        return;
+    }
+    // Passive native Filter selectors read the engine handle without an
+    // editable proxy. STYLE still uses that filter's current model names.
+    const bool filter1Style = std::strcmp (info->key, "filter1.style") == 0;
+    const bool filter2Style = std::strcmp (info->key, "filter2.style") == 0;
+    if (filter1Style || filter2Style)
+    {
+        const auto* modelInfo = synthyboy::findParamByKey (filter1Style ? "filter1.model" : "filter2.model");
+        const int model = modelInfo != nullptr ? static_cast<int> (std::lround (
+            inst->paramMirror[modelInfo - synthyboy::paramTable()].load (std::memory_order_relaxed))) : 0;
+        const int count = synthyboy::filters::filterModelStyleCount (model);
+        const auto* names = synthyboy_mpc::ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
+        synthyboy_mpc::putBounded (buf, kCap, count > 0 && names != nullptr
+            ? names[std::clamp (static_cast<int> (std::lround (plain)), 0, count - 1)] : "");
+        return;
+    }
+    // The passive (filter off) dials of the Filter pages read the raw handle of the filter, which the skin shows as it is: the value carries its unit, like the active native dials
+    // (the host label of these parameters is empty, see effGetParamLabel).
+    if (isPassiveFilterDial (*info))
+    {
+        synthyboy_mpc::overlay::uibind::formatValue (*info, plain, buf, kCap);
+        return;
+    }
+    synthyboy::valueToText (*info, plain, buf, kCap);
+}
+
 static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt);
 
 // The entry the host calls. The plugin runs inside the MPC's own process (no sandbox) and the VST2 interface is a C ABI:
@@ -3942,6 +4010,17 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, "Play List");
+                return 1;   // the display stays empty
+            }
+            if (offset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (offset))
+            {
+                if (opcode == effGetParamName)
+                {
+                    if (offset == nativeui::kChoiceListOpen)
+                        synthyboy_mpc::putBounded (buf, kCap, "Choice List Open");
+                    else
+                        std::snprintf (buf, kCap, "Choice List %d", offset - nativeui::kChoiceList);
+                }
                 return 1;   // the display stays empty
             }
             if (nativeui::isNoteMaskOffset (offset))
@@ -5022,40 +5101,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy_mpc::putBounded (buf, kCap, unit);
         }
         else // effGetParamDisplay
-        {
-            float plain = inst->paramMirror[index].load(std::memory_order_relaxed);
-            static const auto* firstStep = synthyboy::findParamByKey ("voicectl.s1.pan");
-            static const auto* lastStep = synthyboy::findParamByKey ("voicectl.s8.mod2");
-            if (firstStep && lastStep && info >= firstStep && info <= lastStep)
-            {
-                const int row = static_cast<int> (info - firstStep) % synthyboy_mpc::ui::voicegrid::kNumRows;
-                synthyboy_mpc::ui::voicegrid::formatValue (row, plain * 0.01f, buf, kCap);
-                return 1;
-            }
-            // Passive native Filter selectors read the engine handle without an
-            // editable proxy. STYLE still uses that filter's current model names.
-            const bool filter1Style = std::strcmp (info->key, "filter1.style") == 0;
-            const bool filter2Style = std::strcmp (info->key, "filter2.style") == 0;
-            if (filter1Style || filter2Style)
-            {
-                const auto* modelInfo = synthyboy::findParamByKey (filter1Style ? "filter1.model" : "filter2.model");
-                const int model = modelInfo != nullptr ? static_cast<int> (std::lround (
-                    inst->paramMirror[modelInfo - synthyboy::paramTable()].load (std::memory_order_relaxed))) : 0;
-                const int count = synthyboy::filters::filterModelStyleCount (model);
-                const auto* names = synthyboy_mpc::ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
-                synthyboy_mpc::putBounded (buf, kCap, count > 0 && names != nullptr
-                    ? names[std::clamp (static_cast<int> (std::lround (plain)), 0, count - 1)] : "");
-                return 1;
-            }
-            // The passive (filter off) dials of the Filter pages read the raw handle of the filter, which the skin shows as it is: the value carries its unit, like the active native dials
-            // (the host label of these parameters is empty, see effGetParamLabel).
-            if (isPassiveFilterDial (*info))
-            {
-                synthyboy_mpc::overlay::uibind::formatValue (*info, plain, buf, kCap);
-                return 1;
-            }
-            synthyboy::valueToText(*info, plain, buf, kCap);
-        }
+            engineParamDisplay (inst, index, inst->paramMirror[index].load (std::memory_order_relaxed), buf, kCap);
         return 1;
     }
 
@@ -5370,6 +5416,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->flags = kVstParameterUsesIntegerMinMax;
             props->maxInteger = nativeui::kPlayListLastCode;
             props->stepInteger = props->largeStepInteger = 1;
+            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+            return 1;
+        }
+        if (nativeOffset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (nativeOffset))   // the gate of the list modal and the openers (native_choice_list.h): integers 0 .. 1
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = props->stepInteger = props->largeStepInteger = 1;
             props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
             return 1;
         }
@@ -6206,6 +6260,14 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     inst->playListRequests.post (synthyboy_mpc::nativeui::playlist::codeOfValue (parameter));
                     return;
                 }
+                if (nativeui::isChoiceListOffset (offset))   // an opener of a choice list: one tap comes as 1.0 (twice, the port debounces it) and 0.0 at the end of the gesture; never stored
+                {
+                    if (parameter > 0.5f)
+                        inst->choiceListRequests.post (offset - nativeui::kChoiceList);
+                    return;
+                }
+                if (offset == nativeui::kChoiceListOpen)   // the plugin's gate
+                    return;
                 if (nativeui::isTextEditOffset (offset) || nativeui::isTextGateOffset (offset))   // the context, the text and the presence gates are the plugin's to write
                     return;
                 if (nativeui::isNoteMaskOffset (offset))
@@ -6630,6 +6692,376 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
     if (static_cast<size_t>(index) >= synthyboy::paramCount())
         return;
     writeRealParam (inst, static_cast<size_t>(index), parameter);
+}
+
+// ---------------------------------------------------------------------------
+// Native choice lists (native_choice_list.h): the rows of a control, the driver on the display thread
+// ---------------------------------------------------------------------------
+
+/** The rows of the control whose Data handle is host parameter `hostIndex` and the row it shows now (`current`). Every name comes from the source the host's display of that handle reads (the engine
+    display text, the native handle's effGetParamDisplay branch, the name tables of the domains and picks), and every value is exactly the normalised value the host writes into that handle for the choice
+    (its effGetParameterProperties integer range). false: the control lists nothing now (unbound, unavailable or no names); no list opens. Display thread; it reads atomics and snapshots only. */
+bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& items, int& current) const
+{
+    namespace cl = nativeui::choicelist;
+    items.clear();
+    current = 0;
+    char name[cl::kNameLen];
+    auto title = [&items] (const char* text)
+    {
+        items.setTitle (text);
+        for (char* c = items.title; *c != '\0'; ++c)
+            *c = static_cast<char> (std::toupper (static_cast<unsigned char> (*c)));
+    };
+    auto choiceNames = [&] (const char* const* names, int count, int now)   // index i is the handle's integer i of 0 .. count - 1
+    {
+        for (int i = 0; i < count; ++i)
+            items.add (names[i], count > 1 ? static_cast<float> (i) / static_cast<float> (count - 1) : 0.0f);
+        current = std::clamp (now, 0, std::max (0, count - 1));
+    };
+
+    // ---- an engine parameter: its stepped choices; the row reads as effGetParamDisplay, the value is the normalised plain value (what getParameter reports for it)
+    if (hostIndex >= 0 && hostIndex < static_cast<int> (synthyboy::paramCount()))
+    {
+        const auto& info = synthyboy::paramTable()[hostIndex];
+        if (info.scale != synthyboy::Scale::stepped || info.choices == nullptr || info.numChoices < 2)
+            return false;
+        PluginInstance* self = const_cast<PluginInstance*> (this);   // engineParamDisplay only reads the mirror
+        for (int i = 0; i < static_cast<int> (info.numChoices) && info.min + static_cast<float> (i) <= info.max; ++i)
+        {
+            const float plain = info.min + static_cast<float> (i);
+            engineParamDisplay (self, hostIndex, plain, name, synthyboy_mpc::kParamStrBytes);
+            items.add (name, synthyboy::toNormalised (info, plain));
+        }
+        synthyboy_mpc::shortName (info.name, name, sizeof name, synthyboy_mpc::kParamNameChars);
+        title (name);
+        current = std::clamp (static_cast<int> (std::lround (paramMirror[hostIndex].load (std::memory_order_relaxed) - info.min)), 0, std::max (0, items.count - 1));
+        return items.count > 0;
+    }
+    if (! isNativeUiParam (hostIndex))
+        return false;
+    const int offset = hostIndex - nativeUiBase();
+
+    // ---- an FX domain (on the Filter page the same handles carry the filter MODEL and STYLE): the cell bound to it now; names as the domain branch of effGetParamDisplay
+    if (offset >= nativeui::kFxDomainBase && offset < nativeui::kFxDomainBase + nativeui::kFxDomains)
+    {
+        const auto menu = nativeFilterMenu (offset);
+        const bool filterMenu = menu.slot >= 0;
+        const auto cell = filterMenu ? menu.cell() : nativeFxEndpoint (offset).cell();
+        if (cell.target < 0 || cell.source < 0 || (! filterMenu && ! nativeFxHeader.state().on()))   // setParameter drops an endpoint write while the effect is off
+            return false;
+        const auto& source = synthyboy::paramTable()[cell.source];
+        const float plainNow = synthyboy::fromNormalised (source, qReadNorm (cell.target));
+        const int model = nativeui::fxStyleModel (cell.kind);
+        if (model >= 0)
+        {
+            const auto* names = synthyboy_mpc::ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
+            const int n = synthyboy::filters::filterModelStyleCount (model);
+            if (names == nullptr || n < 2)
+                return false;
+            choiceNames (names, n, static_cast<int> (std::lround (plainNow)));
+        }
+        else
+        {
+            if (source.choices == nullptr || source.numChoices < 2)
+                return false;
+            // effGetParamDisplay names choice lround (plain) with choices[lround (plain)], and the handle's integer range is the source's min .. max
+            for (int i = 0; i < static_cast<int> (source.numChoices); ++i)
+                if (static_cast<float> (i) >= source.min && static_cast<float> (i) <= source.max)
+                    items.add (synthyboy_mpc::ui::shownChoice (source.key, i, source.choices[i]), synthyboy::toNormalised (source, static_cast<float> (i)));
+            current = std::clamp (static_cast<int> (std::lround (plainNow - source.min)), 0, std::max (0, items.count - 1));
+        }
+        const char* label = synthyboy_mpc::ui::shownLabel (source.key);
+        if (label != nullptr)
+            title (label);
+        else
+        {
+            synthyboy_mpc::shortName (source.name, name, sizeof name, synthyboy_mpc::kParamNameChars);
+            title (name);
+        }
+        return items.count > 0;
+    }
+
+    // ---- the group choices of the Mod page header (bound only in their filter mode); the host shows the skin's names (kModSourceGroupNames / kModDestinationGroupNames)
+    if (offset == nativeui::kModNavigation + nativeui::mod::SourceGroup || offset == nativeui::kModNavigation + nativeui::mod::DestinationGroup)
+    {
+        const bool sources = offset == nativeui::kModNavigation + nativeui::mod::SourceGroup;
+        if (nativeModNavigation.at (offset - nativeui::kModNavigation).cell().target < 0)
+            return false;
+        static_assert (std::size (cl::kModSourceGroupNames) == nativeui::mod::kLastSourceGroup + 1);
+        static_assert (std::size (cl::kModDestinationGroupNames) == nativeui::mod::kLastDestinationGroup + 1);
+        if (sources)
+            choiceNames (cl::kModSourceGroupNames, nativeui::mod::kLastSourceGroup + 1, nativeModSourceGroup.load (std::memory_order_relaxed));
+        else
+            choiceNames (cl::kModDestinationGroupNames, nativeui::mod::kLastDestinationGroup + 1, nativeModDestinationGroup.load (std::memory_order_relaxed));
+        title (sources ? "Source group" : "Target module");
+        return true;
+    }
+
+    // ---- the Voice page: the row list and the step of the sequence ("STEP n" as effGetParamDisplay writes it)
+    if (offset == nativeui::kVoiceSequence + nativeui::voice::kRow || offset == nativeui::kVoiceSequence + nativeui::voice::kStep)
+    {
+        namespace n = nativeui::voice;
+        const int field = offset - nativeui::kVoiceSequence;
+        const auto cell = nativeVoice.at (field).cell();
+        if (cell.target < 0)
+            return false;
+        if (field == n::kRow)
+            choiceNames (n::kRowNames, n::kRows, cell.target);
+        else
+        {
+            for (int step = 0; step < n::kSteps; ++step)
+            {
+                std::snprintf (name, sizeof name, "STEP %d", step + 1);
+                items.add (name, static_cast<float> (step) / (n::kSteps - 1));
+            }
+            current = std::clamp (cell.target, 0, n::kSteps - 1);
+        }
+        title (field == n::kRow ? "Row" : "Step");
+        return true;
+    }
+
+    // ---- the routing of one source on the Osc pages (shown only while that source is on screen): the seven destinations
+    if (offset >= nativeui::kOscRoutingBySource && offset < nativeui::kOscRoutingBySource + nativeui::osc::kLastSource)
+    {
+        namespace n = nativeui::osc;
+        const auto state = nativeOsc.snapshot();
+        if (! state.displaysSource (offset - nativeui::kOscRoutingBySource + 1))
+            return false;
+        choiceNames (n::kDestinationNames, n::kLastRoute + 1, state.destination());
+        title ("Routing");
+        return true;
+    }
+
+    // ---- the MODE of the LFO shape editor: the names of lfo1.sync_type as effGetParamDisplay formats them
+    if (offset == nativeui::kLfoEditor + nativeui::lfoeditor::kValues + nativeui::lfoeditor::kMode)
+    {
+        namespace n = nativeui::lfoeditor;
+        const auto* mode = synthyboy::findParamByKey ("lfo1.sync_type");
+        if (mode == nullptr || nativeLfoEditor.at (n::kMode).cell().target < 0)
+            return false;
+        const auto range = n::rangeOf (n::kMode, 0, false);
+        for (int i = range.min; i <= range.max; ++i)
+        {
+            synthyboy_mpc::overlay::uibind::formatValue (*mode, static_cast<float> (i), name, synthyboy_mpc::kParamStrBytes);
+            items.add (name, range.encode (i));
+        }
+        current = static_cast<int> (range.decode (nativeLfoEditor.value (n::kMode))) - range.min;
+        title ("Mode");
+        return true;
+    }
+
+    // ---- MODULATE of a point modulation: TIME / LEVEL / CURVE (bound while points are selected)
+    if (offset == nativeui::kLfoDetail + nativeui::lfodetail::fieldHandle (nativeui::lfodetail::Target))
+    {
+        namespace n = nativeui::lfodetail;
+        if (nativeLfoDetail.at (n::Target).cell().target < 0)
+            return false;
+        const auto range = n::rangeOf (n::Target);
+        for (int i = range.min; i <= range.max; ++i)
+            items.add (n::kPointTargets[i], range.encode (i));
+        current = static_cast<int> (range.decode (nativeLfoDetail.value (n::Target))) - range.min;
+        title ("Modulate");
+        return true;
+    }
+
+    // ---- a menu of the oscillator detail page: the choices of the engine parameter bound to it (ui::shownChoice, as effGetParamDisplay)
+    if (nativeui::isOscDetailOffset (offset) && offset - nativeui::kOscDetail >= nativeui::oscdetail::kMenusBase)
+    {
+        namespace n = nativeui::oscdetail;
+        const auto cell = oscDetailCell (offset - nativeui::kOscDetail);
+        if (cell.target < 0 || cell.kind == n::Action || cell.kind == n::Semitone || cell.kind == n::Snap || cell.kind == n::Phase)
+            return false;
+        const auto& info = synthyboy::paramTable()[cell.target];
+        if (info.choices == nullptr || info.numChoices < 2)
+            return false;
+        for (int i = 0; i < static_cast<int> (info.numChoices) && info.min + static_cast<float> (i) <= info.max; ++i)
+            items.add (synthyboy_mpc::ui::shownChoice (info.key, i, info.choices[i]), synthyboy::toNormalised (info, info.min + static_cast<float> (i)));
+        current = std::clamp (static_cast<int> (std::lround (paramMirror[cell.target].load (std::memory_order_relaxed) - info.min)), 0, std::max (0, items.count - 1));
+        synthyboy_mpc::shortName (info.name, name, sizeof name, synthyboy_mpc::kParamNameChars);
+        title (name);
+        return items.count > 0;
+    }
+
+    // ---- the LFO picks: the SOURCE of a point modulation, ADD SOURCE, the GROUP of ADD TARGET and the TARGET of one group. Row 0 of each is a placeholder the page ignores (NONE, ADD SOURCE, ADD TARGET,
+    // TARGET: lfo_ui.h updateNativePick acts on an index > 0 only), so the list holds the real choices 1 .. last.
+    if (nativeui::isLfoPickOffset (offset))
+    {
+        namespace n = nativeui::lfopick;
+        namespace ub = synthyboy_mpc::overlay::uibind;
+        const int field = n::handleField (offset - nativeui::kLfoPick);
+        if (field < 0 || nativeLfoPick.at (field).cell().target < 0)
+            return false;
+        const int last = ub::lfoPickLast (field);
+        const auto range = n::rangeOf (last);
+        const int now = static_cast<int> (range.decode (nativeLfoPick.value (field)));
+        const auto& dest = ub::DestIndex::get();
+        const auto snapshot = std::atomic_load (&overlayContent);
+        synthyboy_mpc::overlay::MacroNames macros;
+        macros.load (snapshot ? snapshot->state.get() : nullptr);
+        const synthyboy_mpc::overlay::NamesScope scope (macros);   // a macro row reads with its own name, as the Mod page writes it
+        for (int i = 1; i <= last; ++i)
+        {
+            const char* text = "";
+            if (field == n::Source || field == n::AddSourceChoice)
+                text = synthyboy_mpc::overlay::ModUi::sourceName (i);
+            else if (field == n::Group)
+                text = static_cast<size_t> (i - 1) < dest.groups.size() ? dest.groups[static_cast<size_t> (i - 1)].c_str() : "";
+            else
+            {
+                const auto group = static_cast<size_t> (field - n::FirstTarget);
+                text = group < dest.choices.size() && static_cast<size_t> (i - 1) < dest.choices[group].size()
+                    ? synthyboy_mpc::overlay::ModUi::destName (dest.choices[group][static_cast<size_t> (i - 1)]) : "";
+            }
+            items.add (text, range.encode (i));
+        }
+        current = std::max (0, now - 1);
+        if (field == n::Source)
+            title ("Source");
+        else if (field == n::AddSourceChoice)
+            title ("Add source");
+        else if (field == n::Group)
+            title ("Add target");
+        else
+        {
+            const auto group = static_cast<size_t> (field - n::FirstTarget);
+            title (group < dest.groups.size() ? dest.groups[group].c_str() : "Target");
+        }
+        return items.count > 0;
+    }
+    return false;
+}
+
+/** Publishes the page of the open list into the modulation picker's list cells exactly as NativeListCells::publish does (the names first, then the cells: rows with kChoiceBias + index, their gates, BACK,
+    PREVIOUS, NEXT, GROUPS, the list gate and the title, all with a fresh identity per page so the host reads the names again; the header is no way up). Display thread, under choiceListMutex. */
+void PluginInstance::choiceListPublish() noexcept
+{
+    namespace nb = nativeui::modboard;
+    const auto& session = *choiceSession;
+    nativeui::nativetext::ListPage page;
+    std::snprintf (page.title, sizeof page.title, "%s", session.items.title);
+    page.up = false;
+    page.count = session.rowsOnPage();
+    for (int row = 0; row < page.count; ++row)
+        std::snprintf (page.rows[row], sizeof page.rows[row], "%s", session.rowName (row));
+    nativeListText.set (page);
+    choiceListSerial = (choiceListSerial + 1) % 8000;
+    const int identity = choiceListSerial + 1;
+    std::array<nativeui::FxCell, nb::kHandles> fields {};
+    for (int row = 0; row < page.count; ++row)
+    {
+        fields[nb::ListRow + row] = { nb::kChoiceBias + session.first() + row, identity, nativeui::kFxDial };
+        fields[nb::ListRowGate + row] = { 1, 1, nativeui::kFxToggle };
+    }
+    for (int field : { nb::ListBack, nb::ListPrev, nb::ListNext, nb::ListGroups, nb::ListGate, nb::ListTitle })
+        fields[field] = { 1, identity, nativeui::kFxToggle };
+    const auto preset = stateGeneration.load (std::memory_order_acquire);
+    if (nativeModBoardPreset.load (std::memory_order_relaxed) != preset)
+        nativeModBoard.invalidate();
+    nativeModBoard.publish (2, fields.data());
+    nativeModBoardPreset.store (preset, std::memory_order_release);
+    nativeModBoardDue.store (true, std::memory_order_release);
+    nativePagePaintUntil = steadyMs() + kNativePaintWindowMs;   // a layout entry or a new page: the host paints before any metadata refresh (CLAUDE.md page-load item 9)
+}
+
+/** Closes the open list: the gate goes to 0 and the cells go back to layout 0 with no names, so the overlay pages publish theirs again. Display thread, under choiceListMutex. */
+void PluginInstance::choiceListClose() noexcept
+{
+    choiceSession->close();
+    choiceListOpen.store (false, std::memory_order_release);
+    nativeModBoard.publish (0, nullptr);
+    nativeListText.clear();
+    nativeModBoardDue.store (true, std::memory_order_release);
+}
+
+/** The driver of the native choice lists, on the display thread (a display.add step before "Native UI", which reports the cells and then the gate). It works with the overlay off: it needs only the
+    host's writes and this thread.
+    - Closes the open list when the state changed (a program, a chunk: stateGeneration), when the overlay identified another page of this instance or another instance's page (nativeScreen,
+      IInstance::nativeScreenShown; without the overlay nothing tells the page and the list stays until a row, BACK or a new opener), or when the control no longer lists the same rows.
+    - Takes the latest opener (a new one replaces an open list), builds its rows (choiceItems) and opens on the page of the current row; a control that lists nothing opens nothing.
+    - Takes one gesture of the list cells: a row applies its value and closes, BACK closes, PREVIOUS / NEXT page, GROUPS does nothing.
+    A row is applied as the host's own write of that value to the control's handle: pluginSetParameter, the same path (the native handle's post to its page, the engine parameter's write); an engine
+    parameter then goes through uiDirty so that "page writes" (uiPoll) tells the host (audioMasterAutomate), a native handle is reported by its own poll once its page applied it. */
+void PluginInstance::choiceListPoll (AEffect* e)
+{
+    namespace cl = nativeui::choicelist;
+    namespace nb = nativeui::modboard;
+    auto& session = *choiceSession;
+    const uint64_t preset = stateGeneration.load (std::memory_order_acquire);
+    const int screen = nativeScreen.load (std::memory_order_relaxed);
+    if (session.isOpen())
+    {
+        if (choiceListScreen < 0 && screen >= 0)
+            choiceListScreen = screen;   // opened before the overlay identified the page: the first page it identifies is the list's
+        if (preset != choiceListPreset || (choiceListScreen >= 0 && screen != -1 && screen != choiceListScreen))
+        {
+            const std::lock_guard<std::mutex> owner (choiceListMutex);
+            choiceListClose();
+        }
+    }
+
+    const int request = choiceListRequests.take();
+    if (request >= 0)
+    {
+        int current = 0;
+        const int handle = cl::kSlotHandles[request];
+        const std::lock_guard<std::mutex> owner (choiceListMutex);
+        if (choiceItems (handle, session.items, current) && session.open (request, current))
+        {
+            choiceListPreset = preset;
+            choiceListScreen = screen >= 0 ? screen : -1;
+            choiceListPublish();
+            choiceListOpen.store (true, std::memory_order_release);
+        }
+        else if (choiceListOpen.load (std::memory_order_relaxed))
+            choiceListClose();   // the new opener replaces the open list, also when it lists nothing
+        else
+            session.close();
+        return;
+    }
+    if (! session.isOpen())
+        return;
+
+    for (int field = nb::ListRow; field < nb::ListGate; ++field)
+    {
+        const auto link = nativeModBoard.at (field);
+        const auto cell = link.cell();
+        float value = 0.0f;
+        if (cell.target < 0 || ! nativeModBoard.take (field, cell, value) || value < 0.5f)
+            continue;
+        const int slot = session.slot();
+        float chosen = 0.0f;
+        bool apply = false;
+        {
+            const std::lock_guard<std::mutex> owner (choiceListMutex);
+            if (field < nb::ListBack)
+                apply = session.choose (field - nb::ListRow, chosen);
+            else if (field == nb::ListBack)
+                session.close();
+            else if (field == nb::ListPrev)
+                session.previous();
+            else if (field == nb::ListNext)
+                session.next();
+            if (session.isOpen())
+                choiceListPublish();   // the gesture is used: new cells (an unused gesture of the old page cannot act on the new one)
+            else
+                choiceListClose();
+        }
+        if (apply)
+        {
+            // the control must still list the same rows (its cell may have been rebound since the list opened: another oscillator, effect, LFO): otherwise nothing is written
+            const int handle = cl::kSlotHandles[slot];
+            int current = 0;
+            const uint32_t opened = session.signature();
+            if (choiceItems (handle, *choiceCheck, current) && choiceCheck->signature() == opened)
+            {
+                pluginSetParameter (e, handle, chosen);
+                if (handle < static_cast<int> (synthyboy::paramCount()))
+                    uiDirty[handle >> 6].fetch_or (uint64_t { 1 } << (handle & 63), std::memory_order_release);   // the host learns the engine write (uiPoll)
+            }
+        }
+        return;
+    }
 }
 
 static float pluginGetParameter(AEffect* e, VstInt32 index)
