@@ -10,239 +10,239 @@
       "name": "LFO 1 Header",
       "form": "lfo-page",
       "title": "LFO 1",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 1",
-        "replace": "Native Caption lfo1 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 1",
+      "replaces": [
+        "Native Caption lfo1 title"
+      ]
     },
     {
       "name": "LFO 2 Header",
       "form": "lfo-page",
       "title": "LFO 2",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 2",
-        "replace": "Native Caption lfo2 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 2",
+      "replaces": [
+        "Native Caption lfo2 title"
+      ]
     },
     {
       "name": "LFO 3 Header",
       "form": "lfo-page",
       "title": "LFO 3",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 3",
-        "replace": "Native Caption lfo3 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 3",
+      "replaces": [
+        "Native Caption lfo3 title"
+      ]
     },
     {
       "name": "LFO 4 Header",
       "form": "lfo-page",
       "title": "LFO 4",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 4",
-        "replace": "Native Caption lfo4 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 4",
+      "replaces": [
+        "Native Caption lfo4 title"
+      ]
     },
     {
       "name": "LFO 5 Header",
       "form": "lfo-page",
       "title": "LFO 5",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 5",
-        "replace": "Native Caption lfo5 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 5",
+      "replaces": [
+        "Native Caption lfo5 title"
+      ]
     },
     {
       "name": "LFO 6 Header",
       "form": "lfo-page",
       "title": "LFO 6",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 6",
-        "replace": "Native Caption lfo6 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 6",
+      "replaces": [
+        "Native Caption lfo6 title"
+      ]
     },
     {
       "name": "LFO 7 Header",
       "form": "lfo-page",
       "title": "LFO 7",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 7",
-        "replace": "Native Caption lfo7 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 7",
+      "replaces": [
+        "Native Caption lfo7 title"
+      ]
     },
     {
       "name": "LFO 8 Header",
       "form": "lfo-page",
       "title": "LFO 8",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 8",
-        "replace": "Native Caption lfo8 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 8",
+      "replaces": [
+        "Native Caption lfo8 title"
+      ]
     },
     {
       "name": "LFO 9 Header",
       "form": "lfo-page",
       "title": "LFO 9",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 9",
-        "replace": "Native Caption lfo9 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 9",
+      "replaces": [
+        "Native Caption lfo9 title"
+      ]
     },
     {
       "name": "LFO 10 Header",
       "form": "lfo-page",
       "title": "LFO 10",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "LFO 10",
-        "replace": "Native Caption lfo10 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "LFO 10",
+      "replaces": [
+        "Native Caption lfo10 title"
+      ]
     },
     {
       "name": "RND 1 Header",
       "form": "lfo-page",
       "title": "RND 1",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "RND 1",
-        "replace": "Native Caption rnd1 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "RND 1",
+      "replaces": [
+        "Native Caption rnd1 title"
+      ]
     },
     {
       "name": "RND 2 Header",
       "form": "lfo-page",
       "title": "RND 2",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "RND 2",
-        "replace": "Native Caption rnd2 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "RND 2",
+      "replaces": [
+        "Native Caption rnd2 title"
+      ]
     },
     {
       "name": "RND 3 Header",
       "form": "lfo-page",
       "title": "RND 3",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "RND 3",
-        "replace": "Native Caption rnd3 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "RND 3",
+      "replaces": [
+        "Native Caption rnd3 title"
+      ]
     },
     {
       "name": "RND 4 Header",
       "form": "lfo-page",
       "title": "RND 4",
-      "title_param": "Parameter 2820",
       "data": "Parameter 2825",
       "gate": [],
-      "place": {
-        "tab": "RND 4",
-        "replace": "Native Caption rnd4 title"
-      },
       "remap": {
         "HdrWave": "Parameter 2820",
         "HdrStyle": "Parameter 2821",
         "HdrTargets": "FromGesture/Parameter 3662"
-      }
+      },
+      "title_handle": "Parameter 2820",
+      "tab": "RND 4",
+      "replaces": [
+        "Native Caption rnd4 title"
+      ]
     }
   ],
   "retire": {

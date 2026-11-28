@@ -24643,25 +24643,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption filternote 0",
-        "type": "Label",
+        "name": "Note Header",
+        "type": "curveHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "FILTER NOTE"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -24669,20 +24655,38 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2842"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[FILTER NOTE]/Parameter 2842"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrInit",
+          "value": "Parameter 2870"
+         },
+         {
+          "key": "HdrUndo",
+          "value": "Parameter 2870"
+         },
+         {
+          "key": "HdrDelPoint",
+          "value": "Parameter 2870"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 4 400 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -26144,25 +26148,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption filtervelo 0",
-        "type": "Label",
+        "name": "Velo Header",
+        "type": "curveHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "FILTER VELO"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -26170,20 +26160,38 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2842"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[FILTER VELO]/Parameter 2842"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrInit",
+          "value": "Parameter 2870"
+         },
+         {
+          "key": "HdrUndo",
+          "value": "Parameter 2870"
+         },
+         {
+          "key": "HdrDelPoint",
+          "value": "Parameter 2870"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 4 400 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -27491,8 +27499,8 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Mod Native Mode ALL",
-        "type": "modNative_mode1_80x56",
+        "name": "Mod Header",
+        "type": "modHeader",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -27506,116 +27514,39 @@
           "value": "Parameter 2936"
          },
          {
-          "key": "Caption",
-          "value": "WithName[ALL]/Parameter 2936"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "280 4 80 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/1/3/4/Parameter 2936"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Mod Native Mode BY SOURCE",
-        "type": "modNative_mode2_140x56",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
+          "key": "HdrTitle",
+          "value": "WithName[MOD MATRIX]/Parameter 2936"
+         },
          {
-          "key": "Data",
+          "key": "HdrTitleGate",
+          "value": "NonZero/Parameter 3806"
+         },
+         {
+          "key": "HdrModeAll",
           "value": "Parameter 2936"
          },
          {
-          "key": "Caption",
-          "value": "WithName[BY SOURCE]/Parameter 2936"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "368 4 140 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/1/3/4/Parameter 2936"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Mod Native Mode BY DEST",
-        "type": "modNative_mode3_120x56",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
+          "key": "HdrModeSource",
           "value": "Parameter 2936"
          },
          {
-          "key": "Caption",
-          "value": "WithName[BY DEST]/Parameter 2936"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "516 4 120 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/1/3/4/Parameter 2936"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Mod Native ADD",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_action_63a81723aeacef565da4.png",
-         "offImage": "native_action_63a81723aeacef565da4.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
+          "key": "HdrModeDest",
+          "value": "Parameter 2936"
+         },
          {
-          "key": "Data",
+          "key": "HdrGroupSource",
+          "value": "Parameter 2937"
+         },
+         {
+          "key": "HdrGroupTarget",
+          "value": "Parameter 2938"
+         },
+         {
+          "key": "HdrCount",
+          "value": "Parameter 3807"
+         },
+         {
+          "key": "HdrAdd",
           "value": "FromGesture/Parameter 2939"
          }
         ]
@@ -27626,82 +27557,8 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1120 4 120 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/1/3/4/Parameter 2936"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Mod Native Source Group",
-        "type": "modNative_group_260x56",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2937"
-         },
-         {
-          "key": "Caption",
-          "value": "WithName[]/Parameter 2937"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "648 4 260 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/4/Parameter 2936"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Mod Native Target Group",
-        "type": "modNative_group_260x56",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2938"
-         },
-         {
-          "key": "Caption",
-          "value": "WithName[]/Parameter 2938"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "648 4 260 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/4/Parameter 2936"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31038,52 +30895,6 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption mod 0",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "MOD MATRIX"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 0"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "58 4 210 56",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 3806"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
         "name": "Mod Native Header normal 0",
         "type": "Label",
         "data": {
@@ -31676,48 +31487,6 @@
         "additionalInvalidatingHandles": [
          "RangedEnabling/3/4/5/Parameter 2880"
         ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Mod Native Text Count",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 23.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "right verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3807"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "930 4 180 56"
        }
       },
       {

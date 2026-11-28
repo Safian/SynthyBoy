@@ -12,11 +12,15 @@
 
 **Q groups.** MAIN [CUTOFF, RESO, DRIVE, MIX], TRACK [KEYTRACK, ENV 1, VAR, COMB], OUT [BLEND, ROUTING, MODEL, STYLE], FORMANT [X, Y, TRANSPOSE, SPREAD].
 
+## Filter header
+
+The Filter 1 / 2 header is a catalogue example only (`filter-screen`); why it is not in the skin: [../header.md](../header.md), last section.
+
 ## Note and Velo
 
 **Tabs:** Note (`filternote`), Velo (`filtervelo`): one tab body each, not instances of `filterScreen`; the view index 3 / 4 is the curve source. **Picture:** none.
 
-**Shows.** The modulation editor and targets title (shared), `filterNativeGlide` (874 82 396 36; read-only GLIDE chip), `filterNativeCurveSurface` (`defs_mod.json`: the curve editor controls), the block labels (`Curve Native Block 0/1`), the "USED BY" list of up to four destinations with dots, names and amounts and a "more" and an empty line (`Curve Native Used *`), and the list pages (`oscNativeList`). The curve canvas is drawn by the plugin (`scalar-curve-editor`, [../scalar-curve-editor.md](../scalar-curve-editor.md)).
+**Shows.** The title and the INIT / UNDO / DEL POINT row are the Header component (instances `Note Header` / `Velo Header`, `curveHeader*` in `defs_mod.json`; [../header.md](../header.md)). The modulation editor and targets title (shared), `filterNativeGlide` (874 82 396 36; read-only GLIDE chip), `filterNativeCurveSurface` (`defs_mod.json`: the curve editor controls), the block labels (`Curve Native Block 0/1`), the "USED BY" list of up to four destinations with dots, names and amounts and a "more" and an empty line (`Curve Native Used *`), and the list pages (`oscNativeList`). The curve canvas is drawn by the plugin (`scalar-curve-editor`, [../scalar-curve-editor.md](../scalar-curve-editor.md)).
 
 **Q groups.** EDIT [POINT, X, Y, CURVE]; LEGATO AND GRID [LEGATO, GRID X, GRID Y, SNAP].
 

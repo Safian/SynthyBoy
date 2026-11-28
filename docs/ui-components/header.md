@@ -1,6 +1,6 @@
 # HEADER (design proposal v0; the oscillator screens use it)
 
-The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise), Env 1-6 and LFO 1-10 / RND 1-4 use it in the skin (see "Skin: the oscillator headers" and "Skin: the Env and LFO headers" below). The catalogue (`kepes-katalogus.html`) shows thirteen examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
+The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise), Env 1-6 and LFO 1-10 / RND 1-4, the Note / Velo curve screens and the Mod matrix page use it in the skin (see "Skin: the oscillator headers", "Skin: the Env and LFO headers" and "Skin: the curve and Mod headers" below). The catalogue (`kepes-katalogus.html`) shows sixteen examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
 
 ## Geometry (tokens in `components/sizes.json`)
 
@@ -49,7 +49,9 @@ One example per slot kind (`kind`, then the fields; every slot may carry `role` 
 | centre | `button` | `{"kind": "button", "role": "browse", "text": "BROWSE"}` | `text` |
 | right | `more` | `{"kind": "more"}` | the common MORE button |
 | right | `dropdown` | `{"kind": "dropdown", "role": "route", "value": "Filter 1", "width_px": 150}` | as the centre dropdown |
-| right | `button` | `{"kind": "button", "role": "targets", "text": "TARGETS"}` | a page text button at the right edge (the modulator screens' TARGETS) |
+| centre | `segment` | `{"kind": "segment", "role": "modeAll", "text": "ALL", "selected": true}` | one button of a switch group: plain look, and in the skin also the selected look (`action_art` look `active`, the RadioGrid selected button); `selected` only draws the catalogue picture |
+| right (or centre) | `button` | `{"kind": "button", "role": "targets", "text": "TARGETS"}` | a page text button; the right zone takes the same text button as the centre (the modulator screens' TARGETS, the curve screens' INIT / UNDO / DEL POINT, the Mod ADD) |
+| centre / right | `label` | `{"kind": "label", "role": "count", "width_px": 180}` | a live value the host draws (Mod slot count): room in the layout, no picture; the skin block is `{"label": {"size", "colour", "justify"}}` |
 
 Another screen is only a spec. Env 1 (title + TARGETS), no POWER:
 
@@ -74,12 +76,13 @@ A slot that is built into the skin names its cells: `"skin": {"cells": [{"name":
 | `page` | also gated by the form's `page_gate` (the Route stays visible when POWER is off) |
 | `wrapper` | `NativeActive`: keep the proven NativeActive / NativeInactive pattern (see below) |
 | `focus`, `show` | a Focus child; the instance's showWhenDataModelInvalid (default `Show`) |
-| `role` | the cell binds its own handle `Hdr<Role>` instead of the slot's (LFO: WAVEFORM and STYLE are two alternative cells of one dropdown slot, each with its own parameter) |
+| `id`, `group` | `buttonId` / `numButtonsInGroup` of a `button` or `segment` cell (default 1 / 1) |
+| `role` | the cell binds its own handle `Hdr<Role>` instead of the slot's (LFO: WAVEFORM and STYLE are two alternative cells of one dropdown slot, each with its own parameter; Mod: source / target group) |
 | `hw_focus` | the cell instance's acceptsHWFocus (default `No`) |
 | `inert` | the cell definition ignores mouse presses (the former cell sat in an inert parent; the touch is handled elsewhere) |
 | `button_focus` | the inner Button's acceptsHWFocus (default `Yes`; `No` also shows it always: the Env TARGETS) |
 
-The form's `skin` block may carry `title_gate`: a handle name the title Label hides with (the instance remaps it; Env: the list page that replaces the caption). A spec WITHOUT a `power` slot (a modulator) gets no POWER button, no `HdrOn` / `HdrOff` gating and no disabled look: the cells are gated only by their own `gate`.
+The form's `skin` block may carry `title_gate`: a handle name the title Label follows alone (the instance remaps it as `HdrTitleGate`; `true` names `HdrTitleGate`), with `title_gate_show` as its showWhenDataModelInvalid (default `Hide`, Env / LFO: the list page that replaces the caption hides it; the curve screens and Mod use `Show`). A spec WITHOUT a `power` slot (a modulator, the curve screens, Mod) gets no POWER button, no `HdrOn` / `HdrOff` gating and no disabled look: the cells are gated only by their own `gate`.
 
 `role` gives the remap name `Hdr<Role>` (`type` -> `HdrType`) that the instance binds to a parameter.
 
@@ -143,3 +146,16 @@ The skin definitions `oscHeaderAbc`, `oscHeaderSub`, `oscHeaderNoise`, `oscHeade
 - Recipe extensions made for it: right-zone `dropdown` (the Filter route), centre `field` (name + number box), `title_slot`, and `skin_parts()` (textless faces plus the disabled look).
 - C++: `layoutFull` (`shell-mpc/overlay/osc_model.h`) follows the TYPE / SOURCE / BROWSE rectangles of the abc column case. The Sub / Noise rows of that function keep their old generic layout (plain data only).
 - The examples 7-11 of the catalogue are new and not yet approved by the owner (`approved` in `catalog.json` stays as it was).
+
+## Skin: the curve and Mod headers (owner order 2026-11-28)
+
+Two more skin families use the same tool (`skin-curve.json`, `skin-mod.json`); their headers have NO POWER, so the form has no `Power` button and no `HdrOn` / `HdrOff` gates, and no disabled look (an instance without `power` gives `title_handle`, any always-valid parameter: the title is `WithName[<title>]/<title_handle>`; `skin.title_gate: true` lets the title alone follow `HdrTitleGate`). The instances sit in the tab bodies (`"tab"`, `"replace"` in the skin spec) and replace the ad hoc cells; the tool also deletes those from their definitions (`"remove"`).
+
+- **Note / Velo** (`curveHeader`, one form, two instances `Note Header` / `Velo Header` in the tabs Note and Velo; example `curve`): title FILTER NOTE / FILTER VELO (slot 146 px, the title gate is the list page `IndexedEnabling/0/2/Parameter 3588` as the old caption's), right zone INIT (id 8 of 13), UNDO (9), DEL POINT (10), all on `Parameter 2870`, gated by the curve surface `RangedEnabling/3/4/5/Parameter 2842`. The three ad hoc buttons left `filterNativeCurveSurface`. The buttons are the Button recipe at 40 px (INIT 48, UNDO 63, DEL POINT 94 px wide, right aligned) instead of the 130 / 132 x 56 pictures.
+- **Mod matrix page** (`modHeader`, example `mod`, instance `Mod Header` in the Mod tab): title MOD MATRIX (title gate `NonZero/Parameter 3806`), the mode switch ALL / BY SOURCE / BY DEST (`segment`, ids 1..3 of 4 on `Parameter 2936`, the selected one in the RadioGrid selected look), the group dropdown (260 px; the source cell `IndexedEnabling/2/4/Parameter 2936` on `Parameter 2937` and the target cell `IndexedEnabling/3/4/...` on `2938` are alternatives, both Show Overlay `fx editor choice menu`), right: the slot count (`label`, `Parameter 3807`) and ADD (`FromGesture/Parameter 2939`); all gated by the matrix page `RangedEnabling/1/3/4/Parameter 2936`. `modNative_mode1/2/3_80x56` and `modNative_group_260x56` (and their pictures) are gone. NOT in the header: the detail page row (BACK, DELETE, SOURCE, TARGET ..., detail title) and the picker row (BACK, GROUPS, title): they are other pages of the same screen with other contents in the same row; the spec describes ONE row.
+
+Proof (per tab Note, Velo, Mod): the resolved records (Buttons and value Labels: handle remap resolved, button id and group, the union of the gates, the enclosing actions) before and after are the same set; the focus flags and the unused `Caption` remaps of the old mode / group cells are not compared.
+
+### Filter 1 / 2: NOT built into the skin (example `filter-screen`, catalogue only)
+
+The Filter screen has no header band: POWER (16, 80) and the title (82, 80) sit beside the response display, the chain selector (72, 20), the F1 + F2 button (364, 16), MODEL (464, 16), STYLE (859, 16) and CLEAN (1176, 16) are 56 px high controls on a 72 px toolbar (the C++ rects in `filter_geometry.h` and `filter_ui.h` were not checked here). The example shows what the Header would be. It cannot be wired as the Osc pattern without a decision: (1) the style dropdown and CLEAN exist once per filter model (about 20 style cells and several CLEAN cells, each bound to another parameter and gated by `IndexedEnabling/<k>/27/Parameter 2860`): a form binds ONE parameter per role, so every model would need its own form instance; (2) MODEL / STYLE / CLEAN have a disabled twin per filter (F1 off, F2 off) with the displayed text of the OTHER filter's parameters, not a POWER gate; (3) moving POWER and the title up into a 56 px row shifts the response display and the Q-link area: a C++ geometry change.

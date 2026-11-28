@@ -37,7 +37,7 @@ class HeaderCatalogTests(unittest.TestCase):
     def test_every_example_has_one_picture(self):
         self.assertEqual([e["id"] for e in EXAMPLES],
                          ["osc-a", "lfo-9", "env-1", "filter-1", "master", "osc-a-off",
-                          "osc-abc", "osc-abc-off", "osc-sub", "osc-noise", "osc-noise-sample", "env-page", "lfo-page"])
+                          "osc-abc", "osc-abc-off", "osc-sub", "osc-noise", "osc-noise-sample", "env-page", "lfo-page", "curve", "mod", "filter-screen"])
         for example in EXAMPLES:
             with Image.open(DIRECTORY / "img" / example["file"]) as image:
                 self.assertEqual(image.size, (header.header_width(example["width"]), 56), example["id"])
@@ -216,20 +216,26 @@ class HeaderSkinSpecTests(unittest.TestCase):
             header.header_examples({"examples": [bad]})
 
 
-if __name__ == "__main__":
-    unittest.main()
+class HeaderNoPowerSkinTests(unittest.TestCase):
+    """The headers without POWER (Env, LFO, Note / Velo curves, Mod): the committed skin is what the tool writes from skin-<family>.json;
+    no Power button, no HdrOn / HdrOff gating, no On / Off twins."""
 
-    def test_every_skin_family_is_what_the_tool_writes(self):
-        """Env and LFO (no POWER): the header definitions are in the committed skin, hold no HdrOn / HdrOff gating and no twins."""
+    def test_the_committed_skin_is_what_the_tool_writes(self):
         by_id = {e["id"]: e for e in EXAMPLES}
-        for family in ("env", "lfo"):
+        for family in ("env", "lfo", "curve", "mod"):
             spec = json.loads((DIRECTORY / f"skin-{family}.json").read_text(encoding="utf-8"))
             doc = json.loads((ROOT / spec["file"]).read_text(encoding="utf-8"))
             committed = {e["key"]: e["value"] for e in doc["componentDefinitions"]["localComponentDefinitions"]}
             for form in spec["forms"]:
                 built = header.header_definitions(by_id[form])
+                names = [c["componentData"]["name"] for c in dict(built["definitions"])[built["form"]]["componentsData"]]
+                self.assertNotIn("Power", names, form)
                 for key, definition in built["definitions"]:
                     self.assertEqual(committed[key], definition, key)
                     self.assertFalse(key.endswith("Off"), key)
                 gates = [g for c in dict(built["definitions"])[built["form"]]["componentsData"] for g in c["bounds"].get("additionalInvalidatingHandles", [])]
                 self.assertFalse({"HdrOn", "HdrOff"} & set(gates), form)
+
+
+if __name__ == "__main__":
+    unittest.main()
