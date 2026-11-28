@@ -21,7 +21,6 @@ class FilterGeometry
 public:
     static constexpr int kMaxGroups = 4;   // MAIN, TRACK, OUT, FORMANT
     static constexpr int kRoutingW = 150;  // the ROUTING cell: dot, "Series 1 to 2", padding
-    static constexpr int kSplitHeaderY = 12, kSplitHeaderH = 48;
     static constexpr int kTopH = 56, kTopBarH = ui::kQLane + kTopH, kMarkerBandH = 8, kBandH = 214, kBlockTitleH = 34, kBlockPad = 2, kBlockGap = 4, kSlotGap = 0, kBandMargin = 4;
     static constexpr int kViewCellW = 72, kCurveSideW = 400;   // the width of one cell of the VIEW selector; the side column of the NOTE / VELO editor (ScalarCurveEditor::kSideW)
     static constexpr int kToggleBandW = 100;                   // the width of a toggle that sits in the slot of a band of knobs
@@ -33,13 +32,11 @@ public:
         rect_ = r;
         layout();
     }
-    void setSplitMode (bool split) { if (splitMode_ != split) { splitMode_ = split; relayout(); } }
     void setCurveView (bool curve) { if (curveView_ != curve) { curveView_ = curve; relayout(); } }
     void setSubTabPage (bool on) { if (subTabPage_ != on) { subTabPage_ = on; relayout(); } }
     void setPageMode (bool on) { if (pageMode_ != on) { pageMode_ = on; relayout(); } }
     void setFormantMode (bool on) { if (formant_ != on) { formant_ = on; if (on) comb_ = false; relayout(); } }
     void setCombMode (bool on) { const bool eff = on && ! formant_; if (comb_ != eff) { comb_ = eff; relayout(); } }
-    bool splitMode() const noexcept { return splitMode_; }
     bool curveView() const noexcept { return curveView_; }
     bool subTabPage() const noexcept { return subTabPage_; }
     bool pageMode() const noexcept { return pageMode_; }
@@ -55,7 +52,6 @@ public:
     ui::Rect expand() const noexcept { return expand_; }
     ui::Rect both() const noexcept { return both_; }
     ui::Rect view() const noexcept { return view_; }
-    ui::Rect scalarView() const noexcept { return scalarView_; }
     ui::Rect outReadout() const noexcept { return outReadout_; }
     ui::Rect block (int i) const noexcept { return i == 0 ? main_ : i == 1 ? track_ : i == 2 ? out_ : formantBlock_; }
     /** What the body of NOTE and VELO is drawn in: everything below the top bar (1280 x 556 on the page). On the page of a hardware sub-tab the top bar has nothing to hold (no selector: the sub-tab names the
@@ -81,67 +77,12 @@ private:
     void clearCells()
     {
         cell_.fill ({});
-        close_ = both_ = view_ = scalarView_ = outReadout_ = expand_ = graph_ = main_ = track_ = out_ = formantBlock_ = {};
-    }
-
-    void layoutSplit()
-    {
-        using namespace nativeui;
-        clearCells();
-        const int m = 8, gapCol = 12;
-        const int lx = rect_.x + m, lw = (rect_.w - 2 * m - gapCol) * 60 / 100;
-        const int rx = lx + lw + gapCol, rw = rect_.right() - m - rx;
-
-        // Leave the host detection markers (y=4..10) above the compact header.
-        const ui::Rect topLeft { lx, rect_.y + kSplitHeaderY, lw, kSplitHeaderH };
-        ui::Rect r[4];
-        const int fixed[4] = { 116, 0, 0, toggleWidthFor ("CLEAN") }, weight[4] = { 0, 5, 4, 0 };
-        pagegeo::layoutRow (topLeft, fixed, weight, 4, 6, r);
-        view_ = r[0];
-        cell_[FilterModel] = r[1];
-        cell_[FilterStyle] = r[2];
-        cell_[FilterClean] = r[3];
-        scalarView_ = { rx, topLeft.y, std::max (116, rw - 130 - 6), kSplitHeaderH };
-
-        // MAIN and TRACK own four dials per row; OUT has BLEND above the compact routing choice.
-        const int rowHeight = 84, rowGap = 4, outWidth = 208, groupGap = 8;
-        const int controlsY = rect_.bottom() - m - 2 * rowHeight - rowGap;
-        const int rowWidth = lw - outWidth - groupGap;
-        main_ = { lx, controlsY, rowWidth, rowHeight };
-        track_ = { lx, controlsY + rowHeight + rowGap, rowWidth, rowHeight };
-        out_ = { lx + rowWidth + groupGap, controlsY, outWidth, 2 * rowHeight + rowGap };
-
-        const int graphY = topLeft.bottom() + 4;
-        graph_ = { lx, graphY, lw, controlsY - 6 - graphY };
-        cell_[FilterPower] = { lx + 8, graphY + 4, 56, 56 };
-        expand_ = { graph_.right() - 64, graphY + 4, 56, 56 };
-
-        const int gap = 4, pad = 4, slotWidth = (rowWidth - 2 * pad - 3 * gap) / 4;
-        auto slot = [&] (ui::Rect row, int column)
-        {
-            const int x = row.x + pad + column * (slotWidth + gap);
-            return ui::Rect { x, row.y + 20, column == 3 ? row.right() - pad - x : slotWidth, 60 };
-        };
-        const int mainSlots[4] = { FilterCutoff, FilterResonance, FilterDrive, FilterMix };
-        const int trackSlots[4] = { FilterKeytrack, FilterEnv1, FilterVar, FilterCombOffset };
-        for (int i = 0; i < 4; ++i)
-        {
-            cell_[mainSlots[i]] = slot (main_, i);
-            cell_[trackSlots[i]] = slot (track_, i);
-        }
-        cell_[FilterFormantResonance] = cell_[FilterVar];
-        cell_[FilterBlend] = { out_.x + pad, main_.y + 20, outWidth - 2 * pad, 60 };
-        cell_[FilterRouting] = { out_.x + pad, track_.y + 24, outWidth - 2 * pad, 48 };
+        close_ = both_ = view_ = outReadout_ = expand_ = graph_ = main_ = track_ = out_ = formantBlock_ = {};
     }
 
     void layout()
     {
         using namespace nativeui;
-        if (splitMode_ && ! curveView_)
-        {
-            layoutSplit();
-            return;
-        }
         clearCells();
         const int m = 8, W = rect_.w;
         const bool isExpCurve = curveView_;
@@ -233,8 +174,8 @@ private:
 
     ui::Rect rect_;
     std::array<ui::Rect, nativeui::FilterPoint> cell_ {};
-    ui::Rect close_, both_, view_, scalarView_, outReadout_, expand_, graph_, main_, track_, out_, formantBlock_;
-    bool splitMode_ = false, curveView_ = false, subTabPage_ = false, pageMode_ = false, formant_ = false, comb_ = false;
+    ui::Rect close_, both_, view_, outReadout_, expand_, graph_, main_, track_, out_, formantBlock_;
+    bool curveView_ = false, subTabPage_ = false, pageMode_ = false, formant_ = false, comb_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

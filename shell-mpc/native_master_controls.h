@@ -7,7 +7,6 @@ namespace synthyboy_mpc::nativeui::master
 {
 enum View { Hidden = 0, Main, Tuning };
 constexpr int kLastFrame = Tuning;
-constexpr float panelValue (int view) noexcept { return view == Tuning ? 1.0f : 0.0f; }
 
 enum OutputField { PeakL, PeakR, HoldL, HoldR, VoiceRatio, VoiceCount, Limiter, Clip, ClearClip, kOutputFields };
 constexpr int kVoiceCountLimit = 32;

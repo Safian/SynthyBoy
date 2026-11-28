@@ -109,7 +109,7 @@ public:
     void setTabView (int what, int value) noexcept override { if (what >= 0 && what < kTabViewFields) { tabViewV[what] = value; ++selectorWrites; } }
     std::shared_ptr<const synthyboy::StateContent> content() const override { return contentV; }
     std::shared_ptr<const synthyboy::StateContent> contentV;   // null: no content (the default)
-    int playSel[3] = { 1, 1, 1 }, tabViewV[kTabViewFields] = { 0, 0 }, selectorWrites = 0;
+    int playSel[3] = { 1, 1, 1 }, tabViewV[kTabViewFields] = { 0 }, selectorWrites = 0;
     int playLastSelector() const noexcept override { return 2; }
     int lastPlayed (int which) const noexcept override { return which == 1 ? lastKey : (which == 0 ? lastVel : -1); }   // the last note-on (the live marker of the NOTE / VELO editors)
     int lastKey = -1, lastVel = -1;

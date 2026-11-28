@@ -1,4 +1,4 @@
-// SynthyBoy - shell-mpc acceptance: instances created and closed on several threads while the display thread reports and the overlay thread polls (SYNTHYBOY_MPC_OVERLAY build).
+// SynthyBoy - shell-mpc acceptance: instances created and closed on several threads while the display thread reports and the overlay thread polls.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

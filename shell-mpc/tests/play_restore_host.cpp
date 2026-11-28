@@ -1,4 +1,4 @@
-// SynthyBoy - shell-mpc acceptance: saving and reloading a project with the Play page (docs/MPC.md "Project save and reload"). A plugin built with SYNTHYBOY_MPC_OVERLAY.
+// SynthyBoy - shell-mpc acceptance: saving and reloading a project with the Play page (docs/MPC.md "Project save and reload").
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
@@ -248,24 +248,29 @@ int main (int argc, char** argv)
     }
 
     {
-        // the chunk-only view state of the merged Env / Filter / LFO tabs (shell-mpc/tab_view.h "mpcTabView": rnd, filter): in the chunk right after the Play selectors, restored exactly by a project reload,
+        // the chunk-only view state of the merged LFO tab (shell-mpc/tab_view.h "mpcTabView": rnd): in the chunk right after the Play selectors, restored exactly by a project reload,
         // the defaults for a chunk without it (an older project), left alone by a program change
-        const std::string member0 = ",\"mpcTabView\":{\"rnd\":0,\"filter\":0}", member = ",\"mpcTabView\":{\"rnd\":3,\"filter\":2}";
+        const std::string member0 = ",\"mpcTabView\":{\"rnd\":0}", member = ",\"mpcTabView\":{\"rnd\":3}";
         const size_t at = s1.chunk.find (member0);
-        check (at != std::string::npos && at >= 14 && s1.chunk.compare (at - 14, 14, "\"mpcPlayLfo\":4") == 0, "the chunk has the view state (0, 0) right after the Play selectors");
+        check (at != std::string::npos && at >= 14 && s1.chunk.compare (at - 14, 14, "\"mpcPlayLfo\":4") == 0, "the chunk has the view state (0) right after the Play selectors");
         std::string withState = s1.chunk;
         if (at != std::string::npos)
             withState.replace (at, member0.size(), member);
         AEffect* e = make();
         setChunk (e, withState);
-        check (getChunk (e) == withState, "a chunk with the view state (rnd 3, filter 2) is restored exactly (the chunk read back is byte for byte the same)");
+        check (getChunk (e) == withState, "a chunk with the view state (rnd 3) is restored exactly (the chunk read back is byte for byte the same)");
         setProgram (e, 0);
         check (getChunk (e).find (member) != std::string::npos, "a program change leaves the view state alone");
         std::string old = s1.chunk;
         if (at != std::string::npos)
             old.erase (at, member0.size());
         setChunk (e, old);
-        check (getChunk (e).find (member0) != std::string::npos, "an old chunk without the member gives the defaults (0, 0) at the reload");
+        check (getChunk (e).find (member0) != std::string::npos, "an old chunk without the member gives the defaults (0) at the reload");
+        std::string oldMember = withState;   // the member of an older plugin build, with the retired filter number
+        if (at != std::string::npos)
+            oldMember.replace (oldMember.find (member), member.size(), ",\"mpcTabView\":{\"rnd\":3,\"filter\":2}");
+        setChunk (e, oldMember);
+        check (getChunk (e).find (member) != std::string::npos, "the older member with the filter number is still read (rnd 3 restored, filter ignored)");
         std::string bad = withState;
         if (at != std::string::npos)
             bad.replace (bad.find ("\"rnd\":3"), 7, "\"rnd\":9");

@@ -6,9 +6,9 @@ cd "$(dirname "$0")/.." || exit 1
 build_root="/tmp/synthyboy-$(id -u)/$(pwd -P | cksum | cut -d' ' -f1)/accept"
 mkdir -p "$build_root" || exit 1
 B=$build_root/build-mpc
-# The build options of the shipped plugin (what the package has: overlay, live LFO and spectrum display, pad pressure; the developer log is ON here, the release proof below builds it OFF).
+# The build options of the shipped plugin (what the package has: live LFO and spectrum display, pad pressure; the developer log is ON here, the release proof below builds it OFF).
 # Every option is named so that a build directory that keeps the entries of earlier runs in its CMake cache cannot change the configuration.
-BASE_OPTS="-DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_DEV_LOG=ON"
+BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_DEV_LOG=ON"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc dump_mpc_chunks synthyboy_sound_lab > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }

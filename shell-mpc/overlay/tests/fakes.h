@@ -345,9 +345,9 @@ public:
     const float* liveTargets() noexcept { if (! hasLive.load()) return nullptr; lt_[0] = liveCutoff.load(); lt_[1] = liveRes.load(); return lt_; }
     double bpm() const noexcept override { return bpmValue.load(); }
     int playSelection (int group) const noexcept override { return playSel[group].load(); }
-    int tabView (int what) const noexcept override { return what >= 0 && what < kTabViewFields ? tabViewV[what].load() : 0; }   // the chunk-only view state (the Filter tab's state, the random LFO)
+    int tabView (int what) const noexcept override { return what >= 0 && what < kTabViewFields ? tabViewV[what].load() : 0; }   // the chunk-only view state (the random LFO)
     void setTabView (int what, int value) noexcept override { if (what >= 0 && what < kTabViewFields) tabViewV[what].store (value); }
-    std::atomic<int> tabViewV[kTabViewFields] { { 0 }, { 0 } };
+    std::atomic<int> tabViewV[kTabViewFields] { { 0 } };
     std::atomic<int> playSel[3] { { 1 }, { 1 }, { 1 } };   // the instances the Play page shows (oscillator, envelope, LFO)
     void setQGroup (const int* targets, int n) noexcept override
     {

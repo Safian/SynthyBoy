@@ -2,7 +2,7 @@
 // cells of the host skin (filter_geometry.h), the native bridge, the response display (FilterDisplay: a display with its handle), the NOTE / VELO curve editor (ScalarCurveUi: canvas and data of its native cells), the PZ curve editor and the
 // detail pages (the modulations of one control, the targets of NOTE / VELO: ModRowsPage data). The page holds no control (owner decision 2026-11-27: the C++ layer has no UI elements). One object per (page view, plugin instance).
 // Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw (), with the instance as IInstanceView. Docs: docs/MPC.md "Filter UI".
-// FOUR STATES (the chunk-only view state mpcTabView.filter, IInstanceView::tabView (kTabViewFilter)): 0 F1, 1 F2 (the controls edit that filter; the F1+F2 toggle is a VIEW only: both curves and the resultant are drawn),
+// FOUR STATES (the hardware sub-tab names the state: the view's instance number 1 .. 4): 0 F1, 1 F2 (the controls edit that filter; the F1+F2 toggle is a VIEW only: both curves and the resultant are drawn),
 // 2 NOTE, 3 VELO: the scalar curve editor of the source (ScalarCurveUi, ui/scalar_curve_editor.h) in the body under the top bar; its TARGETS cell opens the targets page of the source (23 velocity, 24 note).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -26,7 +26,6 @@
 #include <vector>
 
 #include "../q_router.h"
-#include "../tab_view.h"
 #include "../ui/binding.h"
 #include "../ui/choice_names.h"
 #include "../ui/filter_display.h"
@@ -141,8 +140,7 @@ public:
     static constexpr double kModsRefreshMs = 100.0;
     static constexpr int kViewF1 = 0, kViewF2 = 1, kViewNote = 2, kViewVelo = 3;   // the states of the page (the selector's candidate id is the state + 1)
 
-    explicit FilterUi (int standaloneFilter = -1)
-        : standaloneFilter_ (standaloneFilter)
+    FilterUi()
     {
         for (int f = 0; f < 2; ++f)
             for (int s = 0; s < kRowsPerFilter; ++s)
@@ -151,25 +149,13 @@ public:
         curve_[1].configure (1);   // note (the state NOTE)
         assignIds();
         geo_.setPageMode (true);
+        geo_.setSubTabPage (true);
         setCanvas (kCanvasW, kCanvasH);
-        if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
-            adoptSplitState (standaloneFilter_ - 1, scalarSel_, tabview::kFilterExpandedFilter);
-        else
-            syncLayoutMode();
+        adoptState (filterSel_, scalarSel_, false);
     }
 
-    int standaloneFilter() const noexcept { return standaloneFilter_; }
-    bool isStandalone() const noexcept { return standaloneFilter_ >= 1 && standaloneFilter_ <= 2; }
-
-    /** The page of a hardware sub-tab (one tab page = one screen): Filter 1, Filter 2, Note or Velo (the view's instance number 1 .. 4). The state of the page is the sub-tab's: nothing is read from or written to the
-        chunk view state (`mpcTabView.filter`), there is no VIEW selector (F1 | F2 | NOTE | VELO), no 60/40 split and no expand toggle. The F1+F2 curve view toggle stays (a view of the page, not a choice of what it shows). */
-    void setSubTab (bool on) noexcept
-    {
-        subTab_ = on;
-        geo_.setSubTabPage (on);
-        if (on)
-            adoptSplitState (filterSel_, scalarSel_, tabview::kFilterExpandedFilter);
-    }
+    // The page of a hardware sub-tab (one tab page = one screen): Filter 1, Filter 2, Note or Velo (the view's instance number 1 .. 4). The state of the page is the sub-tab's: nothing is read from or written to the
+    // chunk, there is no VIEW selector (F1 | F2 | NOTE | VELO), no split and no expand toggle. The F1+F2 curve view toggle stays (a view of the page, not a choice of what it shows).
 
     // Native controls are the only owner of the controls; there is no fallback switch.
     bool hasNativePower() const noexcept { return true; }
@@ -232,34 +218,20 @@ public:
             }
             syncPages (stack);
         }
-        const int rawView = inst.tabView (IInstanceView::kTabViewFilter);
-        int targetFilter = 0, targetScalar = 0, targetExpand = tabview::kFilterSplit;
-        tabview::decodeFilterSplit (rawView, targetFilter, targetScalar, targetExpand);
-        if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
+        int targetFilter, targetScalar = scalarSel_;
+        bool targetCurve;
+        if (in.instance >= 3)   // Note (3) or Velo (4): the scalar curve editor of the source, in the curve view
         {
-            targetFilter = standaloneFilter_ - 1;
-            targetExpand = tabview::kFilterExpandedFilter;
+            targetFilter = filterSel_;
+            targetScalar = std::clamp (in.instance, 3, 4) - 3;
+            targetCurve = true;
         }
-        else if (subTab_)
+        else   // Filter 1 (1) or Filter 2 (2)
         {
-            if (in.instance >= 3)   // Note (3) or Velo (4): the scalar curve editor of the source, in the expanded curve view
-            {
-                targetFilter = filterSel_;
-                targetScalar = std::clamp (in.instance, 3, 4) - 3;
-                targetExpand = tabview::kFilterExpandedCurve;
-            }
-            else   // Filter 1 (1) or Filter 2 (2)
-            {
-                targetFilter = std::clamp (in.instance, 1, 2) - 1;
-                targetScalar = scalarSel_;
-                targetExpand = tabview::kFilterExpandedFilter;
-            }
+            targetFilter = std::clamp (in.instance, 1, 2) - 1;
+            targetCurve = false;
         }
-        else if (in.instance == 2)
-        {
-            targetFilter = 1;
-        }
-        adoptSplitState (targetFilter, targetScalar, targetExpand);
+        adoptState (targetFilter, targetScalar, targetCurve);
         if (stack.top() == kPageMods)
         {
             if (! modsDestinationValid (inst))
@@ -298,7 +270,7 @@ public:
             curve1_ = std::make_unique<CurveSource> (c1);
             curve2_ = std::make_unique<CurveSource> (c2);
         }
-        if (filterShown())
+        if (! curveView())
         {
             const bool hasTargets = in.targets != nullptr;
             curve1_->update (inst, hasTargets ? in.targets : nullptr, nowMs);
@@ -308,7 +280,7 @@ public:
             updateDisplayData (inst, in.live);
             pullControls (inst);
         }
-        if (curveShown())
+        if (curveView())
         {
             ScalarCurveUi& cu = curveUi();
             cu.pull (inst, nowMs);
@@ -353,11 +325,8 @@ public:
 
     int view() const noexcept { return view_; }                       // 0 F1, 1 F2, 2 NOTE, 3 VELO (expanded compat)
 
-    bool isSplit() const noexcept { return ! isStandalone() && expandMode_ == tabview::kFilterSplit; }
-    bool curveView() const noexcept { return ! isStandalone() && expandMode_ == tabview::kFilterExpandedCurve; }
-    bool curveShown() const noexcept { return isSplit() || curveView(); }
-    bool filterShown() const noexcept { return isSplit() || ! curveView(); }
-    bool isDual() const noexcept { return dual_ && ! isSplit() && ! curveView(); }   // the F1+F2 view toggle
+    bool curveView() const noexcept { return curveMode_; }
+    bool isDual() const noexcept { return dual_ && ! curveView(); }   // the F1+F2 view toggle
     /** The scalar curve editor of the selected scalar source (NOTE when scalarSel_ == 0, VELO when scalarSel_ == 1). */
     ScalarCurveUi& curveUi() noexcept { return curve_[scalarSel_ == 0 ? 1 : 0]; }
     const ScalarCurveUi& curveUi() const noexcept { return curve_[scalarSel_ == 0 ? 1 : 0]; }
@@ -430,18 +399,12 @@ public:
                     sb.clear (0u);
             }
         }
-        if (curveShown())
+        if (curveView())
         {
             const ui::ScalarCurveEditor& ed = curveUi().screen;
             ed.draw (sb);
             if (pageTop_ == 0)
                 drawCurvePageTitle (sb);   // above the opaque graph frame of the editor
-            if (isSplit() && pageTop_ == 0)
-            {
-                const ui::Rect eb = ed.block (0);
-                if (splitQBank_ == 3)
-                    ed.groups[0].draw (sb, nativeControlsActive() ? &eb : nullptr);
-            }
             if (pageTop_ == 0)
                 ed.drawLive (sb);   // the live marker of the last note: the animated layer, nothing cached repaints with it
         }
@@ -508,14 +471,8 @@ public:
             }
             gesture_ = top;
             gestureDown_ = true;
-            if (isSplit() && pageTop_ == 0 && top == &curveUi().screen)
-            {
-                if (curveUi().screen.block (0).contains (x, y) || curveUi().screen.canvas.rect().contains (x, y))
-                    splitQBank_ = 3;
-            }
             dispatch (top->touchDown (x, y, nowMs), stack, inst);
             handlePending (stack, inst);
-            syncSplitQFocus();
             return true;
         }
 
@@ -551,7 +508,7 @@ public:
     void tick (double nowMs, UiStack& stack, IInstanceView& inst)
     {
         nowMs_ = nowMs;
-        if (curveShown() && pageTop_ == 0)
+        if (curveView() && pageTop_ == 0)
             curveUi().tick (inst, nowMs);   // the long press of the canvas, the throttled write that was left over
         if (gesture_ && gestureDown_)
             dispatch (gesture_->tick (nowMs), stack, inst);
@@ -599,10 +556,10 @@ public:
                     handle (ui::Change::indexed (id, next ? 1 : 0, next ? 1.0 : 0.0), stack, inst);
             }
         }
-        else if (curveView() || (isSplit() && splitQBank_ == 3))
+        else if (curveView())
         {
             ScalarCurveUi& cu = curveUi();
-            const int g = isSplit() ? 0 : cu.screen.activeGroup();
+            const int g = cu.screen.activeGroup();
             if (g >= 0 && g < ui::ScalarCurveEditor::kMaxGroups)
                 cu.handle (cu.screen.groups[g].turn (slot, delta), inst, nowMs_);
             drainCurveRequests (stack, inst);
@@ -621,7 +578,7 @@ public:
         if (! top->wheelOver (x, y, notches, ch))
             return false;
         nowMs_ = nowMs;
-        if (top == &curveUi().screen && curveShown())
+        if (top == &curveUi().screen && curveView())
         {
             curveUi().handle (ch, inst, nowMs);
             drainCurveRequests (stack, inst);
@@ -712,7 +669,7 @@ private:
             case FilterClean: return ! geo_.formantMode() && ! geo_.combMode();
             case FilterCombOffset: return geo_.combMode();
             case FilterFormantX: case FilterFormantY: case FilterFormantTranspose: case FilterFormantSpread:
-                return geo_.formantMode() && ! geo_.splitMode();
+                return geo_.formantMode();
             case FilterFormantResonance: return geo_.formantMode();
             default: return true;
         }
@@ -736,7 +693,7 @@ private:
     }
     ui::Rect nativeOutReadoutRect() const noexcept
     {
-        return ! curveView() && ! geo_.splitMode() ? geo_.outReadout() : ui::Rect {};
+        return ! curveView() ? geo_.outReadout() : ui::Rect {};
     }
     /** The member of Q group g at slot k (a nativeui::FilterSlot; -1: none): the TRACK bank holds the formant RESONANCE instead of VAR with the Formant model and COMB with the Comb model only. */
     int qMember (int g, int k) const noexcept
@@ -759,21 +716,14 @@ private:
         nativeTouchX_ = x;
         nativeTouchY_ = y;
         nativeTouchAt_ = nowMs;
-        if (curveShown())
+        if (curveView())
         {
             const auto areas = curveUi().screen.nativeRects();
             for (int s = 0; s < ui::ScalarCurveEditor::kNativeFields; ++s)
                 if (areas[s].contains (x, y))
                 {
                     nativeTouchSlot_ = FilterPoint + s;
-                    if (isSplit())
-                    {
-                        if (s < 4)
-                            splitQBank_ = 3;
-                    }
-                    else
-                        curveUi().screen.setActiveGroup (s < 4 ? 0 : 1);
-                    syncSplitQFocus();
+                    curveUi().screen.setActiveGroup (s < 4 ? 0 : 1);
                     return;
                 }
             if (curveView())
@@ -791,10 +741,7 @@ private:
                         if (qMember (group, knob) == s)
                         {
                             setActiveGroup (group);
-                            if (isSplit() && group < 3)
-                                splitQBank_ = group;
                         }
-                syncSplitQFocus();
                 break;
             }
     }
@@ -806,19 +753,10 @@ private:
         {
             int idx = 0;
             out[idx++] = geo_.view();
-            if (isSplit())
-            {
-                out[idx++] = geo_.scalarView();
-                out[idx++] = geo_.expand();
-                out[idx++] = curveUi().screen.nativeExpandRect();
-            }
-            else
-            {
-                if (! curveView())
-                    out[idx++] = geo_.both();
-                out[idx++] = geo_.expand();
-            }
-            if (filterShown())
+            if (! curveView())
+                out[idx++] = geo_.both();
+            out[idx++] = geo_.expand();
+            if (! curveView())
             {
                 const auto areas = nativeRects (includeReadouts);
                 for (const auto& r : areas)
@@ -832,7 +770,7 @@ private:
                     if (idx < static_cast<int> (out.size())) out[idx++] = nativeSingleStyleRect();
                 }
             }
-            if (curveShown())
+            if (curveView())
             {
                 const auto& editor = curveUi().screen;
                 const auto areas = editor.nativeRects();
@@ -856,7 +794,7 @@ private:
             return FxCell { 0, 0, kFxDial };
         if (slot >= FilterPoint && slot <= FilterLegato)
         {
-            if (! curveShown())
+            if (! curveView())
                 return {};
             if (slot == FilterLegato)
             {
@@ -865,7 +803,7 @@ private:
             }
             return { 0, 0, kFxDial };
         }
-        if (slot < FilterPoint && filterShown() && hasNativeControl (slot))
+        if (slot < FilterPoint && ! curveView() && hasNativeControl (slot))
         {
             const bool selOn = isSelectedFilterOn (inst);
             const bool allow = slot == FilterPower
@@ -890,34 +828,19 @@ private:
     void nativeAction (int action, IInstanceView& inst, UiStack& stack)
     {
         using namespace nativeui;
-        if (subTab_ && (action == FilterF1 || action == FilterF2 || action == FilterNote || action == FilterVelo
-                        || action == FilterExpandFilter || action == FilterExpandCurve))
+        if (action == FilterF1 || action == FilterF2 || action == FilterNote || action == FilterVelo
+            || action == FilterExpandFilter || action == FilterExpandCurve)
             return;   // the hardware sub-tab names the state of the page: no view choice, no split, no expand
-        if (action == FilterF1 || action == FilterF2)
-            chooseFilter (inst, action - FilterF1);
-        else if (action == FilterNote || action == FilterVelo)
-            chooseScalar (inst, action - FilterNote);
-        else if (action == FilterBoth && ! isSplit() && ! curveView())
+        if (action == FilterBoth && ! curveView())
             handle (ui::Change::indexed (kBoth, ! dual_, 0.0), stack, inst);
-        else if (action == FilterEditPz && filterShown())
+        else if (action == FilterEditPz && ! curveView())
             handlePz (kPzOpen, stack, inst);
-        else if (action == FilterExpandFilter && ! isStandalone() && ! subTab_)
-        {
-            const int next = expandMode_ == tabview::kFilterSplit ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
-            chooseSplitState (inst, filterSel_, scalarSel_, next);
-        }
-        else if (curveShown() && action >= FilterInit && action <= FilterTargets
-                 && (! isSplit() || action == FilterTargets))
+        else if (curveView() && action >= FilterInit && action <= FilterTargets)
         {
             using Editor = ui::ScalarCurveEditor;
             const int ids[] = { Editor::kIdInit, Editor::kIdUndo, Editor::kIdDelete, Editor::kIdTargets };
             curveUi().handle (ui::Change::request (ids[action - FilterInit]), inst, nowMs_);
             drainCurveRequests (stack, inst);
-        }
-        else if (action == FilterExpandCurve && ! isStandalone() && ! subTab_)
-        {
-            const int next = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterSplit : tabview::kFilterExpandedCurve;
-            chooseSplitState (inst, filterSel_, scalarSel_, next);
         }
     }
 
@@ -931,19 +854,17 @@ private:
             return;
         }
 
-        const int modelParam = filterShown() ? paramForId (kModel, editFilter_) : -1;
+        const int modelParam = ! curveView() ? paramForId (kModel, editFilter_) : -1;
         const int model = modelParam >= 0 ? static_cast<int> (std::lround (inst.param (modelParam))) : -1;
-        const bool on = filterShown() && isSelectedFilterOn (inst);
-        const bool anyOn = filterShown() && anyFilterOn (inst);
-        const bool sp = isSplit();
-        if (view_ != nativeLastView_ || sp != nativeLastSplit_ || scalarSel_ != nativeLastScalar_
+        const bool on = ! curveView() && isSelectedFilterOn (inst);
+        const bool anyOn = ! curveView() && anyFilterOn (inst);
+        if (view_ != nativeLastView_ || scalarSel_ != nativeLastScalar_
             || model != nativeLastModel_ || on != nativeLastOn_ || anyOn != nativeLastAnyOn_)
         {
             if (nativeTouchSlot_ >= 0)
                 blockedNativeSlot_ = nativeTouchSlot_;
             hideNativeControls (inst);
             nativeLastView_ = view_;
-            nativeLastSplit_ = sp;
             nativeLastScalar_ = scalarSel_;
             nativeLastModel_ = model;
             nativeLastOn_ = on;
@@ -952,10 +873,10 @@ private:
         float value;
         if (inst.takeNativeFilterSlot (FilterAction, nativeCell (FilterAction, inst), value))
         {
-            const int beforeV = view_, beforeS = scalarSel_, beforeE = expandMode_;
+            const int beforeV = view_, beforeS = scalarSel_;
             nativeAction (static_cast<int> (std::lround (value * FilterLastAction)), inst, stack);
             active = nativeControlsActive();
-            if (view_ != beforeV || scalarSel_ != beforeS || expandMode_ != beforeE || ! active)
+            if (view_ != beforeV || scalarSel_ != beforeS || ! active)
             {
                 hideNativeControls (inst);
                 return;
@@ -992,7 +913,7 @@ private:
                     uibind::writeNorm (inst, cell.target, norm);
             }
         }
-        if (filterShown() && powerBefore != isSelectedFilterOn (inst))
+        if (! curveView() && powerBefore != isSelectedFilterOn (inst))
         {
             pullControls (inst);
             nativeLastOn_ = powerOn_;
@@ -1002,7 +923,7 @@ private:
         float values[2 * kFilterCurveFields] {};
         for (int slot = 0; slot < FilterSlots; ++slot)
             cells[slot] = nativeCell (slot, inst);
-        if (curveShown())
+        if (curveView())
         {
             for (int i = 0; i < ScalarCurveUi::kVirtualCount; ++i)
                 values[i] = curveUi().virtualValue (i);
@@ -1015,13 +936,10 @@ private:
         int indicators[kFilterIndicators] {};
         indicators[0] = (filterSel_ == 0 ? 2 : 0) | ((nativeUsedMask_ >> 0) & 1);
         indicators[1] = (filterSel_ == 1 ? 2 : 0) | ((nativeUsedMask_ >> 1) & 1);
-        const bool showScalarSel = isSplit() || curveView();
+        const bool showScalarSel = curveView();
         indicators[2] = (showScalarSel && scalarSel_ == 0 ? 2 : 0) | ((nativeUsedMask_ >> 2) & 1);
         indicators[3] = (showScalarSel && scalarSel_ == 1 ? 2 : 0) | ((nativeUsedMask_ >> 3) & 1);
-        if (isSplit())
-            indicators[4] = powerOn_ ? 2 : (anyOn_ ? 1 : 0);
-        else
-            indicators[4] = (dual_ && ! curveView() ? 1 : 0) | ((filterShown() && powerOn_) ? 2 : 0);
+        indicators[4] = (dual_ && ! curveView() ? 1 : 0) | ((! curveView() && powerOn_) ? 2 : 0);
         inst.setNativeFilterControls (nativeViewFrame(), cells, values, indicators);
     }
     static const synthyboy::ParamInfo& info (int idx) noexcept { return uibind::info (idx); }
@@ -1039,23 +957,6 @@ private:
         return (p1 >= 0 && inst.param (p1) >= 0.5f) || (p2 >= 0 && inst.param (p2) >= 0.5f);
     }
 
-    void syncSplitQFocus() noexcept
-    {
-        if (! isSplit())
-            return;
-        if (splitQBank_ == 3)
-        {
-            setActiveGroup (-1);
-            curveUi().screen.setActiveGroup (0);
-        }
-        else
-        {
-            if (activeGroup_ != splitQBank_)
-                setActiveGroup (splitQBank_);
-            curveUi().screen.setActiveGroup (-1);
-        }
-    }
-
     /** The display follows the geometry (the page of a curve view has none). */
     void syncDisplayGeometry()
     {
@@ -1067,48 +968,33 @@ private:
 
     void syncLayoutMode()
     {
-        const bool sp = isSplit();
         const int fv = curveView() ? (scalarSel_ == 0 ? kViewNote : kViewVelo) : filterSel_;
         geo_.setCurveView (fv >= kViewNote);
-        geo_.setSplitMode (sp);
         syncDisplayGeometry();
-        ui::Rect compactRect {};
-        if (sp)
-        {
-            const ui::Rect fr = geo_.rect();
-            const int lx = fr.x + 8, lw = (fr.w - 28) * 60 / 100;
-            const int rx = lx + lw + 12, rw = fr.right() - 8 - rx;
-            compactRect = { rx, geo_.scalarView().y, rw, fr.bottom() - 8 - geo_.scalarView().y };
-        }
         for (ScalarCurveUi& c : curve_)
         {
-            c.screen.setCompact (sp);
-            c.screen.setOwnQFrames (! sp);
-            c.screen.place (sp ? compactRect : geo_.bodyRect());
+            c.screen.setCompact (false);
+            c.screen.setOwnQFrames (true);
+            c.screen.place (geo_.bodyRect());
         }
         view_ = fv;
-        if (sp)
-            syncSplitQFocus();
-        else
-            curve_[0].screen.setOwnQFrames (true), curve_[1].screen.setOwnQFrames (true);
     }
 
 
-    void adoptSplitState (int f, int s, int e)
+    void adoptState (int f, int s, bool curve)
     {
         f = std::clamp (f, 0, 1);
         s = std::clamp (s, 0, 1);
-        e = std::clamp (e, 0, 2);
-        const bool changed = (f != filterSel_ || s != scalarSel_ || e != expandMode_ || ! started_);
+        const bool changed = (f != filterSel_ || s != scalarSel_ || curve != curveMode_ || ! started_);
         if (changed)
         {
             started_ = true;
-            if (gesture_ != nullptr && (e != expandMode_ || s != scalarSel_))
+            if (gesture_ != nullptr && (curve != curveMode_ || s != scalarSel_))
                 dropGesture();
             qSlots_.forget();
             filterSel_ = f;
             scalarSel_ = s;
-            expandMode_ = e;
+            curveMode_ = curve;
             editFilter_ = filterSel_ + 1;
             modsDirty_ = true;
             syncLayoutMode();
@@ -1156,15 +1042,13 @@ private:
         if (pageTop_ == kPageTargets) return nullptr;
         if (pageTop_ == kPageDest) return &destList_;
         if (pageTop_ == kPagePz) return &pzEditor_;
-        if (isSplit() && geo_.scalarView().contains (x, y))
-            return nullptr;
-        if (curveShown() && curveUi().screen.rect().contains (x, y))
+        if (curveView() && curveUi().screen.rect().contains (x, y))
             return &curveUi().screen;
         if (curveView() && y >= geo_.bodyRect().y)
             return &curveUi().screen;
         return curveView() ? nullptr : &display_;
     }
-    bool gestureOnCurve() noexcept { return curveShown() && pageTop_ == 0 && gesture_ == &curveUi().screen; }
+    bool gestureOnCurve() noexcept { return curveView() && pageTop_ == 0 && gesture_ == &curveUi().screen; }
 
 
     void syncPages (const UiStack& stack)
@@ -1192,15 +1076,7 @@ private:
     {
         for (ScalarCurveUi& cu : curve_)
         {
-            if (cu.expandRequested)
-            {
-                cu.expandRequested = false;
-                if (! isStandalone() && ! subTab_ && pageTop_ == 0)
-                {
-                    const int next = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterSplit : tabview::kFilterExpandedCurve;
-                    chooseSplitState (inst, filterSel_, scalarSel_, next);
-                }
-            }
+            cu.expandRequested = false;   // the sub-tab page has no expand toggle
         }
         openTargetsIfAsked (stack, inst);
     }
@@ -1211,7 +1087,7 @@ private:
             if (cu.targetsRequested)
             {
                 cu.targetsRequested = false;
-                if (curveShown() && pageTop_ == 0)
+                if (curveView() && pageTop_ == 0)
                 {
                     targetsPageIndex_ = 0;
                     stack.openDetail (kPageTargets);
@@ -1227,37 +1103,6 @@ private:
         ui::Change extra;
         while (gesture_ == &display_ && display_.takePending (extra))
             handle (extra, stack, inst);
-    }
-
-    void chooseSplitState (IInstanceView& inst, int f, int s, int e)
-    {
-        f = std::clamp (f, 0, 1);
-        s = std::clamp (s, 0, 1);
-        e = std::clamp (e, 0, 2);
-        if (! isStandalone() && ! subTab_)
-            inst.setTabView (IInstanceView::kTabViewFilter, tabview::encodeFilterSplit (f, s, e));
-        adoptSplitState (f, s, e);
-        qSlots_.forget();
-    }
-    void chooseFilter (IInstanceView& inst, int f)
-    {
-        f = std::clamp (f, 0, 1);
-        const int e = expandMode_ == tabview::kFilterExpandedCurve ? tabview::kFilterExpandedFilter : expandMode_;
-        chooseSplitState (inst, f, scalarSel_, e);
-    }
-    void chooseScalar (IInstanceView& inst, int s)
-    {
-        s = std::clamp (s, 0, 1);
-        chooseSplitState (inst, filterSel_, s, expandMode_ == tabview::kFilterExpandedFilter ? tabview::kFilterExpandedCurve : expandMode_);
-    }
-    /** Compatibility entry for single-index view transitions (`0 F1, 1 F2, 2 NOTE, 3 VELO`). */
-    void chooseView (IInstanceView& inst, int v)
-    {
-        v = std::clamp (v, 0, 3);
-        if (v < kViewNote)
-            chooseFilter (inst, v);
-        else
-            chooseSplitState (inst, filterSel_, v - kViewNote, tabview::kFilterExpandedCurve);
     }
 
     bool isPzModel (const IInstanceView& inst) const noexcept
@@ -1452,13 +1297,6 @@ private:
         {
             switch (c.id)
             {
-                case kExpand:
-                    if (! isStandalone() && ! subTab_)
-                    {
-                        const int next = isSplit() ? tabview::kFilterExpandedFilter : tabview::kFilterSplit;
-                        chooseSplitState (inst, filterSel_, scalarSel_, next);
-                    }
-                    break;
                 case kModsBack:
                     if (pickingSource_)
                         pickingSource_ = false;
@@ -1512,20 +1350,6 @@ private:
             return;
         }
 
-        // F1 | F2 | NOTE | VELO: left filter or full-screen selector; scalarView: right NOTE | VELO selector in Split mode
-        if (c.id == kView && c.kind == K::Index)
-        {
-            if (isSplit())
-                chooseFilter (inst, c.index - 1);
-            else
-                chooseView (inst, c.index - 1);
-            return;
-        }
-        if (c.id == kScalarView && c.kind == K::Index)
-        {
-            chooseScalar (inst, c.index - 1);
-            return;
-        }
         // F1+F2: a view only (the curves of both filters and the resultant): nothing is written
         if (c.id == kBoth && c.kind == K::Index)
         {
@@ -1547,7 +1371,8 @@ private:
             if (targetFilter != editFilter_)
             {
                 editFilter_ = targetFilter;   // the handle the finger holds is the filter being edited: the selector follows (F1 or F2)
-                chooseFilter (inst, targetFilter - 1);
+                adoptState (targetFilter - 1, scalarSel_, false);
+                qSlots_.forget();
             }
             const int pd = paramForId (c.id, targetFilter);
             if (pd >= 0)
@@ -1969,17 +1794,16 @@ private:
             ui::Cell cell (sb, geo_.rect());
             drawLabels (p);
         }
-        const bool formantBank = geo_.formantMode() && ! geo_.splitMode();
+        const bool formantBank = geo_.formantMode();
         const int maxG = formantBank ? kGroups : 3;
         if (ui::QGroup::wideDevice() || activeGroup_ < 0 || activeGroup_ >= maxG || activeGroup_ == 2)   // the OUT group is frameless: its members stand in two places
             return;
         const ui::Rect b = geo_.block (activeGroup_);
         if (b.empty())
             return;
-        const ui::Rect frame = geo_.splitMode() ? b.inset (-1) : b;
-        ui::Pen pen (sb, true, ! powerOn_);
-        ui::Cell cell (sb, ui::Rect::unite (frame, ui::Pen::qMarkerRect (frame)));
-        pen.qFocus (frame);
+                ui::Pen pen (sb, true, ! powerOn_);
+        ui::Cell cell (sb, ui::Rect::unite (b, ui::Pen::qMarkerRect (b)));
+        pen.qFocus (b);
     }
     void drawLabels (ui::Pen& p) const
     {
@@ -1998,7 +1822,7 @@ private:
         for (int i = 0; i < kGroups; ++i)
         {
             const ui::Rect b = geo_.block (i);
-            if ((i != 3 || (geo_.formantMode() && ! geo_.splitMode())) && ! b.empty())
+            if ((i != 3 || geo_.formantMode()) && ! b.empty())
                 p.textLeft ({ b.x + FilterGeometry::kBlockPad + 4, b.y + 3, std::max (0, b.w - 2 * FilterGeometry::kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (activeGroup_ == i ? T.q : T.textDim, 255), T.fMin);
         }
     }
@@ -2034,22 +1858,6 @@ private:
             const int ag = std::clamp (cu.screen.activeGroup(), 0, ui::ScalarCurveEditor::kMaxGroups - 1);
             name = ui::ScalarCurveEditor::groupName (ag);
             qSlots_.publish (v, ui::ScalarCurveEditor::kMaxGroups, ag, [&cu] (int g, int* t) { cu.qTargets (g, t); });
-        }
-        else if (pageTop_ == 0 && isSplit())
-        {
-            const int pos = std::clamp (splitQBank_, 0, 3);
-            name = pos == 3 ? ui::ScalarCurveEditor::groupName (0) : groupName (pos);
-            ScalarCurveUi& cu = curveUi();
-            qSlots_.publish (v, 4, pos, [&] (int k, int* t)
-            {
-                if (k == 3)
-                {
-                    cu.qTargets (0, t);
-                    return;
-                }
-                memberTargets (k, t);
-            });
-            syncSplitQFocus();
         }
         else if (pageTop_ == 0)
         {
@@ -2096,15 +1904,14 @@ private:
     int pzFilter_ = 1;
     bool pzButtonShown_ = false;
     bool pzToolbarSupported_ = false;
-    int standaloneFilter_ = -1; // fixed filter instance when operating as a standalone tab (1 or 2)
-    bool subTab_ = false;       // the page of a hardware sub-tab: Filter 1, Filter 2, Note or Velo (the view's instance number), see setSubTab
     bool nativeGround_ = false;
     int nativeLastView_ = -1, nativeLastScalar_ = -1, nativeLastModel_ = -1, nativeUsedMask_ = 0;
-    bool nativeLastOn_ = false, nativeLastAnyOn_ = true, nativeLastSplit_ = false;
+    bool nativeLastOn_ = false, nativeLastAnyOn_ = true;
     int nativeTouchSlot_ = -1, blockedNativeSlot_ = -1, nativeModControl_ = -1, nativeTouchX_ = 0, nativeTouchY_ = 0;
     double nativeTouchAt_ = 0.0;
     int stackDepth_ = 0, pageTop_ = 0;
-    int view_ = 0, filterSel_ = 0, scalarSel_ = 0, expandMode_ = tabview::kFilterSplit, splitQBank_ = 0, editFilter_ = 1, activeGroup_ = 0;
+    int view_ = 0, filterSel_ = 0, scalarSel_ = 0, editFilter_ = 1, activeGroup_ = 0;
+    bool curveMode_ = false;          // the NOTE / VELO sub-tab (the curve editor), else the filter response
     bool dual_ = false;               // the F1+F2 view toggle (view only)
     bool started_ = false;
     bool powerOn_ = false, anyOn_ = true;   // the selected filter is on; any filter is on

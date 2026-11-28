@@ -5,7 +5,7 @@
 // Usage: pad_pressure_host <plugin library> <own> [off] [DISPLAY_PARAMS] [overlay]
 //   DISPLAY_PARAMS: the display parameters between the engine's list and the pad pressure parameters (default 36 = 4 LFO cursors + 32 spectrum columns; 0 = LFO_LIVE=OFF).
 //   The plugin must be built with SYNTHYBOY_MPC_PAD_PRESSURE=ON and SYNTHYBOY_MPC_LFO_LIVE / SPECTRUM as in the default of the shell (the two parameters are the last two of the list).
-//   overlay: the plugin was built with SYNTHYBOY_MPC_OVERLAY: the overlay parameters follow the two pad pressure parameters (their indexes do not move).
+//   overlay: the overlay is always built in: the overlay parameters follow the two pad pressure parameters (their indexes do not move).
 //   own:   the own engine (the engine of the MPC package): the pressure of a note opens Filter 1 (checked on the audio).
 //   off:   a build with SYNTHYBOY_MPC_PAD_PRESSURE=OFF: nothing after the display parameters, no member in the chunk.
 // Also checks the pure functions of pad_pressure.h. Links the core (paramCount, parameter table). Run the TSan build too.
