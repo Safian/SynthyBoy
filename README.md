@@ -69,7 +69,6 @@ The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md); end-user
 | Path | Content |
 |------|---------|
 | `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` the parameter table and versioned state with its `content` section, content store, engine capability bits, number formatting, `engine-own/` the engine (see [Engine](#engine)), `tests/` unit, real-time (no allocation), thread and fuzz tests with an own tiny runner; the Serum-class packages are `tuning/`, `formula/`, `shapes/`, `wavetable-edit/`, `wavetable-render/`, `vital-import/`, `sample-osc/`, `filters-serum/`, `fx-serum-a/`, `fx-serum-b/` (each with a REPORT, overview: docs/ARCHITECTURE.md 3.1) |
-| `shell-juce/` | thin `juce::AudioProcessor`: parameter layout generated from the core table, MIDI/params to core events, state blob from the core |
 | `tests/clap-smoke/` | `clap_smoke`: loads the built `.clap`, checks parameter parity with the core table, audio, state round trip |
 | `cmake/toolchains/` | `armv7-linux-gnueabihf`, `aarch64-linux-gnu` cross toolchain files |
 | `plugin.json`, `schema/` | plugin manifest and its JSON schema (`scripts/check-manifest.py`) |
