@@ -442,8 +442,5 @@ inline FullLayout layoutFull (const Rect& rect, const FullState& s, const bool* 
     return L;
 }
 
-// =============================================================================================================================================================
-// the detail pages of the types (the OscSpecPage of the former library): which controls apply, the Q groups; the rectangles of the cells are the native contract's
-constexpr int kSpecBarH = 64, kSpecDisplayH = 244, kSpecMaxCtl = 32, kSpecMaxBlocks = 8;
 
 }}} // namespace synthyboy_mpc::overlay::oscmodel

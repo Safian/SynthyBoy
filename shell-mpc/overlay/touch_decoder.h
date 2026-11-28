@@ -136,12 +136,6 @@ public:
 
     size_t available() const noexcept { return qCount_; }
 
-    void clearEvents() noexcept
-    {
-        qHead_ = 0;
-        qTail_ = 0;
-        qCount_ = 0;
-    }
 
     /** Resets touch tracking state. Emits Up if a finger was tracked. */
     void reset (uint64_t timeUs = 0) noexcept

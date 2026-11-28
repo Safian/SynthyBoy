@@ -404,35 +404,6 @@ constexpr int kMaxTargetSlots = synthyboy::kNumModSlots;   // the most slots a s
 
 struct ModRow { int slot = -1; int source = 0; };
 
-/** The modulations of the parameter `param`: a scan of the 64 slots (the slots whose destination is this parameter). `rows` (may be null) gets the slot of every entry. */
-inline ui::ModInput modsOf (const IInstanceView& v, int param, int selected, ModRow* rows)
-{
-    ui::ModInput mi;
-    mi.selectedSource = selected;
-    const size_t dest = synthyboy::modDestinationChoiceOf (static_cast<size_t> (param));
-    if (dest == 0)
-        return mi;
-    int n = 0;
-    for (int s = 0; s < synthyboy::kNumModSlots && n < ui::ModInput::kMaxMods; ++s)
-    {
-        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
-        if (sp.source < 0 || sp.destination < 0 || sp.amount < 0)
-            continue;
-        const int src = static_cast<int> (std::lround (v.param (sp.source)));
-        if (src <= 0 || static_cast<size_t> (std::lround (v.param (sp.destination))) != dest)
-            continue;
-        const double depth = std::clamp (static_cast<double> (v.param (sp.amount)) / 100.0, -1.0, 1.0);
-        const bool bi = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
-        const bool by = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
-        char name[7];
-        shortName (src, name);
-        mi.add (src, name, depth, bi, by, isMacroSource (src));
-        if (rows != nullptr)
-            rows[n] = { s, src };
-        ++n;
-    }
-    return mi;
-}
 /** The first slot without a source (-1: the matrix is full). */
 inline int freeSlot (const IInstanceView& v) noexcept
 {

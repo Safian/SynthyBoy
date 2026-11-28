@@ -249,20 +249,10 @@ public:
     bool openDetail (int slot, int page) { return withUi (slot, [&] (UiStack& u) { return u.openDetail (page); }); }
     bool back (int slot) { return withUi (slot, [&] (UiStack& u) { return u.back(); }); }
     bool closeAll (int slot) { return withUi (slot, [&] (UiStack& u) { return u.closeAll(); }); }
-    /** A copy of the state of the instance in `slot` (main for a slot out of range). */
-    UiStack uiState (int slot)
-    {
-        std::lock_guard<std::mutex> g (mu_);
-        return slot >= 0 && slot < mpckit::kMaxInstances ? ui_[slot] : UiStack();
-    }
 
     /** The x the views cut their picture at (the left edge of what the host draws over the right part of the tab: its Q-Link panel; PanelKey::kNoKey: nothing), and how many times the key came or went (status file, tests). */
     int keyEdge() const noexcept { return keyEdge_; }
-    unsigned long keyChangeCount() const noexcept { return qlinkPanelChanges_; }
 
-    /** Touch events seen and the ones the plugin-drawn pages took (status file, tests). */
-    unsigned long touchEvents() const noexcept { return touchEvents_; }
-    unsigned long touchTaken() const noexcept { return touchTaken_; }
     /** One touch event (upright UI pixels), as the touch input hands it over (tests call it directly). */
     void touchEvent (const TouchEvent& ev, double nowMs)
     {
@@ -308,8 +298,6 @@ public:
         else
             mouse_.reset();
     }
-    unsigned long wheelEvents() const noexcept { return wheelEvents_; }
-    unsigned long wheelTaken() const noexcept { return wheelTaken_; }
     /** The mouse wheel at a point of the UI (upright UI pixels): the control under it takes it (tests call it directly). */
     void wheelEvent (int x, int y, int notches, double nowMs)
     {
@@ -361,11 +349,9 @@ public:
     /** The visible view's object (tests), or null. */
     const gpu::GuardRetry& guardRetry() const noexcept { return guardRetry_; }
     const IView* currentView() const noexcept { return current_ >= 0 ? views_[static_cast<size_t> (current_)].get() : nullptr; }
-    const IView* viewByName (const std::string& name) const noexcept { for (const auto& v : views_) if (name == v->name()) return v.get(); return nullptr; }
     int currentIndex() const noexcept { return current_; }
     /** The slot whose instance the visible view shows (-1 when nothing is shown), and the number of times the instances were asked to report their slot again. */
     int activeSlot() const noexcept { return activeSlot_; }
-    unsigned long rereports() const noexcept { return rereports_; }
     /** Optional: the CPU time of the calling thread in ms (the status file shows the overlay thread's load). */
     void setCpuClock (std::function<double()> clock) { cpuClock_ = std::move (clock); }
     /** Optional: extra "key: value" lines of the status file (the overlay thread's CPU plan, ...), asked for at every write. */

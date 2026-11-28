@@ -135,16 +135,6 @@ inline const char* tabName (const ModInput& m) noexcept
     return m.numMods > 0 ? m.mods[0].name : "";
 }
 
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** Parameter binding handle shared by models and pages: opaque page id, resolved engine parameter index, and static parameter key. */
-struct ParamHandle
-{
-    int id = 0;            // opaque page-local control id reported in Change::id
-    int param = -1;        // resolved engine parameter index (-1 = unbound / virtual)
-    const char* key = "";  // optional static parameter key
-
-    constexpr bool bound() const noexcept { return param >= 0; }
-};
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 /** Pure parameter/Q-Link/layout model contract: NO drawing, NO touch handling. Both native control models and legacy overlay Component widgets satisfy this contract. */

@@ -122,9 +122,6 @@ public:
 
     EnvUi() { setCanvas (kCanvasW, kCanvasH); configure (1); }
 
-    bool nativeADSR() const noexcept { return native(); }
-    bool nativeShape() const noexcept { return native(); }
-    bool nativeTime() const noexcept { return native(); }
     bool nativeInstanceSelector() const noexcept { return nativePlayEditor_ && ! page_; }
     bool nativeTargets() const noexcept { return native(); }
 
@@ -545,8 +542,6 @@ public:
     CompactView& compact() noexcept { return compactView_; }
     const CompactView& compact() const noexcept { return compactView_; }
     const FullGeometry& geometry() const noexcept { return geo_; }
-    /** The handle of the graph shown as selected (the view state of the graph is this page's: the next update gives it to the graph; the full screen graph, or the compact one in the main state). */
-    void selectGraphHandle (int handle) noexcept { graphView_[stackDepth_ == 0 ? 0 : 1].selected = handle; }
     ui::EnvGraph& graph() noexcept { return stackDepth_ == 0 ? compactGraph_ : fullGraph_; }
     void syncNativePlayEditor (IInstanceView& inst, UiStack& stack, int highlight, double nowMs,
                                const synthyboy::LiveValues* live, bool enable)
@@ -640,11 +635,8 @@ public:
         const int s = kStage[stage], b = beatsSlotOf (s);
         return beats && b >= 0 && param_[b] >= 0 ? param_[b] : param_[s];
     }
-    int sustainParam() const noexcept { return param_[kSustain]; }
-    int curveParam (int i) const noexcept { return i >= 0 && i < 3 ? param_[kACurve + i] : -1; }
     /** The number of the targets of the shown envelope. */
     int numTargets() const noexcept { return numTargets_; }
-    uint8_t targetMask() const noexcept { return targetMask_; }
     /** The selector of the full screen (the used candidates, the selected one, one free). */
     const binding::SelectorSet& selector() const noexcept { return selector_; }
     const uibind::SelectorCells& playCells() const noexcept { return playCells_; }

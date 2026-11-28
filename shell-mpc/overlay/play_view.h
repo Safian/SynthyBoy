@@ -34,9 +34,7 @@ namespace play
 constexpr int kPanels = 3;
 constexpr int kOscs = 3, kEnvs = 6, kLfos = 10;                 // the instances of the own engine (LiveValues::kNumEnvs / kNumLfos, three wavetable oscillators)
 constexpr int kOscSelections = playosc::kInstances;            // the oscillator selector: Sub, A, B, C, Noise (play_osc.h); the picture exists for A, B, C only
-constexpr int kInstancesOf[kPanels] = { kOscSelections, kEnvs, kLfos };
 constexpr int kPanelW = 400, kPanelGap = 17;                    // 3 * 400 + 2 * 17 = 1234 px: the region of the view
-constexpr float kTitleSize = 24.0f;                              // pixels per em of the titles
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
 constexpr int kEnvPoints = 256;
 constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
@@ -469,9 +467,6 @@ public:
         if (lfo_ != nullptr) lfo_->forgetQGroup();
         openElement_ = 0;
     }
-    OscUi* oscUi() noexcept { return osc_.get(); }
-    EnvUi* envUi() noexcept { return env_.get(); }
-    LfoUi* lfoUi() noexcept { return lfo_.get(); }
 
     uint32_t oscUiHash()
     {

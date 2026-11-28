@@ -345,10 +345,6 @@ public:
         const bool on = isInstanceOn (inst, sel);
         return std::string (name) + (on ? " (Active)" : " (Inactive)");
     }
-    bool isCurrentInstanceOn (const IInstanceView& inst) const
-    {
-        return isInstanceOn (inst, sel_);
-    }
     std::string currentChoiceLabel (const IInstanceView& inst) const
     {
         return choiceLabel (inst, sel_);
@@ -381,10 +377,6 @@ public:
             return -1;
         const auto* p = synthyboy::findParamByKey (key);
         return p ? static_cast<int> (p - synthyboy::paramTable()) : -1;
-    }
-    static const char* const* destinationChoices() noexcept
-    {
-        return nativeui::osc::kDestinationNames;
     }
     static int currentDestination (const IInstanceView& inst, int sel) noexcept
     {

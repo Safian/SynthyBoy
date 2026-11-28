@@ -200,21 +200,6 @@ public:
         for (int i = 0; i < 5; ++i)
             line (cx + x[i], cy + y[i], cx + x[i + 1], cy + y[i + 1], 2.0f, col);
     }
-    /** The same chip in an exact rectangle (a knob puts it in its label row, right of the name: it never covers the dial). */
-    void modTabBox (const Rect& t, TabState st, uint32_t srcColour, const char* name = "")
-    {
-        if (st == TabState::Absent)
-            return;
-        if (t.w < 12 || t.h < 10)
-            return;
-        const theme::Look& T = theme::L();
-        if (st == TabState::Hollow)
-            rrect (t, 4.0f, c (colour::rgba (srcColour, 255)), 1.6f);
-        else
-            rrect (t, 4.0f, c (colour::rgba (st == TabState::Coloured ? srcColour : T.keylineHi, 255)));
-        const uint32_t tc = st == TabState::Coloured ? T.onBright : (st == TabState::Hollow ? srcColour : T.textDim);
-        textCentered ({ t.x + 2, t.y, std::max (0, t.w - 4), t.h }, name, 11.0f, c (colour::rgba (tc, 255)), 9.0f);
-    }
     /** Place the marker on the top edge, clear of the highlighted control's interior. */
     static constexpr Rect qMarkerRect (const Rect& frame) noexcept
     {

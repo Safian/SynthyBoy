@@ -67,35 +67,5 @@ private:
     std::atomic<uint32_t> generation_{0};
 };
 
-template<size_t N>
-class LoadProgressSet {
-public:
-    LoadProgress& operator[](size_t i) { return progress_[i]; }
-    
-    ProgressSnapshot overall() const {
-        uint32_t total_done = 0;
-        uint32_t total_all = 0;
-        bool any_active = false;
-        
-        for (const auto& p : progress_) {
-            auto s = p.snapshot();
-            if (s.active) {
-                any_active = true;
-                total_done += s.done;
-                total_all += s.total;
-            }
-        }
-        
-        uint32_t percent = 0;
-        if (total_all > 0) {
-            percent = std::min(100u, (total_done * 100) / total_all);
-        }
-        
-        return { any_active, total_done, total_all, percent, 0 };
-    }
-
-private:
-    std::array<LoadProgress, N> progress_;
-};
 
 } // namespace kit

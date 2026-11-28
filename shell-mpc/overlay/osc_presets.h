@@ -187,11 +187,9 @@ constexpr QSpec kNoiseSampleQ[] = { kNoiseGenQ[0], kNoiseGenQ[1],
     { { PanelSlot::NoiseStart, PanelSlot::NoiseRand, PanelSlot::NoiseLoop, PanelSlot::NoiseBounce } } };
 constexpr PanelPreset kNoiseSampleFull { "noise (full screen, sample)", 11, 1, -1, kNoiseSampleItems, 11, kNoiseSampleQ, 3, 0, kNoiseSampleBlocks, 3 };
 
-constexpr PanelPreset kNoiseFull = kNoiseGenFull;
 constexpr PanelItem kNoItems[] = { { PartKind::Dial, PanelSlot::Count, "", 0, 0, 1, 1, false } };
 constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 constexpr PanelPreset kGranularFull { "granular (full screen)", 7, 1, -1, kGranularFullItems, 7, kGranularFullQ, 2, 0, kGranularBlocks, 2 };
-constexpr PanelPreset kEmptyFull { "none (full screen)", 4, 1, -1, kNoItems, 0, nullptr, 0, 0 };
 constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 // the DetailPages of the unison settings of the three types, and the envelope of the multisample oscillator
 constexpr PanelItem kUnisonMsItems[] = {

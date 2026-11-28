@@ -132,7 +132,6 @@ public:
     }
     /** The exact curve of the last full computation (the status dump and the tests). */
     const float* exactCurve() const noexcept { return exact_; }
-    double fullCutoffHz() const noexcept { return fullCutoff_; }
 
 private:
     void findIndices()

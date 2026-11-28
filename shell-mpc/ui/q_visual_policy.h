@@ -36,16 +36,5 @@
 
 namespace synthyboy_mpc { namespace ui {
 
-/** Build policy for Q-Link framing and markers.
-    Gen 1 hardware (32-bit ARMv7: Key 61, Live, One, X) uses a single unnumbered Q marker
-    and bank frame for the active quad on 4-knob devices.
-    Gen 2 hardware (64-bit AArch64: XL, Live III) eliminates the bank frame and marker entirely,
-    with drawing routines compiled out at compile time. Functional knob routing (turn / qslots)
-    is preserved across all generations and knob configurations. */
-struct QVisualPolicy
-{
-    static constexpr int generation = SYNTHYBOY_MPC_UI_GEN;
-    static constexpr bool kHasQFrame = (SYNTHYBOY_MPC_QFRAME_ENABLED != 0);
-};
 
 }} // namespace synthyboy_mpc::ui

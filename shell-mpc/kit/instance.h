@@ -98,8 +98,6 @@ public:
     /** The plugin's LIVE block: a plain struct the plugin's engine writes and its own views read (SynthyBoy: synthyboy::LiveValues, the readout of the voices; a plugin without one keeps false). Copies it into
         `out` (`bytes` = sizeof the struct the caller expects: a different size copies nothing) and returns true when the engine has written one. Lock free. */
     virtual bool readLive (void* /*out*/, size_t /*bytes*/) const noexcept { return false; }
-    /** A list of things the plugin owns that a page shows (presets, samples): null when the plugin has none (content_source.h). */
-    virtual IContentSource* contentSource() noexcept { return nullptr; }
     /** The shell-level settings of this instance (null: none). */
     virtual IInstanceState* state() noexcept { return nullptr; }
     virtual const IInstanceState* state() const noexcept { return nullptr; }

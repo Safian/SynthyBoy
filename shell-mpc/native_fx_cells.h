@@ -25,14 +25,6 @@ constexpr int kFxSideX = 644, kFxSideStride = 318, kFxSideLane = 16, kFxSideLine
     no longer stretches a switch into a box of 190 px; the rows keep their pitch, the cell stands at the top of its row). The skin reads the cap from the contract ("cell_max_h"). */
 constexpr int kFxCellMaxH = 104;
 constexpr int fxStackedCellH (int rowH) noexcept { return rowH - kFxSideLane < 72 ? 72 : (rowH - kFxSideLane > kFxCellMaxH ? kFxCellMaxH : rowH - kFxSideLane); }
-/** Tab y of the first cell line of `row` of a side layout. */
-constexpr int fxSideRowY (const FxLayout& g, int row) noexcept
-{
-    int y = g.top;
-    for (int r = 0; r < row; ++r)
-        y += kFxSideLane + kFxSideLine * g.lines[r];
-    return y + kFxSideLane;
-}
 constexpr FxLayout kFxLayouts[] = {
     { 208, 2 }, { 208, 4 }, { 404, 2 }, { 360, 2 },
     { 344, 2 }, { 390, 1 }, { 424, 2 },

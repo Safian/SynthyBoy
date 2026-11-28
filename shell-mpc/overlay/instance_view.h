@@ -77,7 +77,6 @@ public:
             masterClipHold_.clear();
         return masterClipHold_.active (nowMs);
     }
-    void clearMasterClip() noexcept { masterClipHold_.clear(); }
     virtual bool takeNativeMasterClipClear() noexcept { return false; }
     virtual void setNativeMasterOutput (const nativeui::master::OutputReadout&) noexcept {}
     /** The Mixer page is on screen: the engine measures the source strips (LiveValues::stripPeak[0 .. 6]) for the next moments (IEngine::requestMeters). Called every update of that page; lock free. */

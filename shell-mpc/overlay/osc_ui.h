@@ -86,7 +86,6 @@ public:
     void setNativeInstanceSelector (bool shown) { if (s_.nativeSelector != shown) { s_.nativeSelector = shown; relayout(); } }
     bool hasNativeInstanceSelector() const noexcept { return s_.nativeSelector; }
     ui::Rect selectorArea() const noexcept { return L_.selectorArea; }
-    bool isNativeSelector (int x, int y) const noexcept { return s_.nativeSelector && L_.selectorArea.contains (x, y); }
     void setNativeRouting (bool shown) { if (s_.nativeRouting != shown) { s_.nativeRouting = shown; relayout(); } }
     bool hasNativeRouting() const noexcept { return s_.nativeRouting; }
     bool isNativeRoutingActive() const noexcept { return s_.nativeRouting && ! inactive_; }
@@ -370,12 +369,8 @@ public:
     }
     /** What goes on top of the picture in the display rectangle: the line of the content that is missing. */
     void drawOnDisplay (gpu::SceneBuilder& sb) const { drawMissing (sb); }
-    /** The empty state of a type that plays a file (sample, grain, spectral, multisample) while no file is loaded: the native LOAD cell over the display (opens the browser). */
-    bool loadButtonShown() const noexcept { return loadShown_; }
-    ui::Rect loadButtonRect() const noexcept { return loadRect_; }
     const oscspec::OscSpecPage& specPage() const noexcept { return spec_; }
     oscspec::OscSpecPage& specPage() noexcept { return spec_; }
-    const ui::Rect& marksRect() const noexcept { return marksRect_; }
     /** One of the lists (the content browser, the wavetable browser, the source of a new modulation) is on the screen: the modulations page of a control that has no modulation yet is the list of the sources. */
     bool listOpen() const noexcept { return pageTop_ == kPageList || (pageTop_ == kPageMods && modsBoard()); }
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
@@ -441,7 +436,6 @@ public:
     void dropGesture() noexcept {}
     /** The page went off the screen (a host dialog over it): nothing of ours stays open on the third. */
     void closePopups() {}
-    bool popupOpen() const noexcept { return false; }
     /** Another element's page opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
     void forgetQGroup() noexcept { qSlots_.forget(); }
 
@@ -456,7 +450,6 @@ public:
     }
     /** The label rectangle of the display band of the compact view. */
     ui::Rect compactLabelRect() const noexcept { return oscmodel::compactLabelRect (cl_, instance()); }
-    const oscmodel::CompactLayout& compactLayout() const noexcept { return cl_; }
     /** Standalone oscillator tabs expose the instance choice to the host; the
         page wrapper owns the aperture and touch pass-through. */
     void setNativeInstanceSelector (bool shown) noexcept
@@ -614,7 +607,6 @@ public:
         }
     }
     const std::vector<Item>& items() const noexcept { return main_; }
-    const std::vector<Item>& pageItems() const noexcept { return page_; }
     using CompactNativeCells = std::array<ui::Rect, nativeui::playoscui::kFields>;
     const CompactNativeCells& compactNativeCells() const noexcept { return compactNativeCells_; }
 
@@ -1193,29 +1185,9 @@ public:
         return "";
     }
 
-    static const char* nativeSettingsLabel (const Item& item)
-    {
-        switch (item.type)
-        {
-            case T::Dial: return item.id == kPanel + static_cast<int> (oscmodel::PanelSlot::WtPos) ? "FRAME" : item.cell.label;
-            case T::Number: case T::NumberOct: return item.cell.label;
-            case T::Toggle: return item.cell.label;
-            case T::Choice:
-                return item.id == kWarp1Type ? "WARP 1"
-                                             : item.id == kWarp2Type ? "WARP 2"
-                                                                     : item.cell.label;
-            case T::PictoPlain: return "WAVEFORM";
-            case T::Picto: return "TYPE";
-            case T::Source: case T::Table: return "SOURCE";
-            case T::UpDown: return "VOICES";
-            case T::Inert: return item.id == kWaveMap ? "MAP" : item.id == kUnisonGear ? "DETAIL" : item.id == kBasic + 2 ? "BROWSE" : "WARP";
-            default: return "";
-        }
-    }
 
     int topPage() const noexcept { return pageTop_; }
     int activeQ() const noexcept { return qActive_; }
-    int modsTargetParam() const noexcept { return modsTargetParam_; }
     /** Finds the item (main or page) of an id; null when there is none. */
     const Item* item (int id) const noexcept { for (const Item& it : main_) if (it.id == id) return &it; for (const Item& it : page_) if (it.id == id) return &it; return nullptr; }
 
@@ -2682,7 +2654,6 @@ private:
             missingText_ = name.empty() ? std::string ("content missing") : "content missing: " + name;
     }
 public:
-    const std::string& missingText() const noexcept { return missingText_; }
 private:
     /** The line over the display (in the header band of the compact view, else at the top of the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
     void drawMissing (gpu::SceneBuilder& sb) const

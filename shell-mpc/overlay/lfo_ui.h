@@ -264,8 +264,6 @@ public:
     }
 
     bool isMain() const noexcept { return stackDepth_ == 0; }
-    void setNativeSmooth (bool on) { nativeSmooth_ = on; }
-    bool nativeSmooth() const noexcept { return page_ && nativeSmooth_ && ! random(); }
     void setHostBackground (bool confirmed) noexcept { nativeGround_ = confirmed; }
     bool hostBackground() const noexcept { return nativeGround_ && nativePage_ && pageTop_ == 0; }
 
@@ -306,13 +304,6 @@ public:
         }
     }
     ui::Rect nativeEditorRect (int field) const noexcept { return editor_.rect (field); }
-    ui::Rect nativeEditorToolRect (int tool) const noexcept
-    {
-        const ui::Rect r = editor_.rect (ui::ShapeEditorModel::kTool);
-        constexpr int tools = ui::ShapeTool::kTools;
-        return { r.x + r.w * tool / tools, r.y, r.w * (tool + 1) / tools - r.w * tool / tools, r.h };
-    }
-    ui::Rect editorCanvasRect() const noexcept { return editor_.canvasRect(); }
     ui::Rect nativeDetailRect (int field) const noexcept
     {
         namespace n = nativeui::lfodetail;
@@ -614,8 +605,6 @@ public:
         const int sync = paramOf ("sync");
         syncMode_ = ui::lfo::syncModeOf (static_cast<int> (std::lround (inst.param (sync))));
     }
-    /** The sync mode (Hz, BPM, KEY) of the rate of the compact view as of the last update. */
-    ui::lfo::SyncMode compactRateMode() const noexcept { return syncMode_; }
 
     int compactNativeTarget (int field) const noexcept
     {
@@ -670,7 +659,6 @@ public:
     };
     CompactView compact() const noexcept { return { { syncMode_ } }; }
     ui::ShapeEditorModel& editor() noexcept { return editor_; }
-    ui::PointModModel& pointModModel() noexcept { return pointMod_; }
     void syncNativeTargets (IInstanceView& inst, UiStack& stack, bool fromPlay)
     {
         using namespace nativeui::targets;
@@ -1239,14 +1227,6 @@ private:
     uibind::SelectorCells playCells_;
     unsigned playDots_ = 0;
 public:
-    /** A choice among the cells of the Play page's selector (used LFOs, the selected one, `+`): view state only, nothing is written to the engine. The `+` cell selects the lowest free LFO (or random LFO). */
-    void selectSlot (int s, IInstanceView& v)
-    {
-        const int id = uibind::cellChoice (selector_, playCells_, s);
-        if (id > 0)
-            uibind::chooseLfo (v, id);
-        adoptSelection (v);
-    }
     const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
     const binding::SelectorSet& tabSelector() const noexcept { return selector_; }
     /** The LFO tab was left (page_view_base.h): a selected LFO or random LFO that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
