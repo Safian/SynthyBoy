@@ -448,7 +448,6 @@ _MODIFIER_PREFIX_RE = re.compile(
 )
 # Confirmed harmless B1 modifier-operand pairs: (source_loc, operand) -> reason.
 ALIAS_MODIFIER_ALLOWLIST = {
-    ("defs_osc.json:oscWarpChoices", "Local/7/synthyboyWarpPage"): "Direct SDK Local/<range>/<id> handle (skin/defs_osc.json:5830), not a remapped alias; synthyboyWarpPage is proven on Key 61 (validate_synthyboy_skin.py:29, docs/dsp-knowledge/skin-host-behaviour.md:81).",
     ("defs_common.json:native keyboard overlay", "Local/3/layer"): "Direct UI-only SDK Local/<range>/<id> handle (skin/defs_common.json:3026, docs/dsp-knowledge/native-text-entry.md:7), not a remapped alias; non-proven Local id warning still applies.",
 }
 # Confirmed harmless B2 non-empty remap instances missing Data: (source_loc, component_type, entry_name) -> reason.

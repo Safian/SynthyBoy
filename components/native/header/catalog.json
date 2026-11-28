@@ -135,11 +135,7 @@
           ]
         },
         "caption": "5 · Master: csak cím",
-        "alt": "Master fejléc: MASTER",
-        "skin": {
-          "def": "masterHeader",
-          "static_title": true
-        }
+        "alt": "Master fejléc: MASTER"
       },
       {
         "id": "osc-a-off",
@@ -291,14 +287,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "oscHeaderAbc",
-          "title_kind": "Value",
-          "page_gate": [
-            "NonZero/Parameter 2878",
-            "HdrOscGate"
-          ]
-        },
         "caption": "7 · Oszcillátor A/B/C (a képernyő fejléce, a vázlat szerinti): cím (a három cím közül a legszélesebb helye), POWER, TYPE, SOURCE (legördülő), BROWSE; jobbra a Filter-útvonal legördülője",
         "alt": "Osc A/B/C fejléc: OSC A, POWER, TYPE, SOURCE, BROWSE, Filter 1"
       },
@@ -420,13 +408,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "oscHeaderSub",
-          "page_gate": [
-            "NonZero/Parameter 2878",
-            "HdrOscGate"
-          ]
-        },
         "caption": "9 · Sub: cím, POWER, WAVEFORM (legördülő), OCT (számmező); jobbra a Filter-útvonal legördülője",
         "alt": "Sub fejléc: SUB, POWER, WAVEFORM, OCT, Filter 1"
       },
@@ -503,13 +484,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "oscHeaderNoise",
-          "page_gate": [
-            "NonZero/Parameter 2878",
-            "HdrOscGate"
-          ]
-        },
         "caption": "10 · Noise (generátor): cím, POWER, KIND, SOUND (legördülő); jobbra a Filter-útvonal legördülője",
         "alt": "Noise fejléc: NOISE, POWER, KIND, SOUND, Filter 1"
       },
@@ -570,13 +544,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "oscHeaderNoiseSample",
-          "page_gate": [
-            "NonZero/Parameter 2878",
-            "HdrOscGate"
-          ]
-        },
         "caption": "11 · Noise (minta): cím, POWER, KIND (a teljes szélességen, SOUND nincs); jobbra a Filter-útvonal legördülője",
         "alt": "Noise fejléc mintával: NOISE, POWER, KIND, Filter 1"
       },
@@ -612,10 +579,6 @@
               }
             }
           ]
-        },
-        "skin": {
-          "def": "envHeader",
-          "title_gate": "HdrTitleGate"
         },
         "caption": "12 · Env 1..6 (a képernyő fejléce): cím, jobbra a TARGETS gomb (nincs POWER)",
         "alt": "Env fejléc: ENV 1, TARGETS"
@@ -688,9 +651,6 @@
               }
             }
           ]
-        },
-        "skin": {
-          "def": "lfoHeader"
         },
         "caption": "13 · LFO 1..10 és RND 1..4 (a képernyő fejléce): cím (a legszélesebb helye), WAVEFORM (LFO) vagy STYLE (RND) legördülő, jobbra a TARGETS gomb (nincs POWER)",
         "alt": "LFO fejléc: LFO 1, WAVEFORM, TARGETS"
@@ -767,11 +727,6 @@
               }
             }
           ]
-        },
-        "skin": {
-          "def": "curveHeader",
-          "title_gate": true,
-          "title_gate_show": "Show"
         },
         "caption": "14 · Note / Velo (görbe-képernyők, nincs POWER): cím (a két cím közül a szélesebb helye), jobbra INIT, UNDO, DEL POINT gombok",
         "alt": "Note / Velo fejléc: FILTER NOTE, INIT, UNDO, DEL POINT"
@@ -914,11 +869,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "modHeader",
-          "title_gate": true,
-          "title_gate_show": "Show"
-        },
         "caption": "15 · Mod mátrix oldal (nincs POWER): cím, ALL / BY SOURCE / BY DEST kapcsoló (a kijelölt kiemelve), forrás- vagy cél-csoport legördülő (egymás alternatívái), jobbra a slotok száma (kiolvasás) és ADD",
         "alt": "Mod fejléc: MOD MATRIX, ALL, BY SOURCE, BY DEST, csoport, slotszám, ADD"
       },
@@ -1007,10 +957,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "tuningHeader",
-          "static_title": true
-        },
         "caption": "17 · Tuning & MPE: cím, a skálabemenet kapcsológombja (nyugalmi szöveg; megnyomva: KEY MODE · SELECT ROOT · TAP TO PLAY)",
         "alt": "Tuning fejléc: TUNING & MPE, ACTIVATE SCALE INPUT"
       },
@@ -1094,10 +1040,6 @@
             }
           ]
         },
-        "skin": {
-          "def": "voiceHeader",
-          "static_title": true
-        },
         "caption": "18 · Voice: cím, STEP-legördülő, LENGTH számmező, a kijelölt sor lépésértéke (a név a gazdagép szövege)",
         "alt": "Voice fejléc: VOICE CONTROL, STEP, LENGTH, lépésérték"
       },
@@ -1112,10 +1054,6 @@
               "text": "MACROS"
             }
           ]
-        },
-        "skin": {
-          "def": "macroHeader",
-          "static_title": true
         },
         "caption": "19 · Macros: csak cím",
         "alt": "Macros fejléc: MACROS"

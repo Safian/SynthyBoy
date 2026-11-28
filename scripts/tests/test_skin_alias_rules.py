@@ -150,14 +150,14 @@ class TestSkinAliasRules(unittest.TestCase):
 
     def test_b1_allowlist_permits_proven_local_handle_but_rejects_alias(self):
         defs = {
-            "oscWarpChoices": _definition([
-                _entry("Opt", "Button", gates=["IndexedEnabling/0/7/Local/7/synthyboyWarpPage"]),
+            "native keyboard overlay": _definition([
+                _entry("Opt", "Button", gates=["IndexedEnabling/0/3/Local/3/layer"]),
                 _entry("Bad", "Button", gates=["IndexedEnabling/0/2/SomeAlias"]),
             ]),
         }
         page = _page([_tab("Tab1", [])], defs=defs)
         findings = validator.Findings()
-        validator.check_alias_rules(page, findings, sources={"oscWarpChoices": "defs_osc.json"}, as_error=True)
+        validator.check_alias_rules(page, findings, sources={"native keyboard overlay": "defs_common.json"}, as_error=True)
         self.assertEqual(len(findings.errors), 1)
         self.assertIn("SomeAlias", findings.errors[0][1])
 

@@ -34,7 +34,7 @@ A Filter-oldali lánc-gomb (56 × 48 px, két lámpaszegmenssel) külön kompone
 
 ### Header
 
-A fejléc-komponens (`components/native/header/`, [header.md](header.md)) adja a képernyők egységes felső fejléc-sorát. A skinben az Osc (Osc A/B/C, Sub, Noise), az Env 1–6, az LFO 1–10 és RND 1–4, a Note és Velo görbelapok, a Mod mátrix, valamint a Master, Tuning, Voice és Macros lapok használják generált fejlécként; az FX és a Play egyelőre egyedi, a Filter 1/2 pedig katalógus-példaként szerepel. Specifikáció és részletek: [header.md](header.md).
+A fejléc-komponens (`components/native/header/`, [header.md](header.md)) adja a képernyők egységes felső fejléc-sorát. A skinben az Osc (Osc A/B/C, Sub, Noise), az Env 1–6, az LFO 1–10 és RND 1–4, a Note és Velo görbelapok, a Mod mátrix, valamint a Master, Tuning, Voice és Macros lapok használják (a skinben kézzel karbantartott fejlécként, generátor nélkül); az FX és a Play egyelőre egyedi, a Filter 1/2 pedig katalógus-példaként szerepel. Specifikáció és részletek: [header.md](header.md).
 
 A HTML generált fájl; közvetlenül ne szerkeszd. Újragenerálás a repó gyökeréből:
 

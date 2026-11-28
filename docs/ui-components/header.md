@@ -30,7 +30,7 @@ The Button and IconButton recipes (`button.render_sample`, `icon_button.render_s
 
 ## The spec (owner decision 2026-11-28: a spec list, not a growing number of types)
 
-A header is DESCRIBED by one plain JSON spec; the catalogue examples in `components/native/header/catalog.json` ARE such specs, and the skin definitions are produced from them (`header.header_definitions(spec)`), never written by hand:
+A header is DESCRIBED by one plain JSON spec; the catalogue examples in `components/native/header/catalog.json` ARE such specs; they describe the catalogue pictures (the skin definitions are maintained by hand, see "Skin: hand-maintained"):
 
 ```
 {"id": "...", "file": "header-x.png", "width": "page" | "panel", "caption": "...", "alt": "...",
@@ -62,55 +62,13 @@ Another screen is only a spec. Env 1 (title + TARGETS), no POWER:
 
 and Filter 1 (title, POWER, MODEL dropdown filling the row, MORE): `left` title + power, `centre` one `dropdown` with `"fill": true`, `right` `[{"kind": "more"}]`.
 
-### The skin block of a slot
+## Skin: hand-maintained (owner, 2026-11-28)
 
-A slot that is built into the skin names its cells: `"skin": {"cells": [{"name": "Type", "def": "oscHeaderType", "overlay": "<overlay name>", "gate": ["<handle>"]}]}`.
-
-| Cell field | Meaning |
-|---|---|
-| `name` | the instance name inside the form |
-| `def` | the cell definition (one per role and width; shared by every form that names it) |
-| `overlay` / `toggle` | the action on Mouse Down and Enter Pressed: Show Overlay with this overlay name, or Toggle Switch; none = the control is a Button |
-| `list` | a dropdown that opens the plugin's one-tap list of its own choices: no action, a transparent `list open` Button (handle `ListOpen`, id 1 of 2) over the face; the form maps `ListOpen` to `Hdr<Role>List`, and the instance spec maps `Hdr<Role>List` to `ResetOnGestureEnd/Parameter <3904 + slot>` (`shell-mpc/native_choice_list.h`). Not together with `overlay`. |
-| `hit` | `{"id", "group"}`: a transparent hit Button over a dropdown (the Table cell) |
-| `gate` | extra `additionalInvalidatingHandles` of the cell (which page state shows it); several cells of one slot are alternatives (Table / Source) |
-| `page` | also gated by the form's `page_gate` (the Route stays visible when POWER is off) |
-| `wrapper` | `NativeActive`: keep the proven NativeActive / NativeInactive pattern (see below) |
-| `focus`, `show` | a Focus child; the instance's showWhenDataModelInvalid (default `Show`) |
-| `id`, `group` | `buttonId` / `numButtonsInGroup` of a `button` or `segment` cell (default 1 / 1) |
-| `role` | the cell binds its own handle `Hdr<Role>` instead of the slot's (LFO: WAVEFORM and STYLE are two alternative cells of one dropdown slot, each with its own parameter; Mod: source / target group) |
-| `hw_focus` | the cell instance's acceptsHWFocus in the form (default `No`; `Yes` for cells whose own definition holds `Show Overlay` / `Toggle Switch` actions such as Osc TYPE / SOURCE / WAVEFORM / OCT / KIND / SOUND and Voice controls, `Children` for cells wrapping an inner `Button` with `acceptsHWFocus: Yes` such as Osc Table / BROWSE or a `NativeActive` wrapper such as ROUTE, paired with `acceptsHWFocus: Children` on the Osc header instances and `ignoreMousePresses: true` on every header form; on the Key 61, TYPE / SOURCE / BROWSE / ROUTE react once `Native Osc Detail Title` is gated by `IndexedEnabling/1/2/Parameter 3901`, `docs/dsp-knowledge/skin-host-behaviour.md`) |
-| `inert` | the cell definition ignores mouse presses (the former cell sat in an inert parent; the touch is handled elsewhere) |
-| `button_focus` | the inner Button's acceptsHWFocus (default `Yes`; `No` also shows it always: the Env TARGETS) |
-
-The form's `skin` block may carry `title_gate`: a handle name the title Label follows alone (the instance remaps it as `HdrTitleGate`; `true` names `HdrTitleGate`), with `title_gate_show` as its showWhenDataModelInvalid (default `Hide`, Env / LFO: the list page that replaces the caption hides it; the curve screens and Mod use `Show`). A spec WITHOUT a `power` slot (a modulator, the curve screens, Mod) gets no POWER button, no `HdrOn` / `HdrOff` gating and no disabled look: the cells are gated only by their own `gate`.
-
-`role` gives the remap name `Hdr<Role>` (`type` -> `HdrType`) that the instance binds to a parameter. A `gate` entry is a remap name as well (`HdrPage`, `HdrView`): the instance binds it to the gating handle.
-
-A form whose `skin` block has `static_title: true` (Master, Tuning, Voice, Macros; it requires a header WITHOUT a `power` slot, which has no `HdrOn` / `HdrOff` state and no disabled look): its title is a static Text Label (the spec's text; `HdrTitle` is bound to `Parameter 0` as the former caption was) as wide as the room up to the next control, the cells carry only their own gates.
-
-### Instances and the tool
-
-The instances (which parameters, which page gate) of one screen family are a list in `components/native/header/skin-<family>.json` (`skin-osc.json`): `{"name", "form" (an example id), "title", "power": "Parameter N", "data", "gate", "remap": {"Hdr<Role>": handle, ...}}`. Without POWER `"title_handle"` (any always valid parameter; the Name label of it carries the title text) replaces `power`, or, for a form with `skin.static_title`, there is no `title` and the `remap` names `HdrTitle`; optional `title_gate` (one handle the title alone follows, remapped as `HdrTitleGate`), `show` (default `Hide`), `focus` (acceptsHWFocus of the instance, default `Yes`; `Children` where the cells are their own focus stops, `No` for a title only) and `gate` (omit it for version 1 bounds without the additional handles; an empty list keeps the version 2 bounds). Instead of the family's `layer`, `"tab"` (the instance sits in that tab of `skin/TUI.json`, family key `tab_file` names another file) with `"replaces"` (the names of the former ad hoc items it takes the place of; they are removed, the instance takes the place of the first one). `"retire": {"definitions", "components", "images"}` (family level) lists what the header replaces and the tool removes. The tool derives `HdrTitle` (`WithName[<title>]/<power>`), `HdrPower`, `HdrOn` / `HdrOff` (`IndexedEnabling/1|0/2/<power>`) from `power`. Hand-run, nothing at build time:
-
-```
-python3 scripts/header-skin.py components/native/header/skin-osc.json     # definitions + instances + faces (skin/hdr_*.png)
-python3 scripts/skin-format.py && python3 scripts/skin-baseline-update.py   # as after every skin edit
-```
-
-The tool replaces every definition and instance whose name starts with the family prefix (`oscHeader`), in place, and removes `hdr_*.png` faces no skin file names any more (the families share the directory); the test `HeaderSkinSpecTests` fails if the committed skin differs from what the spec produces. Rolling the Header out to another screen = one `skin` block per example, one `skin-<family>.json`, one tool run.
-
-### Why the number of definitions is small
-
-The Osc family needed 29 header definitions (four forms each with an `...Off` twin, nine cells each with an `...Off` twin, three route definitions); now 16 (4 forms, 9 cells, 3 route definitions), the 18 faces (`hdr_*.png`) are the same. The power state is no longer a separate definition: the form holds the enabled cell instance and the inert pictures (Image + value Label) of the disabled look side by side, gated by the instance's `HdrOn` / `HdrOff` names (the same IndexedEnabling gates the Off twins used). What is NOT folded, and why:
-
-- The cells stay one per role and width: the Show Overlay action names its overlay in `additionalData`, a definition-level string that no handle can change, and a face of another width is another picture. A cell shrunk to a transparent hit area (one per overlay, no width) needs a device probe that a definition without a visible child still receives Mouse Down (not measured; open in TODO.md).
-- The route keeps the NativeActive / NativeInactive wrapper (3 definitions shared by all forms): its disabled look follows the Filter routing gates, not POWER, and its focus chain passes `acceptsHWFocus: Children` down from the header instance (inside the `ignoreMousePresses: true` header form) to the `NativeActive oscHeaderRoute` wrapper instance (`ignoreMousePresses: true`), then `Children` on the active `oscHeaderRoute` child (`No` on `NativeInactive`); folding it into the forms would repeat the inactive look in four forms.
-- The inert disabled `Button`s of the old Off cells (Browse, the Table's Open hit button; ignoreMousePresses on, no hardware focus) are plain pictures in the form now: a Button in the form would take presses; a never-pressed one has no function.
+The header definitions and instances of the skin (`*Header*` in `skin/defs_*.json`, the instances in `skin/TUI.json`) and their faces (`skin/hdr_*.png`) are edited directly in the skin, like every other skin definition. No tool writes them: the header generator (`scripts/header-skin.py`, the `skin-<family>.json` spec lists and the `skin` blocks of the catalogue examples) is removed. The catalogue examples are the design reference (layout, sizes, looks); a change of a header in the skin follows them and the skin rules in `AGENTS.md`.
 
 ## Skin: the Env and LFO headers (owner order 2026-11-28)
 
-`skin/defs_env.json` (`envHeader`, `envHeaderTargets`) and `skin/defs_lfo.json` (`lfoHeader`, `lfoHeaderWave`, `lfoHeaderStyle`, `lfoHeaderTargets`) are generated from the examples `env-page` and `lfo-page` by `scripts/header-skin.py` with `skin-env.json` and `skin-lfo.json`. Both are modulators: title only, no POWER.
+`skin/defs_env.json` (`envHeader`, `envHeaderTargets`) and `skin/defs_lfo.json` (`lfoHeader`, `lfoHeaderWave`, `lfoHeaderStyle`, `lfoHeaderTargets`) follow the examples `env-page` and `lfo-page`. Both are modulators: title only, no POWER.
 
 - One instance per tab (`Env 1 Header` .. `Env 6 Header`, `LFO 1 Header` .. `RND 4 Header`) sits in the tab itself, in place of the caption (`Native Caption env<n> 0`, `Native Caption <view> title`): the title is the Name label `WithName[ENV 1]/Parameter 2934` (LFO: `Parameter 2820`), text 40 px, so the title is a Header title now, not a static caption. The Env title keeps the caption's gate (`IndexedEnabling/0/2/Parameter 3588`, hidden while the list page shows) as `HdrTitleGate`.
 - Env: title left, the TARGETS button right-aligned (right zone `button`); the cell keeps the former `envNativeTargets` behaviour (inert definition, inner Button id 1 of 1 on `Parameter 2934`, gate `NonZero/Parameter 2921`, instance focus `Yes`).
@@ -141,18 +99,18 @@ The Header has no left/right stepper (arrow selector, carousel): every choice is
 
 ## Skin: the oscillator headers (owner observation 2026-11-28)
 
-The skin definitions `oscHeaderAbc`, `oscHeaderSub`, `oscHeaderNoise`, `oscHeaderNoiseSample` in `skin/defs_osc.json` are 1280 x 56 Header instances of the catalogue examples `osc-abc`, `osc-sub`, `osc-noise`, `osc-noise-sample`; each holds BOTH power states (no `...Off` twin). They are generated by `scripts/header-skin.py` from the specs above (layout from `header.layout()`, textless faces from `header.skin_parts()` to `skin/hdr_*.png`). The cells inside (`oscHeaderType`, `Table`, `Source`, `Browse`, `Waveform`, `Oct`, `Kind`, `KindWide`, `Sound`, `Route`) keep the former ad hoc cells' actions, overlays and handles; only the faces, the value label and the bounds follow the Header. Everything is bound by handle remap names (`HdrTitle`, `HdrPower`, `HdrOn`, `HdrOff`, `HdrType`, `HdrSource`, `HdrBrowse`, `HdrRoute`, `HdrWave`, `HdrOct`, `HdrKind`, `HdrSound`, `HdrGate1/2`, `HdrOscGate`); one instance per form sits in `oscNativeSettingsLayer` with the gating of the former `Osc A` / `Sub` / `Noise` cells (`skin-osc.json`).
+The skin definitions `oscHeaderAbc`, `oscHeaderSub`, `oscHeaderNoise`, `oscHeaderNoiseSample` in `skin/defs_osc.json` are 1280 x 56 Header instances of the catalogue examples `osc-abc`, `osc-sub`, `osc-noise`, `osc-noise-sample`; each holds BOTH power states (no `...Off` twin). Their layout follows `header.layout()`; the textless faces are `skin/hdr_*.png`. The cells inside (`oscHeaderType`, `Table`, `Source`, `Browse`, `Waveform`, `Oct`, `Kind`, `KindWide`, `Sound`, `Route`) keep the former ad hoc cells' actions, overlays and handles; only the faces, the value label and the bounds follow the Header. Everything is bound by handle remap names (`HdrTitle`, `HdrPower`, `HdrOn`, `HdrOff`, `HdrType`, `HdrSource`, `HdrBrowse`, `HdrRoute`, `HdrWave`, `HdrOct`, `HdrKind`, `HdrSound`, `HdrGate1/2`, `HdrOscGate`); one instance per form sits in `oscNativeSettingsLayer` with the gating of the former `Osc A` / `Sub` / `Noise` cells (`skin-osc.json`).
 
 - The page title is the header's Name label of the power parameter (`WithName[OSC A]/...`), not a tab caption any more; the three titles OSC A/B/C share one slot (`title_slot` 67 px) so POWER never moves between the pages.
 - Layout (px, row 8 px from the top): POWER 83 (Sub 63, Noise 86 by the title width), TYPE 131..351, SOURCE 359..1023, BROWSE 1031..1114, the Filter route dropdown (150 px) 1122..1272 on every form. Sub: WAVEFORM fills, OCT is a number field (name outside, 68 px value box). Noise: KIND 220 + SOUND fills; with a sample the KIND dropdown takes the whole centre.
 - SOURCE is a dropdown (value centred, chevron); its hit area is the former "Open" button (id 2 of 4). The Previous / Next arrow buttons (ids 1 and 3) are gone with the stepper (dropdowns replace left/right selectors).
-- Recipe extensions made for it: right-zone `dropdown` (the Filter route), centre `field` (name + number box), `title_slot`, and `skin_parts()` (textless faces plus the disabled look).
+- Recipe extensions made for it: right-zone `dropdown` (the Filter route), centre `field` (name + number box) and `title_slot`.
 - C++: `layoutFull` (`shell-mpc/overlay/osc_model.h`) follows the TYPE / SOURCE / BROWSE rectangles of the abc column case. The Sub / Noise rows of that function keep their old generic layout (plain data only).
 - The examples 7-11 of the catalogue are new and not yet approved by the owner (`approved` in `catalog.json` stays as it was).
 
 ## Skin: the curve and Mod headers (owner order 2026-11-28)
 
-Two more skin families use the same tool (`skin-curve.json`, `skin-mod.json`); their headers have NO POWER, so the form has no `Power` button and no `HdrOn` / `HdrOff` gates, and no disabled look (an instance without `power` gives `title_handle`, any always-valid parameter: the title is `WithName[<title>]/<title_handle>`; `skin.title_gate: true` with `title_gate_show: "Show"` lets the title alone follow `HdrTitleGate`). The instances sit in the tab bodies (`"tab"`, `"replaces"` in the skin spec) and replace the ad hoc cells; the tool also deletes those from their definitions (`"retire"`).
+The curve and Mod headers have NO POWER, so the form has no `Power` button and no `HdrOn` / `HdrOff` gates, and no disabled look (the title is `WithName[<title>]/<any always-valid parameter>`; on Mod the title alone follows `HdrTitleGate`). The instances sit in the tab bodies.
 
 - **Note / Velo** (`curveHeader`, one form, two instances `Note Header` / `Velo Header` in the tabs Note and Velo; example `curve`): title FILTER NOTE / FILTER VELO (slot 146 px, the title gate is the list page `IndexedEnabling/0/2/Parameter 3588` as the old caption's), right zone INIT (id 8 of 13), UNDO (9), DEL POINT (10), all on `Parameter 2870`, gated by the curve surface `RangedEnabling/3/4/5/Parameter 2842`. The three ad hoc buttons left `filterNativeCurveSurface`. The buttons are the Button recipe at 40 px (INIT 48, UNDO 63, DEL POINT 94 px wide, right aligned) instead of the 130 / 132 x 56 pictures.
 - **Mod matrix page** (`modHeader`, example `mod`, instance `Mod Header` in the Mod tab): title MOD MATRIX (title gate `NonZero/Parameter 3806`), the mode switch ALL / BY SOURCE / BY DEST (`segment`, ids 1..3 of 4 on `Parameter 2936`, the selected one in the RadioGrid selected look), the group dropdown (260 px; the source cell `IndexedEnabling/2/4/Parameter 2936` on `Parameter 2937` and the target cell `IndexedEnabling/3/4/...` on `2938` are alternatives, both open the plugin list through their `list open` Button (ListOpen, `shell-mpc/native_choice_list.h`)), right: the slot count (`label`, `Parameter 3807`) and ADD (`FromGesture/Parameter 2939`); all gated by the matrix page `RangedEnabling/1/3/4/Parameter 2936`. `modNative_mode1/2/3_80x56` and `modNative_group_260x56` (and their pictures) are gone. NOT in the header: the detail page row (BACK, DELETE, SOURCE, TARGET ..., detail title) and the picker row (BACK, GROUPS, title): they are other pages of the same screen with other contents in the same row; the spec describes ONE row.
@@ -165,7 +123,7 @@ The Filter screen has no header band: POWER (16, 80) and the title (82, 80) sit 
 
 ## Skin: Master, Tuning, Voice, Macros (owner order 2026-11-28)
 
-The four screens have no POWER: the header is the title and, on Tuning and Voice, controls. Each is a 1280 x 56 instance of a form in the screen's family file (`skin/defs_master.json` `masterHeader`, `defs_tuning.json` `tuningHeader` + cell `tuningHeaderScale`, `defs_voice.json` `voiceHeader` + cells `voiceHeaderStep`, `voiceHeaderLength`, `voiceHeaderStepValue`, `defs_macro.json` `macroHeader`), generated from `skin-master.json`, `skin-tuning.json`, `skin-voice.json`, `skin-macro.json` (examples `master`, `tuning`, `voice`, `macros`). Every handle, gate, button id and action is the former one (checked: the resolved Button / Label / action records of every tab before and after are identical, label font sizes aside); positions and faces follow the Header (title at 8 px, controls 40 px high in the content row; the old rows were 56 px high at y 4, the old title at x 64).
+The four screens have no POWER: the header is the title and, on Tuning and Voice, controls. Each is a 1280 x 56 instance of a form in the screen's family file (`skin/defs_master.json` `masterHeader`, `defs_tuning.json` `tuningHeader` + cell `tuningHeaderScale`, `defs_voice.json` `voiceHeader` + cells `voiceHeaderStep`, `voiceHeaderLength`, `voiceHeaderStepValue`, `defs_macro.json` `macroHeader`) (examples `master`, `tuning`, `voice`, `macros`). Every handle, gate, button id and action is the former one (checked: the resolved Button / Label / action records of every tab before and after are identical, label font sizes aside); positions and faces follow the Header (title at 8 px, controls 40 px high in the content row; the old rows were 56 px high at y 4, the old title at x 64).
 
 - **Master**: the title `MASTER` (the former `Native Caption master header 0`, same font and colour, now the Header title slot).
 - **Tuning**: `TUNING & MPE` and the scale-input toggle (`Master Scale Input` -> cell `Scale Input`, handle `Parameter 3657`, gated by the Tuning view): a text button, 520 px wide, resting text `ACTIVATE SCALE INPUT` (offImage) and, while the mode is on, `KEY MODE · SELECT ROOT · TAP TO PLAY` (onImage). The old picture separated the three phrases with a small square; the Header's own font draws a middle dot.
