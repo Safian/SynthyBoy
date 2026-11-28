@@ -7,7 +7,7 @@
 - `lfoScreen`: the modulation editor and targets title and keyline (shared).
 - `lfoScreenTop`: `lfoNativeFullEditor` (0 0 1280 628; the top row WAVEFORM / STYLE / TARGETS is the tab's Header instance): the field groups of the LFO (rate, timing HZ / BPM / KEY, phase, delay, mode, motion, key follow, shape; the random LFO fields), the shape editor controls (BACK, the seven tools, SHAPES, MORE, UNDO, REDO, DELETE, MOD, SNAP, LOOP, SMOOTH, CYCLE LINK, LOOP LINK, POINT, X, Y, CURVE, SCALE, GRID X, GRID Y, PHASE, BEND ALL, MODE) and the detail rows of a point modulation.
 - `lfoScreenTop2`: the text lines of the editor (selected, hint, grid, trigger, info, status, marker hint, point modulation summary).
-- `lfoScreenTop3`: `lfoNativePicks` (ADD SOURCE, ADD TARGET group and the target lists) and the native keyboard (`native keyboard overlay`) for the shape name.
+- `lfoScreenTop3`: `lfoNativePicks` (ADD SOURCE, ADD TARGET group and the target lists), the shared modal list (`nativeListModal` wrapping `oscNativeList` for choice lists; [AGENTS.md](../../../AGENTS.md#lists-owner-2026-11-28)) and the native keyboard (`native keyboard overlay`) for the shape name.
 
 The LFO shape and the live cursor are drawn by the plugin; the top row is the Header (no selector cell in the editor).
 

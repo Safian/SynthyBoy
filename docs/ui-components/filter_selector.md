@@ -10,6 +10,6 @@ The 56 x 48 chip at the top of the Filter page: a button face with two small lam
 
 - Face: the routing chip. Since commit 23aeee14 it reads CHAIN, not F1/F2: the edited filter is the hardware sub-tab, so the face does not show which filter is selected. The `Edited` handle still exists (four film-strip frames), but all frames draw the same face.
 - Lamp bar: two segments, left F1, right F2. Cyan = filter on, dim = filter off. The catalogue shows the four on/off combinations (F1 on / F2 off, both on, both off, F1 off / F2 on).
-- Touch: one tap target; Mouse Down or Enter opens the routing drawer (`Show Overlay`, popup `filterNativeChainChoices` on the Filter page, `skin/TUI.json`). The F1/F2 switch of the Filter page is the sub-tab, not this chip. `docs/dsp-knowledge/filters.md` and `docs/engine-spec/05-filters.md` describe the filter engine, not this control.
+- Touch: one tap target; Mouse Down or Enter opens the routing menu (`Show Overlay`, popup `filterNativeChainChoices` in `skin/defs_filter.json`; host `MenuOverlay` lists are deprecated in favour of the plugin's own one-tap list per [AGENTS.md](../../AGENTS.md#lists-owner-2026-11-28), migration tracked in [TODO.md](../../TODO.md)). The F1/F2 switch of the Filter page is the sub-tab, not this chip. `docs/dsp-knowledge/filters.md` and `docs/engine-spec/05-filters.md` describe the filter engine, not this control.
 
 A face that names the selected filter (F1 / F2) is not drawn by any recipe; it would be a new look and is not in the catalogue.

@@ -69,7 +69,7 @@ A [`components/native/selector/selector.py`](../../components/native/selector/se
 - **Állapotkötés:**
   - A külső feliratot a `caption_handle` (alapértelmezés: `"Caption"`) vezérli, vagy explicit `title_text` esetén fix szöveg.
   - A belső értéket a `title` handle vezérli (alapértelmezés: `"Data"`).
-  - A felugró menüt a hostoverlay actionjei vezérlik (`Show Overlay`, pl. `popup="fx editor choice menu"`).
+  - A választható listák a plugin saját egykoppintásos lapozható listáján nyílnak ([AGENTS.md](../../AGENTS.md#lists-owner-2026-11-28)); a host `MenuOverlay` nem használt, és a korábbi `"fx editor choice menu"` törlődött (`build_titled_selector` `popup` alapértelmezettje még erre mutat, átállítása a `TODO.md`-ban).
 
 ```python
 from components.native.selector.selector import build_titled_selector
