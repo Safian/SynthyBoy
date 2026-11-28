@@ -411,7 +411,7 @@ int main()
         ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", "1", 1);
         check (synthyboy_mpc::outputLimiterForced() == 1, "environment: SYNTHYBOY_MPC_OUTPUT_LIMITER=1 forces the limiter on");
         ::unsetenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER");
-        check (synthyboy_mpc::outputLimiterForced() == (SYNTHYBOY_MPC_OUTPUT_LIMITER != 0 ? 1 : -1), "environment: unset leaves it to the setting (a build with the limiter ON forces it on)");
+        check (synthyboy_mpc::outputLimiterForced() == -1, "environment: unset leaves it to the setting");
     }
     // ---------------- timing: one 128 frame block at 44.1 kHz, idle (under the ceiling) and limiting (a chord 9 dB over) ----------------
     {

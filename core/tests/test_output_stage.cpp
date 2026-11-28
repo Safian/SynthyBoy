@@ -15,10 +15,6 @@
 #include "synthyboy/output_stage.h"
 #include "output_stage.h"
 
-#ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
-#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB synthyboy::kMakeupGainDb
-#endif
-
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
@@ -48,7 +44,7 @@ TEST (output_stage_parity_mpc_desktop)
     // MPC path:
     // MPC (shell-mpc/synthyboy_mpc.cpp:394, 404, 1660-1663, 2354, 3102):
     // synthyboy_mpc::SwitchableOutputStage outputStage;
-    // prepare(sampleRate), setGainDb(SYNTHYBOY_MPC_OUTPUT_GAIN_DB), reset(), setLimiter(...) based on LIMIT setting.
+    // prepare(sampleRate), setGainDb(synthyboy::kMakeupGainDb), reset(), setLimiter(...) based on LIMIT setting.
 
     const double sampleRates[] = { 44100.0, 48000.0, 96000.0 };
     const int blockSizes[] = { 64, 128, 256 };
@@ -65,7 +61,7 @@ TEST (output_stage_parity_mpc_desktop)
 
                 synthyboy_mpc::SwitchableOutputStage mpc;
                 mpc.prepare (sr);
-                mpc.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
+                mpc.setGainDb (static_cast<float> (synthyboy::kMakeupGainDb));
                 mpc.reset();
                 mpc.setLimiter (limiterState);
 

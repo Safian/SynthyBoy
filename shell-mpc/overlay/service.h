@@ -38,9 +38,6 @@
 #include "../ui/qgroup.h"
 #include "mouse_linux.h"
 #include "touch_linux.h"
-#if SYNTHYBOY_MPC_INHOST_DRAW
-#include "inhost/backend.h"
-#endif
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
 #include "gpu/helper_transport_linux.h"
 #endif
@@ -148,10 +145,6 @@ public:
             return -1;   // the page set was refused: no overlay for this library
         ensureController();
         const int slot = controller_->attach (view);
-#if SYNTHYBOY_MPC_INHOST_DRAW && defined(__linux__)
-        if (slot >= 0)
-            inhost::Runtime::get().acquire();
-#endif
         synthyboy_mpc::PlayLog::line ("Service::attach slot %d, thread joinable %d", slot, thread_.joinable() ? 1 : 0);
         if (! thread_.joinable())
         {
@@ -193,9 +186,6 @@ public:
         synthyboy_mpc::PlayLog::line ("Service::detach, %zu instances left", left);
         if (left == 0)
             stopThread();
-#if SYNTHYBOY_MPC_INHOST_DRAW && defined(__linux__)
-        inhost::Runtime::get().release();
-#endif
         return true;
     }
 
@@ -242,18 +232,13 @@ private:
         ui::QGroup::setWideDevice (detectSixteenQLinks (deviceModel));
 #if defined(__linux__)
         display_ = std::make_shared<LinuxDisplay>();     // found at run time by the first use (discovery.h): the CRTC, the planes, the panel, the refresh
-#if SYNTHYBOY_MPC_INHOST_DRAW
-        backend_ = std::make_unique<inhost::InHostBackend> (display_);
-        frames_ = std::make_unique<inhost::InHostFrameSource> (std::make_unique<LinuxFrameSource> (display_));
-#else
         backend_ = std::make_unique<LinuxPlaneBackend> (display_);
         frames_ = std::make_unique<LinuxFrameSource> (display_);
-#endif
 #else
         backend_ = std::make_unique<UnsupportedPlaneBackend>();
         frames_ = std::make_unique<UnsupportedFrameSource>();
 #endif
-#if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU) && ! SYNTHYBOY_MPC_INHOST_DRAW
+#if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
         {
             gpu::GpuConfig cfg;
             transport_ = std::make_unique<gpu::LinuxHelperTransport> (gpuHelperPath());
@@ -265,13 +250,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-#if SYNTHYBOY_MPC_INHOST_DRAW
-        Timing inhostTiming = shippedTiming (deviceModel);
-        inhostTiming.detectEveryMs = 33.0;
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, shippedPaths(), inhostTiming, gpu_.get(), touch_.get(), *pages_, *factory_, true);
-#else
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, shippedPaths(), shippedTiming (deviceModel), gpu_.get(), touch_.get(), *pages_, *factory_, true);
-#endif   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, shippedPaths(), shippedTiming (deviceModel), gpu_.get(), touch_.get(), *pages_, *factory_, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
@@ -313,9 +292,6 @@ private:
             stopThread();
         else if (controller_)
             controller_->shutdown();
-#if SYNTHYBOY_MPC_INHOST_DRAW && defined(__linux__)
-        inhost::Runtime::get().shutdownAtExit();
-#endif
     }
 
     void run()
