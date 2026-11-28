@@ -92,8 +92,6 @@ public:
         if (changed)
             labelsChanged_.store (true, std::memory_order_release);
         const auto previous = this->state();
-        if (state.layout == Hidden)
-            setRackPopup (false);
         if (preset_.load (std::memory_order_relaxed) != preset || previous.rack != state.rack)
             actions_.publish (Hidden, nullptr);
         FxCell fields[kFields + 1];
@@ -133,18 +131,8 @@ public:
         if (preset_.load (std::memory_order_acquire) != preset)
             return;
         const auto link = actions_.at (field);
-        if (link.cell().target == item
-            && (field != Rack || rackPopupLink_.load (std::memory_order_acquire) == link.link))
+        if (link.cell().target == item)
             actions_.post (link, value);
-    }
-
-    void setRackPopup (bool open) noexcept
-    {
-        if (rackPopupOpen_ == open)
-            return;
-        rackPopupOpen_ = open;  // overlay thread only
-        const auto link = actions_.at (Rack);
-        rackPopupLink_.store (open && link.cell().target >= 0 ? link.link : 0, std::memory_order_release);
     }
 
     bool take (int field, const State& expected, float& value) noexcept
@@ -197,7 +185,5 @@ private:
     std::atomic<uint32_t> state_ {};
     std::atomic<uint64_t> preset_ {};
     NativeCellBank<kFields + 1> actions_;
-    bool rackPopupOpen_ = false;
-    std::atomic<uint64_t> rackPopupLink_ {};
 };
 }

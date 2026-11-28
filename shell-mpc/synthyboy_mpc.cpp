@@ -487,7 +487,6 @@ struct PluginInstance
         {
             inst.nativeFxHeader.publish (state, inst.stateGeneration.load (std::memory_order_acquire));
         }
-        void setNativeFxRackPopup (bool active) noexcept override { inst.nativeFxHeader.setRackPopup (active); }
         bool takeNativeFxHeader (int field, const nativeui::fxheader::State& state, float& value) noexcept override
         {
             return inst.nativeFxHeader.take (field, state, value);
@@ -496,7 +495,6 @@ struct PluginInstance
         {
             inst.nativeFxChain.publish (state, inst.stateGeneration.load (std::memory_order_acquire));
         }
-        void setNativeFxAddPopup (bool active) noexcept override { inst.nativeFxChain.setMenuOpen (active); }
         bool takeNativeFxChain (int field, const nativeui::fxchain::State& state, float& value) noexcept override
         {
             return inst.nativeFxChain.take (field, state, value);
@@ -6861,6 +6859,42 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
     if (! isNativeUiParam (hostIndex))
         return false;
     const int offset = hostIndex - nativeUiBase();
+
+    // ---- FX header Rack selector (MAIN, BUS 1, BUS 2, and splitter bands for instance 0 non-splitters)
+    if (offset >= nativeui::kFxHeader + 2 && offset < nativeui::kLfoEditor)
+    {
+        namespace h = nativeui::fxheader;
+        const int handle = offset - nativeui::kFxHeader;
+        const int item = (handle - 2) / h::kFields;
+        const int field = (handle - 2) % h::kFields;
+        if (field != h::Rack)
+            return false;
+        const auto state = nativeFxHeader.state();
+        if (state.layout == h::Hidden || item != state.item || ! state.on())
+            return false;
+        const int n = state.rackCount();
+        for (int r = 0; r < n; ++r)
+            items.add (synthyboy_mpc::ui::fxl::rackName (r), static_cast<float> (r) / (n - 1));
+        current = std::clamp (state.rack, 0, n - 1);
+        title ("RACK");
+        return items.count > 0;
+    }
+
+    // ---- FX chain + ADD effect menu (effects and splitters currently offered by the chain)
+    if (offset == nativeui::kFxChain + nativeui::fxchain::Menu)
+    {
+        namespace c = nativeui::fxchain;
+        namespace fx = synthyboy_mpc::ui::fxl;
+        if (nativeFxChain.at (c::Menu).cell().target < 0)
+            return false;
+        const uint32_t offered = nativeFxChain.offered();
+        for (int k = 1; k <= c::kTypes; ++k)
+            if ((offered & (1u << (k - 1))) != 0)
+                items.add (fx::layoutOf (k).name, static_cast<float> (k) / c::kTypes);
+        current = 0;
+        title ("ADD EFFECT");
+        return items.count > 0;
+    }
 
     // ---- Filter chain routing (Parallel, F1 to F2, F2 to F1)
     if (nativeui::isFilterChainMenu (offset))

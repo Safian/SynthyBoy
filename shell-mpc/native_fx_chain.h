@@ -68,11 +68,10 @@ class Bank
 public:
     void publish (const State& s, uint64_t preset) noexcept
     {
-        if (s.mode == Hidden)
-            setMenuOpen (false);
         if (structure_ != s.structure || preset_.load (std::memory_order_relaxed) != preset)
             actions_.invalidate();
         structure_ = s.structure;
+        offered_.store (s.offered, std::memory_order_release);
         for (int i = 0; i < s.count; ++i)
         {
             const auto& c = s.cards[static_cast<size_t> (i)];
@@ -117,19 +116,10 @@ public:
     {
         if (field < Select || preset_.load (std::memory_order_acquire) != preset)
             return;
-        const auto link = actions_.at (field);
-        if (field != Menu || menuLink_.load (std::memory_order_acquire) == link.link)
-            actions_.post (link, value);
+        actions_.post (actions_.at (field), value);
     }
 
-    void setMenuOpen (bool open) noexcept
-    {
-        if (menuOpen_ == open)
-            return;
-        menuOpen_ = open;
-        const auto link = actions_.at (Menu);
-        menuLink_.store (open && link.cell().target >= 0 ? link.link : 0, std::memory_order_release);
-    }
+    uint32_t offered() const noexcept { return offered_.load (std::memory_order_acquire); }
 
     bool take (int field, const State& expected, float& v) noexcept
     {
@@ -173,10 +163,10 @@ private:
     static int count (int view) noexcept { return (view >> 3) & 31; }
     NativeCellBank<kHandles> actions_;
     std::atomic<int> view_ {}, cards_[kSlots] {};
-    std::atomic<uint64_t> preset_ {}, menuLink_ {};
+    std::atomic<uint32_t> offered_ {};
+    std::atomic<uint64_t> preset_ {};
     // Observed solely by the overlay thread.
     uint32_t structure_ = 0;
-    bool menuOpen_ = false;
     bool lastGallery_ = false;
 };
 }
