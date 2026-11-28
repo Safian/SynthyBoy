@@ -17,8 +17,7 @@
 // Overrides, the first that holds a valid profile wins:
 //   1. the first line of the file /tmp/synthyboy-mpc-profile (the environment variable SYNTHYBOY_MPC_PROFILE_FILE names another file): tests and trials on the device
 //   2. the environment variable SYNTHYBOY_MPC_PROFILE
-//   3. the build option SYNTHYBOY_MPC_PROFILE (CMake cache entry of the same name, empty by default)
-//   4. the table
+//   3. the table
 // An override that does not parse is skipped and named in the report. The profile is resolved ONCE per process (the first engine that is prepared) and stays for the life of the
 // process: every instance of the plugin runs the same profile, and it never changes while notes sound (the warp decimator's history and delay, the morph cycles, the filter
 // coefficient holds and the voice pool's cap all depend on it). What is in force is written to /tmp/synthyboy-mpc-profile.txt (SYNTHYBOY_MPC_PROFILE_REPORT names another file).
@@ -284,10 +283,6 @@ inline std::string profileReport (const ProfileChoice& c, const std::string& mod
          + "\ndevice_model: " + (model.empty() ? "(not readable)" : model) + "\nbuild: " + (build64 ? "64-bit" : "32-bit") + "\n";
 }
 
-#ifndef SYNTHYBOY_MPC_PROFILE
-#define SYNTHYBOY_MPC_PROFILE ""
-#endif
-
 /** The profile of this process: resolved at the first call (never on the audio thread: it reads files), the same for every later call and every instance. */
 inline const ProfileChoice& profileInForce()
 {
@@ -316,7 +311,7 @@ inline const ProfileChoice& profileInForce()
 #endif
         const std::string model = firstLine ("/proc/device-tree/model", 255);
         const std::string filePath = env ("SYNTHYBOY_MPC_PROFILE_FILE", "/tmp/synthyboy-mpc-profile");
-        ProfileChoice c = chooseProfile (model, kBuild64, firstLine (filePath, 255), filePath, env ("SYNTHYBOY_MPC_PROFILE", ""), SYNTHYBOY_MPC_PROFILE);
+        ProfileChoice c = chooseProfile (model, kBuild64, firstLine (filePath, 255), filePath, env ("SYNTHYBOY_MPC_PROFILE", ""), "");
 #if SYNTHYBOY_MPC_WRITE_FILES   // the release build (write_files.h) writes no report file
         if (FILE* f = std::fopen (env ("SYNTHYBOY_MPC_PROFILE_REPORT", "/tmp/synthyboy-mpc-profile.txt").c_str(), "w"))
         {

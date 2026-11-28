@@ -5,7 +5,6 @@
 #define SYNTHYBOY_MPC_LFO_LIVE 1
 #define SYNTHYBOY_MPC_SPECTRUM 1
 #define SYNTHYBOY_MPC_PAD_PRESSURE 1
-#define SYNTHYBOY_MPC_DEBUG_HOOKS 1
 #include "../synthyboy_mpc.cpp"
 namespace
 {

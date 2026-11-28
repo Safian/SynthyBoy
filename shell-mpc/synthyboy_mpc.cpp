@@ -65,33 +65,16 @@
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). When 1 the plugin has four display-only
 // parameters after the engine's list (index paramCount() + n - 1 for LFO n): the cursor of the LFO picture of the skin (lfo_live.h).
 // Never in the mirror, the state or a preset, not automatable. A helper thread (not the audio thread) reads the engine's live values about
-// SYNTHYBOY_MPC_LFO_LIVE_HZ times a second and, when a cursor cell changed, tells the host with audioMasterAutomate (the host redraws only then).
+// SYNTHYBOY_MPC_LFO_LIVE_HZ times a second and stores a changed cursor cell (the host is not notified: the shipped native skin has no binding to the handles; the overlay reads the values).
 // Thread model: the thread is a normal SCHED_OTHER thread (nice 0, all CPUs; thread_policy.h sets that itself, whatever thread created it), one report
 // per changed cursor and tick, in index order, the position always read at the moment of the tick. The audio thread (processReplacing) does nothing
 // for the display: the engine's own relaxed atomic stores are all there is; this thread only reads them.
 //   SYNTHYBOY_MPC_LFO_LIVE_HZ        refresh rate of that thread (default 10 = a tick every 100 ms, the rate of the community wrapper Open MPC)
-//   SYNTHYBOY_MPC_LFO_LIVE_NOTIFY    1 (default): call audioMasterAutomate; 0: update the values only (the host never redraws: a CPU baseline)
-//   SYNTHYBOY_MPC_LFO_LIVE_SELFTEST  0 (default); 1: ignore the engine and sweep the four cursors at 0.25 / 0.5 / 1 / 2 cycles a second (measuring the host
-//                                    side - recording, modified flag, CPU - without playing a note)
 #ifndef SYNTHYBOY_MPC_LFO_LIVE
 #define SYNTHYBOY_MPC_LFO_LIVE 0
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
-// SYNTHYBOY_MPC_PROGRAM_GROUPS (CMake option of the same name, a string): how the program list of the host is grouped (program_list.h, docs/MPC.md "Preset list of a plugin track"); the number is the
-// GroupMode: 0 off (default, the flat list as ever), 1 prefix-short, 2 prefix-group, 3 headers, 4 vst-categories.
-#ifndef SYNTHYBOY_MPC_PROGRAM_GROUPS
-#define SYNTHYBOY_MPC_PROGRAM_GROUPS 0
-#endif
-
-#ifndef SYNTHYBOY_MPC_LFO_LIVE_HZ
-#define SYNTHYBOY_MPC_LFO_LIVE_HZ 10
-#endif
-#ifndef SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
-#define SYNTHYBOY_MPC_LFO_LIVE_NOTIFY 1
-#endif
-#ifndef SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
-#define SYNTHYBOY_MPC_LFO_LIVE_SELFTEST 0
-#endif
+#define SYNTHYBOY_MPC_LFO_LIVE_HZ 10   // the constant of the shipped build (no CMake option)
 #include <chrono>
 #include <cstdio>
 #include <thread>
@@ -106,7 +89,6 @@
 // thread copies the mono sum of its output into a lock-free ring (spectrum.h) and does nothing else; on every tick of the display thread the newest 2048 samples go through
 // an FFT, 32 logarithmic bands (30 Hz .. 18 kHz) and the smoothing, are quantised to 1/64 and every changed column is reported with audioMasterAutomate (at most 32 calls a
 // tick, none while all columns are at the floor).
-//   SYNTHYBOY_MPC_SPECTRUM_SELFTEST  0 (default); 1: ignore the audio and sweep a travelling wave over the 32 columns (measuring the host side without a note)
 #ifndef SYNTHYBOY_MPC_SPECTRUM
 #define SYNTHYBOY_MPC_SPECTRUM 0
 #endif
@@ -114,26 +96,7 @@
 #if !SYNTHYBOY_MPC_LFO_LIVE
 #error "SYNTHYBOY_MPC_SPECTRUM needs SYNTHYBOY_MPC_LFO_LIVE (it runs on the display thread)"
 #endif
-#ifndef SYNTHYBOY_MPC_SPECTRUM_SELFTEST
-#define SYNTHYBOY_MPC_SPECTRUM_SELFTEST 0
-#endif
 #include "spectrum.h"
-#endif
-
-// Callback statistics (docs/MPC.md "LFO pictures"; diagnostics only, the source default is 0: with 0 nothing of it is compiled). Compile switch
-// SYNTHYBOY_MPC_CALLBACK_STATS (CMake option of the same name). The audio callback measures the time between two calls and its own duration into
-// preallocated atomics (callback_stats.h); a low priority thread writes a text file every 5 seconds and at shutdown.
-//   SYNTHYBOY_MPC_CALLBACK_STATS_FILE         environment variable: the file (default /tmp/synthyboy-callback-stats.txt; a second plugin instance
-//                                             writes <file>.2, a third <file>.3 ...)
-//   SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS  environment variable: pause between two writes (default 5000)
-//   SYNTHYBOY_MPC_CALLBACK_STATS_RESET_FILE   environment variable: the file whose existence makes the writer thread zero the MIDI statistics before its next
-//                                             write and delete it (default /tmp/synthyboy-stats-reset)
-// The file also reports (format 2) the MIDI messages of effProcessEvents and what the host asks: effCanDo texts, dispatcher opcodes, our audioMaster calls.
-#ifndef SYNTHYBOY_MPC_CALLBACK_STATS
-#define SYNTHYBOY_MPC_CALLBACK_STATS 0
-#endif
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-#include "callback_stats.h"
 #endif
 
 // Pad pressure to Filter 1 cutoff (docs/MPC.md "Pad pressure"). Compile switch SYNTHYBOY_MPC_PAD_PRESSURE (CMake option of the same name, ON in shell-mpc; the source
@@ -146,13 +109,7 @@
 #include "pad_pressure.h"
 #endif
 
-// Make-up gain of the output stage in dB (docs/MPC.md "Output level"): synthyboy::kMakeupGainDb (core/include/synthyboy/output_stage.h, the one value of every shell) unless the CMake cache entry
-// SYNTHYBOY_MPC_OUTPUT_GAIN_DB gives another. The look-ahead peak limiter behind it is the plugin setting LIMIT (default on; SYNTHYBOY_MPC_OUTPUT_LIMITER forces it for tests).
-// Debug hooks (CMake option SYNTHYBOY_MPC_DEBUG_HOOKS, default OFF, never in the package; docs/MPC.md "Switches and files"): the /tmp files that only the host tests and the acceptance runs on the device use -
-// /tmp/synthyboy-ui-fake-write, -q-fake-group, -q-fake-write, -overlay-q-step-travel, -overlay-fake-slot, -play-log (+ -dump, the .txt, the chunk copies), -select-program (+ .ack), and the file named by SYNTHYBOY_MPC_SCALAR_CURVE_FILE (a NOTE / VELO curve as the curve editor posts it). Without the option the plugin does not look at them at all.
-#ifndef SYNTHYBOY_MPC_DEBUG_HOOKS
-#define SYNTHYBOY_MPC_DEBUG_HOOKS 0
-#endif
+// Make-up gain of the output stage in dB (docs/MPC.md "Output level"): synthyboy::kMakeupGainDb (core/include/synthyboy/output_stage.h, the one value of every shell) . The look-ahead peak limiter behind it is the plugin setting LIMIT (the environment variable SYNTHYBOY_MPC_OUTPUT_LIMITER forces it for tests).
 
 // Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"). Compile switch SYNTHYBOY_MPC_OVERLAY (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). The module itself is shell-mpc/overlay/; the shell only tells it when an
@@ -185,10 +142,6 @@ namespace
 using synthyboy_mpc::stepCountOf;   // the rule of the relative Q proxies: q_step_rule.h
 } // namespace
 #include "synthyboy/readout.h"
-#endif
-
-#ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
-#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB synthyboy::kMakeupGainDb
 #endif
 
 /** The most a preset file may have (a preset is a few KB; the content folder is on user writable media). */
@@ -346,7 +299,7 @@ struct PluginInstance
     std::atomic<float> paramUndo[synthyboy::kMaxParams];   // the value a parameter had before the host's last change of it (NaN: none): see writeRealParam
 #endif
 
-    // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and the look-ahead peak limiter behind it (the setting LIMIT, below).
+    // Output stage: the make-up gain of the MPC shell (synthyboy::kMakeupGainDb, applied once in the constructor) and the look-ahead peak limiter behind it (the setting LIMIT, below).
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
     synthyboy_mpc::SwitchableOutputStage outputStage;
     // All Sound Off requests of the host side (effStopProcess, effMainsChanged (0)): the audio thread puts one event at the front of its next block (processReplacing).
@@ -371,7 +324,7 @@ struct PluginInstance
     {
         const bool isLow = synthyboy_mpc::profileInForce().profile == synthyboy_mpc::profileLow();
         const float trim = isLow ? tierTrimDb.load (std::memory_order_relaxed) : 0.0f;
-        outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB) + trim);
+        outputStage.setGainDb (synthyboy::kMakeupGainDb + trim);
     }
     // The latency the host is told (AEffect::initialDelay): the engine's (Bode's frequency shifter) plus the output limiter's look-ahead while it is on, in samples at the prepared
     // rate. Any thread may mark it stale (the switch, the audio thread when the engine's latency moved); the next dispatcher call that is not effProcessEvents (so never on the
@@ -402,24 +355,10 @@ struct PluginInstance
                 return 0;
             if (opcode != audioMasterVersion && (closingFlag->load (std::memory_order_acquire) || ! knowsFlag->load (std::memory_order_acquire)))
                 return 0;
-#if SYNTHYBOY_MPC_DEBUG_HOOKS && SYNTHYBOY_MPC_OVERLAY
-            if ((opcode == audioMasterAutomate || opcode == audioMasterUpdateDisplay) && synthyboy_mpc::PlayLog::enabled())
-            {
-                if (opcode == audioMasterAutomate)
-                    synthyboy_mpc::PlayLog::line ("ui-send value instance=%p index=%d native_offset=%d q_slot=%d value=%.9g",
-                        e->object, index, isNativeUiParam (index) ? index - nativeUiBase() : -1,
-                        isQParam (index) ? index - qBase() + 1 : 0, static_cast<double> (opt));
-                else
-                    synthyboy_mpc::PlayLog::line ("ui-send metadata instance=%p", e->object);
-            }
-#endif
             return raw (e, opcode, index, value, ptr, opt);
         }
     };
     HostGate audioMaster { nullptr, &closing, &hostKnows };   // the host's callback (transport queries, automation reports)
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-    audioMasterCallback hostCallback = nullptr; // the host's own callback; `audioMaster.raw` is the counting one in this build (see countingHostCallback)
-#endif
     synthyboy::TransportInfo transport { 120.0, 0.0, false };
 
 #if SYNTHYBOY_MPC_OVERLAY
@@ -1226,39 +1165,8 @@ struct PluginInstance
         scalarCurveReq[which] = points;
         scalarCurveDue[which] = true;
     }
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    /** Debug hook (SYNTHYBOY_MPC_DEBUG_HOOKS only; docs/MPC.md "Debug hooks"): while the file named by SYNTHYBOY_MPC_SCALAR_CURVE_FILE exists, its first line "which x,y,power x,y,power ..." (which 0 velocity, 1 note; no points:
-        the identity) is posted exactly as the curve editor of the Filter page does it (requestScalarCurve), when the line changes. The host test (shell-mpc/tests/scalar_curve_chunk_host.cpp) stands in for the page with it
-        and proves the round trip request -> display thread -> validateContent -> content / engine -> chunk in a live plugin. Display thread. */
-    std::string scalarCurveFakeLast;
-    void scalarCurveFakeFile()
-    {
-        static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_SCALAR_CURVE_FILE"); return std::string (p != nullptr ? p : ""); }();
-        if (path.empty())
-            return;
-        std::ifstream f (path);
-        std::string line;
-        if (! f || ! std::getline (f, line) || line == scalarCurveFakeLast)
-            return;
-        scalarCurveFakeLast = line;
-        const int which = std::atoi (line.c_str());
-        std::vector<synthyboy::ContentPoint> pts;
-        size_t at = line.find (' ');
-        while (at != std::string::npos && at + 1 < line.size())
-        {
-            float x = 0.0f, y = 0.0f, pw = 0.0f;
-            if (std::sscanf (line.c_str() + at + 1, "%f,%f,%f", &x, &y, &pw) == 3)
-                pts.push_back (synthyboy::ContentPoint (x, y, pw));
-            at = line.find (' ', at + 1);
-        }
-        requestScalarCurve (which, pts);
-    }
-#endif
     void scalarCurvePoll()
     {
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-        scalarCurveFakeFile();
-#endif
         std::vector<synthyboy::ContentPoint> take[2];
         bool have[2] = {};
         {
@@ -1630,85 +1538,19 @@ struct PluginInstance
         return true;
     }
 
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    /** The debug dump (play_log.h): the state of this instance, written when the request file exists. Display thread. The text is built in memory and written in one go (safe_file.h). */
-    void playDump (AEffect* effect, bool vst, bool display)
-    {
-        namespace pl = synthyboy_mpc::play;
-        std::string text;
-        char line[160];
-        std::snprintf (line, sizeof line, "selectors %d %d %d\nprogram %d protected %d window %d\nui_write_calls %llu ui_automate_calls %llu\n", playSel[0].load(), playSel[1].load(), playSel[2].load(), currentProgram.load(), protectedProgram.load(), restoreSinceMs.load() >= 0 ? 1 : 0, static_cast<unsigned long long> (uiWriteCalls.load (std::memory_order_relaxed)), static_cast<unsigned long long> (uiAutomateCalls.load (std::memory_order_relaxed)));
-        text += line;
-        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
-        {
-            std::snprintf (line, sizeof line, "p %zu %s %.9g\n", i, synthyboy::paramTable()[i].key, static_cast<double> (paramMirror[i].load (std::memory_order_relaxed)));
-            text += line;
-        }
-        for (int p = 0; p < pl::kProxies; ++p)
-        {
-            std::snprintf (line, sizeof line, "proxy %d %.9g\n", p, static_cast<double> (playProxyValue (p)));
-            text += line;
-        }
-        if (vst)
-            for (VstInt32 i = 0; i < effect->numParams; ++i)
-            {
-                std::snprintf (line, sizeof line, "v %d %.9g\n", static_cast<int> (i), static_cast<double> (effect->getParameter (effect, i)));
-                text += line;
-                if (display)
-                {
-                    char value[128] {};
-                    effect->dispatcher (effect, effGetParamDisplay, i, 0, value, 0.0f);
-                    std::snprintf (line, sizeof line, "display %d %s\n", static_cast<int> (i), value);
-                    text += line;
-                }
-            }
-        const std::string chunk = buildStateChunk (this);
-        std::snprintf (line, sizeof line, "chunk %zu\n", chunk.size());
-        text += line;
-        text += chunk;
-        text += '\n';
-        if (text.size() <= synthyboy_mpc::safefile::kMaxWriteBytes)
-            synthyboy_mpc::safefile::writeReplacing (synthyboy_mpc::PlayLog::dumpPath().c_str(), text.data(), text.size());
-    }
-#endif
 
     // ---- the writes of the plugin-drawn pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
     // own widgets follow. The overlay thread sets the dirty bit, the display thread reports it (one value per parameter, the latest).
     std::atomic<int> playLastSel { 0 };                          // 0 none, 1 envelope, 2 LFO: which of the two Play selectors was set last (the modulation source the UI calls "selected")
     std::atomic<uint64_t> uiDirty[synthyboy::kMaxParams / 64] {};
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    std::atomic<uint64_t> uiWriteCalls { 0 }, uiAutomateCalls { 0 };
-#endif
     void uiWrite (int tableIndex, float normalised) noexcept
     {
         if (tableIndex < 0 || tableIndex >= static_cast<int> (synthyboy::paramCount()))
             return;
         writeRealParam (this, static_cast<size_t> (tableIndex), normalised);
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-        uiWriteCalls.fetch_add (1, std::memory_order_relaxed);
-#endif
         uiDirty[tableIndex >> 6].fetch_or (uint64_t { 1 } << (tableIndex & 63), std::memory_order_release);
     }
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-ui-fake-write exists (SYNTHYBOY_MPC_UI_FAKE_WRITE changes the path) its first line "key plainvalue" is written through uiWrite, the path the
-        plugin-drawn pages use (so the host's reaction can be looked at while ANOTHER page is on screen); the file is deleted. Display thread. Read with safe_file.h (a FIFO, a symlink or a huge file is ignored). */
-    void uiFakeWrite()
-    {
-        static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_UI_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-ui-fake-write"); }();
-        char text[synthyboy_mpc::safefile::kSwitchBytes];
-        if (synthyboy_mpc::safefile::readSmall (path.c_str(), text, sizeof text) <= 0)
-            return;
-        char key[96] = {};
-        double v = 0.0;
-        if (std::sscanf (text, "%95s %lf", key, &v) != 2)
-            return;
-        ::unlink (path.c_str());
-        if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key))
-            uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (v))));
-    }
-#else
     void uiFakeWrite() noexcept {}
-#endif
     void uiPoll (AEffect* e)
     {
         uiFakeWrite();
@@ -1725,9 +1567,6 @@ struct PluginInstance
                 bits &= bits - 1;
                 const int idx = static_cast<int> (w) * 64 + b;
                 audioMaster (e, audioMasterAutomate, idx, 0, nullptr, qReadNorm (idx));
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-                uiAutomateCalls.fetch_add (1, std::memory_order_relaxed);
-#endif
             }
         }
     }
@@ -1774,24 +1613,6 @@ struct PluginInstance
     float nativeUiReported[nativeui::kCount] {};   // display thread only
     std::atomic<bool> nativeMixerActive { false };   // the native Mixer strips are on screen
     int nativeVoiceDisplayedRow = -1;   // display thread only
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    long long nextUiLogMs = 0;
-    int loggedMasterView = -1, loggedVoiceView = -1;
-    std::atomic<unsigned> uiNameReads {}, uiLabelReads {}, uiTextReads {}, uiPropsReads {};
-    std::atomic<uint64_t> uiReadNs {};
-    void countUiRead (VstInt32 opcode, int64_t ns) noexcept
-    {
-        switch (opcode)
-        {
-            case effGetParamName: uiNameReads.fetch_add (1, std::memory_order_relaxed); break;
-            case effGetParamLabel: uiLabelReads.fetch_add (1, std::memory_order_relaxed); break;
-            case effGetParamDisplay: uiTextReads.fetch_add (1, std::memory_order_relaxed); break;
-            case effGetParameterProperties: uiPropsReads.fetch_add (1, std::memory_order_relaxed); break;
-            default: return;
-        }
-        uiReadNs.fetch_add (ns, std::memory_order_relaxed);
-    }
-#endif
     static constexpr long long kNativePaintWindowMs = 150;
     bool nativeNamesAwaitingPaint = false;
     long long nativePagePaintUntil = -1;
@@ -3027,78 +2848,10 @@ struct PluginInstance
 
     /** The normalised value of a real parameter (table index) as the host reads it. */
     float qReadNorm (int tableIndex) const noexcept { return qBank.readNorm (tableIndex); }
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-q-fake-group exists (SYNTHYBOY_MPC_Q_FAKE_FILE changes the path) its first line, up to sixteen table indices (-1: none), is the Q group of this
-        instance; applied when the line changes (the host tests of the Q proxies have no UI to set it). Display thread. Read with safe_file.h: at most 256 bytes of it, only a regular file. */
-    std::string qFakeLast;
-    void qFakeGroup()
-    {
-        static const std::string path = [] { const char* e = std::getenv ("SYNTHYBOY_MPC_Q_FAKE_FILE"); return std::string (e != nullptr && *e != '\0' ? e : "/tmp/synthyboy-q-fake-group"); }();
-        char text[synthyboy_mpc::safefile::kSwitchBytes];
-        if (! synthyboy_mpc::safefile::readFirstLine (path.c_str(), text, sizeof text))
-        {
-            qFakeLast.clear();
-            return;
-        }
-        const std::string line = text;
-        if (line == qFakeLast && qBindingsReady())
-            return;
-        qFakeLast = line;
-        int targets[synthyboy_mpc::QRouter::kCount];
-        int n = 0;
-        for (size_t at = 0; n < synthyboy_mpc::QRouter::kCount;)
-        {
-            while (at < line.size() && line[at] == ' ')
-                ++at;
-            if (at >= line.size())
-                break;
-            char* end = nullptr;
-            targets[n++] = static_cast<int> (std::strtol (line.c_str() + at, &end, 10));
-            const size_t next = static_cast<size_t> (end - line.c_str());
-            if (next <= at)
-                break;
-            at = next;
-        }
-        const uint64_t revision = overlayView.qBindingRevision();
-        qBank.setGroup (targets, n);
-        overlayView.finishQBindingUpdate (revision);
-    }
-    /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-q-fake-write exists (SYNTHYBOY_MPC_Q_FAKE_WRITE changes the path) its first line "q value" (q 1 .. 16, value 0 .. 1) is written to the Q
-        proxy through setParameter, as the host does when a Q-Link turns; the file is deleted. There is no way to turn a Q-Link from outside: this proves the path from the Q proxy to the target on
-        the device (not the host's mapping of the knob to the proxy). Display thread. */
-    void qFakeWrite (AEffect* e)
-    {
-        static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_Q_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-q-fake-write"); }();
-        double qd = 0.0, v = 0.0;
-        if (! synthyboy_mpc::safefile::readTwoNumbers (path.c_str(), qd, v))
-            return;
-        ::unlink (path.c_str());
-        const int q = static_cast<int> (qd);
-        if (q >= 1 && q <= synthyboy_mpc::QRouter::kCount && e != nullptr && e->setParameter != nullptr)
-            e->setParameter (e, qBase() + q - 1, static_cast<float> (v));
-    }
-    /** Debug switch (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 6). Display thread. */
-    void qStepTravelFile()
-    {
-        const long long nowMs = steadyMs();   // once a second
-        if (nowMs - qStepFileAtMs < 1000)
-            return;
-        qStepFileAtMs = nowMs;
-        double n = 0.0;
-        qBank.router().setStepTravel (synthyboy_mpc::safefile::readNumber ("/tmp/synthyboy-overlay-q-step-travel", n) && n > 0.0 && n < 1.0e6 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
-    }
-#else
     void qFakeGroup() noexcept {}
     void qFakeWrite (AEffect*) noexcept {}
     void qStepTravelFile() noexcept {}
-#endif
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-    /** Remote program (preset) select hook (SYNTHYBOY_MPC_DEBUG_HOOKS only; docs/MPC.md "Debug hooks"):
-        polls /tmp/synthyboy-select-program (SYNTHYBOY_MPC_SELECT_PROGRAM_FILE changes the path). Display thread. */
-    void remoteProgramSelectPoll (AEffect* e);
-#else
     void remoteProgramSelectPoll (AEffect*) noexcept {}
-#endif
     /** The display thread, every tick: the host is told the Q values after a group change or a change of a target, and the real parameter a Q write changed. */
     void qPoll (AEffect* e)
     {
@@ -3240,31 +2993,6 @@ struct PluginInstance
         if (! audioMaster)
             return;
         const VstInt32 base = firstParam;
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-        synthyboy_mpc::PlayLog::refresh();
-        if (synthyboy_mpc::PlayLog::enabled())
-        {
-            const auto ms = steadyMs();
-            const int master = nativeMasterView.load (std::memory_order_relaxed);
-            const int voice = nativeVoice.layout();
-            if (ms >= nextUiLogMs || master != loggedMasterView || voice != loggedVoiceView)
-            {
-                synthyboy_mpc::PlayLog::line ("ui-state instance=%p uptime_ms=%lld master=%d voice=%d",
-                    static_cast<void*> (this), ms, master, voice);
-                synthyboy_mpc::PlayLog::line ("ui-reads instance=%p name=%u label=%u display=%u properties=%u dispatch_ns=%llu",
-                    static_cast<void*> (this), uiNameReads.load (std::memory_order_relaxed), uiLabelReads.load (std::memory_order_relaxed),
-                    uiTextReads.load (std::memory_order_relaxed), uiPropsReads.load (std::memory_order_relaxed),
-                    static_cast<unsigned long long> (uiReadNs.load (std::memory_order_relaxed)));
-                nextUiLogMs = ms + 1000;
-                loggedMasterView = master;
-                loggedVoiceView = voice;
-            }
-        }
-        synthyboy_mpc::PlayLog::drain();   // the lines the host's threads put into the ring, written here: the only place the play log touches a file
-        bool vst = false, display = false;
-        if (synthyboy_mpc::PlayLog::takeDumpRequest (overlaySlot.load (std::memory_order_relaxed), vst, display))
-            playDump (e, vst, display);
-#endif
         if (! playLastValid)
         {
             for (int p = 0; p < pl::kProxies; ++p)
@@ -3329,46 +3057,17 @@ struct PluginInstance
     std::atomic<bool> uiFullOpen { false };                    // a plugin-drawn full screen page is open for this instance: the frame the skin hides the host widgets of the Play page at
     std::atomic<bool> overlayReportDue { false };              // set by any thread; the display thread makes the host call
     std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
-    bool overlayStaleReleased = false;                         // display thread only
     std::chrono::steady_clock::time_point overlayNextFileCheck {};   // display thread only
-    long long qStepFileAtMs = -100000;   // display thread only: when the Q step travel file was read last
-    static constexpr const char* kOverlayFakeSlotFile = "/tmp/synthyboy-overlay-fake-slot";
 
-    /** The value for the real slot, or (SYNTHYBOY_MPC_DEBUG_HOOKS only) what the debug file says (a number 0 .. 15 = report that slot, any other number or "none" = the none colour, "blank" = frame 0, "stale" = frame 0 until the
-        overlay thread asks for a report and the real slot after that: what a host that shows an old picture until the parameter is reported looks like). Display thread and startOverlay. */
+    /** The value for the real slot. Display thread and startOverlay. */
     float overlayWantedValue (bool asked = false)
     {
         const bool hideHostCells = uiFullOpen.load (std::memory_order_relaxed) && ! nativeMixerActive.load (std::memory_order_relaxed);
         const float real = hideHostCells ? synthyboy_mpc::overlay::fullScreenParamValue() : synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
-        bool stale = false;
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-        char text[32] = {};
-        if (synthyboy_mpc::safefile::readSmall (kOverlayFakeSlotFile, text, sizeof text) >= 0)   // a regular file only, 31 bytes at most (safe_file.h): a FIFO there is ignored, not waited for
-        {
-            if (std::strncmp (text, "blank", 5) == 0)
-                return 0.0f;
-            if (std::strncmp (text, "none", 4) == 0)
-                return synthyboy_mpc::overlay::instanceParamValue (-1);
-            if (std::strncmp (text, "stale", 5) == 0)
-                stale = true;
-            else
-            {
-                char* end = nullptr;
-                const long v = std::strtol (text, &end, 10);
-                if (end != text)
-                    return synthyboy_mpc::overlay::instanceParamValue (static_cast<int> (v));
-            }
-        }
-#endif
-        if (! stale)
-        {
-            overlayStaleReleased = false;
-            return real;
-        }
-        overlayStaleReleased = overlayStaleReleased || asked;
-        return overlayStaleReleased ? real : 0.0f;
+        (void) asked;
+        return real;
     }
-    /** The display thread, every tick: a due report is made with the value the slot (or the debug file) wants now; the debug file is looked at once a second as well (a changed value is
+    /** The display thread, every tick: a due report is made with the value the slot wants now; the value is looked at once a second as well (a changed value is
         reported). The value is read AFTER the flag is taken, so a slot that startOverlay stored before it set the flag is never missed. */
     void overlayPoll (AEffect* e, int paramIndex)
     {
@@ -3516,14 +3215,8 @@ struct PluginInstance
         }
         const std::chrono::milliseconds active (1000 / (SYNTHYBOY_MPC_LFO_LIVE_HZ > 0 ? SYNTHYBOY_MPC_LFO_LIVE_HZ : 1));
         const std::chrono::milliseconds idle (100);   // nothing sounds: a look ten times a second, no call to the host
-        const auto start = std::chrono::steady_clock::now();
         int last[synthyboy_mpc::kLfoLiveCount] = {};
         mpckit::DisplayThread display (this, "sb-lfo-display", { active, idle });
-        display.setAlwaysActive (SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
-#if SYNTHYBOY_MPC_SPECTRUM
-                                 || SYNTHYBOY_MPC_SPECTRUM_SELFTEST
-#endif
-                                 );   // (the measurements sweep the cursors without a voice)
 #if SYNTHYBOY_MPC_SPECTRUM
         synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
         float specLast[synthyboy_mpc::kSpectrumCount] = {};
@@ -3534,19 +3227,16 @@ struct PluginInstance
         display.addUnguarded ([&] { synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen); });
 #endif
         bool readoutPublished = false;
-        display.add ("overlay report", [&] { injectFault ("overlay"); overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
-        display.add ("Play proxies", [&] { injectFault ("play"); playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
+        display.add ("overlay report", [&] { overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
+        display.add ("Play proxies", [&] { playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
         display.add ("Native UI", [&] { nativeUiPoll (e); });
-        display.add ("macro name", [&] { injectFault ("macro"); macroNamePoll(); });
-        display.add ("Q proxies", [&] { injectFault ("q"); qPoll (e); });                                                          // the Q proxies after them
-        display.add ("page writes", [&] { injectFault ("ui"); uiPoll (e); });                                                      // what the plugin-drawn pages wrote
-        display.add ("content loading", [&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
-        display.add ("LFO shape", [&] { injectFault ("shape"); lfoShapePoll(); });                                                 // a drawn LFO shape the LFO page wrote
+        display.add ("macro name", [&] { macroNamePoll(); });
+        display.add ("Q proxies", [&] { qPoll (e); });                                                          // the Q proxies after them
+        display.add ("page writes", [&] { uiPoll (e); });                                                      // what the plugin-drawn pages wrote
+        display.add ("content loading", [&] { contentPoll(); });                                          // a sample or an instrument the browser asked for
+        display.add ("LFO shape", [&] { lfoShapePoll(); });                                                 // a drawn LFO shape the LFO page wrote
         display.add ("Scalar curve", [&] { scalarCurvePoll(); });                                                                  // a NOTE / VELO curve the curve editor wrote
         display.add ("PZ filter curve", [&] { filterCurvePoll(); });
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-        display.add ("program select", [&] { injectFault ("program_select"); remoteProgramSelectPoll (e); });                       // remote program (preset) select hook
-#endif
         display.addUnguarded ([&]
         {
             if (! readoutPublished)   // once, after the first report of the overlay slot above (see publishReadoutTargets)
@@ -3560,16 +3250,7 @@ struct PluginInstance
 #endif
         display.add ("LFO cursors", [&]
         {
-            injectFault ("lfo");
-            int step[synthyboy_mpc::kLfoLiveCount] = {};
-#if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
-            const double t = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
-            for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
-            {
-                const double cycles = t * 0.25 * static_cast<double> (1 << l);
-                step[l] = 1 + static_cast<int> ((cycles - std::floor (cycles)) * synthyboy_mpc::kLfoLiveSteps);
-            }
-#else
+                        int step[synthyboy_mpc::kLfoLiveCount] = {};
             synthyboy::LiveValues live;
             if (engine && engine->copyReadout (live) && live.block != 0) // block 0: the engine wrote no values yet (they read 0, not -1)
                 for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
@@ -3578,7 +3259,6 @@ struct PluginInstance
                     const float phase = phaseIdx[l] >= 0 ? paramMirror[phaseIdx[l]].load (std::memory_order_relaxed) : 0.0f;
                     step[l] = synthyboy_mpc::lfoLiveStep (live.lfoPhase[l], sync, phase);
                 }
-#endif
             bool anyActive = false;
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
             {
@@ -3588,29 +3268,16 @@ struct PluginInstance
                 last[l] = step[l];
                 const float v = synthyboy_mpc::lfoLiveValue (step[l]);
                 liveValue[l].store (v, std::memory_order_relaxed);
-#if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
-                if (audioMaster)
-                    audioMaster (e, audioMasterAutomate, first + l, 0, nullptr, v);
-#else
                 (void) e;
                 (void) first;
-#endif
             }
             display.setBusy (anyActive);   // the grid of the next tick: the short period while a cursor moves (the spectrum below may add to it)
         });
 #if SYNTHYBOY_MPC_SPECTRUM
         display.add ("spectrum", [&]
         {
-            injectFault ("spectrum");
-            float q[synthyboy_mpc::kSpectrumCount];
-#if SYNTHYBOY_MPC_SPECTRUM_SELFTEST
-            // a wave that runs over the 32 columns, one turn in 4 seconds, 2 crests: every column moves on every tick
-            const double ts = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
-            for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
-                q[k] = synthyboy_mpc::spectrumQuantize (static_cast<float> (0.5 + 0.5 * std::sin (6.283185307179586 * (0.25 * ts - 2.0 * k / synthyboy_mpc::kSpectrumCount))));
-#else
+                        float q[synthyboy_mpc::kSpectrumCount];
             analyser.tick (spectrumRing, spectrumRate.load (std::memory_order_relaxed), q);
-#endif
             bool anyActive = display.busy();
             for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
             {
@@ -3619,15 +3286,10 @@ struct PluginInstance
                     continue;
                 specLast[k] = q[k];
                 spectrumValue[k].store (q[k], std::memory_order_relaxed);
-#if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
-                if (audioMaster)
-                    audioMaster (e, audioMasterAutomate, first + synthyboy_mpc::kLfoLiveCount + k, 0, nullptr, q[k]);
-#endif
             }
             display.setBusy (anyActive);
         });
 #endif
-        (void) start;
         display.run ([this] { return liveStop.load (std::memory_order_relaxed) || closing.load (std::memory_order_acquire); },
                      [this] { return hostKnows.load (std::memory_order_acquire); });   // not ready: the host has not called us yet, so it may not hold this effect's pointer: no callback before it does, and no report is taken out of its flag meanwhile (robustness review F12)
     }
@@ -3664,17 +3326,6 @@ struct PluginInstance
         }
     }
 
-    /** Test hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): the environment variable SYNTHYBOY_MPC_TEST_FAULT names a feature of the display thread whose tick then throws on every call. */
-    static void injectFault (const char* feature)
-    {
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-        const char* const want = std::getenv ("SYNTHYBOY_MPC_TEST_FAULT");   // looked at on every tick: a test sets it after other instances ran
-        if (want != nullptr && std::strcmp (want, feature) == 0)
-            throw std::runtime_error (std::string ("injected fault in ") + feature);
-#else
-        (void) feature;
-#endif
-    }
 #endif
 
 #if SYNTHYBOY_MPC_PAD_PRESSURE
@@ -3703,61 +3354,6 @@ struct PluginInstance
     }
 #endif
 
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-    synthyboy_mpc::CallbackStats callbackStats;
-
-    /** The variant of this build, for the first lines of the statistics file. */
-    static std::string buildDescription()
-    {
-        std::string b;
-        size_t extraParams = 0;
-#if SYNTHYBOY_MPC_LFO_LIVE
-        extraParams = PluginInstance::kLiveParams;
-        b += "LFO_LIVE=ON LFO_LIVE_HZ=" + std::to_string (SYNTHYBOY_MPC_LFO_LIVE_HZ)
-           + " LFO_LIVE_NOTIFY=" + (SYNTHYBOY_MPC_LFO_LIVE_NOTIFY ? "ON" : "OFF")
-           + " LFO_LIVE_SELFTEST=" + (SYNTHYBOY_MPC_LFO_LIVE_SELFTEST ? "ON" : "OFF");
-#if SYNTHYBOY_MPC_SPECTRUM
-        b += std::string (" SPECTRUM=ON SPECTRUM_SELFTEST=") + (SYNTHYBOY_MPC_SPECTRUM_SELFTEST ? "ON" : "OFF");
-#endif
-#else
-        b += "LFO_LIVE=OFF";
-#endif
-        b += std::string (" PROGRAM_GROUPS=") + synthyboy_mpc::groupModeName (static_cast<synthyboy_mpc::GroupMode> (SYNTHYBOY_MPC_PROGRAM_GROUPS));
-#if SYNTHYBOY_MPC_PAD_PRESSURE
-        extraParams += synthyboy_mpc::kPadPressureParams;
-        b += " PAD_PRESSURE=ON";
-#else
-        b += " PAD_PRESSURE=OFF";
-#endif
-#if SYNTHYBOY_MPC_OVERLAY
-        extraParams += 1 + synthyboy_mpc::play::kParams + synthyboy_mpc::QRouter::kCount + nativeui::kCount;
-#endif
-        b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
-#if defined(__aarch64__)
-        b += " arch=arm64";
-#elif defined(__arm__)
-        b += " arch=arm32";
-#elif defined(__x86_64__)
-        b += " arch=x86_64";
-#endif
-        return b;
-    }
-
-    void startStats()
-    {
-        static std::atomic<int> instances { 0 };
-        const char* envPath = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_FILE");
-        std::string path = envPath != nullptr && *envPath != 0 ? envPath : "/tmp/synthyboy-callback-stats.txt";
-        const int n = ++instances;
-        if (n > 1)
-            path += "." + std::to_string (n);
-        const char* envMs = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS");
-        const int ms = envMs != nullptr ? std::atoi (envMs) : 0;
-        const char* envReset = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_RESET_FILE");
-        callbackStats.setResetFile (envReset != nullptr && *envReset != 0 ? envReset : "/tmp/synthyboy-stats-reset");
-        callbackStats.start (path, buildDescription(), ms > 0 ? ms : 5000);
-    }
-#endif
 
     PluginInstance()
     {
@@ -3813,7 +3409,7 @@ struct PluginInstance
                 MPCKIT_LOG ("startup", info, "%zu programs from %s", programs.size(), source.c_str());
             }
         }
-        view = synthyboy_mpc::buildProgramView (programs, static_cast<synthyboy_mpc::GroupMode> (SYNTHYBOY_MPC_PROGRAM_GROUPS));
+        view = synthyboy_mpc::buildProgramView (programs, synthyboy_mpc::GroupMode::off);
         synthyboy_mpc::startupTimes().setProgramMode (synthyboy_mpc::groupModeName (view.mode), view.numPrograms());
         synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kScanPresets);
 
@@ -3882,9 +3478,6 @@ struct PluginInstance
 #if SYNTHYBOY_MPC_OVERLAY
         if (contentJob.valid()) contentJob.wait();
 #endif
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-        callbackStats.stop(); // writes the file one last time
-#endif
         if (engine)
             engine->setContentStore(nullptr);
     }
@@ -3915,17 +3508,6 @@ static PluginInstance* getInstance(AEffect* e) noexcept
     return static_cast<PluginInstance*>(e->object);
 }
 
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-// What the plugin does towards the host is counted by opcode, then passed on unchanged (every call goes through inst->audioMaster).
-static VstIntPtr countingHostCallback(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
-{
-    PluginInstance* inst = e ? getInstance(e) : nullptr;
-    if (!inst || !inst->hostCallback)
-        return 0;
-    inst->callbackStats.hostCall(opcode);
-    return inst->hostCallback(e, opcode, index, value, ptr, opt);
-}
-#endif
 
 // ---------------------------------------------------------------------------
 // Helper: current program name (handles the "no program" state)
@@ -4098,54 +3680,12 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         const auto ns = synthyboy_mpc::StartupTimes::nowNs() - t0;
         synthyboy_mpc::startupTimes().callDone (static_cast<synthyboy_mpc::StartupTimes::Call> (slot), ns);
-#if SYNTHYBOY_MPC_DEBUG_HOOKS && SYNTHYBOY_MPC_OVERLAY
-        if (slot == synthyboy_mpc::StartupTimes::kCallParamInfo && synthyboy_mpc::PlayLog::enabled() && e && e->object)
-            getInstance (e)->countUiRead (opcode, ns);
-#endif
     }
     return result;
 }
 
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-static VstIntPtr dispatchHandled(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt);
-
-// What the host asks and sends, recorded (callback_stats.h) around the handling of every call; the handling itself is dispatchHandled, unchanged.
-static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
-{
-    PluginInstance* inst = e ? getInstance(e) : nullptr;
-    if (!inst)
-        return dispatchHandled(e, opcode, index, value, ptr, opt);
-    synthyboy_mpc::CallbackStats& stats = inst->callbackStats;
-    stats.dispatcherCall(opcode, index, value, opt, ptr != nullptr);
-    if (opcode == effProcessEvents && ptr)
-    {
-        const VstEvents* events = static_cast<const VstEvents*>(ptr);
-        for (VstInt32 i = 0; i < events->numEvents; ++i)
-        {
-            const VstEvent* ev = events->events[i];
-            if (!ev)
-                continue;
-            if (ev->type != kVstMidiType)
-            {
-                stats.otherEvent(ev->type);
-                continue;
-            }
-            const VstMidiEvent* m = reinterpret_cast<const VstMidiEvent*>(ev);
-            stats.midiMessage(static_cast<uint8_t>(m->midiData[0]), static_cast<uint8_t>(m->midiData[1]), static_cast<uint8_t>(m->midiData[2]), m->deltaFrames);
-        }
-    }
-    const VstIntPtr result = dispatchHandled(e, opcode, index, value, ptr, opt);
-    if (opcode == effCanDo && ptr)
-        stats.canDo(static_cast<const char*>(ptr), static_cast<int>(result));
-    return result;
-}
-
-static VstIntPtr dispatchHandled(AEffect* e, VstInt32 opcode, VstInt32 index,
-                                 VstIntPtr value, void* ptr, float opt)
-#else
 static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                           VstIntPtr value, void* ptr, float opt)
-#endif
 {
     if (opcode == effGetVstVersion)
         return 2400;
@@ -5521,9 +5061,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
             inst->soundOffPending.store (true, std::memory_order_release);
         }
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-        inst->callbackStats.restartGaps();
-#endif
         if (inst->mainsOn)
             synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kResume);
         // Prepare when mains go on if sample rate or block size changed since last prepare
@@ -5633,15 +5170,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     inst->lastNoteOnVelocity.store (hostVel, std::memory_order_relaxed);
 #endif
                 }
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-                const int channel = (data[0] & 0x0F) + 1;
-                const int noteNum = data[1] & 0x7F;
-                // Velocity given to the engine: the shell applies no mapping to note velocity
-                // (curve or pad mapping, if any, is identity in the shell);
-                // the engine receives the velocity directly corresponding to hostVel.
-                const int engineVel = hostVel;
-                synthyboy_mpc::PlayLog::note (isNoteOn, channel, noteNum, hostVel, engineVel);
-#endif
             }
 
             synthyboy::Event event;
@@ -6580,124 +6108,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     }
 }
 
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
-void PluginInstance::remoteProgramSelectPoll (AEffect* e)
-{
-    if (e == nullptr)
-        return;
-    static const std::string path = [] {
-        const char* p = std::getenv ("SYNTHYBOY_MPC_SELECT_PROGRAM_FILE");
-        return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-select-program");
-    }();
-    char text[synthyboy_mpc::safefile::kSwitchBytes];
-    if (! synthyboy_mpc::safefile::readFirstLine (path.c_str(), text, sizeof text))
-        return;
-    ::unlink (path.c_str());
-
-    static std::atomic<long long> ackCounter { 0 };
-    const long long seq = ++ackCounter;
-    static const std::string ackPath = path + ".ack";
-
-    auto writeAck = [&] (const char* status, const char* payload)
-    {
-        char ackBuf[512];
-        std::snprintf (ackBuf, sizeof ackBuf, "%lld %s %s\n", seq, status, payload != nullptr ? payload : "");
-        synthyboy_mpc::safefile::writeReplacing (ackPath.c_str(), ackBuf, std::strlen (ackBuf));
-    };
-
-    // Trim leading and trailing ASCII whitespace
-    char* start = text;
-    while (*start != '\0' && static_cast<unsigned char> (*start) <= ' ')
-        ++start;
-    char* end = start + std::strlen (start);
-    while (end > start && static_cast<unsigned char> (*(end - 1)) <= ' ')
-        --end;
-    *end = '\0';
-
-    if (*start == '\0')
-    {
-        writeAck ("error", "unknown name");
-        return;
-    }
-
-    // Check if `start` is a decimal integer: optional sign then all digits
-    bool isDecimal = true;
-    const char* p = start;
-    if (*p == '+' || *p == '-')
-        ++p;
-    if (*p == '\0')
-        isDecimal = false;
-    else
-    {
-        while (*p != '\0')
-        {
-            if (*p < '0' || *p > '9')
-            {
-                isDecimal = false;
-                break;
-            }
-            ++p;
-        }
-    }
-
-    const int numProgs = view.numPrograms();
-    int targetProg = -1;
-
-    if (isDecimal)
-    {
-        char* endp = nullptr;
-        errno = 0;
-        const long val = std::strtol (start, &endp, 10);
-        if (errno == ERANGE || val < 0 || val >= numProgs)
-        {
-            writeAck ("error", "out of range");
-            return;
-        }
-        targetProg = static_cast<int> (val);
-    }
-    else
-    {
-        const std::string name (start);
-        if (name == "Init" || name == "init")
-        {
-            targetProg = 0;
-        }
-        else
-        {
-            for (int i = 1; i < numProgs; ++i)
-            {
-                if (view.isHeader (i))
-                    continue;
-                const auto& it = view.items[static_cast<size_t> (i)];
-                if (it.baseName == name || it.label == name)
-                {
-                    targetProg = i;
-                    break;
-                }
-            }
-        }
-        if (targetProg < 0)
-        {
-            writeAck ("error", "unknown name");
-            return;
-        }
-    }
-
-    // Target program is valid. Select through effSetProgram
-    if (e->dispatcher != nullptr)
-        e->dispatcher (e, effSetProgram, 0, targetProg, nullptr, 0.0f);
-    // effSetProgram has already notified the host of the selected preset.
-
-    const int currentProg = currentProgram.load (std::memory_order_relaxed);
-    char nameBuf[kVstMaxProgNameLen + 1] = {};
-    if (e->dispatcher != nullptr)
-        e->dispatcher (e, effGetProgramName, 0, 0, nameBuf, 0.0f);
-
-    char okPayload[256];
-    std::snprintf (okPayload, sizeof okPayload, "%d %s", currentProg, nameBuf);
-    writeAck ("ok", okPayload);
-}
-#endif
 
 // ---------------------------------------------------------------------------
 // Parameter access (normalized 0..1)
@@ -7303,16 +6713,6 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
         return;
     }
 
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-    // Measures the gap to the previous call and, at the end of the scope, the time spent in this one (atomics only, see callback_stats.h)
-    struct StatsScope
-    {
-        synthyboy_mpc::CallbackStats& s;
-        uint64_t t0;
-        StatsScope (synthyboy_mpc::CallbackStats& stats, int frames, double rate) noexcept : s (stats), t0 (stats.begin (frames, rate)) {}
-        ~StatsScope() { s.end (t0); }
-    } statsScope (inst->callbackStats, sampleFrames, inst->sampleRate);
-#endif
 
     const int64_t firstBlockT0 = synthyboy_mpc::startupTimes().reached (synthyboy_mpc::StartupTimes::kFirstAudio) ? 0 : synthyboy_mpc::StartupTimes::nowNs();   // only until the first block has gone all the way
 
@@ -7489,13 +6889,7 @@ extern "C"
         effect->version = SYNTHYBOY_VST2_VERSION; // 0.1.0 build 1 -> 101
 
         // Store the host callback for transport queries
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-        inst->hostCallback = audioMaster;
-        inst->audioMaster = audioMaster ? countingHostCallback : nullptr;
-        audioMaster = inst->audioMaster.raw; // the identification call below is counted as well
-#else
         inst->audioMaster = audioMaster;
-#endif
 
         // Call the host callback to let the host identify itself
         if (audioMaster)
@@ -7509,10 +6903,6 @@ extern "C"
         try { synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kStartOverlay); inst->startOverlay(); synthyboy_mpc::PlayLog::line ("VSTPluginMain: instance %p attached to the overlay, slot %d", static_cast<void*> (inst), inst->overlaySlot.load()); }
         catch (const std::exception& ex) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw: %s", ex.what()); } // no overlay: the plugin works as without it
         catch (...) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw"); }
-#endif
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-        try { inst->startStats(); }
-        catch (...) {} // no file: the statistics are only collected
 #endif
 
         synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kMainReturned);

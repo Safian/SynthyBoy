@@ -15,7 +15,7 @@
 #   --build-dir DIR  root of the CMake trees on the host; one sub directory per architecture (default: per-checkout temporary MPC tree)
 #   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder (default: skin/ of the repository: the skin is edited
 #                    directly there, nothing is generated)
-#   --cmake-arg ARG  an extra argument of the CMake configure step of the plugin module, e.g. --cmake-arg -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25 (repeatable; no
+#   --cmake-arg ARG  an extra argument of the CMake configure step of the plugin module, e.g. --cmake-arg -DSYNTHYBOY_MPC_SPECTRUM=ON (repeatable; no
 #                    spaces inside an argument). A CMake tree keeps the options of earlier runs in its cache: when one tree is used for several variants
 #                    (--build-dir), pass every option of the variant each time. Not applied to the --bench trees.
 #   --bench          also build synthyboy_bench and synthyboy_noteon_bench for each architecture (own CMake tree with SYNTHYBOY_BUILD_TESTS=ON, libstdc++
@@ -101,7 +101,7 @@ if [[ -z "$skins_dir" ]]; then
 fi
 
 if [[ "$release" == 1 ]]; then
-    cmake_args+=("-DSYNTHYBOY_MPC_DEV_LOG=OFF" "-DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF")
+    cmake_args+=("-DSYNTHYBOY_MPC_DEV_LOG=OFF")
 fi
 
 case "$arch" in

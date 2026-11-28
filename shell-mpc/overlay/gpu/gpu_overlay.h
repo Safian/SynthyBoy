@@ -143,11 +143,7 @@ public:
 
 struct GpuConfig
 {
-#ifdef SYNTHYBOY_MPC_DEBUG_HOOKS
-    uint32_t flags = SYNTHYBOY_MPC_DEBUG_HOOKS ? kFlagDump : 0u;   // the helper's frame dump (a debug file in /tmp) only in a debug-hooks build
-#else
-    uint32_t flags = kFlagDump;   // the tests build this header without the option
-#endif
+    uint32_t flags = 0u;   // no frame dump (the debug hooks are gone)
     double startTimeoutMs = 3000.0;     // spawn -> ready (the device needs about 100 ms)
     double ackTimeoutMs = 700.0;        // a scene (or a show) without a frame acknowledgement: the helper hangs
     double hideTimeoutMs = 700.0;

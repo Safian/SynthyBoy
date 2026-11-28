@@ -2,8 +2,7 @@
 //   A  the display thread is inside audioMasterAutomate / UpdateDisplay and the host call does not return: effClose returns within the limit, no new host call starts after effClose began, and when the
 //      host call finally returns the abandoned instance ends by itself (AddressSanitizer: no use after free).
 //   B  no host callback (other than the identification call) before the host has called the dispatcher once: the pointer is not known to the host yet.
-//   C  (with --hooks: a plugin built with SYNTHYBOY_MPC_DEBUG_HOOKS) a tick that throws on every call does not end the process; the feature is switched off after five failures and the reason is in /tmp/synthyboy-mpc-status.txt.
-// Usage: close_hang_host <plugin> [--hooks]
+// Usage: close_hang_host <plugin>
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <atomic>
@@ -66,12 +65,11 @@ static AEffect* make (bool open)
 
 int main (int argc, char** argv)
 {
-    if (argc < 2) { std::fprintf (stderr, "usage: close_hang_host <plugin> [--hooks]\n"); return 2; }
+    if (argc < 2) { std::fprintf (stderr, "usage: close_hang_host <plugin>\n"); return 2; }
     void* lib = dlopen (argv[1], RTLD_NOW | RTLD_LOCAL);
     if (! lib) { std::fprintf (stderr, "dlopen: %s\n", dlerror()); return 2; }
     entry = reinterpret_cast<Main> (dlsym (lib, "VSTPluginMain"));
     if (! entry) return 2;
-    const bool hooks = argc > 2 && std::strcmp (argv[2], "--hooks") == 0;
     mainThread = std::this_thread::get_id();
 
     // B: nothing before the host has called us
@@ -118,20 +116,6 @@ int main (int argc, char** argv)
         sleepMs (300);
         check (blockedNow.load() == 0 && callsAfterClose.load() == 0, "A: after the host call returned the thread ended without another call");
         blockCalls.store (false);
-    }
-
-    // C: a throwing tick
-    if (hooks)
-    {
-        ::unlink ("/tmp/synthyboy-mpc-status.txt");
-        ::setenv ("SYNTHYBOY_MPC_TEST_FAULT", "q", 1);
-        AEffect* e = make (true);
-        sleepMs (1200);
-        std::string text;
-        if (FILE* f = std::fopen ("/tmp/synthyboy-mpc-status.txt", "rb")) { char b[2048]; size_t n = std::fread (b, 1, sizeof b - 1, f); b[n] = 0; text = b; std::fclose (f); }
-        check (text.find ("Q proxies") != std::string::npos && text.find ("injected fault in q") != std::string::npos && text.find ("SWITCHED OFF") != std::string::npos, "C: the failing tick is reported to the status file and the feature is switched off");
-        e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
-        ::unlink ("/tmp/synthyboy-mpc-status.txt");
     }
 
     std::printf (fails == 0 ? "OK\n" : "%d FAILED\n", fails);

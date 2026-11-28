@@ -53,12 +53,6 @@
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
-#ifndef SYNTHYBOY_MPC_INHOST_DRAW
-#define SYNTHYBOY_MPC_INHOST_DRAW 0
-#endif
-#if SYNTHYBOY_MPC_INHOST_DRAW
-#include "inhost/glue.h"
-#endif
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -810,13 +804,7 @@ private:
         if (dimmed_.load())
             return;   // the host's picture is dimmed, the strip does not look like its reference: the cut stays where it was until the wake
         int edge = PanelKey::kNoKey;
-#if SYNTHYBOY_MPC_INHOST_DRAW
-        const bool useInhostEdge = current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn() && inhost::hostEdgeActive();
-        if (useInhostEdge)
-            edge = inhost::hostEdge();
-#else
         constexpr bool useInhostEdge = false;
-#endif
         if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn() && ! useInhostEdge)
         {
             PanelKey& k = keys_[current_];
@@ -1440,9 +1428,6 @@ private:
             return;
         rotateCanvasInto (rotation_, canvas_.data(), w, h, back, stride);
         const auto t2 = Clock::now();
-#if SYNTHYBOY_MPC_INHOST_DRAW
-        inhost::noteFrame (current_, activeSlot_, rotation_);
-#endif
         const bool ok = presenter_.present();   // waits for the vblank on the device
         const auto t3 = Clock::now();
         // the work before SETPLANE (the full computation included, which only some of the pictures need): a decaying maximum, so that even those pictures are ready in time

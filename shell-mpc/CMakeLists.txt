@@ -52,83 +52,14 @@ target_compile_definitions(synthyboy_mpc PRIVATE
     SYNTHYBOY_MPC_UI_GEN=${SYNTHYBOY_MPC_UI_GEN_N}
     SYNTHYBOY_MPC_QFRAME_ENABLED=${SYNTHYBOY_MPC_QFRAME_ENABLED_N})
 
-# Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h -> core/include/synthyboy/output_stage.h).
-# Empty (default): the make-up gain is synthyboy::kMakeupGainDb (0 dB, factory presets levelled to stock Akai instruments),
-# the one value of every shell. A number from -24 to 24 overrides it for this build (tests, trial packages).
-set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb, 0 dB)")
-if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB STREQUAL "")
-    if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
-        message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be empty or a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
-    endif()
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
-endif()
-
-# The program list of a plugin track (the PRESET pop-up of the host), grouped like the Sounds browser: docs/MPC.md "Preset list of a plugin track". A string:
-#   off            the flat list as ever (default; the program list is bit-identical to a build without this option)
-#   prefix-short   "<Bass|Lead|Pad|Pluck|Keys|FX>: <Name>", cut to 24 characters
-#   prefix-group   "<Browser group>: <Name>", cut to 24 characters at the write (the host's name buffer)
-#   headers        a header entry before every group ("-- BASS SUB+808 --"); a header loads the first preset of its group
-#   vst-categories the VST2 program category opcodes are answered (names unchanged, in the order of the groups)
-# These are experiments for the device: pass it with scripts/build-mpc.sh --cmake-arg -DSYNTHYBOY_MPC_PROGRAM_GROUPS=<mode>.
-set(SYNTHYBOY_MPC_PROGRAM_GROUPS "off" CACHE STRING "MPC shell: grouping of the host's program list (off, prefix-short, prefix-group, headers, vst-categories)")
-set_property(CACHE SYNTHYBOY_MPC_PROGRAM_GROUPS PROPERTY STRINGS off prefix-short prefix-group headers vst-categories)
-if(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "off")
-    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 0)
-elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "prefix-short")
-    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 1)
-elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "prefix-group")
-    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 2)
-elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "headers")
-    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 3)
-elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "vst-categories")
-    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 4)
-else()
-    message(FATAL_ERROR "SYNTHYBOY_MPC_PROGRAM_GROUPS must be off, prefix-short, prefix-group, headers or vst-categories, not '${SYNTHYBOY_MPC_PROGRAM_GROUPS}'")
-endif()
-target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PROGRAM_GROUPS=${SYNTHYBOY_MPC_PROGRAM_GROUPS_N})
-
-# The look-ahead peak limiter after the make-up gain is the plugin setting LIMIT (default on, ceiling -0.5 dBFS, 3 ms look-ahead; docs/MPC.md "Output limiter").
-# SYNTHYBOY_MPC_OUTPUT_LIMITER=ON forces it on whatever the setting says (tests); OFF (default) leaves it to the setting.
-option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: force the output peak limiter on (else the plugin setting LIMIT decides)" OFF)
-if(SYNTHYBOY_MPC_OUTPUT_LIMITER)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_LIMITER=1)
-else()
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_LIMITER=0)
-endif()
-
 # Live LFO display (docs/MPC.md "LFO pictures"): four display-only cursor parameters after the engine's list, driven by a low priority thread.
 # The overlay's LFO pages read them, so the MPC package needs the plugin built with this ON (the default of this shell).
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
 option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)
-set(SYNTHYBOY_MPC_LFO_LIVE_HZ 10 CACHE STRING "MPC shell: refresh rate of the LFO display thread (ticks a second; 10 = every 100 ms)")
 option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
-set(live_notify_default ON)
-if(SYNTHYBOY_PACKAGED_NATIVE_SKIN AND SYNTHYBOY_MPC_OVERLAY)
-    # The shipped native skin has no bindings to the legacy LFO or spectrum handles.
-    set(live_notify_default OFF)
-endif()
-option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "Notify host widgets when a legacy LFO or spectrum display value changes" ${live_notify_default})
-option(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST "MPC shell: sweep the four cursors without a voice (host-side measurements only)" OFF)
 if(SYNTHYBOY_MPC_LFO_LIVE)
     find_package(Threads REQUIRED)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE=1 SYNTHYBOY_MPC_LFO_LIVE_HZ=${SYNTHYBOY_MPC_LFO_LIVE_HZ})
-    if(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY)
-        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_NOTIFY=1)
-    else()
-        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_NOTIFY=0)
-    endif()
-    if(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST)
-        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_SELFTEST=1)
-    endif()
-    target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
-endif()
-
-# Diagnostics: statistics of the audio callback (gap between two calls, time inside the call) written to a text file by a low priority thread
-# (docs/MPC.md "LFO pictures"). OFF = the plugin is byte for byte the one without this code. Not for the package.
-option(SYNTHYBOY_MPC_CALLBACK_STATS "MPC shell: measure the audio callback and write /tmp/synthyboy-callback-stats.txt (diagnostics only)" OFF)
-if(SYNTHYBOY_MPC_CALLBACK_STATS)
-    find_package(Threads REQUIRED)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_CALLBACK_STATS=1)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE=1)
     target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
 endif()
 
@@ -136,15 +67,11 @@ endif()
 # the plugin's own output (the audio thread only copies samples into a lock-free ring). The overlay's Macros page reads them, so the MPC package needs
 # the plugin built with this ON (the default of this shell). The source default is 0; OFF builds the plugin byte for byte as it was without this code. Needs SYNTHYBOY_MPC_LFO_LIVE.
 option(SYNTHYBOY_MPC_SPECTRUM "MPC shell: the live spectrum display parameters (needs SYNTHYBOY_MPC_LFO_LIVE)" ON)
-option(SYNTHYBOY_MPC_SPECTRUM_SELFTEST "MPC shell: a travelling wave over the 32 columns without a sound (host-side measurements only)" OFF)
 if(SYNTHYBOY_MPC_SPECTRUM)
     if(NOT SYNTHYBOY_MPC_LFO_LIVE)
         message(FATAL_ERROR "SYNTHYBOY_MPC_SPECTRUM needs SYNTHYBOY_MPC_LFO_LIVE (the spectrum runs on the display thread)")
     endif()
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_SPECTRUM=1)
-    if(SYNTHYBOY_MPC_SPECTRUM_SELFTEST)
-        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_SPECTRUM_SELFTEST=1)
-    endif()
 endif()
 
 # Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"): the module shell-mpc/overlay/ draws the response of Filter 1 on an overlay plane above the MPC's
@@ -153,18 +80,6 @@ endif()
 # No display constant of any model is compiled in: the CRTC, the planes, the panel, the refresh and the rotation are found at run time (shell-mpc/overlay/discovery.h).
 # The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
 # reports it to the host, so the overlay needs SYNTHYBOY_MPC_LFO_LIVE.
-# Debug hooks: the /tmp files that only the host tests and the acceptance runs on the device use (fake slot, fake Q group / write, fake page write, Q step travel, the play log and its dump, the display thread's
-# fault injection). OFF (default, and always for the package): the plugin does not look at them, and no thread of the host can reach a file through them. Needs the overlay.
-option(SYNTHYBOY_MPC_DEBUG_HOOKS "MPC shell: debug / acceptance switch files in /tmp (host tests, device checks); never in the package" OFF)
-if(SYNTHYBOY_MPC_DEBUG_HOOKS AND NOT SYNTHYBOY_MPC_OVERLAY)
-    message(FATAL_ERROR "SYNTHYBOY_MPC_DEBUG_HOOKS requires SYNTHYBOY_MPC_OVERLAY=ON")
-endif()
-if(SYNTHYBOY_MPC_DEBUG_HOOKS)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=1)
-else()
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=0)
-endif()
-
 # The developer log (shell-mpc/kit/log.h, macro MPCKIT_DEV_LOG) and the files the plugin and its GPU helper write into /tmp for the developer (shell-mpc/write_files.h, macro SYNTHYBOY_MPC_WRITE_FILES).
 # ON (default, today's behaviour: the device measurements need the status file): the log exists (every category off until /tmp/synthyboy-log.conf switches it on) and the files are written as before.
 # OFF (the public release: scripts/build-mpc.sh --release): no log code, no log strings, no log thread; no report / probe / error files; the helper's output goes to /dev/null; the status file only while
@@ -217,22 +132,6 @@ if(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE)
     add_subdirectory(overlay/gpu-helper)
 endif()
 
-# In-host drawing (SYNTHYBOY_MPC_INHOST_DRAW, default OFF, shell-mpc/overlay/inhost/; docs/MPC.md "In-host drawing"): a second, EXPERIMENTAL way to present the overlay picture. Instead of a display plane the plugin puts a hook on the
-# host's own call of drmModeAtomicCommit (one GOT slot of /usr/bin/MPC, found and checked at run time, put back when the last instance closes) and copies the CPU-rendered picture into the host's buffer right before the host
-# flips it; the plane overlay stays the fall back (hook refused, kill-switch file /tmp/synthyboy-overlay-inhost-off, a hook that misbehaves). Needs the overlay and a Linux target; the GPU helper is not started in this build.
-# OFF builds the plugin byte for byte as it was without this code.
-option(SYNTHYBOY_MPC_INHOST_DRAW "MPC shell: draw the overlay picture into the host's own frame instead of on a display plane (experimental, needs SYNTHYBOY_MPC_OVERLAY)" OFF)
-if(SYNTHYBOY_MPC_INHOST_DRAW)
-    if(NOT SYNTHYBOY_MPC_OVERLAY)
-        message(FATAL_ERROR "SYNTHYBOY_MPC_INHOST_DRAW needs SYNTHYBOY_MPC_OVERLAY=ON")
-    endif()
-    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        message(FATAL_ERROR "SYNTHYBOY_MPC_INHOST_DRAW needs a Linux target (DRM, the host's GOT)")
-    endif()
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_INHOST_DRAW=1)
-    target_link_libraries(synthyboy_mpc PRIVATE ${CMAKE_DL_LIBS})
-endif()
-
 # Pad pressure to Filter 1 cutoff (docs/MPC.md "Pad pressure"): two automatable parameters "Pad Pressure" and "Pad Pressure Amount" after the spectrum columns (before the overlay build's "Overlay Instance", which stays last), saved in
 # the state chunk. The overlay's Master page reads them, so the MPC package needs the plugin built with this ON (the default of this shell). The
 # source default is 0: OFF builds the plugin byte for byte as it was without this code. The layer itself is in the own engine (the engine of the MPC package).
@@ -240,15 +139,6 @@ option(SYNTHYBOY_MPC_PAD_PRESSURE "MPC shell: pad pressure to Filter 1 cutoff (t
 if(SYNTHYBOY_MPC_PAD_PRESSURE)
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PAD_PRESSURE=1)
 endif()
-
-# Quality profile (docs/MPC.md "Quality profile per device", shell-mpc/device_profile.h): empty (default) = the device table of device_profile.h decides at start-up.
-# A profile text ("low", "medium", "high", or a base with changes such as "low,unison=7,warp=4x") makes this build run that profile on every device
-# (the debug file and the environment variable still override it). For trial packages; the production package is built with the empty default.
-set(SYNTHYBOY_MPC_PROFILE "" CACHE STRING "MPC shell: quality profile of this build on every device (empty = the device table)")
-if(NOT SYNTHYBOY_MPC_PROFILE MATCHES "^[a-z0-9=, ]*$")
-    message(FATAL_ERROR "SYNTHYBOY_MPC_PROFILE must be a profile text such as 'low,unison=7,warp=4x', not '${SYNTHYBOY_MPC_PROFILE}'")
-endif()
-target_compile_definitions(synthyboy_mpc PRIVATE "SYNTHYBOY_MPC_PROFILE=\"${SYNTHYBOY_MPC_PROFILE}\"")
 
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
@@ -366,18 +256,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(kit_parity_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME kit_parity_host COMMAND kit_parity_host)
 
-
-
-
-
-
-    add_executable(inhost_host EXCLUDE_FROM_ALL overlay/tests/inhost_host.cpp)
-    target_include_directories(inhost_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/overlay")
-    target_link_libraries(inhost_host PRIVATE Threads::Threads)
-    target_compile_features(inhost_host PRIVATE cxx_std_17)
-    target_compile_options(inhost_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME inhost_host COMMAND inhost_host)
-
     # the automatic layout lint of the plugin-drawn pages (every page, Init and every factory preset): a finding that is not in the baseline fails it, a baseline entry that no longer occurs too
 
     # the names of the macros on the plugin-drawn pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
@@ -392,7 +270,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     # the host's standby dim (overlay/standby.h) and the parameter coverage of the pages without a test of their own
 
-    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the host tests that reproduced the findings; they pass now and are registered (the plugin_review_host takes the built plugin as its argument).
+    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the host tests that reproduced the findings; they pass now and are registered.
     add_executable(safe_file_host EXCLUDE_FROM_ALL tests/safe_file_host.cpp)
     target_include_directories(safe_file_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(safe_file_host PRIVATE Threads::Threads)
@@ -439,22 +317,6 @@ if(NOT CMAKE_CROSSCOMPILING)
         add_test(NAME ${t} COMMAND ${t})
     endforeach()
 
-    add_executable(play_log_host EXCLUDE_FROM_ALL tests/play_log_host.cpp)
-    target_include_directories(play_log_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(play_log_host PRIVATE Threads::Threads)
-    target_compile_features(play_log_host PRIVATE cxx_std_17)
-    target_compile_options(play_log_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME play_log_host COMMAND play_log_host)
-
-    if(SYNTHYBOY_MPC_DEBUG_HOOKS)
-        add_executable(play_velocity_host EXCLUDE_FROM_ALL tests/play_velocity_host.cpp)
-        target_include_directories(play_velocity_host PRIVATE "${MPC_SDK_DIR}/framework" "${CMAKE_CURRENT_SOURCE_DIR}")
-        target_link_libraries(play_velocity_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-        target_compile_features(play_velocity_host PRIVATE cxx_std_17)
-        target_compile_options(play_velocity_host PRIVATE -Wall -Wextra)
-        add_test(NAME play_velocity_host COMMAND play_velocity_host $<TARGET_FILE:synthyboy_mpc>)
-        set_tests_properties(play_velocity_host PROPERTIES RUN_SERIAL TRUE)
-    endif()
     add_executable(stroke_strip_host EXCLUDE_FROM_ALL tests/stroke_strip_host.cpp)
     target_include_directories(stroke_strip_host PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -470,17 +332,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(close_hang_host PRIVATE cxx_std_17)
     target_compile_options(close_hang_host PRIVATE -Wall -Wextra)
     if(SYNTHYBOY_MPC_OVERLAY)
-        add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc> $<$<BOOL:${SYNTHYBOY_MPC_DEBUG_HOOKS}>:--hooks>)
-    endif()
-
-    add_executable(select_program_host EXCLUDE_FROM_ALL tests/select_program_host.cpp)
-    target_include_directories(select_program_host PRIVATE "${MPC_SDK_DIR}/framework" "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(select_program_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-    target_compile_features(select_program_host PRIVATE cxx_std_17)
-    target_compile_options(select_program_host PRIVATE -Wall -Wextra -Wpedantic)
-    if(SYNTHYBOY_MPC_OVERLAY AND SYNTHYBOY_MPC_DEBUG_HOOKS)
-        add_test(NAME select_program_host COMMAND select_program_host $<TARGET_FILE:synthyboy_mpc>)
-        set_tests_properties(select_program_host PROPERTIES RUN_SERIAL TRUE)
+        add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc>)
     endif()
 
     add_executable(controller_review_host EXCLUDE_FROM_ALL overlay/tests/controller_review_host.cpp)
@@ -500,15 +352,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(chunk_review_host PRIVATE cxx_std_17)
     target_compile_options(chunk_review_host PRIVATE -Wall -Wextra)
 
-    add_executable(plugin_review_host EXCLUDE_FROM_ALL tests/plugin_review_host.cpp)
-    target_include_directories(plugin_review_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${MPC_SDK_DIR}/framework"
-        "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(plugin_review_host PRIVATE synthyboy_core Threads::Threads ${CMAKE_DL_LIBS})
-    target_compile_features(plugin_review_host PRIVATE cxx_std_17)
-    target_compile_options(plugin_review_host PRIVATE -Wall -Wextra)
-    add_test(NAME plugin_review_host COMMAND plugin_review_host $<TARGET_FILE:synthyboy_mpc>)
     add_test(NAME chunk_review_host COMMAND chunk_review_host)
     add_test(NAME controller_review_host COMMAND controller_review_host)
 
