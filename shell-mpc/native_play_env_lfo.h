@@ -10,7 +10,7 @@
 namespace synthyboy_mpc::nativeui::playenvlfo
 {
 enum View { Hidden, LfoHz, LfoBpm, LfoKey, RndHz, RndBpm, RndKey, LastView = RndKey };
-enum Field { EnvExpand, LfoExpand, Shape, Rate, Division, Style, Sync, Stereo, Choose, StandardSync, Count };
+enum Field { ReservedEnv, ReservedLfo, Shape, Rate, Division, Style, Sync, Stereo, Choose, StandardSync, Count };
 constexpr int kOriginalHandles = 1 + StandardSync;  // StandardSync is appended after compact OSC.
 constexpr int kStandardLfos = 10, kSources = kStandardLfos + 4, kLastChoice = kSources - 1;
 constexpr float choiceValue (int source) noexcept { return static_cast<float> (std::max (1, source) - 1) / kLastChoice; }
@@ -25,7 +25,7 @@ constexpr bool usesPopup (int field) noexcept
 {
     return field == Choose || field == Shape || field == Division || field == Style || field == Sync;
 }
-constexpr const char* kNames[] { "Play Env Expand", "Play LFO Expand", "SHAPE", "RATE", "DIVISION", "STYLE", "SYNC", "STEREO", "Play LFO Choose", "Play LFO Sync Mode" };
+constexpr const char* kNames[] { "Reserved", "Reserved", "SHAPE", "RATE", "DIVISION", "STYLE", "SYNC", "STEREO", "Play LFO Choose", "Play LFO Sync Mode" };
 
 struct Context
 {

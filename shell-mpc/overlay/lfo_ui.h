@@ -82,7 +82,7 @@ public:
     // ---- the ids of the controls (the page-local id of a row of the native bridge)
     enum Id : int
     {
-        kClose = 1, kFullButton, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice; kSelector: Play full-screen cells
+        kClose = 1, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice; kSelector: Play full-screen cells
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
         kTgBack = 300, kTgAdd, kTgPage, kTgRow = 310,    // the cells of the targets page (310 + 4 * row + 0 depth, 1 polarity, 2 on / off, 3 remove)
@@ -113,7 +113,7 @@ public:
         { kDelay, "delay", "", T::Dial },              { kDirection, "direction", "", T::List },        { kSwing, "swing", "", T::Dial },
         { kStereo, "stereo", "", T::Dial },            { kMono, "mono", "", T::Toggle },                { kKeyTranspose, "keytrack_transpose", "keytrack_transpose", T::Number },
         { kKeyTune, "keytrack_tune", "keytrack_tune", T::Number },
-        { kInstance, "", "", T::Inert },               { kFullButton, "", "", T::Inert },               { kSyncMode, "", "", T::Inert },
+        { kInstance, "", "", T::Inert },               { kSyncMode, "", "", T::Inert },
         { kTargets, "", "", T::Inert },                { kEdit, "", "", T::Inert }
     };
     /** The binding of a row to the engine parameter of the LFO shown. */
@@ -220,40 +220,6 @@ public:
         }
         pageSlot_ = std::clamp (in.instance, 1, kInstances) - 1;
         updateHostedEditor (inst, stack, 3, nowMs, in.live, true);
-    }
-
-    void syncNativePlayEditor (IInstanceView& inst, UiStack& stack, int highlight, double nowMs,
-                               const synthyboy::LiveValues* live, bool enable)
-    {
-        if (! enable || stack.isMain() || stack.element() != kElementLfo)
-        {
-            if (nativePlayEditor_)
-            {
-                hideNativePlayEditor (inst);
-                update (inst, highlight, stack, nowMs, live);
-            }
-            return;
-        }
-        const bool entering = ! nativePlayEditor_;
-        if (entering)
-            geomKey_ = ~0u;
-        nativePlayEditor_ = true;
-        updateHostedEditor (inst, stack, highlight, nowMs, live, entering);
-    }
-
-    void hideNativePlayEditor (IInstanceView& inst)
-    {
-        if (! nativePlayEditor_)
-            return;
-        nativePlayEditor_ = false;
-        nativePage_ = false;
-        geomKey_ = ~0u;
-        inst.setNativeLfoState ({});
-        nativePublished_ = false;
-        publishNativeEditor (inst, {});
-        publishNativeDetail (inst, {});
-        publishTexts (inst);
-        dropGesture();
     }
 
     /** The whole picture of the page: its ground, the full screen or the page above it, the cursors, the popup. */
@@ -412,8 +378,7 @@ public:
             return false;
         if (stackDepth_ > 0)
         {
-            if ((nativePlayEditor_ && pageTop_ == 0 && fullG_.close.contains (x, y))
-                || nativeFieldAt (x, y) >= 0 || nativeEditorHit (x, y) || nativeDetailHit (x, y))
+            if (nativeFieldAt (x, y) >= 0 || nativeEditorHit (x, y) || nativeDetailHit (x, y))
                 return false;
             return ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y);
         }
@@ -514,7 +479,6 @@ public:
         namespace n = nativeui::playenvlfo;
         switch (field)
         {
-            case n::LfoExpand: return compG_.full;
             case n::Shape: return compG_.shape;
             case n::Rate: return compG_.rateKnob;
             case n::Division: return compG_.division;
@@ -549,8 +513,6 @@ public:
     bool applyCompactNative (IInstanceView& v, UiStack& stack, int field, float value)
     {
         namespace n = nativeui::playenvlfo;
-        if (field == n::LfoExpand && value >= 0.5f)
-            return stack.openFull (kElementLfo);
         if (field == n::StandardSync && ! random())
         {
             const int target = paramOf ("sync");
@@ -591,14 +553,14 @@ public:
     };
     CompactView compact() const noexcept { return { { syncMode_ } }; }
     ui::ShapeEditorModel& editor() noexcept { return editor_; }
-    void syncNativeTargets (IInstanceView& inst, UiStack& stack, bool fromPlay)
+    void syncNativeTargets (IInstanceView& inst, UiStack& stack)
     {
         using namespace nativeui::targets;
         const auto before = stack.changes();
-        targetsNative_.update (inst, targetsView_, pageTop_ == kPageTargets, fromPlay ? PlayLfo : Lfo, source(), targetRows_,
+        targetsNative_.update (inst, targetsView_, pageTop_ == kPageTargets, Lfo, source(), targetRows_,
                                [&] (ui::Change c) { rowsCommand (false, c, stack, inst); });
         const auto destination = synthyboy::modDestinationChoiceOf (static_cast<size_t> (modsTargetParam_));
-        modsNative_.update (inst, modsView_, modsContextValid (inst), fromPlay ? PlayLfo : Lfo, static_cast<int> (destination), modRows_,
+        modsNative_.update (inst, modsView_, modsContextValid (inst), Lfo, static_cast<int> (destination), modRows_,
                             [&] (ui::Change c) { rowsCommand (true, c, stack, inst); }, Modulations);
         if (stack.changes() != before)
         {
@@ -640,7 +602,6 @@ public:
     {
         ui::lfodisplay::Data d = data_;
         d.area = ui::playrows::compactPlotRect (compG_.display);
-        d.aperture = compG_.full;
         return d;
     }
     int gridOf (int lfo) const noexcept { return gridXOf (lfo); }
@@ -769,12 +730,12 @@ private:
     /** Recomputes the rectangles of the pages when something that decides them changed (the type, the sync, the page mode, the editor button). */
     void relayout()
     {
-        const uint32_t key = static_cast<uint32_t> ((random() ? 1 : 0) | (page_ ? 2 : 0) | (keyActive_ ? 4 : 0) | (nativePlayEditor_ ? 8 : 0) | (editShown() ? 16 : 0) | (w_ << 8));
+        const uint32_t key = static_cast<uint32_t> ((random() ? 1 : 0) | (page_ ? 2 : 0) | (keyActive_ ? 4 : 0) | (editShown() ? 16 : 0) | (w_ << 8));
         if (key == geomKey_)
             return;
         geomKey_ = key;
         const ui::Rect tab { 0, kTabY, w_, kTabH };
-        fullG_ = lfolayout::full (tab, random(), page_, keyActive_, nativePlayEditor_, editShown());
+        fullG_ = lfolayout::full (tab, random(), keyActive_, editShown());
         compG_ = lfolayout::compact ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 }, random());
         editor_.place (tab);
         pointMod_.place (tab);
@@ -798,7 +759,7 @@ private:
         if (refresh || nativePage_ != useNative())
             pull();
         if (page_)
-            syncNativeTargets (inst, stack, false);
+            syncNativeTargets (inst, stack);
         nativePage_ = useNative();
         const auto changes = stack.changes();
         updateNativeEditor (inst, stack, nowMs);
@@ -1329,7 +1290,7 @@ private:
         swing_ = swingP >= 0 ? static_cast<float> (v.param (swingP) * 0.01) : 0.0f;
         const int shapeP = paramOf (rnd_ != 0 ? "style" : "shape");
         shapeIdx_ = shapeP >= 0 ? static_cast<int> (std::lround (v.param (shapeP))) : 0;
-        editShown_ = rnd_ == 0 && (page_ || nativePlayEditor_ || shapeIdx_ == ui::lfo::kShapeCustom);   // standalone expands any LFO shape; Play popup expands only Custom
+        editShown_ = rnd_ == 0 && page_;   // the LFO page expands any LFO shape
         relayout();
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
             syncEditor (v);
@@ -1855,7 +1816,7 @@ private:
     nativeui::lfoeditor::State nativeEditorView (IInstanceView& v, const UiStack& stack) const
     {
         namespace n = nativeui::lfoeditor;
-        if ((! page_ && ! nativePlayEditor_) || ! v.nativeLfoShapeEditor() || rnd_ != 0 || editorContentExternal_
+        if ((! page_) || ! v.nativeLfoShapeEditor() || rnd_ != 0 || editorContentExternal_
             || stack.depth() <= 1 || stack.element() != kElementLfo || stack.top() != kPageEditor
             || &ui::theme::L() != &ui::theme::kLook1)
             return {};
@@ -2715,7 +2676,7 @@ private:
     {
         namespace n = nativeui::lfodetail;
         const bool editorList = pageTop_ == kPageList && listKind_ == ListKind::Editor;
-        if ((! page_ && ! nativePlayEditor_) || ! v.nativeLfoShapeDetails() || (rnd_ != 0 && editorList) || (editorContentExternal_ && (editorList || pageTop_ == kPagePointMod))
+        if ((! page_) || ! v.nativeLfoShapeDetails() || (rnd_ != 0 && editorList) || (editorContentExternal_ && (editorList || pageTop_ == kPagePointMod))
             || stack.depth() <= 2 || stack.element() != kElementLfo || &ui::theme::L() != &ui::theme::kLook1)
             return {};
         n::State state;
@@ -3364,8 +3325,8 @@ private:
     void publishTexts (IInstanceView& v)
     {
         namespace t = nativeui::nativetext;
-        const bool editorUp = stackDepth_ > 0 && (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor)) && (page_ || nativePlayEditor_);
-        const bool pointUp = stackDepth_ > 0 && pageTop_ == kPagePointMod && (page_ || nativePlayEditor_);
+        const bool editorUp = stackDepth_ > 0 && (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor)) && page_;
+        const bool pointUp = stackDepth_ > 0 && pageTop_ == kPagePointMod && page_;
         std::array<std::string, 8> next;   // EdSelected, EdHint, EdGrid, EdTrigger, EdInfo, EdStatus, EdMarkerHint, PointModSummary
         if (editorUp)
         {
@@ -3435,7 +3396,6 @@ private:
     double statusUntilMs_ = 0.0;
     static constexpr double kStatusMs = 3500.0, kTurnGapMs = 600.0;
     static constexpr int kMaxShapeName = 40;
-    bool nativePlayEditor_ = false;
     bool page_ = false, nativeGround_ = false;   // standalone LFO and its confirmed host background
     uibind::UsedScan scan_;   // the last scan of the matrix and the parameters (selector candidates)
     int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;

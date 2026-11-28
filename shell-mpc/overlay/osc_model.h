@@ -254,7 +254,7 @@ inline DetailLayout layoutDetail (const PanelPreset& p, const Rect& rect, bool w
 // the compact view (the oscillator third of the Play page)
 struct CompactLayout
 {
-    Rect third, display, power, full, route, instances, basic, first, second, pan, level;
+    Rect third, display, power, route, instances, basic, first, second, pan, level;
     Rect plot() const noexcept { return ui::playrows::compactPlotRect (display); }   // Play phase 2: no band, the buttons stand in the header band above the display
 };
 inline CompactLayout layoutCompact (const Rect& third, Instance inst) noexcept
@@ -266,7 +266,6 @@ inline CompactLayout layoutCompact (const Rect& third, Instance inst) noexcept
     const bool sub = inst == Instance::Sub;
     c.display = pr::displayRect (third);
     c.power = pr::headerPowerRect (third);
-    c.full = pr::headerExpandRect (third);
     c.route = sub ? Rect {} : pr::headerRouteRect (third);
     c.instances = pr::headerSelectorRect (third, true, ! sub);
     const int by = pr::controlsLine (third);

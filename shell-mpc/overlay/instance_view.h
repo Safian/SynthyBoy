@@ -37,7 +37,6 @@ namespace synthyboy_mpc::nativeui::lfodetail { struct State; }
 namespace synthyboy_mpc::nativeui::lfopick { struct State; }
 namespace synthyboy_mpc::nativeui::oscdetail { struct State; }
 namespace synthyboy_mpc::nativeui::targets { struct State; }
-namespace synthyboy_mpc::nativeui::expandedplay { struct State; }
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -92,7 +91,6 @@ public:
     virtual bool mixerSolo (int /*strip*/) const noexcept { return false; }
     virtual bool mixerMute (int /*strip*/) const noexcept { return false; }
     /** One display frame per visible standalone Env selector cell. */
-    virtual void setNativeEnvSelector (const int* /*frames*/) noexcept {}
     virtual void setNativeEnvEditor (bool /*active*/, const nativeui::FxCell* /*fields*/) noexcept {}
     /** Display text for TARGETS. The normalized button action stays independent of the routed destination count. */
     virtual void setNativeEnvTargetCount (int /*count*/) noexcept {}
@@ -131,9 +129,6 @@ public:
     virtual bool nativeMacroTargetsSupported() const noexcept { return false; }
     virtual void publishNativeMacroTargets (bool) noexcept {}
     virtual int takeNativeMacroTarget() noexcept { return -1; }
-    virtual bool nativeExpandedPlaySupported() const noexcept { return false; }
-    virtual void publishNativeExpandedPlay (const nativeui::expandedplay::State&) noexcept {}
-    virtual bool takeNativeExpandedPlayClose (const nativeui::expandedplay::State&) noexcept { return false; }
     virtual bool nativeModTargetsSupported() const noexcept { return false; }
     virtual void publishNativeModTargets (const nativeui::targets::State&) noexcept {}
     virtual void hideNativeModTargets (const void*) noexcept {}

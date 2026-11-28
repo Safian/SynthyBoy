@@ -18,10 +18,9 @@ namespace synthyboy_mpc::nativeui
 constexpr int kMixerStrips = 10;
 constexpr int kMixerPeakBase = 0;
 constexpr int kMixerHoldBase = kMixerPeakBase + kMixerStrips;
+// kEnvSelectorBase: six reserved handles (the Env selector strip of the Play expansion is gone; no longer published, the indexes after them must not move)
 constexpr int kEnvSelectorBase = kMixerHoldBase + kMixerStrips;
 constexpr int kEnvSelectorCells = 6;
-constexpr int kEnvSelectorLastFrame = 30;
-constexpr int kEnvSelectorFrameBits = 5;
 constexpr int kFxValueBase = kEnvSelectorBase + kEnvSelectorCells;
 constexpr int kFxCells = 16;
 constexpr int kFxKindBase = kFxValueBase + kFxCells;
@@ -95,6 +94,7 @@ constexpr int kOscRootLoad = kPzAvailability + 1;
 constexpr int kOscRootLoadView = kOscRootLoad + 3;
 constexpr int kModTargets = kOscRootLoadView + 1;
 constexpr int kModTargetsHandles = 35;
+// Reserved since 2026-11-28 (the Play expansion is gone): no longer published, read or handled; the indexes after them must not move.
 constexpr int kPlayExpanded = kModTargets + kModTargetsHandles;
 constexpr int kPlayExpandedHandles = 4;
 constexpr int kMacroTarget = kPlayExpanded + kPlayExpandedHandles;
@@ -190,7 +190,6 @@ namespace pz
 enum Action { Back = 1, Reset, Remove, Apply };
 enum Availability { None, RemoveOnly, Both, ApplyOnly };
 }
-static_assert (kEnvSelectorCells * kEnvSelectorFrameBits <= 32 && kEnvSelectorLastFrame < (1 << kEnvSelectorFrameBits));
 
 inline float meterValue (float value) noexcept
 {

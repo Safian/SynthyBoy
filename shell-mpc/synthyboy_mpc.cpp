@@ -412,16 +412,6 @@ struct PluginInstance
         {
             return inst.engine != nullptr && inst.engine->mixerMute (strip);
         }
-        void setNativeEnvSelector (const int* frames) noexcept override
-        {
-            uint32_t packed = 0;
-            for (int i = 0; i < nativeui::kEnvSelectorCells; ++i)
-            {
-                const auto frame = static_cast<uint32_t> (std::clamp (frames[i], 0, nativeui::kEnvSelectorLastFrame));
-                packed |= frame << (i * nativeui::kEnvSelectorFrameBits);
-            }
-            inst.nativeEnvSelector.store (packed, std::memory_order_relaxed);
-        }
         void setNativeEnvEditor (bool active, const nativeui::FxCell* fields) noexcept override { inst.nativeEnvEditor.publish (active ? 1 : 0, fields); }
         void setNativeEnvTargetCount (int count) noexcept override
         {
@@ -671,18 +661,6 @@ struct PluginInstance
                 }
             }
             return -1;
-        }
-        bool nativeExpandedPlaySupported() const noexcept override { return true; }
-        void publishNativeExpandedPlay (const nativeui::expandedplay::State& state) noexcept override
-        {
-            inst.nativeExpandedPlay.publish (state);
-        }
-        bool takeNativeExpandedPlayClose (const nativeui::expandedplay::State& state) noexcept override
-        {
-            if (! inst.nativeExpandedPlay.take (state))
-                return false;
-            inst.nativeExpandedPlayAck = nativeui::expandedplay::actionOf (state.frame);
-            return true;
         }
         bool nativeModTargetsSupported() const noexcept override { return true; }
         void publishNativeModTargets (const nativeui::targets::State& state) noexcept override
@@ -1592,9 +1570,7 @@ struct PluginInstance
     static bool isNativeUiParam (VstInt32 index) noexcept { return index >= nativeUiBase() && index < nativeUiBase() + nativeui::kCount; }
     std::atomic<float> nativeUiValues[nativeui::kEnvSelectorBase] {};
     std::atomic<float> nativeStereoMeters[nativeui::kMixerStereoFields * nativeui::kMixerStrips] {};
-    std::atomic<uint32_t> nativeEnvSelector { 0 };
     std::atomic<bool> nativeMetersDue { false }, nativeModBoardDue { false };
-    uint32_t reportedEnvFrames = 0;  // display thread
     bool mixerVisualsReported = false;
     float nativeUiReported[nativeui::kCount] {};   // display thread only
     std::atomic<bool> nativeMixerActive { false };   // the native Mixer strips are on screen
@@ -1664,8 +1640,6 @@ struct PluginInstance
     nativeui::NativeCellBank<nativeui::kMacroTargetCount> nativeMacroTargets;
     std::atomic<uint64_t> nativeMacroTargetPreset {};
     int nativeMacroTargetAck = -1;
-    nativeui::expandedplay::Bank nativeExpandedPlay;
-    int nativeExpandedPlayAck = -1;
     nativeui::targets::Bank nativeModTargets;
     std::array<bool, nativeui::targets::kFields> nativeModTargetAcks {};
     nativeui::NativeCellBank<nativeui::mod::kFields> nativeMod;
@@ -1706,12 +1680,6 @@ struct PluginInstance
             "lfo1.mono", "rlfo1.stereo", "lfo1.keytrack_transpose", "lfo1.keytrack_tune"
         };
         return keys[field] == nullptr ? nullptr : synthyboy::findParamByKey (keys[field]);
-    }
-
-    static float envSelectorValue (uint32_t frames, int cell) noexcept
-    {
-        constexpr uint32_t mask = (1u << nativeui::kEnvSelectorFrameBits) - 1;
-        return static_cast<float> ((frames >> (cell * nativeui::kEnvSelectorFrameBits)) & mask) / nativeui::kEnvSelectorLastFrame;
     }
 
     float nativeFilterValue (int slot) const noexcept
@@ -1789,7 +1757,7 @@ struct PluginInstance
         namespace n = nativeui::playenvlfo;
         if (field == n::Choose)
             return nativePlayEnvLfo.selection();
-        if (field == n::EnvExpand || field == n::LfoExpand)
+        if (field == n::ReservedEnv || field == n::ReservedLfo)
             return 0.0f;
         const int target = nativePlayEnvLfo.at (field).cell().target;
         if (field == n::StandardSync && target >= 0)
@@ -1993,8 +1961,7 @@ struct PluginInstance
         if (nativeui::isMacroTargetOffset (offset))
             return 0.0f;
         if (nativeui::isPlayExpandedOffset (offset))
-            return offset == nativeui::kPlayExpanded
-                ? static_cast<float> (nativeExpandedPlay.layout()) / nativeui::expandedplay::LastFrame : 0.0f;
+            return 0.0f;   // reserved (the Play expansion is gone)
         if (nativeui::isModTargetsOffset (offset))
         {
             const int field = offset - nativeui::kModTargets;
@@ -2150,7 +2117,7 @@ struct PluginInstance
             return nativeFxValue (nativeFxEndpoint (offset).cell());
         }
         if (offset >= nativeui::kEnvSelectorBase)
-            return envSelectorValue (nativeEnvSelector.load (std::memory_order_relaxed), offset - nativeui::kEnvSelectorBase);
+            return 0.0f;   // the Env selector cells (reserved since the Play expansion is gone; their indexes stay)
         return nativeUiValues[offset].load (std::memory_order_relaxed);
     }
 
@@ -2595,13 +2562,6 @@ struct PluginInstance
 
     void nativeUiPoll (AEffect* e)
     {
-        const auto envFrames = nativeEnvSelector.load (std::memory_order_relaxed);
-        if (envFrames != reportedEnvFrames)
-        {
-            for (int i = 0; i < nativeui::kEnvSelectorCells; ++i)
-                reportNativeValue (e, nativeui::kEnvSelectorBase + i, envSelectorValue (envFrames, i));
-            reportedEnvFrames = envFrames;
-        }
         const float previousFxSource = nativeUiReported[nativeui::kFxHeader];
         bool fxLabelsChanged = nativeFxHeaderPoll (e);
         const float currentFxSource = nativeUiReported[nativeui::kFxHeader];
@@ -2631,7 +2591,6 @@ struct PluginInstance
             }
             nativeMacroTargetAck = -1;
         }
-        nativeExpandedPlayPoll (e);
         nativeModTargetsPoll (e);
         nativeModPoll (e);
         nativeModNavigationPoll (e);
@@ -2734,23 +2693,6 @@ struct PluginInstance
         reportNativeValue (e, nativeui::kEnvView, view);
         if (changed)
             requestNativeControlNames();
-    }
-
-    void nativeExpandedPlayPoll (AEffect* e)
-    {
-        constexpr int base = nativeui::kPlayExpanded;
-        const float view = nativeUiValue (base);
-        if (view == 0.0f && nativeUiReported[base] == 0.0f)
-            return;
-        for (int field = 0; field < nativeui::expandedplay::Actions; ++field)
-        {
-            const auto link = nativeExpandedPlay.at (field);
-            const bool rebound = nativeExpandedPlay.needsReport (link);
-            reportNativeValue (e, base + 1 + field, 0.0f, field == nativeExpandedPlayAck || (rebound && link.cell().target >= 0));
-            nativeExpandedPlay.report (link);
-        }
-        nativeExpandedPlayAck = -1;
-        reportNativeValue (e, base, view);
     }
 
     void nativeModTargetsPoll (AEffect* e)
@@ -4075,8 +4017,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             }
             if (nativeui::isPlayExpandedOffset (offset))
             {
-                const char* name = offset == nativeui::kPlayExpanded ? "Play Expanded Editor" : "CLOSE";
-                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? name : "");
+                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Reserved" : "");   // the Play expansion is gone; the indexes stay
                 return 1;
             }
             if (nativeui::isModTargetsOffset (offset))
@@ -4310,7 +4251,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                         std::snprintf (buf, kCap, "%s %d", source > n::kStandardLfos ? "RND" : "LFO",
                                        source > n::kStandardLfos ? source - n::kStandardLfos : source);
                 }
-                else if ((field > n::LfoExpand && field < n::Choose) || field == n::StandardSync)
+                else if ((field > n::ReservedLfo && field < n::Choose) || field == n::StandardSync)
                 {
                     const int target = inst->nativePlayEnvLfo.at (field).cell().target;
                     if (target >= 0)
@@ -5376,7 +5317,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
-            props->maxInteger = nativeOffset == nativeui::kPlayExpanded ? nativeui::expandedplay::LastFrame : 1;
+            props->maxInteger = 1;
             props->stepInteger = 1;
             return 1;
         }
@@ -5526,7 +5467,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->maxInteger = field == n::First ? (sub ? 5 : noise ? 8 : 4)
                               : field == n::Second ? (sub ? 4 : 3)
                               : field == n::Route ? n::kRoutingDetails : 1;
-            if (field == n::Power || field == n::Expand)
+            if (field == n::Power)
                 props->flags |= kVstParameterIsSwitch;
             return 1;
         }
@@ -5540,7 +5481,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 return 0;
             }
             const int target = inst->nativePlayEnvLfo.at (field).cell().target;
-            if (field > n::LfoExpand && field < n::Choose && target >= 0)
+            if (field > n::ReservedLfo && field < n::Choose && target >= 0)
                 fillParameterProperties (synthyboy::paramTable()[target], props);
             else
             {
@@ -5548,8 +5489,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 props->flags = kVstParameterUsesIntegerMinMax;
                 props->maxInteger = field < 0 ? static_cast<int> (n::LastView) : field == n::Choose ? n::kLastChoice
                                                                    : field == n::StandardSync ? 2 : 1;
-                if (field == n::EnvExpand || field == n::LfoExpand)
-                    props->flags |= kVstParameterIsSwitch;
                 props->stepInteger = 1;
             }
             return 1;
@@ -6210,10 +6149,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                 }
                 if (nativeui::isPlayExpandedOffset (offset))
                 {
-                    if (offset > nativeui::kPlayExpanded && parameter >= 0.5f)
-                        inst->nativeExpandedPlay.post (offset - nativeui::kPlayExpanded - 1, parameter,
-                                                     inst->stateGeneration.load (std::memory_order_acquire));
-                    return;
+                    return;   // reserved handles: the Play expansion is gone
                 }
                 if (nativeui::isModTargetsOffset (offset))
                 {

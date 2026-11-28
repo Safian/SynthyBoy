@@ -16,7 +16,8 @@ class PlayEnvLfo
 public:
     static ui::Rect rect (const EnvUi& env, const LfoUi& lfo, int field) noexcept
     {
-        return field == playenvlfo::EnvExpand ? env.compact().full.rect() : lfo.compactNativeRect (field);
+        (void) env;
+        return lfo.compactNativeRect (field);
     }
 
     bool take (IInstanceView& v, UiStack& stack, const EnvUi& env, LfoUi& lfo)
@@ -36,24 +37,19 @@ public:
             }
         }
         bool changed = false;
-        constexpr int inputOrder[] { n::EnvExpand, n::LfoExpand, n::Sync, n::StandardSync, n::Shape, n::Rate, n::Division, n::Style, n::Stereo };
-        static_assert (std::size (inputOrder) + 1 == n::Count);
+        constexpr int inputOrder[] { n::Sync, n::StandardSync, n::Shape, n::Rate, n::Division, n::Style, n::Stereo };
+        static_assert (std::size (inputOrder) + 3 == n::Count);   // + Choose and the two reserved slots
         for (int field : inputOrder)
         {
             float value;
             if (! v.takeNativePlayEnvLfo (state, field, value))
                 continue;
-            if (field == n::EnvExpand)
-            {
-                if (value >= 0.5f)
-                    return stack.openFull (EnvUi::kElementEnv);
-            }
-            else if (lfo.applyCompactNative (v, stack, field, value))
+            if (lfo.applyCompactNative (v, stack, field, value))
             {
                 changed = true;
                 // The active layout or panel may have changed. Take any
                 // remaining fields against the updated binding on the next tick.
-                if (field == n::LfoExpand || field == n::Sync || field == n::StandardSync)
+                if (field == n::Sync || field == n::StandardSync)
                     return true;
             }
         }
@@ -66,7 +62,6 @@ public:
         if (owner_ != nullptr && owner_ != &v)
             leave();
         state_ = current (v, stack, env, lfo);
-        env.compact().full.setHostPainted (state_.fields[n::EnvExpand].target >= 0);
         lfo.setCompactNativeParts (state_);
         if (v.nativePlayEnvLfoControls())
             v.setNativePlayEnvLfo (state_);
@@ -130,8 +125,6 @@ public:
         const int lfoId = uibind::selectedLfo (v);
         const int envId = uibind::selectedEnv (v);
         state.context = { view, envId, lfoId, v.stateGeneration(), v.nativePlayEnvLfoRevision() };
-        state.fields[n::EnvExpand] = { n::EnvExpand, envId, nativeui::kFxToggle };
-        state.fields[n::LfoExpand] = { n::LfoExpand, lfoId, nativeui::kFxToggle };
         state.fields[n::Choose] = { n::Choose, lfoId, nativeui::kFxDial };
         auto bind = [&] (int field)
         {

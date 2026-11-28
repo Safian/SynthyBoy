@@ -64,7 +64,6 @@ inline Rect headerBandRect (const Rect& third) noexcept { return { third.x + kMa
 /** The power button slot (oscillator only): the left end of the header band. */
 inline Rect headerPowerRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.x, h.y, kHeaderButtonSlot, kSelectorH }; }
 /** The full screen (expand) button slot: the right end of the header band, the same place in the three thirds. */
-inline Rect headerExpandRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.right() - kHeaderButtonSlot, h.y, kHeaderButtonSlot, kSelectorH }; }
 /** The route cell (oscillator, not Sub): left of the full screen button. */
 inline Rect headerRouteRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.right() - kHeaderButtonSlot - kHeaderRouteSlot, h.y, kHeaderRouteSlot, kSelectorH }; }
 /** The selector (dropdown) slot between the power button (or the left pad) and the route cell (or the full screen button). */

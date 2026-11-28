@@ -56,7 +56,7 @@ public:
     // ---- the id spaces (a Change comes out with the id the owner gave)
     enum Id : int
     {
-        kClose = 1, kFullButton, kInstances, kGraph, kTargets, kCompactInstances,
+        kClose = 1, kInstances, kGraph, kTargets, kCompactInstances,
         kDial = 100,                        // 100 + dial index: the dials (the compact view and the full screen share the ids)
         kBeats = 130, kLegato,
         kDialBeats = 140,                   // 140 + dial index: the rows of the time dials in beats
@@ -104,25 +104,16 @@ public:
     /** The cells of the full screen / page: the nine dials, BEATS, RETRIG, the selector (Play expansion only), the TARGETS cell, CLOSE (Play expansion only), the graph, the blocks. */
     struct FullGeometry
     {
-        ui::Rect knob[kNumDials], beats, legato, selector, targets, close, graph, tags, caption, block[kGroups];
+        ui::Rect knob[kNumDials], beats, legato, selector, targets, graph, tags, caption, block[kGroups];
     };
-    /** The compact view of the Play page: the graph, the host-painted full screen cell and the four ADSR dial cells. */
+    /** The compact view of the Play page: the graph and the four ADSR dial cells. */
     struct CompactView
     {
-        struct FullCell
-        {
-            ui::Rect r;
-            bool hostPainted = false;
-            const ui::Rect& rect() const noexcept { return r; }
-            void setHostPainted (bool on) noexcept { hostPainted = on; }
-        };
-        FullCell full;
         ui::Rect graph, plot, knob[4];
     };
 
     EnvUi() { setCanvas (kCanvasW, kCanvasH); configure (1); }
 
-    bool nativeInstanceSelector() const noexcept { return nativePlayEditor_ && ! page_; }
     bool nativeTargets() const noexcept { return native(); }
 
     void setHostBackground (bool on) noexcept { nativeGround_ = on; }
@@ -261,7 +252,7 @@ public:
                 stack.openDetail (kPageTargets);   // an opening detail owns the frame before the virtual selector is read
         }
         update (inst, 2, stack, nowMs, in.live);
-        syncNativeTargets (inst, stack, false);
+        syncNativeTargets (inst, stack);
         publishNativeEditor (inst);
         if (consumeNativeEditor (inst, stack))
         {
@@ -314,7 +305,7 @@ public:
         }
         if (pageTop_ == 0)
         {
-            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());   // Play expansion: covers the compact cells of the Play page under the native cells
+            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());
             fullGraph_.draw (sb);
             return;
         }
@@ -360,8 +351,6 @@ public:
         }
         if (! ui::Rect { kCompactX, kTabY + 4, kCompactW, kTabH - 8 }.contains (x, y))
             return false;
-        if (compactView_.full.rect().contains (x, y))
-            return false;
         for (const ui::Rect& k : compactView_.knob)
             if (k.contains (x, y))
                 return false;
@@ -393,7 +382,7 @@ public:
             }
             gesture_ = nullptr;
             gestureDown_ = false;
-            if ((page_ || nativePlayEditor_) && stackDepth_ == 1 && pageTop_ == 0)
+            if (page_ && stackDepth_ == 1 && pageTop_ == 0)
             {
                 nativeGestureField_ = nativeFieldAt (x, y);
                 nativeGestureTarget_ = nativeGestureField_ >= 0 ? nativeCells_[nativeGestureField_].target : -1;
@@ -464,26 +453,18 @@ public:
             nativeHold_ = false;
             handle (ui::Change::modsRequest (kNativeScalarIds[field]), stack, inst);
             syncPages (stack, inst);
-            publishNativeSelector (inst);
             publishNativeEditor (inst);
         }
         if (gesture_ && gestureDown_)
             handle (gesture_->tick (nowMs), stack, inst);
     }
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the graph or the list under the pointer takes it as steps of its own; the selector of the Play expansion steps the envelope. false: nothing of
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the graph or the list under the pointer takes it as steps of its own. false: nothing of
         this page lies there, or a finger is down on it. */
     bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         ui::Component* top = topComponent();
         if (gestureDown_)
             return false;
-        if (pageTop_ == 0 && stackDepth_ > 0 && nativeSelectorAt (x, y))
-        {
-            const int id = selectorStep (selector_, notches);
-            if (id > 0)
-                uibind::chooseEnv (inst, id);
-            return true;
-        }
         if (! top || ! covers (x, y))
             return false;
         ui::Change ch;
@@ -513,64 +494,15 @@ public:
     const CompactView& compact() const noexcept { return compactView_; }
     const FullGeometry& geometry() const noexcept { return geo_; }
     ui::EnvGraph& graph() noexcept { return stackDepth_ == 0 ? compactGraph_ : fullGraph_; }
-    void syncNativePlayEditor (IInstanceView& inst, UiStack& stack, int highlight, double nowMs,
-                               const synthyboy::LiveValues* live, bool enable)
-    {
-        const bool active = enable && stack.depth() == 1 && stack.element() == kElementEnv && pageTop_ == 0;
-        if (! active)
-        {
-            hideNativePlayEditor (inst);
-            return;
-        }
-        const auto preset = inst.stateGeneration();
-        if (nativePlayEditor_ && preset != nativePlayPreset_)
-        {
-            inst.setNativeEnvEditor (false, nullptr);
-            nativeGestureBlocked_ = nativeGestureField_ >= 0;
-        }
-        nativePlayPreset_ = preset;
-        if (! nativePlayEditor_)
-        {
-            nativePlayEditor_ = true;
-            layoutFull();
-        }
-        publishNativeSelector (inst);
-        publishNativeEditor (inst);
-        if (consumeNativeEditor (inst, stack))
-        {
-            update (inst, highlight, stack, nowMs, live);
-            if (stack.depth() != 1)
-                hideNativePlayEditor (inst);
-            else
-            {
-                publishNativeSelector (inst);
-                publishNativeEditor (inst);
-            }
-        }
-    }
-
-    void hideNativePlayEditor (IInstanceView& inst) noexcept
-    {
-        if (! nativePlayEditor_)
-            return;
-        nativePlayEditor_ = false;
-        layoutFull();
-        publishNativeTags (inst, false);
-        inst.setNativeEnvEditor (false, nullptr);
-        const int frames[nativeui::kEnvSelectorCells] = {};
-        inst.setNativeEnvSelector (frames);
-        dropGesture();
-    }
-
-    void syncNativeTargets (IInstanceView& inst, UiStack& stack, bool fromPlay)
+    void syncNativeTargets (IInstanceView& inst, UiStack& stack)
     {
         using namespace nativeui::targets;
         const auto before = stack.changes();
-        nativeTargets_.update (inst, targets_, pageTop_ == kPageTargets, fromPlay ? PlayEnv : Env,
+        nativeTargets_.update (inst, targets_, pageTop_ == kPageTargets, Env,
                                selectedSource_, targetRows_, [&] (ui::Change change) { handle (change, stack, inst); });
         const auto destination = synthyboy::modDestinationChoiceOf (static_cast<size_t> (modsTargetParam_));
         nativeModulations_.update (inst, mods_, ! pickingSource_ && modsContextValid (inst),
-            fromPlay ? PlayEnv : Env, static_cast<int> (destination), modRows_,
+            Env, static_cast<int> (destination), modRows_,
             [&] (ui::Change change) { handle (change, stack, inst); }, Modulations);
         publishNativeList (inst, stack);
         if (stack.changes() != before)
@@ -639,7 +571,7 @@ private:
     static_assert (std::size (kNativeScalarIds) == nativeui::env::Selection);
     static constexpr int kGroundX0 = 434, kGroundX1 = 848;
 
-    bool native() const noexcept { return page_ || nativePlayEditor_; }
+    bool native() const noexcept { return page_; }
     /** The slot of a control id (-1: none): the dials 100 .. 108, BEATS 130, RETRIG 131. */
     static constexpr int slotOfId (int id) noexcept
     {
@@ -669,7 +601,6 @@ private:
         compactGraph_.setId (kGraph);
         compactView_.graph = gr;
         compactView_.plot = compactGraph_.plotArea;
-        compactView_.full.r = ui::playrows::headerExpandRect (third);
         const int gap = ui::playrows::kControlGap;
         const int by = ui::playrows::controlsLine (third), kh = std::max (kKnobH, (third.bottom() - m - by - gap) / 2);
         const int cw = (W - gap) / 2;
@@ -689,13 +620,12 @@ private:
         const int fixed[3] = { page_ ? 0 : 96, 0, 200 }, weight[3] = { 0, 1, 0 };
         pagegeo::layoutRow (top, fixed, weight, 3, pagegeo::kGap, r);
         const int cy = top.y + (top.h - 56) / 2;
-        g.close = { nativePlayEditor_ ? tab.x + 58 : r[0].x, cy, r[0].w, 56 };
         laidCells_ = selector_.numCells();
         const int captionW = page_ ? kPageCaptionW : kCaptionW;
-        g.caption = nativePlayEditor_ ? ui::Rect {} : ui::Rect { r[1].x, cy, captionW, 56 };
+        g.caption = ui::Rect { r[1].x, cy, captionW, 56 };
         const int selW = page_ ? 0 : std::min (std::max (0, r[1].w - kCaptionW), std::max (1, laidCells_) * kSelectorCellW);
         g.selector = { r[1].x + (page_ ? captionW : kCaptionW), cy, selW, 56 };
-        g.targets = { r[2].x, cy, page_ || nativePlayEditor_ ? 160 : r[2].w, 56 };
+        g.targets = { r[2].x, cy, page_ ? 160 : r[2].w, 56 };
         const int selRight = g.selector.right();
         g.tags = { selRight + 16, cy, std::max (0, g.targets.x - 12 - (selRight + 16)), 56 };
         // ---- the bottom band: three blocks (a Q group each), in proportion to the members
@@ -737,12 +667,10 @@ private:
         {
             case n::Beats: return geo_.beats;
             case n::Retrig: return geo_.legato;
-            case n::Selection: return nativeInstanceSelector() ? geo_.selector : ui::Rect {};
             case n::Targets: return nativeTargets() ? geo_.targets : ui::Rect {};
             default: return {};
         }
     }
-    bool nativeSelectorAt (int x, int y) const noexcept { return nativeInstanceSelector() && geo_.selector.contains (x, y); }
     bool nativeCellAt (int x, int y) const noexcept
     {
         if (! native())
@@ -750,7 +678,7 @@ private:
         for (int f = 0; f < nativeui::env::kFields; ++f)
             if (cellOf (f).contains (x, y))
                 return true;
-        return nativePlayEditor_ && geo_.close.contains (x, y);
+        return false;
     }
     /** The group whose native cells hold (x, y): ADSR 0, SHAPE 1, TIME 2 (-1: none). */
     int groupAt (int x, int y) const noexcept
@@ -772,8 +700,6 @@ private:
             return areas;
         for (int f = 0; f < nativeui::env::kFields; ++f)
             areas[f] = cellOf (f);
-        if (nativePlayEditor_)
-            areas[nativeui::env::kFields] = geo_.close;
         return areas;
     }
     static void drawBank (gpu::SceneBuilder& sb, const ui::Rect& frame)
@@ -788,8 +714,6 @@ private:
     // ---- the native bridge
     int nativeFieldAt (int x, int y) const noexcept
     {
-        if (nativeSelectorAt (x, y))
-            return nativeui::env::Selection;
         if (nativeTargets() && geo_.targets.contains (x, y))
             return nativeui::env::Targets;
         for (int field = 0; field < nativeui::env::Selection; ++field)
@@ -801,7 +725,7 @@ private:
     void publishNativeEditor (IInstanceView& inst) noexcept
     {
         namespace n = nativeui::env;
-        if (! page_ && ! nativePlayEditor_)
+        if (! page_)
             return;
         const bool visible = stackDepth_ == 1 && pageTop_ == 0;
         nativeCells_.fill ({});
@@ -816,8 +740,6 @@ private:
             }
             // Actions identify the selected envelope via its sustain index.
             // They never write that engine parameter.
-            if (nativeInstanceSelector())
-                nativeCells_[n::Selection] = { param_[kSustain], param_[kSustain], nativeui::kFxToggle };
             if (nativeTargets())
                 nativeCells_[n::Targets] = { param_[kSustain], param_[kSustain], nativeui::kFxToggle };
         }
@@ -832,12 +754,11 @@ private:
         inst.setNativeEnvEditor (visible, nativeCells_.data());
         publishNativeTags (inst, visible);
     }
-    /** What the envelope modulates, as the text lines of the tags in the top bar (nativeui::nativetext::EnvTag0 .., native Labels of the Env tabs and of the Play expansion): the first targets that fit (the page three, the Play
-        expansion one) and "+n" for the rest. */
+    /** What the envelope modulates, as the text lines of the tags in the top bar (nativeui::nativetext::EnvTag0 .., native Labels of the Env tabs): the first targets that fit (three) and "+n" for the rest. */
     void publishNativeTags (IInstanceView& inst, bool visible) const noexcept
     {
         namespace t = nativeui::nativetext;
-        const int slots = nativePlayEditor_ ? 1 : 3;
+        const int slots = 3;
         const int shown = visible ? std::min ({ numTargetLines_, numTargets_, slots }) : 0;
         for (int i = 0; i < 3; ++i)
             inst.setNativeText (t::EnvTag0 + i, i < shown ? targetLines_[i] : "");
@@ -858,16 +779,6 @@ private:
             return cell.target >= 0 && inst.takeNativeEnvField (field, cell, value);
         };
         float value = 0.0f;
-        if (take (n::Selection, value))
-        {
-            const int choice = 1 + static_cast<int> (std::lround (value * (n::kInstances - 1)));
-            for (int pos = 0; pos < playCells_.n; ++pos)
-                if (uibind::cellChoice (selector_, playCells_, pos) == choice && choice != sel_)
-                {
-                    uibind::chooseEnv (inst, choice);
-                    return true;
-                }
-        }
         if (take (n::Targets, value) && value >= 0.5f)
         {
             stack.openDetail (kPageTargets);
@@ -883,51 +794,6 @@ private:
             if (field != n::Beats && take (field, value))
                 uibind::writeNorm (inst, nativeCells_[field].target, value);
         return false;
-    }
-
-    /** The skin gates a native button on each candidate's five contiguous frames.
-        Frame 0 is blank, then each candidate has plain, used, selected,
-        selected-and-used and '+' frames in that order. */
-    void publishNativeSelector (IInstanceView& v) const noexcept
-    {
-        constexpr int kVariants = 5;
-        static_assert (nativeui::kEnvSelectorCells * kVariants == nativeui::kEnvSelectorLastFrame);
-        int frames[nativeui::kEnvSelectorCells] = {};
-        if (stackDepth_ == 1 && pageTop_ == 0)
-        {
-            int cells[nativeui::kEnvSelectorCells];
-            const int n = selector_.cells (cells, nativeui::kEnvSelectorCells);
-            for (int slot = 0; slot < n; ++slot)
-            {
-                const int choice = uibind::cellChoice (selector_, playCells_, slot);
-                if (choice <= 0)
-                    continue;
-                const int index = cells[slot];
-                const int variant = index == binding::SelectorSet::kPlus ? 4
-                    : (selector_.state.selected == choice ? 2 : 0) + (selector_.state.items[index].used ? 1 : 0);
-                frames[slot] = 1 + (choice - 1) * kVariants + variant;
-            }
-        }
-        v.setNativeEnvSelector (frames);
-    }
-
-    /** One detent of the wheel on the selector: the id of the next (delta > 0) or previous shown candidate, without wrapping; 0: nothing changes. */
-    static int selectorStep (const binding::SelectorSet& sel, int delta) noexcept
-    {
-        if (delta == 0)
-            return 0;
-        int shown[binding::SelectorSet::kMaxCandidates], ns = 0, at = -1;
-        for (int i = 0; i < std::min (sel.state.count, binding::SelectorSet::kMaxCandidates); ++i)
-            if (binding::SelectorSet::isShown (sel.state, i))
-            {
-                if (sel.state.items[i].id == sel.state.selected)
-                    at = ns;
-                shown[ns++] = i;
-            }
-        if (ns == 0)
-            return 0;
-        const int to = at < 0 ? (delta > 0 ? 0 : ns - 1) : std::clamp (at + delta, 0, ns - 1);
-        return to == at ? 0 : sel.state.items[shown[to]].id;
     }
 
     // ======================================================================================================================================================================
@@ -1563,8 +1429,6 @@ private:
     bool nativeHold_ = false;
     int nativeDownX_ = 0, nativeDownY_ = 0;
     double nativeDownMs_ = 0.0;
-    bool nativePlayEditor_ = false;
-    uint64_t nativePlayPreset_ = 0;
     bool page_ = false;                  // the page of the Env tab
     uibind::UsedScan scan_;              // the last scan of the matrix and the parameters (selector candidates)
     const IInstanceView* selectorInstance_ = nullptr;

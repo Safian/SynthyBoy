@@ -20,7 +20,7 @@ constexpr int kModeW = 208, kModeH = 56;   // the HZ | BPM | KEY radio grid: thr
 /** The compact view (the right third of the Play page): the rectangle `third`. */
 struct Compact
 {
-    ui::Rect third, instance, full, shape, style, sync, rate, rateKnob, division, modeCells, rise, smoothTime, stereo, display;
+    ui::Rect third, instance, shape, style, sync, rate, rateKnob, division, modeCells, rise, smoothTime, stereo, display;
 };
 inline Compact compact (const ui::Rect& third, bool random) noexcept
 {
@@ -30,7 +30,6 @@ inline Compact compact (const ui::Rect& third, bool random) noexcept
     c.third = third;
     const int m = kMargin, W = third.w - 2 * m, rowH = pr::kCompactRowH, g = pr::kControlGap;
     c.instance = pr::headerSelectorRect (third, false, false);
-    c.full = pr::headerExpandRect (third);
     const int dy = third.y + m + pr::kSelectorH + pr::kSelectorGap;
     int qy = third.bottom() - m - kQuadRandomH;
     if (random)
@@ -72,17 +71,17 @@ inline Compact compact (const ui::Rect& third, bool random) noexcept
     return c;
 }
 
-/** The full screen of the LFO (the Play page's expansion) or the page of an LFO tab (`pageMode`). */
+/** The page of an LFO tab. */
 struct Full
 {
     static constexpr int kBandH = 290, kBandRandomH = 196, kMaxBlocks = 3;
-    ui::Rect tab, close, targets, namedPicker, picker, display, edit;
+    ui::Rect tab, targets, namedPicker, picker, display, edit;
     ui::Rect blocks[kMaxBlocks];
     int nBlocks = 0;
     ui::Rect rate, rise, smoothTime, smoothSwitch, smoothArea, syncMode, mode, modeList, phase, delay, host, direction, swing, stereo, mono, stereoToggle, keyTranspose, keyTune;
     int blockOfRate = 0;
 };
-inline Full full (const ui::Rect& tab, bool random, bool pageMode, bool keyActive, bool nativePlayEditor, bool editShown) noexcept
+inline Full full (const ui::Rect& tab, bool random, bool keyActive, bool editShown) noexcept
 {
     Full f;
     f.tab = tab;
@@ -90,32 +89,14 @@ inline Full full (const ui::Rect& tab, bool random, bool pageMode, bool keyActiv
     const int bandH = random ? Full::kBandRandomH : Full::kBandH;
     const int bandY = tab.bottom() - m - bandH;
     int midY;
-    if (pageMode)
-    {
-        // The page of an LFO sub-tab: the readable named waveform / style selector at the left of the top row, the TARGETS action button (200 x 56) at its right.
-        const int topY = tab.y + m, targetsW = 200;
-        midY = topY + 56 + m;
-        f.targets = { tab.right() - m - targetsW, topY, targetsW, 56 };
-        const int pickerX = tab.x + m;
-        f.namedPicker = { pickerX, topY, std::max (0, (tab.right() - m - targetsW - 8) - pickerX), 56 };
-        const int cx = tab.right() - m - 304;
-        f.close = nativePlayEditor ? ui::Rect { cx, tab.y + 210, 96, 56 } : ui::Rect {};
-        f.display = { tab.x + m, midY, W - 2 * m, std::max (0, bandY - m - midY) };
-        f.edit = ! random && editShown ? ui::playrows::fullRect (f.display) : ui::Rect {};
-    }
-    else
-    {
-        const ui::Rect top { tab.x + m, tab.y + 2 + ui::kQLane, W - 2 * m, 56 };
-        const int closeW = 84, targetsW = 200;
-        f.close = { top.x, top.y, closeW, 56 };
-        f.targets = { top.right() - targetsW, top.y, targetsW, 56 };
-        midY = top.bottom() + 15;
-        const int midH = std::max (0, bandY - m - midY);
-        const int colW = std::min (random ? 232 : 304, W / 4);
-        f.display = { tab.x + m, midY, W - 3 * m - colW, midH };
-        f.edit = ! random && editShown ? ui::playrows::fullRect (f.display) : ui::Rect {};
-        f.picker = { tab.right() - m - colW, midY, colW, midH };   // the cells of the shapes / styles beside the display
-    }
+    // The page of an LFO sub-tab: the readable named waveform / style selector at the left of the top row, the TARGETS action button (200 x 56) at its right.
+    const int topY = tab.y + m, targetsW = 200;
+    midY = topY + 56 + m;
+    f.targets = { tab.right() - m - targetsW, topY, targetsW, 56 };
+    const int pickerX = tab.x + m;
+    f.namedPicker = { pickerX, topY, std::max (0, (tab.right() - m - targetsW - 8) - pickerX), 56 };
+    f.display = { tab.x + m, midY, W - 2 * m, std::max (0, bandY - m - midY) };
+    f.edit = ! random && editShown ? ui::playrows::fullRect (f.display) : ui::Rect {};
     // the blocks of the bottom band
     const int n = random ? 1 : 3;   // the key follow has no block of its own: its two numbers stand in the RATE block
     f.nBlocks = n;

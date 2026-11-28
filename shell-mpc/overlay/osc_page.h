@@ -30,23 +30,9 @@ class OscPageUi
 {
 public:
     static constexpr int kElementPage = OscUi::kElementOsc;
-    static constexpr ui::Rect expandedCloseRect() noexcept { return { 1148, page::kTabY + 116, 120, 56 }; }
 
     OscPageUi() : ownedOsc_ (std::make_unique<OscUi>()), ownedDisplay_ (std::make_unique<OscDisplay>()),
                   osc_ (*ownedOsc_), display_ (*ownedDisplay_) {}
-    OscPageUi (OscUi& osc, OscDisplay& display) : osc_ (osc), display_ (display), inPlay_ (true) {}
-
-    void enterPlay() noexcept { setHostBackground (false); }
-
-    void leavePlay (IInstanceView& inst)
-    {
-        leftTab (inst);
-        osc_.setPage (0);
-        setNativeInstanceSelector (false);
-        setNativeRouting (false);
-        osc_.full().setNativePower (false);
-        sel_ = tabSelection_ = 0;
-    }
 
     /** The same three oscillator readout slices as Play, shared by every standalone tab. */
     static std::vector<int> readoutTargets()
@@ -59,7 +45,7 @@ public:
     void update (IInstanceView& inst, UiStack& stack, double nowMs, const page::Input& in)
     {
         const auto generation = inst.stateGeneration();
-        const int tabSelection = std::clamp (inPlay_ ? inst.playSelection (0) : in.instance, 1, playosc::kInstances);
+        const int tabSelection = std::clamp (in.instance, 1, playosc::kInstances);
         if (tabSelection != tabSelection_ || generation != preset_)
         {
             const bool keepDetail = tabSelection == tabSelection_ && sel_ == tabSelection
@@ -79,7 +65,7 @@ public:
             stack.openFull (kElementPage);
             hideNativeDetail (inst);
         }
-        auto pull = [&] { osc_.update (inst, 1, stack, nowMs, std::clamp (inst.playSelection (1), 1, 6), std::clamp (inst.playSelection (2), 1, 10), inPlay_); };
+        auto pull = [&] { osc_.update (inst, 1, stack, nowMs, std::clamp (inst.playSelection (1), 1, 6), std::clamp (inst.playSelection (2), 1, 10)); };
         pull();
         if (updateNativeSettings (inst, stack, true))
         {
@@ -103,7 +89,7 @@ public:
             updateNativeSettings (inst, stack, false);
             updateNativeDetail (inst, stack, false);
         }
-        osc_.syncNativeModulations (inst, stack, inPlay_ ? nativeui::targets::PlayOsc : nativeui::targets::Osc);
+        osc_.syncNativeModulations (inst, stack, nativeui::targets::Osc);
         marks_ = OscMarks::of (inst, sel_, osc_.topPage());
         display_.update (inst, sel_, in.targets, in.live, nowMs, counters_);
         inst.setNativeText (nativeui::nativetext::OscMessage, display_.message());
@@ -119,7 +105,7 @@ public:
         if (! r.empty() && display_.valid())
         {
             const bool nativeRootPower = osc_.topPage() == 0 && osc_.full().hasNativePower();
-            const std::array<ui::Rect, 3> header { powerArea(), inPlay_ ? expandedCloseRect() : ui::Rect {}, osc_.full().isNativeRoutingActive() ? routingArea() : ui::Rect {} };
+            const std::array<ui::Rect, 3> header { powerArea(), ui::Rect {}, osc_.full().isNativeRoutingActive() ? routingArea() : ui::Rect {} };
             display_.draw (sb, r, false, osc_.plotArea(), nativeRootPower ? &header : nullptr);
             display_.draw (sb, r, true, osc_.plotArea());
             if (marks_.any())
@@ -385,11 +371,6 @@ private:
         if (nativeSelector_ && inst.takeNativeOsc (state, n::kSource, choice) && inst.stateGeneration() == preset_)
         {
             setSelection (choice + 1);
-            if (inPlay_ && tabSelection_ != sel_)
-            {
-                tabSelection_ = sel_;
-                inst.setPlaySelection (0, sel_);
-            }
             state = nativeState (inst);
         }
         if (osc_.full().hasNativePower() && inst.takeNativeOsc (state, n::kPower, choice) && (choice != 0) != state.powered
@@ -525,8 +506,6 @@ private:
             return true;
         if (osc_.topPage() != 0)
             return false;
-        if (inPlay_ && expandedCloseRect().contains (x, y))
-            return true;
         if (nativeSelector_ && selectorArea().contains (x, y))
             return true;
         if (osc_.full().hasNativePower() && powerArea().contains (x, y))
@@ -542,7 +521,6 @@ private:
     std::unique_ptr<OscDisplay> ownedDisplay_;
     OscUi& osc_;
     OscDisplay& display_;
-    bool inPlay_ = false;
     OscMarks marks_;
     ViewCounters counters_;
     int sel_ = 0, tabSelection_ = 0;

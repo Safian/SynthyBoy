@@ -9,7 +9,6 @@
 
 #include <memory>
 
-#include "../native_play_expanded.h"
 #include "../play_params.h"
 #include "../ui/display.h"
 #include "env_ui.h"
@@ -17,7 +16,6 @@
 #include "macro_names.h"
 #include "native_marker_covers.h"
 #include "osc_display.h"
-#include "osc_page.h"
 #include "osc_ui.h"
 #include "page_detector.h"
 #include "page_view_base.h"
@@ -108,8 +106,7 @@ public:
         }
         // ---- oscillator: the picture of the display rectangle of the overlay oscillator UI (osc_display.h: the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the
         // spectrum of a spectral one, the noise colour, the sub oscillator's waveform, the live read-outs)
-        if (! expandedOscActive_)
-            changed = osd_.update (inst, sel_[0], in.targets, live, in.nowMs, counters_) || changed;
+        changed = osd_.update (inst, sel_[0], in.targets, live, in.nowMs, counters_) || changed;
         // ---- envelope: the curve (cheap) and the dot
         {
             const bool data = group_[1]->read (inst) || bpm != envBpm_;
@@ -189,8 +186,7 @@ public:
         // ---- the overlay oscillator pages: they read their parameters and the Q group; what they draw changes the picture
         if (usePageUi)
         {
-            if (! expandedOscActive_)
-                io->setNativeText (nativeui::nativetext::OscMessage, osd_.message());
+            io->setNativeText (nativeui::nativetext::OscMessage, osd_.message());
             if (! osc_)
             {
                 osc_ = std::make_unique<OscUi>();
@@ -202,17 +198,7 @@ public:
                 osc_->update (*io, highlight_, in.ui->isMain() || in.ui->element() == OscUi::kElementOsc ? *in.ui : idleStack_,
                               in.nowMs, sel_[1], sel_[2]);
             };
-            const auto syncExpandedOscExit = [&] {
-                if (expandedOscActive_ && (in.ui->element() != OscUi::kElementOsc || &ui::theme::L() != &ui::theme::kLook1))
-                {
-                    expandedOsc_->leavePlay (*io);
-                    expandedOscActive_ = false;
-                    changed |= osd_.update (inst, sel_[0], in.targets, live, in.nowMs, counters_);
-                }
-            };
-            syncExpandedOscExit();
-            if (! expandedOscActive_)
-                pullOsc();
+            pullOsc();
             const bool nativeOsc = io->nativePlayOscControls();
             if (nativeOsc)
             {
@@ -247,67 +233,6 @@ public:
                 syncOpenElement();
                 env_->update (*io, highlight_, *in.ui, in.nowMs, live);
                 lfo_->update (*io, highlight_, *in.ui, in.nowMs, live);
-            }
-            if (io->nativeExpandedPlaySupported())
-            {
-                nativeExpandedIo_ = io;
-                auto expanded = nativeExpandedState (*in.ui, *io);
-                io->publishNativeExpandedPlay (expanded);
-                if (io->takeNativeExpandedPlayClose (expanded))
-                {
-                    in.ui->back();
-                    syncOpenElement();
-                    syncExpandedOscExit();
-                    pullOsc();
-                    env_->update (*io, highlight_, *in.ui, in.nowMs, live);
-                    lfo_->update (*io, highlight_, *in.ui, in.nowMs, live);
-                }
-                const bool hosted = &ui::theme::L() == &ui::theme::kLook1;
-                env_->syncNativePlayEditor (*io, *in.ui, highlight_, in.nowMs, live, hosted);
-                lfo_->syncNativePlayEditor (*io, *in.ui, highlight_, in.nowMs, live, hosted);
-                if (! in.ui->isMain() && in.ui->element() == OscUi::kElementOsc && (hosted || in.ui->top() == OscUi::kPageRoute))
-                {
-                    if (! expandedOsc_)
-                        expandedOsc_ = std::make_unique<OscPageUi> (*osc_, osd_);
-                    if (! expandedOscActive_)
-                    {
-                        expandedOsc_->enterPlay();
-                        expandedOscActive_ = true;
-                    }
-                    page::Input oscInput;
-                    oscInput.targets = in.targets;
-                    oscInput.live = live;
-                    expandedOsc_->update (*io, *in.ui, in.nowMs, oscInput);
-                    sel_[0] = expandedOsc_->selection();
-                }
-                io->publishNativeExpandedPlay (nativeExpandedState (*in.ui, *io));
-            }
-            if (io->nativeModTargetsSupported())
-            {
-                nativeTargetsIo_ = io;
-                const unsigned long uiChanges = in.ui->changes();
-                env_->syncNativeTargets (*io, *in.ui, true);
-                lfo_->syncNativeTargets (*io, *in.ui, true);
-                if (! expandedOscActive_)
-                    osc_->syncNativeModulations (*io, *in.ui, nativeui::targets::PlayOsc);
-                syncOpenElement();
-                if (in.ui->changes() != uiChanges)
-                {
-                    syncExpandedOscExit();
-                    if (in.ui->isMain())
-                    {
-                        pullOsc();
-                        env_->update (*io, highlight_, *in.ui, in.nowMs, live);
-                        lfo_->update (*io, highlight_, *in.ui, in.nowMs, live);
-                    }
-                    if (io->nativeExpandedPlaySupported())
-                    {
-                        const bool hosted = &ui::theme::L() == &ui::theme::kLook1;
-                        env_->syncNativePlayEditor (*io, *in.ui, highlight_, in.nowMs, live, hosted);
-                        lfo_->syncNativePlayEditor (*io, *in.ui, highlight_, in.nowMs, live, hosted);
-                        io->publishNativeExpandedPlay (nativeExpandedState (*in.ui, *io));
-                    }
-                }
             }
             nativeEnvLfo_.publish (*io, *in.ui, *env_, *lfo_);
             if (nativeOsc)
@@ -348,16 +273,11 @@ public:
             return false;
         if (ev.kind == TouchEvent::Down && stack.isMain() && ev.y >= play::kTabY && ev.y < play::kTabY + play::kTabH)   // a touch on a third makes its Q group the active one (the same rule as every page: the group that was touched)
             highlight_ = ev.x < 434 ? 1 : (ev.x < 850 ? 2 : 3);
-        // the envelope's pages while its full screen is open or a finger is down on it; else the oscillator's (its third, or its full screen), else the envelope's compact view (its third)
-        if (env_ != nullptr && ((! stack.isMain() && stack.element() == EnvUi::kElementEnv) || env_->fingerDown()))
+        // the envelope's pages while a finger is down on it; else the oscillator's, else the envelope's compact view (its third)
+        if (env_ != nullptr && env_->fingerDown())
             return env_->touch (ev, stack, io, nowMs);
-        // the LFO's pages likewise (its full screen, its editor, its lists); its compact view is the third at the right
-        if (lfo_ != nullptr && ((! stack.isMain() && stack.element() == LfoUi::kElementLfo) || lfo_->fingerDown()))
+        if (lfo_ != nullptr && lfo_->fingerDown())
             return lfo_->touch (ev, stack, io, nowMs);
-        if (expandedOscActive_ && ! stack.isMain() && stack.element() == OscUi::kElementOsc)
-            return expandedOsc_->touch (ev, stack, io, nowMs);
-        if (osc_ != nullptr && ! stack.isMain() && stack.element() == OscUi::kElementOsc)
-            return osc_->touch (ev, stack, io, nowMs);
         if (osc_ != nullptr && osc_->touch (ev, stack, io, nowMs))
             return true;
         if (env_ != nullptr && env_->touch (ev, stack, io, nowMs))
@@ -372,15 +292,7 @@ public:
             return false;
         if (stack.isMain() && y >= play::kTabY + play::kNativeSelectorY && y < play::kTabY + play::kNativeSelectorY + play::kNativeSelectorH)
             return false;
-        // the same routing as a touch: the envelope's / LFO's full screens while open, else the three panels in turn
-        if (env_ != nullptr && ! stack.isMain() && stack.element() == EnvUi::kElementEnv)
-            return env_->wheel (x, y, notches, stack, io, nowMs);
-        if (lfo_ != nullptr && ! stack.isMain() && stack.element() == LfoUi::kElementLfo)
-            return lfo_->wheel (x, y, notches, stack, io, nowMs);
-        if (expandedOscActive_ && ! stack.isMain() && stack.element() == OscUi::kElementOsc)
-            return expandedOsc_->wheel (x, y, notches, stack, io, nowMs);
-        if (osc_ != nullptr && ! stack.isMain() && stack.element() == OscUi::kElementOsc)
-            return osc_->wheel (x, y, notches, stack, io, nowMs);
+        // the same routing as a touch: the three panels in turn
         if (osc_ != nullptr && osc_->wheel (x, y, notches, stack, io, nowMs))
             return true;
         if (env_ != nullptr && env_->wheel (x, y, notches, stack, io, nowMs))
@@ -391,8 +303,7 @@ public:
     {
         IInstanceView& io = static_cast<IInstanceView&> (base);
         const NamesScope scope (names_);
-        if (expandedOscActive_) expandedOsc_->tick (nowMs, stack, io);
-        else if (osc_ != nullptr) osc_->tick (nowMs, stack, io);
+        if (osc_ != nullptr) osc_->tick (nowMs, stack, io);
         if (env_ != nullptr) env_->tick (nowMs, stack, io);
         if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io);
     }
@@ -408,24 +319,18 @@ public:
     }
     bool fingerDown() const noexcept override
     {
-        return (expandedOscActive_ ? expandedOsc_->fingerDown() : osc_ != nullptr && osc_->fingerDown())
+        return (osc_ != nullptr && osc_->fingerDown())
             || (env_ != nullptr && env_->fingerDown()) || (lfo_ != nullptr && lfo_->fingerDown());
     }
     void dropGesture() noexcept override
     {
-        if (expandedOscActive_) expandedOsc_->dropGesture();
-        else if (osc_ != nullptr) osc_->dropGesture();
+        if (osc_ != nullptr) osc_->dropGesture();
         if (env_ != nullptr) env_->dropGesture();
         if (lfo_ != nullptr) lfo_->dropGesture();
     }
     void setNativeActionPopup (int action) noexcept override
     {
         nativeEnvLfo_.setPopup (action);
-        if (expandedOscActive_)
-        {
-            expandedOsc_->setNativeActionPopup (*nativeExpandedIo_, action);
-            return;
-        }
         namespace n = nativeui::playoscui;
         constexpr int fields[] { n::Route, n::First, n::Second };
         if (nativeOscIo_ != nullptr)
@@ -438,25 +343,6 @@ public:
         {
             osc_->publishCompactNative (*nativeOscIo_, false, true);
             nativeOscIo_ = nullptr;
-        }
-        if (nativeExpandedIo_ != nullptr)
-        {
-            env_->hideNativePlayEditor (*nativeExpandedIo_);
-            lfo_->hideNativePlayEditor (*nativeExpandedIo_);
-            if (expandedOscActive_)
-            {
-                expandedOsc_->leavePlay (*nativeExpandedIo_);
-                expandedOscActive_ = false;
-            }
-            nativeExpandedIo_->publishNativeExpandedPlay ({});
-            nativeExpandedIo_ = nullptr;
-        }
-        if (nativeTargetsIo_ != nullptr)
-        {
-            env_->hideNativeTargets (*nativeTargetsIo_);
-            lfo_->hideNativeTargets (*nativeTargetsIo_);
-            osc_->hideNativeModulations (*nativeTargetsIo_);
-            nativeTargetsIo_ = nullptr;
         }
         nativeEnvLfo_.leave();
         dropGesture();
@@ -474,10 +360,7 @@ public:
     {
         gpu::SceneBuilder sb (*scratch_);
         sb.begin (gpu::kKindPlay, 0, play::kRegionW, play::kRegionH);
-        if (expandedOscActive_)
-            expandedOsc_->draw (sb);
-        else
-            osc_->draw (sb);
+        osc_->draw (sb);
         return page::sceneHash (*scratch_) ^ static_cast<uint32_t> (osc_->displayRect().x * 31 + osc_->displayRect().w);
     }
     void render (uint32_t* cv, int w, int h) override
@@ -656,24 +539,6 @@ private:
         if (edgeX_ < play::kRegionW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge, the picture is the host's there
             sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (play::kRegionH));
         const bool compact = osc_ != nullptr && osc_->isMain();
-        if (env_ != nullptr && ! env_->isMain())   // the full screen of the envelope covers the whole plugin area of the page: its page, its dots, its popups
-        {
-            env_->drawPage (sb);
-            env_->drawLive (sb);
-            return;
-        }
-        if (lfo_ != nullptr && ! lfo_->isMain())   // the full screen of the LFO likewise: its page (the editor, the targets), its cursors, its popups
-        {
-            lfo_->drawPage (sb);
-            lfo_->drawLive (sb);
-            lfo_->drawPopup (sb);
-            return;
-        }
-        if (expandedOscActive_)
-        {
-            expandedOsc_->draw (sb);
-            return;
-        }
         if (compact)
         {
             ui::Cell markers (sb, { 0, play::kTabY, play::kRegionW, play::kNativeSelectorY }, 0);
@@ -742,26 +607,7 @@ private:
     double envBpm_ = 0.0;
     std::vector<float> envY_, lfoY_;
     std::unique_ptr<OscUi> osc_;
-    nativeui::expandedplay::State nativeExpandedState (const UiStack& stack, const IInstanceView& inst) const noexcept
-    {
-        namespace n = nativeui::expandedplay;
-        if (stack.isMain() || (&ui::theme::L() != &ui::theme::kLook1
-            && !(stack.element() == OscUi::kElementOsc && stack.top() == OscUi::kPageRoute)))
-            return {};
-        if (stack.element() == OscUi::kElementOsc)
-            return {stack.depth() == 1 ? n::OscRoot : n::OscDetail, std::clamp (inst.playSelection (0), 1, playosc::kInstances), inst.stateGeneration()};
-        if (stack.element() == EnvUi::kElementEnv)
-            return {stack.depth() == 1 ? n::EnvRoot : n::EnvDetail, uibind::selectedEnv (inst), inst.stateGeneration()};
-        if (stack.element() == LfoUi::kElementLfo)
-            return {stack.depth() == 1 ? n::LfoRoot : n::LfoDetail, uibind::selectedLfo (inst), inst.stateGeneration()};
-        return {};
-    }
-
-    IInstanceView* nativeExpandedIo_ = nullptr;
-    std::unique_ptr<OscPageUi> expandedOsc_;
-    bool expandedOscActive_ = false;
     IInstanceView* nativeOscIo_ = nullptr;
-    IInstanceView* nativeTargetsIo_ = nullptr;
     PlayEnvLfo nativeEnvLfo_;
     std::unique_ptr<EnvUi> env_;
     std::unique_ptr<LfoUi> lfo_;

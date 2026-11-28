@@ -148,19 +148,18 @@ class OscUi
 public:
     // ---- the pages (UiStack ids)
     static constexpr int kElementOsc = 1;                                     // the full screen of the oscillator
-    enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageRoute = 13, kPageMods = 14, kPageList = 15 };   // 16 .. 22: the detail pages of osc_spec_page.h (oscspec::PageId)
+    enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageMods = 14, kPageList = 15 };   // 16 .. 22: the detail pages of osc_spec_page.h (oscspec::PageId)
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
     {
-        kClose = 1, kPower, kRoute, kFullButton, kInstances,
+        kClose = 1, kPower, kRoute, kInstances,
         kBasic = 100,                       // the first Q group's parts: selector, source stepper, dropdown, OCT (Sub), FILTER, SOUND of the noise, PAN, LEVEL (compact view) = 100 .. 107
         kTuneOct = 110, kTuneFin = 112, kTuneCrs = 113, kTuneMore = 115, kWavePhase, kWaveRandom, kWaveMap,   // OCT (A, B, C), FIN, the PITCH of the noise, the MORE button of the full screen
         kSpecLoad = 790, kSpec = 800,       // the LOAD button of an empty sample type; 800 + i: the controls of a detail page of osc_spec_page.h
         kPanel = 200,                       // 200 + PanelSlot: the parts of the full screen's bottom band (and the position knob, the Sub's CRS and PHASE, the noise's KIND and STEREO of its top row)
         kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,   // (the Var ids are free: the warp PHASE knobs are on MORE now)
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
-        kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2,
         kList = 700, kListBackdrop, kListHeader,   // the native list (source, warp types, the content browser: its header is the way up)
         kModsBack = 600, kModsRow = 610,    // 610 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsAddStep = 660, kModsAdd, kModsPage
@@ -225,7 +224,7 @@ public:
     }
 
     /** Reads the instance: the selected oscillator, the type of A, B, C, every value of the visible controls, the modulations of the knobs, the pages of the stack, the Q group. */
-    void update (IInstanceView& inst, int highlight, UiStack& stack, double nowMs, int selectedEnv, int selectedLfo, bool expandedPlay = false)
+    void update (IInstanceView& inst, int highlight, UiStack& stack, double nowMs, int selectedEnv, int selectedLfo)
     {
         highlight_ = highlight;
         const int sel = pageSel_ > 0 ? pageSel_ : std::clamp (inst.playSelection (0), 1, playosc::kInstances);
@@ -273,14 +272,13 @@ public:
         updateWavetable (inst);
         pull (inst, main_);
         pull (inst, page_);
-        updateMix (inst);
 
         applyInactive();
         updateSpecVisibility (inst);
         updateLoadButton (inst);
         if (pageTop_ == kPageEnvelope)
             updateEnvelope();
-        const bool standaloneNative = isPage() && ! expandedPlay && (nativeSelector_ || nativeRouting_);
+        const bool standaloneNative = isPage() && (nativeSelector_ || nativeRouting_);
         inst.setUiFullOpen (standaloneNative ? (pageTop_ != 0) : ! stack.isMain());
         publishNativeLists (inst, stack);
         publishQGroup (inst);
@@ -447,7 +445,7 @@ public:
     std::array<ui::Rect, 3> compactNativeHeader() const noexcept
     {
         namespace n = nativeui::playoscui;
-        return { compactNativeCells_[n::Power], compactNativeCells_[n::Expand], compactNativeCells_[n::Route] };
+        return { compactNativeCells_[n::Power], ui::Rect {}, compactNativeCells_[n::Route] };
     }
     /** The label rectangle of the display band of the compact view. */
     ui::Rect compactLabelRect() const noexcept { return oscmodel::compactLabelRect (cl_, instance()); }
@@ -614,7 +612,7 @@ public:
     std::array<const Item*, nativeui::playoscui::kFields> compactNativeItems() const noexcept
     {
         const bool sub = sel_ == playosc::kSub, noise = sel_ == playosc::kNoise;
-        return { item (kPower), item (kFullButton), sub ? nullptr : item (kRoute),
+        return { item (kPower), nullptr /* reserved: the expand button is gone */, sub ? nullptr : item (kRoute),
                  item (kBasic + (noise ? 5 : 0)), item (kBasic + (sub ? 3 : noise ? 4 : 1)),
                  item (kBasic + 6), item (kBasic + 7) };
     }
@@ -691,8 +689,8 @@ public:
             {
                 const int route = static_cast<int> (std::lround (value * n::kRoutingDetails));
                 if (route == n::kRoutingDetails)
-                    handle (ui::Change::request (target->id), stack, inst);
-                else if (inst.param (target->param) != static_cast<float> (route))
+                    continue;   // the old "route details" step: the popup is gone (kept so the host range does not move)
+                if (inst.param (target->param) != static_cast<float> (route))
                     writePlain (inst, target->param, static_cast<float> (route));
             }
             else
@@ -897,8 +895,7 @@ public:
         nativeDetailState_ = {};
         nativeDetailState_.preset = preset;
         const bool spec = oscspec::isSpecPage (pageTop_);
-        const bool route = pageTop_ == kPageRoute;
-        const bool detail = route || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope;
+        const bool detail = pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope;
         const bool root = stackDepth_ == 1 && pageTop_ == 0;
         if (! enabled || full_.inactive() || (! root && ! spec && ! detail))
         {
@@ -907,7 +904,7 @@ public:
             nativeDetail_ = n::Hidden;
             return nativeDetailState_;
         }
-        const bool graph = ! root && ! route && (spec ? spec_.spec()->display : true);
+        const bool graph = ! root && (spec ? spec_.spec()->display : true);
         const bool load = graph && loadShown_;
         if (graph)
             marksRect_ = nativeDetailGraphRect();
@@ -942,25 +939,6 @@ public:
             return state;
         }
         action (n::kBack, kDetailBack, "BACK");
-        if (route)
-        {
-            nativeDetailTitle_ = "ROUTING";
-            static const char* const labels[] = { "DESTINATION", "F1 / F2", "BUS 1", "BUS 2" };
-            for (int i = 0; i < 4; ++i)
-            {
-                auto* item = find (kRouteTarget + i);
-                if (! item || item->param < 0 || (i == 1 && ! routeFilter_))
-                    continue;
-                const int field = n::slot (i, 0);
-                const int kind = i == 0 ? n::Choice : i == 1 ? n::Bi : n::Uni;
-                nativeDetailItems_[field] = item;
-                state.fields[field] = { item->param, item->id, kind };
-                state.labels[field] = labels[i];
-                if (kind == n::Choice)
-                    state.fields[field + n::kCells] = state.fields[field];
-            }
-            return state;
-        }
         if (load)
             action (n::kLoad, kSpecLoad, loadLabel());
         const auto add = [&] (int block, int cell, Item* item, const char* label)
@@ -1128,7 +1106,7 @@ public:
             return true;
         }
         auto* item = nativeDetailItems_[field % n::kCells];
-        if (! item || (item->id == kRouteBalance && std::lround (v.param (nativeDetailState_.fields[n::slot (0, 0)].target)) != 5))
+        if (! item)
             return false;
         const auto& pi = info (cell.target);
         const float old = v.param (cell.target);
@@ -1318,7 +1296,7 @@ private:
         ui::Rect frame;
         for (int i = 0; i < n::kCells; ++i)
             if (const auto* part = nativeDetailItems_[i])
-                if (pageTop_ == kPageRoute || nativeDetailQ (part).first == active)
+                if (nativeDetailQ (part).first == active)
                 {
                     const auto rect = part->type == T::Mask ? maskArea_ : nativeDetailRect (i);
                     frame = frame.empty() ? rect : ui::Rect::unite (frame, rect);
@@ -1412,7 +1390,6 @@ private:
         {
             const bool abc = ! sub && ! noise;
             bind (main_, kInstances, T::Inert, "");
-            bind (main_, kFullButton, T::Inert, "");
             bind (main_, kPower, T::Toggle, "on");
             bind (main_, kRoute, T::Route, "destination");
             const std::string typeKey = sub ? "waveform" : (noise ? "" : "type");
@@ -1695,7 +1672,6 @@ private:
             switch (it.id)
             {
                 case kInstances: c.rect = cl_.instances; c.shown = false; break;   // the host's own selector
-                case kFullButton: c.rect = cl_.full; break;
                 case kPower: c.rect = cl_.power; break;
                 case kRoute: c.rect = cl_.route; break;
                 case kBasic + 0: case kBasic + 5: c.rect = cl_.first; break;
@@ -1893,16 +1869,6 @@ private:
         const int sig = top * 16 + (top == kPageMods ? modsTarget_ & 0xff : 0);
         if (top != pageTop_ || sig != pageSig_)
         {
-            if (top == kPageRoute && pageTop_ != kPageRoute)
-            {
-                savedGroup_ = fullActive_;
-                fullActive_ = -1;      // the popup's group is the active one: the full screen's frame goes away while it is open
-            }
-            else if (top != kPageRoute && pageTop_ == kPageRoute && savedGroup_ >= 0)
-            {
-                fullActive_ = savedGroup_;
-                savedGroup_ = -1;
-            }
             pageTop_ = top;
             pageSig_ = sig;
             if (top != kPageList)
@@ -1928,12 +1894,6 @@ private:
                 break;
             case kPageGrain: loadDetail (oscmodel::presets::kGrainDetail); break;
             case kPageEnvelope: loadDetail (oscmodel::presets::kEnvelopeDetail); break;
-            case kPageRoute:
-                bind (page_, kRouteTarget, T::Choice, "destination", "", false);
-                bind (page_, kRouteBalance, T::Dial, "filter_blend", "", false);
-                bind (page_, kRouteBus1, T::Dial, "bus1_send", "", false);
-                bind (page_, kRouteBus2, T::Dial, "bus2_send", "", false);
-                break;
             case kPageMods: loadMods (inst); break;
             case oscspec::kWtMap: case oscspec::kMore: case oscspec::kOptions: case oscspec::kSampleRegion: case oscspec::kSampleSlice: case oscspec::kGrain: case oscspec::kSpecFilter: case oscspec::kSpecScan:
                 bindSpec (pageTop_);
@@ -2122,7 +2082,7 @@ private:
         showCurrentRow();
         modsListFilled_ = true;
     }
-    int modsTargetParam_ = -1, savedGroup_ = -1;
+    int modsTargetParam_ = -1;
     char modsTitle_[32] = "MODULATIONS";
     static const char* sourceName (int choice) noexcept { return uibind::sourceName (choice); }   // a macro answers with its name (macro_names.h)
     void refreshMods (const IInstanceView& v)
@@ -2250,13 +2210,6 @@ private:
                 c.enabled = false;   // the sub oscillator has no route button (its routing is the ROUTING block of its page): the hidden cell takes no touch and no Q-Link
         }
     }
-    /** What the page needs of the routing of the module: BAL (the balance of the F1 / F2 routing) shows a second routing cell. (The level, pan and destination of the module are shown by the host's native cells.) */
-    void updateMix (const IInstanceView& v)
-    {
-        const int di = indexOfKey (prefix_ + "destination");
-        const int d = di >= 0 ? std::clamp (static_cast<int> (std::lround (v.param (di))), 0, 6) : 0;
-        routeFilter_ = d == 5;
-    }
     /** A value of a parameter as text with its unit: "35%", "+12 ct", "420 Hz", "1.20 s", "-6.0 dB" (at most 15 characters). */
     static void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
     {
@@ -2339,7 +2292,6 @@ private:
         oscmodel::setText (st, name.empty() ? "NO SAMPLE" : name.c_str());
     }
     bool warpOff_[2] = { false, false };
-    bool routeFilter_ = false;
     bool warpIsOff (int id) const noexcept { return warpOff_[id == kWarp1Amount ? 0 : 1]; }
     void warpOff (int typeId, bool off)
     {
@@ -2388,7 +2340,6 @@ private:
         {
             switch (id)
             {
-                case kFullButton: stack.openFull (kElementOsc); return;
                 case kModsBack:
                     if (modsPicking_)
                         closeModsPicking();
@@ -2408,11 +2359,6 @@ private:
                 case kTuneMore:
                     if (sel_ != playosc::kSub && sel_ != playosc::kNoise)
                         stack.openDetail (oscspec::kMore);
-                    return;
-                case kRoute:
-                    if (stack.depth() == 0)
-                        stack.openFull (kElementOsc);   // the route popup lies over the full screen: from the compact view that opens first
-                    stack.openDetail (kPageRoute);
                     return;
                 case kListBackdrop:
                     if (pageTop_ == kPageMods && modsPicking_ && mods_.numRows() > 0)
@@ -2805,9 +2751,11 @@ private:
             }
         }
     }
-    /** The wavetable browser in the native list rows (over the full screen: from the compact view the full screen opens first): the categories, the tables of one, the current one marked. */
+    /** The wavetable browser in the native list rows (over the full screen of a standalone page): the categories, the tables of one, the current one marked. */
     void openWavetableBrowser (UiStack& stack, IInstanceView& v)
     {
+        if (stack.depth() == 0)
+            return;   // Play has no large view and no list: only the standalone pages open the browser
         const Item* it = item (kBasic + 1);
         if (it == nullptr || it->param < 0)
             return;
@@ -2829,8 +2777,6 @@ private:
         wtBrowser_.open (std::move (cat), fileTable ? -1 : choice, pack, file);
         wtMode_ = true;
         browseMode_ = false;
-        if (stack.depth() == 0)
-            stack.openFull (kElementOsc);
         stack.openDetail (kPageList);
         fillWavetableList();
     }
@@ -2870,9 +2816,11 @@ private:
         // A::Refused: the row says why, nothing changes
     }
 
-    /** The content browser in the native list rows (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
+    /** The content browser in the native list rows (over the full screen of a standalone page): the roots the instance offers, the folders, the files. */
     void openBrowser (UiStack& stack, IInstanceView& v)
     {
+        if (stack.depth() == 0)
+            return;   // Play has no large view and no list: only the standalone pages open the browser
         std::vector<IInstanceView::ContentRoot> roots;
         v.contentRoots (roots);
         if (roots.empty())
@@ -2887,8 +2835,6 @@ private:
         else
             browser_.open (kind);
         browseMode_ = true;
-        if (stack.depth() == 0)
-            stack.openFull (kElementOsc);
         stack.openDetail (kPageList);
         fillBrowserList();
     }
@@ -3017,15 +2963,6 @@ private:
         {
             name = "List";
             qSlots_.publish (v, 0, 0, [] (int, int*) {});
-        }
-        else if (pageTop_ == kPageRoute)
-        {
-            name = "Route";
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) {
-                for (int i = 0; i < 4; ++i)
-                    if (const auto* item = find (kRouteTarget + i))
-                        t[i] = full_.inactive() || (i == 1 && ! routeFilter_) ? -1 : item->param;
-            });
         }
         else if (fullActive_ < 0 && tuneFocus_ >= 0 && full_.hasNativeTune() && isNativeRoutingActive())
         {
