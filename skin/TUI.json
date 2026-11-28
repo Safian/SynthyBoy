@@ -4317,6 +4317,10 @@
          {
           "key": "Data",
           "value": "Parameter 2678"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -4679,7 +4683,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -4725,7 +4729,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -4898,7 +4902,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -4940,7 +4944,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -4978,6 +4982,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3309"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5021,6 +5029,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3309"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5200,7 +5212,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -5242,7 +5254,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -5280,6 +5292,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3315"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5323,6 +5339,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3315"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5502,7 +5522,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -5544,7 +5564,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -5582,6 +5602,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3321"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5625,6 +5649,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3321"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -5799,12 +5827,16 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 3327"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -5846,7 +5878,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -6015,6 +6047,10 @@
          {
           "key": "Data",
           "value": "Parameter 3295"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -6081,6 +6117,10 @@
          {
           "key": "Data",
           "value": "Parameter 3301"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -6228,6 +6268,10 @@
          {
           "key": "Data",
           "value": "Parameter 3297"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -6393,6 +6437,10 @@
          {
           "key": "Data",
           "value": "Parameter 3297"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3902"
          }
         ]
        },
@@ -6630,6 +6678,38 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Play Native List",
+        "type": "playNativeList",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Back",
+          "value": "Parameter 3584"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3588"
+        ]
        }
       }
      ]
