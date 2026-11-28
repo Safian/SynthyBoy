@@ -78,3 +78,135 @@ Evidence basis: read-only inspection of `skin/` (`HEAD` and git commits `3bb2742
 
 3. **Break Point 3 — `acceptsHWFocus: "No"` on `oscScreen` and `oscScreenTop` instances (`skin/TUI.json:8684, 8794` and tabs `Osc B`, `Osc C`, `Sub`, `Noise`) (FACT)**:
    - Does not hide controls (the root `Osc A` page in `docs/screens/osc_a.jpg` renders despite `acceptsHWFocus: "No"`), but prevents hardware cursor navigation from entering `oscScreen` / `oscNativeDetail` / `oscDetailGrid`. Should be `"Children"` on `Screen` (`skin/TUI.json:8684, 8957, 9230, 9503, 9776`).
+
+---
+
+## 3. Exact Fix Proposal
+
+### 3.1 Owning files and tooling (no active skin generator)
+
+- **FACT (`AGENTS.md`, `ddfc962f`, `2fff7caf`)**: `skin/` was frozen as the sole source of truth in `ddfc962f` and `scripts/mpc-skin-extras/58_osc_detail.py` was deleted in `2fff7caf`. No build-time or script generator owns `oscDetailGrid` / `oscDetailTile*` anymore.
+- **Owning source files**:
+  - [skin/defs_osc.json](file:///Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-oscmore-audit/skin/defs_osc.json) (`oscDetailGrid`, `oscDetailTile*`, `oscDetailMenuFace`, `oscNativeSetting_menuDetailValue`)
+  - [skin/TUI.json](file:///Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-oscmore-audit/skin/TUI.json) (`Osc A`, `Osc B`, `Osc C`, `Sub`, `Noise` tab `Screen` focus property)
+- **Owning format/validation scripts**:
+  - `python3 scripts/skin-format.py skin/TUI.json skin/defs_osc.json` (canonical one-element-per-line formatting; `scripts/skin-format.py:1-6`)
+  - `python3 scripts/validate_synthyboy_skin.py skin` (JSON Schema + parameter-range + baseline check; `scripts/validate_synthyboy_skin.py`)
+  - `python3 scripts/skin-baseline-update.py` (**only after** the Key 61 device check passes; `scripts/skin-baseline-update.py:1-5`)
+
+### 3.2 Change A — Replace nested `oscDetailGrid` (`repeats: 8` + `oscDetailTile*` + `NonZero/Kind`) with direct flat controls (`skin/defs_osc.json:18966-19149, 24764-26098`)
+
+Because `explicit.json` (`af97c588`) already proved on Key 61 that keeping the `oscDetailTile` wrapper (even with `repeats: 8`, `{Increment}`, and `"Kind"` aliases removed) still leaves the grid blank, the fix must follow the **proven Key 61 pattern** used by `fxNativeParameterCells` (`skin/defs_fx.json`, `docs/screens/fx.jpg`) and `Unison 0..6` in `3bb27424` (`docs/screens/old/osc_unison_detail_wave_old.jpg`):
+
+1. **`skin/defs_osc.json:18966-19149` (`oscDetailGrid`)**:
+   - Change `"version": 3` + `"repeats": 8` -> `"version": 2` (remove `"repeats"`).
+   - Remove the 4 `oscDetailTile*` children gated by `"NonZero/Kind"`.
+   - Mount one concrete control entry directly in `oscDetailGrid` for each `(col, row, kind)` slot reachable in `oscspec::kSpecs`, `oscmodel::presets`, and `kPageRoute`, at `"boundsType": "Absolute"`, `"bounds": "<col*158> <row*116> 158 92"`:
+     - `kind == 1`: `oscNativeSetting_dial_uni` (`Data -> Parameter <3335+slot>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/1/17/Parameter <3399+slot>`)
+     - `kind == 2`: `oscNativeSetting_dial_bi` (`Data -> Parameter <3335+slot>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/2/17/Parameter <3399+slot>`)
+     - `kind == 3`: `oscNativeSetting_toggle` (`Data -> Parameter <3335+slot>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/3/17/Parameter <3399+slot>`)
+     - `kind == 4`: `oscNativeSetting_dial_uni` (`Data -> Parameter <3335+slot>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/4/17/Parameter <3399+slot>`)
+     - `kind == 5`: `oscDetailStepper` (`Data -> Parameter <3335+slot>`, `Step -> FromGesture/Parameter <3367+slot>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/5/17/Parameter <3399+slot>`)
+     - `kind == 6`: `oscNativeSetting_action` (`Data -> FromGesture/Parameter <3335+slot>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/6/17/Parameter <3399+slot>`)
+     - `kind == 7..16`: a combined `oscNativeSetting_menu` (or `oscNativeSetting_warpChoice`, restoring `oscNativeSetting_menu` removed in `41b2bef9` by merging `oscDetailMenuFace` + `oscNativeSetting_menuDetailValue` into one component, with `Data -> Parameter <3434 + kind - 7>`, `Caption -> Parameter <3335+slot>`, gate `IndexedEnabling/<kind>/17/Parameter <3399+slot>`). Note: `synthyboy_mpc.cpp:4225` already returns the slot's control label (e.g. `"STACK"`) for `effGetParamName(3335+slot)`.
+2. **Delete dead `oscDetailTileNoMenu` (`24764-24982`), `oscDetailTilem0m1m2m4m7m8` (`24984-25450`), `oscDetailTilem5m6m9` (`25452-25810`), `oscDetailTilem3` (`25812-26100`)** (plus `oscDetailMenuFace`, `oscNativeSetting_menuDetailValue`, `oscNativeSettingWarpChoiceDetailValue` if folded into combined menu definitions).
+
+#### Concrete `old -> new` excerpt for `skin/defs_osc.json:18966-19026` (showing `SEM` at `(0, 0)` `slot = 0` and `MAP` at `(0, 2)` `slot = 2`):
+
+**Old (`skin/defs_osc.json:18966-19026`):**
+```json
+    "key": "oscDetailGrid",
+    "value": {
+     "version": 3,
+     "actions": [],
+     "backgroundData": { "version": 1, "focussed": { "version": 1, "colour": "0", "image": "" }, "unfocussed": { "version": 1, "colour": "0", "image": "" } },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "repeats": 8,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": { "version": 1, "name": "0", "type": "oscDetailTileNoMenu", "data": { "version": 1, "handleName": "Data" } },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         { "key": "Data", "value": "Parameter {Increment:Base=3335,Step=4}" },
+         { "key": "Step", "value": "FromGesture/Parameter {Increment:Base=3367,Step=4}" },
+         { "key": "Kind", "value": "Parameter {Increment:Base=3399,Step=4}" }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 158 92",
+        "additionalInvalidatingHandles": [ "NonZero/Kind" ]
+       }
+      }, ...
+```
+
+**New (`skin/defs_osc.json:18966+`, formatted by `scripts/skin-format.py`):**
+```json
+    "key": "oscDetailGrid",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": { "version": 1, "focussed": { "version": 1, "colour": "0", "image": "" }, "unfocussed": { "version": 1, "colour": "0", "image": "" } },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": { "version": 1, "name": "0.4", "type": "oscNativeSetting_dial_uni", "data": { "version": 1, "handleName": "Data" } },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         { "key": "Data", "value": "Parameter 3335" },
+         { "key": "Caption", "value": "Parameter 3335" }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 158 92",
+        "additionalInvalidatingHandles": [ "IndexedEnabling/4/17/Parameter 3399" ]
+       }
+      },
+      ...
+      {
+       "version": 2,
+       "componentData": { "version": 1, "name": "2.6", "type": "oscNativeSetting_action", "data": { "version": 1, "handleName": "Data" } },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         { "key": "Data", "value": "FromGesture/Parameter 3337" },
+         { "key": "Caption", "value": "Parameter 3337" }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 232 158 92",
+        "additionalInvalidatingHandles": [ "IndexedEnabling/6/17/Parameter 3401" ]
+       }
+      }, ...
+```
+
+### 3.3 Change B — Fix hardware focus propagation on `oscScreen` (`skin/TUI.json:8684, 8957, 9230, 9503, 9776`)
+
+**Old (`skin/TUI.json` lines `8684`, `8957`, `9230`, `9503`, `9776`):**
+```json
+        "acceptsHWFocus": "No",
+```
+**New:**
+```json
+        "acceptsHWFocus": "Children",
+```
