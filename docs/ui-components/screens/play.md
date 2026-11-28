@@ -14,7 +14,7 @@ Texts: `Native Osc Missing Compact` (a source that is missing) and `Native Osc M
 
 ## Definitions
 
-`skin/defs_play.json` (55 definitions: the four header selectors, the titled `play*Titled` fields, the own-row choice overlays `playEnvChoices`, `playOscTypeChoices`, `playOscRouteChoices`, `playLfoStyleChoices`, `playLfoSyncChoices`, the plugin list `playNativeList`, the 56 px dials `compactNativeDial56`, `compactNativeRiseDial56`, `compactNativeSmoothWithIndicator56`, `compactNativeSmoothReadout56` and their NativeActive/NativeInactive pairs).
+`skin/defs_play.json` (47 definitions: the four header selectors and the titled `play*Titled` fields, each list field with a "list open" Button (ListOpen, buttonId = list code), the plugin list `playNativeList`, the 56 px dials `compactNativeDial56`, `compactNativeRiseDial56`, `compactNativeSmoothWithIndicator56`, `compactNativeSmoothReadout56` and their NativeActive/NativeInactive pairs).
 
 ## Data
 
@@ -35,7 +35,7 @@ Every Play choice list is the plugin's own paged native list (owner, 2026-11-28;
 | 7 | OSCILLATOR | Sub, Oscillator A, B, C, Noise (fixed names: "Play Osc" has no choice list) | `IInstanceView::setPlaySelection (0, row + 1)` = `playSetSelector`, the selector write of `setParameter` |
 | 8 | ENVELOPE | Env 1..6 (fixed names) | `uibind::chooseEnv` = `playSetSelector (1, ...)` |
 | 9 | TYPE | `oscN.type` choices in the pictogram order of the native cell (`nativeui::osc::kTypeChoices`: Wavetable, Multisample, Sample, Granular, Spectral) | `OscUi::applyCompactNativeField` (First: `applyNativeSetting`, row / 4) |
-| 10 | ROUTE | the seven `oscN.destination` / `noise.destination` choices, then "Routing controls" | `OscUi::applyCompactNativeField` (Route: destination index; the last row writes the handle's last value 1.0) |
+| 10 | ROUTE | the seven `oscN.destination` / `noise.destination` choices | `OscUi::applyCompactNativeField` (Route: destination index) |
 | 11 | SUB WAVE | `sub.waveform` choices | `OscUi::applyCompactNativeField` (Sub First) |
 | 12 | OCTAVE | -4 .. 4 (fixed names: `sub.octave` is a whole number) | `OscUi::applyCompactNativeField` (Sub Second, row / 8) |
 | 13 | LFO STYLE | `rlfoN.style` choices | `LfoUi::applyCompactNative` (Style) |

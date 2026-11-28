@@ -26,7 +26,7 @@ enum Code
     OscSelect = 7,     // the Play oscillator selector "Play Osc" (Parameter 2676): Sub, Oscillator A, B, C, Noise (row k = instance k + 1, the value k / 4 the host's Button k of 5 writes)
     EnvSelect = 8,     // the Play envelope selector "Play Env" (Parameter 2677): Env 1 .. 6 (row k = instance k + 1, the value k / 5)
     OscType = 9,       // the TYPE of the shown oscillator A / B / C (compact "First" field, e.g. Parameter 3311): the five types in the pictogram order (nativeui::osc::kTypeChoices)
-    OscRoute = 10,     // the destination of the shown oscillator A / B / C or Noise (compact "Route" field, e.g. Parameter 3310): the seven destinations, then "Routing controls"
+    OscRoute = 10,     // the destination of the shown oscillator A / B / C or Noise (compact "Route" field, e.g. Parameter 3310): the seven destinations (the old host list's eighth row "Routing controls" wrote the same value as "None" and is gone)
     SubWave = 11,      // the waveform of the Sub (compact Sub "First" field, Parameter 3305): sub.waveform
     OscOctave = 12,    // the octave of the Sub (compact Sub "Second" field, Parameter 3306, -4 .. 4): the only compact octave field
     LfoStyle = 13,     // the style of the shown random LFO (playenvlfo::Style)
@@ -95,9 +95,6 @@ inline const char* const* octaveNames() noexcept
     static const char* const names[kOctaveRows] = { "-4", "-3", "-2", "-1", "0", "1", "2", "3", "4" };
     return names;
 }
-
-/** The OscRoute list: the seven destinations (the parameter's choices, nativeui::osc::kLastRoute + 1) and this last row, which applies what the host's last value (1.0) on the route handle applies. */
-constexpr const char* kRoutingControlsRow = "Routing controls";
 
 /** Host thread -> overlay thread: the codes written by the host (post), debounced, the latest one taken by the Play page (take). Plain data, a mutex (the host's parameter thread, never the audio thread). */
 class RequestPort

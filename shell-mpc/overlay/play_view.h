@@ -617,7 +617,7 @@ private:
         list_.showRow (current);
     }
     /** The rows of the list of a field (listParam_) and its current row: the names of the parameter's choices (ui::shownChoice), the Type in the pictogram order of its native cell
-        (nativeui::osc::kTypeChoices), the route's seven destinations and "Routing controls", the octave -4 .. 4 (a whole number with no choices). false: the parameter has no names for this list. */
+        (nativeui::osc::kTypeChoices), the route's seven destinations, the octave -4 .. 4 (a whole number with no choices). false: the parameter has no names for this list. */
     bool fieldListNames (int code, IInstanceView& io, int& current)
     {
         namespace pl = nativeui::playlist;
@@ -651,8 +651,6 @@ private:
             return false;
         for (int i = 0; i < pi.numChoices; ++i)
             listNames_.push_back (ui::shownChoice (pi.key, i, pi.choices[i]));
-        if (code == pl::OscRoute)
-            listNames_.push_back (pl::kRoutingControlsRow);
         current = static_cast<int> (std::lround (io.param (listParam_) - pi.min));
         return true;
     }
@@ -701,8 +699,8 @@ private:
             list_.showRow (osc_->compactSourceList().current);
     }
     /** A row of a flat list: the choice applied through the path of the host writing that value into the field's own handle: the selectors as "Play Osc" / "Play Env" (IInstanceView::setPlaySelection,
-        the selector write of setParameter), a compact oscillator field as its native cell (OscUi::applyCompactNativeField: row / (rows - 1), the Type the pictogram index, the route the destination index;
-        "Routing controls" the handle's last value 1.0), an LFO field as its native cell (LfoUi::applyCompactNative). Nothing is written when the field is no longer active (fieldListParam). */
+        the selector write of setParameter), a compact oscillator field as its native cell (OscUi::applyCompactNativeField: row / (rows - 1), the Type the pictogram index, the route the destination index),
+        an LFO field as its native cell (LfoUi::applyCompactNative). Nothing is written when the field is no longer active (fieldListParam). */
     void applyListRow (int row, int count, IInstanceView& io, UiStack& stack)
     {
         namespace pl = nativeui::playlist;
@@ -718,9 +716,8 @@ private:
             case pl::NoiseSound: case pl::OscType: case pl::SubWave: case pl::OscOctave:
                 osc_->applyCompactNativeField (io, stack, oscFieldOf (listCode_), value);
                 break;
-            case pl::OscRoute:   // the route handle is the destination index 0 .. kLastRoute; the last row is the handle's last value
-                osc_->applyCompactNativeField (io, stack, n::Route,
-                    static_cast<float> (std::min (row, nativeui::osc::kLastRoute)) / static_cast<float> (nativeui::osc::kLastRoute));
+            case pl::OscRoute:   // the route handle is the destination index 0 .. kLastRoute
+                osc_->applyCompactNativeField (io, stack, n::Route, static_cast<float> (row) / static_cast<float> (nativeui::osc::kLastRoute));
                 break;
             case pl::LfoShape: lfo_->applyCompactNative (io, stack, playenvlfo::Shape, value); break;
             case pl::LfoDivision: lfo_->applyCompactNative (io, stack, playenvlfo::Division, value); break;
