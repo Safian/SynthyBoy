@@ -603,18 +603,14 @@ struct PluginInstance
         void publishMasterView (nativeui::master::View view, nativeui::master::View skinPanel) noexcept
         {
             const auto preset = inst.stateGeneration.load (std::memory_order_acquire);
-            if (preset != inst.nativeMasterPanelPreset.load (std::memory_order_relaxed))
-                inst.nativeMasterPanel.invalidate();
-            if (view != nativeui::master::Tuning || preset != inst.nativeMasterPanelPreset.load (std::memory_order_relaxed))
+            if (view != nativeui::master::Tuning || preset != inst.nativeMasterViewPreset.load (std::memory_order_relaxed))
                 inst.scaleInput.store (ScaleInputHidden);
             if (view == nativeui::master::Tuning)
             {
                 int hidden = ScaleInputHidden;
                 inst.scaleInput.compare_exchange_strong (hidden, ScaleInputOff);
             }
-            const auto cell = masterPanelCell (view);
-            inst.nativeMasterPanel.publish (view, &cell);
-            inst.nativeMasterPanelPreset.store (preset, std::memory_order_release);
+            inst.nativeMasterViewPreset.store (preset, std::memory_order_release);
             inst.nativeMasterSkinPanel.store (skinPanel, std::memory_order_relaxed);
             inst.nativeMasterView.store (view, std::memory_order_relaxed);
             if (view != nativeui::master::Main)
@@ -624,16 +620,10 @@ struct PluginInstance
         int takeMasterScaleRoot() noexcept override
         {
             int root = inst.scaleInput.load();
-            if (root >= 0 && inst.nativeMasterPanelPreset.load() == inst.stateGeneration.load()
+            if (root >= 0 && inst.nativeMasterViewPreset.load() == inst.stateGeneration.load()
                 && inst.scaleInput.compare_exchange_strong (root, ScaleInputArmed))
                 return root;
             return -1;
-        }
-        bool nativeMasterPanelSupported() const noexcept override { return true; }
-        bool takeNativeMasterPanel (nativeui::master::View view, float& value) noexcept override
-        {
-            return inst.nativeMasterPanelPreset.load (std::memory_order_acquire) == inst.stateGeneration.load (std::memory_order_acquire)
-                && inst.nativeMasterPanel.take (0, masterPanelCell (view), value);
         }
         bool takeNativeMasterClipClear() noexcept override
         {
@@ -1649,8 +1639,7 @@ struct PluginInstance
     // MIDI delivery may use multiple threads. Preserve releases for notes played before arming.
     enum { Released, Sounding, Captured };
     std::array<std::atomic<uint8_t>, 16 * 128> scaleInputKeys {};
-    nativeui::NativeCellBank<1> nativeMasterPanel;
-    std::atomic<uint64_t> nativeMasterPanelPreset {};
+    std::atomic<uint64_t> nativeMasterViewPreset {};
     std::atomic<float> nativeMasterValues[nativeui::master::ClearClip] {};
     std::atomic<int> nativeMasterPolyphony { 16 };
     int nativeMasterReportedPolyphony = 0;  // display thread only
@@ -1839,11 +1828,6 @@ struct PluginInstance
         return qReadNorm (cell.target);
     }
 
-    static nativeui::FxCell masterPanelCell (nativeui::master::View view) noexcept
-    {
-        return view == nativeui::master::Hidden ? nativeui::FxCell {} : nativeui::FxCell {0, view, nativeui::kFxDial};
-    }
-
     float nativeModTargetValue (int field, nativeui::FxCell cell) const noexcept
     {
         namespace n = nativeui::targets;
@@ -2000,8 +1984,6 @@ struct PluginInstance
         }
         if (offset == nativeui::kMasterScaleInput)
             return scaleInput.load() >= ScaleInputArmed ? 1.0f : 0.0f;
-        if (offset == nativeui::kMasterPanel)
-            return nativeui::master::panelValue (nativeMasterSkinPanel.load (std::memory_order_relaxed));
         if (nativeui::isOscDetailOffset (offset))
         {
             namespace n = nativeui::oscdetail;
@@ -2426,10 +2408,6 @@ struct PluginInstance
         }
         if (nativeMasterClearAck.exchange (false, std::memory_order_relaxed))
             reportNativeValue (e, base + m::ClearClip, 0.0f, true);
-        const auto panel = nativeMasterPanel.at (0);
-        reportNativeValue (e, nativeui::kMasterPanel, nativeUiValue (nativeui::kMasterPanel),
-                           panel.cell().target >= 0 && nativeMasterPanel.needsReport (panel));
-        nativeMasterPanel.report (panel);
         reportNativeValue (e, nativeui::kMasterScaleInput, nativeUiValue (nativeui::kMasterScaleInput));
         reportNativeValue (e, nativeui::kMasterView, view);
     }
@@ -4092,13 +4070,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     : opcode == effGetParamDisplay ? (inst->scaleInput.load() >= PluginInstance::ScaleInputArmed ? "Select root" : "Play") : "");
                 return 1;
             }
-            if (offset == nativeui::kMasterPanel)
-            {
-                const auto view = inst->nativeMasterSkinPanel.load (std::memory_order_relaxed);
-                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Master Panel"
-                    : opcode == effGetParamDisplay && view > 0 ? (view == nativeui::master::Main ? "Main" : "Tuning & MPE") : "");
-                return 1;
-            }
             if (nativeui::isOscDetailOffset (offset))
             {
                 namespace n = nativeui::oscdetail;
@@ -5366,7 +5337,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->stepInteger = 1;
             return 1;
         }
-        if (nativeOffset == nativeui::kMasterPanel || nativeOffset == nativeui::kMasterScaleInput)
+        if (nativeOffset == nativeui::kMasterScaleInput)
         {
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
@@ -6128,9 +6099,10 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     return;
                 }
                 if (nativeui::isModDetailReservedOffset (offset)
+                    || offset == nativeui::kMasterPanel
                     || nativeui::isMixerSoloVisualOffset (offset)
                     || nativeui::isMixerMuteVisualOffset (offset))
-                    return;   // read-only presentation / reserved slots
+                    return;   // read-only presentation / reserved slots (Master Panel: index 3460 stays reserved, nothing is published)
                 if (nativeui::isMacroTargetOffset (offset))
                 {
                     const auto link = inst->nativeMacroTargets.at (offset - nativeui::kMacroTarget);
@@ -6196,16 +6168,6 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                                && !inst->scaleInput.compare_exchange_weak (mode, PluginInstance::ScaleInputOff)) {}
                     if (logging)
                         synthyboy_mpc::PlayLog::line ("key-mode input=%.3f state=%d", parameter, inst->scaleInput.load());
-                    return;
-                }
-                if (offset == nativeui::kMasterPanel)
-                {
-                    const auto link = inst->nativeMasterPanel.at (0);
-                    const auto preset = inst->nativeMasterPanelPreset.load (std::memory_order_acquire);
-                    if (preset == inst->stateGeneration.load (std::memory_order_acquire)
-                        && (parameter == 0.0f || parameter == 1.0f) && link.cell().target >= 0
-                        && parameter != nativeui::master::panelValue (link.cell().source))
-                        inst->nativeMasterPanel.post (link, parameter);
                     return;
                 }
                 if (nativeui::isOscDetailOffset (offset))

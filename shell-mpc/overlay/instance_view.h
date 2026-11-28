@@ -155,8 +155,6 @@ public:
     virtual void leaveNativeMasterView (nativeui::master::View /*returnPanel*/) noexcept { setNativeMasterView (nativeui::master::Hidden); }
     virtual bool masterScaleInputActive() const noexcept { return false; }
     virtual int takeMasterScaleRoot() noexcept { return -1; }
-    virtual bool nativeMasterPanelSupported() const noexcept { return false; }
-    virtual bool takeNativeMasterPanel (nativeui::master::View /*view*/, float& /*value*/) noexcept { return false; }
     virtual bool nativeVoiceSequenceControls() const noexcept { return false; }
     virtual void setNativeVoiceState (const nativeui::voice::ViewState&) noexcept {}
     virtual bool takeNativeVoice (const nativeui::voice::ViewState&, int, float&) noexcept { return false; }
