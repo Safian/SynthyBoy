@@ -3484,146 +3484,6 @@
     }
    },
    {
-    "key": "lfoNativeField1_1056x56_0",
-    "value": {
-     "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "lfoNativeChoiceDrawer1"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "lfoNativeChoiceDrawer1"
-      }
-     ],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "selector_face_1056x56.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1056 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 17.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "14 21 1010 29"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Name",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 13.0
-          },
-          "colour": "ff829bc4",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "WAVEFORM"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "14 4 1010 18"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "lfoNativeField3_72x112_0",
     "value": {
      "version": 2,
@@ -5474,146 +5334,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "14 24 116 18"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "lfoNativeField2_1056x56_0",
-    "value": {
-     "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "lfoNativeChoiceDrawer2"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "lfoNativeChoiceDrawer2"
-      }
-     ],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "selector_face_1056x56.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1056 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 17.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "14 21 1010 29"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Name",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 13.0
-          },
-          "colour": "ff829bc4",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "STYLE"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "14 4 1010 18"
        }
       }
      ]
@@ -13003,42 +12723,6 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "LFO 1 Native 1-3.1.0",
-        "type": "lfoNativeField1_1056x56_0",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2820"
-         },
-         {
-          "key": "Caption",
-          "value": "WithName[WAVEFORM]/Parameter 2820"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 1056 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/1/3/7/Parameter 2825"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
         "name": "LFO 1 Native 1-3.3.0",
         "type": "lfoNativeField3_72x112_0",
         "data": {
@@ -13154,43 +12838,6 @@
         "additionalInvalidatingHandles": [
          "RangedEnabling/1/3/7/Parameter 2825",
          "IndexedEnabling/1/2/Parameter 2822"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "LFO 1 Native Action 1",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_action_fdae43bd753e198136b3.png",
-         "offImage": "native_action_fdae43bd753e198136b3.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "FromGesture/Parameter 3662"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1072 8 200 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/1/6/7/Parameter 2825"
         ]
        }
       },
@@ -13930,42 +13577,6 @@
         "bounds": "14 480 162 96",
         "additionalInvalidatingHandles": [
          "IndexedEnabling/3/7/Parameter 2825"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "LFO 1 Native 4-6.2.0",
-        "type": "lfoNativeField2_1056x56_0",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2821"
-         },
-         {
-          "key": "Caption",
-          "value": "WithName[STYLE]/Parameter 2821"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 1056 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/4/6/7/Parameter 2825"
         ]
        }
       },
@@ -18818,6 +18429,479 @@
         "bounds": "0 0 1280 628",
         "additionalInvalidatingHandles": [
          "RangedEnabling/9/10/11/Parameter 3897"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "lfoHeaderWave",
+    "value": {
+     "version": 2,
+     "actions": [
+      {
+       "version": 1,
+       "onAction": "Mouse Down",
+       "handler": "Show Overlay",
+       "handleName": "Data",
+       "additionalData": "lfoNativeChoiceDrawer1"
+      },
+      {
+       "version": 1,
+       "onAction": "Enter Pressed",
+       "handler": "Show Overlay",
+       "handleName": "Data",
+       "additionalData": "lfoNativeChoiceDrawer1"
+      }
+     ],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "focus",
+        "type": "Focus",
+        "data": {
+         "version": 1,
+         "backgroundColour": "19ffffff",
+         "outlineColour": "ff19c6e0",
+         "backgroundInset": 2.0,
+         "outlineThickness": 1.0
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "WhenFocussed",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1085 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_1085x40.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1085 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffeef1ff",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "12 0 1041 40"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "lfoHeaderStyle",
+    "value": {
+     "version": 2,
+     "actions": [
+      {
+       "version": 1,
+       "onAction": "Mouse Down",
+       "handler": "Show Overlay",
+       "handleName": "Data",
+       "additionalData": "lfoNativeChoiceDrawer2"
+      },
+      {
+       "version": 1,
+       "onAction": "Enter Pressed",
+       "handler": "Show Overlay",
+       "handleName": "Data",
+       "additionalData": "lfoNativeChoiceDrawer2"
+      }
+     ],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "focus",
+        "type": "Focus",
+        "data": {
+         "version": 1,
+         "backgroundColour": "19ffffff",
+         "outlineColour": "ff19c6e0",
+         "backgroundInset": 2.0,
+         "outlineThickness": 1.0
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "WhenFocussed",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1085 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_1085x40.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1085 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffeef1ff",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "12 0 1041 40"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "lfoHeaderTargets",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "TARGETS",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "hdr_targets_84x40.png",
+         "offImage": "hdr_targets_84x40.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 84 40"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "lfoHeader",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 40.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Name",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTitle"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 8 79 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Waveform",
+        "type": "lfoHeaderWave",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrWave"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "95 8 1085 40",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/3/7/Parameter 2825"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Style",
+        "type": "lfoHeaderStyle",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrStyle"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "95 8 1085 40",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/4/6/7/Parameter 2825"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Targets",
+        "type": "lfoHeaderTargets",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTargets"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1188 8 84 40",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/6/7/Parameter 2825"
         ]
        }
       }

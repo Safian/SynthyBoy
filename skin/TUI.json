@@ -10613,25 +10613,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption env1 0",
-        "type": "Label",
+        "name": "Env 1 Header",
+        "type": "envHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "ENV 1"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -10639,20 +10625,30 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2921"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[ENV 1]/Parameter 2934"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "Parameter 2934"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 12 96 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -10986,25 +10982,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption env2 0",
-        "type": "Label",
+        "name": "Env 2 Header",
+        "type": "envHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "ENV 2"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -11012,20 +10994,30 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2921"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[ENV 2]/Parameter 2934"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "Parameter 2934"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 12 96 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -11359,25 +11351,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption env3 0",
-        "type": "Label",
+        "name": "Env 3 Header",
+        "type": "envHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "ENV 3"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -11385,20 +11363,30 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2921"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[ENV 3]/Parameter 2934"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "Parameter 2934"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 12 96 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -11732,25 +11720,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption env4 0",
-        "type": "Label",
+        "name": "Env 4 Header",
+        "type": "envHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "ENV 4"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -11758,20 +11732,30 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2921"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[ENV 4]/Parameter 2934"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "Parameter 2934"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 12 96 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -12105,25 +12089,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption env5 0",
-        "type": "Label",
+        "name": "Env 5 Header",
+        "type": "envHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "ENV 5"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -12131,20 +12101,30 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2921"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[ENV 5]/Parameter 2934"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "Parameter 2934"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 12 96 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -12478,25 +12458,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption env6 0",
-        "type": "Label",
+        "name": "Env 6 Header",
+        "type": "envHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "ENV 6"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -12504,20 +12470,30 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2921"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[ENV 6]/Parameter 2934"
+         },
+         {
+          "key": "HdrTitleGate",
+          "value": "IndexedEnabling/0/2/Parameter 3588"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "Parameter 2934"
          }
         ]
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 12 96 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Parameter 3588"
-        ]
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -12876,25 +12852,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo1 title",
-        "type": "Label",
+        "name": "LFO 1 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 1"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -12902,17 +12864,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 1]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -13158,25 +13137,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo2 title",
-        "type": "Label",
+        "name": "LFO 2 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 2"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -13184,17 +13149,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 2]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -13440,25 +13422,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo3 title",
-        "type": "Label",
+        "name": "LFO 3 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 3"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -13466,17 +13434,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 3]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -13722,25 +13707,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo4 title",
-        "type": "Label",
+        "name": "LFO 4 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 4"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -13748,17 +13719,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 4]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -14004,25 +13992,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo5 title",
-        "type": "Label",
+        "name": "LFO 5 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 5"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -14030,17 +14004,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 5]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -14286,25 +14277,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo6 title",
-        "type": "Label",
+        "name": "LFO 6 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 6"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -14312,17 +14289,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 6]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -14568,25 +14562,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo7 title",
-        "type": "Label",
+        "name": "LFO 7 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 7"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -14594,17 +14574,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 7]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -14850,25 +14847,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo8 title",
-        "type": "Label",
+        "name": "LFO 8 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 8"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -14876,17 +14859,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 8]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -15132,25 +15132,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo9 title",
-        "type": "Label",
+        "name": "LFO 9 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 9"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -15158,17 +15144,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 9]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -15414,25 +15417,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption lfo10 title",
-        "type": "Label",
+        "name": "LFO 10 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "LFO 10"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -15440,17 +15429,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[LFO 10]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -15696,25 +15702,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption rnd1 title",
-        "type": "Label",
+        "name": "RND 1 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "RND 1"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -15722,17 +15714,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[RND 1]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -15978,25 +15987,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption rnd2 title",
-        "type": "Label",
+        "name": "RND 2 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "RND 2"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -16004,17 +15999,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[RND 2]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -16260,25 +16272,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption rnd3 title",
-        "type": "Label",
+        "name": "RND 3 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "RND 3"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -16286,17 +16284,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[RND 3]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -16542,25 +16557,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption rnd4 title",
-        "type": "Label",
+        "name": "RND 4 Header",
+        "type": "lfoHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "RND 4"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -16568,17 +16569,34 @@
         "map": [
          {
           "key": "Data",
-          "value": "Parameter 0"
+          "value": "Parameter 2825"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "WithName[RND 4]/Parameter 2820"
+         },
+         {
+          "key": "HdrWave",
+          "value": "Parameter 2820"
+         },
+         {
+          "key": "HdrStyle",
+          "value": "Parameter 2821"
+         },
+         {
+          "key": "HdrTargets",
+          "value": "FromGesture/Parameter 3662"
          }
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 91 400 44"
+        "bounds": "0 0 1280 56",
+        "additionalInvalidatingHandles": []
        }
       },
       {

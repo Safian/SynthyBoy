@@ -1,6 +1,6 @@
 # HEADER (design proposal v0; the oscillator screens use it)
 
-The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise) uses it in the skin (see "Skin: the oscillator headers" below); no other screen does yet. The catalogue (`kepes-katalogus.html`) shows eleven examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
+The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise), Env 1-6 and LFO 1-10 / RND 1-4 use it in the skin (see "Skin: the oscillator headers" and "Skin: the Env and LFO headers" below). The catalogue (`kepes-katalogus.html`) shows thirteen examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
 
 ## Geometry (tokens in `components/sizes.json`)
 
@@ -49,6 +49,7 @@ One example per slot kind (`kind`, then the fields; every slot may carry `role` 
 | centre | `button` | `{"kind": "button", "role": "browse", "text": "BROWSE"}` | `text` |
 | right | `more` | `{"kind": "more"}` | the common MORE button |
 | right | `dropdown` | `{"kind": "dropdown", "role": "route", "value": "Filter 1", "width_px": 150}` | as the centre dropdown |
+| right | `button` | `{"kind": "button", "role": "targets", "text": "TARGETS"}` | a page text button at the right edge (the modulator screens' TARGETS) |
 
 Another screen is only a spec. Env 1 (title + TARGETS), no POWER:
 
@@ -73,12 +74,18 @@ A slot that is built into the skin names its cells: `"skin": {"cells": [{"name":
 | `page` | also gated by the form's `page_gate` (the Route stays visible when POWER is off) |
 | `wrapper` | `NativeActive`: keep the proven NativeActive / NativeInactive pattern (see below) |
 | `focus`, `show` | a Focus child; the instance's showWhenDataModelInvalid (default `Show`) |
+| `role` | the cell binds its own handle `Hdr<Role>` instead of the slot's (LFO: WAVEFORM and STYLE are two alternative cells of one dropdown slot, each with its own parameter) |
+| `hw_focus` | the cell instance's acceptsHWFocus (default `No`) |
+| `inert` | the cell definition ignores mouse presses (the former cell sat in an inert parent; the touch is handled elsewhere) |
+| `button_focus` | the inner Button's acceptsHWFocus (default `Yes`; `No` also shows it always: the Env TARGETS) |
+
+The form's `skin` block may carry `title_gate`: a handle name the title Label hides with (the instance remaps it; Env: the list page that replaces the caption). A spec WITHOUT a `power` slot (a modulator) gets no POWER button, no `HdrOn` / `HdrOff` gating and no disabled look: the cells are gated only by their own `gate`.
 
 `role` gives the remap name `Hdr<Role>` (`type` -> `HdrType`) that the instance binds to a parameter.
 
 ### Instances and the tool
 
-The instances (which parameters, which page gate) of one screen family are a list in `components/native/header/skin-<family>.json` (`skin-osc.json`): `{"name", "form" (an example id), "title", "power": "Parameter N", "data", "gate", "remap": {"Hdr<Role>": handle, ...}}`. The tool derives `HdrTitle` (`WithName[<title>]/<power>`), `HdrPower`, `HdrOn` / `HdrOff` (`IndexedEnabling/1|0/2/<power>`) from `power`. Hand-run, nothing at build time:
+The instances (which parameters, which page gate) of one screen family are a list in `components/native/header/skin-<family>.json` (`skin-osc.json`): `{"name", "form" (an example id), "title", "power": "Parameter N", "data", "gate", "remap": {"Hdr<Role>": handle, ...}}`; without POWER `"title_param"` (any parameter; the Name label of it carries the title text) replaces `power`; `"place": {"tab", "replace"}` puts the instance into that TUI.json tab in place of the named component (the old caption) instead of into the family layer; `"retire": {"definitions", "components", "images"}` (family level) lists what the header replaces and the tool removes. The tool derives `HdrTitle` (`WithName[<title>]/<power>`), `HdrPower`, `HdrOn` / `HdrOff` (`IndexedEnabling/1|0/2/<power>`) from `power`. Hand-run, nothing at build time:
 
 ```
 python3 scripts/header-skin.py components/native/header/skin-osc.json     # definitions + instances + faces (skin/hdr_*.png)
@@ -94,6 +101,17 @@ The Osc family needed 29 header definitions (four forms each with an `...Off` tw
 - The cells stay one per role and width: the Show Overlay action names its overlay in `additionalData`, a definition-level string that no handle can change, and a face of another width is another picture. A cell shrunk to a transparent hit area (one per overlay, no width) needs a device probe that a definition without a visible child still receives Mouse Down (not measured; open in TODO.md).
 - The route keeps the NativeActive / NativeInactive wrapper (3 definitions shared by all forms): its disabled look follows the Filter routing gates, not POWER, and its focus chain (`acceptsHWFocus` No on the wrapper, Children on the active child) is the proven one; folding it into the forms would repeat the inactive look in four forms and change the focus chain on no evidence.
 - The inert disabled `Button`s of the old Off cells (Browse, the Table's Open hit button; ignoreMousePresses on, no hardware focus) are plain pictures in the form now: a Button in the form would take presses; a never-pressed one has no function.
+
+## Skin: the Env and LFO headers (owner order 2026-11-28)
+
+`skin/defs_env.json` (`envHeader`, `envHeaderTargets`) and `skin/defs_lfo.json` (`lfoHeader`, `lfoHeaderWave`, `lfoHeaderStyle`, `lfoHeaderTargets`) are generated from the examples `env-page` and `lfo-page` by `scripts/header-skin.py` with `skin-env.json` and `skin-lfo.json`. Both are modulators: title only, no POWER.
+
+- One instance per tab (`Env 1 Header` .. `Env 6 Header`, `LFO 1 Header` .. `RND 4 Header`) sits in the tab itself, in place of the caption (`Native Caption env<n> 0`, `Native Caption <view> title`): the title is the Name label `WithName[ENV 1]/Parameter 2934` (LFO: `Parameter 2820`), text 40 px, so the title is a Header title now, not a static caption. The Env title keeps the caption's gate (`IndexedEnabling/0/2/Parameter 3588`, hidden while the list page shows) as `HdrTitleGate`.
+- Env: title left, the TARGETS button right-aligned (right zone `button`); the cell keeps the former `envNativeTargets` behaviour (inert definition, inner Button id 1 of 1 on `Parameter 2934`, gate `NonZero/Parameter 2921`, instance focus `Yes`).
+- LFO / RND: title (slot 79 px = "LFO 10", so the dropdown never moves), the dropdown filling the row and the TARGETS button right. The dropdown slot holds two alternative cells with the former gates: `Waveform` (overlay `lfoNativeChoiceDrawer1`, `Parameter 2820`, `RangedEnabling/1/3/7/Parameter 2825`) and `Style` (overlay `lfoNativeChoiceDrawer2`, `Parameter 2821`, `RangedEnabling/4/6/7/Parameter 2825`); the button is the former `LFO 1 Native Action 1` (id 1 of 1 on `FromGesture/Parameter 3662`, gate `RangedEnabling/1/6/7/Parameter 2825`, inert definition as the editor it sat in).
+- Geometry follows the Header: 40 px controls 8 px from the top (the former cells were 56 px high); the TARGETS button is the Button recipe at its text width (84 px; it was 160 / 200 px); the dropdown shows the value only (the WAVEFORM / STYLE caption inside the box is gone). The C++ rectangles (`env_ui.h` `geo_.targets`, `lfo_layout.h` `targets` / `namedPicker`) are not drawn or hit in the skin build and were not changed.
+- The target tags of the Env row (`envScreenTop`, `Env Native Tag`) are page content between the title and TARGETS, not Header slots; they stay as they are.
+- Proof: a script resolved, per tab (Env 1-6, LFO 1-10, RND 1-4), the (handle remap, button id, group, focus, gates, actions) records of the header items before and after: all 116 records match.
 
 ## Add an example
 

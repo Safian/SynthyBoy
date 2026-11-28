@@ -738,59 +738,6 @@
     }
    },
    {
-    "key": "envNativeTargets",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Env Native Targets",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "env_targets_on.png",
-         "offImage": "env_targets_on.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 160 56"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "envNativeDial",
     "value": {
      "version": 2,
@@ -1201,42 +1148,6 @@
      "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Env Native Targets",
-        "type": "envNativeTargets",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2934"
-         },
-         {
-          "key": "Caption",
-          "value": "WithName[TARGETS]/Parameter 2934"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1072 12 160 56",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
-        ]
-       }
-      },
       {
        "version": 2,
        "componentData": {
@@ -2251,6 +2162,160 @@
         "bounds": "0 0 1280 628",
         "additionalInvalidatingHandles": [
          "IndexedEnabling/1/2/Parameter 3588"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "envHeaderTargets",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "TARGETS",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "hdr_targets_84x40.png",
+         "offImage": "hdr_targets_84x40.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 84 40"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "envHeader",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 40.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Name",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTitle"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 8 68 40",
+        "additionalInvalidatingHandles": [
+         "HdrTitleGate"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Targets",
+        "type": "envHeaderTargets",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTargets"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1188 8 84 40",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 2921"
         ]
        }
       }

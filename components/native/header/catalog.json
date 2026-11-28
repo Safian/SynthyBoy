@@ -561,6 +561,121 @@
         },
         "caption": "11 · Noise (minta): cím, POWER, KIND (a teljes szélességen, SOUND nincs); jobbra a Filter-útvonal legördülője",
         "alt": "Noise fejléc mintával: NOISE, POWER, KIND, Filter 1"
+      },
+      {
+        "id": "env-page",
+        "file": "header-env-page.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "ENV 1"
+            }
+          ],
+          "right": [
+            {
+              "kind": "button",
+              "role": "targets",
+              "text": "TARGETS",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Targets",
+                    "def": "envHeaderTargets",
+                    "inert": true,
+                    "hw_focus": "Yes",
+                    "gate": [
+                      "NonZero/Parameter 2921"
+                    ],
+                    "button_focus": "No"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "skin": {
+          "def": "envHeader",
+          "title_gate": "HdrTitleGate"
+        },
+        "caption": "12 · Env 1..6 (a képernyő fejléce): cím, jobbra a TARGETS gomb (nincs POWER)",
+        "alt": "Env fejléc: ENV 1, TARGETS"
+      },
+      {
+        "id": "lfo-page",
+        "file": "header-lfo-page.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "LFO 10",
+              "slot": 79
+            }
+          ],
+          "centre": [
+            {
+              "kind": "dropdown",
+              "role": "wave",
+              "value": "Sine",
+              "width": "header.dropdown.min_width",
+              "fill": true,
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Waveform",
+                    "def": "lfoHeaderWave",
+                    "overlay": "lfoNativeChoiceDrawer1",
+                    "focus": true,
+                    "hw_focus": "Yes",
+                    "show": "Hide",
+                    "gate": [
+                      "RangedEnabling/1/3/7/Parameter 2825"
+                    ]
+                  },
+                  {
+                    "name": "Style",
+                    "def": "lfoHeaderStyle",
+                    "role": "style",
+                    "overlay": "lfoNativeChoiceDrawer2",
+                    "focus": true,
+                    "hw_focus": "Yes",
+                    "show": "Hide",
+                    "gate": [
+                      "RangedEnabling/4/6/7/Parameter 2825"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "right": [
+            {
+              "kind": "button",
+              "role": "targets",
+              "text": "TARGETS",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Targets",
+                    "def": "lfoHeaderTargets",
+                    "show": "Hide",
+                    "gate": [
+                      "RangedEnabling/1/6/7/Parameter 2825"
+                    ],
+                    "inert": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "skin": {
+          "def": "lfoHeader"
+        },
+        "caption": "13 · LFO 1..10 és RND 1..4 (a képernyő fejléce): cím (a legszélesebb helye), WAVEFORM (LFO) vagy STYLE (RND) legördülő, jobbra a TARGETS gomb (nincs POWER)",
+        "alt": "LFO fejléc: LFO 1, WAVEFORM, TARGETS"
       }
     ]
   }

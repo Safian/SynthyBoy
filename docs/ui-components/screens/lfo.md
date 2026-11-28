@@ -1,15 +1,15 @@
 # LFO screen (`lfoScreen`, `lfoScreenTop`, `lfoScreenTop2`, `lfoScreenTop3`)
 
-**Tabs:** LFO 1 .. LFO 10 (`lfo1` .. `lfo10`) and RND 1 .. RND 4 (`rnd1` .. `rnd4`); the view index is 1 .. 14 (RND m is 10 + m). They are the sub-tabs of two function keys (LFO: LFO 1 .. 8; `LFO 9`: LFO 9, LFO 10, RND 1 .. 4). Each tab holds the four screen instances in order, the markers, the instance picture, the caption `Native Caption <view> title` (22 91 400 44) and the sentinel. **Pictures:** `../../screens/lfo.jpg`, `rnd.jpg`.
+**Tabs:** LFO 1 .. LFO 10 (`lfo1` .. `lfo10`) and RND 1 .. RND 4 (`rnd1` .. `rnd4`); the view index is 1 .. 14 (RND m is 10 + m). They are the sub-tabs of two function keys (LFO: LFO 1 .. 8; `LFO 9`: LFO 9, LFO 10, RND 1 .. 4). Each tab holds the four screen instances in order, the markers, the instance picture, the header instance `<tab> Header` (Header component, [../header.md](../header.md): title, WAVEFORM / STYLE dropdown, TARGETS button) and the sentinel. **Pictures:** `../../screens/lfo.jpg`, `rnd.jpg`.
 
 ## What it shows
 
 - `lfoScreen`: the modulation editor and targets title and keyline (shared).
-- `lfoScreenTop`: `lfoNativeFullEditor` (0 0 1280 628): the field groups of the LFO (rate, timing HZ / BPM / KEY, phase, delay, mode, motion, key follow, shape; the random LFO fields), the shape editor controls (BACK, the seven tools, SHAPES, MORE, UNDO, REDO, DELETE, MOD, SNAP, LOOP, SMOOTH, CYCLE LINK, LOOP LINK, POINT, X, Y, CURVE, SCALE, GRID X, GRID Y, PHASE, BEND ALL, MODE) and the detail rows of a point modulation.
+- `lfoScreenTop`: `lfoNativeFullEditor` (0 0 1280 628; the top row WAVEFORM / STYLE / TARGETS is the tab's Header instance): the field groups of the LFO (rate, timing HZ / BPM / KEY, phase, delay, mode, motion, key follow, shape; the random LFO fields), the shape editor controls (BACK, the seven tools, SHAPES, MORE, UNDO, REDO, DELETE, MOD, SNAP, LOOP, SMOOTH, CYCLE LINK, LOOP LINK, POINT, X, Y, CURVE, SCALE, GRID X, GRID Y, PHASE, BEND ALL, MODE) and the detail rows of a point modulation.
 - `lfoScreenTop2`: the text lines of the editor (selected, hint, grid, trigger, info, status, marker hint, point modulation summary).
 - `lfoScreenTop3`: `lfoNativePicks` (ADD SOURCE, ADD TARGET group and the target lists) and the native keyboard (`native keyboard overlay`) for the shape name.
 
-The LFO shape and the live cursor are drawn by the plugin; there is no selector cell on the page.
+The LFO shape and the live cursor are drawn by the plugin; the top row is the Header (no selector cell in the editor).
 
 ## LFO and RND
 
