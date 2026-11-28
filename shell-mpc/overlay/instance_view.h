@@ -187,6 +187,8 @@ public:
     virtual int takeNativeTextKey() noexcept { return 0; }
     /** Forgets the keys queued so far (the keyboard opens). */
     virtual void clearNativeTextKeys() noexcept {}
+    /** The latest list code a radio Button of the Play page wrote into "Play List" (debounced, nativeui::playlist::Code), 0 when there is none; the Play page opens that list (play_view.h). */
+    virtual int takePlayListRequest() noexcept { return 0; }
     /** The names of the rows of the list the modulation picker's native cells show (the file browsers and the source of a new modulation of the oscillator pages); nullptr: the picker's own names. */
     virtual void setNativeListText (const nativeui::nativetext::ListPage* /*page*/) noexcept {}
     /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */

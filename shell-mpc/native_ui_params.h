@@ -155,11 +155,16 @@ constexpr int kTextEditContexts = 11, kTextEditKeys = 100;
 constexpr int kTextGate = kTextEdit + 3;
 constexpr int kTextGates = 2;   // 0: nativetext::TargetsTitle (Targets / Modulations keyline), 1: nativetext::OscDetailTitle (the oscillator detail keyline)
 constexpr int textGateLine (int gate) noexcept { return gate == 0 ? nativetext::TargetsTitle : nativetext::OscDetailTitle; }
-constexpr int kCount = kTextGate + kTextGates;
+// Appended 2026-11-28 (play list): "Play List", the code of the Play page's own paged list the skin radio Buttons open (native_play_list.h: 0 none, 1 source, 2 LFO/RND, 3 noise sound, 4 LFO shape, 5 LFO division,
+// 6 standard LFO); stepped integer 0 .. 6, written by the host, never stored (getParameter is always 0). Host index 2719 + offset = Parameter 3902 (the text gates end at 3901).
+constexpr int kPlayList = kTextGate + kTextGates;
+constexpr int kPlayListLastCode = 6;
+static_assert (kPlayList == 3902 - 2719, "Play List is Parameter 3902 in skin/defs_play.json: the handle block before it changed");
+constexpr int kCount = kPlayList + 1;
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
 constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kTextEdit; }
 constexpr bool isTextEditOffset (int offset) noexcept { return offset >= kTextEdit && offset < kTextGate; }
-constexpr bool isTextGateOffset (int offset) noexcept { return offset >= kTextGate && offset < kCount; }
+constexpr bool isTextGateOffset (int offset) noexcept { return offset >= kTextGate && offset < kPlayList; }
 constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
 constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
 constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }

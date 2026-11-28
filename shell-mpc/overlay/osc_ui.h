@@ -755,6 +755,65 @@ public:
         }
         return changed;
     }
+
+    // ---- the lists of the Play page (play_view.h, nativeui::playlist): no stack page, the Play page shows the list with its own NativeListCells
+    /** What the Play page's Source list shows: the header (the browser's title), the rows, whether the header is a way up, the current row (-1: none). */
+    struct CompactList
+    {
+        const char* header = nullptr;
+        const char* const* items = nullptr;
+        int count = 0, current = -1;
+        bool headerBack = false;
+    };
+    /** Opens the source browser of the shown oscillator A / B / C without a list page (the same browsers and code as the list page): the wavetable categories and tables, or the content roots, folders and
+        files. false: the oscillator has no source field (Sub, Noise) or the instance offers no content root. */
+    bool openCompactSourceList (IInstanceView& v)
+    {
+        const Item* src = item (kBasic + 1);
+        if (src == nullptr || (src->type != T::Table && src->type != T::Source))
+            return false;
+        if (src->type == T::Table ? ! startWavetableBrowser (v) : ! startContentBrowser (v))
+            return false;
+        if (wtMode_)
+            fillWavetableList();
+        else
+            fillBrowserList();
+        return true;
+    }
+    CompactList compactSourceList() const noexcept
+    {
+        if (! wtMode_ && ! browseMode_)
+            return {};
+        return { listData_.header, listData_.items, listData_.count, listData_.current, listData_.headerBack };
+    }
+    /** A row of the Play page's Source list: true when a final choice was made (the list closes); false when a category or folder opened or the row was refused. */
+    bool chooseCompactSourceRow (int row, IInstanceView& v)
+    {
+        if (wtMode_)
+            return applyWavetableRow (row, v);
+        return browseMode_ && applyBrowserRow (row, v);
+    }
+    /** The way up of the Play page's Source list: false at the top level (the list closes). */
+    bool compactSourceUp (IInstanceView&) { return browserUp(); }
+    /** The Play page closed its Source list (a list page of the standalone tabs keeps its own state). */
+    void closeCompactSourceList() noexcept
+    {
+        if (pageTop_ != kPageList)
+            wtMode_ = browseMode_ = false;
+    }
+    /** The parameter of the compact Noise "First" field (noise.sample), -1 when the shown source is not the noise. */
+    int compactNoiseSoundParam() const noexcept
+    {
+        const Item* first = sel_ == playosc::kNoise ? compactNativeItems()[nativeui::playoscui::First] : nullptr;
+        return first != nullptr ? first->param : -1;
+    }
+    /** Writes the noise sound through the compact Noise "First" item, the way its native cell does (`value` normalised). */
+    bool applyCompactNoiseSound (IInstanceView& v, UiStack& stack, float value)
+    {
+        const Item* first = sel_ == playosc::kNoise ? compactNativeItems()[nativeui::playoscui::First] : nullptr;
+        return first != nullptr && first->param >= 0 && applyNativeSetting (*first, v, stack, value);
+    }
+
     nativeui::osc::SettingsView nativeSettingsView() const noexcept
     {
         namespace n = nativeui::osc;
@@ -2431,10 +2490,8 @@ private:
                             fillModsSources();
                         }
                     }
-                    else if (wtMode_ && wtBrowser_.up() == WavetableBrowser::Action::Changed)
-                        fillWavetableList();
-                    else if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
-                        fillBrowserList();
+                    else
+                        browserUp();
                     return;
                 case kBasic + 1: case kBasic + 2:
                 {
@@ -2510,15 +2567,8 @@ private:
             }
             if (browseMode_)
             {
-                const ContentBrowser::Action a = browser_.tap (c.index + 1);   // the list shows the rows after the header
-                if (a == ContentBrowser::Action::Changed)
-                    fillBrowserList();
-                else if (a == ContentBrowser::Action::Chosen)
-                {
-                    lastChosen_[browser_.kind() - 1] = browser_.chosen();
-                    v.requestContent (playosc::oscNumber (sel_), browser_.kind(), browser_.chosen());
+                if (applyBrowserRow (c.index, v))
                     stack.back();
-                }
                 return;
             }
             stack.back();
@@ -2850,10 +2900,18 @@ private:
     void openWavetableBrowser (UiStack& stack, IInstanceView& v)
     {
         if (stack.depth() == 0)
-            return;   // Play has no large view and no list: only the standalone pages open the browser
-        const Item* it = item (kBasic + 1);
-        if (it == nullptr || it->param < 0)
+            return;   // the compact Play view opens no list page; the Play page opens its own list through openCompactSourceList (play_view.h)
+        if (! startWavetableBrowser (v))
             return;
+        stack.openDetail (kPageList);
+        fillWavetableList();
+    }
+    /** Opens the wavetable browser on the catalogue of the instance (shared by the list page and the Play page's list); false when the oscillator has no table field. */
+    bool startWavetableBrowser (IInstanceView& v)
+    {
+        const Item* it = item (kBasic + 1);
+        if (it == nullptr || it->type != T::Table || it->param < 0)
+            return false;
         synthyboy::CatalogueSources src;
         v.wavetableSources (src);
         synthyboy::WavetableCatalogue cat = synthyboy::buildWavetableCatalogue (synthyboy::StdCatalogueFs {}, src);
@@ -2872,8 +2930,7 @@ private:
         wtBrowser_.open (std::move (cat), fileTable ? -1 : choice, pack, file);
         wtMode_ = true;
         browseMode_ = false;
-        stack.openDetail (kPageList);
-        fillWavetableList();
+        return true;
     }
     void fillWavetableList()
     {
@@ -2887,6 +2944,12 @@ private:
     }
     void chooseWavetableRow (int row, UiStack& stack, IInstanceView& v)
     {
+        if (applyWavetableRow (row, v))
+            stack.back();
+    }
+    /** A row of the wavetable browser: a category opens (false), a table is chosen and loaded (true: the list closes), a refused file changes nothing (false). */
+    bool applyWavetableRow (int row, IInstanceView& v)
+    {
         using A = WavetableBrowser::Action;
         const Item* it = item (kBasic + 1);
         const A a = wtBrowser_.tap (row);
@@ -2895,7 +2958,7 @@ private:
         else if (a == A::ChoseBuiltin && it != nullptr && it->param >= 0)
         {
             writePlain (v, it->param, info (it->param).min + wtBrowser_.chosenChoice());   // as the stepper did: the choice parameter, the old table plays until the new one is built
-            stack.back();
+            return true;
         }
         else if (a == A::ChoseFile)
         {
@@ -2906,20 +2969,29 @@ private:
             stepPack_ = wtBrowser_.chosenEntry().ref.pack;
             stepFile_ = wtBrowser_.chosenEntry().ref.file;
             stepValid_ = true;
-            stack.back();
+            return true;
         }
         // A::Refused: the row says why, nothing changes
+        return false;
     }
 
     /** The content browser in the native list rows (over the full screen of a standalone page): the roots the instance offers, the folders, the files. */
     void openBrowser (UiStack& stack, IInstanceView& v)
     {
         if (stack.depth() == 0)
-            return;   // Play has no large view and no list: only the standalone pages open the browser
+            return;   // the compact Play view opens no list page; the Play page opens its own list through openCompactSourceList (play_view.h)
+        if (! startContentBrowser (v))
+            return;
+        stack.openDetail (kPageList);
+        fillBrowserList();
+    }
+    /** Opens the content browser on the roots the instance offers (shared by the list page and the Play page's list); false when there is none. */
+    bool startContentBrowser (IInstanceView& v)
+    {
         std::vector<IInstanceView::ContentRoot> roots;
         v.contentRoots (roots);
         if (roots.empty())
-            return;
+            return false;
         std::vector<ContentBrowser::Root> rs;
         for (const auto& r : roots)
             rs.push_back ({ r.label, r.path });
@@ -2930,8 +3002,33 @@ private:
         else
             browser_.open (kind);
         browseMode_ = true;
-        stack.openDetail (kPageList);
-        fillBrowserList();
+        wtMode_ = false;
+        return true;
+    }
+    /** A row of the content browser (the rows after its header): a folder opens (false), a file is chosen and requested (true: the list closes). */
+    bool applyBrowserRow (int row, IInstanceView& v)
+    {
+        const ContentBrowser::Action a = browser_.tap (row + 1);   // the list shows the rows after the header
+        if (a == ContentBrowser::Action::Changed)
+            fillBrowserList();
+        else if (a == ContentBrowser::Action::Chosen)
+        {
+            lastChosen_[browser_.kind() - 1] = browser_.chosen();
+            v.requestContent (playosc::oscNumber (sel_), browser_.kind(), browser_.chosen());
+            return true;
+        }
+        return false;
+    }
+    /** The way up of a browser list (its header): true when the list changed, false at the top level or when no browser is open. */
+    bool browserUp()
+    {
+        if (wtMode_ && wtBrowser_.up() == WavetableBrowser::Action::Changed)
+            fillWavetableList();
+        else if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
+            fillBrowserList();
+        else
+            return false;
+        return true;
     }
     void fillBrowserList()
     {
