@@ -3108,6 +3108,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 1376"
+         },
+         {
           "key": "Readout0",
           "value": "Parameter 1376"
          },
@@ -3160,6 +3164,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 1377"
+         },
          {
           "key": "Readout0",
           "value": "Parameter 1377"
