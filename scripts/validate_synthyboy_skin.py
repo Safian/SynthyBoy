@@ -407,6 +407,16 @@ def validate_package(package, *, check_live=False):
         name = tab["tabName"]
         components = [c["componentData"] for c in tab["componentDefinition"]["componentsData"]]
         types = {c["type"] for c in components}
+        # a screen definition (lfoScreen, oscScreen ...) holds the shared items of the page: its types count for the tab
+        stack = list(types)
+        by_key = {d["key"]: d["value"] for d in definitions["localComponentDefinitions"]}
+        while stack:
+            definition = by_key.get(stack.pop())
+            for child in (definition or {}).get("componentsData", []):
+                child_type = child["componentData"]["type"]
+                if child_type not in types:
+                    types.add(child_type)
+                    stack.append(child_type)
         images = {c["name"] for c in components if c["type"] == "Image" and c["data"].get("image")}
         found = {c["name"][len("Overlay Marker "):-len(" left")] for c in components
                  if c["name"].startswith("Overlay Marker ") and c["name"].endswith(" left")}
