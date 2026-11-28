@@ -34,7 +34,8 @@ display path reads the topic files below that touch its work **before** writing 
 | [vector-paths.md](vector-paths.md) | Every NEON path of the engine: its scalar reference, the bit-identity test, status; the compiled-code check for fused multiply-add and estimates |
 | [mpc-display.md](mpc-display.md) | The MPC host's display pipeline (DRM planes, commits) and our overlay |
 | [native-text-entry.md](native-text-entry.md) | Native text keyboard design, factory text keyboard, XL numeric input and verified host string-setter gate |
-| [skin-host-behaviour.md](skin-host-behaviour.md) | How the host treats our skin: list selection and closing, a skin change that froze the host, tab backgrounds (measured) |
+| [skin-host-behaviour.md](skin-host-behaviour.md) | How the host treats our skin: list selection and closing, a skin change that froze the host, tab backgrounds, importFiles (measured on the Key 61) |
+| [community-practices.md](community-practices.md) | Ranked code/skin organisation practices from the community plugins and the SDK (skin structure, importFiles, size comparison with stock skins, plugin/UI separation, lint, release) |
 | [mpc-expert-runtime.md](mpc-expert-runtime.md) | Expert startup, background source refresh and source-cited lexical retrieval index |
 | [mpc-host-scripting.md](mpc-host-scripting.md) | The host's embedded Lua API (Q-Link Touch / Rotate / SetPosition), device scripts, control surface; fact sheet, not a release path |
 | [spectral-start.md](spectral-start.md) | Note-on spikes of the Spectral oscillator and the start ledger |
