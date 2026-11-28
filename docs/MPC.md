@@ -43,6 +43,12 @@ The output folder is named `Safian - VST - SynthyBoy` and contains:
 - `Content/packs/<pack id>/` — the factory content packs `content/factory-wavetables` (16 wavetables) and `content/factory-samples` (12 samples, 3 multisample instruments with their SFZ files, 3 impulse responses for Convolve), written by `scripts/gen-content-pack.py` (CC0-1.0, synthesised, 11.5 MB in all) and referenced by pack id + file + SHA-256 from the presets of sound set batch 2 (`content.wavetables / samples / impulses / instruments`). The plugin's content store reads them from there (`addPackRoot (Content/packs)` in `shell-mpc/synthyboy_mpc.cpp`); a missing file is skipped on load (a wavetable becomes the saw, a sample, granular, spectral or multisample oscillator is silent, Convolve is bypassed).
 - `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, committed in `skin/` (edited directly, no generation), including the browser artwork tile (`Plugin Skins/browser_images/soundsmode.png`) for Sounds > INSTRUMENTS.
 
+Skin install checks (`scripts/validate_synthyboy_skin.py`, run by `scripts/install-mpc-package.sh` before every install):
+- Every `Parameter N` handle in `TUI.json` must be below the plugin parameter count: `docs/params.json` count plus the MPC extras that `shell-mpc/synthyboy_mpc.cpp` adds to `numParams`, computed by compiling `scripts/skin-param-extra.cpp` against the committed headers (needs `c++`; no binary is read).
+- Every `localComponentDefinitions` entry is compared by key (sha256 of its canonical JSON) with the known-good `scripts/skin-baseline/TUI.keys.json`: added keys pass, changed or removed keys fail with the list.
+- An intended edit needs `SYNTHYBOY_SKIN_ACCEPT_CHANGES=1` for that run.
+- After the owner has proven the skin on the Key 61, run `scripts/skin-baseline-update.py` and commit the new baseline.
+
 The plugin finds its own folder by walking up from the binary's path (obtained via `dladdr` on `VSTPluginMain`) to the first directory that contains a file named `plugin.json`. This logic is in `shell-mpc/plugin_paths.h`.
 
 ## Install on the MPC

@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Check the native skin that the MPC looks up for the SynthyBoy instrument."""
 import argparse
+import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+BASELINE = ROOT / "scripts/skin-baseline/TUI.keys.json"
 # One identifying control per physical tab. The shared OSC surface serves five tabs.
 SURFACES = {
     "Play": "playOscSelector", "Macros": "macroCard", "Osc A": "oscNativeSurface",
@@ -31,6 +36,47 @@ def walk(value):
     elif isinstance(value, list):
         for child in value:
             yield from walk(child)
+
+
+def current_hashes(tui_path):
+    """sha256 of the canonical JSON of every localComponentDefinitions entry, by key."""
+    definitions = json.loads(Path(tui_path).read_bytes())["pageData"]["componentDefinitions"]["localComponentDefinitions"]
+    return {d["key"]: hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+            for d in definitions}
+
+
+def plugin_param_count():
+    """Engine parameters (docs/params.json) plus the MPC shell extras, computed from the committed headers."""
+    engine = json.loads((ROOT / "docs/params.json").read_bytes())["count"]
+    with tempfile.TemporaryDirectory() as tmp:
+        exe = Path(tmp) / "extra"
+        build = subprocess.run(["c++", "-std=c++17", "-w", f"-I{ROOT / 'shell-mpc'}", f"-I{ROOT / 'core/include'}",
+                                str(ROOT / "scripts/skin-param-extra.cpp"), "-o", str(exe)], capture_output=True, text=True)
+        if build.returncode:
+            raise ValueError(f"cannot compute the plugin parameter count (c++ failed): {build.stderr.strip()[:400]}")
+        return engine + int(subprocess.run([str(exe)], capture_output=True, text=True, check=True).stdout)
+
+
+def check_parameter_handles(page):
+    count = plugin_param_count()
+    used = {int(m[1]) for value in walk(page) if isinstance(value, str) for m in re.finditer(r"\bParameter (\d+)\b", value)}
+    bad = sorted(n for n in used if n >= count)
+    if bad:
+        raise ValueError(f"'Parameter N' handles at or above the plugin parameter count {count}: {bad[:20]}")
+
+
+def check_baseline(page):
+    if os.environ.get("SYNTHYBOY_SKIN_ACCEPT_CHANGES") == "1":
+        return
+    base = json.loads(BASELINE.read_bytes())
+    definitions = page["componentDefinitions"]["localComponentDefinitions"]
+    now = {d["key"]: hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+           for d in definitions}
+    removed = sorted(k for k in base if k not in now)
+    changed = sorted(k for k in base if k in now and now[k] != base[k])
+    if removed or changed:
+        raise ValueError(f"component definitions differ from scripts/skin-baseline/TUI.keys.json; changed: {changed}; removed: {removed}. "
+                         "If intended, set SYNTHYBOY_SKIN_ACCEPT_CHANGES=1; after the owner has proven the skin on the Key 61 run scripts/skin-baseline-update.py")
 
 
 def check_legacy_display_bindings(page, qlinks):
@@ -62,6 +108,8 @@ def validate_package(package, *, check_live=False):
 
     page = json.loads((skins / "TUI.json").read_bytes())["pageData"]
     qlinks = json.loads((skins / "Q-Links.json").read_bytes())
+    check_parameter_handles(page)
+    check_baseline(page)
     if check_live:
         check_legacy_display_bindings(page, qlinks)
     if (page["version"], page["componentDefinitions"]["version"], qlinks["version"],
