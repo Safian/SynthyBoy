@@ -117,7 +117,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 native_skin=OFF
-if [[ -z "$plugin_dir" && -z "$skins_dir" && "$skin_layout" -ef "$repo_root/scripts/overlay-skin/mpc-ui-pages-overlay.json" ]]; then
+if [[ -z "$plugin_dir" && -z "$skins_dir" ]]; then
     native_skin=ON
 fi
 
@@ -406,20 +406,9 @@ else
         done
     fi
 
-    # Plugin Skins/: the given directory, or generated from the page list
+    # Plugin Skins/: the committed skin (skin/ in the repository, hand-maintained, never generated) or the directory given with --skins
     rm -rf "$plugin_folder/Plugin Skins"
-    if [[ -n "$skins_dir" ]]; then
-        cp -R "$skins_dir" "$plugin_folder/Plugin Skins"
-    else
-        ui_tmp="$package_stage/generated-ui"
-        python3 "$repo_root/scripts/gen-mpc-ui.py" --params "$repo_root/docs/params.json" --pages "$repo_root/docs/kick-pages.json" \
-            --layout "$skin_layout" --out "$ui_tmp"
-        python3 "$repo_root/scripts/run-gen-ui.py" --sdk "$MPC_SDK" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
-        # Graphical extras (scripts/mpc-skin-extras/*.py) on top of the generated skin; not for a given --skins directory
-        python3 "$repo_root/scripts/apply-mpc-skin-extras.py" --skins "$plugin_folder/Plugin Skins" --params "$repo_root/docs/params.json" \
-            --meta "$ui_tmp/skin-meta.json"
-        rm -rf "$ui_tmp"
-    fi
+    cp -R "${skins_dir:-$repo_root/skin}" "$plugin_folder/Plugin Skins"
 
     # Ensure browser artwork tile (Plugin Skins/browser_images/soundsmode.png) is in the package
     if [[ ! -f "$plugin_folder/Plugin Skins/browser_images/soundsmode.png" ]]; then
