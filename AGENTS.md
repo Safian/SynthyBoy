@@ -95,3 +95,20 @@ While controls are being removed from the plugin layer or pages are converted to
 
 A change that is mechanical (renaming a class or token, replacing a widget by a model, removing a file and every reference to it, switching a recipe call) is done as ONE scripted bulk find-and-replace over the whole file set (`git grep -l` to list the files, then perl/sed/python regex to rewrite them), followed by the compile or the touched tests as the check; the compile/test errors are the work list for the few places that need hand work. Delete first and let `git grep` / the compiler show the remaining references. Do not edit dozens of files by hand one after another and do not split a mechanical change into stages or workers. Keep the replacement script in the commit message or in the report so the change can be repeated.
 
+
+## Page-loading pattern: every screen loads the same way (owner, 2026-11-28)
+
+The proven fast Key 61 page-load pattern (Voice, Master, FX card switch) applies to EVERY screen; a screen that breaks a rule is a defect. Evidence, per-screen audit, ranking and the worst-five remediations: [docs/review/page-load-pattern.md](docs/review/page-load-pattern.md); measured facts: [docs/dsp-knowledge/mpc-display.md](docs/dsp-knowledge/mpc-display.md). Checklist:
+
+1. **Compact tab tree:** keep each tab ≤ ~450 expanded components (never > 1,000); measure with the ordered-pairs expander over `skin/TUI.json` + `skin/defs_*.json`.
+2. **Retarget, do not duplicate:** share one `<family>Screen` per repeating tab family and retarget one shared slot bank instead of per-state, per-item, per-source, or per-model copies.
+3. **No blank-at-0 root gates:** bind standalone tab roots to direct engine params or always-valid cached handles, never a zero-default or cross-tab view gate; gate text-owned cells only on 0/1 `kTextGate` (`UNSURE` on Key 61).
+4. **Lean artwork:** use plain `backgroundData` colour (`ff090d19`, `image: ""`) and shared control filmstrips; avoid embedding large hidden modals (e.g. keyboard) across repeating tabs.
+5. **Ordinary root frame:** keep `setUiFullOpen(false)` at every native root and on `leftTab()`; assert Frame 24 (`Parameter 2675`) only for true plugin-drawn modals.
+6. **Read-only cache on exit:** on `leftTab()`/`onHidden()`, call `suspend()` (disarm writes, keep display state readable) and `renewInputRevisions()` on return—never reset layout/view handles or text lines to `0`/empty.
+7. **Cold pre-population:** seed read-only display banks before host exposure and after every `effSetProgram`/`effSetChunk` without claiming gestures or Q groups.
+8. **Ordered batched writes:** in `native*Poll()`, report cell values/kinds/texts *before* the layout/view gate, suppress unchanged values via `nativeUiReported`, and force-report only on rebind/ack/format change.
+9. **Paint-window protection:** arm `nativePagePaintUntil` (`kNativePaintWindowMs = 150 ms`) on *every* layout entry and visible-to-visible layout change, and call `requestNativeControlNames()`, never bare `requestProxyNames()`.
+10. **Trailing-edge metadata deferral:** send Q 1..16 values immediately, coalesce all `audioMasterUpdateDisplay` triggers onto `pageSwitchNamesPending` (`kPageSwitchSettleMs = 800 ms`, cap `2500 ms`; device timing `UNSURE`), and set `statusDue_ = true` on view change.
+
+A measured win on any screen is written back into this list in the same commit.

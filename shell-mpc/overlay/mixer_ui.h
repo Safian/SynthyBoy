@@ -190,7 +190,7 @@ public:
                 inst.setNativeMixerStereoMeter (s, stereo);
             }
         }
-        inst.setUiFullOpen (true);
+        inst.setUiFullOpen (! nativeBase());   // a native root keeps the ordinary Overlay Instance frame, never Frame 24
         publishStripVisuals (inst);
         inst.setNativeMixerActive (nativeBase());
         publishQGroup (inst);
@@ -242,6 +242,7 @@ public:
     void leftTab (IInstanceView& inst) noexcept
     {
         inst.setNativeMixerActive (false);
+        inst.setUiFullOpen (false);   // never leak Frame 24 into the next tab (page-load pattern P7)
         for (int s = 0; s < kStrips; ++s)
         {
             inst.setNativeMixerMeter (s, 0.0f, 0.0f);
