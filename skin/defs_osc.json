@@ -1873,35 +1873,6 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "button",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "osc_active_on_125_on.png",
-         "offImage": "osc_active_on_125_off.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 125 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
         "name": "name",
         "type": "Label",
         "data": {
@@ -1933,6 +1904,35 @@
         "whenVisible": "Always",
         "boundsType": "Proportional",
         "bounds": "0 0 1 0.25"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "button",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "osc_active_on_125_on.png",
+         "offImage": "osc_active_on_125_off.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 125 56"
        }
       }
      ]
@@ -21212,6 +21212,48 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Native Targets Empty",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3838"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 112 1264 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Modulation Editor",
         "type": "nativeModulationEditor",
         "data": {
@@ -21322,48 +21364,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "504 32 356 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Targets Empty",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3838"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 112 1264 40"
        }
       },
       {
@@ -21794,12 +21794,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 156 122 16"
+        "bounds": "40 156 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -21836,12 +21841,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 156 122 16"
+        "bounds": "672 156 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -21878,12 +21888,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 272 122 16"
+        "bounds": "40 272 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -21920,12 +21935,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 272 122 16"
+        "bounds": "672 272 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -21962,12 +21982,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 388 122 16"
+        "bounds": "40 388 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -22004,12 +22029,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 388 122 16"
+        "bounds": "672 388 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -22046,12 +22076,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 504 122 16"
+        "bounds": "40 504 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -22088,12 +22123,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 504 122 16"
+        "bounds": "672 504 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512",
+         "IndexedEnabling/0/2/Parameter 3823"
+        ]
        }
       }
      ]

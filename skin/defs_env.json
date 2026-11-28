@@ -838,6 +838,48 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Native Targets Empty",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3838"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 112 1264 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Modulation Editor",
         "type": "nativeModulationEditor",
         "data": {
@@ -948,48 +990,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "504 32 356 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Targets Empty",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3838"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 112 1264 40"
        }
       },
       {
@@ -1135,12 +1135,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "138 12 270 56"
+        "bounds": "138 12 270 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1206,12 +1209,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "434 12 270 56"
+        "bounds": "434 12 270 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1277,12 +1283,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "730 12 270 56"
+        "bounds": "730 12 270 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1319,12 +1328,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1016 12 44 56"
+        "bounds": "1016 12 44 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
