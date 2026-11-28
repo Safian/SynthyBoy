@@ -205,7 +205,7 @@ Follow these steps on the MPC standalone touchscreen to route pad pressure to an
 | MODULATION MATRIX                                          [ + ADD ]  |
 | Tabs: [ ALL ]  [ BY SOURCE ]  [ BY DEST ]                             |
 +-----------------------------------------------------------------------+
-| Empty Matrix View: 57-Source Quick-Add Board (ModSourceBoard)         |
+| Empty Matrix View: 57-Source Quick-Add Board         |
 | [ ENVELOPES ]  Env 1   Env 2   Env 3   Env 4   Env 5   Env 6          |
 | [ LFOS ]       LFO 1..10   RLFO 1..4                                  |
 | [ MACROS ]     Macro 1..8                                             |
@@ -223,7 +223,7 @@ Follow these steps on the MPC standalone touchscreen to route pad pressure to an
 - Press the physical **Mod** function key on the hardware, or tap the **Mod** tab on the MPC touchscreen.
 
 ### Step 2: Select the Source
-- **If the matrix has 0 active slots:** SynthyBoy displays the 57-source Quick-Add board (`ModSourceBoard`) ([MPC modulation page](../ui-map/mod.md)). Tap the **POLY AFTERTOUCH** chip located in the **PLAYER** category.
+- **If the matrix has 0 active slots:** SynthyBoy displays the 57-source Quick-Add board ([MPC modulation page](../ui-map/mod.md)). Tap the **POLY AFTERTOUCH** chip located in the **PLAYER** category.
 - **If routes already exist:** Tap **+ ADD** at the top right. In the newly created row, tap the **SOURCE** button (or turn Q-Link knob **Q2**). In the source picker list, select **Poly Aftertouch** (source choice 38).
 
 ### Step 3: Choose the Destination Target

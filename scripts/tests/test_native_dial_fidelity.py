@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The native dial and fader art follow the drawn ui::Knob / ui::Fader from the same tokens.
-
-docs/review/NATIVE-COMPONENT-FIDELITY-2026-11-26.md
+"""The native dial and fader art follow the same tokens as the dial and fader recipes.
 """
 import math
 from pathlib import Path

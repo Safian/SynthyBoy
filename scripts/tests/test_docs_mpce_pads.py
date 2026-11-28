@@ -58,7 +58,7 @@ class MpcePadsDocTests(unittest.TestCase):
         required_phrases = [
             "Poly Aftertouch", "Velocity", "Filter 1 Cutoff",
             "PAD PRESS", "PAD %", "35%", "36 semitones", "12 ms",
-            "ModSourceBoard", "57 modulation sources",
+            "57 modulation sources",
             "TUNING & MPE", "master.mpe",
             "Full Level", "0xA0", "0xD0",
         ]
