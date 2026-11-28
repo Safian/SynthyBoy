@@ -3,17 +3,23 @@
 // sub-tabs of the Play function key; the panel of the sub-tab that is on screen (the view's `index`: 1 oscillator, 2 envelope, 3 LFO) has a frame. Every panel has a small title with the
 // selected instance ("OSC 2", "ENV 3", "LFO 10"). The picture is drawn once through a sink (CpuSink: the canvas, SceneSink: the GPU helper's display list), so the two renderers
 // cannot drift apart.
+// The choices with more than eight options (the oscillator's source, the LFO / RND selector, the noise sound, the LFO shape and division, the standard LFO) are the page's own paged native list (owner, 2026-11-28):
+// a skin radio Button writes a code into the "Play List" handle (native_play_list.h, IInstanceView::takePlayListRequest), the page opens the list in the modulation picker's cells (NativeListCells, the
+// skin instance playNativeList over an opaque backdrop) and applies the row tapped; while the list is open the view draws nothing (the GPU plane is above the host's and must not cover it).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
 #include <memory>
 
+#include "../native_play_list.h"
 #include "../play_params.h"
 #include "../ui/display.h"
 #include "env_ui.h"
 #include "lfo_ui.h"
 #include "macro_names.h"
+#include "native_list_cells.h"
+#include "../ui/choice_names.h"
 #include "native_marker_covers.h"
 #include "osc_display.h"
 #include "osc_ui.h"
@@ -219,6 +225,7 @@ public:
             nativeEnvLfo_.publish (*io, *in.ui, *env_, *lfo_);
             if (nativeOsc)
                 osc_->publishCompactNative (*io, in.ui->isMain());
+            changed |= updateList (*io, *in.ui);
             publishQ (in);
             const uint32_t h = oscUiHash() ^ (env_->drawHash (*scratch_) * 16777619u) ^ (lfo_->drawHash (*scratch_) * 2246822519u);
             if (h != uiHash_)
@@ -239,6 +246,8 @@ public:
     }
     bool onTouch (const TouchEvent& ev, UiStack& stack, mpckit::IInstance& base, double nowMs) override
     {
+        if (listCode_ != nativeui::playlist::None)
+            return false;   // the native list cells and their backdrop take every touch
         IInstanceView& io = static_cast<IInstanceView&> (base);   // every instance of SynthyBoy is an IInstanceView
         const NamesScope scope (names_);
         if (ev.kind == TouchEvent::Down && stack.isMain() && env_ && lfo_
@@ -268,6 +277,8 @@ public:
     }
     bool onWheel (int x, int y, int notches, UiStack& stack, mpckit::IInstance& base, double nowMs) override
     {
+        if (listCode_ != nativeui::playlist::None)
+            return false;
         IInstanceView& io = static_cast<IInstanceView&> (base);
         const NamesScope scope (names_);
         if (stack.isMain() && env_ && lfo_ && nativeEnvLfo_.coversNative (*env_, *lfo_, x, y))
@@ -321,6 +332,7 @@ public:
     }
     void onHidden() override
     {
+        closeList();
         if (nativeOscIo_ != nullptr)
         {
             osc_->publishCompactNative (*nativeOscIo_, false, true);
@@ -371,6 +383,7 @@ public:
         uint32_t h = 2166136261u;
         for (int p = 0; p < play::kPanels; ++p)
             h = fnv (h, sel_[p]);
+        h = fnv (h, listCode_);   // an open list: the picture is empty
         for (float v : osd_.cycle())
             h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (v) * 1000.0)));
         for (float v : envY_)
@@ -388,6 +401,8 @@ public:
         return h;
     }
     int selection (int p) const noexcept { return sel_[p]; }
+    /** The code of the open Play list (nativeui::playlist::Code), 0 when none is open. */
+    int listCode() const noexcept { return listCode_; }
     int highlight() const noexcept { return highlight_; }
     static constexpr int kGroups = 4;   // oscillator, envelope, LFO, and the extra group (extraTargets)
     /** The four groups of the page in reading order (oscillator, envelope, LFO, extra), mapped to the sixteen Q slots together while all three thirds show their compact views: the active third's group on Q 1 .. 4, the next ones on 5 .. 8,
@@ -487,6 +502,149 @@ public:
     }
 
 private:
+    // ---- the Play lists (native_play_list.h): one list at a time, in the modulation picker's cells; the data are the page's (the names of a parameter's choices, the LFO names) or the oscillator's
+    // source browser (OscUi::openCompactSourceList: the same browsers as the Osc pages' list page)
+    /** Every update while the page UI runs: takes one request of the "Play List" handle and opens that list, publishes the open list and takes its gesture; closes it on a final choice, on BACK at the top
+        level, on a preset change, when the Play oscillator (or, for the shape and division, the shown LFO) changes and while a full screen covers the page. true: a list opened or closed. */
+    bool updateList (IInstanceView& io, UiStack& stack)
+    {
+        namespace pl = nativeui::playlist;
+        const int before = listCode_;
+        if (listIo_ != nullptr && listIo_ != &io)
+            closeList();
+        if (! stack.isMain() || osc_ == nullptr || lfo_ == nullptr)
+        {
+            closeList();
+            return before != listCode_;
+        }
+        if (listCode_ != pl::None
+            && (io.stateGeneration() != listPreset_ || sel_[0] != listOsc_
+                || (listCode_ == pl::Source && osc_->typeRaw() != listType_)
+                || ((listCode_ == pl::LfoShape || listCode_ == pl::LfoDivision) && uibind::selectedLfo (io) != listLfo_)))
+            closeList();
+        const int request = io.takePlayListRequest();
+        if (request != pl::None)
+            openList (request, io);
+        if (listCode_ != pl::None)
+            publishList (io, stack);
+        return before != listCode_ || request != pl::None;
+    }
+    /** Opens the list of `code` (the open one closes first) on the page of its current row; nothing opens when the list has no data here (no source field, no shape of a random LFO). */
+    void openList (int code, IInstanceView& io)
+    {
+        namespace pl = nativeui::playlist;
+        closeList();
+        int current = -1;
+        listParam_ = -1;
+        switch (code)
+        {
+            case pl::Source:
+                if (! osc_->openCompactSourceList (io))
+                    return;
+                current = osc_->compactSourceList().current;
+                break;
+            case pl::LfoChoose:
+                listNames_.assign (pl::lfoNames(), pl::lfoNames() + pl::kLfoChooseRows);
+                current = uibind::selectedLfo (io) - 1;
+                break;
+            case pl::LfoStandard:
+                listNames_.assign (pl::lfoNames(), pl::lfoNames() + pl::kLfoStandardRows);
+                current = std::clamp (io.playSelection (2), 1, pl::kLfoStandardRows) - 1;
+                break;
+            case pl::NoiseSound: listParam_ = osc_->compactNoiseSoundParam(); break;
+            case pl::LfoShape: listParam_ = lfo_->random() ? -1 : lfo_->compactNativeTarget (playenvlfo::Shape); break;
+            case pl::LfoDivision: listParam_ = lfo_->compactNativeTarget (playenvlfo::Division); break;
+            default: return;
+        }
+        if (code == pl::NoiseSound || code == pl::LfoShape || code == pl::LfoDivision)
+        {
+            if (listParam_ < 0)
+                return;
+            const synthyboy::ParamInfo& pi = synthyboy::paramTable()[listParam_];
+            if (pi.choices == nullptr || pi.numChoices < 2)
+                return;
+            for (int i = 0; i < pi.numChoices; ++i)
+                listNames_.push_back (ui::shownChoice (pi.key, i, pi.choices[i]));
+            current = static_cast<int> (std::lround (io.param (listParam_) - pi.min));
+        }
+        listCode_ = code;
+        listIo_ = &io;
+        listPreset_ = io.stateGeneration();
+        listOsc_ = sel_[0];
+        listType_ = osc_->typeRaw();
+        listLfo_ = uibind::selectedLfo (io);
+        list_.restart();
+        list_.showRow (current);
+    }
+    void publishList (IInstanceView& io, UiStack& stack)
+    {
+        namespace pl = nativeui::playlist;
+        const bool source = listCode_ == pl::Source;
+        NativeListCells::Data data;
+        data.fallbackTitle = pl::title (listCode_);
+        OscUi::CompactList src;
+        if (source)
+        {
+            src = osc_->compactSourceList();
+            data.header = src.header;
+            data.items = src.items;
+            data.count = src.count;
+            data.headerBack = src.headerBack;
+        }
+        else
+        {
+            data.items = listNames_.data();
+            data.count = static_cast<int> (listNames_.size());
+        }
+        const std::string header = src.header != nullptr ? src.header : "";
+        bool close = false, moved = false;
+        list_.publish (io, data,
+            [&] (int row)
+            {
+                if (source)
+                {
+                    close = osc_->chooseCompactSourceRow (row, io);
+                    const auto now = osc_->compactSourceList();
+                    moved = ! close && (now.count != src.count || header != (now.header != nullptr ? now.header : ""));   // a category or folder opened (a refused row stays where it is)
+                }
+                else
+                {
+                    applyListRow (row, data.count, io, stack);
+                    close = true;
+                }
+            },
+            [&] { if (source && osc_->compactSourceUp (io)) moved = true; else close = true; },   // BACK: up one level, at the top level the list closes
+            [&] { moved = source && osc_->compactSourceUp (io); });                               // the header: up one level (nothing at the top level)
+        if (close)
+            closeList();
+        else if (moved)
+            list_.showRow (osc_->compactSourceList().current);
+    }
+    /** A row of a flat list: the choice applied the way the compact native cell of that field applies it. */
+    void applyListRow (int row, int count, IInstanceView& io, UiStack& stack)
+    {
+        namespace pl = nativeui::playlist;
+        const float value = count > 1 ? static_cast<float> (row) / static_cast<float> (count - 1) : 0.0f;
+        switch (listCode_)
+        {
+            case pl::LfoChoose: case pl::LfoStandard: uibind::chooseLfo (io, row + 1); break;
+            case pl::NoiseSound: osc_->applyCompactNoiseSound (io, stack, value); break;
+            case pl::LfoShape: lfo_->applyCompactNative (io, stack, playenvlfo::Shape, value); break;
+            case pl::LfoDivision: lfo_->applyCompactNative (io, stack, playenvlfo::Division, value); break;
+            default: break;
+        }
+    }
+    void closeList()
+    {
+        if (listIo_ != nullptr)
+            list_.hide (*listIo_);
+        if (listCode_ == nativeui::playlist::Source && osc_ != nullptr)
+            osc_->closeCompactSourceList();
+        listCode_ = nativeui::playlist::None;
+        listIo_ = nullptr;
+        listNames_.clear();
+    }
+
     const ui::lfodisplay::Data* pageLfoData() const noexcept
     {
         return usePageLfo_ && lfo_ ? &lfo_->displayData() : nullptr;
@@ -516,6 +674,8 @@ private:
     void build (gpu::SceneBuilder& sb) const
     {
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
+        if (listCode_ != nativeui::playlist::None)
+            return;   // the native list (host plane) is on the screen: the GPU plane above it stays empty
         if (edgeX_ < play::kRegionW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge, the picture is the host's there
             sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (play::kRegionH));
         const bool compact = osc_ != nullptr && osc_->isMain();
@@ -600,6 +760,12 @@ private:
     int envDotPx_ = -1, lfoCursorPx_ = -1;
     double envDotX_ = 0.0;
     float lfoCursorX_ = -1.0f;
+    NativeListCells list_;                 // the open Play list (the modulation picker's cells, the skin instance playNativeList)
+    int listCode_ = 0;                     // nativeui::playlist::Code of the open list, 0: none
+    IInstanceView* listIo_ = nullptr;      // the instance the list is published to
+    uint64_t listPreset_ = 0;
+    int listOsc_ = 0, listType_ = 0, listLfo_ = 0, listParam_ = -1;   // what the list was opened for (a change closes it); the parameter of a choice list
+    std::vector<const char*> listNames_;   // the rows of a flat list (static names: the LFO names, the engine's or choice_names.h's names of the choices)
 };
 
 }} // namespace synthyboy_mpc::overlay

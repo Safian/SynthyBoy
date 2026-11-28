@@ -131,6 +131,7 @@ namespace nativeui = synthyboy_mpc::nativeui;
 #include "q_router.h"
 #include "macro_names.h"
 #include "native_text_entry.h"
+#include "native_play_list.h"
 #include "filter_curve_edits.h"
 #include "q_step_rule.h"
 
@@ -774,6 +775,7 @@ struct PluginInstance
             inst.nativeTextEntryLines.set (1, context != 0 ? text : "");
         }
         int takeNativeTextKey() noexcept override { return inst.nativeTextKeys.take(); }
+        int takePlayListRequest() noexcept override { return inst.playListRequests.take(); }
         void clearNativeTextKeys() noexcept override { inst.nativeTextKeys.clear(); }
         void setNativeListText (const nativeui::nativetext::ListPage* page) noexcept override
         {
@@ -1711,6 +1713,7 @@ struct PluginInstance
     std::atomic<int> nativeTextEntryContext { 0 };   // the native text keyboard: 0 closed, else textentry::kCtx* (the overlay thread writes, the display thread reports)
     nativeui::nativetext::BasicLines<2> nativeTextEntryLines;   // line 0 the title (the display string of the context), line 1 the text with its caret (the display string of the text)
     synthyboy_mpc::textentry::KeyPort nativeTextKeys;   // the key codes the host wrote (debounced), taken by the overlay page
+    synthyboy_mpc::nativeui::playlist::RequestPort playListRequests;   // the "Play List" codes the host wrote (debounced), taken by the Play page (native_play_list.h)
     std::atomic<float> nativeMacroSubpage { 0.0f };   // exactly 0 on the cards page of the Macros tab, exactly 1 while its targets / list / keyboard page is open (the gate of the native base page)
     nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
     nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
@@ -1933,7 +1936,7 @@ struct PluginInstance
             return nativeText.value (nativeui::textGateLine (offset - nativeui::kTextGate)) > 0.0f ? 1.0f : 0.0f;
         if (offset == nativeui::kTextEditContext)
             return synthyboy_mpc::textentry::valueOfContext (nativeTextEntryContext.load (std::memory_order_relaxed), nativeui::kTextEditContexts);
-        if (offset == nativeui::kTextEditKey)
+        if (offset == nativeui::kTextEditKey || offset == nativeui::kPlayList)
             return 0.0f;
         if (offset == nativeui::kTextEditText)
             return nativeTextEntryLines.value (1);
@@ -3926,6 +3929,12 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 }
                 return 1;
             }
+            if (offset == nativeui::kPlayList)
+            {
+                if (opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, "Play List");
+                return 1;   // the display stays empty
+            }
             if (nativeui::isNoteMaskOffset (offset))
             {
                 const int field = offset - nativeui::kNoteMask;
@@ -5345,6 +5354,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             std::memset (props, 0, sizeof (*props));
             return 1;
         }
+        if (nativeOffset == nativeui::kPlayList)   // the code of the Play list a skin radio Button opens (native_play_list.h): a stepped integer 0 .. 6
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = nativeui::kPlayListLastCode;
+            props->stepInteger = props->largeStepInteger = 1;
+            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+            return 1;
+        }
         if (nativeui::isNoteMaskOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
@@ -6171,6 +6189,11 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                 if (offset == nativeui::kTextEditKey)   // a key of the native keyboard: the codes of one tap come twice, the port debounces them
                 {
                     inst->nativeTextKeys.post (synthyboy_mpc::textentry::keyOfValue (parameter, nativeui::kTextEditKeys));
+                    return;
+                }
+                if (offset == nativeui::kPlayList)   // a radio Button of the Play page opens one of its lists: the codes of one tap come twice, the port debounces them; never stored
+                {
+                    inst->playListRequests.post (synthyboy_mpc::nativeui::playlist::codeOfValue (parameter));
                     return;
                 }
                 if (nativeui::isTextEditOffset (offset) || nativeui::isTextGateOffset (offset))   // the context, the text and the presence gates are the plugin's to write
