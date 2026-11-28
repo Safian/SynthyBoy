@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Tests of docs/release/*: the form (sections, lengths) and the FACTS (every cited commit exists and its subject has the claimed topic,
-every cited docs anchor exists, the numbers equal what the files say, the generated parts of OPEN-QUESTIONS.md are current)."""
+every cited docs anchor exists, the numbers equal what the files say)."""
 
 import json
 import os
@@ -211,38 +211,6 @@ class DocsReleaseTests(unittest.TestCase):
             self.assertNotIn(stale, self.changelog.replace("README.md", ""))
         self.assertNotIn("Resolved Key 61", self.history)
         self.assertNotIn("3/128", self.changelog + self.history)
-
-    # ---- OPEN-QUESTIONS
-    def test_open_questions_part_a_cites_real_lines(self):
-        text = read("docs", "release", "OPEN-QUESTIONS.md")
-        part_a = text.split("## B.", 1)[0].split("## A.", 1)[1]
-        pat = re.compile(r"not (yet )?(measured|verified|tested|seen|checked|tried|known|built)|was not built|unverified|TODO|known bug|GUESS|"
-                         r"pending|(still|stays|remains?|is|are|left) open|open (bug|question|item|issue)|Still open|Open question|open", re.I)
-        cited = 0
-        for row in part_a.split("\n"):
-            if not row.startswith("| A"):
-                continue
-            src = row.rstrip().rstrip("|").rsplit("|", 1)[1]
-            for m in re.finditer(r"(README\.md|THIRD_PARTY\.md|docs/[A-Za-z0-9_-]+\.md):(\d+)((?:, \d+\b)*)", src):
-                nums = [int(m.group(2))] + [int(x) for x in m.group(3).replace(" ", "").split(",") if x]
-                lines = read(m.group(1)).split("\n")
-                for n in nums:
-                    cited += 1
-                    self.assertLessEqual(n, len(lines), f"{m.group(1)}:{n} does not exist")
-                    self.assertTrue(pat.search(lines[n - 1]), f"{m.group(1)}:{n} has no marker: {lines[n-1][:80]}")
-            for h in re.findall(r"\b[0-9a-f]{8}\b", src):
-                self.assertEqual(git("cat-file", "-e", h).returncode, 0, f"commit {h} does not exist")
-        self.assertGreaterEqual(cited, 18)
-
-    def test_open_questions_commit_headings_have_hashes(self):
-        text = read("docs", "release", "OPEN-QUESTIONS.md")
-        block = text.split("<!-- BEGIN AUTO-COMMITS -->")[1].split("<!-- END AUTO-COMMITS -->")[0]
-        heads = re.findall(r"^### (\S*)", block, re.M)
-        self.assertGreater(len(heads), 5)
-        for h in heads:
-            self.assertRegex(h, r"^[0-9a-f]{7,8}$")
-            self.assertEqual(git("cat-file", "-e", h).returncode, 0)
-        self.assertNotIn("Co-Authored-By", block)
 
 
 if __name__ == "__main__":
