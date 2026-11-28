@@ -4,7 +4,7 @@
   "configurePresets": [
     {
       "name": "dev",
-      "displayName": "Development: core and tests only (no JUCE plugin, no bitmap GUI)",
+      "displayName": "Development: core and tests only",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-dev",
       "cacheVariables": {

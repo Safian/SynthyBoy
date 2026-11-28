@@ -1,5 +1,5 @@
 # SynthyBoy - minimal 8-voice synthesizer (standalone Akai MPC plugin)
-# core/      JUCE-free static library synthyboy_core (engine interface, parameters, state, own engine) + tests
+# core/      static library synthyboy_core (engine interface, parameters, state, own engine) + tests
 # shell-mpc/  the MPC VST2 shell
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -21,12 +21,7 @@ cmake_minimum_required(VERSION 3.22)
 
 # Must be set before project(). macOS builds target the host architecture by default
 # (arm64 on Apple Silicon); pass -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" for a universal build.
-# iOS (-DCMAKE_SYSTEM_NAME=iOS): 15.0, the lowest target the libc++ of the current SDK still supports without a warning (and JUCE 8 needs 12).
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum iOS deployment target")
-else()
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment target")
-endif()
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment target")
 
 project(SynthyBoy VERSION 0.1.0 LANGUAGES C CXX)
 

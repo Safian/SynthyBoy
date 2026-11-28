@@ -6,17 +6,8 @@ option) any later version (SPDX: AGPL-3.0-or-later). The full text is in the fil
 
 This product includes software developed by third parties:
 
-  * JUCE (https://juce.com), used under the terms of the GNU Affero General Public License v3
-    (JUCE 8.0.17-security). The macOS Audio Unit build uses JUCE's own AU wrapper and the system
-    AudioUnit frameworks; no Apple AudioUnit SDK source is included.
-  * clap-juce-extensions (https://github.com/free-audio/clap-juce-extensions), MIT licence,
-    Copyright 2019-2020 Paul Walker and contributors (commit 7adee3a1bd4684d4caa5601100e364abccff4b4d).
-  * CLAP (https://github.com/free-audio/clap) and clap-helpers (https://github.com/free-audio/clap-helpers),
-    MIT licence, Copyright (c) 2021 Alexandre BIQUE.
-  * Steinberg VST 3 SDK 3.8.0 (bundled with JUCE), MIT licence, Copyright (c) 2025 Steinberg Media
-    Technologies GmbH.
-  * Roboto Regular and Bold 2.137, Apache License 2.0, Copyright 2011 Google Inc. (embedded in the native
-    module as the font of the bitmap GUI; shell-clap/bitmap/fonts).
+  * Titillium Web SemiBold, SIL Open Font License 1.1 (the font of the display layer, shell-mpc/overlay/fonts;
+    the distance-field atlas in shell-mpc/overlay/sdf_font_data.h is generated from it).
 
 Not linked and not distributed: the ODDSound MTS-ESP client library (the tuning seam in core/tuning has no MTS-ESP code).
 Written for this project and under its licence, without third-party source: core/tuning, core/formula, core/shapes,
