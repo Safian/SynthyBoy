@@ -54,7 +54,7 @@ inline void layoutRow (const ui::Rect& r, const int* fixed, const int* weight, i
 /** The cells of one row of the matrix (and of the summary row of the page of a slot): number, SOURCE, TARGET, AMOUNT, polarity, on / off, MORE. `r` is the row (kRowH high, the cells 56 px under the lane of the Q chips). */
 struct RowCells
 {
-    ui::Rect number, source, dest, amount, polarity, bypass, detail;
+    ui::Rect source, dest, amount, polarity, bypass, detail;
     std::array<ui::Rect, 3> navigation() const noexcept { return { source, dest, detail }; }
     std::array<ui::Rect, 3> values() const noexcept { return { amount, polarity, bypass }; }
 };
@@ -63,8 +63,7 @@ inline RowCells rowCells (const ui::Rect& r) noexcept
     RowCells c;
     const int y = r.y + kQLane, h = kCtlH, gap = 6;
     int x = r.x + 4;
-    c.number = { x, y, 56, h };
-    x += 56 + gap;
+    x += 56 + gap;   // the lane of the row number (drawn by the host)
     c.source = { x, y, 176, h };
     x += 176 + 26;
     c.dest = { x, y, 244, h };
@@ -94,19 +93,13 @@ public:
 
     struct SlotEntry
     {
-        char src[32] = {};
-        char dst[40] = {};
         double amount = 0.0;
-        bool bi = false, bypass = false;
         int srcGroup = 0;      // the group of the source (0: none)
         int destModule = -1;
-        bool hasLive = false;
-        double liveVal = 0.0;
         bool active = false;
     };
 
     void place (const ui::Rect& r) { rect_ = r; syncWindow(); }
-    ui::Rect rect() const noexcept { return rect_; }
 
     // ---- header cells (mode tabs, the filter choice, ADD) ----------------------------------------------------------------------------------------------------
     ui::Rect tabAll() const noexcept { return { rect_.x + 280, rect_.y + 4, 80, 56 }; }
@@ -132,30 +125,6 @@ public:
     }
     RowCells cells (int wIdx) const noexcept { return rowCells (rowRect (wIdx)); }
 
-    std::array<ui::Rect, 6 + kWindowRows * 3> nativeNavigationApertures() const noexcept
-    {
-        std::array<ui::Rect, 6 + kWindowRows * 3> areas {};
-        const auto header = headerNavigation();
-        std::copy (header.begin(), header.end(), areas.begin());
-        for (int i = 0; i < visibleRows(); ++i)
-            if (slotAtWindowIndex (i) >= 0)
-            {
-                const auto row = cells (i).navigation();
-                std::copy (row.begin(), row.end(), areas.begin() + header.size() + i * row.size());
-            }
-        return areas;
-    }
-    std::array<ui::Rect, kWindowRows * 3> nativeApertures() const noexcept
-    {
-        std::array<ui::Rect, kWindowRows * 3> areas {};
-        for (int i = 0; i < visibleRows(); ++i)
-            if (slotAtWindowIndex (i) >= 0)
-            {
-                const auto row = cells (i).values();
-                std::copy (row.begin(), row.end(), areas.begin() + i * row.size());
-            }
-        return areas;
-    }
     bool isNativeNavigation (int x, int y) const noexcept
     {
         for (const ui::Rect& area : headerNavigation())
@@ -242,20 +211,14 @@ public:
     int activeSlots() const noexcept { return totalActive_; }
 
     /** The data of slot `slot` (the owner calls it for all 64; an empty name is a slot that is not used): amount -1 .. +1, `srcGroup` the group of the source and `destModule` the module of the target (the filters). */
-    void setSlotData (int slot, const char* src, const char* dst, double amount, bool bi, bool bypassed, int srcGroup, int destModule, bool hasLive = false, double liveVal = 0.0)
+    void setSlotData (int slot, const char* src, const char* dst, double amount, int srcGroup, int destModule)
     {
         if (slot < 0 || slot >= kMaxSlots)
             return;
         SlotEntry& e = slots_[slot];
-        ui::setText (e.src, sizeof e.src, src);
-        ui::setText (e.dst, sizeof e.dst, dst);
         e.amount = amount;
-        e.bi = bi;
-        e.bypass = bypassed;
         e.srcGroup = srcGroup;
         e.destModule = destModule;
-        e.hasLive = hasLive;
-        e.liveVal = liveVal;
         e.active = src[0] != '\0' && dst[0] != '\0';
     }
     /** The owner is done with a round of setSlotData: the list is rebuilt only when what it lists changed. */
@@ -402,10 +365,7 @@ public:
 
     void place (const ui::Rect& r)
     {
-        rect_ = r;
         const int m = 8;
-        back_ = { r.x + 66, r.y + 4, 100, 56 };
-        delete_ = { r.right() - 40 - 120, r.y + 4, 120, 56 };
         summary_ = rowCells ({ r.x, r.y + kBarH, r.w, kRowH });
         const int y0 = r.y + kBarH + kRowH + 6, h = r.bottom() - m - y0;
         const int avail = r.w - 2 * m - 2 * kBlockGap;
@@ -430,7 +390,7 @@ public:
         };
         ui::Rect a[4], t[4];
         grid (blocks_[BlockAux], a, true);
-        auxSource_ = a[0]; auxOutput_ = a[1]; auxInv_ = a[2]; auxPower_ = a[3];
+        auxOutput_ = a[1]; auxInv_ = a[2]; auxPower_ = a[3];
         {
             const ui::Rect in = inner (blocks_[BlockShape]);
             const int rh = in.h - kQLane - kGap - kLedRowH;   // STEREO is one row; the room it leaves goes to the CURVE cell
@@ -441,17 +401,13 @@ public:
         rise_ = t[0]; fall_ = t[1]; delay_ = t[2]; delaySync_ = t[3];
     }
 
-    ui::Rect rect() const noexcept { return rect_; }
     ui::Rect block (int b) const noexcept { return b >= 0 && b < 3 ? blocks_[b] : ui::Rect {}; }
-    const RowCells& summary() const noexcept { return summary_; }
     /** The twelve native value cells (the slot's row, then the cells of the blocks), the DELAY cell being the BEATS cell while SYNC is on. */
     std::array<ui::Rect, 12> nativeApertures() const noexcept
     {
         const auto r = summary_.values();
         return { r[0], r[1], r[2], auxOutput_, auxInv_, auxPower_, power_, stereo_, rise_, fall_, delay_, delaySync_ };
     }
-    /** BACK, DELETE, SOURCE, TARGET, AUX SOURCE. */
-    std::array<ui::Rect, 5> nativeNavigationApertures() const noexcept { return { back_, delete_, summary_.source, summary_.dest, auxSource_ }; }
     bool isNativeControl (int x, int y) const noexcept
     {
         for (const ui::Rect& r : nativeApertures())
@@ -473,7 +429,6 @@ public:
             confirmDelete_ = false;
         }
     }
-    int slot() const noexcept { return slotIndex_; }
 
     /** The DELAY is in milliseconds or in beats (the SYNC switch): the member of the TIME group follows it. */
     void setDelaySync (bool sync) noexcept { delaySyncOn_ = sync; }
@@ -511,7 +466,7 @@ public:
     }
 
 private:
-    ui::Rect rect_ {}, back_ {}, delete_ {}, blocks_[3] {}, auxSource_ {}, auxOutput_ {}, auxInv_ {}, auxPower_ {}, power_ {}, stereo_ {}, rise_ {}, fall_ {}, delay_ {}, delaySync_ {};
+    ui::Rect blocks_[3] {}, auxOutput_ {}, auxInv_ {}, auxPower_ {}, power_ {}, stereo_ {}, rise_ {}, fall_ {}, delay_ {}, delaySync_ {};
     RowCells summary_ {};
     Block activeBlock_ = BlockAux;
     bool confirmDelete_ = false, delaySyncOn_ = false;

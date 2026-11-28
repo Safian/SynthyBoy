@@ -1,9 +1,9 @@
 # Master displays and native readouts
 
-The overlay draws the glide slope with `PortamentoCurveDisplay`.
+The overlay draws the glide slope itself (`MasterUi::drawGlideCurve`, `shell-mpc/overlay/master_ui.h`).
 
-`PeakMeterReadout`, `VoiceMeterReadout` and `ClipReadout` are plain state/geometry adapters for host-native widgets. They have no GPU drawing or touch methods. Peaks retain independent L/R hold levels; `updateHold` falls by 0.5 per second. Voice state contains active voice count and polyphony. Clip state is supplied by `IInstanceView::pollMasterClip`; its real `ClipHold` latch remains in `ui/clip_hold.h` and clears through the native host callback.
+The output peaks, the voice count and the clip state are plain state in `MasterUi`, shown by host-native widgets. Peaks keep independent L/R hold levels; `updateHold` falls by 0.5 per second. The clip state comes from `IInstanceView::pollMasterClip`; its `ClipHold` latch lives in `ui/clip_hold.h` and clears through the native host callback.
 
-`MasterUi` publishes those values with `setNativeMasterOutput`. The native callback and readout checks live in `shell-mpc/overlay/tests/mastervoice_ui_host.cpp`; the real VST engine-index path is exercised in `shell-mpc/tests/play_env_lfo_host.cpp`.
+`MasterUi` publishes those values with `setNativeMasterOutput`.
 
 The current screen image is [master](../screens/master.jpg).
