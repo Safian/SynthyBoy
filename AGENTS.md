@@ -50,7 +50,7 @@ MPC hardver-, működési és host-bekötési kérdéssel először az `mpc-expe
 
 ## Saved device builds (owner, 2026-11-27)
 
-Finished packages live outside the repository in `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-builds/` (see its README.md). Install one without checking out its branch: `scripts/xl-install.sh <package folder>` or `scripts/k61-install.sh <package folder>`. The installer keeps no backup of the replaced package, so save a build there before replacing one worth keeping.
+Finished packages live outside the repository in `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-builds/` (see its README.md). Install one without checking out its branch: `scripts/xl-install.sh <package folder>` or `scripts/k61-install.sh <package folder>`. The installer keeps no backup of the replaced package, so save a build there before replacing one worth keeping. Build, archive and install in one step: `scripts/build-k61.sh` (Key 61, armv7) or `scripts/build-xl.sh` (XL, aarch64), `--release` for the release mode, `--no-install` to only archive (details: [docs/MPC.md](docs/MPC.md), "One step device build").
 
 - `old-ui-3bb27424`: the old UI (before the sub-tab conversions of 2026-11-26/27, in-screen tab strips on Osc/Env/Master/Filter/LFO, Mixer peek bar), built from develop commit 3bb27424 for both architectures. Kept for comparison and as a fallback.
 
