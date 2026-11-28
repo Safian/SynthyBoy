@@ -604,7 +604,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[AMOUNT]/AMOUNT"
+          "value": "CapAmount"
          }
         ]
        },
@@ -637,7 +637,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[POLARITY]/POLARITY"
+          "value": "CapPolarity"
          }
         ]
        },
@@ -670,7 +670,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[ROUTE]/ROUTE"
+          "value": "CapRoute"
          }
         ]
        },
@@ -703,7 +703,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[SOURCE]/SOURCE"
+          "value": "CapSource"
          }
         ]
        },
@@ -736,7 +736,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[TARGET]/TARGET"
+          "value": "CapTarget"
          }
         ]
        },
@@ -769,7 +769,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[EDIT]/MORE"
+          "value": "CapEdit"
          }
         ]
        },
