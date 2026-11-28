@@ -80,18 +80,6 @@ endif()
 # No display constant of any model is compiled in: the CRTC, the planes, the panel, the refresh and the rotation are found at run time (shell-mpc/overlay/discovery.h).
 # The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
 # reports it to the host, so the overlay needs SYNTHYBOY_MPC_LFO_LIVE.
-# Debug hooks: the /tmp files that only the host tests and the acceptance runs on the device use (fake slot, fake Q group / write, fake page write, Q step travel, the play log and its dump, the display thread's
-# fault injection). OFF (default, and always for the package): the plugin does not look at them, and no thread of the host can reach a file through them. Needs the overlay.
-option(SYNTHYBOY_MPC_DEBUG_HOOKS "MPC shell: debug / acceptance switch files in /tmp (host tests, device checks); never in the package" OFF)
-if(SYNTHYBOY_MPC_DEBUG_HOOKS AND NOT SYNTHYBOY_MPC_OVERLAY)
-    message(FATAL_ERROR "SYNTHYBOY_MPC_DEBUG_HOOKS requires SYNTHYBOY_MPC_OVERLAY=ON")
-endif()
-if(SYNTHYBOY_MPC_DEBUG_HOOKS)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=1)
-else()
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=0)
-endif()
-
 # The developer log (shell-mpc/kit/log.h, macro MPCKIT_DEV_LOG) and the files the plugin and its GPU helper write into /tmp for the developer (shell-mpc/write_files.h, macro SYNTHYBOY_MPC_WRITE_FILES).
 # ON (default, today's behaviour: the device measurements need the status file): the log exists (every category off until /tmp/synthyboy-log.conf switches it on) and the files are written as before.
 # OFF (the public release: scripts/build-mpc.sh --release): no log code, no log strings, no log thread; no report / probe / error files; the helper's output goes to /dev/null; the status file only while
@@ -282,7 +270,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     # the host's standby dim (overlay/standby.h) and the parameter coverage of the pages without a test of their own
 
-    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the host tests that reproduced the findings; they pass now and are registered (the plugin_review_host takes the built plugin as its argument).
+    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the host tests that reproduced the findings; they pass now and are registered.
     add_executable(safe_file_host EXCLUDE_FROM_ALL tests/safe_file_host.cpp)
     target_include_directories(safe_file_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(safe_file_host PRIVATE Threads::Threads)
@@ -329,22 +317,6 @@ if(NOT CMAKE_CROSSCOMPILING)
         add_test(NAME ${t} COMMAND ${t})
     endforeach()
 
-    add_executable(play_log_host EXCLUDE_FROM_ALL tests/play_log_host.cpp)
-    target_include_directories(play_log_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(play_log_host PRIVATE Threads::Threads)
-    target_compile_features(play_log_host PRIVATE cxx_std_17)
-    target_compile_options(play_log_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME play_log_host COMMAND play_log_host)
-
-    if(SYNTHYBOY_MPC_DEBUG_HOOKS)
-        add_executable(play_velocity_host EXCLUDE_FROM_ALL tests/play_velocity_host.cpp)
-        target_include_directories(play_velocity_host PRIVATE "${MPC_SDK_DIR}/framework" "${CMAKE_CURRENT_SOURCE_DIR}")
-        target_link_libraries(play_velocity_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-        target_compile_features(play_velocity_host PRIVATE cxx_std_17)
-        target_compile_options(play_velocity_host PRIVATE -Wall -Wextra)
-        add_test(NAME play_velocity_host COMMAND play_velocity_host $<TARGET_FILE:synthyboy_mpc>)
-        set_tests_properties(play_velocity_host PROPERTIES RUN_SERIAL TRUE)
-    endif()
     add_executable(stroke_strip_host EXCLUDE_FROM_ALL tests/stroke_strip_host.cpp)
     target_include_directories(stroke_strip_host PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -360,17 +332,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(close_hang_host PRIVATE cxx_std_17)
     target_compile_options(close_hang_host PRIVATE -Wall -Wextra)
     if(SYNTHYBOY_MPC_OVERLAY)
-        add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc> $<$<BOOL:${SYNTHYBOY_MPC_DEBUG_HOOKS}>:--hooks>)
-    endif()
-
-    add_executable(select_program_host EXCLUDE_FROM_ALL tests/select_program_host.cpp)
-    target_include_directories(select_program_host PRIVATE "${MPC_SDK_DIR}/framework" "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(select_program_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-    target_compile_features(select_program_host PRIVATE cxx_std_17)
-    target_compile_options(select_program_host PRIVATE -Wall -Wextra -Wpedantic)
-    if(SYNTHYBOY_MPC_OVERLAY AND SYNTHYBOY_MPC_DEBUG_HOOKS)
-        add_test(NAME select_program_host COMMAND select_program_host $<TARGET_FILE:synthyboy_mpc>)
-        set_tests_properties(select_program_host PROPERTIES RUN_SERIAL TRUE)
+        add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc>)
     endif()
 
     add_executable(controller_review_host EXCLUDE_FROM_ALL overlay/tests/controller_review_host.cpp)
@@ -390,15 +352,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(chunk_review_host PRIVATE cxx_std_17)
     target_compile_options(chunk_review_host PRIVATE -Wall -Wextra)
 
-    add_executable(plugin_review_host EXCLUDE_FROM_ALL tests/plugin_review_host.cpp)
-    target_include_directories(plugin_review_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${MPC_SDK_DIR}/framework"
-        "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(plugin_review_host PRIVATE synthyboy_core Threads::Threads ${CMAKE_DL_LIBS})
-    target_compile_features(plugin_review_host PRIVATE cxx_std_17)
-    target_compile_options(plugin_review_host PRIVATE -Wall -Wextra)
-    add_test(NAME plugin_review_host COMMAND plugin_review_host $<TARGET_FILE:synthyboy_mpc>)
     add_test(NAME chunk_review_host COMMAND chunk_review_host)
     add_test(NAME controller_review_host COMMAND controller_review_host)
 

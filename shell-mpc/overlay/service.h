@@ -215,12 +215,9 @@ private:
     static Paths shippedPaths()
     {
         Paths p = Paths::forBranding (mpckit::branding());
-#if defined(SYNTHYBOY_MPC_DEBUG_HOOKS) && SYNTHYBOY_MPC_DEBUG_HOOKS
-#else
         p.pointerHotSpot.clear();
         p.dumpRequest.clear();
         p.dump.clear();
-#endif
         return p;
     }
 
