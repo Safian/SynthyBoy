@@ -283,7 +283,7 @@ The list **BANK 1: 1-4 / BANK 2: 5-8** (the lit dot is the bank) chooses which r
 
 [Korábbi állapotkép: Osc A](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/osc-a.png)
 
-Three identical oscillators (Osc A = Osc 1, B = Osc 2, C = Osc 3 in the parameter list). The page is the full-screen page
+Three identical oscillators (Osc A = Osc 1, B = Osc 2, C = Osc 3 in the parameter list). The page is the editor
 of one oscillator. Each oscillator is one of **five types**, chosen with the five keys at the top: **WAVE** (wavetable), **MULTI**
 (multisample instrument), **SAMPLE** (one sample), **GRAIN** (granular) and **SPEC** (spectral). Everything you can set
 on an oscillator is reachable on the page or on one of its detail pages, and from the Q-Links.
@@ -515,7 +515,7 @@ Controls that do not apply to the current model are dimmed, including their valu
 
 [Korábbi állapotkép: Envelope](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/env.png)
 
-The Env page shows one envelope full screen. The buttons at the top (**1 .. 6**) show the envelopes that are in use (routed somewhere, or changed from their defaults) and the one you are editing, ENV 1 always; **+** selects the next free envelope (choosing writes nothing). A dot under a button marks an envelope that is in use. The page and the Play page show the same envelope, and a project remembers which one. An envelope shapes a value over the time of a note: Env 1 is the amplitude envelope in the Init sound, the others are free for the filter, the pitch or anything else you route them to (chapter 6).
+The Env page shows one envelope. The buttons at the top (**1 .. 6**) show the envelopes that are in use (routed somewhere, or changed from their defaults) and the one you are editing, ENV 1 always; **+** selects the next free envelope (choosing writes nothing). A dot under a button marks an envelope that is in use. The page and the Play page show the same envelope, and a project remembers which one. An envelope shapes a value over the time of a note: Env 1 is the amplitude envelope in the Init sound, the others are free for the filter, the pitch or anything else you route them to (chapter 6).
 
 - **Graph.** The graph has the whole width. The handles of DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE are on the curve. Drag a time handle to change the time; the DECAY handle changes decay time and sustain level at once; the small handle in the middle of attack, decay and release bends the curve; double tap on a handle = its default. The name and value of the handle in your hand are written over it. A dot and a soft line follow the playing voice(s); Env 1 lies faintly behind the other envelopes on the same time axis.
 - **LOCKED / FREE** (the button at the top left of the graph). **LOCKED** (the default): the envelope always fills the graph, so when you change the times the **time ruler** under the graph changes, not the picture. **FREE**: a horizontal drag along the ruler zooms the time axis (to the right in, to the left out); the envelope may then run past the right edge and the handles beyond it cannot be touched. Switching to FREE keeps the picture as it is; switching back fits again. The compact graph on the Play page is always locked and has no button.

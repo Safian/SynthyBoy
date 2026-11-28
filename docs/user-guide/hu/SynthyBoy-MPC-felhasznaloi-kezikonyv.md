@@ -77,7 +77,7 @@ Az Akai kézikönyvek a gazdarendszer felőli oldalt ismertetik. Ahol ez az útm
 
 A kézikönyvek nem részletezik, hogy a SynthyBoy pontosan hol jelenik meg a plugin ablakban (a fejlesztői feljegyzések szerint az "External Plugins" kategória alatt); lásd a 11. fejezetet.
 
-**Első indítás.** Helyezzük a plugint egy sávra, és nyissuk meg a Track Edit Mode (Sávszerkesztő mód) nézetet (a Sounds módban az **Edit Instrument** gomb ezt teszi); nyomjuk meg a **Play** funkciógombot (az első funkciógombot). Ekkor meg kell jelennie az 5.1 fejezetben látható három panelnek. Ha csak egy sötét, üres terület látható, lásd a 9. fejezetet.
+**Első indítás.** Helyezzük a plugint egy sávra, és nyissuk meg a Track Edit Mode (Sávszerkesztő mód) nézetet (a Sounds módban az **Edit Instrument** gomb ezt teszi); nyomjuk meg a **Play** funkciógombot (az első funkciógombot). Ekkor meg kell jelennie az 5.1 fejezetben látható három harmadnak. Ha csak egy sötét, üres terület látható, lásd a 9. fejezetet.
 
 Egy olyan projekt, amelyben egy korábbi verziójú SynthyBoy szerepelt egy sávon, megőrzi az adott sáv régi Q-Link hozzárendelését mindaddig, amíg a plugint újra be nem szúrjuk a sávra (8. fejezet).
 
@@ -107,7 +107,7 @@ A képernyő 1280 x 800 képpont felbontású és érintésérzékeny.
 Összesen 24 oldal. A Filter, Env és LFO oldalakon belül anélkül válthatunk át a másik szűrőre, burkolóra vagy LFO-ra, hogy elhagynánk az oldalt (az oldalon lévő második gombsor segítségével): a fül csupán azt dönti el, melyik jelenjen meg legelőször.
 Hat burkológörbe és tíz LFO (plusz négy random LFO) áll rendelkezésre; az Env 1 - 4 és LFO 1 - 4 fülek csupán a kezdő bejegyzések.
 
-**Megnyitás és bezárás egy oldalon belül.** Több oldal rendelkezik teljes képernyős gombbal, "MORE" (Továbbiak) gombbal, fogaskerék ikonnal vagy listával: ezek egy külön nézetet nyitnak meg az aktuális oldal felett. A **BACK** (Vissza) vagy **CLOSE** (Bezárás) gomb visszalép. A Play fül elhagyása automatikusan bezár mindent, ami az oldalai fölé volt nyitva.
+**Megnyitás és bezárás egy oldalon belül.** Több oldal rendelkezik "MORE" (Továbbiak) gombbal, fogaskerék ikonnal vagy listával: ezek egy külön nézetet nyitnak meg az aktuális oldal felett. A **BACK** (Vissza) vagy **CLOSE** (Bezárás) gomb visszalép.
 
 Mindig csak annak a sávnak a pluginje kerül kirajzolásra, amelynek oldala a képernyőn látható; több SynthyBoy példány esetén a kép követi az éppen vizsgált sávot (akár 16 példányig; 8. fejezet).
 
@@ -179,40 +179,31 @@ Az alábbi fejezetekben a "tartomány" a `docs/params.json` fájlból származó
 
 ### 5.1 Play
 
-[Korábbi állapotkép: Play](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/play.png)
+![A Play oldal](../../screens/play.jpg)
 
-A Play fül EGY oldal: három élő panel egymás mellett, egy **oszcillátor** panel (balra), egy **burkoló (envelope)** panel (középen) és egy **LFO** panel (jobbra). Az első négy Q-Link (potméter) az oszcillátor panelé (típus, tábla vagy OCT, PAN, LEVEL), a következő négy a burkolóé (ATTACK, DECAY, SUSTAIN, RELEASE), a következő négy az LFO-é (SHAPE, RATE, RISE, SMOOTH). Az MPC XL-en mind a tizenkettő egyszerre a potméterekön van, és minden vezérlő a saját potméterének számát viseli. A Key 61-en a sárga keret jelöli az éppen aktív négy potmétert; egy másik panel vezérlőjének megérintése hozza a csoportját a négy potméterre (a többi sorban követi), a többihez a Q-Link bank gombok szolgálnak. Minden panel tetején egy választó van: középen az aktuális elem, két oldalán a szomszédai (egy érintéssel lépünk rá, vagy végighúzással), a névre koppintva megnyílik a lista. A kikapcsolt oszcillátor szürkén látszik (a bekapcsoló gomb piros).
-Ez a felület való a játékra és az azonnali finomhangolásra: a három leggyakrabban használt elem fő vezérlői egyetlen nézetben érhetők el.
+A Play fül EGY oldal, három harmaddal egymás mellett: **Oszcillátor** (balra), **Envelope (burkoló)** (középen) és **LFO** (jobbra). Mindegyik harmadnak van egy fejléc-legördülője, alatta egy élő kijelzője, még lejjebb a potméterei és a választói. Az első négy Q-Link (potméter) az oszcillátor-harmadé, a következő négy a burkolóé, a következő négy az LFO-é. Az MPC XL-en mind a tizenkettő egyszerre a potméterekön van, és minden vezérlő a saját potméterének számát viseli. A Key 61-en a sárga keret jelöli az éppen aktív négy potmétert; egy másik harmad vezérlőjének megérintése hozza a csoportját a négy potméterre (a többi sorban követi), a többihez a Q-Link bank gombok szolgálnak. Ez a felület való a játékra és az azonnali finomhangolásra: a három leggyakrabban használt elem vezérlői egyetlen nézetben érhetők el. A teljes szerkesztők az Osc A, Osc B, Osc C, Sub, Noise (5.3 - 5.5), az Env 1 - Env 6 (5.8) és az LFO 1 - LFO 10 (5.9) fülek.
 
-A Play oldal elrendezése:
-- **Nincsenek fül-sorok:** A navigációt egyetlen választó biztosítja a képernyő mindegyik harmadában.
-- **Nyilas léptetés, koppintásra nyíló lista:** Használd a nyilakat a léptetéshez, vagy koppints a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
-- **Egységes kijelzőmagasság:** Mindhárom kijelző azonos magasságú és felül igazított. Mindegyik kijelző rendelkezik egy fejlécsávval a címével és gombjaival (bekapcsolás, útválasztás, teljes képernyő); a rajzolt tartomány a sáv alatt helyezkedik el.
+- **Fejléc-legördülő:** mindegyik harmad tetején egy legördülő van; a címe a megjelenített elem. Koppintásra kiválasztható az elem. Az oszcillátor-harmadban a lista: Sub, Osc A, Osc B, Osc C, Noise; a burkoló-harmadban Env 1 - Env 6; az LFO-harmadban LFO 1 - LFO 10 és RND 1 - RND 4. A választás a projekttel együtt mentődik.
+- **Egységes kijelzőmagasság:** mindhárom kijelző azonos magasságú és felül igazított; a rajzolt tartomány a fejléc alatt helyezkedik el.
 
-Az LFO panel a csoportjával (SHAPE, RATE, RISE, SMOOTH: XL-en a 9–12. Q-Link):
-
-[Korábbi állapotkép: Play LFO](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/play-lfo.png)
-
-**Oszcillátor panel.**
+**Oszcillátor-harmad.**
 
 | Vezérlő | Mit csinál |
 |---|---|
-| Forrásválasztó (Sub, Osc A, Osc B, Osc C, Noise) | Kiválasztja, melyik hangforrást mutatja és szerkeszti a panel (a projekttel együtt mentődik). A nyilak léptetnek, koppintásra megnyílik az ötös lista. |
-| Bekapcsológomb és név | Be- és kikapcsolja a megjelenített forrást; a kijelző fejlécsávjának bal szélén található. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
-| Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintásra megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2); a kijelző fejlécsávjában található a teljes képernyő gomb bal oldalán. A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
-| Kijelző + teljes képernyő gomb | A kijelző rendelkezik egy fejlécsávval a bekapcsológombbal, a forrás nevével, az útválasztó gombbal és a teljes képernyő gombbal (négy sarokzárójel); az oszcillátor egyetlen ciklusa a sáv alatt jelenik meg. A teljes képernyő gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
-| Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális), a kijelző alá rendezve. Q 1. |
-| Forrásléptető és a listagomb | A hullámtábla neve (fájlból betöltött táblánál a fájl címe) vagy a betöltött fájl neve. Mindkettő megnyitja a hullámtábla-böngészőt (vagy a tartalomböngészőt); kompakt nézetből először a teljes képernyő nyílik meg. Q 2. |
+| Fejléc-legördülő (Sub, Osc A, Osc B, Osc C, Noise) | Kiválasztja, melyik hangforrást mutatja és szerkeszti a harmad. |
+| Bekapcsológomb | Be- és kikapcsolja a megjelenített forrást; a kijelző fejlécének bal szélén található. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
+| ROUTE választó (F1 / F2 / F12 / M / DIR / BAL / OFF) | Az adott oszcillátor kimeneti célpontját állítja (Osc N Destination); a kijelző fejlécében található. A Sub oszcillátornak itt nincs ROUTE választója; az útválasztása a saját oldalán található (5.4). |
+| Kijelző | Az oszcillátor egyetlen ciklusa a fejléc alatt jelenik meg. |
+| WAVE / TYPE / SOURCE választók | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális), valamint a hullámtábla vagy a betöltött fájl, a kijelző alatt. Q 1 és Q 2. |
+| OCT | A megjelenített forrás oktávja (Sub és az oszcillátorok). |
 | PAN | -100 .. +100 százalék (C, L n, R n). Q 3. |
 | LEVEL | 0 .. 100 százalék. Q 4. |
 
-A Sub és a Noise más vezérlőkkel rendelkezik (hullámforma, oktáv; zaj színe, szűrő): lásd az 5.4 és 5.5 fejezetet.
+A Sub és a Noise más választókkal rendelkezik (hullámforma, oktáv; zaj színe, szűrő): lásd az 5.4 és 5.5 fejezetet.
 
-**Burkoló panel (Envelope panel).** A felső választó az **Env 1 .. Env 6** közötti burkolót választja ki (a nyilak léptetnek, koppintásra megnyílik a lista). A kijelző fejlécsávval rendelkezik a burkoló nevével és a jobb oldalon lévő teljes képernyő gombbal; a burkológörbe grafikonja a sáv alatt jelenik meg. A kijelző alatt találhatók az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (az XL-en a Q 5–8). A grafikon itt mindig a panelhez illeszkedik; a zárolás és az idővonalzó a teljes oldalon található. Részletek az 5.8 fejezetben.
+**Envelope-harmad.** A fejléc-legördülő az **Env 1 .. Env 6** közötti burkolót választja ki. A burkológörbe grafikonja a fejléc alatt jelenik meg. A kijelző alatt találhatók az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (az XL-en a Q 5 - 8). A grafikon mindig a harmadhoz illeszkedik. Részletek az 5.8 fejezetben.
 
-**LFO panel.** A felső választó az **LFO 1 .. LFO 10** vagy **RND 1 .. RND 4** elemet választja ki (a nyilak léptetnek, koppintásra megnyílik a lista). A kijelző fejlécsávval rendelkezik a névvel és a jobb oldalon lévő teljes képernyő gombbal; az LFO görbéje a sáv alatt jelenik meg. A kijelző alatt található a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (az XL-en a Q 9–12; az első harmadban az LFO képe mutatja a hullámformát és a pozíciót). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a potméter halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
-
-**Teljes képernyő.** A teljes képernyő gomb megnyitja az adott elem oldalát a teljes plugin-területen (ugyanaz az oldal, mint a megfelelő Osc, Env vagy LFO fül, egy CLOSE gombbal). A Play fül elhagyásakor ez bezáródik.
+**LFO-harmad.** A fejléc-legördülő az **LFO 1 .. LFO 10** vagy **RND 1 .. RND 4** elemet választja ki. Az LFO görbéje a fejléc alatt jelenik meg. A kijelző alatt található a SHAPE választó, a RATE potméter (tempószinkronnál a DIVISION választó), a **HZ / BPM / KEY** gombok (a világító jelzi az üzemmódot), a RISE és a SMOOTH (az XL-en a Q 9 - 12); a random LFO-knak STYLE, SYNC és STEREO választójuk van. A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a potméter halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
 
 ### 5.2 Macros (Makrók)
 
@@ -230,7 +221,7 @@ A **BANK 1: 1-4 / BANK 2: 5-8** lista (a világító pont jelzi a bankot) kivál
 
 [Korábbi állapotkép: Osc A](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/osc-a.png)
 
-Három azonos oszcillátor (a paraméterlistában Osc A = Osc 1, B = Osc 2, C = Osc 3). Az oldal egyetlen oszcillátor teljes képernyős oldala. Mindegyik oszcillátor **öt típus** egyike lehet, amelyet a felül található öt gombbal választhatunk ki: **WAVE** (hullámtábla), **MULTI** (multimintás hangszer), **SAMPLE** (egyetlen hangminta), **GRAIN** (granuláris) és **SPEC** (spektrális). Minden, ami egy oszcillátoron beállítható, elérhető az oldalon vagy annak valamelyik részletező oldalán, valamint a Q-Linkekről.
+Három azonos oszcillátor (a paraméterlistában Osc A = Osc 1, B = Osc 2, C = Osc 3). Az oldal egyetlen oszcillátor szerkesztője. Mindegyik oszcillátor **öt típus** egyike lehet, amelyet a felül található öt gombbal választhatunk ki: **WAVE** (hullámtábla), **MULTI** (multimintás hangszer), **SAMPLE** (egyetlen hangminta), **GRAIN** (granuláris) és **SPEC** (spektrális). Minden, ami egy oszcillátoron beállítható, elérhető az oldalon vagy annak valamelyik részletező oldalán, valamint a Q-Linkekről.
 
 A kép 16 potméteres eszközhöz van renderelve: a kis számok a Q-Link potmétereket jelzik (1 - 4 a sárga csoport, 5 - 16 a következő csoportok, 4.3 fejezet). A Key 61-en ugyanez az oldal 1 - 4 számokat mutat az inaktív csoportokon.
 
@@ -286,7 +277,7 @@ A SynthyBoy az érintőképernyős kezelőfelületén egy egységes, teljes kép
 
 **A böngésző megnyitása:**
 1. Válasszuk ki az oszcillátor fület (**Osc A**, **Osc B** vagy **Osc C**), és állítsuk a típust **WAVE**-re.
-2. Érintsük meg a hullámtábla nevét a forrásléptető mezőben (vagy a mellette lévő listagombot). Ez elérhető az Osc A / B / C teljes képernyős oldalain, valamint a Play oldal oszcillátor-harmadában (a kompakt nézetben) is — a Play oldalról megérintve először a teljes képernyős felület tárul fel.
+2. Érintsük meg a hullámtábla nevét a forrásléptető mezőben (vagy a mellette lévő listagombot). Ez elérhető az Osc A / B / C teljes képernyős oldalain, valamint a Play oldal oszcillátor-harmadában is.
 3. A wavetable-böngésző egy kétszintű listaként nyílik meg a teljes plugin-terület felett (56 képpont magas sorokkal).
 4. Mindig az éppen megszólaló hullámtábla **kategóriájában** nyílik meg, és az adott tábla ki van jelölve a listában (a beépített tábla a sorszáma alapján, a fájlból betöltött tábla a csomagja és elérési útja szerint).
 5. A fejlécben az aktuális kategória neve látható egy balra mutató vissza-nyíllal: erre koppintva léphetünk fel a kategóriák főlistájához (fejléc: "WAVETABLES", a kategórianevek után kis háromszöggel), ahol bármely kategóriát megérintve megnézhetjük az abban található hullámtáblákat.
@@ -510,7 +501,7 @@ Azok a vezérlők, amelyek az aktuális modellre nem érvényesek, halványak, b
 
 [Korábbi állapotkép: Envelope](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/env.png)
 
-Az Env 1 - Env 4 oldalak mindegyike egy-egy burkolót mutat teljes képernyőn; a felül lévő **ENV 1 .. ENV 6** gombokkal átválthatunk egy másik burkolóra (a gomb alatti pont jelöli a modulációban részt vevő burkolót).
+Az Env 1 - Env 4 oldalak mindegyike egy-egy burkolót mutat; a felül lévő **ENV 1 .. ENV 6** gombokkal átválthatunk egy másik burkolóra (a gomb alatti pont jelöli a modulációban részt vevő burkolót).
 A fül csak azt határozza meg, melyik burkoló jelenjen meg először. A burkológörbe egy értéket formál a hang időtartama alatt: az Env 1 az amplitúdó-burkoló az Init hangszínben, a többiek szabadon hozzárendelhetők a szűrőhöz, a hangmagassághoz vagy bármi máshoz (6. fejezet).
 
 - **Grafikon.** A grafikon a teljes szélességet kitölti. A DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE fogópontjai a görbén helyezkednek el. Húzzunk meg egy idő-fogópontot az idő módosításához; a DECAY fogópont egyszerre módosítja a lecsengési időt és a kitartási (sustain) szintet; az attack, decay és release szakaszon lévő kis középső fogópont meghajlítja a görbét; egy fogópont dupla megérintése visszaállítja az alapértelmezett értéket. A kézben tartott fogópont neve és értéke megjelenik felette. Egy pont és egy lágy vonal követi a megszólaló hang(ok) futását; az Env 1 halványan megjelenik a többi burkoló mögött azonos időtengelyen.
