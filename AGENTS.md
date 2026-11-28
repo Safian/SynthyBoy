@@ -8,6 +8,10 @@ For native components follow [components/AGENTS.md](components/AGENTS.md). In `s
 
 Develop and release SynthyBoy exclusively for standalone Akai MPC hardware. Follow the [Open MPC community release workflow](https://open-mpc.github.io/workflow.html). Assign work and release checks to the device plugin, skin, shared engine, content and MPC tooling. Use the Mac for offline builds and tests. MPC Desktop compatibility, desktop project interchange, Kick and other plugin hosts are outside this release.
 
+## Skin editing (owner, 2026-11-28)
+
+`skin/TUI.json` is edited directly and stays formatted one element per line (`python3 scripts/skin-format.py` after every edit; lossless, keeps duplicate keys), so edits of different screens merge without conflicts. Work is split by screen (tab) wherever the change allows it.
+
 ## Release packaging and which architecture to build (owner, 2026-11-20)
 
 - A release has TWO zips, built with the Open MPC tool: `armv7` (MPC Key 61 and the other 32-bit devices) and `aarch64` (MPC XL). Both hold the same plugin, with the display layer (overlay) enabled.
