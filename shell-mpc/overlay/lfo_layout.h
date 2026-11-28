@@ -13,21 +13,20 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace lfolayout {
 
-constexpr int kRowH = 56, kRateH = 72, kGap = 4, kLedRowH = 56, kMargin = 6;
+constexpr int kGap = 4, kLedRowH = 56, kMargin = 6;
 constexpr int kQuadRandomH = 280;   // Play phase 2: the Q lane (16) and four 60 px rows with three 8 px gaps (RND: STYLE, RATE, SYNC, STEREO)
 constexpr int kModeW = 208, kModeH = 56;   // the HZ | BPM | KEY radio grid: three 64 px faces and two 8 px gaps, in a 56 px touch row
 
 /** The compact view (the right third of the Play page): the rectangle `third`. */
 struct Compact
 {
-    ui::Rect third, instance, shape, style, sync, rate, rateKnob, division, modeCells, rise, smoothTime, stereo, display;
+    ui::Rect instance, shape, style, sync, rateKnob, division, modeCells, rise, smoothTime, stereo, display;
 };
 inline Compact compact (const ui::Rect& third, bool random) noexcept
 {
     // Play phase 2 (docs/review/PLAY-PHASE2-PLAN-2026-11-27.md): the selector stands in the header band of the third, the display has no band, the controls are 60 px rows with 8 px gaps
     namespace pr = ui::playrows;
     Compact c;
-    c.third = third;
     const int m = kMargin, W = third.w - 2 * m, rowH = pr::kCompactRowH, g = pr::kControlGap;
     c.instance = pr::headerSelectorRect (third, false, false);
     const int dy = third.y + m + pr::kSelectorH + pr::kSelectorGap;
@@ -42,7 +41,6 @@ inline Compact compact (const ui::Rect& third, bool random) noexcept
     int y = qy + ui::kQLane;
     auto rateCell = [&] (const ui::Rect& r)
     {
-        c.rate = r;
         const int h = std::min (r.h, kModeH);
         c.modeCells = { r.right() - kModeW, r.y + (r.h - h) / 2, kModeW, h };
         c.rateKnob = { r.x, r.y, std::max (0, r.w - kModeW - g), r.h };
@@ -75,11 +73,9 @@ inline Compact compact (const ui::Rect& third, bool random) noexcept
 struct Full
 {
     static constexpr int kBandH = 290, kBandRandomH = 196, kMaxBlocks = 3;
-    ui::Rect tab, targets, namedPicker, picker, display, edit;
+    ui::Rect tab, targets, namedPicker, display, edit;
     ui::Rect blocks[kMaxBlocks];
-    int nBlocks = 0;
-    ui::Rect rate, rise, smoothTime, smoothSwitch, smoothArea, syncMode, mode, modeList, phase, delay, host, direction, swing, stereo, mono, stereoToggle, keyTranspose, keyTune;
-    int blockOfRate = 0;
+    ui::Rect rate, rise, smoothTime, smoothArea, syncMode, mode, modeList, phase, delay, host, direction, swing, stereo, mono, stereoToggle, keyTranspose, keyTune;
 };
 inline Full full (const ui::Rect& tab, bool random, bool keyActive, bool editShown) noexcept
 {
@@ -99,7 +95,6 @@ inline Full full (const ui::Rect& tab, bool random, bool keyActive, bool editSho
     f.edit = ! random && editShown ? ui::Rect { f.display.right() - 4 - 64, f.display.y + 4 + (64 - 56) / 2, 64, 56 } : ui::Rect {};
     // the blocks of the bottom band
     const int n = random ? 1 : 3;   // the key follow has no block of its own: its two numbers stand in the RATE block
-    f.nBlocks = n;
     static const int wShape[3] = { 3, 4, 3 }, wRandom[1] = { 1 };
     const int* wt = random ? wRandom : wShape;
     int sum = 0;
@@ -135,7 +130,6 @@ inline Full full (const ui::Rect& tab, bool random, bool keyActive, bool editSho
         const ui::Rect smooth { sx, in0.bottom() - kKnobH, sw, kKnobH };
         constexpr int buttonW = 72;
         f.smoothArea = { smooth.x, smooth.y + 2, smooth.w, smooth.h - 2 };
-        f.smoothSwitch = { smooth.x, smooth.y, buttonW, smooth.h };
         f.smoothTime = { smooth.x + buttonW, smooth.y, smooth.w - buttonW, smooth.h };
         const ui::Rect in = inner (1);
         const int lw = 150, kx = in.x + lw + g, kw = in.w - lw - g, topH = 3 * th, kwHalf = (kw - g) / 2;

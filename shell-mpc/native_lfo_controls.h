@@ -19,7 +19,7 @@ enum Field
 };
 enum Action { kIdle, kTargets, kExpand, kActionLast = kExpand };
 constexpr int kInstances = 14, kStandard = 10, kLayoutLast = 6;
-constexpr int kShapeLast = 12, kStyleLast = 4;
+constexpr int kShapeLast = 12;
 constexpr const char* kNames[kCount] = {
     "LFO Waveform", "RND Style", "LFO Smooth", "LFO Smooth Time", "LFO Action", "LFO Layout",
     "LFO Rate", "LFO Division", "LFO Rise", "LFO Sync", "LFO Mode", "RND Mode", "LFO Phase", "LFO Delay",
