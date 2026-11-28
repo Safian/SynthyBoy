@@ -1612,6 +1612,10 @@ struct PluginInstance
     std::atomic<bool> nativeMixerActive { false };   // the native Mixer strips are on screen
     int nativeVoiceDisplayedRow = -1;   // display thread only
     static constexpr long long kNativePaintWindowMs = 150;
+    /** A Q group change (a page or sub-tab switch) lets the host paint the new page before the plugin-wide metadata re-read (audioMasterUpdateDisplay: the host asks the name, label, display and
+        properties of every one of the ~3700 parameters on its main thread). Upper bound of the Key 61 paint of Master/Voice: 435-467 ms (docs/dsp-knowledge/mpc-display.md). */
+    static constexpr long long kPageSwitchSettleMs = 800;
+    bool pageSwitchNamesPending = false;
     bool nativeNamesAwaitingPaint = false;
     long long nativePagePaintUntil = -1;
     long long proxyNamesRequestedAt = -1;   // display thread only
@@ -2870,7 +2874,10 @@ struct PluginInstance
                         if (switchedFxCard)
                             fxQNamesDue = true;
                         else
+                        {
                             requestProxyNames ();
+                            pageSwitchNamesPending = true;
+                        }
                     });
         flushProxyNames (e, steadyMs());
     }
@@ -2905,6 +2912,9 @@ struct PluginInstance
         if ((nativeNamesAwaitingPaint && nowMs - proxyNamesRequestedAt < kNativePaintWindowMs)
             || (nowMs < nativePagePaintUntil && nowMs - proxyNamesRequestedAt < maxWaitMs))
             return;
+        if (pageSwitchNamesPending && nowMs - proxyNamesRequestedAt < kPageSwitchSettleMs)
+            return;
+        pageSwitchNamesPending = false;
         nativeNamesAwaitingPaint = false;
         proxyNamesRequestedAt = -1;
         qNotifyGroup (e);
