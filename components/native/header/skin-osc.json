@@ -26,6 +26,7 @@
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "RangedEnabling/1/3/5/Parameter 2876",
         "HdrType": "Parameter 3004",
+        "HdrTypeList": "ResetOnGestureEnd/Parameter 4030",
         "HdrSource": "Parameter 3005",
         "HdrBrowse": "Parameter 3006"
       }
@@ -47,6 +48,7 @@
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "IndexedEnabling/0/5/Parameter 2876",
         "HdrWave": "Parameter 2979",
+        "HdrWaveList": "ResetOnGestureEnd/Parameter 4031",
         "HdrOct": "Parameter 2980"
       }
     },
@@ -67,7 +69,9 @@
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "IndexedEnabling/4/5/Parameter 2876",
         "HdrKind": "Parameter 2986",
-        "HdrSound": "Parameter 2987"
+        "HdrKindList": "ResetOnGestureEnd/Parameter 4032",
+        "HdrSound": "Parameter 2987",
+        "HdrSoundList": "ResetOnGestureEnd/Parameter 4033"
       }
     },
     {
@@ -86,8 +90,17 @@
         "HdrGate1": "IndexedEnabling/1/3/Parameter 2878",
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "IndexedEnabling/4/5/Parameter 2876",
-        "HdrKind": "Parameter 2986"
+        "HdrKind": "Parameter 2986",
+        "HdrKindList": "ResetOnGestureEnd/Parameter 4032"
       }
     }
-  ]
+  ],
+  "retire": {
+    "definitions": [
+      "oscNativeSetting_menu_TYPEChoices",
+      "oscNativeSetting_menu_WAVEFORMChoices",
+      "oscNativeSetting_menu_KINDChoices",
+      "oscNativeSetting_menu_SOUNDChoices"
+    ]
+  }
 }

@@ -209,7 +209,7 @@
                   {
                     "name": "Type",
                     "def": "oscHeaderType",
-                    "overlay": "oscNativeSetting_menu_TYPEChoices",
+                    "list": true,
                     "hw_focus": "Yes",
                     "gate": [
                       "RangedEnabling/4/8/9/Parameter 2978"
@@ -373,7 +373,7 @@
                   {
                     "name": "Waveform",
                     "def": "oscHeaderWaveform",
-                    "overlay": "oscNativeSetting_menu_WAVEFORMChoices",
+                    "list": true,
                     "hw_focus": "Yes"
                   }
                 ]
@@ -456,7 +456,7 @@
                   {
                     "name": "Kind",
                     "def": "oscHeaderKind",
-                    "overlay": "oscNativeSetting_menu_KINDChoices",
+                    "list": true,
                     "hw_focus": "Yes"
                   }
                 ]
@@ -473,7 +473,7 @@
                   {
                     "name": "Sound",
                     "def": "oscHeaderSound",
-                    "overlay": "oscNativeSetting_menu_SOUNDChoices",
+                    "list": true,
                     "hw_focus": "Yes"
                   }
                 ]
@@ -540,7 +540,7 @@
                   {
                     "name": "Kind",
                     "def": "oscHeaderKindWide",
-                    "overlay": "oscNativeSetting_menu_KINDChoices",
+                    "list": true,
                     "hw_focus": "Yes"
                   }
                 ]

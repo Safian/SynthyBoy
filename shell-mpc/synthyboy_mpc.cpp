@@ -6985,15 +6985,49 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
         return true;
     }
 
-    // ---- the standalone Osc A/B/C main-page settings (e.g. AbcWarp1Type / AbcWarp2Type): open the bound engine parameter's list while powered
+    // ---- the standalone Osc main-page header and settings (TYPE / WAVEFORM / KIND / SOUND / WARP): open the bound engine parameter's list while powered
     if (const int field = nativeOscSettingField (offset); field >= 0)
     {
         const auto cell = nativeOscSettings.at (field).cell();
-        if (cell.target < 0 || ! nativeOsc.snapshot().powered()
-            || nativeOscSettings.layout() < nativeui::osc::SettingsWavetable)
+        if (cell.target < 0 || ! nativeOsc.snapshot().powered())
             return false;
-        if (isWarpTypeParam (cell.target))
-            return buildWarpItems (cell.target, items, current);
+        const int layout = nativeOscSettings.layout();
+        if (layout >= nativeui::osc::SettingsWavetable)
+        {
+            if (isWarpTypeParam (cell.target))
+                return buildWarpItems (cell.target, items, current);
+            if (field == nativeui::osc::kSettings + nativeui::osc::AbcType && cell.kind == nativeui::osc::SettingsType)
+            {
+                const auto& info = synthyboy::paramTable()[cell.target];
+                constexpr int kTypes = static_cast<int> (std::size (nativeui::osc::kTypeChoices));
+                if (info.choices == nullptr || info.numChoices != kTypes)
+                    return false;
+                const int raw = static_cast<int> (std::lround (paramMirror[cell.target].load (std::memory_order_relaxed)));
+                for (int i = 0; i < kTypes; ++i)
+                {
+                    const int choice = nativeui::osc::kTypeChoices[i];
+                    items.add (synthyboy_mpc::ui::shownChoice (info.key, choice, info.choices[choice]), static_cast<float> (i) / (kTypes - 1));
+                    if (choice == raw)
+                        current = i;
+                }
+                title ("TYPE");
+                return true;
+            }
+            return false;
+        }
+        if ((layout == nativeui::osc::SettingsSub && field == 0)
+            || ((layout == nativeui::osc::SettingsNoise || layout == nativeui::osc::SettingsNoiseSample) && field == nativeui::osc::kSubSettings)
+            || (layout == nativeui::osc::SettingsNoise && field == nativeui::osc::kSubSettings + 1))
+        {
+            const auto& info = synthyboy::paramTable()[cell.target];
+            if (info.choices == nullptr || info.numChoices < 2)
+                return false;
+            for (int i = 0; i < static_cast<int> (info.numChoices) && info.min + static_cast<float> (i) <= info.max; ++i)
+                items.add (synthyboy_mpc::ui::shownChoice (info.key, i, info.choices[i]), synthyboy::toNormalised (info, info.min + static_cast<float> (i)));
+            current = std::clamp (static_cast<int> (std::lround (paramMirror[cell.target].load (std::memory_order_relaxed) - info.min)), 0, std::max (0, items.count - 1));
+            title (field == 0 ? "WAVEFORM" : field == nativeui::osc::kSubSettings ? "KIND" : "SOUND");
+            return items.count > 0;
+        }
         return false;
     }
 
