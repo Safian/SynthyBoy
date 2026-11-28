@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the NOTE / VELOCITY CURVE EDITOR (step 5 of the Env / Filter / LFO merges). One component for both scalar sources: the curve a key number (NOTE) or a velocity
+// SynthyBoy - MPC plugin-drawn layer: the NOTE / VELOCITY CURVE EDITOR (step 5 of the Env / Filter / LFO merges). One component for both scalar sources: the curve a key number (NOTE) or a velocity
 // (VELO) is read through before it drives the modulation matrix. Same contract as every component (core.h): the owner puts the curve, the legato flag, the glide time text, the routing rows and the source in, writes
 // whatever comes out; the editor keeps only the gesture and the view settings (selection, grid, snap, undo).
 //  - ScalarCurve: the model. 2 .. 64 points {x 0 .. 1 ascending, y 0 .. 1, power -20 .. 20 = the bend of the segment after the point}, the first x = 0 and the last x = 1 fixed. An EMPTY curve (the identity, what the content

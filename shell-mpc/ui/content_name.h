@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the name of a piece of content (a sample, an instrument, a wavetable file, an impulse) as the screen writes it. A file name can be as long as the player made it, so a name is shown by a rule
+// SynthyBoy - MPC plugin-drawn layer: the name of a piece of content (a sample, an instrument, a wavetable file, an impulse) as the screen writes it. A file name can be as long as the player made it, so a name is shown by a rule
 // and not cut by chance: the TITLE of the pack's manifest when the content has one, else the file name without its extension with the underscores as spaces; when that is wider than its box at the smallest legible size, the MIDDLE is
 // replaced by an ellipsis (the start and the end of a name are what tells two names apart: "drum loop 1…20 bpm"), never the end. A text with an ellipsis that is not at its end is a content name by this rule (the layout lint accepts
 // it; an ellipsis at the end of a text is a cut and a finding).

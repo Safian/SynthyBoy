@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the LFO DISPLAY. What the picture of an LFO in its display rectangle is made of, in the language of theme.h: a block with hairline grid, the shape of one cycle as one
+// SynthyBoy - MPC plugin-drawn layer: the LFO DISPLAY. What the picture of an LFO in its display rectangle is made of, in the language of theme.h: a block with hairline grid, the shape of one cycle as one
 // thin crisp line along the LFO's two colours over a faint area, the RISE and DELAY of the LFO as a faint lead-in in front of it, the loop point of an envelope type, and (the only thing that moves) one
 // cursor per sounding voice: a vertical hairline and a dot on the shape at the position the voice is at. No light around lines, values or text. A RANDOM LFO has no cycle: the display shows the trace of
 // its output over the last moments (the data is a ring the owner fills, oldest first) with a dot at the newest value.

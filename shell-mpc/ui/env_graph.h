@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the ENVELOPE GRAPH (EnvGraph). The picture of a DAHDSR envelope (delay, attack, hold, decay, sustain, release and the three curves) with the handles that
+// SynthyBoy - MPC plugin-drawn layer: the ENVELOPE GRAPH (EnvGraph). The picture of a DAHDSR envelope (delay, attack, hold, decay, sustain, release and the three curves) with the handles that
 // edit it by touch and the running dots of the sounding voices. Same contract as every component (core.h): a plain state struct and a rectangle in, a drawing and a Change out; it knows no engine.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

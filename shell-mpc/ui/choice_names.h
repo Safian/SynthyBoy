@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the names of the choices and laws on the screen. The engine's choice lists still carry the working names of the models they were measured against ("Vital", "Serum");
+// SynthyBoy - MPC plugin-drawn layer: the names of the choices and laws on the screen. The engine's choice lists still carry the working names of the models they were measured against ("Vital", "Serum");
 // the screen never shows a name of another product: every page that shows one of these parameters asks this file for the name by what the choice DOES (read from the code of the engine, core/engine-own):
 //   eq.law          0  the equalizer is built from state variable sections (the Digital filter's shelves and peaks)                    -> "State variable"
 //                   1  the textbook biquads (shelf, peak, notch, high / low pass) with their measured Q law                                    -> "Biquad"

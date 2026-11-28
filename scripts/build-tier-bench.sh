@@ -22,7 +22,7 @@
 # Every output directory also holds synthyboy_libm_probe and synthyboy_pmu_probe when the tree has these targets.
 #
 # The same container, toolchain files and compiler flags as scripts/build-mpc.sh --bench (GNU cross compilers of Debian 12, cmake/toolchains/*.cmake, Release, the own
-# engine without Vital), so the DSP code is the code of the packaged plugin; only the link differs (-static). Environment: MPC_BUILD_IMAGE (or ARMV7_IMAGE) names the
+# engine), so the DSP code is the code of the packaged plugin; only the link differs (-static). Environment: MPC_BUILD_IMAGE (or ARMV7_IMAGE) names the
 # Docker image (default debian:12-slim: the script then installs the cross compilers inside the container on every run; an image that has them is faster),
 # MPC_SDK is not needed (the shell is not built).
 

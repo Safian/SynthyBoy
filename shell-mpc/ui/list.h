@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: ListPopup, the list of choices as a popup (the source list of an oscillator, the warp types). Same contract as every component (core.h).
+// SynthyBoy - MPC plugin-drawn layer: ListPopup, the list of choices as a popup (the source list of an oscillator, the warp types). Same contract as every component (core.h).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the FILTER DISPLAY and filter screens.
+// SynthyBoy - MPC plugin-drawn layer: the FILTER DISPLAY and filter screens.
 // FilterDisplay: frequency response curve on log-frequency axis (20 Hz - 20 kHz) with interactive cutoff/reso handle,
 // dual-filter curves (F1 cyan, F2 magenta, resultant white), live voice markers; Formant mode XY-pad with vowel markers.
 // (The filter page itself holds no control: overlay/filter_ui.h keeps its parameter rows and the geometry of the native cells.)

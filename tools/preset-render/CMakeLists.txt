@@ -26,8 +26,7 @@ endif()
 
 # The gate: every factory preset x 3 tiers passes the checks (the velocity sweep is off here, it is for the report).
 # Label `slow` like the other audio quality gates.
-# The gate runs on the OWN engine, the one every shell ships (owner decision 2026-11-20: one engine; the Vital engine is a measuring reference only and the gate must not
-# depend on it). Thresholds are unchanged.
+# The gate runs on the OWN engine, the one every shell ships (owner decision 2026-11-20: one engine). Thresholds are unchanged.
 # The files the presets of sound set batch 2 name (wavetables, samples, instruments, impulse responses: pack id + file) are read from a content store, <root>/<pack id>/<file>:
 # links to the factory packs content/factory-* named by their ids (the shell reads them from Content/packs/<pack id>, scripts/build-mpc.sh). Without a store a sample, granular,
 # spectral or multisample oscillator is silent and Convolve absent, and the gate would not check what those presets sound like.

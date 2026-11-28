@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the pure parameter/Q-Link/layout model contract (no drawing, no touch handling).
+// SynthyBoy - MPC plugin-drawn layer: the pure parameter/Q-Link/layout model contract (no drawing, no touch handling).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

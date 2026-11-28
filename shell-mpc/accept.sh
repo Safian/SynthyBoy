@@ -181,8 +181,8 @@ done
 c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -DQLINK_FIXTURE=\"shell-mpc/overlay/tests/fixtures/qlink_panel_fixtures.bin\" -o $B/page_detector_host_asan $OVSRC/page_detector_host.cpp || { echo "ACCEPT FAIL: page_detector_host asan build"; exit 1; }
 $B/page_detector_host_asan > $B/page-detector-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/page-detector-asan.log | head; echo "ACCEPT FAIL: page_detector_host under AddressSanitizer / UBSan"; exit 1; }
 # Exercise the Q slots with the same sanitized core as the other overlay hosts.
-# the UI component library (shell-mpc/ui/, header only: the black box components, their interface tests and the demonstration program): the tests under AddressSanitizer + UBSan, the demo
-# renders the oscillator pages and the detail pages into $B/ui-images (PNG, for a human; not compared)
+# the plugin-drawn layer (shell-mpc/ui/, header only): its tests under AddressSanitizer + UBSan; the tests write PNGs
+# into $B/ui-images (for a human; not compared)
 mkdir -p $B/ui-images
 for t in ui_list_host ui_time_ruler_host ui_text_entry_host; do   # ui_cov_findings_host is NOT here on purpose: it demonstrates findings (its own header says it is not an acceptance test)
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I core/shapes/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }

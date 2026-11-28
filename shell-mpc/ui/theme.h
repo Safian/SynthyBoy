@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the THEME. Every colour, gradient, line width, font size, corner radius and spacing the components and the views draw with is in one table (struct Look);
+// SynthyBoy - MPC plugin-drawn layer: the THEME. Every colour, gradient, line width, font size, corner radius and spacing the components and the views draw with is in one table (struct Look);
 // the components take their numbers from here and from nowhere else. Three looks (look 1 .. 3) are three tables, not branches in the code: they differ in how bold the colour is (and how much
 // light), and in how the instance colours are handed out, all of them in the same neon direction: a quiet dark ground, the colour in the signal and in the values.
 // Copyright (C) 2026 Safian Szabolcs

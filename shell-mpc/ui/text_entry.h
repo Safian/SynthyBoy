@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: TEXT ENTRY, an on-screen keyboard page of our own (the host offers no text entry to a overlay page): a text field with a caret, a QWERTY layout with a
+// SynthyBoy - MPC plugin-drawn layer: TEXT ENTRY, an on-screen keyboard page of our own (the host offers no text entry to a overlay page): a text field with a caret, a QWERTY layout with a
 // shift / caps key, digits and a small set of symbols on a second layer, SPACE, backspace, CLEAR, CANCEL and OK. The page is the whole tab (1280 x 628); every key is at least 56 x 56 pixels and the
 // rows use the whole width. Library palette and fonts, no glow. Used by the Macros page to name a macro (docs/ui-design/macro-names.md); the owner decides what OK means.
 // Copyright (C) 2026 Safian Szabolcs

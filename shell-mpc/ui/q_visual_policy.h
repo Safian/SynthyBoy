@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: Q-Link visual build policy.
+// SynthyBoy - MPC plugin-drawn layer: Q-Link visual build policy.
 // Defines hardware generation framing rules:
 //   Gen 1 (ARMv7 32-bit standalone MPCs: Key 61, Live, One, X, etc.):
 //     Factory-style bank frame and single unnumbered Q marker on 4-knob setups; zero numbered chips.

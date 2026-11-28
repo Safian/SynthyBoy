@@ -30,8 +30,8 @@
 # an image that already has the cross compilers skips the apt-get step), MPC_DOCKER (the docker command, default: docker).
 #
 # The plugin folder is assembled from the binaries of THIS run only (VST/ is emptied first), so plugin.json never lists a binary of an older build.
-# Why Debian 12: its toolchain (GCC 12.2, glibc 2.36, libstdc++ 3.4.30) is the one the Kick app for the MPC is built with (kick-armv7-builder) and it is
-# below the glibc 2.39 of the MPC OS 3 firmware, which the SDK validator enforces. The source tree is mounted read-only; nothing is written outside the
+# Why Debian 12: its toolchain (GCC 12.2, glibc 2.36, libstdc++ 3.4.30) is below the glibc 2.39 of the MPC OS 3 firmware, which the SDK
+# validator enforces. The source tree is mounted read-only; nothing is written outside the
 # build directory and the output folder. Exit codes: 0 built, 2 usage, 3 Docker is not usable (the manual commands are printed), 1 build / check failed.
 
 set -euo pipefail

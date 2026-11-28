@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the FX DISPLAY component (FxDisplay): the picture of what an effect does, drawn from the parameters of the selected slot with thin smooth lines:
+// SynthyBoy - MPC plugin-drawn layer: the FX DISPLAY component (FxDisplay): the picture of what an effect does, drawn from the parameters of the selected slot with thin smooth lines:
 //   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass) as the engine's equalizer makes it in either law (state variable or
 //               cookbook biquads, with the engine's Q of the resonance; ui_fx_editor_host compares it with the engine's impulse response), with a dot at the centre of each band
 //   COMPRESSOR  the transfer curve (the peak level of a steady tone in, out) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): the

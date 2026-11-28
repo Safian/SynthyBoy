@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: host test of time_ruler.h (the round time marks under a graph whose x axis is time, e.g. the envelope display).
+// SynthyBoy - MPC plugin-drawn layer: host test of time_ruler.h (the round time marks under a graph whose x axis is time, e.g. the envelope display).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../time_ruler.h"

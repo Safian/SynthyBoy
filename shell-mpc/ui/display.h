@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the OSCILLATOR DISPLAY. What the picture of the oscillator in the display rectangle is made of, in the language of theme.h: thin lines of light along a
+// SynthyBoy - MPC plugin-drawn layer: the OSCILLATOR DISPLAY. What the picture of the oscillator in the display rectangle is made of, in the language of theme.h: thin lines of light along a
 // colour gradient, a stack of the wavetable's frames behind the current one, the unison voices as hairlines around the main curve, the min / max picture of a sample, the loop range, the
 // grain window, a faint spectrum under the wave. The data comes in a plain struct (Data); nothing here knows an engine. Every curve is a few hundred vertices: the whole picture stays
 // inside the frame budget measured on the device (docs/MPC.md "Observed on the device", D plan trial 17).

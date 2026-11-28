@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the LFO SHAPE MODEL. The drawn (custom) shape of an LFO as the UI edits it: up to 128 points {x 0 .. 1, y 0 .. 1, power -20 .. 20 of the segment to the next
+// SynthyBoy - MPC plugin-drawn layer: the LFO SHAPE MODEL. The drawn (custom) shape of an LFO as the UI edits it: up to 128 points {x 0 .. 1, y 0 .. 1, power -20 .. 20 of the segment to the next
 // point}, the loop point and the smooth flag, exactly the data of the engine's content state (core ContentLfoShape) and evaluated exactly as the engine evaluates it (core/shapes/src/shape.cpp,
 // ShapeData::evaluate), so the editor shows what the voice plays. Pure arithmetic, no allocation, no dependency: the conversion from and to the content state is the owner's (overlay/lfo_ui.h).
 // The editing operations (insert, move, remove, curve, flat and ramp cells, snap, the selection operations: move, scale, delete, falloff; flip, shift, reset and bend of the whole shape) and the undo stack live

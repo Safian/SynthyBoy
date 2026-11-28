@@ -1,4 +1,4 @@
-// SynthyBoy - MPC VST2 shell (headless, no JUCE, no CLAP).
+// SynthyBoy - MPC VST2 shell (headless).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

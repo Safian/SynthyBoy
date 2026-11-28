@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the TABLES of the effect pages (FxLayout). ONE mechanism for every effect the FX page can show: for each of the 13 effect types of the pool (kFxTypeChorus .. kFxTypeConvolve) and for
+// SynthyBoy - MPC plugin-drawn layer: the TABLES of the effect pages (FxLayout). ONE mechanism for every effect the FX page can show: for each of the 13 effect types of the pool (kFxTypeChorus .. kFxTypeConvolve) and for
 // the three splitters (kKindSplitterLh / Lmh / Ms, modules of the fixed chain without a type of the pool) a table of its controls in the standard rows of four cells. A ROW is one block of the effect and ONE Q group (in reading
 // order: the rows of the page on Q 1 .. 16). A control is named by its ENGINE KEY ("chorus.rate"), so the name, the range, the unit and the choices come from the parameter table (one source of truth); the table says only
 // where it stands and when it is live.

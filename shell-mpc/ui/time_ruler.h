@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: time ruler, the round time marks under a graph whose x axis is time.
+// SynthyBoy - MPC plugin-drawn layer: time ruler, the round time marks under a graph whose x axis is time.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

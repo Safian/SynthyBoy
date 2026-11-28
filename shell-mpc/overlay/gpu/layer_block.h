@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: shared memory block for main-layer atomic takeover between the GPU helper and the commit shim.
-// Pure header (no libdrm, no JUCE, plain lock-free atomics; usable from both C11 and C++17).
+// Pure header (no libdrm, plain lock-free atomics; usable from both C11 and C++17).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library tests: the helpers every test file shares: the check, a canvas the scene is drawn into by the CPU renderer (overlay/scene_cpu.h), the "nothing outside
+// SynthyBoy - MPC plugin-drawn layer tests: the helpers every test file shares: the check, a canvas the scene is drawn into by the CPU renderer (overlay/scene_cpu.h), the "nothing outside
 // the rectangle" and "which pixels changed" tests, and a PNG writer for the pictures a human looks at.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

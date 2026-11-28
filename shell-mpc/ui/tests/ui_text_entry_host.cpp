@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library tests: TextEntry (the keyboard page): the keys and their size, typing, shift / caps, the layers, backspace, CLEAR, the limit (characters, not bytes), OK / CANCEL as requests,
+// SynthyBoy - MPC plugin-drawn layer tests: TextEntry (the keyboard page): the keys and their size, typing, shift / caps, the layers, backspace, CLEAR, the limit (characters, not bytes), OK / CANCEL as requests,
 // a finger that slides off a key, a disabled page, the drawing inside the tab.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

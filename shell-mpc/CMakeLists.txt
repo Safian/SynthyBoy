@@ -1,4 +1,4 @@
-# SynthyBoy - MPC VST2 shell (headless, no JUCE, no CLAP).
+# SynthyBoy - MPC VST2 shell (headless).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -344,9 +344,6 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_test(NAME chunk_review_host COMMAND chunk_review_host)
     add_test(NAME controller_review_host COMMAND controller_review_host)
-
-    # --- UI Component Library Coverage Tests ---
-
 
     # --- Q-Link Visual Build Policy Tests and Fixtures ---
 

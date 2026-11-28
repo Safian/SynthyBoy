@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the common contract. Every component is a black box with an INTERFACE: a small plain state struct (what it shows), a rectangle it must stay inside,
+// SynthyBoy - MPC plugin-drawn layer: the common contract. Every component is a black box with an INTERFACE: a small plain state struct (what it shows), a rectangle it must stay inside,
 // a `qFrame` flag (it belongs to the active Q-Link group) and an `enabled` flag (disabled = drawn dim, no reaction) go in; a drawing (scene ops inside the rectangle) and an optional
 // change { id, value } come out. The component never stores the truth: the value comes in through the state struct, and after a change the owner writes the new value back.
 // Copyright (C) 2026 Safian Szabolcs

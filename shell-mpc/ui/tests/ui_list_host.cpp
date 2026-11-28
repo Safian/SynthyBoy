@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library tests: ListPopup (the list of choices as a popup): rows, scrolling by whole rows, a tap selects, the backdrop closes, the turn, disabled, drawing inside.
+// SynthyBoy - MPC plugin-drawn layer tests: ListPopup (the list of choices as a popup): rows, scrolling by whole rows, a tap selects, the backdrop closes, the turn, disabled, drawing inside.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ui_test.h"
