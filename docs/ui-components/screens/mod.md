@@ -11,7 +11,11 @@
 
 ## Definitions
 
-`skin/defs_mod.json` (24: `modNative_*` controls, `modNativeRowNormal`, `modNativeRowScroll`, `filterNativeGlide`, `filterNativeNv_151x60`, `filterNativeCurveSurface`), and the picker rows and the modulation editor in `defs_common.json`. The view is gated by `kModView` (`mod::View`: Hidden, Matrix, MatrixScroll, DetailDelay, DetailBeats).
+`skin/defs_mod.json` (31: `modNative_*` controls, `modNativeRowNormal`, `modNativeRowScroll`, `modHeader*`, `filterNativeGlide`, `filterNativeNv_151x60`, `filterNativeCurveSurface`), and the picker rows and the modulation editor in `defs_common.json`. The view is gated by `kModView` (`mod::View`: Hidden, Matrix, MatrixScroll, DetailDelay, DetailBeats).
+
+## Page-loading / suspend
+
+On `leftTab` (`ModUi::leftTab` / `suspendNative`), `ModUi` disarms touch/wheel/Q input (`suspended_ = true`), invalidates in-flight gestures (`dropGesture`), clears `setUiFullOpen(false)`, hides modal `nativeTargets_` (`TargetsTitle`/`Count`/`Empty`), and clears `nativeModBoard` only when the shared modal picker (`kPageList`, `ListGate`) was open—keeping the last published Matrix rows, navigation, detail, quick-add board, and `Mod*` `nativeText` lines readable for the host without clearing other screens' `nativeText` lines. On return (`ModUi::update`), pending native writes are drained (`drainNativePending`) before re-arming (`suspended_ = false`) and republishing. Remaining `synthyboy_mpc.cpp` items (`enteringLayout` paint-window protection and `NativeCellBank::renewInputRevisions()` / cold pre-population) are tracked in [TODO.md](../../../TODO.md).
 
 ## Data
 
