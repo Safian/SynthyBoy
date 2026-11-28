@@ -373,10 +373,68 @@ def tui_semantics(page, schema, skins, findings):
         if value.get("ignoreMousePresses") is False and not value.get("actions") and has_interactive_descendant(value, {key}):
             findings.error(json_path([*defs_path, index, "value", "ignoreMousePresses"]),
                            f"header form '{key}' has ignoreMousePresses false with empty actions and interactive children; container swallows touches")
+    check_choice_lists(page, definitions, findings)
     for k, item in enumerate(page["replacementStrings"]):
         check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
     if len(page["tabs"]) > PROVEN_MAX_TABS:
         findings.warn("$.pageData.tabs", f"{len(page['tabs'])} tabs: the SDK note allows {SDK_MAX_TABS}, the proven skin runs {PROVEN_MAX_TABS} on both devices")
+
+
+def choice_list_table():
+    """The slot table of the one-tap choice lists (shell-mpc/native_choice_list.h): (first slot parameter, [Data handle of slot 0, 1, ...])."""
+    text = (ROOT / "shell-mpc/native_choice_list.h").read_text(encoding="utf-8")
+    first = int(re.search(r"kFirstSlotParameter\s*=\s*(\d+)", text)[1])
+    table = [int(n) for n in re.findall(r"\d+", re.search(r"kSlotHandles\[\]\s*=\s*\{(.*?)\};", text, re.S)[1])]
+    return first, table
+
+
+def check_choice_lists(page, definitions, findings):
+    """The one-tap choice lists (owner 2026-11-28): the host MenuOverlay draws no item names for a VST2 (Key 61 probe 2026-11-28, docs/dsp-knowledge/skin-host-behaviour.md
+    "Host list: who draws the names"), so (1) a MenuOverlay a control opens must carry its own rows (a Button per option, named by a Label or an Image), and (2) every opener of a plugin list
+    maps ListOpen (or <name>List next to <name>) to ResetOnGestureEnd/Parameter <first + slot> where slot is the index of its Data handle in shell-mpc/native_choice_list.h."""
+    first, table = choice_list_table()
+    if len(set(table)) != len(table):
+        findings.error("$", "shell-mpc/native_choice_list.h: a Data handle is listed in two slots")
+    def_by_key = {d["key"]: d["value"] for d in definitions}
+    for index, definition in enumerate(definitions):
+        types = [c.get("componentData", {}).get("type") for c in definition["value"].get("componentsData", [])]
+        if "MenuOverlay" in types and "Button" not in types:
+            opened = any(a.get("handler") == "Show Overlay" and a.get("additionalData") == definition["key"]
+                         for d in definitions for a in d["value"].get("actions", []))
+            if opened:
+                findings.error(json_path(["pageData", "componentDefinitions", "localComponentDefinitions", index, "key"]),
+                               f"MenuOverlay '{definition['key']}' has no own rows: the host shows no item names for a VST2 (use the plugin list: ListOpen, shell-mpc/native_choice_list.h)")
+    used = set()
+    containers = [(f"definition '{d['key']}'", ["pageData", "componentDefinitions", "localComponentDefinitions", i, "value"], d["value"]) for i, d in enumerate(definitions)]
+    containers += [(f"tab '{t.get('tabName')}'", ["pageData", "tabs", i, "componentDefinition"], t["componentDefinition"]) for i, t in enumerate(page["tabs"])]
+    for owner, base, node in containers:
+        for j, entry in enumerate(node.get("componentsData", [])):
+            mapping = {m.get("key"): m.get("value") for m in entry.get("handle remapping", {}).get("map", [])}
+            for key, value in mapping.items():
+                if not isinstance(value, str) or not (key == "ListOpen" or key.endswith("List")):
+                    continue
+                data = "Data" if key == "ListOpen" else key[:-len("List")]
+                slot = re.fullmatch(r"ResetOnGestureEnd/Parameter (\d+)", value)
+                where = json_path([*base, "componentsData", j, "handle remapping"])
+                name = entry.get("componentData", {}).get("name")
+                if slot and first <= int(slot[1]) < first + len(table):
+                    s = int(slot[1]) - first
+                    used.add(s)
+                    if mapping.get(data) != f"Parameter {table[s]}":
+                        findings.error(where, f"{owner} / {name}: {key} opens slot {s} (Parameter {table[s]}) but {data} is {mapping.get(data)!r}")
+                elif re.fullmatch(r"\w+", value) and isinstance(mapping.get(data), str) and re.fullmatch(r"\w+", mapping[data]):
+                    expect = "ListOpen" if mapping[data] == "Data" else mapping[data] + "List"
+                    if value != expect:
+                        findings.error(where, f"{owner} / {name}: {key} routes to {value!r} but {data} routes to {mapping[data]!r} (expected {expect!r})")
+    header = (ROOT / "shell-mpc/native_choice_list.h").read_text(encoding="utf-8")
+    replacements = {r.get("key"): r.get("value") for r in page.get("replacementStrings", [])}
+    for name, handle in (("kModSourceGroupNames", "Parameter 2937"), ("kModDestinationGroupNames", "Parameter 2938")):
+        found = re.search(name + r"\[\]\s*=\s*\{(.*?)\};", header, re.S)
+        names = re.findall(r'"([^"]*)"', found[1]) if found else None
+        if names != replacements.get(handle):
+            findings.error("$.pageData.replacementStrings", f"shell-mpc/native_choice_list.h {name} {names} differs from the replacementStrings of {handle} {replacements.get(handle)}")
+    for s in sorted(set(range(len(table))) - used):
+        findings.warn("$", f"choice list slot {s} (Parameter {table[s]}) has no opener in the skin")
 
 
 def check_skin_schema(skins, label="skin"):

@@ -347,7 +347,9 @@ def _definition(children, actions=(), inert=False, ignore_presses=None):
 
 
 def _actions(cell):
-    """Show Overlay (a dropdown or number list) or Toggle Switch on both triggers, or none (a Button is the control)."""
+    """Show Overlay (a number list) or Toggle Switch on both triggers, or none (a Button is the control; a "list" dropdown opens the plugin's own list through its "list open" Button)."""
+    if cell.get("overlay") and cell.get("list"):
+        raise ValueError(f"cell {cell.get('name')}: a dropdown opens either a host overlay or the plugin list, not both")
     if cell.get("overlay"):
         handler, extra = "Show Overlay", cell["overlay"]
     elif cell.get("toggle"):
@@ -388,6 +390,9 @@ def _cell_children(slot, cell, w, h, on):
             out.append(_comp("focus", "Focus", FOCUS_DATA, (0, 0, w, h), visible="WhenFocussed"))
         out.append(_image("Selector face", face, (0, 0, w, h)))
         out.append(_label("Title", (pad, 0, w - pad - lane - gap, h), font, TEXT if on else DIM_TEXT))
+        if on and cell.get("list"):      # the plugin's own one-tap list (shell-mpc/native_choice_list.h): the instance maps ListOpen to the slot of its Data handle
+            out.append(_comp("list open", "Button", {"version": 2, "onImage": HIT_IMAGE, "offImage": HIT_IMAGE, "buttonId": 1, "numButtonsInGroup": 2,
+                                                     "handleName": "ListOpen", "gestureBehaviour": "Instant"}, (0, 0, w, h), focus="Yes", show="Hide"))
         if on and cell.get("hit"):
             hit = cell["hit"]
             out.append(_comp("Open", "Button", {"version": 2, "onImage": HIT_IMAGE, "offImage": HIT_IMAGE, "buttonId": hit["id"],
@@ -507,11 +512,12 @@ def header_definitions(spec):
                               gates=["NativeActiveGate2"], focus="Children", show="Hide", kind="Proportional")],
                         ignore_presses=True)       # the proven NativeActive wrapper: the wrapper ignores presses, its active child takes them
                     comps.append(_comp(cell["name"], wrapper + " " + key, {"version": 1, "handleName": "Data"}, rect,
-                                       [("Data", handle), ("NativeActiveGate1", "HdrGate1"), ("NativeActiveGate2", "HdrGate2")],
+                                       [("Data", handle), ("NativeActiveGate1", "HdrGate1"), ("NativeActiveGate2", "HdrGate2")] + ([("ListOpen", handle + "List")] if cell.get("list") else []),
                                        page + gate, cell.get("hw_focus", "No"), show))
                     continue
                 caption = [("Caption", handle + "Caption")] if slot.get("caption") else []
-                comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)] + caption,
+                listed = [("ListOpen", handle + "List")] if cell.get("list") else []
+                comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)] + caption + listed,
                                    on_gate + page + gate, cell.get("hw_focus", "No"), show))
                 for child in (_cell_children(slot, cell, w, h, False) if has_power and slot["kind"] != "segment" else []):       # the disabled look: inert pictures straight in the form
                     cx, cy, cw, ch = map(int, child["bounds"]["bounds"].split())

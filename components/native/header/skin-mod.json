@@ -20,7 +20,9 @@
         "HdrModeSource": "Parameter 2936",
         "HdrModeDest": "Parameter 2936",
         "HdrGroupSource": "Parameter 2937",
+        "HdrGroupSourceList": "ResetOnGestureEnd/Parameter 3961",
         "HdrGroupTarget": "Parameter 2938",
+        "HdrGroupTargetList": "ResetOnGestureEnd/Parameter 3962",
         "HdrCount": "Parameter 3807",
         "HdrAdd": "FromGesture/Parameter 2939"
       },

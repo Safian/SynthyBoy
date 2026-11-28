@@ -6741,7 +6741,7 @@
        "componentData": {
         "version": 1,
         "name": "Play Native List",
-        "type": "playNativeList",
+        "type": "nativeListModal",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -6751,8 +6751,120 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
           "key": "Back",
-          "value": "Parameter 3584"
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
          }
         ]
        },
@@ -16551,6 +16663,150 @@
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
+       }
       }
      ]
     },
@@ -16891,6 +17147,10 @@
          {
           "key": "Data",
           "value": "Parameter 1564"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3916"
          }
         ]
        },
@@ -17644,6 +17904,10 @@
          {
           "key": "Data",
           "value": "Parameter 21"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3904"
          }
         ]
        },
@@ -18397,6 +18661,10 @@
          {
           "key": "Data",
           "value": "Parameter 45"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3905"
          }
         ]
        },
@@ -19150,6 +19418,10 @@
          {
           "key": "Data",
           "value": "Parameter 69"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3906"
          }
         ]
        },
@@ -19903,6 +20175,10 @@
          {
           "key": "Data",
           "value": "Parameter 86"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3907"
          }
         ]
        },
@@ -20656,6 +20932,10 @@
          {
           "key": "Data",
           "value": "Parameter 1376"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3912"
          }
         ]
        },
@@ -21409,6 +21689,10 @@
          {
           "key": "Data",
           "value": "Parameter 1377"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3913"
          }
         ]
        },
@@ -22146,6 +22430,10 @@
          {
           "key": "Data",
           "value": "Parameter 1380"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3914"
          }
         ]
        },
@@ -22660,6 +22948,10 @@
          {
           "key": "Data",
           "value": "Parameter 1381"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3915"
          }
         ]
        },
@@ -23466,6 +23758,150 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
        }
       }
      ]
@@ -27284,8 +27720,16 @@
           "value": "Parameter 2937"
          },
          {
+          "key": "HdrGroupSourceList",
+          "value": "ResetOnGestureEnd/Parameter 3961"
+         },
+         {
           "key": "HdrGroupTarget",
           "value": "Parameter 2938"
+         },
+         {
+          "key": "HdrGroupTargetList",
+          "value": "ResetOnGestureEnd/Parameter 3962"
          },
          {
           "key": "HdrCount",
@@ -31386,6 +31830,150 @@
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
+       }
       }
      ]
     },
@@ -31658,6 +32246,10 @@
          {
           "key": "Caption",
           "value": "WithName[VOICE OVERRIDE]/Parameter 1595"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3919"
          }
         ]
        },
@@ -32080,6 +32672,10 @@
          {
           "key": "Caption",
           "value": "WithName[SAME NOTE]/Parameter 1576"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3917"
          }
         ]
        },
@@ -32114,6 +32710,10 @@
          {
           "key": "Caption",
           "value": "WithName[STEAL]/Parameter 1577"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3918"
          }
         ]
        },
@@ -32764,6 +33364,150 @@
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
+       }
       }
      ]
     },
@@ -32904,6 +33648,10 @@
          {
           "key": "Caption",
           "value": "WithName[SCALE]/Parameter 1241"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3909"
          }
         ]
        },
@@ -32938,6 +33686,10 @@
          {
           "key": "Caption",
           "value": "WithName[KEY]/Parameter 1240"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3908"
          }
         ]
        },
@@ -32972,6 +33724,10 @@
          {
           "key": "Caption",
           "value": "WithName[MODE]/Parameter 1242"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3910"
          }
         ]
        },
@@ -33040,6 +33796,10 @@
          {
           "key": "Caption",
           "value": "WithName[TUNING]/Parameter 1244"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3911"
          }
         ]
        },
@@ -33214,6 +33974,10 @@
          {
           "key": "NativeActiveGate1",
           "value": "IndexedEnabling/1/2/Parameter 1247"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3920"
          }
         ]
        },
@@ -33491,6 +34255,150 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
        }
       }
      ]
@@ -33930,6 +34838,10 @@
          {
           "key": "Caption",
           "value": "WithName[LFO MODE]/Parameter 2119"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3921"
          }
         ]
        },
@@ -33974,6 +34886,10 @@
          {
           "key": "HdrStep",
           "value": "Parameter 2962"
+         },
+         {
+          "key": "HdrStepList",
+          "value": "ResetOnGestureEnd/Parameter 3963"
          },
          {
           "key": "HdrLength",
@@ -36917,6 +37833,150 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
        }
       }
      ]

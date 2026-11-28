@@ -279,7 +279,7 @@
                   {
                     "name": "Route",
                     "def": "oscHeaderRoute",
-                    "overlay": "oscNativeRoutingChoices",
+                    "list": true,
                     "focus": true,
                     "wrapper": "NativeActive",
                     "hw_focus": "Children",
@@ -408,7 +408,7 @@
                   {
                     "name": "Route",
                     "def": "oscHeaderRoute",
-                    "overlay": "oscNativeRoutingChoices",
+                    "list": true,
                     "focus": true,
                     "wrapper": "NativeActive",
                     "hw_focus": "Children",
@@ -491,7 +491,7 @@
                   {
                     "name": "Route",
                     "def": "oscHeaderRoute",
-                    "overlay": "oscNativeRoutingChoices",
+                    "list": true,
                     "focus": true,
                     "wrapper": "NativeActive",
                     "hw_focus": "Children",
@@ -558,7 +558,7 @@
                   {
                     "name": "Route",
                     "def": "oscHeaderRoute",
-                    "overlay": "oscNativeRoutingChoices",
+                    "list": true,
                     "focus": true,
                     "wrapper": "NativeActive",
                     "hw_focus": "Children",
@@ -860,7 +860,7 @@
                     "name": "Source Group",
                     "def": "modHeaderGroupSource",
                     "role": "groupSource",
-                    "overlay": "fx editor choice menu",
+                    "list": true,
                     "gate": [
                       "IndexedEnabling/2/4/Parameter 2936"
                     ],
@@ -871,7 +871,7 @@
                     "name": "Target Group",
                     "def": "modHeaderGroupTarget",
                     "role": "groupTarget",
-                    "overlay": "fx editor choice menu",
+                    "list": true,
                     "gate": [
                       "IndexedEnabling/3/4/Parameter 2936"
                     ],
@@ -1036,7 +1036,7 @@
                   {
                     "name": "Step Select",
                     "def": "voiceHeaderStep",
-                    "overlay": "fx editor choice menu",
+                    "list": true,
                     "gate": [
                       "HdrPage"
                     ],

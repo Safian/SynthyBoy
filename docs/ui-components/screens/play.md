@@ -14,7 +14,7 @@ Texts: `Native Osc Missing Compact` (a source that is missing) and `Native Osc M
 
 ## Definitions
 
-`skin/defs_play.json` (47 definitions: the four header selectors and the titled `play*Titled` fields, each list field with a "list open" Button (ListOpen, buttonId = list code), the plugin list `playNativeList`, the 56 px dials `compactNativeDial56`, `compactNativeRiseDial56`, `compactNativeSmoothWithIndicator56`, `compactNativeSmoothReadout56` and their NativeActive/NativeInactive pairs).
+`skin/defs_play.json` (47 definitions: the four header selectors and the titled `play*Titled` fields, each list field with a "list open" Button (ListOpen, buttonId = list code), the plugin list modal `nativeListModal` (shared, now in `defs_common.json`), the 56 px dials `compactNativeDial56`, `compactNativeRiseDial56`, `compactNativeSmoothWithIndicator56`, `compactNativeSmoothReadout56` and their NativeActive/NativeInactive pairs).
 
 ## Data
 
