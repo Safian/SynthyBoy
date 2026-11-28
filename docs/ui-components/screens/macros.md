@@ -5,7 +5,7 @@
 ## What it shows
 
 - The studio spectrum frame across the upper area (`macroSpectrumFrame`, 8 72 1264 290; the spectrum is drawn by the plugin, `spectrum_curve.h`) and the eight macro cards in one bottom row (`macroCard`, 152 x 238: dial, value, target chips) with the card name and its underline (`macroNameLine`) under each.
-- The targets page of a macro (title, count, empty hint, and the modulation editor `nativeModulationEditor` with its keyline), the add-target picker (seven list rows `modNative_list_1200x56`, BACK, GROUPS, PREVIOUS, NEXT, title) and the native keyboard (`native keyboard overlay`) for renaming a macro. The sub pages are gated by the macro sub-page handle.
+- The targets page of a macro (title, count, empty hint, and the modulation editor `nativeModulationEditor` with its keyline), the inline add-target picker in `skin/TUI.json` (seven list rows `modNative_list_1200x56`, BACK, GROUPS, PREVIOUS, NEXT, title; migration to the shared two-level `oscNativeList` pattern is tracked in [TODO.md](../../../TODO.md); [AGENTS.md](../../../AGENTS.md#lists-owner-2026-11-28)) and the native keyboard (`native keyboard overlay`) for renaming a macro. The sub pages are gated by the macro sub-page handle.
 
 ## Header
 

@@ -61,4 +61,4 @@ All key buttons belong to a radio group bound to `ResetOnGestureEnd/Parameter <T
 
 ## Skin
 
-ONE definition `native keyboard overlay` in `skin/TUI.json` (built by `build_keyboard_overlay_definition`, an inline modal component, `ignoreMousePresses: false`), 16 instances named `Native Keyboard` (Macros; Play; LFO 1-10; RND 1-4), bounds `0 0 1280 628`, gated by `RangedEnabling/<1|9>/<8|10>/11/Parameter 3916`. There is no generator: a change of the recipe is applied to `skin/TUI.json` by replacing the definition (ordered-pairs edit, then `scripts/skin-format.py`).
+ONE definition `native keyboard overlay` in `skin/defs_common.json` (built by `build_keyboard_overlay_definition`, an inline modal component, `ignoreMousePresses: false`), 16 instances named `Native Keyboard` (Macros and Play in `skin/TUI.json`; LFO 1-10 and RND 1-4 in `skin/defs_lfo.json`), bounds `0 0 1280 628`, gated by `RangedEnabling/<1|9>/<8|10>/11/Parameter <kTextEditContext>`. There is no generator: a change of the recipe is applied to `skin/defs_common.json` by replacing the definition (ordered-pairs edit, then `python3 scripts/skin-format.py` and verify it prints `rewritten`).

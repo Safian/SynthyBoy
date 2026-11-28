@@ -4,7 +4,7 @@
 
 ## What it shows
 
-`envScreen`: the modulation editor and targets title (shared, `defs_common.json`) and `envNativeFullFields` (0 0 1280 628): the dials Attack, Decay, Sustain, Release, Delay, Hold, the three curve cells (attack, decay, release), the BEATS and RETRIG switches (the targets button is the Env header now). `envScreenTop`: the target tags (three tag dots and labels plus the "more" label, `Env Native Tag`) and the modal list (`nativeListModal`). The envelope graph with the live position is drawn by the plugin (`env-graph`, [../env-graph.md](../env-graph.md)).
+`envScreen`: the modulation editor and targets title (shared, `defs_common.json`) and `envNativeFullFields` (0 0 1280 628): the dials Attack, Decay, Sustain, Release, Delay, Hold, the three curve cells (attack, decay, release), the BEATS and RETRIG switches (the targets button is the Env header now). `envScreenTop`: the target tags (three tag dots and labels plus the "more" label, `Env Native Tag`) and the shared modal list (`nativeListModal` wrapping `oscNativeList` for target/source picking; [AGENTS.md](../../../AGENTS.md#lists-owner-2026-11-28)). The envelope graph with the live position is drawn by the plugin (`env-graph`, [../env-graph.md](../env-graph.md)).
 
 ## Definitions
 

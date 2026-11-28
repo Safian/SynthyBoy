@@ -7,7 +7,7 @@ Reusable Akai MPC host-native compound channel strip component, definitions, and
 
 ## Overview & Architecture
 
-The `MixerStrip` component transitions the historical monolithic mixer layout (the former skin script, now in `skin/TUI.json`) into the project's standard component family model:
+The `MixerStrip` component places the mixer strip definitions in `skin/defs_mixer.json` (imported by `skin/TUI.json`) using the project's standard component family model:
 - **One shared definition per architecture variant**:
   - `mixerStripSource`: Generator & Filter strips (SUB, A, B, C, NOISE, F1, F2).
   - `mixerStripBus`: Effect return buses (BUS 1, BUS 2).
@@ -151,8 +151,8 @@ The engine defines dedicated non-mutating atomic solo and mute bitmasks (`mixerS
 
 ## Host-Only Normal Mixer & Overlay Gating
 
-- **Normal Mixer Screen**: Completely host-only when `nativeBase()` is active (`useNativeWidgets() && hostConfirmed() && ! listOpen_`). Emits 0 ops, 0 vertices, and empty scene. `covers(x, y)` returns `false` so the host receives 100% of input events.
-- **Popup Isolation**: When the destination list is active, `nativeBase()` becomes false, overlay claims full coverage (`covers()` returns true for backdrop), and native apertures are cleared cleanly.
+- **Normal Mixer Screen**: Completely host-only when `nativeBase()` is active (`useNativeCells()` in `shell-mpc/overlay/mixer_ui.h`). Emits 0 ops, 0 vertices, and empty scene. `covers(x, y)` returns `false` so the host receives 100% of input events.
+- **Destination List**: Opening a strip's destination field triggers `ListOpen` (`native_choice_list.h`) and displays the shared plugin modal `nativeListModal` (`Parameter 3903`; [AGENTS.md](../../AGENTS.md#lists-owner-2026-11-28)) above the Mixer tab.
 
 ## Verification & Test Results
 
