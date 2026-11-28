@@ -462,7 +462,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
         }
         if (seconds > 0.0) put ("reverb.decay", seconds * 1000.0, nullptr);
     }
-    // A509 (13-new-keys.md 4.48): the wet signal of a Serum module has another level than ours (measured, tools/ref-compare/make_fx_laws.py: a C3 saw at 100 % wet, Serum minus ours); the dry signal
+    // A509 (13-new-keys.md 4.48): the wet signal of a Serum module has another level than ours (measured, tools/ref-compare: a C3 saw at 100 % wet, Serum minus ours); the dry signal
     // stays at unity: the mix and the level of our module are remapped so that dry * (1 - w) + wet * w * r comes out of it (L = (1 - w) + w r, mix = w r / L, level + 20 log10 L). The distortion
     // also takes its drive from the measured law of the mode (the harmonic shapes of the modes follow ours, the drive scale does not)
     {

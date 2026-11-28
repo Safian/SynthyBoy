@@ -15,7 +15,6 @@ for path in (REPO_ROOT, REPO_ROOT / "scripts"):
 
 from components import style
 from components.native.band_lane import band_lane as lane
-import native_ui_params as handles
 
 HEADER = (REPO_ROOT / "shell-mpc/native_fx_bands.h").read_text()
 PARAMS = (REPO_ROOT / "shell-mpc/native_ui_params.h").read_text()
@@ -47,8 +46,6 @@ class TestBandLane(unittest.TestCase):
 
     def test_handles_mirror_the_plugin(self):
         fields = style.size("band_lane.handles")
-        self.assertEqual(handles.FX_BANDS_LANE_HANDLES, fields["lane"])
-        self.assertEqual(handles.FX_BANDS_LANES, lane.LANES)
         c = header_ints(PARAMS[PARAMS.index("namespace fxbands"):])
         self.assertEqual((c["Lanes"], c["Cards"]), (lane.LANES, lane.CARDS))
         order = ("Tile", "Range", "Info", "Count", "Open", "Add", "AddAvail")

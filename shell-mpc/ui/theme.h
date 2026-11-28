@@ -50,7 +50,7 @@ struct Look
     float controlGradStart, controlGradEnd;   // the control face is flat to this fraction of its height, linear to the end fraction, flat below (control.gradient)
 };
 
-// Exact palette and geometry values are generated from the shared JSON tokens.
+// Exact palette and geometry values come from the shared JSON tokens (theme_tokens.h).
 #include "theme_tokens.h"
 
 /** The LEVEL OF DETAIL, next to the look: how much of the drawing is made (the number of frames of the wavetable stack, of unison hairlines, the spectrum, the soft light passes, the afterglow).

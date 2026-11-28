@@ -43,7 +43,7 @@ namespace synthyboy
 
 /** THE make-up gain of every shell, in dB (the MPC build option SYNTHYBOY_MPC_OUTPUT_GAIN_DB overrides it for the MPC shell only when it is given). Change the level of all shells here.
     0 dB (2026-11-19, the owner's rule): the default sound is unity gain staging: with every level control at 0 the track output carries the engine's output as it is, no hidden
-    gain and no limiter; the whole level lives in the presets' master.volume (levelled to the stock MPC instruments: scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md). */
+    gain and no limiter; the whole level lives in the presets' master.volume (levelled to the stock MPC instruments: the levelling done by hand, docs/release/LEVELLING-STOCK-2026-11-19.md). */
 constexpr float kMakeupGainDb = 0.0f;
 
 class OutputStage

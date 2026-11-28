@@ -41,7 +41,7 @@ if (c.kind == ChangeKind::Value && c.id == 1015) writeLevel (1, c.value);   // s
 `shell-mpc/overlay/mixer_ui.h` (`MixerUi`, `kElementPage` 5). Picture: `docs/screens/mixer.jpg`.
 
 ## Real Native Widgets and Single Input Ownership
-The dedicated skin extra `scripts/mpc-skin-extras/84_mixer.py` configures real native widgets on the Mixer tab for available strip bindings from the generated skin (`mix_routing`, `mix_bus`):
+The Mixer tab of `skin/TUI.json` configures real native widgets for available strip bindings (`mix_routing`, `mix_bus`):
 - `filter1.destination` -> `Mixer F1 Dest` (radio3, strip 5 dest, 645 134 115 56)
 - `filter2.destination` -> `Mixer F2 Dest` (radio3, strip 6 dest, 772 134 115 56)
 - `bus1.fx_bypass` -> `Mixer Bus 1 Bypass` (toggle, strip 7 power, 899 74 115 56)

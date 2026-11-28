@@ -1,5 +1,5 @@
 // MpcKit - the PAGES of a plugin as the overlay runtime and the skin generator see them: the list of tabs with their marker colours (IPageSet, PageDef), the instance colour table, and the check
-// that the colours can be told apart (validatePages), which is what scripts/gen-overlay-layout-header.py checks for the SynthyBoy layout.
+// that the colours can be told apart (validatePages), which the host test of the SynthyBoy layout checks.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
@@ -118,7 +118,7 @@ inline bool colourClose (uint32_t a, uint32_t b) noexcept
     return true;
 }
 
-/** The checks of the layout, the same ones as scripts/gen-overlay-layout-header.py: exactly two markers per page that no other marker is close to, instance colours that differ from each other and from every
+/** The checks of the layout, the checks of the SynthyBoy layout: exactly two markers per page that no other marker is close to, instance colours that differ from each other and from every
     marker, from the background of an opaque picture and from the colour under every marker, the instance picture inside the region (at least 4 x 4) and clear of the markers, at most 24 pages (the detector's
     limit). The kind of a page is not checked (a table may hold the pictures of the first overlay). Returns true when all hold; otherwise `why` says what is wrong. */
 inline bool validatePages (const IPageSet& set, std::string& why)

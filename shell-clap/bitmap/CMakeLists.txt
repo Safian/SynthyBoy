@@ -9,29 +9,7 @@
 # synthyboy_bitmap_module_options(target)   what the .clap needs besides the sources: hidden symbols, the export list (ONLY clap_entry and synthyboy_clap_get_entry leave the file),
 #                          no fontconfig, dead code removal.
 
-# The fonts as data, generated at configure time by a CMake script (no helper tool: the cross builds have no host tools, JUCE's juceaide would have to be built for the host first).
-# Regenerated when a font or the script changes.
-set(_font_files "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Roboto-Regular.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Roboto-Bold.ttf")
-set(_font_dir "${CMAKE_CURRENT_BINARY_DIR}/fonts")
-set(_font_stamp "")
-foreach(_f ${_font_files} "${CMAKE_CURRENT_SOURCE_DIR}/embed_fonts.cmake")
-    file(SHA256 "${_f}" _h)
-    string(APPEND _font_stamp "${_h}")
-endforeach()
-set(_font_stamp_file "${_font_dir}/stamp")
-set(_font_old "")
-if(EXISTS "${_font_stamp_file}")
-    file(READ "${_font_stamp_file}" _font_old)
-endif()
-if(NOT _font_old STREQUAL _font_stamp OR NOT EXISTS "${_font_dir}/EmbeddedFonts.cpp")
-    message(STATUS "bitmap GUI: embedding the fonts")
-    execute_process(COMMAND "${CMAKE_COMMAND}" "-DOUT_DIR=${_font_dir}" "-DFILES=${_font_files}" -P "${CMAKE_CURRENT_SOURCE_DIR}/embed_fonts.cmake" RESULT_VARIABLE _font_result)
-    if(NOT _font_result EQUAL 0)
-        message(FATAL_ERROR "embed_fonts.cmake failed")
-    endif()
-    file(WRITE "${_font_stamp_file}" "${_font_stamp}")
-endif()
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_font_files} "${CMAKE_CURRENT_SOURCE_DIR}/embed_fonts.cmake")
+# The fonts as data: EmbeddedFonts.h / EmbeddedFonts.cpp are committed sources (no generator).
 
 # An INTERFACE library: its sources are compiled in the consumer (the module), next to the JUCE module sources, with the consumer's definitions (hidden symbols, no fontconfig, the export list).
 set(_bitmap_sources BitmapGuiPlugin.cpp BitmapPeer.cpp BitmapSession.cpp JuceRuntime.cpp NativeUiHost.cpp PresetBrowser.cpp
@@ -39,8 +17,8 @@ set(_bitmap_sources BitmapGuiPlugin.cpp BitmapPeer.cpp BitmapSession.cpp JuceRun
 list(TRANSFORM _bitmap_sources PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 add_library(synthyboy_bitmap_gui INTERFACE)
 target_sources(synthyboy_bitmap_gui INTERFACE ${_bitmap_sources})
-target_sources(synthyboy_bitmap_gui INTERFACE "${_font_dir}/EmbeddedFonts.cpp")
-target_include_directories(synthyboy_bitmap_gui INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/.." "${_font_dir}" "${CLAP_INCLUDE_DIR}")
+target_sources(synthyboy_bitmap_gui INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/EmbeddedFonts.cpp")
+target_include_directories(synthyboy_bitmap_gui INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/.." "${CLAP_INCLUDE_DIR}")
 target_link_libraries(synthyboy_bitmap_gui INTERFACE synthyboy_ui)
 target_compile_features(synthyboy_bitmap_gui INTERFACE cxx_std_17)
 target_compile_definitions(synthyboy_bitmap_gui INTERFACE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)

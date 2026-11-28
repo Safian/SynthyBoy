@@ -148,7 +148,7 @@ if(SYNTHYBOY_MPC_SPECTRUM)
 endif()
 
 # Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"): the module shell-mpc/overlay/ draws the response of Filter 1 on an overlay plane above the MPC's
-# own UI, from a thread of its own, and shows it while the "Filter 1" tab of the overlay skin (scripts/overlay-skin/mpc-ui-pages-overlay.json) is on screen. EXPERIMENTAL and OFF by default: it uses
+# own UI, from a thread of its own, and shows it while the "Filter 1" tab of the overlay skin (skin/TUI.json) is on screen. EXPERIMENTAL and OFF by default: it uses
 # a display plane the MPC firmware does not offer to plugins (Key 61 only so far). OFF builds the plugin byte for byte as it was without this code.
 # No display constant of any model is compiled in: the CRTC, the planes, the panel, the refresh and the rotation are found at run time (shell-mpc/overlay/discovery.h).
 # The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
@@ -289,7 +289,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(dump_mpc_chunks PRIVATE cxx_std_17)
     target_compile_options(dump_mpc_chunks PRIVATE -Wall -Wextra)
 
-    # loads a program or a chunk into the built plugin and prints every parameter (the check of the Sounds-browser files, scripts/gen-xpl-presets.py); run by hand
+    # loads a program or a chunk into the built plugin and prints every parameter (the check of the Sounds-browser files); run by hand
     add_executable(chunk_load_host EXCLUDE_FROM_ALL tests/chunk_load_host.cpp)
     target_include_directories(chunk_load_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"
@@ -412,7 +412,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(preset_index_host PRIVATE synthyboy_core Threads::Threads)
     target_compile_features(preset_index_host PRIVATE cxx_std_17)
     target_compile_options(preset_index_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME preset_index_host COMMAND preset_index_host "${CMAKE_SOURCE_DIR}/content/presets" "${CMAKE_SOURCE_DIR}/scripts/build-preset-index.py")
+    add_test(NAME preset_index_host COMMAND preset_index_host "${CMAKE_SOURCE_DIR}/content/presets")
 
     add_executable(poll_guard_host EXCLUDE_FROM_ALL tests/poll_guard_host.cpp)
     target_include_directories(poll_guard_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

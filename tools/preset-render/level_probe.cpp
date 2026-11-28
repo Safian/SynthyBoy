@@ -1,4 +1,4 @@
-// SynthyBoy - level-probe: the levels of every factory preset as a shell hands them to its host, for the levelling against the stock MPC instruments (scripts/level-to-stock.py,
+// SynthyBoy - level-probe: the levels of every factory preset as a shell hands them to its host, for the levelling against the stock MPC instruments (the levelling done by hand,
 // docs/release/LEVELLING-STOCK-2026-11-19.md).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

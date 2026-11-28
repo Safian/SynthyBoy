@@ -91,10 +91,6 @@ class DialFidelityTests(unittest.TestCase):
         self.assertAlmostEqual(style.size("font.host.height.per.em"), (ascent + descent) / 1000, places=2)
         self.assertAlmostEqual(style.native_font_em(15), 15 / style.size("font.host.height.per.em"))
 
-    def test_theme_header_is_generated_from_the_tokens(self):
-        result = subprocess.run([sys.executable, str(ROOT / "scripts/gen-ui-theme.py"), "--check"], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

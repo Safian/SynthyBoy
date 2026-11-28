@@ -17,10 +17,7 @@ enabled; disabled: the inactive dial (`active=False`) and `style.dim_artwork` of
 
 4 stops (2nd stop) at 36 / 40 / 48 / 56 px, 3 stops, 6 stops, 8 stops, disabled. Footprint table in the catalogue. A new example is one more entry (`id`, `file`, `alt`, `caption`, `stops`, `position`, `diameter`, `state`), then:
 
-```sh
-python3 -c "import sys; sys.path[:0]=['scripts','.']; import render_native_catalog_cards as r; r.render_stepped_dial_cards()"
-python3 scripts/gen-native-component-catalog.py
-```
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
 
 ## Native skin item (not implemented)
 

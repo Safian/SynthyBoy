@@ -144,7 +144,7 @@ Until then F1-F3 results are "faster, audio identity unverified". Do not install
 Rules for the in-host runs:
 
 - Build ONLY the architecture of the device being measured (Key 61: `arm32`, XL: `arm64`). Both are built together only for a release or release candidate.
-- Package A and package B are built from the same source state except for the change under test, with the same production skin layout (`scripts/overlay-skin/mpc-ui-pages-overlay.json`, the `build-mpc.sh` default), the same `MPC_SDK`, and the same options. Do not pass `--skins`, `--no-validate` or a different `--skin-layout`: a missing or broken native skin must fail the build and the install before the working package is replaced.
+- Package A and package B are built from the same source state except for the change under test, with the same committed skin (`skin/`, the `build-mpc.sh` default), the same `MPC_SDK`, and the same options. Do not pass `--skins`, `--no-validate` or a different skin: a missing or broken native skin must fail the build and the install before the working package is replaced.
 - Build each package from its own worktree (section 0) with its own `--out` and `--build-dir`. Add `--bench` so the note-on bench of the same code is built in the same run.
 - Install with the checked installer (`scripts/k61-install.sh PACKAGE_DIR` / `scripts/xl-install.sh PACKAGE_DIR`, see `.agents/skills/akai-mpc-ssh-deploy`). Record the package identity (sha256 of `synthyboy-<arch>.so`, of the overlay helper, and of `Plugin Skins/TUI.json`) with the evidence.
 - Keep the accepted package installed between tasks. On the XL leave the package the current task needs. Reinstall the accepted package after the run.

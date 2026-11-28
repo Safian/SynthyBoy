@@ -8,7 +8,7 @@ Native component artwork still owns control faces, frames, values and labels.
 The Mixer strip artwork and bindings are unchanged. The root canvas no longer
 contains a duplicate of its strips, tracks, scales or names. Required fixed group
 captions use the existing native Name/Value Label child factory; their positions
-are recorded in `scripts/mpc-skin-extras/static-native-captions.json`.
+are recorded in `skin/TUI.json` (the `Native Caption ...` components).
 LFO group captions retain their layout gates. Play captions already belong to its
 native dial components, so no second copies are inserted.
 

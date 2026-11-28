@@ -1,5 +1,7 @@
 # The reusable UI kit and the starter template (MpcKit)
 
+> NOTE (2026-11-28): the generators, the post-processing scripts, `gen_skin.py`, `mpc-plugin.conf` and the `--plugin` path of `scripts/build-mpc.sh` named below were removed; skins and UI headers are committed files edited directly. The text is the historical plan.
+
 Goal: another Akai MPC VST2 plugin uses SynthyBoy's plugin-drawn UI - the component library (`shell-mpc/ui/`) and the overlay runtime (`shell-mpc/overlay/`) - **without SynthyBoy's engine**, and a starter plugin (`template-mpc/`, "MpcKit Demo") shows how: "you only assemble your VST from ready UI elements". This document is the survey, the design and the plan. Branch `work/ui-template`, base `c6a39140`. Component pages: `docs/ui-components/` (written by the documentation worker); the template's own docs: `template-mpc/README.md` and `template-mpc/AGENTS.md`.
 
 Licence: AGPL-3.0-or-later (the file headers).

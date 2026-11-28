@@ -12,9 +12,8 @@ from validate_synthyboy_skin import SURFACES
 def write_native_skin_stub(skins):
     """Minimal native tab structure for the Docker/packaging stub, without an SDK install."""
     views = json.loads((ROOT / "shell-mpc/overlay/overlay_layout.json").read_text())["views"]
-    layout = json.loads((ROOT / "scripts/overlay-skin/mpc-ui-pages-overlay.json").read_text())["pages"]
-    labels = {p["name"]: p.get("label", p["name"]) for p in layout}
-    detectors = {labels[v["tab"]]: v["name"] for v in views}
+    assert len(views) == len(SURFACES)
+    detectors = {tab: v["name"] for tab, v in zip(SURFACES, views)}   # any one-to-one assignment: the validator reads the view from the markers
     tabs, mappings = [], []
     for index, (tab, surface) in enumerate(SURFACES.items()):
         view = detectors[tab]

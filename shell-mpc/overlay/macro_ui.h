@@ -120,7 +120,7 @@ public:
         return nativeDialAt (x, y) >= 0;
     }
 
-    // ---- the native cells of the targets page (scripts/mpc-skin-extras/mod-targets-native-contract.json, tab coordinates)
+    // ---- the native cells of the targets page (tab coordinates, as in skin/TUI.json)
     static constexpr int kTgRowTop = 116, kTgStride = 72, kTgH = 56;
     static ui::Rect tgBack() noexcept { return { 4, kTabY + 32, 120, kTgH }; }
     static ui::Rect tgAdd() noexcept { return { 1076, kTabY + 32, 200, kTgH }; }

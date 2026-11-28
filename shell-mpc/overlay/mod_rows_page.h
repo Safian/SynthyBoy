@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the ONE data model of the two detail pages "targets of a source" and "modulations of a control" (Env, LFO, Filter NOTE / VELO, Mod, Osc, ...): the rows (name, source, depth, polarity, on / off),
-// the page index, the title and the rectangles of the native cells (the geometry of scripts/mpc-skin-extras/mod-targets-native-contract.json)
+// the page index, the title and the rectangles of the native cells (the geometry of the cells in skin/TUI.json)
 // the host skin draws (BACK, ADD, the page stepper and, per row, the depth, the polarity, the on / off and the remove cell). A model, not a control (owner decision 2026-11-27: the C++ layer has no UI elements): it
 // takes no touch and draws no control; the overlay paints only what the host skin does not (the title, the count, the names, the empty hint) and cuts the native cells out of the ground. The native bridge
 // (native_mod_targets_ui.h) publishes the rows and reads the gestures of the skin through the same ids the page gave (`setRowIds`).

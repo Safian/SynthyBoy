@@ -103,11 +103,6 @@ class DialCatalogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             dial_variants(dict(dial, variants=[dict(dial["variants"][0], diameter="nonexistent.token")]))
 
-    def test_html_is_current(self):
-        before = HTML.read_bytes()
-        subprocess.run([sys.executable, str(ROOT / "scripts/gen-native-component-catalog.py")], check=True, capture_output=True)
-        self.assertEqual(HTML.read_bytes(), before)
-
     def test_skin_filmstrips_still_hold_all_frames(self):
         for strip in ("pan/img/play_sub_pan_40.png", "pan/img/play_sub_pan_90.png",
                       "level/img/play_sub_level_40.png", "level/img/play_sub_level_90.png"):

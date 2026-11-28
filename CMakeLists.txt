@@ -293,27 +293,15 @@ endif()
 # The UI library itself was added above (shell-juce/ui). The adapters of the JUCE plug-in:
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-file(GLOB_RECURSE FACTORY_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/content/presets/*.sbpreset")
-
-set(EMBEDDED_PRESETS_H   "${CMAKE_CURRENT_BINARY_DIR}/EmbeddedPresets.h")
-set(EMBEDDED_PRESETS_CPP "${CMAKE_CURRENT_BINARY_DIR}/EmbeddedPresets.cpp")
-
-add_custom_command(
-    OUTPUT "${EMBEDDED_PRESETS_H}" "${EMBEDDED_PRESETS_CPP}"
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-presets.py"
-            --presets-dir "${CMAKE_CURRENT_SOURCE_DIR}/content/presets"
-            --out-h "${EMBEDDED_PRESETS_H}"
-            --out-cpp "${EMBEDDED_PRESETS_CPP}"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-presets.py" ${FACTORY_PRESET_FILES}
-    COMMENT "Generating embedded factory presets for desktop shell"
-    VERBATIM
-)
+# The embedded factory presets are a committed source (shell-juce/EmbeddedPresets.cpp/.h): nothing is generated in the build.
+set(EMBEDDED_PRESETS_H   "${CMAKE_CURRENT_SOURCE_DIR}/shell-juce/EmbeddedPresets.h")
+set(EMBEDDED_PRESETS_CPP "${CMAKE_CURRENT_SOURCE_DIR}/shell-juce/EmbeddedPresets.cpp")
 
 add_library(synthyboy_desktop_presets STATIC
     "${EMBEDDED_PRESETS_CPP}"
     "${EMBEDDED_PRESETS_H}"
 )
-target_include_directories(synthyboy_desktop_presets PUBLIC "${CMAKE_CURRENT_BINARY_DIR}" shell-juce)
+target_include_directories(synthyboy_desktop_presets PUBLIC shell-juce)
 target_link_libraries(synthyboy_desktop_presets PRIVATE synthyboy_core)
 target_link_libraries(synthyboy_ui INTERFACE synthyboy_desktop_presets)
 

@@ -1,0 +1,16 @@
+{
+  "name": "SynthyBoy",
+  "manufacturer": "Safian",
+  "uid": "SfSB",
+  "format": "vst2",
+  "kind": "instrument",
+  "numInputs": 0,
+  "numOutputs": 2,
+  "file32": "VST/synthyboy-arm32.so",
+  "file64": "VST/synthyboy-arm64.so",
+  "version": "0.1.0",
+  "build": 1,
+  "description": "Wavetable synthesizer for MPC",
+  "author": "Safian Szabolcs",
+  "license": "AGPL-3.0-or-later"
+}

@@ -88,7 +88,7 @@ else()
     target_compile_options(synthyboy_profile_compare PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# The power gain of one effect module on pink noise, the calibration of the tier level makeup (bench/fx_makeup_calibrate.cpp, scripts/tier-makeup-calibrate.py).
+# The power gain of one effect module on pink noise, the calibration of the tier level makeup (bench/fx_makeup_calibrate.cpp, the calibration tables are edited directly).
 add_executable(synthyboy_fx_makeup_calibrate fx_makeup_calibrate.cpp)
 target_link_libraries(synthyboy_fx_makeup_calibrate PRIVATE synthyboy_core Threads::Threads)
 target_include_directories(synthyboy_fx_makeup_calibrate PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")

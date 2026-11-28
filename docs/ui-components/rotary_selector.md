@@ -20,10 +20,7 @@ enabled / disabled (`render_dial_frame(active=False)` and `style.dim_artwork` of
 
 4 stops at stop 2 and stop 3, 3 stops, 6 stops (48 px dial), 4 stops at 56 px, disabled. The footprint of each is in the catalogue table. A new example is one more entry (`id`, `file`, `alt`, `caption`, `icons`, `position`, `diameter` token, `title`, `state`), then:
 
-```sh
-python3 -c "import sys; sys.path[:0]=['scripts','.']; import render_native_catalog_cards as r; r.render_rotary_selector_cards()"
-python3 scripts/gen-native-component-catalog.py
-```
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
 
 ## Native skin item (not implemented)
 

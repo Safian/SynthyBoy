@@ -78,7 +78,7 @@ inline std::vector<ProgramEntry> scanPrograms (const std::string& presetsDir) no
 
 
 // ---------------------------------------------------------------------------
-// The preset index (scripts/build-preset-index.py writes <presets>/index.json at package time; docs/MPC.md "The preset index")
+// The preset index (<presets>/index.json is a committed file, edited directly; docs/MPC.md "The preset index")
 // ---------------------------------------------------------------------------
 
 /** FNV-1a 64: the hash of the index (an integrity check, not a security measure). */
@@ -369,7 +369,7 @@ inline std::string truncateUtf8 (const std::string& s, size_t maxBytes)
 
 namespace group_detail
 {
-/** The group a preset sorts into: its browser group, else (index missing, scan, user preset) its folder category, after the factory groups in the order of the folders (as scripts/gen-xpl-presets.py does). */
+/** The group a preset sorts into: its browser group, else (index missing, scan, user preset) its folder category, after the factory groups in the order of the folders (as content/mpc-presets does). */
 inline const std::string& label (const ProgramEntry& e) { return e.group.empty() ? e.category : e.group; }
 inline int rank (const ProgramEntry& e)
 {

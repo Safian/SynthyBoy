@@ -14,7 +14,7 @@ else()
     target_compile_options(synthyboy_preset_render PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# level-probe: the levels of every factory preset after the shells' output stage, for the levelling against the stock MPC instruments (scripts/level-to-stock.py).
+# level-probe: the levels of every factory preset after the shells' output stage, for the levelling against the stock MPC instruments (the levelling done by hand).
 add_executable(synthyboy_level_probe level_probe.cpp)
 target_link_libraries(synthyboy_level_probe PRIVATE synthyboy_core)
 set_target_properties(synthyboy_level_probe PROPERTIES CXX_EXTENSIONS OFF)
@@ -39,11 +39,3 @@ file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-samples" "${SYNTHYBOY_CO
 add_test(NAME synthyboy_preset_sanity
          COMMAND synthyboy_preset_render --engine own --presets "${PROJECT_SOURCE_DIR}/content/presets" --content-dir "${SYNTHYBOY_CONTENT_STORE}" --summary-only)
 set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
-
-# The shipped factory presets are exactly what scripts/gen-factory-presets.py generates (docs/params.json -> state v3, deterministic).
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-    add_test(NAME synthyboy_factory_presets_reproducible
-             COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/scripts/gen-factory-presets.py"
-                     --check --out "${PROJECT_SOURCE_DIR}/content/presets")
-endif()

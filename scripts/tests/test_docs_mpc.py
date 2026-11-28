@@ -14,7 +14,7 @@ TEXT = DOC.read_text(encoding="utf-8") if DOC.exists() else ""
 SECTIONS = ["Build", "Package layout", "Install on the MPC", "Known host behaviour", "Sound differences at tier low"]
 TERMS = ["scripts/build-armv7-mpc.sh", "MPC_SDK", "ARMV7_IMAGE", "VST2 Plugins", "Safian - VST - SynthyBoy", "plugin.json", "version.xml",
          "VST/synthyboy-arm32.so", "Content/presets", "Plugin Skins", "Enable Enhancements", "External Plugin Support", "44.1 kHz", "128",
-         "GCC", "Zig", "scripts/overlay-skin/mpc-ui-pages-overlay.json", "shell-mpc/accept.sh", "file64", "kSpectrumFloorDb", "kSpectrumCeilingDb"]
+         "GCC", "Zig", "shell-mpc/accept.sh", "file64", "kSpectrumFloorDb", "kSpectrumCeilingDb"]
 
 
 def section(title):
@@ -110,36 +110,6 @@ class MpcDocTests(unittest.TestCase):
                       "default of the unison cap is 3", "no cap on the number of notes is needed", "`878326f`", "4.42 ms",
                       "14 of the 112 factory presets", "2 oscillators with 7 unison voices each"):
             self.assertIn(value, observed)
-
-    def test_presets_named_as_affected_match_the_report(self):
-        # the names in the document are the presets whose largest unison on an active oscillator is above 3
-        import json
-        observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
-        line = next(l for l in observed.splitlines() if "14 of the 112 factory presets" in l)
-        # the document reports the measurement of the first 112 factory presets (2026-11-13); the 24 presets each of sound set batches 1, 2 and 3 came after it and are not in it
-        import importlib.util
-        later = set()
-        for part in ("factory-presets-batch1.py", "factory-presets-batch2.py", "factory-presets-batch3.py"):
-            spec = importlib.util.spec_from_file_location("factory_presets_" + part[16:22], str(ROOT / "scripts" / part))
-            batch = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(batch)
-            later |= {e[0] for e in batch.build()}
-        self.assertEqual(len(later), 72)
-        files = sorted((ROOT / "content" / "presets").rglob("*.sbpreset"))
-        self.assertEqual(len(files), 112 + len(later))
-        files = [f for f in files if json.loads(f.read_text(encoding="utf-8"))["meta"]["name"] not in later]
-        self.assertEqual(len(files), 112)
-        affected = []
-        for f in files:
-            d = json.loads(f.read_text(encoding="utf-8"))
-            p = d["state"]["params"]
-            top = max([int(round(p.get("osc%d.unison.voices" % n, 1))) for n in (1, 2, 3) if p.get("osc%d.on" % n, 0)] or [0])
-            (affected if top > 3 else []).append(d["meta"]["name"])
-            if top <= 3:
-                self.assertNotIn(d["meta"]["name"] + ",", line)
-        self.assertEqual(len(affected), 14)
-        for name in affected:
-            self.assertIn(name, line)
 
     def test_final_measurement_and_tier_low_list(self):
         observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]

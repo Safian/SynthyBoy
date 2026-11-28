@@ -65,9 +65,9 @@ approved native component factories:
   "TARGETS" label.
 
 ### Implementation files
-- `scripts/mpc-skin-extras/96_env_native.py`: Single idempotent installer using
+- the Env tabs of `skin/TUI.json` (formerly installed by a skin script, now edited directly) use
   public native component factories. No local ImageDraw drawing.
-- `scripts/mpc-skin-extras/98_play_expanded.py`: Reuses ENV definitions for
+- the Play expanded editor of `skin/TUI.json` reuses ENV definitions for
   expanded Play via `full-controls/selector` extraction.
 
 ### Authentic offline preview and review

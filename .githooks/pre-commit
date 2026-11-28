@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the staged screenshot library and generate both catalogues from the index."""
+"""Validate the staged screenshot library. The catalogue HTML files are hand-maintained: nothing is generated here."""
 import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 
 
 def git(*args, **kwargs):
@@ -13,39 +12,7 @@ def git(*args, **kwargs):
 
 root = Path(git('rev-parse', '--show-toplevel').decode().strip())
 os.chdir(root)
-changed = [p.decode() for p in git('diff', '--cached', '--name-only', '-z').split(b'\0') if p]
-jobs = []
-component_generator = 'scripts/gen-native-component-catalog.py'
-component_template = 'scripts/templates/native-component-catalog.html'
-component_output = 'docs/ui-components/kepes-katalogus.html'
-screen_generator = 'scripts/update_native_katalogus.py'
-screen_output = 'docs/ui-components/native-katalogus.html'
-if any(p.startswith('components/') or p in (component_generator, component_template, component_output, 'scripts/old-ui-screens.json') for p in changed):
-    jobs.append((component_generator, component_output))
-if any(p.startswith('docs/screens/') or p in ('scripts/screen-catalog.json', screen_generator, screen_output) for p in changed):
-    jobs.append((screen_generator, screen_output))
 # Validate the actual staged script and index, not another worktree's files.
 validator = 'scripts/validate-screen-images.py'
 if git('ls-files', '--', validator).strip():
     subprocess.run([sys.executable, '-c', git('show', ':' + validator).decode()], check=True)
-for _, output in jobs:
-    if subprocess.call(['git', 'diff', '--quiet', '--', output]) != 0:
-        sys.exit(f'{output}: unstaged changes exist; stage or save them before generating the catalogue')
-if not jobs:
-    sys.exit(0)
-with tempfile.TemporaryDirectory(prefix='native-catalog-') as directory:
-    snapshot = Path(directory)
-    paths = git('ls-files', '-z', '--', 'components/', 'docs/screens/', component_generator,
-                component_template, screen_generator, 'scripts/screen-catalog.json', 'scripts/old-ui-screens.json')
-    subprocess.run(['git', 'checkout-index', '--prefix=' + directory + '/', '-z', '--stdin'], input=paths, check=True)
-    env = os.environ.copy()
-    for key in ('PYTHONPATH', 'PYTHONHOME'):
-        env.pop(key, None)
-    for generator, output in jobs:
-        generated = snapshot / output
-        generated.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([sys.executable, str(snapshot / generator)], cwd=snapshot, env=env, check=True)
-        content = generated.read_bytes()
-        blob = git('hash-object', '-w', '--stdin', input=content).decode().strip()
-        git('update-index', '--add', '--cacheinfo', '100644', blob, output)
-        (root / output).write_bytes(content)

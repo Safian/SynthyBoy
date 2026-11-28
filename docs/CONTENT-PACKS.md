@@ -26,8 +26,8 @@ Categories are the six folders `Analog Digital Spectral Vocal Metallic Noise`. T
 1. Write `content-src/wavetables/<Category>/<slug>.json` (copy a neighbour; format below). `slug` = file name = what presets will name, so choose it once.
 2. `python3 scripts/wavetable-lab.py check` (validates and renders every recipe).
 3. `python3 scripts/gen-content-pack.py --only <Category>` writes the wav and the manifest of that category; `--list` prints the catalogue; `--check` verifies everything is what the recipes make (the numpy of the machine that made the files; a different numpy release may differ by one least-significant bit: regenerate then).
-4. `python3 scripts/gen-wavetable-docs.py` refreshes `docs/release/WAVETABLE-PACK.md` and the catalogue in `docs/user-guide/factory-content.md`.
-5. Presets that use the table name it by pack id + path + SHA-256 (`WT(1, "Analog/pwm_dual_phase")` in `scripts/batch2/*.py`); then `python3 scripts/gen-factory-presets.py` regenerates them and the preset manifest.
+4. Update `docs/release/WAVETABLE-PACK.md` and the catalogue in `docs/user-guide/factory-content.md` by hand (their generator was removed on 2026-11-28).
+5. Presets that use the table name it by pack id + path + SHA-256 (`WT(1, "Analog/pwm_dual_phase")`); the preset files and `content/presets/contentpack.json` are edited directly.
 Never rename or regenerate a published table with different content: presets pin the hash.
 
 ## An add-on pack beside the factory one

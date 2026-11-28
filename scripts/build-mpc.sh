@@ -7,20 +7,14 @@
 # The plugin is ALWAYS built with the overlay (SYNTHYBOY_MPC_OVERLAY=ON and, for ARM, the GPU helper next to it): the overlay-only skin has no host widgets, the native pages are the base
 # and the helper only adds the live curves. There is no switch to turn it off.
 #
-# Usage: scripts/build-mpc.sh [--plugin DIR] [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--release] [--skin-only] [--no-validate] [--xpl-presets xl|k61|both|off] [--dump-tool PATH] [--dump-plugin PATH] [--chunks DIR]
+# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--cmake-arg ARG]... [--bench] [--release] [--skin-only] [--no-validate] [--xpl-presets xl|k61|both|off]
 #
-#   --plugin DIR     build ANOTHER plugin made with the kit instead of SynthyBoy (migration step 12 of docs/ui-components/TEMPLATE.md), e.g. --plugin template-mpc: DIR (relative to the repository or
-#                    absolute) holds mpc-plugin.conf, which says what to build (the CMake source folder, the target, the module, the helper, the binary names, the package manifest and the script that
-#                    generates the skin); the presets, content, preset browser and the SynthyBoy skin generation are not part of it, the SDK validator is. Default: SynthyBoy, everything as below.
 #   --arch A         arm32 (VST/synthyboy-arm32.so, "file32"), arm64 (VST/synthyboy-arm64.so, "file64") or all (default: both)
 #   --out DIR        where the finished plugin folder is assembled (default: per-checkout temporary MPC package)
 #   --jobs N         parallel compile jobs inside the container (default 2)
 #   --build-dir DIR  root of the CMake trees on the host; one sub directory per architecture (default: per-checkout temporary MPC tree)
-#   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder instead of generating it
-#                    (default: generated from the layout file with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py (through scripts/run-gen-ui.py),
-#                    then scripts/apply-mpc-skin-extras.py)
-#   --skin-layout F  the layout file of the generated skin (default: scripts/overlay-skin/mpc-ui-pages-overlay.json,
-#                    the production layout, 22 tabs)
+#   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder (default: skin/ of the repository: the skin is edited
+#                    directly there, nothing is generated)
 #   --cmake-arg ARG  an extra argument of the CMake configure step of the plugin module, e.g. --cmake-arg -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25 (repeatable; no
 #                    spaces inside an argument). A CMake tree keeps the options of earlier runs in its cache: when one tree is used for several variants
 #                    (--build-dir), pass every option of the variant each time. Not applied to the --bench trees.
@@ -28,12 +22,9 @@
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
 #   --release        the public release: -DSYNTHYBOY_MPC_DEV_LOG=OFF (no developer log, no diagnostic files in /tmp; the plugin binary holds no log tag: `strings synthyboy-*.so | grep -c "mpckit\|startup"`
 #                    style checks are in docs/ui-components/LOGGING.md). Without it the build is what it always was (log and files on).
-#   --skin-only      run only skin generation (gen-mpc-ui.py, run-gen-ui.py, apply-mpc-skin-extras.py), artwork and SDK validation into <out>/ without C++ cross-compilation
+#   --skin-only      copy skin/ and run the SDK validation into <out>/ without C++ cross-compilation
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
-#   --xpl-presets P  preset browser (.xpl) generation: xl, k61, both, or off (default: xl)
-#   --dump-tool P    path to native dump_mpc_chunks tool (default: auto-detected from build-native / build)
-#   --dump-plugin P  path to native synthyboy_mpc library for the dump tool (default: auto-detected)
-#   --chunks DIR     path to directory of pre-dumped preset chunks (bypasses dump-tool)
+#   --xpl-presets P  preset browser (.xpl) set: xl, k61 or both copy the committed content/mpc-presets, off leaves it out (default: xl)
 #
 # Environment: MPC_SDK (required: path to the MPC plugin SDK), MPC_BUILD_IMAGE or ARMV7_IMAGE (the Docker image; default: the pinned Debian 12 image below;
 # an image that already has the cross compilers skips the apt-get step), MPC_DOCKER (the docker command, default: docker).
@@ -55,20 +46,13 @@ out_dir="$scratch/package"
 build_dir="$scratch/tree"
 jobs=2
 skins_dir=""
-skin_layout="$repo_root/scripts/overlay-skin/mpc-ui-pages-overlay.json"
 skin_only=0
 with_bench=0
 release=0
 xpl_presets="xl"
-dump_tool=""
-dump_plugin=""
-chunks_dir=""
-XPL_PATH_MODE="${XPL_PATH_MODE:-shared}"
 validate=1
-plugin_dir=""   # --plugin: another plugin; empty = SynthyBoy
-# what is built and how the binaries are named: SynthyBoy's (a plugin's mpc-plugin.conf overrides every one of them)
-P_TARGET="synthyboy_mpc"; P_CMAKE_SOURCE=""; P_CMAKE_ARGS=""; P_MODULE="shell-mpc/synthyboy_mpc.so"; P_BINARY_BASE="synthyboy"
-P_HELPER="shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu"; P_MANIFEST=""; P_SKIN_SCRIPT=""
+module="shell-mpc/synthyboy_mpc.so"; binary_base="synthyboy"
+helper_path="shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu"
 PLUGIN_NAME="Safian - VST - SynthyBoy"
 cmake_args=()
 image="${MPC_BUILD_IMAGE:-${ARMV7_IMAGE:-$IMAGE_DEFAULT}}"
@@ -78,7 +62,7 @@ usage() { sed -n '/^# Usage/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; 
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --arch|--out|--jobs|--build-dir|--skins|--skin-layout|--cmake-arg|--xpl-presets|--dump-tool|--dump-plugin|--chunks|--plugin)
+        --arch|--out|--jobs|--build-dir|--skins|--cmake-arg|--xpl-presets)
             [[ $# -ge 2 ]] || { echo "$me: $1 needs a value" >&2; exit 2; }
             case "$1" in
                 --arch) arch="$2" ;;
@@ -86,12 +70,7 @@ while [[ $# -gt 0 ]]; do
                 --jobs) jobs="$2" ;;
                 --build-dir) build_dir="$2" ;;
                 --skins) skins_dir="$2" ;;
-                --skin-layout) skin_layout="$2" ;;
                 --xpl-presets) xpl_presets="$2" ;;
-                --dump-tool) dump_tool="$2" ;;
-                --dump-plugin) dump_plugin="$2" ;;
-                --chunks) chunks_dir="$2" ;;
-                --plugin) plugin_dir="$2" ;;
                 --cmake-arg)
                     case "$2" in
                         -D?*|-U?*|-G?*|-T?*|-A?*) ;;
@@ -117,41 +96,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 native_skin=OFF
-if [[ -z "$plugin_dir" && -z "$skins_dir" ]]; then
+if [[ -z "$skins_dir" ]]; then
     native_skin=ON
 fi
 
 if [[ "$release" == 1 ]]; then
     cmake_args+=("-DSYNTHYBOY_MPC_DEV_LOG=OFF" "-DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF")
-fi
-
-if [[ -n "$plugin_dir" ]]; then
-    [[ "$plugin_dir" = /* ]] || plugin_dir="$repo_root/$plugin_dir"
-    [[ -d "$plugin_dir" && -f "$plugin_dir/mpc-plugin.conf" ]] || { echo "$me: --plugin: $plugin_dir has no mpc-plugin.conf" >&2; exit 2; }
-    plugin_dir="$(cd "$plugin_dir" && pwd)"
-    # mpc-plugin.conf: plain NAME=value lines (read, not sourced): TARGET, CMAKE_SOURCE, CMAKE_ARGS, MODULE, BINARY_BASE, HELPER, MANIFEST, SKIN_SCRIPT
-    while IFS='=' read -r key value; do
-        key="${key//[[:space:]]/}"
-        case "$key" in ''|'#'*) continue ;; esac
-        value="${value%%#*}"; value="${value%"${value##*[![:space:]]}"}"; value="${value#"${value%%[![:space:]]*}"}"
-        case "$key" in
-            TARGET) P_TARGET="$value" ;;
-            CMAKE_SOURCE) P_CMAKE_SOURCE="$value" ;;
-            CMAKE_ARGS) P_CMAKE_ARGS="$value" ;;
-            MODULE) P_MODULE="$value" ;;
-            BINARY_BASE) P_BINARY_BASE="$value" ;;
-            HELPER) P_HELPER="$value" ;;
-            MANIFEST) P_MANIFEST="$plugin_dir/$value" ;;
-            SKIN_SCRIPT) P_SKIN_SCRIPT="$plugin_dir/$value" ;;
-            *) echo "$me: --plugin: $plugin_dir/mpc-plugin.conf: unknown key $key" >&2; exit 2 ;;
-        esac
-    done < "$plugin_dir/mpc-plugin.conf"
-    for need in TARGET:"$P_TARGET" CMAKE_SOURCE:"$P_CMAKE_SOURCE" MODULE:"$P_MODULE" BINARY_BASE:"$P_BINARY_BASE" MANIFEST:"$P_MANIFEST"; do
-        [[ -n "${need#*:}" ]] || { echo "$me: --plugin: ${need%%:*} is missing in $plugin_dir/mpc-plugin.conf" >&2; exit 2; }
-    done
-    [[ -f "$P_MANIFEST" ]] || { echo "$me: --plugin: manifest not found: $P_MANIFEST" >&2; exit 2; }
-    [[ -n "$skins_dir" || -n "$P_SKIN_SCRIPT" ]] || { echo "$me: --plugin: give --skins DIR or SKIN_SCRIPT in mpc-plugin.conf" >&2; exit 2; }
-    PLUGIN_NAME="$(python3 -I "$repo_root/scripts/gen-mpc-manifest.py" --package-manifest "$P_MANIFEST" --folder-name)" || exit 2
 fi
 
 case "$arch" in
@@ -164,14 +114,6 @@ case "$xpl_presets" in
     xl|k61|both|off) ;;
     *) echo "$me: --xpl-presets must be xl, k61, both or off (got: $xpl_presets)" >&2; exit 2 ;;
 esac
-if [[ -n "$dump_tool" && ! -f "$dump_tool" ]]; then
-    echo "$me: --dump-tool: file not found: $dump_tool" >&2
-    exit 2
-fi
-if [[ -n "$chunks_dir" && ! -d "$chunks_dir" ]]; then
-    echo "$me: --chunks: directory not found: $chunks_dir" >&2
-    exit 2
-fi
 if [[ -n "$skins_dir" && ! -d "$skins_dir" ]]; then echo "$me: --skins: not a directory: $skins_dir" >&2; exit 2; fi
 [[ "$jobs" =~ ^[0-9]+$ && "$jobs" -ge 1 ]] || { echo "$me: --jobs needs a positive number" >&2; exit 2; }
 
@@ -215,229 +157,118 @@ fi
 echo "$me: image $image, architectures: ${archs[*]}"
 echo "$me: source $repo_root (read-only), build trees $build_dir/<arch>, jobs $jobs"
 
-# Shared JSON remains the source of truth; never compile a stale graph palette.
-if [[ -z "$plugin_dir" ]]; then
-    python3 "$repo_root/scripts/gen-ui-theme.py" --check
-fi
-
 # ---- 1. the modules (and the benchmarks), one container per architecture ----------------------------------------------------------------------------
 # Runs as root inside the container (apt needs it); the results are handed back to the host user at the end of mpc-container-build.sh.
 if [[ "$skin_only" != 1 ]]; then
-    plugin_env=()   # another plugin: what the container builds (SynthyBoy: nothing, the script's defaults)
-    if [[ -n "$plugin_dir" ]]; then
-        plugin_env=(-e PLUGIN_TARGET="$P_TARGET" -e PLUGIN_CMAKE_SOURCE="$P_CMAKE_SOURCE" -e PLUGIN_CMAKE_ARGS="$P_CMAKE_ARGS" -e PLUGIN_MODULE="$P_MODULE" -e PLUGIN_HELPER="$P_HELPER")
-    fi
     for a in "${archs[@]}"; do
         echo "$me: === building $a ==="
         "$docker_cmd" run --rm \
             -v "$repo_root":/src:ro -v "$build_dir/$a":/build -v "$build_dir/$a-bench":/build-bench -v "$out_dir":/out -v "$MPC_SDK":/mpc-sdk:ro \
             -e ARCH="$a" -e JOBS="$jobs" -e NATIVE_SKIN="$native_skin" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
-            ${plugin_env[@]+"${plugin_env[@]}"} "$image" bash /src/scripts/mpc-container-build.sh
+            "$image" bash /src/scripts/mpc-container-build.sh
     done
 fi
 
 # ---- 2. the plugin folder (shared by both architectures) --------------------------------------------------------------------------------------------
 plugin_folder="$out_dir/$PLUGIN_NAME"
-if [[ -z "$plugin_dir" ]]; then
-    # The SDK first writes a stock editor. Keep its intermediate tree out of
-    # the published package even when generation or final validation fails.
-    package_stage="$(mktemp -d "$out_dir/.synthyboy-build.XXXXXX")"
-    published_folder="$plugin_folder"
-    plugin_folder="$package_stage/$PLUGIN_NAME"
-    cleanup_stage() {
-        if [[ -d "$package_stage/previous" && ! -e "$published_folder" ]]; then
-            mv "$package_stage/previous" "$published_folder" || return 1
-        fi
-        rm -rf "$package_stage"
-    }
-    trap cleanup_stage EXIT
-    trap 'exit 1' HUP INT TERM
-    if [[ -d "$published_folder" ]]; then
-        cp -Rp "$published_folder" "$plugin_folder"
+# The SDK first writes a stock editor. Keep its intermediate tree out of
+# the published package even when generation or final validation fails.
+package_stage="$(mktemp -d "$out_dir/.synthyboy-build.XXXXXX")"
+published_folder="$plugin_folder"
+plugin_folder="$package_stage/$PLUGIN_NAME"
+cleanup_stage() {
+    if [[ -d "$package_stage/previous" && ! -e "$published_folder" ]]; then
+        mv "$package_stage/previous" "$published_folder" || return 1
     fi
+    rm -rf "$package_stage"
+}
+trap cleanup_stage EXIT
+trap 'exit 1' HUP INT TERM
+if [[ -d "$published_folder" ]]; then
+    cp -Rp "$published_folder" "$plugin_folder"
 fi
 mkdir -p "$plugin_folder"
 if [[ "$skin_only" != 1 ]]; then
     rm -rf "$plugin_folder/VST"
     mkdir -p "$plugin_folder/VST"
     for a in "${archs[@]}"; do
-        cp "$build_dir/$a/${P_MODULE%.so}.stripped.so" "$plugin_folder/VST/$P_BINARY_BASE-$a.so"
+        cp "$build_dir/$a/${module%.so}.stripped.so" "$plugin_folder/VST/$binary_base-$a.so"
     done
 
     # The GPU helper of the overlay (always built, SYNTHYBOY_MPC_OVERLAY=ON, on ARM; scripts/mpc-container-build.sh): VST/synthyboy-overlay-gpu-<arch>, next to the plugin binary
-    # (the plugin looks for it there). Another plugin (--plugin) may have no such target.
+    # (the plugin looks for it there).
     for a in "${archs[@]}"; do
-        helper="$build_dir/$a/$P_HELPER.stripped"
+        helper="$build_dir/$a/$helper_path.stripped"
         if [[ -f "$helper" ]]; then
-            cp "$helper" "$plugin_folder/VST/$(basename "$P_HELPER")-$a"
-            chmod 755 "$plugin_folder/VST/$(basename "$P_HELPER")-$a"
+            cp "$helper" "$plugin_folder/VST/$(basename "$helper_path")-$a"
+            chmod 755 "$plugin_folder/VST/$(basename "$helper_path")-$a"
         fi
     done
 fi
 
-if [[ -n "$plugin_dir" ]]; then
-    # another plugin (--plugin): no presets, content packs or preset browser; its skin is its own script's (or --skins)
-    rm -rf "$plugin_folder/Plugin Skins"
-    if [[ -n "$skins_dir" ]]; then
-        cp -R "$skins_dir" "$plugin_folder/Plugin Skins"
-    else
-        python3 "$P_SKIN_SCRIPT" --out "$plugin_folder" --sdk "$MPC_SDK"
-    fi
-else
-    if [[ "$skin_only" != 1 ]]; then
-        # Create Content/ folder (empty if nothing to put there)
-        mkdir -p "$plugin_folder/Content"
+if [[ "$skin_only" != 1 ]]; then
+    # Create Content/ folder (empty if nothing to put there)
+    mkdir -p "$plugin_folder/Content"
 
-        # Copy factory presets
-        rm -rf "$plugin_folder/Content/presets"
-        cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
-        # The preset index (one small file the plugin reads at start instead of scanning 136 files; docs/MPC.md "The preset index")
-        python3 "$repo_root/scripts/build-preset-index.py" --presets-dir "$plugin_folder/Content/presets" --categories "$repo_root/scripts/factory-preset-categories.json"
-    fi
-
-    # Generate .xpl presets for the Akai host's Sounds browser (<out>/Safian - VST - SynthyBoy/Presets/)
-    # Controlled by --xpl-presets (xl|k61|both|off), default: xl.
-    # XPL_PATH_MODE="shared" (default): ONE set in the package, written with the XL's plugin path; the Key 61 loads it as it is (checked on the device: the list appears and the presets load, so the
-    # <PLUGIN file=...> path need not match the device). XPL_PATH_MODE="device" writes device-specific paths: XL in the package, Key 61 in Presets-k61/ (scripts/mpc-fix-xpl-paths.py rewrites the path).
-    if [[ "$skin_only" != 1 && "$xpl_presets" != "off" ]]; then
-        have_chunks=0
-        actual_chunks=""
-        chunks_tmp=""
-
-        if [[ -n "$chunks_dir" && -d "$chunks_dir" ]]; then
-            have_chunks=1
-            actual_chunks="$chunks_dir"
-        else
-            # Locate dump_mpc_chunks tool
-            if [[ -z "$dump_tool" ]]; then
-                for candidate in \
-                    "$build_dir/../build-native/shell-mpc/dump_mpc_chunks" \
-                    "$repo_root/build-native/shell-mpc/dump_mpc_chunks" \
-                    "$scratch/../build/shell-mpc/dump_mpc_chunks" \
-                    "$scratch/../accept/build-mpc/shell-mpc/dump_mpc_chunks" \
-                    "$repo_root/build/shell-mpc/dump_mpc_chunks" \
-                    "$repo_root/build/dump_mpc_chunks"; do
-                    if [[ -x "$candidate" ]]; then
-                        dump_tool="$candidate"
-                        break
-                    fi
-                done
-            fi
-
-            # Locate native synthyboy_mpc library if dump_tool was found
-            if [[ -n "$dump_tool" && -x "$dump_tool" ]]; then
-                if [[ -z "$dump_plugin" ]]; then
-                    dump_dir="$(dirname "$dump_tool")"
-                    for candidate in \
-                        "$dump_dir/synthyboy_mpc.dylib" \
-                        "$dump_dir/synthyboy_mpc.so" \
-                        "$repo_root/build-native/shell-mpc/synthyboy_mpc.dylib" \
-                        "$repo_root/build-native/shell-mpc/synthyboy_mpc.so" \
-                        "$scratch/../build/shell-mpc/synthyboy_mpc.dylib" \
-                        "$scratch/../accept/build-mpc/shell-mpc/synthyboy_mpc.dylib" \
-                        "$repo_root/build/shell-mpc/synthyboy_mpc.dylib" \
-                        "$scratch/../build/shell-mpc/synthyboy_mpc.so" \
-                        "$scratch/../accept/build-mpc/shell-mpc/synthyboy_mpc.so" \
-                        "$repo_root/build/shell-mpc/synthyboy_mpc.so"; do
-                        if [[ -f "$candidate" ]]; then
-                            dump_plugin="$candidate"
-                            break
-                        fi
-                    done
-                fi
-            fi
-
-            if [[ -n "$dump_tool" && -x "$dump_tool" && -n "$dump_plugin" && -f "$dump_plugin" ]]; then
-                chunks_tmp="$(mktemp -d)"
-                "$dump_tool" "$dump_plugin" "$repo_root/content/presets" "$chunks_tmp"
-                have_chunks=1
-                actual_chunks="$chunks_tmp"
-            fi
-        fi
-
-        if [[ "$have_chunks" == 1 ]]; then
-            presets_folder="$plugin_folder/Presets"
-            rm -rf "$presets_folder"
-            mkdir -p "$presets_folder"
-
-            primary_dev="xl"
-            if [[ "$xpl_presets" == "k61" && "$XPL_PATH_MODE" == "device" ]]; then
-                primary_dev="k61"
-            fi
-
-            python3 "$repo_root/scripts/gen-xpl-presets.py" --chunks "$actual_chunks" \
-                --device "$primary_dev" --out "$presets_folder"
-
-            # Under device mode with one package serving both devices, also produce Key 61 set
-            if [[ "$XPL_PATH_MODE" == "device" ]]; then
-                if [[ "$xpl_presets" == "xl" || "$xpl_presets" == "both" ]]; then
-                    k61_out="$out_dir/Presets-k61"
-                    rm -rf "$k61_out"
-                    mkdir -p "$k61_out"
-                    cp -R "$presets_folder/"* "$k61_out/"
-                    python3 "$repo_root/scripts/mpc-fix-xpl-paths.py" --dir "$k61_out" \
-                        --path "/sdcard/VST2 Plugins/$PLUGIN_NAME/VST/synthyboy-arm32.so" --quiet
-                elif [[ "$xpl_presets" == "k61" ]]; then
-                    xl_out="$out_dir/Presets-xl"
-                    rm -rf "$xl_out"
-                    mkdir -p "$xl_out"
-                    cp -R "$presets_folder/"* "$xl_out/"
-                    python3 "$repo_root/scripts/mpc-fix-xpl-paths.py" --dir "$xl_out" \
-                        --path "/nvme/VST2 Plugins/$PLUGIN_NAME/VST/synthyboy-arm64.so" --quiet
-                fi
-            fi
-
-            if [[ -n "${chunks_tmp:-}" && -d "$chunks_tmp" ]]; then
-                rm -rf "$chunks_tmp"
-            fi
-        else
-            echo "$me: note: native dump tool (dump_mpc_chunks) or native plugin library not found; skipping XPL preset generation (pass --dump-tool <path>, build 'dump_mpc_chunks', or pass --chunks <dir>)"
-        fi
-    fi
-
-    if [[ "$skin_only" != 1 ]]; then
-        # Copy the factory content packs (wavetables, samples, instruments, impulse responses: scripts/gen-content-pack.py writes them, they are committed) to Content/packs/<pack id>/:
-        # that is where the plugin's content store looks for the files a preset names (pack id + file, shell-mpc/synthyboy_mpc.cpp addPackRoot). A pack folder is named by its id.
-        rm -rf "$plugin_folder/Content/packs"
-        for pack_dir in factory-wavetables factory-samples; do
-            pack_id="$(sed -n 's/^  "id": "\(.*\)",$/\1/p' "$repo_root/content/$pack_dir/contentpack.json")"
-            mkdir -p "$plugin_folder/Content/packs"
-            cp -R "$repo_root/content/$pack_dir" "$plugin_folder/Content/packs/$pack_id"
-        done
-    fi
-
-    # Plugin Skins/: the committed skin (skin/ in the repository, hand-maintained, never generated) or the directory given with --skins
-    rm -rf "$plugin_folder/Plugin Skins"
-    cp -R "${skins_dir:-$repo_root/skin}" "$plugin_folder/Plugin Skins"
-
-    # Ensure browser artwork tile (Plugin Skins/browser_images/soundsmode.png) is in the package
-    if [[ ! -f "$plugin_folder/Plugin Skins/browser_images/soundsmode.png" ]]; then
-        mkdir -p "$plugin_folder/Plugin Skins/browser_images"
-        cp "$repo_root/scripts/mpc-skin-extras/browser_images/soundsmode.png" "$plugin_folder/Plugin Skins/browser_images/soundsmode.png"
-    fi
+    # Copy factory presets
+    rm -rf "$plugin_folder/Content/presets"
+    cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
+    # (the preset index, content/presets/index.json, is a committed file: docs/MPC.md "The preset index")
 fi
 
-# Generate plugin.json (file32 / file64 for the binaries that exist) and version.xml
-manifest_args=()
-if [[ "$skin_only" == 1 ]]; then
-    manifest_args+=("--allow-no-binary")
+# The .xpl presets of the Akai host's Sounds browser (<out>/Safian - VST - SynthyBoy/Presets/): the committed set content/mpc-presets/ (written with the XL's plugin path; the Key 61
+# loads it as it is), copied as it is. --xpl-presets off leaves it out.
+if [[ "$skin_only" != 1 && "$xpl_presets" != "off" ]]; then
+    rm -rf "$plugin_folder/Presets"
+    cp -R "$repo_root/content/mpc-presets" "$plugin_folder/Presets"
 fi
-if [[ -n "$plugin_dir" ]]; then
-    python3 -I "$repo_root/scripts/gen-mpc-manifest.py" --package-manifest "$P_MANIFEST" --plugin-dir "$plugin_folder" ${manifest_args[@]+"${manifest_args[@]}"}
-else
-    python3 "$repo_root/scripts/gen-mpc-manifest.py" --plugin-dir "$plugin_folder" ${manifest_args[@]+"${manifest_args[@]}"}
-    skin_checks=()
-    if [[ "$native_skin" == ON ]]; then
-        skin_checks+=(--check-legacy-display-bindings)
-    fi
-    python3 "$repo_root/scripts/validate_synthyboy_skin.py" ${skin_checks[@]+"${skin_checks[@]}"} "$plugin_folder"
+
+if [[ "$skin_only" != 1 ]]; then
+    # Copy the factory content packs (wavetables, samples, instruments, impulse responses: scripts/gen-content-pack.py writes them, they are committed) to Content/packs/<pack id>/:
+    # that is where the plugin's content store looks for the files a preset names (pack id + file, shell-mpc/synthyboy_mpc.cpp addPackRoot). A pack folder is named by its id.
+    rm -rf "$plugin_folder/Content/packs"
+    for pack_dir in factory-wavetables factory-samples; do
+        pack_id="$(sed -n 's/^  "id": "\(.*\)",$/\1/p' "$repo_root/content/$pack_dir/contentpack.json")"
+        mkdir -p "$plugin_folder/Content/packs"
+        cp -R "$repo_root/content/$pack_dir" "$plugin_folder/Content/packs/$pack_id"
+    done
 fi
+
+# Plugin Skins/: the committed skin (skin/ in the repository, hand-maintained, never generated) or the directory given with --skins
+rm -rf "$plugin_folder/Plugin Skins"
+cp -R "${skins_dir:-$repo_root/skin}" "$plugin_folder/Plugin Skins"
+
+# plugin.json and version.xml: the committed files (mpc-package/ of SynthyBoy, package/ of the other plugin) are copied; plugin.json keeps file32 / file64 only for the binaries that exist
+# (a --skin-only folder without any binary keeps both). Nothing is generated.
+pkg_src="$repo_root/mpc-package"
+python3 -I - "$pkg_src/plugin.json" "$plugin_folder" "$skin_only" <<'PYTHON'
+import json
+import sys
+from pathlib import Path
+
+source, folder, skin_only = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] == "1"
+manifest = json.loads(source.read_text(encoding="utf-8"))
+missing = [k for k in ("file32", "file64") if k in manifest and not (folder / manifest[k]).is_file()]
+present = [k for k in ("file32", "file64") if k in manifest and k not in missing]
+if not present and not skin_only:
+    sys.exit("build-mpc.sh: none of the binaries named in %s is in %s" % (source, folder))
+if present:
+    for k in missing:
+        del manifest[k]
+(folder / "plugin.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+(folder / "version.xml").write_bytes((source.parent / "version.xml").read_bytes())
+PYTHON
+skin_checks=()
+if [[ "$native_skin" == ON ]]; then
+    skin_checks+=(--check-legacy-display-bindings)
+fi
+python3 "$repo_root/scripts/validate_synthyboy_skin.py" ${skin_checks[@]+"${skin_checks[@]}"} "$plugin_folder"
 
 # ---- 3. the SDK's own validator on the finished folder ----------------------------------------------------------------------------------------------
 # Its schema lists both file32 and file64 as required, while docs/plugin-folder-format.md of the SDK says a 32-bit MPC uses only file32 and a 64-bit one
 # only file64. With both binaries built there is nothing to accept. A single-architecture build accepts exactly the one finding about the key of the
 # architecture that was not built; any other error fails the build.
-# Second accepted finding: the number of pages of the --skin-layout file is the number accepted (if > 32, any other count is an error). The Key 61
+# Second accepted finding: the number of tabs of the skin's TUI.json is the number accepted (if > 32, any other count is an error). The Key 61
 # (MPC 3.10.1.12) loads such a skin (docs/MPC.md).
 if [[ "$validate" == 1 ]]; then
     echo "$me: running SDK validator on $plugin_folder"
@@ -447,9 +278,8 @@ if [[ "$validate" == 1 ]]; then
     [[ "$arch" == arm32 ]] && expected_missing="file64"
     [[ "$arch" == arm64 ]] && expected_missing="file32"
     other="$(echo "$report" | grep '^ERROR' || true)"
-    # the number of tabs the layout file has (15 for the overlay production layout): exactly this finding is accepted if > 32
-    layout_tabs="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["pages"]))' "$skin_layout" 2>/dev/null || echo 15)"
-    [[ -z "$plugin_dir" ]] || layout_tabs=0   # another plugin: no tab limit finding is expected
+    # the number of tabs the skin has: exactly this finding is accepted if > 32
+    layout_tabs="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["pageData"]["tabs"]))' "$plugin_folder/Plugin Skins/TUI.json" 2>/dev/null || echo 15)"
     other="$(echo "$other" | grep -v "^ERROR  TUI.json: ${layout_tabs} tabs; at most 32 are supported\$" || true)"
     if [[ "$skin_only" == 1 ]]; then
         # no binary is built: the validator's findings about the missing binaries (the keys, or the files plugin.json names) are expected
@@ -465,9 +295,8 @@ if [[ "$validate" == 1 ]]; then
     fi
 fi
 
-if [[ -z "$plugin_dir" ]]; then
-    # Serialize the directory replacement when builds share one output root.
-    python3 - "$plugin_folder" "$published_folder" "$package_stage/previous" <<'PYTHON'
+# Serialize the directory replacement when builds share one output root.
+python3 - "$plugin_folder" "$published_folder" "$package_stage/previous" <<'PYTHON'
 import fcntl
 import os
 from pathlib import Path
@@ -488,7 +317,6 @@ try:
 finally:
     os.close(directory)
 PYTHON
-    plugin_folder="$published_folder"
-fi
+plugin_folder="$published_folder"
 echo "$me: done $plugin_folder"
 if [[ "$with_bench" == 1 ]]; then for a in "${archs[@]}"; do echo "$me: benchmarks: $out_dir/bench-$a/"; done; fi

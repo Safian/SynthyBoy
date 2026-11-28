@@ -45,15 +45,10 @@ sys.exit(0 if ok else 1)
 PY
 EXP=$(nm -gU "$LIB" | awk '{print $NF}' | sort | tr '\n' ' ')
 [ "$EXP" = "_VSTPluginMain " ] || { echo "exports: $EXP" | cut -c1-600; echo "ACCEPT FAIL: exported symbols must be only _VSTPluginMain"; exit 1; }
-# the shell creates the own engine (a Vital engine switch is excluded by scripts/tests/test_vital_removal_cmake.py)
+# the shell creates the own engine
 grep -q "EngineKind::own" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not create the own engine"; exit 1; }
 # plugin folder / content path logic
 c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp && $B/paths_test > $B/paths.log 2>&1 || { cat $B/paths.log 2>/dev/null | tail -12; echo "ACCEPT FAIL: paths_test (shell-mpc/plugin_paths.h)"; exit 1; }
-# MPC manifest: only binaries that exist, version.xml
-python3 scripts/tests/test_gen_mpc_manifest.py > $B/manifest-test.log 2>&1 || { tail -25 $B/manifest-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_manifest.py"; exit 1; }
-python3 scripts/tests/test_gen_mpc_package.py > $B/package-test.log 2>&1 || { tail -30 $B/package-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_package.py"; exit 1; }
-# the .xpl generator (scripts/gen-mpc-xpl.py): files the device wrote decode and re-render byte for byte, generated files decode to the same structure; with dump_mpc_chunks built (above) all 160 presets are generated from the built plugin
-python3 scripts/tests/test_gen_mpc_xpl.py > $B/xpl-test.log 2>&1 || { tail -30 $B/xpl-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_xpl.py"; exit 1; }
 for f in scripts/build-mpc.sh scripts/build-armv7-mpc.sh scripts/mpc-container-build.sh; do [ -f $f ] && bash -n $f || { echo "ACCEPT FAIL: $f missing or not valid bash"; exit 1; }; done
 # factory presets as programs: the list header, then the library inside a plugin folder (Content/presets) and outside one
 INC="-I core/include -I core/filters-serum/include -I core/shapes/include -I $MPC_SDK/framework"
@@ -153,7 +148,6 @@ live_build ovloff -DSYNTHYBOY_MPC_OVERLAY=OFF
 # Overlay (SYNTHYBOY_MPC_OVERLAY, default OFF, shell-mpc/overlay/; BASE_OPTS does not name it on purpose: the builds above are the ones "without it", the ovloff variant names OFF): the switched-off build is byte for byte the build that does not name the option (and the same as the build of the commit
 # before the module existed: checked by hand when the module was added); the switched-on build has the module, the other builds have no trace of it. The unit tests run on the Mac with a fake
 # display backend and a fake framebuffer; the plugin built with it ON must still load, run and give the same state chunk (on the Mac the module finds no display and disables itself).
-python3 scripts/gen-overlay-layout-header.py --check || { echo "ACCEPT FAIL: shell-mpc/overlay/overlay_layout.h is not what scripts/gen-overlay-layout-header.py makes of overlay_layout.json"; exit 1; }
 OVLON="$(find ${B}-live-ovlon -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 OVLOFF="$(find ${B}-live-ovloff -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 OVLREL="$(find ${B}-live-ovlrel -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
@@ -193,9 +187,6 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/s
 $B/stacking_host > $B/stacking-host.log 2>&1 || { grep -E "^FAIL" $B/stacking-host.log; echo "ACCEPT FAIL: stacking_host (the zpos rule and the guard)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/panel_key_host $OVSRC/panel_key_host.cpp || { echo "ACCEPT FAIL: panel_key_host build"; exit 1; }
 $B/panel_key_host > $B/panel-key-host.log 2>&1 || { grep -E "^FAIL" $B/panel-key-host.log; echo "ACCEPT FAIL: panel_key_host (the key of the host's Q-Link panel)"; exit 1; }
-# the kit parity (shell-mpc/kit/, migration steps 2 and 3 of docs/ui-components/TEMPLATE.md): the kit's parameter source and text function against the old direct calls, for every parameter of the table
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/kit_parity_host $OVSRC/kit_parity_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: kit_parity_host build"; exit 1; }
-$B/kit_parity_host > $B/kit-parity-host.log 2>&1 || { grep -E "^FAIL" $B/kit-parity-host.log | head; echo "ACCEPT FAIL: kit_parity_host (the kit's parameter source differs from the old direct calls)"; exit 1; }
 # the cached cells of the scene protocol (gpu/scene.h CellBegin, gpu/cell_plan.h): the hash, the plan of the layers, the damage between two pictures, the part to paint for the age of the back buffer, the CPU reference
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -I shell-mpc -o $B/cell_plan_host $OVSRC/cell_plan_host.cpp || { echo "ACCEPT FAIL: cell_plan_host build"; exit 1; }
 $B/cell_plan_host > $B/cell-plan-host.log 2>&1 || { grep -E "^FAIL" $B/cell-plan-host.log; echo "ACCEPT FAIL: cell_plan_host (cached cells: hash, plan, damage, paint boxes)"; exit 1; }
@@ -475,15 +466,13 @@ c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I core/filte
 $B/device_profile_host_asan > $B/device-profile-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/device-profile-host-asan.log | head; echo "ACCEPT FAIL: device_profile_host under AddressSanitizer / UBSan"; exit 1; }
 # the editors of the FX pages (ui/fx_slot_editor.h, fx_layout.h: the tables of the 16 effects, the splitters), plainly and under AddressSanitizer + UBSan
 # the data of the FX tables is consistent (ui/fx_layout.h against the engine's parameter table), plainly and under AddressSanitizer + UBSan
-# the tool of the Sounds-browser files loads a program or a chunk into the built plugin (scripts/gen-xpl-presets.py): it must compile and the program of the first factory preset must load
+# the tool of the Sounds-browser files loads a program or a chunk into the built plugin (the dumper of the Sounds-browser set): it must compile and the program of the first factory preset must load
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I $MPC_SDK/framework -I shell-mpc -o $B/chunk_load_host shell-mpc/tests/chunk_load_host.cpp -ldl || { echo "ACCEPT FAIL: chunk_load_host build"; exit 1; }
 # the headers of the oscillator pages stand alone (osc_spec_page.h: the spec tables of the pages; osc_marks.h: the marks of the oscillator displays)
 for h in osc_spec_page osc_marks; do
     echo "#include \"$h.h\"" > $B/hdr_$h.cpp
     c++ -std=c++17 -fsyntax-only -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc/overlay -I shell-mpc/ui $B/hdr_$h.cpp || { echo "ACCEPT FAIL: shell-mpc/overlay/$h.h does not compile on its own"; exit 1; }
 done
-# the cross build of the quality profile bench: syntax and usage only (the build itself needs Docker and is run by hand)
-bash -n scripts/build-tier-bench.sh && bash scripts/build-tier-bench.sh --help > $B/tier-bench-help.log 2>&1 || { echo "ACCEPT FAIL: scripts/build-tier-bench.sh (syntax / --help)"; exit 1; }
 # the documents of the release (docs/release/*: form, cited commits and lines, numbers) and of the MPC (docs/MPC.md: structure, measured numbers only under the device observations)
 python3 -m unittest scripts/tests/test_docs_release.py scripts/tests/test_docs_mpc.py > $B/docs-test.log 2>&1 || { tail -25 $B/docs-test.log; echo "ACCEPT FAIL: the tests of docs/release and docs/MPC.md"; exit 1; }
 # the release proof: no developer log strings in the DEV_LOG=OFF binary (and the same patterns are found in the default overlay build, so the check can see them)
@@ -500,10 +489,6 @@ strings -a "$NOLOG" | grep -E -e "$LOGPAT" | grep -v -E "^N[0-9]+mpckit[0-9]" > 
 strings -a "$OVLREL" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
 # the lock free hand-over of the events between the threads (event_inbox.h): plainly and under ThreadSanitizer
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { tail -15 $B/event-inbox.log; echo "ACCEPT FAIL: event_inbox_host"; exit 1; }
-# the starter template of an MPC plugin (template-mpc/): its pages host test
-c++ -std=c++17 -O1 -Wall -Wextra -I shell-mpc -I shell-mpc/ui -I shell-mpc/overlay -I template-mpc/src -I $MPC_SDK/framework -o $B/mpckit_demo_pages_host template-mpc/tests/pages_host.cpp -lpthread > $B/mpckit-build.log 2>&1 || { tail -15 $B/mpckit-build.log; echo "ACCEPT FAIL: mpckit_demo_pages_host build"; exit 1; }
-$B/mpckit_demo_pages_host > $B/mpckit-pages.log 2>&1 || { tail -8 $B/mpckit-pages.log; echo "ACCEPT FAIL: mpckit_demo_pages_host"; exit 1; }
-tail -1 $B/mpckit-pages.log | grep -q "^OK" || { tail -3 $B/mpckit-pages.log; echo "ACCEPT FAIL: mpckit_demo_pages_host did not end with OK"; exit 1; }
 # the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
 bash shell-mpc/overlay/tests/run_touch_tests.sh > $B/touch.log 2>&1 || { grep -E "FAIL|error" $B/touch.log | head -20; echo "ACCEPT FAIL: touch_host"; exit 1; }
 echo "ACCEPT OK"

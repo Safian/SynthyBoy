@@ -20,14 +20,4 @@ if(Python3_Interpreter_FOUND)
                  COMMAND "${Python3_EXECUTABLE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/contentpack.py" verify
                          --dir "${PROJECT_SOURCE_DIR}/content/${pack}")
     endforeach()
-
-    # ... and exactly what scripts/gen-content-pack.py makes (numpy: the files are reproducible with the numpy they were made with; skipped where numpy is missing)
-    execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import numpy" RESULT_VARIABLE synthyboy_numpy_missing OUTPUT_QUIET ERROR_QUIET)
-    if(NOT synthyboy_numpy_missing)
-        add_test(NAME synthyboy_factory_content_reproducible
-                 COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/gen-content-pack.py"
-                         --check --out-root "${PROJECT_SOURCE_DIR}/content")
-        # label `slow` (more than about 5 s alone: `ctest -LE slow` is the quick set, docs/dsp-knowledge/testing.md)
-        set_tests_properties(synthyboy_factory_content_reproducible PROPERTIES LABELS slow)
-    endif()
 endif()

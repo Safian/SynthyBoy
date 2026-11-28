@@ -1,6 +1,6 @@
-// The preset index (scripts/build-preset-index.py, shell-mpc/program_list.h loadPrograms): the programs and their ORDER from the index are exactly those of the scan, the index is used when current,
+// The preset index (committed content/presets/index.json, shell-mpc/program_list.h loadPrograms): the programs and their ORDER from the index are exactly those of the scan, the index is used when current,
 // and a stale, damaged or missing index falls back to the scan (same list again).
-// Usage: preset_index_host <repo>/content/presets <repo>/scripts/build-preset-index.py
+// Usage: preset_index_host <repo>/content/presets
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cstdio>
@@ -29,7 +29,7 @@ static bool same (const std::vector<ProgramEntry>& a, const std::vector<ProgramE
 
 int main (int argc, char** argv)
 {
-    if (argc < 3) { std::printf ("usage: preset_index_host <presets dir> <build-preset-index.py>\n"); return 2; }
+    if (argc < 2) { std::printf ("usage: preset_index_host <presets dir with the committed index.json>\n"); return 2; }
     const fs::path tmp = fs::temp_directory_path() / ("sb-preset-index-" + std::to_string (static_cast<long> (getpid())));
     std::error_code ec;
     fs::remove_all (tmp, ec);
@@ -37,8 +37,7 @@ int main (int argc, char** argv)
     const std::string dir = (tmp / "presets").string();
     fs::copy (argv[1], dir, fs::copy_options::recursive, ec);
     check (! ec, "the presets were copied");
-    const std::string cmd = std::string ("python3 \"") + argv[2] + "\" --presets-dir \"" + dir + "\" > /dev/null";
-    check (std::system (cmd.c_str()) == 0, "the index script ran");
+    check (fs::exists (fs::path (dir) / "index.json"), "the committed index.json was copied");
 
     const auto scanned = scanPrograms (dir);
     check (scanned.size() == 184, "the scan finds the 184 factory presets");

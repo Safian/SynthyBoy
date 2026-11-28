@@ -7,4 +7,4 @@ A label that is a switch: the switchable caption placed next to a dial. Source: 
 - Layouts: `right` (label centred beside the dial) and `bottom` (label centred under it), `gap.column` between.
 - Smooth: the SMOOTH caption of the Smooth dial will be an instance of this component. The smooth tokens (`smooth.*`) stay until that switch is made.
 
-Add an example: an object in `on_off.examples` (`id`, `file`, `alt`, `caption`, `state`, optional `dial` = `level`|`pan` with `layout`, optional `text`), then `r.render_on_off_cards()` (as in label.md) and `python3 scripts/gen-native-component-catalog.py`.
+Add an example: an object in `on_off.examples` (`id`, `file`, `alt`, `caption`, `state`, optional `dial` = `level`|`pan` with `layout`, optional `text`), then `r.render_on_off_cards()` (as in label.md) and edit `docs/ui-components/kepes-katalogus.html` directly (no generator).

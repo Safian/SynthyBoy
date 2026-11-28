@@ -176,11 +176,8 @@ class DocsAndLegal(unittest.TestCase):
         for needle in ("SYNTHYBOY_SHELL_ENGINE", "SYNTHYBOY_WITH_VITAL=ON (default)", "ios-vital-free", "EngineKind::own | EngineKind::vital", "Two engines"):
             self.assertNotIn(needle, text, needle)
 
-    def test_generators_do_not_name_the_vital_engine(self):
-        self.assertNotIn("core/engine-vital", read("scripts/gen-params-doc.py"))
+    def test_docs_do_not_name_the_vital_engine(self):
         self.assertNotIn("core/engine-vital", read("docs/PARAMETERS.md"))
-        self.assertNotIn("Vital engine", read("scripts/gen-sound-set-batch2-doc.py"))
-        self.assertNotIn("engine-vital", read("scripts/gen-factory-presets.py"))
 
     def test_history_records_say_so(self):
         self.assertRegex(read("docs/UPSTREAM.md")[:600], r"(?i)history")

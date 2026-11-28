@@ -22,7 +22,4 @@ The disabled look is `style.dim_artwork` of the face (existing `inactive.preview
 
 Add an object to `button.samples` (`id`, `file`, `alt`, `caption`, `height` token, `text`, `state` = `enabled`|`disabled`), then:
 
-```sh
-python3 -c "import sys; sys.path[:0]=['scripts','.']; import render_native_catalog_cards as r; r.render_button_cards()"
-python3 scripts/gen-native-component-catalog.py
-```
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.

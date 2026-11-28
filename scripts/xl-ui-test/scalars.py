@@ -17,7 +17,7 @@ from shard import MODELS, add_shard, selected
 from inventory import inventory, locate
 from disabled import OSC
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_ui_params as native
 
 

@@ -29,7 +29,7 @@ Enforces Owner Decisions and Architecture Specifications:
     Preserves signed semitone remainder across octave changes.
 - Proven Native OSC_DETAIL MORE Offset (No Fallback 97):
   * Navigation offset is proven from shell-mpc/native_osc_detail.h (kNavigation = kKind + kCells)
-    and scripts/mpc-skin-extras/58_osc_detail.py (base + 1 + 3 * count + 0):
+    (base + 1 + 3 * count + 0):
     OSC_DETAIL_MORE_OFFSET = 1 + 3 * OSC_DETAIL_CELLS = 97.
   * MORE parameter handle: FromGesture/Parameter {base + OSC_DETAIL + 97}.
   * Strict error handling: If base cannot be resolved from base or param_count,
@@ -89,7 +89,7 @@ DEFAULT_FIELD_GAP = _style_size('gap.field')
 DEFAULT_BTN_HEIGHT = _style_size('height.medium')
 DEFAULT_BTN_GAP = _style_size('gap.field')
 
-# Host parameter offset constants (from native_ui_params schema)
+# Host parameter offset constants (shell-mpc/native_ui_params.h)
 LEGACY_EXTRAS = 82
 
 
@@ -103,7 +103,7 @@ OSC_DETAIL = 629
 OSC_DETAIL_CELLS = 32
 
 # Native detail navigation offsets proven from shell-mpc/native_osc_detail.h
-# and scripts/mpc-skin-extras/58_osc_detail.py:
+
 # kNavigation = kKind + kCells = 1 + 3 * kCells = 1 + 3 * 32 = 97
 OSC_DETAIL_MORE_OFFSET = 1 + 3 * OSC_DETAIL_CELLS  # 97
 OSC_DETAIL_BACK_OFFSET = OSC_DETAIL_MORE_OFFSET + 1  # 98

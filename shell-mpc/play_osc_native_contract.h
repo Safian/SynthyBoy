@@ -1,4 +1,4 @@
-// Generated from scripts/mpc-skin-extras/play-osc-native-contract.json by scripts/native_play/osc.py.
+// Hand-maintained (no generator): edit this file directly.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

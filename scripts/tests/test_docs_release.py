@@ -213,25 +213,6 @@ class DocsReleaseTests(unittest.TestCase):
         self.assertNotIn("3/128", self.changelog + self.history)
 
     # ---- OPEN-QUESTIONS
-    def test_open_questions_generated_parts_are_current(self):
-        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "gen-open-questions.py"), "--check"], cwd=ROOT)
-        self.assertEqual(r.returncode, 0, "run scripts/gen-open-questions.py to refresh docs/release/OPEN-QUESTIONS.md")
-
-    def test_open_questions_counts_equal_the_grep(self):
-        sys.path.insert(0, os.path.join(ROOT, "scripts"))
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("genoq", os.path.join(ROOT, "scripts", "gen-open-questions.py"))
-        g = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(g)
-        rows = g.collect()
-        text = read("docs", "release", "OPEN-QUESTIONS.md")
-        self.assertIn(f"Lines found: {len(rows)} in {len({r[0] for r in rows})} files.", text)
-        # the same search with git grep, line count (git grep -c would count per file)
-        files = g.scope_files()
-        out = subprocess.run(["git", "grep", "-n", "-i", "-E", g.PATTERN, "--", *files], cwd=ROOT, capture_output=True, text=True).stdout
-        self.assertEqual(len([l for l in out.split("\n") if l]), len(rows))
-        self.assertIn(g.PATTERN, text)
-
     def test_open_questions_part_a_cites_real_lines(self):
         text = read("docs", "release", "OPEN-QUESTIONS.md")
         part_a = text.split("## B.", 1)[0].split("## A.", 1)[1]

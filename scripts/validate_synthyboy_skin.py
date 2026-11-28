@@ -80,18 +80,25 @@ def validate_package(package, *, check_live=False):
     if [tab["tabName"] for tab in tabs] != list(SURFACES):
         raise ValueError("incorrect SynthyBoy page set or order")
     views = json.loads((ROOT / "shell-mpc/overlay/overlay_layout.json").read_bytes())["views"]
-    layout = json.loads((ROOT / "scripts/overlay-skin/mpc-ui-pages-overlay.json").read_bytes())["pages"]
-    labels = {p["name"]: p.get("label", p["name"]) for p in layout}
-    detectors = {labels[v["tab"]]: v["name"] for v in views}
+    view_names = {v["name"] for v in views}
+    detected = set()
     for tab in tabs:
         name = tab["tabName"]
         components = [c["componentData"] for c in tab["componentDefinition"]["componentsData"]]
         types = {c["type"] for c in components}
         images = {c["name"] for c in components if c["type"] == "Image" and c["data"].get("image")}
-        view = detectors[name]
+        found = {c["name"][len("Overlay Marker "):-len(" left")] for c in components
+                 if c["name"].startswith("Overlay Marker ") and c["name"].endswith(" left")}
+        if len(found) != 1 or not found <= view_names:
+            raise ValueError(f"{name}: expected exactly one known detector view, found {sorted(found)}")
+        view = next(iter(found))
+        detected.add(view)
         markers = {f"Overlay Marker {view} left", f"Overlay Marker {view} right", f"Overlay Instance {view}"}
         if SURFACES[name] not in types or not markers <= images or tab["qlinkBoundsData"] != []:
             raise ValueError(f"{name}: missing custom surface, detector images or unexpected stock highlight")
+
+    if detected != view_names:
+        raise ValueError(f"detector views without a tab: {sorted(view_names - detected)}")
 
     positions = {(t["fnKeyIndex"] + 1, t["fnKeySubIndex"] + 1) for t in tabs}
     mappings = qlinks["Screen Mode Q-Links"]["map"]

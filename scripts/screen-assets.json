@@ -33,6 +33,6 @@
     "docs/ui-map/env-filter-lfo-plan/used_selector_all.png",
     "docs/ui-map/env-filter-lfo-plan/used_selector_empty.png",
     "docs/ui-map/env-filter-lfo-plan/used_selector_partly.png",
-    "scripts/mpc-skin-extras/browser_images/soundsmode.png"
+    "skin/browser_images/soundsmode.png"
   ]
 }

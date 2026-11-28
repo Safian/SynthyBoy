@@ -257,7 +257,7 @@ int main (int argc, char** argv)
                     }
                 }
                 check (inOrder, (tag + "groups in the order of the Sounds browser files, names alphabetical inside, group sizes as in factory-preset-categories.json").c_str());
-                // the same numbering as the .xpl file names: the k-th preset of the list is the k-th file (scripts/gen-xpl-presets.py: group order, then name.lower())
+                // the same numbering as the .xpl file names: the k-th preset of the list is the k-th file (content/mpc-presets: group order, then name.lower())
                 std::vector<std::string> xplOrder;
                 for (int g = 0; g < kFactoryGroupCount; ++g)
                 {

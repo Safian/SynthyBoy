@@ -5,7 +5,7 @@
 #
 #   sound-lab.py report PRESET.sbpreset... [--profile xl|low|both] [--bin PATH] [--work DIR] [--quick]
 #
-# For every preset and profile it renders: single notes (MIDI 36 / 48 / 60 / 72 / 84), velocity 30 / 80 / 127, the four note chord of the level measure (what scripts/tune-preset-levels.py
+# For every preset and profile it renders: single notes (MIDI 36 / 48 / 60 / 72 / 84), velocity 30 / 80 / 127, the four note chord of the level measure (what the level tuning
 # uses), an eight note chord at velocity 127, every macro at 0 and at 100, a held note with a pressure ramp, a held note with the mod wheel, and a long held note, and prints per preset:
 #   level      RMS of the loudest 300 ms of the 4 note chord (dBFS, the set's reference is -20), peak of the 8 note chord at velocity 127 raw and after the make-up gain of the shells (OUTPUT_GAIN_DB = synthyboy::kMakeupGainDb, before their limiter)
 #   stereo     correlation, level of the mono sum against the stereo level, the worst 1/3 octave band of the mono sum
@@ -281,7 +281,7 @@ def run_report(preset_path, profile, lab, quick=False, long_hold=False):
     ons = lambda ks, v, t=0.0: [f"on {t} {k} {v}" for k in ks]
     offs = lambda ks, t: [f"off {t} {k}" for k in ks]
     # a swelling sound is levelled where it has swelled: the chord is held until the slowest of the attacks of env 1 and 2 is over (the first hundred are levelled after one second, which
-    # leaves a slow pad far louder when it has opened: scripts/tune-preset-levels.py), at most 5 s
+    # leaves a slow pad far louder when it has opened: the level tuning), at most 5 s
     P = doc["state"]["params"]
     att = max(float(P.get("env1.attack", 5)) + float(P.get("env1.delay", 0)), 0.0)
     hold = min(5.0, max(1.0, 0.4 + att / 1000.0))

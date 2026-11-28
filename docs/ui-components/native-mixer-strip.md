@@ -7,7 +7,7 @@ Reusable Akai MPC host-native compound channel strip component, definitions, and
 
 ## Overview & Architecture
 
-The `MixerStrip` component transitions the historical monolithic mixer layout (`scripts/mpc-skin-extras/84_mixer.py`) into the project's standard component family model:
+The `MixerStrip` component transitions the historical monolithic mixer layout (the former skin script, now in `skin/TUI.json`) into the project's standard component family model:
 - **One shared definition per architecture variant**:
   - `mixerStripSource`: Generator & Filter strips (SUB, A, B, C, NOISE, F1, F2).
   - `mixerStripBus`: Effect return buses (BUS 1, BUS 2).

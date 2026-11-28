@@ -17,10 +17,7 @@ selected (accent), unselected (legacy face), disabled (`style.dim_artwork` of th
 
 TYPE 2 x 3 (BELL selected, 40 px; also 32 and 48 px), 1 x 4 (HZ BPM KEY FREE, BPM selected, 40 px), 3 x 1 vertical, disabled. Footprints in the catalogue table. A new example is one more entry (`id`, `file`, `alt`, `caption`, `rows`, `cols`, `items`, `selected`, `height` token, `width`, `title`, `state`), then:
 
-```sh
-python3 -c "import sys; sys.path[:0]=['scripts','.']; import render_native_catalog_cards as r; r.render_radio_grid_cards()"
-python3 scripts/gen-native-component-catalog.py
-```
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
 
 ## Native skin item (not implemented)
 

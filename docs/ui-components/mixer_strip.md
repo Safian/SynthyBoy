@@ -43,5 +43,4 @@ Add an object to `mixer_strip.examples` in the catalog.json (`id`, `file`, `alt`
 
 ```sh
 PYTHONPATH=. python3 -c "from components.native.mixer_strip import mixer_strip as s; s.render_catalog()"
-python3 scripts/gen-native-component-catalog.py
 ```

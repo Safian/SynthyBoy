@@ -67,7 +67,7 @@ For AI coding agents. Imperative and terse. Human docs with one page per compone
 ## How to add a page (step by step)
 1. Screen: `shell-mpc/ui/<name>_screen.h`, a `Composite` over library components, one table of Q groups, 1280 x 628.
 2. Ui class: `shell-mpc/overlay/<name>_ui.h` after `voice_ui.h` (ids enum, `T` table, `configure`, `pull`, `handle`, `publishQGroup`, `touch`, `wheel`, `tick`, `draw`, `fingerDown`, `dropGesture`, `forgetQGroup`, `topPage`, `qTargets`, `qSlotCount`, `kElementPage`).
-3. Register: a view kind in `overlay_layout.json`, regenerate `overlay_layout.h` (`scripts/gen-overlay-layout-header.py`), a `case` in `pages.h`, the skin script `scripts/mpc-skin-extras/83_pages.py`.
+3. Register: a view kind in `overlay_layout.json`, edit `overlay_layout.h` to match (no generator), a `case` in `pages.h`, the page's tab in `skin/TUI.json` (edited directly).
 4. Tests: a host test of the screen in `shell-mpc/ui/tests/`, a host test of the page, `coverage_host.cpp`, `qslots_host.cpp`, the gallery states, the lint states.
 5. Docs: `docs/MPC.md` Q-group table, `docs/ui-components/`.
 

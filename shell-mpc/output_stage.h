@@ -67,7 +67,7 @@ inline bool outputLimiterFromChunk (const void* data, size_t size, bool& on) noe
 }
 
 /** The preset's own choice of the output limiter: the optional top-level member "outputLimiter" of a .sbpreset file (1 / 0 or true / false; written by
-    scripts/gen-factory-presets.py for the presets whose measured overshoot asks for it). True when it is there (then `on` is set); false leaves `on` as it is. A program without
+    editing the preset files for the presets whose measured overshoot asks for it). True when it is there (then `on` is set); false leaves `on` as it is. A program without
     the member gets the default (kOutputLimiterDefaultOn: off) from the caller. Never reads outside `size`. */
 inline bool outputLimiterFromPreset (const void* data, size_t size, bool& on) noexcept
 {

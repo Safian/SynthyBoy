@@ -1,6 +1,6 @@
 # The native component library of the SynthyBoy MPC plugin
 
-The controls of the plugin are the shared **native components**: the catalogue (`components/native/<name>`, the picture catalogue below), the tokens (`components/colors.json`, `components/sizes.json`) and the host skin recipes (`components/native` and `scripts/mpc-skin-extras`). Every control on every screen comes from its component. The plugin-drawn layer (`shell-mpc/ui`, `shell-mpc/overlay`) keeps only what the host cannot draw: live graphs, meters, curve, waveform and spectrum displays, animation, the automation indicators around native controls and the interaction of the curve editors. (Owner decision 2026-11-27: the C++ widget library is not offered to others; everyone draws native controls for themselves, as we did.)
+The controls of the plugin are the shared **native components**: the catalogue (`components/native/<name>`, the picture catalogue below), the tokens (`components/colors.json`, `components/sizes.json`) and the component recipes (`components/native`; the skin itself, `skin/`, is edited directly). Every control on every screen comes from its component. The plugin-drawn layer (`shell-mpc/ui`, `shell-mpc/overlay`) keeps only what the host cannot draw: live graphs, meters, curve, waveform and spectrum displays, animation, the automation indicators around native controls and the interaction of the curve editors. (Owner decision 2026-11-27: the C++ widget library is not offered to others; everyone draws native controls for themselves, as we did.)
 
 The pages below that describe C++ classes (one page per class, the contract further down) are an internal developer reference of the plugin-drawn layer, not a library to build on. The C++ widgets that remain are the parameter/Q-Link model and layout of the native cells; see [docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md](../review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md) for which of them are reachable and what is left to replace.
 
@@ -14,7 +14,7 @@ A képes katalógus kizárólag az önálló MPC host natív skin-komponenseit m
 
 A Pan és a Level kártyája a `components/native/<név>/catalog.json` `dial` bejegyzéséből készül: csak a tárcsa rajza, felirat és érték nélkül, az `ui::Knob`-recept (`level.render_dial_frame`) szerint, minden változat a valós méretén (1:1, nincs átméretezés). A `level.render_dial_preview` a feliratot paraméterrel kapcsolja ki, nem vágással. A méretfeliratot (`Normál · 90 × 90 px`) a HTML adja, nem a kép.
 
-Új méret felvétele: egy elem a `dial.variants` listába (`id`, `label`, `diameter` = `components/sizes.json` egész méret-token, `file`, `alt`), majd `python3 -c "import sys; sys.path[:0]=['scripts','.']; import render_native_catalog_cards as r; r.render_dial_cards()"` (a képek), végül a fenti HTML-generálás. A `state`-ek (`dial.states`) és az állapotok közti távolság (`dial.state_gap`) közösek; az új változat a `scripts/tests/test_native_dial_catalog.py` ellenőrzéseit automatikusan megkapja. A skin filmstripjeit ez nem érinti.
+Új méret felvétele: egy elem a `dial.variants` listába (`id`, `label`, `diameter` = `components/sizes.json` egész méret-token, `file`, `alt`), majd `python3 scripts/render_native_catalog_cards.py` (a képek), végül a katalógus HTML kézi szerkesztése. A `state`-ek (`dial.states`) és az állapotok közti távolság (`dial.state_gap`) közösek; az új változat a `scripts/tests/test_native_dial_catalog.py` ellenőrzéseit automatikusan megkapja. A skin filmstripjeit ez nem érinti.
 
 Ugyanez a bejegyzés adja az állapotképeket (`dial.state_images`: állapotonként egy szöveg nélküli kép, normál méretben) és a szöveges változatokat (`dial.text`: `caption`, `value`, `state`, `diameter` és `variants`). Elrendezés (`layout`): `right` (felirat jobbra, alatta az érték), `bottom` (csak az érték a tárcsa alatt), `top` (felirat fent, érték lent). Új elrendezés: új elem a `dial.text.variants`-ba, és az elrendezés felvétele a `level.DIAL_TEXT_LAYOUTS`-ba és a `render_dial_labelled`-be. A felirat és az érték mindig ugyanazzal a szövegstílussal készül: `level.DIAL_TEXT_STYLE` (`font.value`, `text.value`), egyetlen helyen átállítható. A `render_dial_labelled(..., disabled=True)` a letiltott változatot adja (inaktív tárcsa, tompított szöveg); alapból ki van kapcsolva.
 
@@ -38,9 +38,7 @@ A `components/native/header/` bejegyzés a fejléc-sor nyolc példáját mutatja
 
 A HTML generált fájl; közvetlenül ne szerkeszd. Újragenerálás a repó gyökeréből:
 
-```sh
-python3 scripts/gen-native-component-catalog.py
-```
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
 
 A commit előtti Git-hook automatikusan újragenerálja és a commitba teszi a HTML-t, ha a komponenskönyvtár, a generátor vagy a sablon változik. Kizárólag a stage-elt fájlokból dolgozik. Ebben a checkoutban engedélyezve van; új klónban egyszer állítsd be:
 
@@ -56,7 +54,7 @@ A metaadat `version: 1`, `approved: true`, egész `order`, `title` és `sections
 
 A színek egyetlen adatforrása `components/colors.json`, a méreteké és elrendezéseké `components/sizes.json`; ezeket a natív Python-komponensek és a katalógus egyaránt a `components/style.py` betöltőn keresztül használják. Egy méret másikra hivatkozhat `{"ref": "height.medium"}` alakban, így a natív geometriában és a feliratokban ugyanaz a szerep változik. A metaadatban a `{size:height.medium}` méretértéket, a `{size_label:height.medium}` a közös méretnevet illeszti be. A HTML-sablon (`scripts/templates/native-component-catalog.html`) szín- és mérettokeneket használ, nincs benne másolt paletta.
 
-A HTML-generátor a kiválasztott kész képeket olvassa, nem rajzol helyettük mintát. A stílusértékek jelenlegi átvezetése megtartja az elfogadott képek értékeit. Későbbi stílusváltozáskor az érintett képeket először a valódi komponensrajzolóval kell frissíteni (a natív kártyákhoz `scripts/render_native_catalog_cards.py`, a működő OFF állapotokhoz a komponens saját natív állapotrajzolója); ezután a fenti egyetlen HTML-generálási parancs frissíti a katalógust. Régi összehasonlító képet ne válassz be automatikusan.
+A katalógus HTML a kiválasztott kész képeket mutatja, nem rajzol helyettük mintát. A stílusértékek jelenlegi átvezetése megtartja az elfogadott képek értékeit. Későbbi stílusváltozáskor az érintett képeket először a valódi komponensrajzolóval kell frissíteni (a natív kártyákhoz `scripts/render_native_catalog_cards.py`, a működő OFF állapotokhoz a komponens saját natív állapotrajzolója); ezután a katalógus HTML-t kézzel frissítsd. Régi összehasonlító képet ne válassz be automatikusan.
 
 Hordozható terjesztéskor a komponens saját modulja és `img/` mappája mellé a közös `components/style.py`, `colors.json`, `sizes.json` fájlokat is csomagold, a repóval azonos `components/native/<név>/` elrendezésben. A más natív komponenseket használó összetett elemekhez a használt komponensmodulokat és azok képeit is csomagold. A publikus natív komponens-API-k újrahasználhatók; megvalósításukat és a közös stílusadatokat ne másold az összetett elembe.
 

@@ -68,7 +68,7 @@ double filterDriveLevelDb (const std::string& type, double drive, double reso) n
 
 double filterDriveMakeupDb (double v) noexcept;
 
-/** A509 (13-new-keys.md 4.48): the effect laws measured against Serum 2.1.5 (tools/ref-compare/make_fx_laws.py). The distortion of a Serum mode and drive (0 .. 100): our drive in dB
+/** A509 (13-new-keys.md 4.48): the effect laws measured against Serum 2.1.5 (tools/ref-compare). The distortion of a Serum mode and drive (0 .. 100): our drive in dB
     and the gain (dB, Serum minus ours) of the wet signal; false for a mode the table does not know. */
 bool fxDistortionLaw (const std::string& mode, double serumDrive, double& ourDrive, double& wetGainDb) noexcept;
 /** The gain (dB, Serum minus ours) of the wet signal of a module type (kFxType*) at 100 % wet; the wet gain of the Hyper module by its unison count. */

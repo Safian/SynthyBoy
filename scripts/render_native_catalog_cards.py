@@ -6,13 +6,10 @@
 Generates catalog-specific preview images (prefixed catalog-) inside components/native/<component>/img/:
 - Button / IconButton: size samples in the legacy and ghost looks (button/img, icon_button/img)
 - Selector: Filter MODEL and Voice step selector at their runtime sizes
-- RadioButton: segmented native radio at the runtime 56 px height
-- Name-value field: Sub OCT at its runtime 40 px visual height
 - MacroCard: direct single MacroCard component sample (298x172)
 """
 
 import json
-import runpy
 import sys
 import tempfile
 from pathlib import Path
@@ -29,7 +26,6 @@ from PIL import Image, ImageDraw
 # Component-specific native imports
 from components.style import color as _style_color, native_font_em, rgba as _style_rgba, opacity as _style_opacity, size as _style_size
 from components.native.button.button import action_art
-from native_name_value import render_name_value_preview
 from components.native.macro_card.macro_card import render_macro_card, macro_level_definition, CARD_WIDTH, CARD_HEIGHT
 from components.native.tune.tune import render_tune_card
 
@@ -165,58 +161,6 @@ def render_radio_grid_cards():
     render_sample_cards("radio_grid", "grid_samples")
 
 
-def render_radio_cards():
-    """Render the 56 px segmented style used by ENV, Voice and FX."""
-    out_dir = REPO_ROOT / "components/native/radio_button/img"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Read the actual ENV selector filmstrip, including its selected state.
-    env = runpy.run_path(str(REPO_ROOT / "scripts/mpc-skin-extras/96_env_native.py"))
-    with tempfile.TemporaryDirectory() as tmp:
-        env["_selector_assets"](tmp)
-        with Image.open(Path(tmp) / env["SELECTOR_ART"]) as strip:
-            side = env["SELECTOR_H"]
-            selected_frame = 1 + 2  # ENV 1, selected variant in _selector_assets.
-            strip.crop((0, selected_frame * side, env["SELECTOR_W"],
-                        (selected_frame + 1) * side)).save(out_dir / "catalog-radio-56.png")
-            group = Image.new("RGBA", (env["SELECTOR_W"] * env["ENV_SELECTOR_CELLS"], side))
-            for slot in range(env["ENV_SELECTOR_CELLS"]):
-                # Real ENV frames: selected, used, then available instances.
-                variant = 2 if slot == 0 else 1 if slot == 1 else 0
-                frame = 1 + slot * env["SELECTOR_VARIANTS"] + variant
-                group.paste(strip.crop((0, frame * side, env["SELECTOR_W"],
-                                        (frame + 1) * side)), (slot * env["SELECTOR_W"], 0))
-            group.save(out_dir / "catalog-radio-env-group.png")
-
-    from scripts.native_voice.voice_tab import voice_definitions
-    with tempfile.TemporaryDirectory() as tmp:
-        definition = voice_definitions(tmp)["voiceNativeRowList"]
-        rows = [entry for entry in definition["componentsData"]
-                if entry["componentData"]["type"] == "Button"]
-        bounds = [tuple(map(int, entry["bounds"]["bounds"].split())) for entry in rows]
-        left, top = min(b[0] for b in bounds), min(b[1] for b in bounds)
-        right, bottom = max(b[0] + b[2] for b in bounds), max(b[1] + b[3] for b in bounds)
-        group = Image.new("RGBA", (right - left, bottom - top))
-        for index, (entry, rect) in enumerate(zip(rows, bounds)):
-            data = entry["componentData"]["data"]
-            with Image.open(Path(tmp) / data["onImage" if index == 0 else "offImage"]) as art:
-                group.paste(art, (rect[0] - left, rect[1] - top))
-        group.save(out_dir / "catalog-radio-voice-group.png")
-
-
-
-def render_name_value_cards():
-    """Render the actual Sub OCT field size."""
-    out_dir = REPO_ROOT / "components/native/name_value/img"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
-    contract = json.loads((REPO_ROOT / "scripts/mpc-skin-extras/play-osc-native-contract.json").read_text())
-    width = contract["sub"]["second"][2]
-    height = _style_size("height.intermediate")
-    render_name_value_preview("OCT", "-1", width=width, height=height).save(
-        out_dir / "catalog-name-value-40.png")
-
-
 def render_macro_card_sample():
     """Render a single MacroCard sample (298x172) using shared button/dial components."""
     out_dir = REPO_ROOT / "components/native/macro_card/img"
@@ -269,7 +213,6 @@ def main():
     render_filter_selector_cards()
     render_header_cards()
     render_button_cards()
-    render_radio_cards()
     render_radio_list_cards()
     render_slide_switch_cards()
     render_wave_icons_cards()
@@ -280,7 +223,6 @@ def main():
     mixer_strip.render_catalog()
     from components.native.hslider import hslider
     hslider.render_catalog()
-    render_name_value_cards()
     render_macro_card_sample()
     render_tune_card_sample()
     render_remaining_cards()

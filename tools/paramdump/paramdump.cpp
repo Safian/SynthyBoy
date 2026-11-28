@@ -1,12 +1,12 @@
 // SynthyBoy - paramdump: the whole parameter table as JSON, the machine readable description that Kick's own UI consumes
-// (docs/ARCHITECTURE.md R4). docs/params.json is this output; scripts/gen-params-doc.py turns it into docs/PARAMETERS.md.
+// (docs/ARCHITECTURE.md R4). docs/params.json is this output; hand editing turns it into docs/PARAMETERS.md.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_paramdump            writes the parameter table JSON to stdout
 //   synthyboy_paramdump --kick-pages  writes the Kick remote-control pages JSON to stdout
 //   synthyboy_paramdump --own-engine-gap  one line per key (tab separated): key, group, live (the own engine acts on it), dimmed (the UI draws it dimmed with the own engine's
-//                                     capability words), the capability bits it lacks (comma separated); input of scripts/gen-own-engine-gap.py
+//                                     capability words), the capability bits it lacks (comma separated); input of hand editing
 //
 // Keys: key, id, name, group, min, max, default, scale (linear | exp_skew | stepped), skew, interval, decimals, unit,
 // flags, choices (stepped parameters with a name list) or choiceSet ("modSource" | "modDestination", the lists are at the top

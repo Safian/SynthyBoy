@@ -8,9 +8,9 @@ The shared table (`struct Look`) supplies graph colours, gradients, line widths,
 
 ## Token source and regeneration
 
-`components/colors.json` owns the RGB values and the `themes` field maps each Look field to a colour token. `components/sizes.json` owns the `theme.neon`, `theme.aurora` and `theme.plasma` metric tables. `scripts/gen-ui-theme.py` reads both through `components/style.py` and writes `shell-mpc/ui/theme_tokens.h`.
+`components/colors.json` owns the RGB values and the `themes` field maps each Look field to a colour token. `components/sizes.json` owns the `theme.neon`, `theme.aurora` and `theme.plasma` metric tables. `shell-mpc/ui/theme_tokens.h` holds the C++ constants and is edited directly (no generator).
 
-After editing these theme tokens, run `python3 scripts/gen-ui-theme.py`. The MPC package build runs the generator with `--check` before compilation and rejects a stale header. This generates C++ constants only; fixed background PNG assets are never regenerated.
+When a theme token changes, change `theme_tokens.h` in the same commit: nothing checks that the two agree. Fixed background PNG assets are never regenerated.
 
 ## State fields (struct Look)
 | Group | Fields |

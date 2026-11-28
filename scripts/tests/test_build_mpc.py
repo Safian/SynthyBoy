@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SynthyBoy - tests of scripts/build-mpc.sh (both MPC architectures in one plugin folder), of its thin wrapper scripts/build-armv7-mpc.sh and of the manifest
 # with both binaries. No Docker: MPC_DOCKER points at a stub that logs its arguments and writes a fake stripped module where the container would; the SDK
-# is a fake directory whose validate.py prints what the test wants (the real validator is covered by the build itself and by test_mpc_skin_extras.py).
+# is a fake directory whose validate.py prints what the test wants (the real validator is covered by the build itself ).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -21,7 +21,6 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_MPC = ROOT / "scripts" / "build-mpc.sh"
 BUILD_ARMV7 = ROOT / "scripts" / "build-armv7-mpc.sh"
 CONTAINER = ROOT / "scripts" / "mpc-container-build.sh"
-MANIFEST = ROOT / "scripts" / "gen-mpc-manifest.py"
 PLUGIN = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
 FOLDER = "Safian - VST - SynthyBoy"
 
@@ -209,68 +208,6 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("/opt/drm-uapi", text)
         self.assertIn('printf \'#include <drm/drm.h>', text)
 
-    # ---- another plugin (--plugin DIR, migration step 12 of docs/ui-components/TEMPLATE.md) ---------------------------------------------------
-
-    def plugin_build(self, *args, **env):
-        common = ["--out", str(self.out), "--build-dir", str(self.tree), "--skins", str(self.skins), "--plugin", "template-mpc"]
-        return self.run_script(BUILD_MPC, *common, *args, **env)
-
-    def test_the_template_is_built_and_packaged_with_its_own_names(self):
-        r = self.plugin_build("--no-validate", "--arch", "all", STUB_MODULE="mpckit_demo.so", STUB_HELPER="1", STUB_HELPER_PATH="gpu-helper/mpckit-demo-overlay-gpu")
-        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        runs = self.runs()
-        self.assertEqual(len(runs), 2)
-        for run, arch in zip(runs, ("arm32", "arm64")):
-            self.assertIn("ARCH=" + arch, run)
-            self.assertIn("PLUGIN_TARGET=mpckit_demo", run)
-            self.assertIn("PLUGIN_CMAKE_SOURCE=template-mpc", run)
-            self.assertIn("PLUGIN_CMAKE_ARGS=-DMPCKIT_OVERLAY=ON", run)
-            self.assertIn("PLUGIN_MODULE=mpckit_demo.so", run)
-            self.assertIn("PLUGIN_HELPER=gpu-helper/mpckit-demo-overlay-gpu", run)
-        folder = self.out / "Example - VST - MpcKit Demo"
-        self.assertEqual(sorted(p.name for p in (folder / "VST").iterdir()), ["mpckit-demo-overlay-gpu-arm32", "mpckit-demo-overlay-gpu-arm64", "mpckitdemo-arm32.so", "mpckitdemo-arm64.so"])
-        self.assertEqual((folder / "VST" / "mpckitdemo-arm32.so").read_text(), "fake arm32 module")
-        self.assertTrue(os.access(folder / "VST" / "mpckit-demo-overlay-gpu-arm64", os.X_OK))
-        m = json.loads((folder / "plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual((m["name"], m["uid"], m["file32"], m["file64"]), ("MpcKit Demo", "McKD", "VST/mpckitdemo-arm32.so", "VST/mpckitdemo-arm64.so"))
-        self.assertTrue((folder / "version.xml").is_file())
-        self.assertFalse((folder / "Content").exists(), "no presets or content packs for another plugin")
-        self.assertFalse((self.out / FOLDER).exists(), "nothing of SynthyBoy's package")
-        self.assertTrue((folder / "Plugin Skins" / "TUI.json").is_file(), "the given skin is copied")
-
-    def test_the_template_with_one_architecture_lists_one_binary(self):
-        r = self.plugin_build("--no-validate", "--arch", "arm64", STUB_MODULE="mpckit_demo.so")
-        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        folder = self.out / "Example - VST - MpcKit Demo"
-        m = json.loads((folder / "plugin.json").read_text(encoding="utf-8"))
-        self.assertIn("file64", m)
-        self.assertNotIn("file32", m)
-
-    def test_plugin_usage_errors(self):
-        for args in (["--plugin"], ["--plugin", str(self.tmp / "no-such-plugin")], ["--plugin", "scripts"]):
-            r = self.run_script(BUILD_MPC, "--out", str(self.out), *args)
-            self.assertEqual(r.returncode, 2, (args, r.stderr))
-        self.assertEqual(self.runs(), [])
-        bad = self.tmp / "badplugin"
-        bad.mkdir()
-        (bad / "mpc-plugin.conf").write_text("TARGET=x\nUNKNOWN=1\n")
-        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--plugin", str(bad))
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("unknown key UNKNOWN", r.stderr)
-        (bad / "mpc-plugin.conf").write_text("TARGET=x\n")
-        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--plugin", str(bad))
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("missing", r.stderr)
-
-    def test_the_container_script_builds_another_plugins_own_cmake_project(self):
-        text = CONTAINER.read_text()
-        self.assertIn('cmake -S "/src/$PLUGIN_CMAKE_SOURCE" -B /build', text)
-        self.assertIn('cmake --build /build --target "$PLUGIN_TARGET"', text)
-        self.assertIn('so="/build/$PLUGIN_MODULE"', text)
-        self.assertIn('stripped="${so%.so}.stripped.so"', text)
-        conf = (ROOT / "template-mpc" / "mpc-plugin.conf").read_text()
-        for key in ("TARGET=mpckit_demo", "CMAKE_SOURCE=template-mpc", "MODULE=mpckit_demo.so", "BINARY_BASE=mpckitdemo", "MANIFEST=package/plugin.json", "SKIN_SCRIPT=tools/gen_skin.py"):
-            self.assertIn(key, conf)
 
     def test_scripts_are_valid_bash(self):
         for script in (BUILD_MPC, BUILD_ARMV7, CONTAINER):
@@ -408,70 +345,12 @@ class BuildMpcTest(unittest.TestCase):
 
     # ---- the xpl presets packaging -------------------------------------------------------------------------------------------
 
-    def test_xpl_presets_skip_notice_when_tool_absent(self):
-        unavailable = self.tmp / "dump_mpc_chunks"
-        unavailable.touch(mode=0o600)
-        r = self.build("--no-validate", "--xpl-presets", "xl", "--dump-tool", str(unavailable))
-        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        self.assertIn("native dump tool (dump_mpc_chunks) or native plugin library not found", r.stdout)
-        self.assertFalse((self.folder() / "Presets").exists())
-        self.assertFalse((self.out / "Presets-k61").exists())
-
-    def test_xpl_presets_packaging_with_chunks(self):
-        mock_chunks = self.tmp / "mock_chunks"
-        mock_chunks.mkdir()
-        presets_dir = ROOT / "content" / "presets"
-        for p in presets_dir.glob("*/*.sbpreset"):
-            try:
-                name = json.loads(p.read_text(encoding="utf-8"))["meta"]["name"]
-                chunk_file = mock_chunks / f"{name}.chunk"
-                chunk_data = json.dumps({"mpcProgram": 1, "mpcProgramName": name, "format": "synthyboy-state"})
-                chunk_file.write_text(chunk_data, encoding="utf-8")
-            except Exception:
-                pass
-
-        r = self.build("--no-validate", "--xpl-presets", "xl", "--chunks", str(mock_chunks), XPL_PATH_MODE="device")
-        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-
-        presets = self.folder() / "Presets"
-        k61_presets = self.out / "Presets-k61"
-        self.assertTrue(presets.is_dir())
-        self.assertTrue(k61_presets.is_dir())
-
-        xl_files = sorted(presets.glob("*.xpl"))
-        k61_files = sorted(k61_presets.glob("*.xpl"))
-        self.assertGreater(len(xl_files), 0)
-        self.assertEqual(len(xl_files), len(k61_files))
-
-        sample_xl = xl_files[0].read_text(encoding="utf-8")
-        sample_k61 = (k61_presets / xl_files[0].name).read_text(encoding="utf-8")
-        self.assertIn("synthyboy-arm64.so", sample_xl)
-        self.assertIn("synthyboy-arm32.so", sample_k61)
-
     def test_xpl_presets_off_flag(self):
         mock_chunks = self.tmp / "mock_chunks_off"
         mock_chunks.mkdir()
         r = self.build("--no-validate", "--xpl-presets", "off", "--chunks", str(mock_chunks))
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertFalse((self.folder() / "Presets").exists())
-        self.assertFalse((self.out / "Presets-k61").exists())
-
-    def test_xpl_presets_shared_mode(self):
-        mock_chunks = self.tmp / "mock_chunks_shared"
-        mock_chunks.mkdir()
-        presets_dir = ROOT / "content" / "presets"
-        for p in presets_dir.glob("*/*.sbpreset"):
-            try:
-                name = json.loads(p.read_text(encoding="utf-8"))["meta"]["name"]
-                chunk_file = mock_chunks / f"{name}.chunk"
-                chunk_data = json.dumps({"mpcProgram": 1, "mpcProgramName": name, "format": "synthyboy-state"})
-                chunk_file.write_text(chunk_data, encoding="utf-8")
-            except Exception:
-                pass
-
-        r = self.build("--no-validate", "--xpl-presets", "xl", "--chunks", str(mock_chunks), XPL_PATH_MODE="shared")
-        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        self.assertTrue((self.folder() / "Presets").is_dir())
         self.assertFalse((self.out / "Presets-k61").exists())
 
     # ---- the wrapper -------------------------------------------------------------------------------------------------------------------------
@@ -512,34 +391,6 @@ class BuildMpcTest(unittest.TestCase):
     def test_wrapper_passes_usage_errors_through(self):
         self.assertEqual(self.run_script(BUILD_ARMV7, "--jobs", "0").returncode, 2)
         self.assertEqual(self.run_script(BUILD_ARMV7, "--bogus").returncode, 2)
-
-
-class ManifestWithBothBinariesTest(unittest.TestCase):
-    def run_manifest(self, names):
-        with tempfile.TemporaryDirectory() as d:
-            folder = Path(d)
-            (folder / "VST").mkdir()
-            for n in names:
-                (folder / "VST" / n).write_bytes(b"x")
-            r = subprocess.run(["python3", "-I", str(MANIFEST), "--plugin-dir", str(folder)], capture_output=True, text=True)
-            return r, (json.loads((folder / "plugin.json").read_text()) if r.returncode == 0 else None)
-
-    def test_both_keys(self):
-        r, m = self.run_manifest(["synthyboy-arm32.so", "synthyboy-arm64.so"])
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual((m["file32"], m["file64"]), ("VST/synthyboy-arm32.so", "VST/synthyboy-arm64.so"))
-        self.assertNotIn("file", m)
-
-    def test_only_arm64(self):
-        r, m = self.run_manifest(["synthyboy-arm64.so"])
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertNotIn("file32", m)
-        self.assertEqual(m["file64"], "VST/synthyboy-arm64.so")
-
-    def test_no_binary_is_an_error(self):
-        r, _ = self.run_manifest([])
-        self.assertEqual(r.returncode, 2)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -125,7 +125,7 @@ constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = kFilterChainRoutes - 1;   // the routing only (Parallel, F1 to F2, F2 to F1)
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
 constexpr int kLfoTargetsAction = kFxEditorPower + 1;
-// The band lanes of an FX splitter (components/native/band_lane): lane after lane, kLaneHandles each (shell-mpc/native_fx_bands.h, scripts/native_ui_params.py).
+// The band lanes of an FX splitter (components/native/band_lane): lane after lane, kLaneHandles each (shell-mpc/native_fx_bands.h).
 namespace fxbands
 {
 constexpr int kLanes = 3, kCards = 13;
