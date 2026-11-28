@@ -194,7 +194,7 @@ SynthyBoy provides a unified **Content Browser** accessible directly from the to
 
 ### Loading Wavetables (Wavetable Oscillator): the wavetable browser
 1. Select the oscillator tab (**Osc A**, **Osc B**, or **Osc C**) and set the type to **WAVE**.
-2. Tap the name in the table selector (or its list button). It works on the Osc A / B / C pages and on the oscillator third of the Play page (which opens the full screen first).
+2. Tap the name in the table selector (or its list button). It works on the Osc A / B / C pages and on the oscillator third of the Play page.
 3. The wavetable browser opens as a list over the screen. It opens in the **category** of the table you are playing, with that table marked. The bar at the top is the category name with a back arrow: tap it to see all categories (**Basic**, **Morph**, the categories of the installed packs such as Analog or Vocal, the folders you made yourself, **User**), tap a category to see its tables.
 4. Tap a table to play it. A built-in table is selected at once. A table from a pack or from your own files is read from the card or the drive, and the amber bar at the top of the page shows while that happens; the old table keeps playing until the new one is ready. The selector then shows the name of the table.
 5. A table is made of **frames**; scan through them with **WT POS** (the frame position). Tables with one frame are single cycles.
