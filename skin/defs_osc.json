@@ -21655,12 +21655,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "140 4 1130 56"
+        "bounds": "140 4 1130 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3901"
+        ]
        }
       },
       {
