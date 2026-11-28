@@ -1988,9 +1988,9 @@ private:
         if (! g.empty())
         {
             const char* hdr = ! powerOn_
-                ? (view_ == kViewF2 ? "FILTER 2 Â· OFF (BYPASSED)" : "FILTER 1 Â· OFF (BYPASSED)")
-                : (geo_.formantMode() ? (view_ == kViewF2 ? "FILTER 2 Â· FORMANT XY" : "FILTER 1 Â· FORMANT XY")
-                                      : (view_ == kViewF2 ? "FILTER 2 Â· RESPONSE" : "FILTER 1 Â· RESPONSE"));
+                ? (view_ == kViewF2 ? "FILTER 2 - OFF (BYPASSED)" : "FILTER 1 - OFF (BYPASSED)")
+                : (geo_.formantMode() ? (view_ == kViewF2 ? "FILTER 2 - FORMANT XY" : "FILTER 1 - FORMANT XY")
+                                      : (view_ == kViewF2 ? "FILTER 2 - RESPONSE" : "FILTER 1 - RESPONSE"));
             p.textLeft ({ g.x + 74, g.y + 4, std::max (0, g.w - 204), 56 },
                         hdr, ui::theme::kPageTitleSize, p.c (powerOn_ ? T.text : T.textFaint, 255), T.fMin);   // the page title: the size of every page (static-native-captions.json filter1 / filter2 draws the same rect on the host layer)
         }
