@@ -266,7 +266,7 @@
     }
    },
    {
-    "key": "nativeListRow_426x68",
+    "key": "nativeListRow_640x72",
     "value": {
      "version": 2,
      "actions": [
@@ -324,7 +324,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 0 426 68"
+        "bounds": "0 0 640 72"
        }
       },
       {
@@ -361,7 +361,36 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "24 0 394 68"
+        "bounds": "24 0 552 72"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Arrow",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "native_list_row_arrow.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "584 16 40 40",
+        "additionalInvalidatingHandles": [
+         "Arrow"
+        ]
        }
       }
      ]
@@ -2493,7 +2522,134 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 0 426 628"
+        "bounds": "0 0 640 628"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 26.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Title"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "24 0 600 64",
+        "additionalInvalidatingHandles": [
+         "TopLevel"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title Deeper",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 26.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Title"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "72 0 552 64",
+        "additionalInvalidatingHandles": [
+         "DeeperLevel"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Back Arrow",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_list_back_arrow.png",
+         "offImage": "native_list_back_arrow.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Groups"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 64 64",
+        "additionalInvalidatingHandles": [
+         "DeeperLevel"
+        ]
        }
       },
       {
@@ -2501,7 +2657,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 1",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2517,6 +2673,10 @@
          {
           "key": "Caption",
           "value": "Cap0"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow0"
          }
         ]
        },
@@ -2526,7 +2686,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 68 426 68",
+        "bounds": "0 64 640 72",
         "additionalInvalidatingHandles": [
          "Gate0"
         ]
@@ -2537,7 +2697,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 2",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2553,6 +2713,10 @@
          {
           "key": "Caption",
           "value": "Cap1"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow1"
          }
         ]
        },
@@ -2562,7 +2726,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 136 426 68",
+        "bounds": "0 136 640 72",
         "additionalInvalidatingHandles": [
          "Gate1"
         ]
@@ -2573,7 +2737,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 3",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2589,6 +2753,10 @@
          {
           "key": "Caption",
           "value": "Cap2"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow2"
          }
         ]
        },
@@ -2598,7 +2766,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 204 426 68",
+        "bounds": "0 208 640 72",
         "additionalInvalidatingHandles": [
          "Gate2"
         ]
@@ -2609,7 +2777,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 4",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2625,6 +2793,10 @@
          {
           "key": "Caption",
           "value": "Cap3"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow3"
          }
         ]
        },
@@ -2634,7 +2806,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 272 426 68",
+        "bounds": "0 280 640 72",
         "additionalInvalidatingHandles": [
          "Gate3"
         ]
@@ -2645,7 +2817,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 5",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2661,6 +2833,10 @@
          {
           "key": "Caption",
           "value": "Cap4"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow4"
          }
         ]
        },
@@ -2670,7 +2846,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 340 426 68",
+        "bounds": "0 352 640 72",
         "additionalInvalidatingHandles": [
          "Gate4"
         ]
@@ -2681,7 +2857,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 6",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2697,6 +2873,10 @@
          {
           "key": "Caption",
           "value": "Cap5"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow5"
          }
         ]
        },
@@ -2706,7 +2886,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 408 426 68",
+        "bounds": "0 424 640 72",
         "additionalInvalidatingHandles": [
          "Gate5"
         ]
@@ -2717,7 +2897,7 @@
        "componentData": {
         "version": 1,
         "name": "Row 7",
-        "type": "nativeListRow_426x68",
+        "type": "nativeListRow_640x72",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2733,6 +2913,10 @@
          {
           "key": "Caption",
           "value": "Cap6"
+         },
+         {
+          "key": "Arrow",
+          "value": "Arrow6"
          }
         ]
        },
@@ -2742,44 +2926,10 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 476 426 68",
+        "bounds": "0 496 640 72",
         "additionalInvalidatingHandles": [
          "Gate6"
         ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "BACK",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_action_016dcd3823d3a8350b30.png",
-         "offImage": "native_action_016dcd3823d3a8350b30.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Back"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 6 120 56"
        }
       },
       {
@@ -2808,12 +2958,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 564 150 56"
+        "bounds": "8 572 150 56",
+        "additionalInvalidatingHandles": [
+         "HasPrev"
+        ]
        }
       },
       {
@@ -2842,128 +2995,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "268 564 150 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "GROUPS",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_action_f8f7e86150ac977365d8.png",
-         "offImage": "native_action_f8f7e86150ac977365d8.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Groups"
-         }
-        ]
-       },
-       "bounds": {
         "version": 2,
         "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "136 6 100 56",
+        "bounds": "482 572 150 56",
         "additionalInvalidatingHandles": [
-         "TitleGroups"
+         "HasNext"
         ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "UP",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_action_b82b5235289aa9b425c4.png",
-         "offImage": "native_action_b82b5235289aa9b425c4.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Groups"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "136 6 100 56",
-        "additionalInvalidatingHandles": [
-         "TitleUp"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 18.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Title"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "244 6 174 56"
        }
       }
      ]

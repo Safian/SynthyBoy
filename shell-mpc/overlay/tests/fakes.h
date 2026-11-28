@@ -402,6 +402,37 @@ public:
     std::atomic<bool> clipFlag { false };
     bool takeClipFlag() noexcept override { return clipFlag.exchange (false, std::memory_order_relaxed); }
     std::atomic<float> liveCutoff { 1000.0f }, liveRes { 20.0f };
+    void setNativeListText (const synthyboy_mpc::nativeui::nativetext::ListPage* page) noexcept override
+    {
+        if (page != nullptr) { listPage = *page; listPageActive = true; }
+        else { listPage = {}; listPageActive = false; }
+    }
+    void setNativeListState (const synthyboy_mpc::nativeui::liststate::State& state) noexcept override { listState = state; }
+    void setNativeModBoard (int gate, const synthyboy_mpc::nativeui::FxCell* fields) noexcept override
+    {
+        modBoardGate = gate;
+        if (fields != nullptr)
+            for (int i = 0; i < synthyboy_mpc::nativeui::modboard::kHandles; ++i)
+                modBoardFields[static_cast<size_t> (i)] = fields[i];
+        else
+            modBoardFields.fill ({});
+    }
+    bool takeNativeModBoard (int field, const synthyboy_mpc::nativeui::FxCell& expected, float& value) noexcept override
+    {
+        if (pendingModBoardField != field || expected.target < 0)
+            return false;
+        pendingModBoardField = -1;
+        value = pendingModBoardVal;
+        return true;
+    }
+    void injectModBoardTap (int field, float value = 1.0f) noexcept { pendingModBoardField = field; pendingModBoardVal = value; }
+    synthyboy_mpc::nativeui::nativetext::ListPage listPage {};
+    bool listPageActive = false;
+    synthyboy_mpc::nativeui::liststate::State listState {};
+    int modBoardGate = 0;
+    std::array<synthyboy_mpc::nativeui::FxCell, synthyboy_mpc::nativeui::modboard::kHandles> modBoardFields {};
+    int pendingModBoardField = -1;
+    float pendingModBoardVal = 0.0f;
 
 private:
     std::atomic<float> atom_[synthyboy::kMaxParams];

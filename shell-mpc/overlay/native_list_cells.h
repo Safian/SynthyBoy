@@ -27,6 +27,8 @@ public:
         const char* const* items = nullptr;
         int count = 0;
         bool headerBack = false;
+        bool allRowsOpenLevel = false;
+        const uint8_t* rowOpensLevel = nullptr;
     };
 
     /** Publishes the list and takes one gesture: onRow (index in the whole list), onBack (), onGroups () are called for it; returns true when a gesture was used (the owner may have changed its page). */
@@ -41,13 +43,22 @@ public:
         std::snprintf (page.title, sizeof page.title, "%s", data.header != nullptr ? data.header : data.fallbackTitle);
         page.up = false;
         page.count = std::clamp (count - first_, 0, nb::kListRows);
+        nativeui::liststate::State state;
+        state.active = true;
+        state.deeperLevel = data.headerBack;
+        state.hasPrev = first_ > 0;
+        state.hasNext = first_ + nb::kListRows < count;
         uint32_t signature = 2166136261u;
         auto mix = [&] (const char* text) { for (const char* c = text; *c != '\0'; ++c) signature = (signature ^ static_cast<unsigned char> (*c)) * 16777619u; signature = (signature ^ 0xffu) * 16777619u; };
         mix (page.title);
         for (int row = 0; row < page.count; ++row)
         {
-            std::snprintf (page.rows[row], sizeof page.rows[row], "%s", data.items != nullptr && data.items[first_ + row] != nullptr ? data.items[first_ + row] : "");
+            nativeui::liststate::copyRowName (page.rows[row], sizeof page.rows[row], data.items != nullptr ? data.items[first_ + row] : nullptr);
             mix (page.rows[row]);
+            const bool opens = data.rowOpensLevel != nullptr ? data.rowOpensLevel[first_ + row] != 0 : data.allRowsOpenLevel;
+            state.rowOpensLevel[row] = opens;
+            if (opens)
+                signature = (signature ^ static_cast<uint32_t> (0x100u + row)) * 16777619u;
         }
         signature = (signature ^ static_cast<uint32_t> (first_ * 4 + count * 64 + (data.headerBack ? 2 : 0))) * 16777619u;
         if (! published_ || signature != signature_)
@@ -57,6 +68,7 @@ public:
             inst.setNativeListText (&page);
             published_ = true;
         }
+        inst.setNativeListState (state);
         const int identity = serial_ + 1;   // a new page: new cell codes, so the host reads the names again
         std::array<nativeui::FxCell, nb::kHandles> fields {};
         for (int row = 0; row < page.count; ++row)
@@ -93,6 +105,7 @@ public:
             return;
         inst.setNativeModBoard (0, nullptr);
         inst.setNativeListText (nullptr);
+        inst.setNativeListState ({});
         published_ = false;
     }
 

@@ -518,15 +518,24 @@ public:
         const bool up = pageTop_ == kPageList && (wtMode_ || browseMode_);   // a browser: its header is the way UP
         nativeui::nativetext::ListPage page;
         std::snprintf (page.title, sizeof page.title, "%s", listData_.header != nullptr ? listData_.header : up ? "" : "SELECT MODULATION SOURCE");
-        page.up = up;
+        page.up = false;
         page.count = std::clamp (count - nativeListFirst_, 0, nb::kListRows);
+        nativeui::liststate::State state;
+        state.active = true;
+        state.deeperLevel = listData_.headerBack;
+        state.hasPrev = nativeListFirst_ > 0;
+        state.hasNext = nativeListFirst_ + nb::kListRows < count;
         uint32_t signature = 2166136261u;
         auto mix = [&] (const char* text) { for (const char* c = text; *c != '\0'; ++c) signature = (signature ^ static_cast<unsigned char> (*c)) * 16777619u; signature = (signature ^ 0xffu) * 16777619u; };
         mix (page.title);
         for (int row = 0; row < page.count; ++row)
         {
-            std::snprintf (page.rows[row], sizeof page.rows[row], "%s", listData_.items != nullptr && listData_.items[nativeListFirst_ + row] != nullptr ? listData_.items[nativeListFirst_ + row] : "");
+            nativeui::liststate::copyRowName (page.rows[row], sizeof page.rows[row], listData_.items != nullptr ? listData_.items[nativeListFirst_ + row] : nullptr);
             mix (page.rows[row]);
+            const bool opens = listData_.rowOpensLevel != nullptr ? listData_.rowOpensLevel[nativeListFirst_ + row] != 0 : listData_.allRowsOpenLevel;
+            state.rowOpensLevel[row] = opens;
+            if (opens)
+                signature = (signature ^ static_cast<uint32_t> (0x100u + row)) * 16777619u;
         }
         signature = (signature ^ static_cast<uint32_t> (nativeListFirst_ * 4 + count * 64 + (up ? 1 : 0) + (listData_.headerBack ? 2 : 0))) * 16777619u;
         if (! listPublished_ || signature != nativeListSignature_)
@@ -536,6 +545,7 @@ public:
             inst.setNativeListText (&page);
             listPublished_ = true;
         }
+        inst.setNativeListState (state);
         const int identity = nativeListSerial_ + 1;   // a new page: new cell codes, so the host reads the names again
         std::array<nativeui::FxCell, nb::kHandles> fields {};
         for (int row = 0; row < page.count; ++row)
@@ -569,6 +579,7 @@ public:
             return;
         inst.setNativeModBoard (0, nullptr);
         inst.setNativeListText (nullptr);
+        inst.setNativeListState ({});
         listPublished_ = false;
     }
     void hideNativeNoteMask (IInstanceView& inst)
@@ -794,6 +805,8 @@ public:
         const char* const* items = nullptr;
         int count = 0, current = -1;
         bool headerBack = false;
+        bool allRowsOpenLevel = false;
+        const uint8_t* rowOpensLevel = nullptr;
     };
     /** Opens the source browser of the shown oscillator A / B / C without a list page (the same browsers and code as the list page): the wavetable categories and tables, or the content roots, folders and
         files. false: the oscillator has no source field (Sub, Noise) or the instance offers no content root. */
@@ -814,7 +827,7 @@ public:
     {
         if (! wtMode_ && ! browseMode_)
             return {};
-        return { listData_.header, listData_.items, listData_.count, listData_.current, listData_.headerBack };
+        return { listData_.header, listData_.items, listData_.count, listData_.current, listData_.headerBack, listData_.allRowsOpenLevel, listData_.rowOpensLevel };
     }
     /** A row of the Play page's Source list: true when a final choice was made (the list closes); false when a category or folder opened or the row was refused. */
     bool chooseCompactSourceRow (int row, IInstanceView& v)
@@ -2184,7 +2197,7 @@ private:
             fillModsSources();
     }
     /** The list of the sources a new modulation can come from: the groups, then the sources of one group (the header is the way up). */
-    void fillModsSources()
+    void fillModsSources (int focusGroup = -1)
     {
         modsListNames_.clear();
         modsListChoices_.clear();
@@ -2197,6 +2210,9 @@ private:
             }
             listData_.header = nullptr;
             listData_.headerBack = false;
+            listData_.allRowsOpenLevel = true;
+            listData_.rowOpensLevel = nullptr;
+            listData_.current = focusGroup > 0 && focusGroup <= uibind::kSourceGroups ? focusGroup - 1 : -1;
         }
         else
         {
@@ -2208,10 +2224,12 @@ private:
                 }
             listData_.header = uibind::sourceGroupName (modsListGroup_);
             listData_.headerBack = true;
+            listData_.allRowsOpenLevel = false;
+            listData_.rowOpensLevel = nullptr;
+            listData_.current = -1;
         }
         listData_.items = modsListNames_.data();
         listData_.count = static_cast<int> (modsListNames_.size());
-        listData_.current = -1;
         showCurrentRow();
         modsListFilled_ = true;
     }
@@ -2504,8 +2522,9 @@ private:
                     {
                         if (modsListGroup_ >= 0)
                         {
+                            const int leftGroup = modsListGroup_;
                             modsListGroup_ = -1;
-                            fillModsSources();
+                            fillModsSources (leftGroup);
                         }
                     }
                     else
@@ -2964,6 +2983,8 @@ private:
         // the header is the list's own bar (the way up and the title), the rows are the categories or the tables
         listData_.header = wtBrowser_.title().c_str();
         listData_.headerBack = ! wtBrowser_.atCategories();
+        listData_.allRowsOpenLevel = wtBrowser_.atCategories();
+        listData_.rowOpensLevel = nullptr;
         listData_.items = wtBrowser_.items();
         listData_.count = wtBrowser_.count();
         listData_.current = wtBrowser_.currentRow();
@@ -3051,21 +3072,33 @@ private:
     {
         if (wtMode_ && wtBrowser_.up() == WavetableBrowser::Action::Changed)
             fillWavetableList();
-        else if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
-            fillBrowserList();
+        else if (browseMode_)
+        {
+            const std::string leftFolder = browser_.folder();
+            if (browser_.tap (0) == ContentBrowser::Action::Changed)
+                fillBrowserList (leftFolder);
+            else
+                return false;
+        }
         else
             return false;
         return true;
     }
-    void fillBrowserList()
+    void fillBrowserList (const std::string& focusPath = {})
     {
         // the header (the way up and the path) is the list's own bar, the rows are the ones below the first
         browserTitle_ = browser_.title();
         listData_.header = browserTitle_.c_str();
         listData_.headerBack = ! browser_.atRoots();
+        listData_.allRowsOpenLevel = false;
         listData_.items = browser_.items() + 1;
         listData_.count = std::max (0, browser_.count() - 1);
-        const int cur = browser_.rowOf (lastChosen_[browser_.kind() - 1]);
+        browserRowOpens_.resize (static_cast<size_t> (listData_.count));
+        const auto& rows = browser_.rows();
+        for (int i = 0; i < listData_.count; ++i)
+            browserRowOpens_[static_cast<size_t> (i)] = rows[static_cast<size_t> (i + 1)].kind == 1 ? 1 : 0;
+        listData_.rowOpensLevel = browserRowOpens_.data();
+        const int cur = browser_.rowOf (! focusPath.empty() ? focusPath : lastChosen_[browser_.kind() - 1]);
         listData_.current = cur > 0 ? cur - 1 : -1;
         showCurrentRow();
     }
@@ -3238,10 +3271,13 @@ private:
     {
         const char* header = nullptr;
         bool headerBack = false;
+        bool allRowsOpenLevel = false;
+        const uint8_t* rowOpensLevel = nullptr;
         const char* const* items = nullptr;
         int count = 0, current = -1;
     };
     ListData listData_;
+    std::vector<uint8_t> browserRowOpens_;
     int nativeListFirst_ = 0;            // the first row of the page of the list shown
     uint32_t nativeListSignature_ = 0;   // what the host was told last (the names, the page): a new one makes new cells and a new text page
     int nativeListSerial_ = 0;

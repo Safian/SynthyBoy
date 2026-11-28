@@ -207,5 +207,29 @@
         "look": "ghost"
       }
     ]
-  }
+  },
+  "glyphs": [
+    {
+      "id": "list-back-arrow-64",
+      "file": "icon-button-list-back-arrow-64.png",
+      "skin_file": "native_list_back_arrow.png",
+      "alt": "Lista vissza nyíl, 64x64 px (28 px ikon)",
+      "caption": "Lista vissza nyíl · 64 px",
+      "glyph": "back_arrow",
+      "box": 64,
+      "glyph_size": 28,
+      "stroke": 2.6
+    },
+    {
+      "id": "list-row-arrow-40",
+      "file": "icon-button-list-row-arrow-40.png",
+      "skin_file": "native_list_row_arrow.png",
+      "alt": "Lista sor nyíl, 40x40 px (20 px ikon)",
+      "caption": "Lista sor nyíl · 40 px",
+      "glyph": "row_arrow",
+      "box": 40,
+      "glyph_size": 20,
+      "stroke": 2.2
+    }
+  ]
 }
