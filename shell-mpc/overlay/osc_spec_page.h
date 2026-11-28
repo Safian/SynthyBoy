@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the DETAIL PAGES of the oscillator types that hold the parameters the full screen has no room for (docs/MPC.md "Oscillator UI", table "type -> page -> block -> controls").
+// SynthyBoy - MPC overlay: the DETAIL PAGES of the oscillator types that hold the parameters the full screen has no room for.
 // A page is DATA (a Spec: title, whether the display of the type is above it, blocks, controls with the key of the parameter, the state in which the control is shown). The controls are native cells of the host skin (owner decision
 // 2026-11-27: the C++ layer has no UI elements); `OscSpecPage` is plain data: which controls apply in the current state, the Q groups (each titled block with a visible control is one group of up to four controls in reading order, a
 // block with nothing to show is left out) and the rectangle of the display. Pure: no OS headers; the owner (OscUi) binds the controls to the parameters and says which controls are visible.

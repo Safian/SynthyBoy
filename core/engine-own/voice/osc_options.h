@@ -1,5 +1,5 @@
 // SynthyBoy - own engine: the small pure rules of the oscillator options that change which note an oscillator plays: the transpose snap (a scale mask of the semitones of an octave, as Vital's
-// transpose quantize: bits 0 .. 11 the allowed notes, bit 12 snaps the whole note instead of the transpose alone) and the key fold of the key range (docs/MPC.md "Oscillator UI", Serum 2 manual p.271).
+// transpose quantize: bits 0 .. 11 the allowed notes, bit 12 snaps the whole note instead of the transpose alone) and the key fold of the key range (Serum 2 manual p.271).
 // No allocation, no state: usable on the audio thread.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

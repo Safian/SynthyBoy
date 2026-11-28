@@ -1,5 +1,5 @@
 // SynthyBoy - MPC UI component library: the ROWS of the three thirds of the Play pages (oscillator, envelope, LFO), ONE table so that the three displays (the wave, the envelope graph, the LFO curve) have the same top and the same
-// height and the controls below them start on one line (owner request, docs/MPC.md "Play page: the rows"). Every third has, top to bottom: the selector row (the one selector component, kSelectorH), the display (displayRect), and below it the
+// height and the controls below them start on one line (owner request). Every third has, top to bottom: the selector row (the one selector component, kSelectorH), the display (displayRect), and below it the
 // block of the controls that starts at controlsLine (the lane of the Q index chips lies above it). The blocks below are as tall as the tallest of the thirds needs (kControlsH: the LFO's SHAPE, RATE and the two knobs).
 // The display has a HEADER BAND at its top (bandRect, kBandH): the buttons of the display stand in it (power, route, full screen: powerRect, routeRect, fullRect) with the label text between them (labelRect); the PLOT AREA (plotRect: grid,
 // curve, fill, handles, cursor) is the display below the band with the same inner padding in all three thirds, so no curve ever runs under a button and the three plots have the same top, bottom and height.

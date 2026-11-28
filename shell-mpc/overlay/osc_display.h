@@ -1,7 +1,7 @@
 // SynthyBoy - MPC overlay: the DISPLAY of the oscillator UI, shared by the Play page (the compact view and the full screen of the oscillator third) and the pages of the OSC tab (osc_page.h): the data of
 // the picture of the instance a selector names (Sub, A, B, C, Noise) and its drawing in a rectangle (ui/display.h). The data: the cycle of a wavetable with the frames behind it and a faint spectrum, the
 // min / max overview of a sample, multisample or granular oscillator, the colour of the noise, the waveform of the sub oscillator; and the live read-outs of the engine (the read heads and grains,
-// the phases of the sub, the read head of a sample noise). One implementation: nothing of it is kept twice (docs/MPC.md "Oscillator UI").
+// the phases of the sub, the read head of a sample noise). One implementation: nothing of it is kept twice.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -251,7 +251,7 @@ public:
     }
     float framePosition() const noexcept { return shownFrame_; }
 
-    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. `live`: the running parts only. `plotArea`: the rectangle the picture is drawn in (the compact view's, below its header band); empty = the display rectangle. */
+    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is, drawn by ui/display.h. `live`: the running parts only. `plotArea`: the rectangle the picture is drawn in (the compact view's, below its header band); empty = the display rectangle. */
     void draw (gpu::SceneBuilder& sb, const ui::Rect& r, bool live, const ui::Rect& plotArea = {},
                const std::array<ui::Rect, 3>* nativeHeader = nullptr) const
     {

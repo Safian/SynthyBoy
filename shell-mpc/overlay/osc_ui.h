@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the oscillator UI of the Play page and of the oscillator tabs, wired to the real engine parameters (docs/MPC.md "Oscillator UI"). Owner decision 2026-11-27: the C++ layer has no UI elements; every control of
+// SynthyBoy - MPC overlay: the oscillator UI of the Play page and of the oscillator tabs, wired to the real engine parameters. Owner decision 2026-11-27: the C++ layer has no UI elements; every control of
 // the oscillator is a native cell of the host skin. This object holds what the plugin knows about them: the rows (`Item`: id, engine key, kind, the state read from the parameter and the rectangle of the cell, osc_model.h), the Q-Link groups
 // (tables of item ids), the native bridge (compact, settings, detail), the displays and the picture rectangles, the pages above the full screen. One object per (Play view, plugin instance). Pure: no OS headers, no threads of its own; the overlay
 // thread calls update () / touch () / tick () / describe (), with the instance as IInstanceView.
@@ -9,7 +9,7 @@
 // window, multisample envelope, the modulations of a control) and the route popup. The picture of the oscillator cycle goes into the display rectangle (displayRect (); the Play view draws it).
 // What it does with a touch: the host's native cell writes the value (native bridge: applyNativeSetting / applyNativeDetail, the id of the cell says which parameter and how the value converts); the write goes through
 // IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back into the cells, so host automation, presets and the host's own widgets show on the next frame.
-// Controls whose engine parameter does not exist or is not read by the engine are DISABLED (docs/MPC.md "Oscillator UI": WARP Var, phase memory, the source list of the sample types, the source dropdown).
+// Controls whose engine parameter does not exist or is not read by the engine are DISABLED (WARP Var, phase memory, the source list of the sample types, the source dropdown).
 // The lists (the content browser, the wavetable browser, the source of a new modulation) are the native cells of the modulation picker (nativeui::modboard, names through IInstanceView::setNativeListText) and the mask of the transpose snap is
 // twelve native toggle cells (nativeui::kNoteMask): the plugin holds the data of both (listData_, maskItem_) and takes their gestures (publishNativeLists, publishNativeNoteMask).
 #pragma once

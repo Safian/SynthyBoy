@@ -1127,7 +1127,7 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     lastVelocity = n.velocity;
 }
 
-/** Phase Memory and Phase Legato of the wavetable oscillators, after the note started (docs/MPC.md "Oscillator UI", Serum 2 manual p.43 and 44). Memory All Voices: the note starts with PHASE and RAND (nothing here). Contiguous: it
+/** Phase Memory and Phase Legato of the wavetable oscillators, after the note started (Serum 2 manual p.43 and 44). Memory All Voices: the note starts with PHASE and RAND (nothing here). Contiguous: it
     continues with the phase the previous note has now. Per Voice: it starts with the same phase every time, the one captured from the previous note when this mode was entered (the first note after it, with no previous
     note, captures its own). Phase Legato (the oscillator's switch or the global voice.phase_legato, memory on All Voices): a note that starts while the key of the previous note is still held takes that note's phases instead of PHASE and RAND (docs/ui-design/13-new-keys.md A86). Arrays: [oscillator][unison voice] or null. */
 void OwnEngine::applyPhaseOptions (Voice& v, const uint32_t (*prev)[Voice::kPhaseCount], bool prevHeld) noexcept

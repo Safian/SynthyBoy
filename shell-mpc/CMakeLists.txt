@@ -52,7 +52,7 @@ target_compile_definitions(synthyboy_mpc PRIVATE
     SYNTHYBOY_MPC_UI_GEN=${SYNTHYBOY_MPC_UI_GEN_N}
     SYNTHYBOY_MPC_QFRAME_ENABLED=${SYNTHYBOY_MPC_QFRAME_ENABLED_N})
 
-# Live LFO display (docs/MPC.md "LFO pictures"): four display-only cursor parameters after the engine's list, driven by a low priority thread.
+# Live LFO display (docs/MPC.md "LFO live display and the display thread"): four display-only cursor parameters after the engine's list, driven by a low priority thread.
 # The overlay's LFO pages read them, so the MPC package needs the plugin built with this ON (the default of this shell).
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
 option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)

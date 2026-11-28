@@ -61,7 +61,7 @@
 #error "SYNTHYBOY_VST2_VERSION must come from the build"
 #endif
 
-// Live LFO display (docs/MPC.md "LFO pictures"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
+// Live LFO display (docs/MPC.md "LFO live display and the display thread"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). When 1 the plugin has four display-only
 // parameters after the engine's list (index paramCount() + n - 1 for LFO n): the cursor of the LFO picture of the skin (lfo_live.h).
 // Never in the mirror, the state or a preset, not automatable. A helper thread (not the audio thread) reads the engine's live values about
@@ -1499,7 +1499,7 @@ struct PluginInstance
     }
     bool overlayAttached = false;
 
-    // ---- the Play page (play_params.h, docs/MPC.md "Play page"): three selectors (saved in the chunk) and 24 proxy parameters (the real parameter of the selected instance) ----
+    // ---- the Play page (play_params.h, docs/MPC.md "Play selectors and proxies"): three selectors (saved in the chunk) and 24 proxy parameters (the real parameter of the selected instance) ----
     std::atomic<int> playSel[synthyboy_mpc::play::kGroups] { { 1 }, { 1 }, { 1 } };
     std::atomic<uint64_t> playOscSelectionRev {};
     /** The chunk-only view state of the merged tabs (tab_view.h "mpcTabView": rnd, filter): no host parameter. effSetChunk restores it (a chunk without it gives 0, 0), effSetProgram leaves it. */

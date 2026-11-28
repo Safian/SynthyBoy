@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the five oscillator instances of the Play page's "Play Osc" selector, in the order of the selector: 1 Sub, 2 A, 3 B, 4 C, 5 Noise (docs/MPC.md "Play page").
+// SynthyBoy - MPC overlay: the five oscillator instances of the Play page's "Play Osc" selector, in the order of the selector: 1 Sub, 2 A, 3 B, 4 C, 5 Noise (docs/MPC.md "Play selectors and proxies").
 // Pure constants and functions, no dependencies, so that the plugin's parameter code (shell-mpc/play_params.h) and the overlay's views use ONE table.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

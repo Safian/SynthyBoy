@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The Play page shows one oscillator, one envelope and one LFO side by side (docs/MPC.md "Play page"). Which instance each panel shows is set by three SELECTORS, and eight knobs under
+// The Play page shows one oscillator, one envelope and one LFO side by side (docs/MPC.md "Play selectors and proxies"). Which instance each panel shows is set by three SELECTORS, and eight knobs under
 // the panel act on the selected instance through PROXY parameters:
 //   "Play Osc" 1 .. 5 (Sub, A, B, C, Noise: overlay/play_osc.h), "Play Env" 1 .. 6, "Play LFO" 1 .. 10: stepped, saved in the chunk (mpcPlayOsc5 / mpcPlayEnv / mpcPlayLfo; the chunk of the build with
 //   three oscillator instances has "mpcPlayOsc" 1 .. 3 = A, B, C and is migrated), not automatable; an old chunk without them leaves them as they are

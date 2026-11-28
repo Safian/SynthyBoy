@@ -1,4 +1,4 @@
-// SynthyBoy - MPC shell (overlay build only): the debug log of the host's calls that the Play page depends on (docs/MPC.md "Play page", "Project save and reload").
+// SynthyBoy - MPC shell (overlay build only): the debug log of the host's calls that the Play page depends on (docs/MPC.md "Play selectors and proxies", "Project save and reload").
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
