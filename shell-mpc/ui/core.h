@@ -342,7 +342,7 @@ protected:
     bool captured_ = false, hostPainted_ = false;
 };
 
-/** Marks a ControlModel host-painted if it is a legacy drawable Component; no-op for pure models. */
+/** Marks a ControlModel host-painted if it is a drawable Component; no-op for pure models. */
 inline void setHostPainted (ControlModel* m, bool on) noexcept
 {
     if (auto* c = dynamic_cast<Component*> (m))

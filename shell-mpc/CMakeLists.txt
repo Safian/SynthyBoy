@@ -104,10 +104,10 @@ set(SYNTHYBOY_MPC_LFO_LIVE_HZ 10 CACHE STRING "MPC shell: refresh rate of the LF
 option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
 set(live_notify_default ON)
 if(SYNTHYBOY_PACKAGED_NATIVE_SKIN AND SYNTHYBOY_MPC_OVERLAY)
-    # The shipped native skin has no bindings to the legacy LFO or spectrum handles.
+    # The shipped native skin has no bindings to the LFO or spectrum display handles.
     set(live_notify_default OFF)
 endif()
-option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "Notify host widgets when a legacy LFO or spectrum display value changes" ${live_notify_default})
+option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "Notify the host when an LFO or spectrum display value changes" ${live_notify_default})
 option(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST "MPC shell: sweep the four cursors without a voice (host-side measurements only)" OFF)
 if(SYNTHYBOY_MPC_LFO_LIVE)
     find_package(Threads REQUIRED)
@@ -526,10 +526,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(device_profile_host PRIVATE cxx_std_17)
     target_compile_options(device_profile_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME device_profile_host COMMAND device_profile_host)
-
-    # Data consistency tests for the FX page tables (ui/fx_layout.h, ui/choice_names.h)
-
-    # UI component library coverage: new parts host tests (NoteMask, FxBandBoard, Knob LED/dialMax, NumberField maxBox/text, LedList 2-digit chips)
 
 endif()
 

@@ -135,7 +135,7 @@ inline const char* tabName (const ModInput& m) noexcept
 
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** Pure parameter/Q-Link/layout model contract: NO drawing, NO touch handling. Both native control models and legacy overlay Component widgets satisfy this contract. */
+/** Pure parameter/Q-Link/layout model contract: NO drawing, NO touch handling. Both the native control models and the drawable overlay Components satisfy this contract. */
 class ControlModel
 {
 public:

@@ -182,7 +182,7 @@ public:
         DetailNorm,  // a DetailButton with a 0 .. 1 value
         DetailInt,   // a DetailButton with an integer value
         Route,       // the route button: the destination choice
-        List,        // a short choice parameter as a LedList (all options visible)
+        List,        // a short choice parameter (all options visible)
         Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
         SnapBit,     // the toggle for bit 12 of the same parameter (snap the played note, not the transpose)
         Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser

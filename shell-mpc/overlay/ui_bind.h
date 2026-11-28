@@ -308,7 +308,7 @@ inline void fillSelector (SelKind kind, const UsedScan& sc, const IInstanceView&
     selectorCandidates (kind, sc.used, sc.edited, sel);
     sel.setSelected (kind == SelKind::Env ? selectedEnv (v) : selectedLfo (v));
 }
-/** The cells of a selector as a list of positions: what the Play page's carousel steps over (the neighbours, the list of its name). It is made FROM the filled UsedSelector (`cellsFromSelector`), so the tab and the Play page cannot drift
+/** The cells of a selector as a list of positions: what the Play page's selector steps over (the neighbours, the list of its name). It is made FROM the filled SelectorSet (`cellsFromSelector`), so the tab and the Play page cannot drift
     apart: the same used items, the selected one and ONE `+`. `id[k]` is the candidate of cell k, `kPlusCell` (0) for the `+` cell; `names[k]` its row name ("ENV 3", "LFO 3", "RND 2", "+"). */
 struct SelectorCells
 {

@@ -108,7 +108,7 @@ void drawGround (const Ui& ui, gpu::SceneBuilder& sb, long)
 }
 } // namespace page
 
-/** The hooks of a page view for a page that needs nothing of the plugin around it (a page of the kit: mpckit::PageBase over mpckit::IInstance): no names to load, no loading bar. A plugin with its own
+/** The hooks of a page view for a page that needs nothing of the plugin around it (a page of the kit over mpckit::IInstance): no names to load, no loading bar. A plugin with its own
     names, or a loading state, writes a class like MacroNameHooks (macro_names.h): `Instance`, `Input`, `update (IInstance&)`, `scope ()`, `loading (const IInstance&)`, `fill (Input&, const ViewInput&)`. */
 struct NoHooks
 {
