@@ -154,6 +154,7 @@
 
 ## Rajzolási költség, valós idejű terhelés, memória
 
+- [ ] GPU helper részleges kép (2026-11-28): a dobozon kívüli draw-ok kihagyása és az `eglSetDamageRegionKHR` (`EGL_KHR_partial_update`) hatásának mérése Key 61-en (XL-en külön): előtte/utána `base-idle`, `layers1`, `c8` bench és a 19-es próba sorai (helper ms átlag/p99, GPU MHz boosttal és nélküle). A bővítményt mindkét gép EGL-je kínálja (`platform-key61.md`). Kész, ha a mérés a `docs/MPC.md`-ben van; ha a boost nélkül is ≤14 ms a kép, a `gpu_clock` boost elhagyását mérjük.
 - [ ] Statikus és animációs réteg szétválasztása a kijelzőn (owner 2026-11-21): a nem változó elemek egyszer egy statikus képbe, képkockánként csak az animált téglalapok (LFO szerkesztéskor a vonal, lejátszáskor a pötty; FX-nél a görbe húzás közben). Kész, ha Key 61-en kevesebb a GPU- és CPU-idő képkockánként ugyanazzal a látvánnyal; XL-en is mérni.
 - [ ] Display readout cadence (owner decision): `OwnEngine::writeReadout`/`publishStats` pollolt motornál minden blokkban fut; minden negyedik blokk ~6,5 k Ir/blokk nyereség (x86 callgrind), de ~20 ms régebbi adat, a mérőcsúcsokat gyűjteni kellene. Kész, ha az owner a késleltetésről dönt és a PMU mutatja a nyereséget.
 - [ ] A `docs/dsp-knowledge/voice-control.md` control-period cache-einek készülékmérése (oszcillátor mezőcsoportonként, szűrő-memo, használatlan LFO-k, render tail, no-op snapshot, hangszám-erősítés cache): csak x86 callgrind van. Kész, ha Key 61-en A/B/A hangonként nyereséget mutat, vagy visszavonva.

@@ -46,6 +46,7 @@
 ## GPU (Key 61 Mali-T760 and XL Mali-G610; EGL probe 2026-11-21)
 
 - Both: Mesa Panfrost through a surfaceless EGL context on the render node (probe: `.hw-local/mpc-tools/gpu-info/`, outputs `k61.txt`, `xl.txt`). OpenGL ES 3.1 context works, 3.2 fails. COMPUTE SHADERS compile and link (`#version 310 es`). No OpenCL, rusticl or ICD file on either device.
+- Both: the EGL display extensions include `EGL_EXT_buffer_age`, `EGL_KHR_partial_update` (damage region for tile-based partial redraws, used by the GPU helper since 2026-11-28) and `EGL_ANDROID_native_fence_sync` (a possible fence-based replacement of the helper's per-picture `glFinish`; not used). `measured: .hw-local/mpc-tools/gpu-info/k61.txt, xl.txt`
 - Key 61: Mesa 24.0.7, EGL 1.4, compute work group size 128 and 128 invocations, GL_EXT_color_buffer_float, EXT_shader_framebuffer_fetch, OES_texture_float present; missing against the XL: EXT_gpu_shader5, OES_sample_shading, EXT_disjoint_timer_query, EXT_multi_draw_indirect, EXT_texture_storage. devfreq 100-600 MHz (100/200/300/400/600), simple_ondemand.
 - XL: Mesa 24.3.4, EGL 1.5, work group 256 x 3 / 256 invocations, shared memory 32 KiB, 8 compute SSBO blocks, 192 image units, devfreq 300-1000 MHz.
 - A GPU dispatch plus read-back through shared memory suits non-realtime parallel work; whether a GPU FFT pays off is unmeasured (open item in TODO.md: the overlay thread time split decides).
