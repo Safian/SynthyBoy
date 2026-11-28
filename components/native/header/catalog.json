@@ -644,7 +644,7 @@
                   {
                     "name": "Waveform",
                     "def": "lfoHeaderWave",
-                    "overlay": "lfoNativeChoiceDrawer1",
+                    "list": true,
                     "focus": true,
                     "hw_focus": "Yes",
                     "show": "Hide",
@@ -656,7 +656,7 @@
                     "name": "Style",
                     "def": "lfoHeaderStyle",
                     "role": "style",
-                    "overlay": "lfoNativeChoiceDrawer2",
+                    "list": true,
                     "focus": true,
                     "hw_focus": "Yes",
                     "show": "Hide",

@@ -6862,6 +6862,31 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
         return false;
     const int offset = hostIndex - nativeUiBase();
 
+    // ---- the standalone LFO / RND page choice fields (WAVEFORM, STYLE, DIVISION, MODE, DIRECTION)
+    if (offset >= nativeui::kLfoBase && offset < nativeui::kFilterBase)
+    {
+        namespace n = nativeui::lfo;
+        const int field = offset - nativeui::kLfoBase;
+        const uint64_t active = nativeLfo.publication();
+        if (active == 0 || (active & n::bit (field)) == 0)
+            return false;
+        const auto* info = PluginInstance::nativeLfoInfo (field);
+        if (info == nullptr || info->choices == nullptr || info->numChoices < 2)
+            return false;
+        for (int i = 0; i < info->numChoices && info->min + static_cast<float> (i) <= info->max; ++i)
+        {
+            const char* row = (field == n::kShape && i == n::kShapeLast) ? "Drawn" : info->choices[i];
+            items.add (row, synthyboy::toNormalised (*info, info->min + static_cast<float> (i)));
+        }
+        const float plain = synthyboy::fromNormalised (*info, nativeLfo.value (field));
+        current = std::clamp (static_cast<int> (std::lround (plain - info->min)), 0, std::max (0, items.count - 1));
+        title (field == n::kShape ? "WAVEFORM"
+             : field == n::kStyle ? "STYLE"
+             : field == n::kDivision ? "DIVISION"
+             : field == n::kDirection ? "DIRECTION" : "MODE");
+        return items.count > 0;
+    }
+
     // ---- an FX domain (on the Filter page the same handles carry the filter MODEL and STYLE): the cell bound to it now; names as the domain branch of effGetParamDisplay
     if (offset >= nativeui::kFxDomainBase && offset < nativeui::kFxDomainBase + nativeui::kFxDomains)
     {
