@@ -56,6 +56,7 @@
 #include "poll_guard.h"
 #include "program_list.h"
 #include "native_ui_params.h"
+#include "native_osc_settings_bank.h"
 
 #ifndef SYNTHYBOY_VST2_VERSION
 #error "SYNTHYBOY_VST2_VERSION must come from the build"
@@ -2332,11 +2333,11 @@ struct PluginInstance
         // Seed the standalone Osc A read-only presentation without claiming gestures or Q groups.
         const uint64_t oscPreset = overlayView.stateGeneration();
         auto standaloneOsc = std::make_unique<ov::OscUi>();
-        const auto oscRoot = standaloneOsc->prepareStandaloneRoot (overlayView, synthyboy_mpc::playosc::kOscA, oscPreset);
-        const bool oscPowered = ov::OscPageUi::isInstanceOn (overlayView, synthyboy_mpc::playosc::kOscA);
+        const auto oscRoot = standaloneOsc->prepareStandaloneRoot (overlayView, synthyboy_mpc::playosc::kA, oscPreset);
+        const bool oscPowered = ov::OscPageUi::isInstanceOn (overlayView, synthyboy_mpc::playosc::kA);
         const nativeui::osc::ViewState oscView {
-            synthyboy_mpc::playosc::kOscA, oscPowered, oscPreset,
-            ov::OscPageUi::currentDestination (overlayView, synthyboy_mpc::playosc::kOscA), oscPowered
+            synthyboy_mpc::playosc::kA, oscPowered, oscPreset,
+            ov::OscPageUi::currentDestination (overlayView, synthyboy_mpc::playosc::kA), oscPowered
         };
         std::lock_guard<std::mutex> oscGuard (oscPresentationMutex);
         if (oscPreset != overlayView.stateGeneration())
