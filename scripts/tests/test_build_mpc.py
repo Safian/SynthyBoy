@@ -288,12 +288,12 @@ class BuildMpcTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
 
     def test_cmake_args_reach_every_container(self):
-        r = self.build("--no-validate", "--cmake-arg", "-DSYNTHYBOY_MPC_CALLBACK_STATS=ON", "--cmake-arg", "-DSYNTHYBOY_MPC_LFO_LIVE_HZ=25")
+        r = self.build("--no-validate", "--cmake-arg", "-DSYNTHYBOY_MPC_PAD_PRESSURE=ON", "--cmake-arg", "-DSYNTHYBOY_MPC_SPECTRUM=ON")
         self.assertEqual(r.returncode, 0, r.stderr)
         runs = self.runs()
         self.assertEqual(len(runs), 2)
         for run in runs:
-            self.assertIn("CMAKE_EXTRA_ARGS=-DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25", run)
+            self.assertIn("CMAKE_EXTRA_ARGS=-DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_SPECTRUM=ON", run)
 
     def test_no_cmake_arg_leaves_the_environment_value_empty(self):
         self.assertEqual(self.build("--arch", "arm32", "--no-validate").returncode, 0)

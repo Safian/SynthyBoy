@@ -203,7 +203,7 @@ private:
     const std::chrono::steady_clock::time_point epoch_ = std::chrono::steady_clock::now();
 
     /** The files the controller looks at in the shipped plugin. The switches that are features (overlay-off, nogpu, rot, look, detail, fps, gpuclock) and the status file stay; the debug ones (the pointer hot spot, the
-        curve dump request) are empty without SYNTHYBOY_MPC_DEBUG_HOOKS, so the plugin does not look at them. */
+        curve dump request) are empty (the debug hooks are gone), so the plugin does not look at them. */
     /** The shipped timing: the GPU helper is started as soon as an instance is attached (the overlay thread does it, in parallel with the host's own loading), not when the first page is found on screen. */
     static Timing shippedTiming (const std::string& deviceModel)
     {

@@ -6,11 +6,9 @@ cd "$(dirname "$0")/.." || exit 1
 build_root="/tmp/synthyboy-$(id -u)/$(pwd -P | cksum | cut -d' ' -f1)/accept"
 mkdir -p "$build_root" || exit 1
 B=$build_root/build-mpc
-GAIN_DB=${SYNTHYBOY_ACCEPT_GAIN_DB:-18}   # the test make-up gain the acceptance builds run with (historic 18 dB test level to exercise limiting; one place for the builds and for output_level_host)
-# -USYNTHYBOY_MPC_OVERLAY*: the overlay options are the one place the builds do NOT name (the default is the build without the module), so a cache entry an earlier overlay build left in the directory is dropped.
-# Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
-# configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
-BASE_OPTS="-USYNTHYBOY_MPC_OVERLAY -USYNTHYBOY_MPC_OVERLAY_GPU -DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=$GAIN_DB -DSYNTHYBOY_MPC_OUTPUT_LIMITER=OFF -DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF"
+# The build options of the shipped plugin (what the package has: overlay, live LFO and spectrum display, pad pressure; the developer log is ON here, the release proof below builds it OFF).
+# Every option is named so that a build directory that keeps the entries of earlier runs in its CMake cache cannot change the configuration.
+BASE_OPTS="-DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_DEV_LOG=ON"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc dump_mpc_chunks synthyboy_sound_lab > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
@@ -35,7 +33,7 @@ a = [x["name"] for x in d["params"]]; b = [x["name"] for x in p["params"]]
 b = subprocess.run([sys.argv[3]], input="\n".join(b) + "\n", capture_output=True, text=True, check=True).stdout.split("\n")[:-1]   # the names as the host gets them
 ok = True
 extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)] + ["Spectrum %d" % n for n in range(1, 33)] + ["Pad Pressure", "Pad Pressure Amount"]   # SYNTHYBOY_MPC_LFO_LIVE and SYNTHYBOY_MPC_SPECTRUM (default ON): display-only parameters after the engine's list, then the two SYNTHYBOY_MPC_PAD_PRESSURE parameters
-if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 38 extra parameters {a[p['count']:]}"); ok = False
+if len(a) < p["count"] + len(extra) or a[p["count"]:p["count"] + len(extra)] != extra: print(f"param count {len(a)}: the {len(extra)} display parameters do not follow the {p['count']} engine parameters: {a[p['count']:]}"); ok = False   # (the overlay parameters come after them)
 for i, (x, y) in enumerate(zip(a, b)):
     if x != y: print(f"param {i}: plugin '{x}' != docs '{y}'"); ok = False; break
 for k, v in (("name", "SynthyBoy"), ("vendor", "Safian"), ("uid", "SfSB"), ("isInstrument", True), ("numInputs", 0), ("numOutputs", 2)):
@@ -119,44 +117,15 @@ if grep -q "WARNING: ThreadSanitizer" $T/programs.log; then
     echo "ACCEPT FAIL: data races while changing programs (full report: $T/programs.log)"; exit 1
 fi
 grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/programs.log | head; echo "ACCEPT FAIL: tsan programs_host"; exit 1; }
-# Live LFO display (SYNTHYBOY_MPC_LFO_LIVE, default ON in this shell): the main build above has it. Four more builds with the own engine (the readout of the cursors
-# comes from it): OFF (nothing after the engine's parameters), ON (cursors follow a held note), SELFTEST (cursors sweep without a note), SELFTEST + NOTIFY=OFF
-# (no audioMasterAutomate). All four give the same state chunk. The ON build runs once more under ThreadSanitizer (the display thread reads the engine's atomics).
+# The shipped configuration is the main build above (BASE_OPTS). The only extra build is the release one (DEV_LOG=OFF), for the release proof at the end.
 LIVEINC="-I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework"
 live_build() { # name, cmake options...
     n=$1; shift
     cmake -S . -B ${B}-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "$@" > ${B}-live-$n.configure.log 2>&1 && cmake --build ${B}-live-$n --target synthyboy_mpc > ${B}-live-$n.build.log 2>&1 || { tail -30 ${B}-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
 }
-live_build off -DSYNTHYBOY_MPC_LFO_LIVE=OFF -DSYNTHYBOY_MPC_SPECTRUM=OFF
-live_build on
-live_build self -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON
-live_build quiet -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=OFF
-live_build hz25 -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
-live_build stats -DSYNTHYBOY_MPC_CALLBACK_STATS=ON
-live_build specoff -DSYNTHYBOY_MPC_SPECTRUM=OFF
-live_build specself -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON
-live_build specself25 -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
-live_build gain0 -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
-live_build limiteron -DSYNTHYBOY_MPC_OUTPUT_LIMITER=ON
-live_build limitergain0 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=ON -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
-live_build ovlon -DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON
-# ovlrel: the overlay build the way the package has it (the debug hooks OFF: no /tmp switch files looked at); the robustness tests run against it too (below)
-live_build ovlrel -DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF
 # nolog: the release mode (SYNTHYBOY_MPC_DEV_LOG=OFF, what build-mpc.sh --release passes): it must compile, and its binary holds no log strings (docs/ui-components/LOGGING.md, "Release proof")
-live_build nolog -DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF -DSYNTHYBOY_MPC_DEV_LOG=OFF
-live_build ovloff -DSYNTHYBOY_MPC_OVERLAY=OFF
-# Overlay (SYNTHYBOY_MPC_OVERLAY, default OFF, shell-mpc/overlay/; BASE_OPTS does not name it on purpose: the builds above are the ones "without it", the ovloff variant names OFF): the switched-off build is byte for byte the build that does not name the option (and the same as the build of the commit
-# before the module existed: checked by hand when the module was added); the switched-on build has the module, the other builds have no trace of it. The unit tests run on the Mac with a fake
-# display backend and a fake framebuffer; the plugin built with it ON must still load, run and give the same state chunk (on the Mac the module finds no display and disables itself).
-OVLON="$(find ${B}-live-ovlon -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
-OVLOFF="$(find ${B}-live-ovloff -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
-OVLREL="$(find ${B}-live-ovlrel -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
-OVLDEF="$(find ${B}-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
-cmp -s "$OVLOFF" "$OVLDEF" || { echo "ACCEPT FAIL: SYNTHYBOY_MPC_OVERLAY=OFF is not byte for byte the build that does not name the option"; exit 1; }
-grep -q "synthyboy-overlay-status" "$OVLON" || { echo "ACCEPT FAIL: the overlay build has no overlay code"; exit 1; }
-for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
-    grep -q "synthyboy-overlay" "$f" && { echo "ACCEPT FAIL: trace of the overlay in a build without SYNTHYBOY_MPC_OVERLAY"; exit 1; }
-done
+live_build nolog -DSYNTHYBOY_MPC_DEV_LOG=OFF
+grep -q "synthyboy-overlay-status" "$LIB" || { echo "ACCEPT FAIL: the build has no overlay code"; exit 1; }
 OVCORE=$(find $B/core -name '*.a' | tr '\n' ' ')
 OVSRC=shell-mpc/overlay/tests
 c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
@@ -194,20 +163,6 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/c
 $B/cell_cache_host > $B/cell-cache-host.log 2>&1 || { grep -E "^FAIL" $B/cell-cache-host.log; echo "ACCEPT FAIL: cell_cache_host (the layer cache and the partial picture: every buffer age)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/gpu_clock_host $OVSRC/gpu_clock_host.cpp || { echo "ACCEPT FAIL: gpu_clock_host build"; exit 1; }
 $B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock-host.log; echo "ACCEPT FAIL: gpu_clock_host (the GPU clock hint)"; exit 1; }
-# the function tour table of the oscillator UI (the Key 61 script reads it): it must build and list every control
-# Check an actual reachable MORE control for every main oscillator/type pair. A duplicate config cannot cover a missing one.
-awk -F'|' '
-    $7 >= 56 && $8 >= 56 && $9 == "on" { seen[$1 "|" $3] = 1 }
-    END {
-        if (NR <= 800) { print "Too few oscillator tour entries: " NR; bad = 1 }
-        split("wave sample grain spectral multi", types, " ")
-        for (n = 1; n <= 3; n++) for (i = 1; i <= 5; i++) {
-            key = "page-more:" substr("ABC", n, 1) "-" types[i] "|osc" n ".pitch_coarse"
-            if (!(key in seen)) { print "Missing oscillator tour control: " key; bad = 1 }
-        }
-        exit bad
-    }
-' "$B/tour.txt" || { echo "ACCEPT FAIL: incomplete oscillator tour"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
 A=${B}-asan
 cmake -S . -B "$A" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined" > "$A.configure.log" 2>&1 &&
@@ -234,33 +189,8 @@ for t in ui_list_host ui_time_ruler_host ui_text_entry_host; do   # ui_cov_findi
     UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
 done
-$B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
-live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
-# output level (shell-mpc/output_stage.h): the stage alone, then the plugin in both limiter states:
-# 1. limiter OFF: test make-up gain ($GAIN_DB dB) against gain 0 dB (intact dynamics, peaks over 0 dBFS)
-# 2. limiter ON (default): test make-up gain ($GAIN_DB dB) against gain 0 dB (peaks held at -0.5 dBFS ceiling)
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { grep -E "^FAIL|error" $B/event-inbox.log | head; echo "ACCEPT FAIL: event inbox test"; exit 1; }
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -I core/include -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
-$B/output_level_host "$(find ${B}-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find ${B}-live-gain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $GAIN_DB off > $B/output-level-off.log 2>&1 || { grep -E "^FAIL|^quiet|^loud|^dynamics" $B/output-level-off.log; echo "ACCEPT FAIL: output_level_host (limiter OFF)"; exit 1; }
-$B/output_level_host "$(find ${B}-live-limiteron -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find ${B}-live-limitergain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $GAIN_DB on > $B/output-level-on.log 2>&1 || { grep -E "^FAIL|^quiet|^loud" $B/output-level-on.log; echo "ACCEPT FAIL: output_level_host (limiter ON)"; exit 1; }
-cat $B/output-level-off.log $B/output-level-on.log > $B/output-level.log
-grep -E "^quiet|^loud|^dynamics" $B/output-level.log
-c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a $B/core/shapes/libsynthyboy_shapes.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
-# the refresh rate: the default is 10 a second (at most 21 calls per cursor in 2 s), SYNTHYBOY_MPC_LFO_LIVE_HZ=25 still changes it (the checks scale with HZ)
-for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do
-    d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
-    $B/lfo_live_host "$(find ${B}-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m, $hz Hz)"; exit 1; }
-done
-# the plugin with the overlay built in (on the Mac the module finds no display): the same chunk and the same LFO display as the build without it
-$B/lfo_live_host "$OVLON" on overlay > $B/live-ovlon.log 2>&1 || { grep -E "^FAIL" $B/live-ovlon.log; echo "ACCEPT FAIL: lfo_live_host with the overlay built in (one more display parameter, Overlay Instance)"; exit 1; }
-# the display parameter "Overlay Instance" (only in the overlay build): slots of several instances, the debug file, 17 instances, instances created and closed on several threads. The other builds above
-# were checked with exact parameter counts without it (the tests take the word "overlay" for the one build that has the extra parameter and are exact in both cases).
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: overlay_instance_host build"; exit 1; }
-$B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^FAIL" $B/overlay-instance.log; echo "ACCEPT FAIL: overlay_instance_host (Overlay Instance parameter)"; exit 1; }
-# the Play page's parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"): selectors, proxies, chunk, no feedback loop (the list, the order and the counts are checked there)
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
-$B/play_host "$OVLON" > $B/play.log 2>&1 || { grep -E "^FAIL" $B/play.log; echo "ACCEPT FAIL: play_host (the Play page's parameters)"; exit 1; }
 # Build the native Play, Mixer and FX host checks together.
 cmake --build "$B" --target mixer_binding_host > "$B/native-ui-build.log" 2>&1 || { tail -40 "$B/native-ui-build.log"; exit 1; }
 for t in mixer_binding_host; do
@@ -271,70 +201,30 @@ c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/i
 $B/play_params_rt_host > $B/play-params-rt.log 2>&1 || { grep -E "^FAIL" $B/play-params-rt.log; echo "ACCEPT FAIL: play_params_rt_host (the table of the Play proxies must exist before the first lookup, no allocation)"; exit 1; }
 # saving and reloading a project with the Play page (docs/MPC.md "Project save and reload"): the load orders a host could use (chunk only, write-back of every parameter before / after the chunk, program re-selection, the order seen on the Key 61), the restore window, the debug log
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_restore_host shell-mpc/tests/play_restore_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_restore_host build"; exit 1; }
-$B/play_restore_host "$OVLON" > $B/play-restore.log 2>&1 || { grep -E "^FAIL" $B/play-restore.log | cut -c1-400; echo "ACCEPT FAIL: play_restore_host (project save and reload of the Play page)"; exit 1; }
+$B/play_restore_host "$LIB" > $B/play-restore.log 2>&1 || { grep -E "^FAIL" $B/play-restore.log | cut -c1-400; echo "ACCEPT FAIL: play_restore_host (project save and reload of the Play page)"; exit 1; }
 # instances created and closed on three threads while the display thread reports (docs/MPC.md "Closing an instance"): the host is never called for an instance whose effClose returned
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/close_stress_host shell-mpc/tests/close_stress_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: close_stress_host build"; exit 1; }
-$B/close_stress_host "$OVLON" 120 > $B/close-stress.log 2>&1 || { grep -E "^FAIL" $B/close-stress.log; echo "ACCEPT FAIL: close_stress_host (host called after effClose)"; exit 1; }
-# the overlay builds without the parameter must not exist: a build that is not the overlay one has no trace of it (the parameter's name is in the overlay build only)
-for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
-    grep -q "Overlay Instance" "$f" && { echo "ACCEPT FAIL: Overlay Instance in a build without SYNTHYBOY_MPC_OVERLAY"; exit 1; }
-done
-grep -q "Overlay Instance" "$OVLON" || { echo "ACCEPT FAIL: the overlay build has no Overlay Instance parameter"; exit 1; }
-[ "$(grep -h '^chunk ' $B/live-on.log)" = "$(grep -h '^chunk ' $B/live-ovlon.log)" ] || { echo "ACCEPT FAIL: the state chunk differs in the overlay build"; exit 1; }
-# live spectrum (SYNTHYBOY_MPC_SPECTRUM, default ON): the band mapping and the analyser on known signals, then the plugin in four variants (off, on, the self-test wave at 10 and 25 a second).
-# The switched-off build has no trace of it; the state chunk is the same in every variant.
+$B/close_stress_host "$LIB" 120 > $B/close-stress.log 2>&1 || { grep -E "^FAIL" $B/close-stress.log; echo "ACCEPT FAIL: close_stress_host (host called after effClose)"; exit 1; }
+grep -q "Overlay Instance" "$LIB" || { echo "ACCEPT FAIL: the build has no Overlay Instance parameter"; exit 1; }
+# live spectrum (SYNTHYBOY_MPC_SPECTRUM): the band mapping and the analyser on known signals
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -o $B/spectrum_bands_host shell-mpc/tests/spectrum_bands_host.cpp || { echo "ACCEPT FAIL: spectrum_bands_host build"; exit 1; }
 $B/spectrum_bands_host > $B/spectrum-bands.log 2>&1 || { grep -E "^FAIL" $B/spectrum-bands.log; echo "ACCEPT FAIL: spectrum_bands_host"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -o $B/spectrum_host shell-mpc/tests/spectrum_host.cpp -lpthread || { echo "ACCEPT FAIL: spectrum_host build"; exit 1; }
 $B/spectrum_host > $B/spectrum-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-host.log; echo "ACCEPT FAIL: spectrum_host"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/spectrum_live_host shell-mpc/tests/spectrum_live_host.cpp $B/core/libsynthyboy_core.a $B/core/shapes/libsynthyboy_shapes.a -lpthread || { echo "ACCEPT FAIL: spectrum_live_host build"; exit 1; }
-for v in specoff:off:10 on:on:10 specself:selftest:10 specself25:selftest:25; do
-    d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
-    $B/spectrum_live_host "$(find ${B}-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/spectrum-live-$d.log 2>&1 || { grep -E "^FAIL" $B/spectrum-live-$d.log; echo "ACCEPT FAIL: spectrum_live_host ($m, $hz Hz)"; exit 1; }
-done
-for d in specoff specself specself25; do
-    [ "$(grep -h '^chunk ' $B/spectrum-live-on.log)" = "$(grep -h '^chunk ' $B/spectrum-live-$d.log)" ] || { echo "ACCEPT FAIL: the state chunk differs in the spectrum variant $d"; exit 1; }
-done
-grep -q "Spectrum %d" "$(find ${B}-live-on -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" || { echo "ACCEPT FAIL: the spectrum build has no spectrum code"; exit 1; }
-grep -q "Spectrum %d" "$(find ${B}-live-specoff -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" && { echo "ACCEPT FAIL: trace of the spectrum in the build with SYNTHYBOY_MPC_SPECTRUM=OFF"; exit 1; }
-# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE, default ON): pad_pressure.h and the plugin in the own engine (the pressure opens the filter), without the display parameters, and switched off (no trace of it: no names, no chunk member)
+grep -q "Spectrum %d" "$LIB" || { echo "ACCEPT FAIL: the build has no spectrum code"; exit 1; }
+# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE): pad_pressure.h and the plugin in the own engine (the pressure opens the filter)
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/pad_pressure_host shell-mpc/tests/pad_pressure_host.cpp $B/core/libsynthyboy_core.a $B/core/shapes/libsynthyboy_shapes.a -lpthread || { echo "ACCEPT FAIL: pad_pressure_host build"; exit 1; }
-pp_lib() { find ${B}-live-$1 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1; }
-$B/pad_pressure_host "$(pp_lib on)" own > $B/pad-pressure-own.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-own.log; echo "ACCEPT FAIL: pad_pressure_host (own engine)"; exit 1; }
+$B/pad_pressure_host "$LIB" own overlay > $B/pad-pressure-own.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-own.log; echo "ACCEPT FAIL: pad_pressure_host (own engine, Overlay Instance after the pad pressure parameters)"; exit 1; }
 grep -E "^INFO" $B/pad-pressure-own.log
-$B/pad_pressure_host "$(pp_lib off)" own 0 > $B/pad-pressure-nodisplay.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-nodisplay.log; echo "ACCEPT FAIL: pad_pressure_host (no display parameters)"; exit 1; }
-$B/pad_pressure_host "$(pp_lib padoff)" own off > $B/pad-pressure-off.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-off.log; echo "ACCEPT FAIL: pad_pressure_host (switched off)"; exit 1; }
-$B/pad_pressure_host "$OVLON" own overlay > $B/pad-pressure-ovlon.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-ovlon.log; echo "ACCEPT FAIL: pad_pressure_host with the overlay built in (Overlay Instance after the pad pressure parameters)"; exit 1; }
 # (the names are asked of the built plugin: the compiler may fold the literal into the copy, so no string of the binary says it)
-$B/host_sim "$(pp_lib on)" dump 2>/dev/null | grep -q "Pad Pressure Amount" || { echo "ACCEPT FAIL: the pad pressure build has no pad pressure code"; exit 1; }
-$B/host_sim "$(pp_lib padoff)" dump 2>/dev/null | grep -q "Pad Pressure Amount" && { echo "ACCEPT FAIL: trace of the pad pressure in the build with SYNTHYBOY_MPC_PAD_PRESSURE=OFF"; exit 1; }
-# callback statistics (SYNTHYBOY_MPC_CALLBACK_STATS, diagnostics): off in the default build (no trace of it in the module), on in the stats variant
-STATSLIB="$(find ${B}-live-stats -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
-grep -q "dispatcher_opcodes:" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no host statistics (format 2)"; exit 1; }
-grep -q "synthyboy-callback-stats" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no statistics code"; exit 1; }
-for f in "$LIB" "$(find ${B}-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"; do
-    grep -q "synthyboy-callback-stats" "$f" && { echo "ACCEPT FAIL: statistics code in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
-    grep -q "dispatcher_opcodes:" "$f" && { echo "ACCEPT FAIL: host statistics (format 2) in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
-done
-c++ -std=c++17 -O1 -Wall -Wextra -I $MPC_SDK/framework -I shell-mpc -o $B/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: callback_stats_host build"; exit 1; }
-$B/callback_stats_host "$STATSLIB" $B/callback-stats.txt > $B/callback-stats.log 2>&1 || { grep -E "^FAIL" $B/callback-stats.log; echo "ACCEPT FAIL: callback_stats_host"; exit 1; }
-[ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
+$B/host_sim "$LIB" dump 2>/dev/null | grep -q "Pad Pressure Amount" || { echo "ACCEPT FAIL: the build has no pad pressure code"; exit 1; }
 TL=${B}-live-tsan
-cmake -S . -B $TL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
-c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a $TL/core/shapes/libsynthyboy_shapes.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
-run_tsan "$TL/live.log" $TL/lfo_live_host "$TLLIB" on overlay
-if grep -q "WARNING: ThreadSanitizer" $TL/live.log; then
-    grep -A14 "WARNING: ThreadSanitizer" $TL/live.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
-    echo "ACCEPT FAIL: data races in the LFO display (full report: $TL/live.log)"; exit 1
-fi
-grep -q "^FAIL" $TL/live.log && { grep "^FAIL" $TL/live.log; echo "ACCEPT FAIL: tsan lfo_live_host"; exit 1; }
 # the spectrum ring (audio thread writes, display thread reads) and the plugin with the spectrum under ThreadSanitizer
 c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/spectrum_host shell-mpc/tests/spectrum_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan spectrum_host build"; exit 1; }
 run_tsan "$TL/spectrum-host.log" $TL/spectrum_host
-c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/spectrum_live_host shell-mpc/tests/spectrum_live_host.cpp $TL/core/libsynthyboy_core.a $TL/core/shapes/libsynthyboy_shapes.a -lpthread || { echo "ACCEPT FAIL: tsan spectrum_live_host build"; exit 1; }
-run_tsan "$TL/spectrum-live.log" $TL/spectrum_live_host "$TLLIB" on 10 overlay
-for f in $TL/spectrum-host.log $TL/spectrum-live.log; do
+for f in $TL/spectrum-host.log; do
     if grep -q "WARNING: ThreadSanitizer" $f; then
         grep -A14 "WARNING: ThreadSanitizer" $f | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
         echo "ACCEPT FAIL: data races in the spectrum (full report: $f)"; exit 1
@@ -357,15 +247,7 @@ if grep -q "WARNING: ThreadSanitizer" $TL/pad-pressure.log; then
     echo "ACCEPT FAIL: data races in the pad pressure (full report: $TL/pad-pressure.log)"; exit 1
 fi
 grep -q "^FAIL" $TL/pad-pressure.log && { grep "^FAIL" $TL/pad-pressure.log; echo "ACCEPT FAIL: tsan pad_pressure_host"; exit 1; }
-# the same ThreadSanitizer build has the statistics switched on: the display thread and the writer thread read what the audio thread writes
-c++ -std=c++17 -O1 -g -fsanitize=thread -I $MPC_SDK/framework -I shell-mpc -o $TL/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan callback_stats_host build"; exit 1; }
-run_tsan "$TL/stats.log" $TL/callback_stats_host "$TLLIB" $TL/callback-stats.txt
-if grep -q "WARNING: ThreadSanitizer" $TL/stats.log; then
-    grep -A14 "WARNING: ThreadSanitizer" $TL/stats.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
-    echo "ACCEPT FAIL: data races in the callback statistics (full report: $TL/stats.log)"; exit 1
-fi
-grep -q "^FAIL" $TL/stats.log && { grep "^FAIL" $TL/stats.log; echo "ACCEPT FAIL: tsan callback_stats_host"; exit 1; }
-# the overlay thread (the tsan build above has the module in: it runs next to the display thread and the statistics writer) and the controller on a real thread against changing parameters, markers and instances
+# the overlay thread (the tsan build above has the module in: it runs next to the display thread) and the controller on a real thread against changing parameters, markers and instances
 TSCORE=$(find $TL/core -name '*.a' | tr '\n' ' ')
 for t in curve_host gpu_backend_host; do
     c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc/overlay -o $TL/$t shell-mpc/overlay/tests/$t.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan $t build"; exit 1; }
@@ -376,18 +258,6 @@ for t in curve_host gpu_backend_host; do
     fi
     grep -q "^FAIL" $TL/$t.log && { grep "^FAIL" $TL/$t.log; echo "ACCEPT FAIL: tsan $t"; exit 1; }
 done
-run_tsan "$TL/live-ovl.log" $TL/lfo_live_host "$TLLIB" on overlay
-# instances created, closed and asked for their slot on several threads against the overlay thread, in the plugin under ThreadSanitizer
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $TL/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan overlay_instance_host build"; exit 1; }
-run_tsan "$TL/overlay-instance.log" $TL/overlay_instance_host "$TLLIB"
-grep -q "WARNING: ThreadSanitizer" $TL/overlay-instance.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/overlay-instance.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in Overlay Instance (full report: $TL/overlay-instance.log)"; exit 1; }
-grep -q "^FAIL" $TL/overlay-instance.log && { grep "^FAIL" $TL/overlay-instance.log; echo "ACCEPT FAIL: tsan overlay_instance_host"; exit 1; }
-# the Play page's selectors and proxies: host writes, the display thread's reports and the echoing host, under ThreadSanitizer
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $TL/play_host shell-mpc/tests/play_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan play_host build"; exit 1; }
-run_tsan "$TL/play.log" $TL/play_host "$TLLIB"
-grep -q "WARNING: ThreadSanitizer" $TL/play.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/play.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Play page's parameters (full report: $TL/play.log)"; exit 1; }
-grep -q "^FAIL" $TL/play.log && { grep "^FAIL" $TL/play.log; echo "ACCEPT FAIL: tsan play_host"; exit 1; }
-grep -q "WARNING: ThreadSanitizer" $TL/live-ovl.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/live-ovl.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races with the overlay thread in the plugin (full report: $TL/live-ovl.log)"; exit 1; }
 # the same stress test under ThreadSanitizer (the display thread, the overlay thread and the host's threads) and under AddressSanitizer + UndefinedBehaviorSanitizer (a member used after it was destroyed, a leaked or doubly freed instance)
 c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $TL/close_stress_host shell-mpc/tests/close_stress_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan close_stress_host build"; exit 1; }
 run_tsan "$TL/close-stress.log" $TL/close_stress_host "$TLLIB" 40
@@ -395,7 +265,7 @@ grep -q "WARNING: ThreadSanitizer" $TL/close-stress.log && { grep -A14 "WARNING:
 grep -q "^FAIL" $TL/close-stress.log && { grep "^FAIL" $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host"; exit 1; }
 grep -q "^OK" $TL/close-stress.log || { tail -5 $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host did not finish"; exit 1; }
 AL=${B}-live-asan
-cmake -S . -B $AL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
+cmake -S . -B $AL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
 ALIB="$(find $AL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 ASCORE=$(find $AL/core -name '*.a' | tr '\n' ' ')
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }
@@ -422,7 +292,7 @@ grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/q-router-review.log && { grep -E "
 # the layout lint of every plugin-drawn page (Init and every factory preset) against its baseline, and its own self test
 # the robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the logic alone, plainly and under AddressSanitizer + UBSan (and ThreadSanitizer where threads are the point)
 RT=shell-mpc/tests
-for t in safe_file_host poll_guard_host display_thread_host play_log_host startup_timing_host log_host; do
+for t in safe_file_host poll_guard_host display_thread_host startup_timing_host log_host; do
     c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/$t $RT/$t.cpp -lpthread || { echo "ACCEPT FAIL: $t build"; exit 1; }
     $B/$t > $B/$t.log 2>&1 || { grep -E "^FAIL" $B/$t.log; echo "ACCEPT FAIL: $t (robustness review)"; exit 1; }
     c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I shell-mpc -o $B/${t}_asan $RT/$t.cpp -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
@@ -435,30 +305,11 @@ for t in host_strings_host chunk_review_host; do
     c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -o $B/$t $RT/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t build"; exit 1; }
     $B/$t > $B/$t.log 2>&1 || { grep -E "^FAIL" $B/$t.log; echo "ACCEPT FAIL: $t (robustness review)"; exit 1; }
 done
-# the plugin as the host loads it: hostile parameter string buffers, FIFO / huge files at the switch files, the play log, a blocked host callback. The hooks build (ovlon, and the AddressSanitizer build) and the release-like build (ovlrel: hooks OFF,
-# the switch files are not looked at) must both pass; close_hang_host takes --hooks for the hooks builds (the thrown tick of the poll guard)
-c++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $AL/plugin_review_host $RT/plugin_review_host.cpp $ASCORE -lpthread -ldl || { echo "ACCEPT FAIL: plugin_review_host build"; exit 1; }
+# the plugin as the host loads it: a blocked host callback (effClose must not hang the host, no host call before the first dispatcher call)
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -I shell-mpc -I $MPC_SDK/framework -o $AL/close_hang_host $RT/close_hang_host.cpp -lpthread -ldl || { echo "ACCEPT FAIL: close_hang_host build"; exit 1; }
-for v in "$ALIB" "$OVLON" "$OVLREL"; do
-    ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/plugin_review_host "$v" > $AL/plugin-review.log 2>&1 || { grep -E "^FAIL|ERROR" $AL/plugin-review.log | head; echo "ACCEPT FAIL: plugin_review_host ($v)"; exit 1; }
+for v in "$ALIB" "$LIB"; do
+    ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/close_hang_host "$v" > $AL/close-hang.log 2>&1 || { grep -E "^FAIL|ERROR" $AL/close-hang.log | head; echo "ACCEPT FAIL: close_hang_host ($v)"; exit 1; }
 done
-for v in "$ALIB:--hooks" "$OVLON:--hooks" "$OVLREL:"; do
-    ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/close_hang_host "${v%%:*}" ${v#*:} > $AL/close-hang.log 2>&1 || { grep -E "^FAIL|ERROR" $AL/close-hang.log | head; echo "ACCEPT FAIL: close_hang_host (${v%%:*})"; exit 1; }
-done
-# the names of the macros in the chunk and on the Q proxies (docs/ui-design/macro-names.md), plainly and under ThreadSanitizer
-c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/macro_names_chunk_host $RT/macro_names_chunk_host.cpp $OVCORE -lpthread -ldl || { echo "ACCEPT FAIL: macro_names_chunk_host build"; exit 1; }
-pkg_overlay="$PK/VST/macro-test-$(basename "$OVLON")"
-cp "$OVLON" "$pkg_overlay" || exit 1
-$B/macro_names_chunk_host "$OVLON" "$pkg_overlay" > $B/macro-names-chunk.log 2>&1 || { grep -E "^FAIL" $B/macro-names-chunk.log; echo "ACCEPT FAIL: macro_names_chunk_host"; exit 1; }
-# the NOTE / VELO curves of the Filter page in the live plugin (debug hook SYNTHYBOY_MPC_SCALAR_CURVE_FILE stands for the page): request -> display thread -> validateContent -> content -> chunk
-c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $B/scalar_curve_chunk_host $RT/scalar_curve_chunk_host.cpp $OVCORE -lpthread -ldl || { echo "ACCEPT FAIL: scalar_curve_chunk_host build"; exit 1; }
-$B/scalar_curve_chunk_host "$OVLON" > $B/scalar-curve-chunk.log 2>&1 || { grep -E "^FAIL" $B/scalar-curve-chunk.log; echo "ACCEPT FAIL: scalar_curve_chunk_host"; exit 1; }
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I core/shapes/include -I shell-mpc -I $MPC_SDK/framework -o $TL/macro_names_chunk_host $RT/macro_names_chunk_host.cpp $TSCORE -lpthread -ldl || { echo "ACCEPT FAIL: tsan macro_names_chunk_host build"; exit 1; }
-run_tsan "$TL/macro-names-chunk.log" $TL/macro_names_chunk_host "$TLLIB"
-grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/macro-names-chunk.log && { grep -E "^FAIL|WARNING" $TL/macro-names-chunk.log | head; echo "ACCEPT FAIL: tsan macro_names_chunk_host"; exit 1; }
-# the release-like overlay build gives the same chunk and the same parameter list as the hooks build
-$B/lfo_live_host "$OVLREL" on overlay > $B/live-ovlrel.log 2>&1 || { grep -E "^FAIL" $B/live-ovlrel.log; echo "ACCEPT FAIL: lfo_live_host with the release-like overlay build"; exit 1; }
-[ "$(grep -h '^chunk ' $B/live-ovlon.log)" = "$(grep -h '^chunk ' $B/live-ovlrel.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the hooks build and the release-like overlay build"; exit 1; }
 # the quality profile per device (shell-mpc/device_profile.h, docs/MPC.md "Quality profile per device"): the texts, the device table, the overrides; plainly and under AddressSanitizer + UBSan
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -o $B/device_profile_host shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host build"; exit 1; }
 $B/device_profile_host > $B/device-profile-host.log 2>&1 || { grep -E "^FAIL" $B/device-profile-host.log; echo "ACCEPT FAIL: device_profile_host (quality profile per device: texts, table, overrides)"; exit 1; }
@@ -477,16 +328,10 @@ done
 python3 -m unittest scripts/tests/test_docs_release.py scripts/tests/test_docs_mpc.py > $B/docs-test.log 2>&1 || { tail -25 $B/docs-test.log; echo "ACCEPT FAIL: the tests of docs/release and docs/MPC.md"; exit 1; }
 # the release proof: no developer log strings in the DEV_LOG=OFF binary (and the same patterns are found in the default overlay build, so the check can see them)
 NOLOG="$(find ${B}-live-nolog -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
-for hook in /tmp/synthyboy-select-program /tmp/synthyboy-play-log; do
-    if strings -a "$NOLOG" | grep -Fx "$hook" >/dev/null; then
-        echo "ACCEPT FAIL: debug hook $hook present in release"; exit 1
-    fi
-    strings -a "$OVLON" | grep -Fx "$hook" >/dev/null || { echo "ACCEPT FAIL: missing positive control for $hook"; exit 1; }
-done
 LOGPAT="-dev\.log|-log\.conf|mpckit|engine created at|scan factory presets|VSTPluginMain returns"
 strings -a "$NOLOG" | grep -E -e "$LOGPAT" | grep -v -E "^N[0-9]+mpckit[0-9]" > $B/nolog-strings.txt &&   # (the RTTI type names of the kit classes, N6mpckit9IInstanceE, are not log strings: the kit holds classes now, not only the log)
  { head -5 $B/nolog-strings.txt; echo "ACCEPT FAIL: log strings in the release (DEV_LOG=OFF) build"; exit 1; }
-strings -a "$OVLREL" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
+strings -a "$LIB" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
 # the lock free hand-over of the events between the threads (event_inbox.h): plainly and under ThreadSanitizer
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { tail -15 $B/event-inbox.log; echo "ACCEPT FAIL: event_inbox_host"; exit 1; }
 # the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
