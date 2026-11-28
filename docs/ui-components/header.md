@@ -64,7 +64,7 @@ and Filter 1 (title, POWER, MODEL dropdown filling the row, MORE): `left` title 
 
 ## Skin: hand-maintained (owner, 2026-11-28)
 
-The header definitions and instances of the skin (`*Header*` in `skin/defs_*.json`, the instances in `skin/TUI.json`) and their faces (`skin/hdr_*.png`) are edited directly in the skin, like every other skin definition. No tool writes them: the header generator (`scripts/header-skin.py`, the `skin-<family>.json` spec lists and the `skin` blocks of the catalogue examples) is removed. The catalogue examples are the design reference (layout, sizes, looks); a change of a header in the skin follows them and the skin rules in `AGENTS.md`.
+The header definitions and instances of the skin (`*Header*` in `skin/defs_*.json`, the instances in `skin/TUI.json`) and their faces (`skin/hdr_*.png`) are edited directly in the skin, like every other skin definition. No tool writes them: the header generator (`scripts/header-skin.py`, the `skin-<family>.json` spec lists and the `skin` blocks of the catalogue examples) is removed. The catalogue examples are the design reference (layout, sizes, looks); a change of a header in the skin follows them and the skin rules in `AGENTS.md`. The faces `skin/hdr_*.png` are updated by hand when the look of a cell changes (rule in `AGENTS.md`, "Skin editing").
 
 ## Skin: the Env and LFO headers (owner order 2026-11-28)
 
