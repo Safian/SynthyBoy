@@ -27,7 +27,8 @@ enum Line
     TargetsTitle = kLegacyLines, TargetsCount, TargetsEmpty,                                  // the TARGETS / MODULATIONS pages (mod_rows_page.h): title, count (or the value of the control), the empty hint
     EdSelected, EdHint, EdGrid, EdTrigger, EdInfo, EdStatus, EdMarkerHint, PointModSummary,   // the LFO shape editor and its point modulation page
     OscDetailTitle, OscDetailBlock0, OscDetailBlock1, OscDetailBlock2, OscDetailBlock3, OscDetailBlock4, OscDetailBlock5, OscDetailBlock6, OscDetailBlock7,   // the title and the block titles of the oscillator detail pages
-    OscMissingCompact, OscMissingPage, OscMessage,                                                         // the "content missing" line of the oscillator display (Play compact view, oscillator page)
+    OscMissingCompact, OscMissingPage, OscMessage,
+    OscDetailGraph, OscDetailGraphBlock0, OscDetailGraphBlock1, OscDetailGraphBlock2, OscDetailGraphBlock3, OscDetailGraphBlock4, OscDetailGraphBlock5, OscDetailGraphBlock6, OscDetailGraphBlock7,   // a detail page with a graph: "1" and the block titles at the lower rows                                                         // the "content missing" line of the oscillator display (Play compact view, oscillator page)
     kLines
 };
 constexpr int kDrawLines = kLines - kLegacyLines;

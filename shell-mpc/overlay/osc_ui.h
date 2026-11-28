@@ -1294,10 +1294,16 @@ private:
         const bool detailUp = nativeDetail_ >= n::Plain;
         v.setNativeText (t::OscDetailTitle, detailUp ? nativeDetailTitle_ : "");
         for (int b = 0; b < static_cast<int> (nativeDetailBlocks_.size()); ++b)
-            v.setNativeText (t::OscDetailBlock0 + b, detailUp && nativeDetailBlocks_[b] != nullptr ? nativeDetailBlocks_[b] : "");
+        {
+            const char* title = detailUp && nativeDetailBlocks_[b] != nullptr ? nativeDetailBlocks_[b] : "";
+            const bool graph = nativeDetail_ >= n::Graph;
+            v.setNativeText (t::OscDetailBlock0 + b, graph ? "" : title);
+            v.setNativeText (t::OscDetailGraphBlock0 + b, graph ? title : "");
+        }
+        v.setNativeText (t::OscDetailGraph, detailUp && nativeDetail_ >= n::Graph ? "1" : "");
         const std::string missing = missingText_;
         v.setNativeText (t::OscMissingCompact, stackDepth_ == 0 ? missing.c_str() : "");
-        v.setNativeText (t::OscMissingPage, stackDepth_ == 0 ? "" : missing.c_str());
+        v.setNativeText (t::OscMissingPage, stackDepth_ == 1 ? missing.c_str() : "");   // the root page only (the detail pages have other display rectangles)
     }
 
     void drawNativeDetailQFrame (gpu::SceneBuilder& sb) const
