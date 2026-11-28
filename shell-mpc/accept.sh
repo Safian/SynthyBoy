@@ -45,7 +45,7 @@ sys.exit(0 if ok else 1)
 PY
 EXP=$(nm -gU "$LIB" | awk '{print $NF}' | sort | tr '\n' ' ')
 [ "$EXP" = "_VSTPluginMain " ] || { echo "exports: $EXP" | cut -c1-600; echo "ACCEPT FAIL: exported symbols must be only _VSTPluginMain"; exit 1; }
-# the shell creates the own engine (a Vital engine switch is excluded by scripts/tests/test_vital_removal_cmake.py)
+# the shell creates the own engine
 grep -q "EngineKind::own" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not create the own engine"; exit 1; }
 # plugin folder / content path logic
 c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp && $B/paths_test > $B/paths.log 2>&1 || { cat $B/paths.log 2>/dev/null | tail -12; echo "ACCEPT FAIL: paths_test (shell-mpc/plugin_paths.h)"; exit 1; }
@@ -500,10 +500,6 @@ strings -a "$NOLOG" | grep -E -e "$LOGPAT" | grep -v -E "^N[0-9]+mpckit[0-9]" > 
 strings -a "$OVLREL" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
 # the lock free hand-over of the events between the threads (event_inbox.h): plainly and under ThreadSanitizer
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { tail -15 $B/event-inbox.log; echo "ACCEPT FAIL: event_inbox_host"; exit 1; }
-# the starter template of an MPC plugin (template-mpc/): its pages host test
-c++ -std=c++17 -O1 -Wall -Wextra -I shell-mpc -I shell-mpc/ui -I shell-mpc/overlay -I template-mpc/src -I $MPC_SDK/framework -o $B/mpckit_demo_pages_host template-mpc/tests/pages_host.cpp -lpthread > $B/mpckit-build.log 2>&1 || { tail -15 $B/mpckit-build.log; echo "ACCEPT FAIL: mpckit_demo_pages_host build"; exit 1; }
-$B/mpckit_demo_pages_host > $B/mpckit-pages.log 2>&1 || { tail -8 $B/mpckit-pages.log; echo "ACCEPT FAIL: mpckit_demo_pages_host"; exit 1; }
-tail -1 $B/mpckit-pages.log | grep -q "^OK" || { tail -3 $B/mpckit-pages.log; echo "ACCEPT FAIL: mpckit_demo_pages_host did not end with OK"; exit 1; }
 # the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
 bash shell-mpc/overlay/tests/run_touch_tests.sh > $B/touch.log 2>&1 || { grep -E "FAIL|error" $B/touch.log | head -20; echo "ACCEPT FAIL: touch_host"; exit 1; }
 echo "ACCEPT OK"

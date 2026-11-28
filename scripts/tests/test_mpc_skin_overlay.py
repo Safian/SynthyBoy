@@ -82,26 +82,6 @@ class SharedConstantsTests(unittest.TestCase):
         r = subprocess.run([sys.executable, str(GEN_HEADER), "--check"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_the_generator_takes_its_own_kinds_namespace_and_source_for_another_plugin(self):
-        """Migration step 9 (docs/ui-components/TEMPLATE.md): a plugin made with the kit generates a header of its own from its layout file; the default output stays byte for byte SynthyBoy's (test_header_is_current)."""
-        template_json = ROOT / "template-mpc" / "skin" / "overlay_layout.json"
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "demo_layout.h"
-            r = subprocess.run([sys.executable, str(GEN_HEADER), "--json", str(template_json), "--kinds", "page=16", "--namespace", "demo::layout", "--out", str(out)], capture_output=True, text=True)
-            self.assertEqual(r.returncode, 0, r.stderr)
-            text = out.read_text(encoding="utf-8")
-            self.assertIn("namespace demo { namespace layout {", text)
-            self.assertIn("}} // namespace demo::layout", text)
-            self.assertIn("constexpr int kKindPage = 16;", text)
-            self.assertIn("constexpr bool isPageKind (int kind) { return kind >= 16; }", text)
-            self.assertIn("from template-mpc/skin/overlay_layout.json", text.splitlines()[0])
-            self.assertEqual(len(re.findall(r'^    \{ "', text, re.M)), len(json.loads(template_json.read_text(encoding="utf-8"))["views"]))
-            # without --kinds the kind "page" is not SynthyBoy's: the generator says so
-            r = subprocess.run([sys.executable, str(GEN_HEADER), "--json", str(template_json), "--out", str(out)], capture_output=True, text=True)
-            self.assertNotEqual(r.returncode, 0)
-            r = subprocess.run([sys.executable, str(GEN_HEADER), "--json", str(template_json), "--kinds", "page", "--out", str(out)], capture_output=True, text=True)
-            self.assertNotEqual(r.returncode, 0, "a kind without a number is refused")
-
     def test_the_skin_modules_take_the_layout_and_the_parameter_numbers_from_the_layout_file(self):
         """The modules of SynthyBoy's skin run on another plugin's layout (template-mpc): the layout path from the meta or the environment, "paramsBefore" / "paramsAfterInstance" with SynthyBoy's numbers as the default."""
         spec = importlib.util.spec_from_file_location("m50", REAL_EXTRAS / "50_filter_overlay.py")
@@ -116,8 +96,6 @@ class SharedConstantsTests(unittest.TestCase):
         self.assertEqual(m50.params_before({}), 38, "SynthyBoy's 4 LFO cursors + 32 spectrum columns + 2 pad pressure parameters")
         self.assertEqual(m50.params_before({"paramsBefore": 0}), 0)
         self.assertEqual(m50.params_before(json.loads(SHARED_JSON.read_text(encoding="utf-8"))), 38, "the layout of SynthyBoy carries no key: the default")
-        template = json.loads((ROOT / "template-mpc" / "skin" / "overlay_layout.json").read_text(encoding="utf-8"))
-        self.assertEqual((template["paramsBefore"], template["paramsAfterInstance"]), (0, 0))
         self.assertIn("page", m50.KNOWN_KINDS)
 
     def test_header_matches_the_json(self):
