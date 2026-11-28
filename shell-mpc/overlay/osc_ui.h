@@ -2778,6 +2778,12 @@ private:
         stepFile_ = file;
         stepValid_ = true;
     }
+    /** Writes the built-in table (the plain value `plain` of the choice parameter `param`) of the shown oscillator; a file request still loading is withdrawn first, so that it cannot override this newer choice when its decode ends. */
+    void writeBuiltinTable (IInstanceView& v, int param, double plain)
+    {
+        v.cancelWavetable (playosc::oscNumber (sel_));
+        writePlain (v, param, plain);
+    }
     void requestFile (IInstanceView& v, const synthyboy::WavetableEntry& e)
     {
         wtLastPack_ = e.ref.pack;
@@ -2846,7 +2852,7 @@ private:
             }
             else
             {
-                writePlain (v, it.param, pi.min + std::clamp (e.builtinChoice, 0, last));   // the old table plays until the new one is built
+                writeBuiltinTable (v, it.param, pi.min + std::clamp (e.builtinChoice, 0, last));   // the old table plays until the new one is built
                 stepPack_.clear();   // no file is our position: a file shown later is placed again
                 stepFile_.clear();
             }
@@ -2859,7 +2865,7 @@ private:
         const int toward = target > cur ? 1 : -1;
         if (target == synthyboy::kWavetablePresetTable && ! have)
             target += toward;   // no file table: "Preset table" would play the saw
-        writePlain (v, it.param, pi.min + std::clamp (target, 0, last));
+        writeBuiltinTable (v, it.param, pi.min + std::clamp (target, 0, last));
     }
     /** The arrows of the table cell (and the Q-Link): one position to the previous / next table or file; nothing at the ends of a list without wrap. */
     void turnTable (const Item& it, int d, IInstanceView& v)
@@ -2957,7 +2963,7 @@ private:
             fillWavetableList();
         else if (a == A::ChoseBuiltin && it != nullptr && it->param >= 0)
         {
-            writePlain (v, it->param, info (it->param).min + wtBrowser_.chosenChoice());   // as the stepper did: the choice parameter, the old table plays until the new one is built
+            writeBuiltinTable (v, it->param, info (it->param).min + wtBrowser_.chosenChoice());   // as the stepper did: the choice parameter, the old table plays until the new one is built
             return true;
         }
         else if (a == A::ChoseFile)

@@ -240,6 +240,9 @@ public:
         gives it to the engine and then sets oscN.wavetable to "Preset table"; the old table plays until the new one is built. The latest request wins. The result is `contentLoad` (3 = refused, with "not a wavetable file: <reason>") and
         content () of a later moment. Called from the overlay thread; it only stores the request. */
     virtual void requestWavetable (int /*osc*/, const synthyboy::ContentFileRef& /*ref*/) {}
+    /** Withdraws a wavetable FILE request of oscillator `osc` (1 .. 3) that is still queued or decoding, so that it cannot set oscN.wavetable to "Preset table" after a newer built-in choice. Called from the overlay
+        thread right before it writes a built-in table; a sample or instrument request is kept. */
+    virtual void cancelWavetable (int /*osc*/) {}
     /** The steps the Q knob of oscillator `osc` made while its table is a file (-1 / +1 summed since the last call; the Q knob of the stepper does not move the parameter then): the overlay loads the previous / next file of the
         category for them. Lock free, 0 when there are none. */
     virtual int takeWavetableSteps(int /*osc*/) noexcept { return 0; }

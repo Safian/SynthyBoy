@@ -885,6 +885,7 @@ struct PluginInstance
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
         void wavetableSources (synthyboy::CatalogueSources& out) const override { inst.wavetableSourcesOf (out); }
         void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { inst.requestWavetableLoad (osc, ref); }
+        void cancelWavetable (int osc) override { inst.cancelWavetableLoad (osc); }
         int takeWavetableSteps (int osc) noexcept override { return osc >= 1 && osc <= 3 ? inst.wtStepMail[osc - 1].exchange (0, std::memory_order_relaxed) : 0; }
         void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
         void setScalarCurve (int which, const std::vector<synthyboy::ContentPoint>& points) override { inst.requestScalarCurve (which, points); }
@@ -1069,6 +1070,24 @@ struct PluginInstance
         contentRootsOf (roots);
         for (const auto& r : roots)
             out.userRoots.push_back (r.path);
+    }
+    /** A built-in table replaces a file table that was asked for but not applied yet: the queued request of `osc` is dropped and a decode in flight is superseded (its serial is no longer the latest, so
+        contentPoll discards the result). A queued sample or instrument request is kept (it already superseded the decode). */
+    void cancelWavetableLoad (int osc)
+    {
+        std::lock_guard<std::mutex> g (contentReqMutex);
+        if (osc < 1 || osc > 3)
+            return;
+        const int slot = osc - 1;
+        if (queuedContent[slot].serial && queuedContent[slot].kind == 0)
+            queuedContent[slot] = {};
+        if (! queuedContent[slot].serial && activeContent.serial && activeContent.osc == osc && activeContent.kind == 0)
+            latestContent[slot] = ++contentSerial;
+        const auto pending = [this] (const ContentRequest& q) { return q.serial != 0 && q.serial == latestContent[q.osc - 1]; };
+        const auto waitingTable = [&] (const ContentRequest& q) { return pending (q) && q.kind == 0; };
+        wtLoading.store (waitingTable (activeContent) || std::any_of (queuedContent.begin(), queuedContent.end(), waitingTable), std::memory_order_relaxed);
+        if (! pending (activeContent) && std::none_of (queuedContent.begin(), queuedContent.end(), pending) && contentLoadStatus.load (std::memory_order_relaxed) == 1)
+            contentLoadStatus.store (0, std::memory_order_relaxed);
     }
     void requestWavetableLoad (int osc, const synthyboy::ContentFileRef& ref)
     {
