@@ -176,6 +176,11 @@ public:
     const char* rowName (int row) const noexcept { return row >= 0 && row < rowsOnPage() ? items.names[first_ + row] : ""; }
     uint32_t signature() const noexcept { return signature_; }
     int lastFirst() const noexcept { return items.count > 0 ? ((items.count - 1) / kRows) * kRows : 0; }
+    /** Every choice list is a single flat level of final items; page bounds follow first_ and items.count. */
+    bool deeperLevel() const noexcept { return false; }
+    bool rowOpensLevel (int) const noexcept { return false; }
+    bool hasPrevious() const noexcept { return open_ && first_ > 0; }
+    bool hasNext() const noexcept { return open_ && first_ + kRows < items.count; }
     /** PREVIOUS / NEXT: false when there is no page that way (nothing changes). */
     bool previous() noexcept { return page (-kRows); }
     bool next() noexcept { return page (kRows); }

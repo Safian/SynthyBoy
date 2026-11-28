@@ -190,6 +190,8 @@ public:
     virtual int takePlayListRequest() noexcept { return 0; }
     /** The names of the rows of the list the modulation picker's native cells show (the file browsers and the source of a new modulation of the oscillator pages); nullptr: the picker's own names. */
     virtual void setNativeListText (const nativeui::nativetext::ListPage* /*page*/) noexcept {}
+    /** The exact 0/1 state of the open list page (which rows open a deeper level, whether the header shows the back arrow, whether PREVIOUS / NEXT have a page). */
+    virtual void setNativeListState (const nativeui::liststate::State& /*state*/) noexcept {}
     /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */
     virtual void setNativeNoteMask (bool /*shown*/, const nativeui::FxCell* /*fields*/) noexcept {}
     virtual bool takeNativeNoteMask (int /*field*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }

@@ -790,6 +790,13 @@ struct PluginInstance
                 inst.nativeListText.clear();
             inst.nativeModBoardDue.store (true, std::memory_order_release);
         }
+        void setNativeListState (const nativeui::liststate::State& state) noexcept override
+        {
+            const std::lock_guard<std::mutex> owner (inst.choiceListMutex);
+            if (inst.choiceListOpen.load (std::memory_order_relaxed))
+                return;   // a native choice list owns the flags (choiceListPublish)
+            inst.publishListState (state);
+        }
         void setNativeNoteMask (bool shown, const nativeui::FxCell* fields) noexcept override
         {
             const auto preset = stateGeneration();
@@ -1748,9 +1755,29 @@ struct PluginInstance
     bool choiceItems (int hostIndex, nativeui::choicelist::Items& items, int& current) const;
     void choiceListPoll (AEffect* e);
     void choiceListPublish() noexcept;
+    /** Stores the 0/1 flags of the open list page (nativeui::liststate) and marks the cells due when they changed; the caller holds choiceListMutex. */
+    void publishListState (const nativeui::liststate::State& state) noexcept
+    {
+        uint32_t bits = 0;
+        if (state.active)
+        {
+            for (int r = 0; r < nativeui::modboard::kListRows; ++r)
+                if (state.rowOpensLevel[r])
+                    bits |= (1u << (nativeui::liststate::kRowArrow + r));
+            if (state.deeperLevel)
+                bits |= (1u << nativeui::liststate::kDeeperLevel);
+            if (state.hasPrev)
+                bits |= (1u << nativeui::liststate::kHasPrev);
+            if (state.hasNext)
+                bits |= (1u << nativeui::liststate::kHasNext);
+        }
+        if (nativeListStateBits.exchange (bits, std::memory_order_release) != bits)
+            nativeModBoardDue.store (true, std::memory_order_release);
+    }
     void choiceListClose() noexcept;
     std::atomic<float> nativeMacroSubpage { 0.0f };   // exactly 0 on the cards page of the Macros tab, exactly 1 while its targets / list / keyboard page is open (the gate of the native base page)
     nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
+    std::atomic<uint32_t> nativeListStateBits { 0 };  // 0/1 flags of the open list page (nativeui::liststate): row arrows 0..6, deeper level, has prev, has next
     nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
     std::atomic<uint64_t> nativeNoteMaskPreset { 0 };
     std::atomic<bool> nativeNoteMaskDue { false };
@@ -2016,11 +2043,14 @@ struct PluginInstance
                 return nativeModBoard.layout() == 1 ? 1.0f : 0.0f;
             if (field == nativeui::modboard::ListGate)
                 return nativeModBoard.layout() == 2 ? 1.0f : 0.0f;
-            if (field == nativeui::modboard::ListTitle)
-                return nativeModBoard.layout() == 2 && nativeListText.up() ? 1.0f : 0.0f;   // 1: the header of the list is a way UP (a browser), 0: the groups of the sources
             if (field >= nativeui::modboard::ListRowGate)
                 return nativeModBoard.layout() == 2 && nativeModBoard.at (field).cell().target >= 0 ? 1.0f : 0.0f;
             return 0.0f;
+        }
+        if (nativeui::isListStateOffset (offset))
+        {
+            const int bit = offset - nativeui::kListState;
+            return (nativeListStateBits.load (std::memory_order_acquire) & (1u << bit)) != 0 ? 1.0f : 0.0f;
         }
         if (nativeui::isMixerSoloVisualOffset (offset))
         {
@@ -2740,6 +2770,8 @@ struct PluginInstance
         }
         if (nativeModBoardDue.load (std::memory_order_acquire) && nativeModBoardDue.exchange (false, std::memory_order_acq_rel))
         {
+            for (int i = 0; i < nativeui::liststate::kHandles; ++i)   // the row arrows, back arrow and pager flags before the cells and the list gate (CLAUDE.md page-load item 8)
+                reportNativeValue (e, nativeui::kListState + i, nativeUiValue (nativeui::kListState + i));
             for (int i = 0; i < nativeui::modboard::kHandles; ++i)
             {
                 const auto link = nativeModBoard.at (i);
@@ -4022,6 +4054,25 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                         std::snprintf (buf, kCap, "Choice List %d", offset - nativeui::kChoiceList);
                 }
                 return 1;   // the display stays empty
+            }
+            if (nativeui::isListStateOffset (offset))
+            {
+                namespace ls = nativeui::liststate;
+                const int field = offset - nativeui::kListState;
+                if (opcode == effGetParamName)
+                {
+                    if (field < ls::kDeeperLevel)
+                        std::snprintf (buf, kCap, "List Row Arrow %d", field + 1);
+                    else if (field == ls::kDeeperLevel)
+                        synthyboy_mpc::putBounded (buf, kCap, "List Deeper Level");
+                    else
+                        synthyboy_mpc::putBounded (buf, kCap, field == ls::kHasPrev ? "List Has Previous" : "List Has Next");
+                }
+                else if (opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "On" : "Off");
+                else
+                    buf[0] = '\0';
+                return 1;
             }
             if (nativeui::isNoteMaskOffset (offset))
             {
@@ -5419,7 +5470,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
             return 1;
         }
-        if (nativeOffset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (nativeOffset))   // the gate of the list modal and the openers (native_choice_list.h): integers 0 .. 1
+        if (nativeOffset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (nativeOffset) || nativeui::isListStateOffset (nativeOffset))   // the gate of the list modal, the openers (native_choice_list.h) and the list state flags: integers 0 .. 1
         {
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
@@ -6322,6 +6373,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     }
                     return;
                 }
+                if (nativeui::isListStateOffset (offset))
+                    return;   // read-only 0/1 facts of the open list page (nativeui::liststate)
                 if (nativeui::isModBoardControlOffset (offset))
                 {
                     const int field = offset - nativeui::kModBoardControl;
@@ -6958,6 +7011,14 @@ void PluginInstance::choiceListPublish() noexcept
     const auto preset = stateGeneration.load (std::memory_order_acquire);
     if (nativeModBoardPreset.load (std::memory_order_relaxed) != preset)
         nativeModBoard.invalidate();
+    nativeui::liststate::State state;   // a choice list is one flat level of final items: no row arrows, no back arrow; PREVIOUS / NEXT only where a page exists
+    state.active = true;
+    state.deeperLevel = session.deeperLevel();
+    state.hasPrev = session.hasPrevious();
+    state.hasNext = session.hasNext();
+    for (int row = 0; row < page.count; ++row)
+        state.rowOpensLevel[static_cast<size_t> (row)] = session.rowOpensLevel (row);
+    publishListState (state);
     nativeModBoard.publish (2, fields.data());
     nativeModBoardPreset.store (preset, std::memory_order_release);
     nativeModBoardDue.store (true, std::memory_order_release);
@@ -6971,6 +7032,7 @@ void PluginInstance::choiceListClose() noexcept
     choiceListOpen.store (false, std::memory_order_release);
     nativeModBoard.publish (0, nullptr);
     nativeListText.clear();
+    publishListState ({});
     nativeModBoardDue.store (true, std::memory_order_release);
 }
 

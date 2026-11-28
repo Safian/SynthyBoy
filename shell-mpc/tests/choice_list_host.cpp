@@ -34,9 +34,19 @@ int main()
     {
         check (cl::kSlots == 113, "113 slots");
         check (cl::slotOfHandle (21) == 0 && cl::slotOfHandle (3801) == cl::kSlots - 1 && cl::slotOfHandle (22) == -1, "slotOfHandle finds the first and the last slot, -1 for no opener");
-        check (nu::kChoiceListOpen == 3903 - 2719 && nu::kChoiceList == 3904 - 2719 && nu::kCount == nu::kChoiceList + cl::kSlots, "the handle block follows Play List");
-        check (! nu::isTextGateOffset (nu::kChoiceListOpen) && nu::isChoiceListOffset (nu::kChoiceList) && nu::isChoiceListOffset (nu::kCount - 1)
-               && ! nu::isChoiceListOffset (nu::kChoiceListOpen) && ! nu::isChoiceListOffset (nu::kCount), "the predicates of the block");
+        check (nu::kChoiceListOpen == 3903 - 2719 && nu::kChoiceList == 3904 - 2719
+               && nu::kListState == nu::kChoiceList + cl::kSlots && nu::kCount == nu::kListState + nu::liststate::kHandles,
+               "the choice-list and list-state handle blocks follow Play List");
+        check (! nu::isTextGateOffset (nu::kChoiceListOpen) && nu::isChoiceListOffset (nu::kChoiceList) && nu::isChoiceListOffset (nu::kListState - 1)
+               && ! nu::isChoiceListOffset (nu::kChoiceListOpen) && ! nu::isChoiceListOffset (nu::kListState), "the predicates of the choice-list block");
+        check (nu::isListStateOffset (nu::kListState) && nu::isListStateOffset (nu::kCount - 1)
+               && ! nu::isListStateOffset (nu::kListState - 1) && ! nu::isListStateOffset (nu::kCount)
+               && nu::liststate::kHandles == 10, "the predicates of the list-state block");
+        char rowBuf[32];
+        nu::liststate::copyRowName (rowBuf, sizeof rowBuf, "Basic \xe2\x96\xb6");
+        check (std::strcmp (rowBuf, "Basic") == 0, "copyRowName strips trailing folder/category arrow");
+        nu::liststate::copyRowName (rowBuf, sizeof rowBuf, "Sine");
+        check (std::strcmp (rowBuf, "Sine") == 0, "copyRowName keeps plain row names unchanged");
     }
     // ---- the port: one tap is one request, latest wins, per-slot debounce
     {
@@ -89,16 +99,25 @@ int main()
         auto session = std::make_unique<cl::Session>();
         fill (session->items, 0);
         check (! session->open (4, 0) && ! session->isOpen(), "an empty list does not open");
+        fill (session->items, 5);    // single page: no prev, no next
+        check (session->open (1, 0) && ! session->deeperLevel() && ! session->hasPrevious() && ! session->hasNext(), "single-page choice list: not deeper, no prev, no next");
+        for (int r = 0; r < cl::kRows; ++r)
+            check (! session->rowOpensLevel (r), "choice list rows are always final");
         fill (session->items, 17);   // pages of 7: 0..6, 7..13, 14..16
+        check (session->open (4, 0) && ! session->hasPrevious() && session->hasNext(), "first page of 3: no prev, has next");
         check (session->open (4, 9) && session->isOpen() && session->slot() == 4, "opens for its slot");
         check (session->first() == 7 && session->rowsOnPage() == 7 && std::strcmp (session->rowName (2), "Item 9") == 0, "opens on the page that holds the current row");
+        check (session->hasPrevious() && session->hasNext() && ! session->deeperLevel(), "middle page of 3: has prev, has next, not deeper");
         check (session->next() && session->first() == 14 && session->rowsOnPage() == 3, "NEXT: the last page holds the rest");
+        check (session->hasPrevious() && ! session->hasNext(), "last page of 3: has prev, no next");
         check (! session->next() && session->first() == 14, "no page after the last one");
         check (std::strcmp (session->rowName (3), "") == 0, "a row past the end shows nothing");
         float value = -1.0f;
         check (! session->choose (3, value) && session->isOpen() && value == -1.0f, "a tap on an empty row does nothing");
         check (session->previous() && session->previous() && session->first() == 0 && ! session->previous(), "PREVIOUS down to the first page, not past it");
+        check (! session->hasPrevious() && session->hasNext(), "back to first page: no prev, has next");
         check (session->choose (5, value) && value == 5.0f / 16.0f && ! session->isOpen() && session->slot() == -1, "one tap on a row gives its value and closes");
+        check (! session->hasPrevious() && ! session->hasNext(), "closed list has no prev/next");
         check (! session->choose (0, value), "a closed list takes no row");
         check (session->open (2, 99) && session->first() == 0, "a current row out of range opens the first page");
         check (session->open (2, -1) && session->first() == 0, "no current row opens the first page");

@@ -601,6 +601,76 @@ int main()
         in.nowMs = (now += 500.0);
         check (v.update (in), "the cursor moves on");
     }
+    // ---- native two-level lists: row arrows, deeper level flag, pager flags, and returning to the left row's page
+    {
+        namespace nb = synthyboy_mpc::nativeui::modboard;
+        FakeInstance inst;
+        NativeListCells cells;
+        std::array<const char*, 17> items {};
+        for (int i = 0; i < 17; ++i) items[static_cast<size_t> (i)] = i == 0 ? "Basic \xe2\x96\xb6" : "Row";
+        NativeListCells::Data catData;
+        catData.header = "TEST";
+        catData.items = items.data();
+        catData.count = 17;
+        catData.headerBack = false;
+        catData.allRowsOpenLevel = true;
+        auto noop = [] {}; auto noopRow = [] (int) {};
+        cells.publish (inst, catData, noopRow, noop, noop);
+        check (inst.listState.active && ! inst.listState.deeperLevel && ! inst.listState.hasPrev && inst.listState.hasNext, "list cells first page: not deeper, no prev, has next");
+        check (std::strcmp (inst.listPage.rows[0], "Basic") == 0, "list cells strips trailing triangle from category row");
+        bool allArrows = true;
+        for (int r = 0; r < nb::kListRows; ++r) allArrows = allArrows && inst.listState.rowOpensLevel[static_cast<size_t> (r)];
+        check (allArrows, "category list reports arrow on every row");
+
+        inst.injectModBoardTap (nb::ListNext);
+        cells.publish (inst, catData, noopRow, noop, noop);
+        cells.publish (inst, catData, noopRow, noop, noop);
+        check (inst.listState.hasPrev && inst.listState.hasNext, "list cells middle page: has prev and has next");
+
+        inst.injectModBoardTap (nb::ListNext);
+        cells.publish (inst, catData, noopRow, noop, noop);
+        cells.publish (inst, catData, noopRow, noop, noop);
+        check (inst.listState.hasPrev && ! inst.listState.hasNext && inst.listState.rowOpensLevel[0] && inst.listState.rowOpensLevel[2], "list cells last page: has prev, no next, trailing rows carry arrows");
+
+        NativeListCells::Data finalData;
+        finalData.header = "BASIC";
+        finalData.items = items.data();
+        finalData.count = 5;
+        finalData.headerBack = true;
+        finalData.allRowsOpenLevel = false;
+        cells.restart();
+        cells.publish (inst, finalData, noopRow, noop, noop);
+        check (inst.listState.deeperLevel && ! inst.listState.hasPrev && ! inst.listState.hasNext, "final level: deeperLevel is 1, single page has no prev/next");
+        bool noArrows = true;
+        for (int r = 0; r < nb::kListRows; ++r) noArrows = noArrows && ! inst.listState.rowOpensLevel[static_cast<size_t> (r)];
+        check (noArrows, "final list reports no row arrows");
+
+        cells.hide (inst);
+        check (! inst.listState.active && ! inst.listState.deeperLevel && ! inst.listState.hasPrev && ! inst.listState.hasNext, "hide clears list state flags");
+
+        // EnvUi two-level target list: page 2 group -> deeper level -> header back arrow returns to page 2
+        EnvUi env;
+        UiStack stack;
+        stack.openFull (EnvUi::kElementEnv);
+        stack.openDetail (EnvUi::kPageList);
+        page::Input envIn;
+        envIn.instance = 1;
+        double envNow = 100.0;
+        env.update (inst, stack, envNow, envIn);
+        check (! inst.listState.deeperLevel && ! inst.listState.hasPrev && inst.listState.hasNext && inst.listState.rowOpensLevel[0], "Env target groups page 1: arrow rows, not deeper, hasNext");
+        inst.injectModBoardTap (nb::ListNext);
+        env.update (inst, stack, (envNow += 50.0), envIn);
+        env.update (inst, stack, (envNow += 50.0), envIn);
+        check (inst.listState.hasPrev, "Env target groups moved to page 2");
+        inst.injectModBoardTap (nb::ListRow + 1);
+        env.update (inst, stack, (envNow += 50.0), envIn);
+        env.update (inst, stack, (envNow += 50.0), envIn);
+        check (inst.listState.deeperLevel && ! inst.listState.rowOpensLevel[0], "Env target items: deeperLevel is 1 and rows have no arrows");
+        inst.injectModBoardTap (nb::ListGroups);
+        env.update (inst, stack, (envNow += 50.0), envIn);
+        env.update (inst, stack, (envNow += 50.0), envIn);
+        check (! inst.listState.deeperLevel && inst.listState.hasPrev && inst.listState.rowOpensLevel[0], "Env back arrow returns to the page holding the group just left");
+    }
     std::printf (g_fails ? "views_host: FAILED (%d)\n" : "views_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }

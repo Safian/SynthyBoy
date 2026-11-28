@@ -668,6 +668,8 @@ private:
             data.items = src.items;
             data.count = src.count;
             data.headerBack = src.headerBack;
+            data.allRowsOpenLevel = src.allRowsOpenLevel;
+            data.rowOpensLevel = src.rowOpensLevel;
         }
         else
         {
@@ -691,8 +693,8 @@ private:
                     close = true;
                 }
             },
-            [&] { if (source && osc_->compactSourceUp (io)) moved = true; else close = true; },   // BACK: up one level, at the top level the list closes
-            [&] { moved = source && osc_->compactSourceUp (io); });                               // the header: up one level (nothing at the top level)
+            [&] { close = true; },                                                                 // Back: tap beside the panel closes without a change
+            [&] { moved = source && osc_->compactSourceUp (io); });                               // the header back arrow: up one level (nothing at the top level)
         if (close)
             closeList();
         else if (moved)

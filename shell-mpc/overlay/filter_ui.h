@@ -1319,7 +1319,7 @@ private:
                     break;
                 case kTargetsBack: stack.back(); break;
                 case kTargetsAdd: openDestList (stack); break;
-                case kDestHeader: destGroup_ = -1; fillDestList(); break;
+                case kDestHeader: { const int leftGroup = destGroup_; destGroup_ = -1; fillDestList (leftGroup); break; }
                 default: break;
             }
             syncPages (stack);
@@ -1505,7 +1505,7 @@ private:
     }
 
     /** The list that picks a new target: the groups of the destinations, then the parameters of a group. */
-    void fillDestList()
+    void fillDestList (int focusGroup = -1)
     {
         const uibind::DestIndex& d = uibind::DestIndex::get();
         destNames_.clear();
@@ -1523,7 +1523,10 @@ private:
             destHeader_ = d.groups[static_cast<size_t> (destGroup_)].c_str();
             destHeaderBack_ = true;
         }
-        listCells_.restart();
+        if (destGroup_ < 0 && focusGroup >= 0 && focusGroup < static_cast<int> (destNames_.size()))
+            listCells_.showRow (focusGroup);
+        else
+            listCells_.restart();
     }
     /** The add-target / add-source list is on the screen as the native picker cells (nativeui::modboard; the skin instance `Osc Native List`). */
     bool listShown() const noexcept { return pageTop_ == kPageDest || (pageTop_ == kPageMods && pickingSource_); }
@@ -1540,6 +1543,7 @@ private:
         data.items = destNames_.data();
         data.count = static_cast<int> (destNames_.size());
         data.headerBack = destHeaderBack_;
+        data.allRowsOpenLevel = ! pickingSource_ && destGroup_ < 0;
         listCells_.publish (inst, data,
             [&] (int index) { handle (ui::Change::indexed (kDestList, index, 1.0), stack, inst); },
             [&] { handle (ui::Change::request (kDestBackdrop), stack, inst); },

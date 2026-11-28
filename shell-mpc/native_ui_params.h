@@ -3,9 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 
+#include "native_choice_list.h"
 #include "native_lfo_controls.h"
 #include "native_env_controls.h"
 #include "native_master_controls.h"
@@ -168,12 +172,44 @@ constexpr int kChoiceList = kChoiceListOpen + 1;
 constexpr int kChoiceListSlots = choicelist::kSlots;
 static_assert (kChoiceListOpen == choicelist::kOpenParameter - 2719, "Choice List Open is Parameter 3903 in the skin (IndexedEnabling of nativeListModal)");
 static_assert (kChoiceList == choicelist::kFirstSlotParameter - 2719, "Choice List 0 is Parameter 3904 in the skin (the ListOpen handle of every opener)");
-constexpr int kCount = kChoiceList + kChoiceListSlots;
 constexpr bool isChoiceListOffset (int offset) noexcept { return offset >= kChoiceList && offset < kChoiceList + kChoiceListSlots; }
+// Appended 2026-11-28 (two-level list state): exact 0/1 facts of the open native list page (row arrows 0..6, deeper level, previous/next page).
+namespace liststate
+{
+constexpr int kRowArrow = 0;                            // 0 .. modboard::kListRows - 1 (Parameter 4017 .. 4023): 1 when row opens a deeper level, else 0
+constexpr int kDeeperLevel = modboard::kListRows;       // 7 (Parameter 4024): 1 when on a deeper level (header shows the back arrow), else 0
+constexpr int kHasPrev = kDeeperLevel + 1;              // 8 (Parameter 4025): 1 when there is a previous page, else 0
+constexpr int kHasNext = kHasPrev + 1;                  // 9 (Parameter 4026): 1 when there is a next page, else 0
+constexpr int kHandles = kHasNext + 1;                  // 10
+
+struct State
+{
+    bool active = false;
+    bool deeperLevel = false;
+    bool hasPrev = false;
+    bool hasNext = false;
+    std::array<bool, modboard::kListRows> rowOpensLevel {};
+};
+
+inline void copyRowName (char* out, size_t cap, const char* text) noexcept
+{
+    if (out == nullptr || cap == 0)
+        return;
+    std::snprintf (out, cap, "%s", text != nullptr ? text : "");
+    const size_t len = std::strlen (out);
+    constexpr const char kArrow[] = " \xe2\x96\xb6";
+    constexpr size_t kArrowLen = sizeof (kArrow) - 1;
+    if (len >= kArrowLen && std::memcmp (out + len - kArrowLen, kArrow, kArrowLen) == 0)
+        out[len - kArrowLen] = '\0';
+}
+}
+constexpr int kListState = kChoiceList + kChoiceListSlots;
+constexpr int kCount = kListState + liststate::kHandles;
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
 constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kTextEdit; }
 constexpr bool isTextEditOffset (int offset) noexcept { return offset >= kTextEdit && offset < kTextGate; }
 constexpr bool isTextGateOffset (int offset) noexcept { return offset >= kTextGate && offset < kPlayList; }
+constexpr bool isListStateOffset (int offset) noexcept { return offset >= kListState && offset < kCount; }
 constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
 constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
 constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }
