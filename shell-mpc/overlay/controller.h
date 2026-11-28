@@ -1025,7 +1025,7 @@ private:
         auto* inst = slots_.at (activeSlot_);
         if (inst == nullptr || viewSlot_[current_] != activeSlot_ || viewGeneration_[current_] != slots_.generation (activeSlot_))
             return false;
-        views_[static_cast<size_t> (current_)]->setNativeActionPopup (actionPopup >= 0 ? actionPopup : nativeui::playoscui::kOtherPopup);
+        views_[static_cast<size_t> (current_)]->setNativeActionPopup (actionPopup >= 0 ? actionPopup : IView::kOtherActionPopup);
         if (! nativeParameterModal_)
         {
             inst->setQGroup (nullptr, 0);

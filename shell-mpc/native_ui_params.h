@@ -156,9 +156,9 @@ constexpr int kTextGate = kTextEdit + 3;
 constexpr int kTextGates = 2;   // 0: nativetext::TargetsTitle (Targets / Modulations keyline), 1: nativetext::OscDetailTitle (the oscillator detail keyline)
 constexpr int textGateLine (int gate) noexcept { return gate == 0 ? nativetext::TargetsTitle : nativetext::OscDetailTitle; }
 // Appended 2026-11-28 (play list): "Play List", the code of the Play page's own paged list the skin radio Buttons open (native_play_list.h: 0 none, 1 source, 2 LFO/RND, 3 noise sound, 4 LFO shape, 5 LFO division,
-// 6 standard LFO); stepped integer 0 .. 6, written by the host, never stored (getParameter is always 0). Host index 2719 + offset = Parameter 3902 (the text gates end at 3901).
+// 6 standard LFO, 7 oscillator selector, 8 envelope selector, 9 oscillator type, 10 route, 11 Sub wave, 12 Sub octave, 13 LFO style, 14 LFO sync); stepped integer 0 .. 14, written by the host, never stored (getParameter is always 0). Host index 2719 + offset = Parameter 3902 (the text gates end at 3901).
 constexpr int kPlayList = kTextGate + kTextGates;
-constexpr int kPlayListLastCode = 6;
+constexpr int kPlayListLastCode = 14;   // == playlist::kLastCode (native_play_list.h; checked in synthyboy_mpc.cpp)
 static_assert (kPlayList == 3902 - 2719, "Play List is Parameter 3902 in skin/defs_play.json: the handle block before it changed");
 constexpr int kCount = kPlayList + 1;
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }

@@ -737,23 +737,53 @@ public:
             if (target == nullptr || ! inst.takeNativePlayOsc (state, field, value)
                 || state.preset != inst.stateGeneration() || state.selection != inst.playOscSelectionRevision())
                 continue;
-            if (field == n::Route)
-            {
-                const int route = static_cast<int> (std::lround (value * nativeui::osc::kLastRoute));
-                if (inst.param (target->param) != static_cast<float> (route))
-                    writePlain (inst, target->param, static_cast<float> (route));
-            }
-            else
-                applyNativeSetting (*target, inst, stack, value);
             changed = true;
-            if (field == n::Power || field == n::First || ! stack.isMain())
-            {
-                inst.setNativePlayOsc ({}, "");
-                dropGesture();
+            if (applyCompactField (*target, field, inst, stack, value))
                 break;
-            }
         }
         return changed;
+    }
+
+    /** The parameter of the compact field `field` (nativeui::playoscui::Field) of the shown oscillator while its native cell is active (the skin's NativeActive gate: the oscillator is on; the power
+        field always), -1 when the shown oscillator has no such field or it is inactive. The Play page's lists of a compact field (play_view.h) open only for such a field. */
+    int compactFieldParam (int field) const noexcept
+    {
+        namespace n = nativeui::playoscui;
+        if (field < 0 || field >= n::kFields || (field != n::Power && ! powerOn()))
+            return -1;
+        const Item* it = compactNativeItems()[field];
+        return it != nullptr && it->param >= 0 ? it->param : -1;
+    }
+    /** Writes `value` (normalised, what the host writes into the field's native handle) into the compact field `field` of the shown oscillator through the same path as a host write
+        (syncCompactNative): the route as its destination index, every other field through applyNativeSetting. false: the field is not active (compactFieldParam). */
+    bool applyCompactNativeField (IInstanceView& inst, UiStack& stack, int field, float value)
+    {
+        if (compactFieldParam (field) < 0)
+            return false;
+        applyCompactField (*compactNativeItems()[field], field, inst, stack, value);
+        return true;
+    }
+
+    /** One host value of a compact field applied (syncCompactNative, applyCompactNativeField). true: the binding changed (power, type or waveform, a full screen opened): the published compact state
+        is withdrawn until the next publish and the gesture dropped, so no further value of the old binding is taken. */
+    bool applyCompactField (const Item& target, int field, IInstanceView& inst, UiStack& stack, float value)
+    {
+        namespace n = nativeui::playoscui;
+        if (field == n::Route)
+        {
+            const int route = static_cast<int> (std::lround (value * nativeui::osc::kLastRoute));
+            if (inst.param (target.param) != static_cast<float> (route))
+                writePlain (inst, target.param, static_cast<float> (route));
+        }
+        else
+            applyNativeSetting (target, inst, stack, value);
+        if (field == n::Power || field == n::First || ! stack.isMain())
+        {
+            inst.setNativePlayOsc ({}, "");
+            dropGesture();
+            return true;
+        }
+        return false;
     }
 
     // ---- the lists of the Play page (play_view.h, nativeui::playlist): no stack page, the Play page shows the list with its own NativeListCells
@@ -800,18 +830,6 @@ public:
     {
         if (pageTop_ != kPageList)
             wtMode_ = browseMode_ = false;
-    }
-    /** The parameter of the compact Noise "First" field (noise.sample), -1 when the shown source is not the noise. */
-    int compactNoiseSoundParam() const noexcept
-    {
-        const Item* first = sel_ == playosc::kNoise ? compactNativeItems()[nativeui::playoscui::First] : nullptr;
-        return first != nullptr ? first->param : -1;
-    }
-    /** Writes the noise sound through the compact Noise "First" item, the way its native cell does (`value` normalised). */
-    bool applyCompactNoiseSound (IInstanceView& v, UiStack& stack, float value)
-    {
-        const Item* first = sel_ == playosc::kNoise ? compactNativeItems()[nativeui::playoscui::First] : nullptr;
-        return first != nullptr && first->param >= 0 && applyNativeSetting (*first, v, stack, value);
     }
 
     nativeui::osc::SettingsView nativeSettingsView() const noexcept

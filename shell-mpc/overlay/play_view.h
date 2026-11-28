@@ -3,9 +3,10 @@
 // sub-tabs of the Play function key; the panel of the sub-tab that is on screen (the view's `index`: 1 oscillator, 2 envelope, 3 LFO) has a frame. Every panel has a small title with the
 // selected instance ("OSC 2", "ENV 3", "LFO 10"). The picture is drawn once through a sink (CpuSink: the canvas, SceneSink: the GPU helper's display list), so the two renderers
 // cannot drift apart.
-// The choices with more than eight options (the oscillator's source, the LFO / RND selector, the noise sound, the LFO shape and division, the standard LFO) are the page's own paged native list (owner, 2026-11-28):
-// a skin radio Button writes a code into the "Play List" handle (native_play_list.h, IInstanceView::takePlayListRequest), the page opens the list in the modulation picker's cells (NativeListCells, the
-// skin instance playNativeList over an opaque backdrop) and applies the row tapped; while the list is open the view draws nothing (the GPU plane is above the host's and must not cover it).
+// Every choice list of the page (the oscillator and envelope selectors, the oscillator's source, type, route, the Sub's wave and octave, the noise sound, the LFO / RND selector, the LFO shape, division, style
+// and sync, the standard LFO) is the page's own paged native list (owner, 2026-11-28: one row tap applies and closes): a skin radio Button writes a code into the "Play List" handle (native_play_list.h,
+// IInstanceView::takePlayListRequest), the page opens the list in the modulation picker's cells (NativeListCells, the skin instance playNativeList over an opaque backdrop) and applies the row tapped through
+// the same path as the host writing that value into the field's handle; while the list is open the view draws nothing (the GPU plane is above the host's and must not cover it).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -321,15 +322,6 @@ public:
         if (env_ != nullptr) env_->dropGesture();
         if (lfo_ != nullptr) lfo_->dropGesture();
     }
-    void setNativeActionPopup (int action) noexcept override
-    {
-        nativeEnvLfo_.setPopup (action);
-        namespace n = nativeui::playoscui;
-        constexpr int fields[] { n::Route, n::First, n::Second };
-        if (nativeOscIo_ != nullptr)
-            nativeOscIo_->setNativePlayOscPopup (action >= 0 && action < 3 ? fields[action]
-                : action == n::kNoPopup ? n::kNoPopup : n::kOtherPopup);
-    }
     void onHidden() override
     {
         closeList();
@@ -505,7 +497,8 @@ private:
     // ---- the Play lists (native_play_list.h): one list at a time, in the modulation picker's cells; the data are the page's (the names of a parameter's choices, the LFO names) or the oscillator's
     // source browser (OscUi::openCompactSourceList: the same browsers as the Osc pages' list page)
     /** Every update while the page UI runs: takes one request of the "Play List" handle and opens that list, publishes the open list and takes its gesture; closes it on a final choice, on BACK at the top
-        level, on a preset change, when the Play oscillator (or, for the shape and division, the shown LFO) changes and while a full screen covers the page. true: a list opened or closed. */
+        level, on a preset change, when the Play oscillator changes (and a list of an oscillator field when that field is no longer active: the oscillator was switched off, its type changed), when the
+        shown LFO changes (the lists of an LFO field) and while a full screen covers the page. true: a list opened or closed. */
     bool updateList (IInstanceView& io, UiStack& stack)
     {
         namespace pl = nativeui::playlist;
@@ -520,7 +513,8 @@ private:
         if (listCode_ != pl::None
             && (io.stateGeneration() != listPreset_ || sel_[0] != listOsc_
                 || (listCode_ == pl::Source && osc_->typeRaw() != listType_)
-                || ((listCode_ == pl::LfoShape || listCode_ == pl::LfoDivision) && uibind::selectedLfo (io) != listLfo_)))
+                || (oscFieldOf (listCode_) >= 0 && fieldListParam (listCode_) != listParam_)
+                || (lfoList (listCode_) && uibind::selectedLfo (io) != listLfo_)))
             closeList();
         const int request = io.takePlayListRequest();
         if (request != pl::None)
@@ -529,7 +523,50 @@ private:
             publishList (io, stack);
         return before != listCode_ || request != pl::None;
     }
-    /** Opens the list of `code` (the open one closes first) on the page of its current row; nothing opens when the list has no data here (no source field, no shape of a random LFO). */
+    /** The compact oscillator field (nativeui::playoscui::Field) a list edits, -1 for a list of no oscillator field. */
+    static int oscFieldOf (int code) noexcept
+    {
+        namespace pl = nativeui::playlist;
+        namespace n = nativeui::playoscui;
+        switch (code)
+        {
+            case pl::NoiseSound: case pl::OscType: case pl::SubWave: return n::First;
+            case pl::OscRoute: return n::Route;
+            case pl::OscOctave: return n::Second;
+            default: return -1;
+        }
+    }
+    /** A list of a field of the shown LFO (it closes when the shown LFO changes). */
+    static bool lfoList (int code) noexcept
+    {
+        namespace pl = nativeui::playlist;
+        return code == pl::LfoShape || code == pl::LfoDivision || code == pl::LfoStyle || code == pl::LfoSync;
+    }
+    /** The parameter a list of a field edits while that field is active for the shown oscillator or LFO (the NativeActive gates of the compact cells: the oscillator is on; the field exists for this
+        oscillator or LFO), -1 otherwise: the Type of an oscillator A / B / C, the route of A / B / C and Noise, the Sub's wave and octave, the Noise's sound, the shape of a standard LFO, the division of
+        an LFO in BPM mode, the style and sync of a random LFO. */
+    int fieldListParam (int code) const noexcept
+    {
+        namespace pl = nativeui::playlist;
+        namespace n = nativeui::playoscui;
+        const int source = osc_->selection();
+        const bool abc = nativeui::osc::isAbcSource (source), sub = source == playosc::kSub, noise = source == playosc::kNoise;
+        switch (code)
+        {
+            case pl::NoiseSound: return noise ? osc_->compactFieldParam (n::First) : -1;
+            case pl::OscType: return abc ? osc_->compactFieldParam (n::First) : -1;
+            case pl::SubWave: return sub ? osc_->compactFieldParam (n::First) : -1;
+            case pl::OscOctave: return sub ? osc_->compactFieldParam (n::Second) : -1;
+            case pl::OscRoute: return abc || noise ? osc_->compactFieldParam (n::Route) : -1;
+            case pl::LfoShape: return lfo_->random() ? -1 : lfo_->compactNativeTarget (playenvlfo::Shape);
+            case pl::LfoDivision: return lfo_->compactNativeTarget (playenvlfo::Division);
+            case pl::LfoStyle: return lfo_->random() ? lfo_->compactNativeTarget (playenvlfo::Style) : -1;
+            case pl::LfoSync: return lfo_->random() ? lfo_->compactNativeTarget (playenvlfo::Sync) : -1;
+            default: return -1;
+        }
+    }
+    /** Opens the list of `code` (the open one closes first) on the page of its current row; nothing opens when the list has no data here (no source field, a field not active for the shown oscillator or
+        LFO: fieldListParam). */
     void openList (int code, IInstanceView& io)
     {
         namespace pl = nativeui::playlist;
@@ -551,21 +588,24 @@ private:
                 listNames_.assign (pl::lfoNames(), pl::lfoNames() + pl::kLfoStandardRows);
                 current = std::clamp (io.playSelection (2), 1, pl::kLfoStandardRows) - 1;
                 break;
-            case pl::NoiseSound: listParam_ = osc_->compactNoiseSoundParam(); break;
-            case pl::LfoShape: listParam_ = lfo_->random() ? -1 : lfo_->compactNativeTarget (playenvlfo::Shape); break;
-            case pl::LfoDivision: listParam_ = lfo_->compactNativeTarget (playenvlfo::Division); break;
+            case pl::OscSelect:
+                listNames_.assign (pl::oscSelectNames(), pl::oscSelectNames() + pl::kOscSelectRows);
+                current = std::clamp (io.playSelection (0), 1, pl::kOscSelectRows) - 1;
+                break;
+            case pl::EnvSelect:
+                listNames_.assign (pl::envSelectNames(), pl::envSelectNames() + pl::kEnvSelectRows);
+                current = std::clamp (io.playSelection (1), 1, pl::kEnvSelectRows) - 1;
+                break;
+            case pl::NoiseSound: case pl::OscType: case pl::OscRoute: case pl::SubWave: case pl::OscOctave:
+            case pl::LfoShape: case pl::LfoDivision: case pl::LfoStyle: case pl::LfoSync:
+                listParam_ = fieldListParam (code);
+                if (listParam_ < 0 || ! fieldListNames (code, io, current))
+                {
+                    listNames_.clear();
+                    return;
+                }
+                break;
             default: return;
-        }
-        if (code == pl::NoiseSound || code == pl::LfoShape || code == pl::LfoDivision)
-        {
-            if (listParam_ < 0)
-                return;
-            const synthyboy::ParamInfo& pi = synthyboy::paramTable()[listParam_];
-            if (pi.choices == nullptr || pi.numChoices < 2)
-                return;
-            for (int i = 0; i < pi.numChoices; ++i)
-                listNames_.push_back (ui::shownChoice (pi.key, i, pi.choices[i]));
-            current = static_cast<int> (std::lround (io.param (listParam_) - pi.min));
         }
         listCode_ = code;
         listIo_ = &io;
@@ -575,6 +615,46 @@ private:
         listLfo_ = uibind::selectedLfo (io);
         list_.restart();
         list_.showRow (current);
+    }
+    /** The rows of the list of a field (listParam_) and its current row: the names of the parameter's choices (ui::shownChoice), the Type in the pictogram order of its native cell
+        (nativeui::osc::kTypeChoices), the route's seven destinations and "Routing controls", the octave -4 .. 4 (a whole number with no choices). false: the parameter has no names for this list. */
+    bool fieldListNames (int code, IInstanceView& io, int& current)
+    {
+        namespace pl = nativeui::playlist;
+        namespace osc = nativeui::osc;
+        const synthyboy::ParamInfo& pi = synthyboy::paramTable()[listParam_];
+        const int raw = static_cast<int> (std::lround (io.param (listParam_)));
+        if (code == pl::OscOctave)
+        {
+            if (pi.min != static_cast<float> (pl::kOctaveLowest) || pi.max != static_cast<float> (pl::kOctaveLowest + pl::kOctaveRows - 1))
+                return false;
+            listNames_.assign (pl::octaveNames(), pl::octaveNames() + pl::kOctaveRows);
+            current = raw - pl::kOctaveLowest;
+            return true;
+        }
+        if (pi.choices == nullptr || pi.numChoices < 2)
+            return false;
+        if (code == pl::OscType)
+        {
+            constexpr int rows = static_cast<int> (std::size (osc::kTypeChoices));
+            if (pi.numChoices != rows)
+                return false;
+            for (int i = 0; i < rows; ++i)
+            {
+                listNames_.push_back (ui::shownChoice (pi.key, osc::kTypeChoices[i], pi.choices[osc::kTypeChoices[i]]));
+                if (osc::kTypeChoices[i] == raw)
+                    current = i;
+            }
+            return true;
+        }
+        if (code == pl::OscRoute && pi.numChoices != osc::kLastRoute + 1)
+            return false;
+        for (int i = 0; i < pi.numChoices; ++i)
+            listNames_.push_back (ui::shownChoice (pi.key, i, pi.choices[i]));
+        if (code == pl::OscRoute)
+            listNames_.push_back (pl::kRoutingControlsRow);
+        current = static_cast<int> (std::lround (io.param (listParam_) - pi.min));
+        return true;
     }
     void publishList (IInstanceView& io, UiStack& stack)
     {
@@ -620,17 +700,32 @@ private:
         else if (moved)
             list_.showRow (osc_->compactSourceList().current);
     }
-    /** A row of a flat list: the choice applied the way the compact native cell of that field applies it. */
+    /** A row of a flat list: the choice applied through the path of the host writing that value into the field's own handle: the selectors as "Play Osc" / "Play Env" (IInstanceView::setPlaySelection,
+        the selector write of setParameter), a compact oscillator field as its native cell (OscUi::applyCompactNativeField: row / (rows - 1), the Type the pictogram index, the route the destination index;
+        "Routing controls" the handle's last value 1.0), an LFO field as its native cell (LfoUi::applyCompactNative). Nothing is written when the field is no longer active (fieldListParam). */
     void applyListRow (int row, int count, IInstanceView& io, UiStack& stack)
     {
         namespace pl = nativeui::playlist;
+        namespace n = nativeui::playoscui;
         const float value = count > 1 ? static_cast<float> (row) / static_cast<float> (count - 1) : 0.0f;
+        if ((oscFieldOf (listCode_) >= 0 || lfoList (listCode_)) && fieldListParam (listCode_) != listParam_)
+            return;
         switch (listCode_)
         {
             case pl::LfoChoose: case pl::LfoStandard: uibind::chooseLfo (io, row + 1); break;
-            case pl::NoiseSound: osc_->applyCompactNoiseSound (io, stack, value); break;
+            case pl::OscSelect: io.setPlaySelection (0, row + 1); break;
+            case pl::EnvSelect: uibind::chooseEnv (io, row + 1); break;
+            case pl::NoiseSound: case pl::OscType: case pl::SubWave: case pl::OscOctave:
+                osc_->applyCompactNativeField (io, stack, oscFieldOf (listCode_), value);
+                break;
+            case pl::OscRoute:   // the route handle is the destination index 0 .. kLastRoute; the last row is the handle's last value
+                osc_->applyCompactNativeField (io, stack, n::Route,
+                    static_cast<float> (std::min (row, nativeui::osc::kLastRoute)) / static_cast<float> (nativeui::osc::kLastRoute));
+                break;
             case pl::LfoShape: lfo_->applyCompactNative (io, stack, playenvlfo::Shape, value); break;
             case pl::LfoDivision: lfo_->applyCompactNative (io, stack, playenvlfo::Division, value); break;
+            case pl::LfoStyle: lfo_->applyCompactNative (io, stack, playenvlfo::Style, value); break;
+            case pl::LfoSync: lfo_->applyCompactNative (io, stack, playenvlfo::Sync, value); break;
             default: break;
         }
     }

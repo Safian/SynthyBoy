@@ -20,9 +20,28 @@ Texts: `Native Osc Missing Compact` (a source that is missing) and `Native Osc M
 
 The three selector parameters `Play Osc`, `Play Env`, `Play LFO` and the 24 Play proxies (the legacy prefix, [../../MPC.md](../../MPC.md), "Parameter order" and "Play selectors and proxies"); blocks of `shell-mpc/native_ui_params.h`: `kPlayOsc` (`native_play_osc.h`), `kPlayEnvLfo` (`native_play_env_lfo.h`), `kPlayLfoStandard`, `kPlayLfoStandardSync`, `kOscPower`, `kNativeText`, `kPlayList` ("Play List", Parameter 3902), the modulation picker's list cells (`kModBoardControl`, `nativeui::modboard`) and the list names (`setNativeListText`). The Play page keeps its own selection, independent of the Env, LFO and Osc tabs.
 
-### Lists with more than eight options
+### Lists: the plugin's own list, one tap chooses and closes
 
-The host MenuOverlay cannot show a VST2's choice names, so the long Play lists are the plugin's own paged native list (7 rows a page, BACK, UP/GROUPS, PREVIOUS, NEXT), the same cells the Osc pages use. A radio Button of the skin writes a code into "Play List" (`shell-mpc/native_play_list.h`: stepped integer 0..6, not automatable, never stored, getParameter 0, empty display; the host's double press of one tap is debounced, 250 ms): 1 Source (two levels: the wavetable categories and tables, or the content roots, folders and files; `OscUi::openCompactSourceList`, the same browsers as the Osc list page), 2 LFO 1..10 / RND 1..4, 3 Noise sound (the nine `noise.sample` choices, through the compact Noise First item), 4 LFO shape, 5 LFO division (through `LfoUi::applyCompactNative`), 6 LFO 1..10. `PlayView` opens the list on the page of the current row and publishes it with `NativeListCells`; the skin instance `playNativeList` (opaque backdrop + the `oscNativeList` cells) is gated by the modboard ListGate like the Note tab. The list closes after a final choice, on BACK at the top level (BACK in a category or folder goes up), on a preset change, when the Play oscillator (shape / division: the shown LFO; source: the oscillator type) changes, when a full screen covers the page and on tab exit. While it is open the view draws nothing on the GPU plane (it lies above the host plane) and takes no touch or wheel.
+Every Play choice list is the plugin's own paged native list (owner, 2026-11-28; 7 rows a page, BACK, UP/GROUPS, PREVIOUS, NEXT), the same cells the Osc pages use: the host MenuOverlay shows no names of a VST2's choices and its row tap only marks. A radio Button of the skin writes a code into "Play List" (`shell-mpc/native_play_list.h`: stepped integer 0..14, not automatable, never stored, getParameter 0, empty display; the host's double press of one tap is debounced, 250 ms). `PlayView` (`openList`, `publishList`, `applyListRow`) opens the list on the page of the current row, publishes it with `NativeListCells` and applies the tapped row through the same C++ path as the host writing that value into the field's own handle:
+
+| Code | List (title) | Rows, names from | Applied through |
+|---|---|---|---|
+| 1 | Source | two levels: wavetable categories and tables, or content roots, folders, files (`OscUi::openCompactSourceList`) | the Osc list page's browsers |
+| 2 | LFO / RND (SELECT LFO) | LFO 1..10, RND 1..4 (fixed names) | `uibind::chooseLfo` |
+| 3 | NOISE SOUND | `noise.sample` choices | `OscUi::applyCompactNativeField` (Noise First) |
+| 4 | LFO SHAPE | the shape choices of the standard LFO | `LfoUi::applyCompactNative` (Shape) |
+| 5 | LFO DIVISION | the division choices | `LfoUi::applyCompactNative` (Division) |
+| 6 | SELECT LFO | LFO 1..10 (fixed names) | `uibind::chooseLfo` |
+| 7 | OSCILLATOR | Sub, Oscillator A, B, C, Noise (fixed names: "Play Osc" has no choice list) | `IInstanceView::setPlaySelection (0, row + 1)` = `playSetSelector`, the selector write of `setParameter` |
+| 8 | ENVELOPE | Env 1..6 (fixed names) | `uibind::chooseEnv` = `playSetSelector (1, ...)` |
+| 9 | TYPE | `oscN.type` choices in the pictogram order of the native cell (`nativeui::osc::kTypeChoices`: Wavetable, Multisample, Sample, Granular, Spectral) | `OscUi::applyCompactNativeField` (First: `applyNativeSetting`, row / 4) |
+| 10 | ROUTE | the seven `oscN.destination` / `noise.destination` choices, then "Routing controls" | `OscUi::applyCompactNativeField` (Route: destination index; the last row writes the handle's last value 1.0) |
+| 11 | SUB WAVE | `sub.waveform` choices | `OscUi::applyCompactNativeField` (Sub First) |
+| 12 | OCTAVE | -4 .. 4 (fixed names: `sub.octave` is a whole number) | `OscUi::applyCompactNativeField` (Sub Second, row / 8) |
+| 13 | LFO STYLE | `rlfoN.style` choices | `LfoUi::applyCompactNative` (Style) |
+| 14 | LFO SYNC | `rlfoN.sync` choices | `LfoUi::applyCompactNative` (Sync) |
+
+A list of a field opens only while that field is active (`PlayView::fieldListParam`, the NativeActive gates of the compact cells): the oscillator fields (`OscUi::compactFieldParam`) need the shown oscillator ON and the field present (Type: A / B / C; Route: A / B / C and Noise; Sub wave and Octave: Sub; Noise sound: Noise), Style and Sync need a random LFO (a standard LFO's mode is its HZ / BPM / KEY cells), Shape a standard LFO. The host's own handles of these fields only show the value: a host write to them is refused (`playoscui::Bank::listOnly`, `playenvlfo::listOnly`). The list closes after a final choice, on BACK at the top level (BACK in a category or folder goes up), on a preset change, when the Play oscillator changes, when the field of an oscillator list is no longer active (switched off, type changed), when the shown LFO changes (shape, division, style, sync), when a full screen covers the page and on tab exit. While it is open the view draws nothing on the GPU plane (it lies above the host plane) and takes no touch or wheel. The Play page has no host popup any more: the action-marker popup gating of the compact cells (`setNativePlayOscPopup`, `setNativePlayEnvLfoPopup`, `PlayView::setNativeActionPopup`) is deleted.
 
 ## Tab exit and page loading
 
@@ -34,4 +53,4 @@ Four groups published together (`PlayView::publishQ`): the oscillator's Basic, t
 
 ## C++ owners
 
-`shell-mpc/overlay/play_view.h`, `play_osc.h`, `play_env_lfo.h`, `osc_ui.h` / `env_ui.h` / `lfo_ui.h` (their compact views), `shell-mpc/play_params.h`, `shell-mpc/native_play_osc.h`, `native_play_env_lfo.h`, `native_play_list.h` (the Play List codes and the request port; `IInstanceView::takePlayListRequest`), `overlay/native_list_cells.h` (the list cells), `play_osc_native_contract.h`. Retired unreferenced symbols (`85e92dbb`): `compactLabelRect`, 40 dead skin definitions, and 15 orphaned images.
+`shell-mpc/overlay/play_view.h`, `play_osc.h`, `play_env_lfo.h`, `osc_ui.h` / `env_ui.h` / `lfo_ui.h` (their compact views), `shell-mpc/play_params.h`, `shell-mpc/native_play_osc.h`, `native_play_env_lfo.h`, `native_play_list.h` (the Play List codes 1..14, their titles, the fixed row names and the request port; `IInstanceView::takePlayListRequest`), `overlay/native_list_cells.h` (the list cells), `play_osc_native_contract.h`. Retired unreferenced symbols (`85e92dbb`): `compactLabelRect`, 40 dead skin definitions, and 15 orphaned images.

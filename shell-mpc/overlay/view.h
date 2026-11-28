@@ -72,7 +72,8 @@ public:
     virtual void dropGesture() noexcept {}
     /** The view went off the screen (a host dialog over it, another page, no instance): a running gesture ends and the open pop-up lists close (the caller holds the controller's lock). */
     virtual void onHidden() {}
-    /** A host popup with the page's action marker was observed or closed. */
+    /** A host popup was observed or closed: `action` is the index of the page's action marker in it (page_detector.h), kOtherActionPopup a popup with no action marker, -1 closed. */
+    static constexpr int kOtherActionPopup = -2;
     virtual void setNativeActionPopup (int /*action*/) noexcept {}
     /** The view has a static background in the host's skin: the square (UI pixels of the screen) and the colour the page detector must read on the host's framebuffer before the view may go transparent
         (host_background.h). false: no background, the view always draws everything. */
