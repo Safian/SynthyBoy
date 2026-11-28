@@ -194,10 +194,9 @@ public:
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
     /** The overlay compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */
     virtual void setPlaySelection (int /*group*/, int /*instance*/) noexcept {}
-    /** The chunk-only view state of the merged tabs (`mpcTabView`, no host parameter, no engine parameter; docs/MPC.md "Tab view state"): `what` kTabViewRnd = the random LFO being edited (0 = a standard LFO, 1 .. 4), kTabViewFilter =
-        the state of the Filter tab (0 F1, 1 F2, 2 NOTE, 3 VELO). Default 0. A project reload (effSetChunk) restores it, a chunk without it gives 0; a program change leaves it. Lock free. The Env and LFO selections themselves are
+    /** The chunk-only view state of the merged tabs (`mpcTabView`, no host parameter, no engine parameter; docs/MPC.md "Tab view state"): `what` kTabViewRnd = the random LFO being edited (0 = a standard LFO, 1 .. 4). Default 0. A project reload (effSetChunk) restores it, a chunk without it gives 0; a program change leaves it. Lock free. The Env and LFO selections themselves are
         the Play selectors (playSelection (1) / (2)): the tab and the Play page share them. */
-    static constexpr int kTabViewRnd = 0, kTabViewFilter = 1, kTabViewFields = 2;
+    static constexpr int kTabViewRnd = 0, kTabViewFields = 1;
     /** The key (which 1: 0 .. 127) and the velocity (which 0: 1 .. 127) of the last note-on the plugin received, -1 until a note was played: the live x marker of the NOTE / VELO curve editors (x = key / 127, velocity / 127, the
         engine's scale). One atomic per source fed from the MIDI the plugin already gets (effProcessEvents); lock free, no allocation on the MIDI thread. */
     virtual int lastPlayed (int /*which*/) const noexcept { return -1; }

@@ -1487,8 +1487,8 @@ struct PluginInstance
     // ---- the Play page (play_params.h, docs/MPC.md "Play selectors and proxies"): three selectors (saved in the chunk) and 24 proxy parameters (the real parameter of the selected instance) ----
     std::atomic<int> playSel[synthyboy_mpc::play::kGroups] { { 1 }, { 1 }, { 1 } };
     std::atomic<uint64_t> playOscSelectionRev {};
-    /** The chunk-only view state of the merged tabs (tab_view.h "mpcTabView": rnd, filter): no host parameter. effSetChunk restores it (a chunk without it gives 0, 0), effSetProgram leaves it. */
-    std::atomic<int> tabViewState[synthyboy_mpc::tabview::kFields] { { 0 }, { 0 } };
+    /** The chunk-only view state of the merged tabs (tab_view.h "mpcTabView": rnd): no host parameter. effSetChunk restores it (a chunk without it gives 0), effSetProgram leaves it. */
+    std::atomic<int> tabViewState[synthyboy_mpc::tabview::kFields] { { 0 } };
     /** The key and the velocity of the last note-on the plugin received (effProcessEvents): the live x marker of the NOTE / VELO curve editors of the Filter page (IInstanceView::lastPlayed). One atomic per source, written with a
         relaxed store on the thread the host delivers the events on (no lock, no allocation) and read by the overlay thread; -1 until a note was played. Not state: a project reload leaves them. */
     std::atomic<int> lastNoteOnKey { -1 }, lastNoteOnVelocity { -1 };
@@ -3502,7 +3502,7 @@ static std::string buildStateChunk (PluginInstance* inst)
         // the three Play selectors ride in the chunk before the pad pressure members (which are read from the very end)
         const int sel[3] = { inst->playSel[0].load (std::memory_order_relaxed), inst->playSel[1].load (std::memory_order_relaxed), inst->playSel[2].load (std::memory_order_relaxed) };
         chunk = synthyboy_mpc::play::chunkWithPlay (std::move (chunk), sel);
-        const int tv[synthyboy_mpc::tabview::kFields] = { inst->tabViewState[0].load (std::memory_order_relaxed), inst->tabViewState[1].load (std::memory_order_relaxed) };
+        const int tv[synthyboy_mpc::tabview::kFields] = { inst->tabViewState[0].load (std::memory_order_relaxed) };
         chunk = synthyboy_mpc::tabview::chunkWithTabView (std::move (chunk), tv);   // after the Play selectors, before the limiter and pad pressure members
     }
     chunk = synthyboy_mpc::chunkWithOutputLimiter (std::move (chunk), inst->outputLimiter.load (std::memory_order_relaxed));   // before the pad pressure members, which are read from the very end
@@ -5145,7 +5145,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 }
                 {
                     // the view state of the merged tabs: a project reload restores it exactly; a chunk without it (an older one) gives the defaults. A program change (effSetProgram) leaves it: the selector shows the selected item even when the new preset does not use it
-                    int tv[synthyboy_mpc::tabview::kFields] = { 0, 0 };
+                    int tv[synthyboy_mpc::tabview::kFields] = { 0 };
                     synthyboy_mpc::tabview::tabViewFromChunk (chunk, static_cast<size_t>(size), tv);
                     for (int f = 0; f < synthyboy_mpc::tabview::kFields; ++f)
                         inst->tabViewState[f].store (tv[f], std::memory_order_relaxed);

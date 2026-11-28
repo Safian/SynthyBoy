@@ -79,9 +79,7 @@ inline std::unique_ptr<IView> make (const char* name, int kind, int index)
     {
         case layout::kKindFilterUi:
         {
-            auto filter = std::make_unique<FilterPage> (name, index, filterTargets());
-            filter->ui().setSubTab (true);   // Filter 1, Filter 2, Note, Velo: the view's index is the state of the page, no in-screen selector
-            view = std::move (filter);
+            view = std::make_unique<FilterPage> (name, index, filterTargets());   // Filter 1, Filter 2, Note, Velo: the view's index is the state of the page, no in-screen selector
             break;
         }
         case layout::kKindMixer: view = std::make_unique<MixerPage> (name, index, filterTargets()); break;
