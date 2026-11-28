@@ -1,4 +1,4 @@
-// MpcKit - PageInput: what the controller hands a page besides the instance. (The widget page base and the binder of the kit were deleted 2026-11-27: the C++ layer has no UI elements, the controls are native
+// MpcKit - PageInput: what the controller hands a page besides the instance. (The C++ layer has no UI elements: the controls are native
 // components of the host skin and the plugin holds only parameter binding data, shell-mpc/ui/binding.h.)
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

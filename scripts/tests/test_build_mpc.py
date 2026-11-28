@@ -332,7 +332,7 @@ class BuildMpcTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
 
     def test_validator_accepts_no_tab_count_finding(self):
-        # the production layout (the overlay layout, 16 pages) is far under the validator's 32 tab limit: since the 34 and 32 tab skins were deleted the build
+        # the production layout (the overlay layout, 16 pages) is far under the validator's 32 tab limit: the build
         # accepts no tab-count finding at all (it accepted exactly the layout's page count when that was above 32)
         for bad in ("ERROR  TUI.json: 34 tabs; at most 32 are supported", "ERROR  TUI.json: 35 tabs; at most 32 are supported", "ERROR  TUI.json: 33 tabs; at most 32 are supported",
                     "ERROR  TUI.json: tabs[1] and tabs[2] both use fnKeyIndex 0 / fnKeySubIndex 0"):
