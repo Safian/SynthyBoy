@@ -164,7 +164,7 @@ inline int lfoSource (int n) noexcept { return n >= 1 && n <= 8 ? 6 + n : (n == 
 
 inline int rndSource (int n) noexcept { return n >= 1 && n <= 4 ? 14 + n : ui::kNoSource; }   // random LFO n (1 .. 4) = source 15 .. 18
 
-// ---- the selector of the merged Env / LFO tabs ("used + one free", docs/ui-map/env-filter-lfo-plan.md section (b)); the component is binding::SelectorSet -----------------------------------------------------------------
+// ---- the selector of the merged Env / LFO tabs ("used + one free"); the component is binding::SelectorSet -----------------------------------------------------------------
 constexpr int kSelEnvs = 6, kSelLfos = 10, kSelRnds = 4, kSourceIds = 64;   // the items; the source ids (choice values of modNN.source) are below 64
 constexpr int kRndBase = kSelLfos;   // the selector id of random LFO m (1 .. 4) is kRndBase + m (11 .. 14); LFO n and ENV n have the id n
 
@@ -360,7 +360,7 @@ inline int cellChoice (const binding::SelectorSet& sel, const SelectorCells& cel
     int ch[binding::SelectorSet::kMaxChoices];
     return sel.plusChoices (ch, binding::SelectorSet::kMaxChoices) > 0 ? sel.state.items[ch[0]].id : 0;
 }
-/** The id the selection falls back to when the tab is LEFT while an item that is neither used nor edited is selected (a `+` pick the user did not edit; decided 2026-11-21, `docs/ui-map/osc-play-bold-cut/README.md`): the last used item
+/** The id the selection falls back to when the tab is LEFT while an item that is neither used nor edited is selected (a `+` pick the user did not edit; decided 2026-11-21): the last used item
     in number order before it, else the first used one after it, else the first candidate (ENV 1, LFO 1). 0: the selection is used (or `always`): nothing changes. Pure: no parameter is written, the owner changes the view state only. */
 inline int fallbackSelection (const binding::SelectorSet& sel) noexcept
 {

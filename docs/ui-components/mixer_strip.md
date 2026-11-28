@@ -1,6 +1,6 @@
 # MIXER STRIP (catalogue design, 160 px)
 
-One channel strip composed from existing recipes; no screen, skin or overlay uses it yet (the live Mixer is described in [../ui-map/mixer.md](../ui-map/mixer.md)). The Mixer page is just the strips, so the strip has no tab bar, no peek and no docked editor. Source: `components/native/mixer_strip/mixer_strip.py` (section "CATALOGUE DESIGN"), examples: `components/native/mixer_strip/catalog.json`, test: `scripts/tests/test_native_mixer_strip_design.py`. Bottom row sliders: [hslider.md](hslider.md).
+One channel strip composed from existing recipes; no screen, skin or overlay uses it yet (the live Mixer is `shell-mpc/overlay/mixer_ui.h`, see [the UI map](../ui-map/README.md)). The Mixer page is just the strips, so the strip has no tab bar, no peek and no docked editor. Source: `components/native/mixer_strip/mixer_strip.py` (section "CATALOGUE DESIGN"), examples: `components/native/mixer_strip/catalog.json`, test: `scripts/tests/test_native_mixer_strip_design.py`. Bottom row sliders: [hslider.md](hslider.md).
 
 ## Structure, top to bottom (all gaps `mixer_strip.design.gap` = `header.gap` = 8, padding `header.padding` = 8 on all sides)
 

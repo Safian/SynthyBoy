@@ -547,7 +547,7 @@ public:
     }
     /** The fourth group of the page, on Q 13 .. 16 of the XL and the bank 4 of the Key 61 (no chips: its controls are the compact views' own): [LFO SYNC, OSC POWER, LFO MONO, -] of the LFO and the oscillator that are shown. All
         three are STEPPED targets: a Q-Link steps them relatively, one step per 6 clicks (QRouter::hostWrite), so a single click cannot switch an oscillator off. The MONO member exists only for a standard LFO (a random LFO has no mono parameter: the slot stays empty). A fourth member (a selector) is not published: the open question is
-        which of the three selectors it is (docs/ui-map/q-link-audit.md "Feasibility"). */
+        which of the three selectors it is. */
     void extraTargets (int* t) const
     {
         t[0] = t[1] = t[2] = t[3] = -1;

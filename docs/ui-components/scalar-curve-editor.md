@@ -1,7 +1,7 @@
 # ScalarCurveEditor (the NOTE / VELO curve editor)
 
 ## What it is
-The editor of the two transfer curves the modulation sources `Note` (24) and `Velocity` (23) are read through (`docs/ui-map/env-filter-lfo-plan.md` section (d), step 5). One component for both sources (`setSource`). A Serum-like small graph with the curve, point handles and the fields of the selected point, LEGATO with a read-only GLIDE chip, and the list of the mod slots that use the source. It is a component and its page logic only: the Filter tab (step 4) embeds it as its NOTE and VELO states.
+The editor of the two transfer curves the modulation sources `Note` (24) and `Velocity` (23) are read through (step 5 of the Env / Filter / LFO merges). One component for both sources (`setSource`). A Serum-like small graph with the curve, point handles and the fields of the selected point, LEGATO with a read-only GLIDE chip, and the list of the mod slots that use the source. It is a component and its page logic only: the Filter tab (step 4) embeds it as its NOTE and VELO states.
 
 ## Files
 - `shell-mpc/ui/scalar_curve_editor.h`: `scurve::ScalarCurve` (model), `scurve::History` (undo), `ScalarCurveCanvas` (graph and touch), `ScalarCurveEditor` (the screen, a `Composite`), `ScalarCurveEvent`.
@@ -42,4 +42,4 @@ Designed for the Filter tab body 1280 x 556 (`minSize` 1100 x 500): the graph (a
 `ScalarCurveUi`: curve edits go to `IInstanceView::setScalarCurve` at most every 90 ms during a gesture and at its end; LEGATO through `writePlain`; TARGETS sets `targetsRequested` (a request to the page owner, the existing `ModTargetsPage`, no host tab change). Nothing else is written (`master.velocity_track` stays on the Master page).
 
 ## Tests and pictures
-`shell-mpc/ui/tests/ui_scalar_curve_host.cpp` (model, engine equality, undo, gestures, fields, Q members, layout, drawing), `shell-mpc/overlay/tests/scalar_curve_ui_host.cpp` (USED BY, read / write, throttle, hold, legato, Q targets, state round trip). Pictures: `docs/ui-map/env-filter-lfo-plan/scalar_curve_*.png`.
+`shell-mpc/ui/tests/ui_scalar_curve_host.cpp` (model, engine equality, undo, gestures, fields, Q members, layout, drawing), `shell-mpc/overlay/tests/scalar_curve_ui_host.cpp` (USED BY, read / write, throttle, hold, legato, Q targets, state round trip).

@@ -131,7 +131,7 @@ inline bool formatPlain (Format f, double plain, char* out, size_t cap) noexcept
     return false;
 }
 
-// ---- the "used + one free" candidate set of the merged Env / LFO tabs (docs/ui-map/env-filter-lfo-plan.md section (b)): the DATA behind the native instance selector, no control -----------------------------------
+// ---- the "used + one free" candidate set of the merged Env / LFO tabs: the DATA behind the native instance selector, no control -----------------------------------
 /** Every candidate that is USED, the SELECTED one and a candidate marked `always`, in the order given, then ONE "+" cell while a candidate is neither used, always nor selected. A candidate has a `group` (0 standard, 1 random LFO): the
     "+" offers the lowest free candidate of each group (at most kMaxChoices). Pure: the same input gives the same cells. */
 struct SelectorSet

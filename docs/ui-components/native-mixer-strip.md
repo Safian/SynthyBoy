@@ -96,7 +96,7 @@ Replaces prior horizontal sliders with authentic compact dials reusing the publi
 ## Visual Previews (Offline Design Previews)
 
 ### Before / After Single Strip Comparison
-Historical layout crop from `docs/ui-map/mixer-master-bold-cut/after/Init_mixer.png` (exact geometry $x: 6..129, y: 176..734$) compared directly against the authentic new native `MixerStrip` render with identical logical state (SUB, Filters 1+2, 50.0% Level, 0.0% Pan, 0.0% Sends):
+Historical layout crop (exact geometry $x: 6..129, y: 176..734$) compared directly against the authentic new native `MixerStrip` render with identical logical state (SUB, Filters 1+2, 50.0% Level, 0.0% Pan, 0.0% Sends):
 
 ![MixerStrip Before/After Comparison](img/source_strip_before_after.png)
 

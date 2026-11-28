@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the page logic of the NOTE / VELOCITY curve editor (ui/scalar_curve_editor.h), step 5 of docs/ui-map/env-filter-lfo-plan.md. It is NOT a registered page: the Filter tab (step 4) holds one
+// SynthyBoy - MPC overlay: the page logic of the NOTE / VELOCITY curve editor (ui/scalar_curve_editor.h), step 5 of the Env / Filter / LFO merges. It is NOT a registered page: the Filter tab (step 4) holds one
 // ScalarCurveUi per source as its NOTE and VELO states and calls pull / handle / tick / draw like the other Ui classes.
 // Read: content().velocityCurve / noteCurve (the points), curve.velocity.legato / curve.note.legato, master.portamento.time (the read-only GLIDE chip), the 64 mod slots (USED BY).
 // Written: the points through IInstanceView::setScalarCurve (CONTENT, an empty vector = the identity; at most every kSendMs during a gesture and at its end, like the LFO shape), the legato key through writeParam.

@@ -145,7 +145,7 @@ constexpr PanelItem kGranularFullItems[] = {
 };
 constexpr QSpec kGranularFullQ[] = { { { PanelSlot::Dens, PanelSlot::Length, PanelSlot::WarpMenu, PanelSlot::Count } },
                                      { { PanelSlot::Offset, PanelSlot::Dir, PanelSlot::Pitch, PanelSlot::Fin } } };
-// ---- THE DEFAULT VIEWS of the bold cut (docs/ui-map/osc-play-bold-cut/README.md): the bottom band of the full screen of an oscillator instance. The top band (OscTopRow, screen.h) holds the first Q group (Basic); the blocks
+// ---- THE DEFAULT VIEWS of the bold cut: the bottom band of the full screen of an oscillator instance. The top band (OscTopRow, screen.h) holds the first Q group (Basic); the blocks
 // here are the other groups, in reading order. Level, pan and destination are not here (read-only indicator in the top band: their home is the Mixer); everything that is not in the default view is behind the ONE MORE button.
 // Sub: tuning and behaviour below the waveform and octave selectors.
 constexpr PanelItem kSubFullItems[] = {

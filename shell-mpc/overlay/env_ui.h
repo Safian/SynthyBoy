@@ -1603,7 +1603,7 @@ private:
     NativeModTargets nativeTargets_;
     ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
     ui::ListPopup list_;
-    binding::SelectorSet selector_;      // ENV 1 .. 6 as "used + one free" (docs/ui-map/env-filter-lfo-plan.md (b)); filled every update
+    binding::SelectorSet selector_;      // ENV 1 .. 6 as "used + one free"; filled every update
     uibind::SelectorCells playCells_;    // the cells of the selector as positions (pullSelector)
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     ui::Component* gesture_ = nullptr;
