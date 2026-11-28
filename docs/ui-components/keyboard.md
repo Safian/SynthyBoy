@@ -2,7 +2,7 @@
 
 The native on-screen touch keyboard component for standalone Akai MPC hardware (MPC Key 61, MPC XL), designed for Macro renaming and LFO shape naming without third-party text-loss issues.
 
-Source: `components/native/keyboard/keyboard.py`; catalogue entry: `components/native/keyboard/catalog.json`; skin hook: `scripts/mpc-skin-extras/96_native_keyboard.py`; tests: `scripts/tests/test_native_keyboard.py`.
+Source: `components/native/keyboard/keyboard.py`; catalogue entry: `components/native/keyboard/catalog.json`; plugin side: `shell-mpc/native_text_entry.h`; tests: `scripts/tests/test_native_keyboard.py`.
 
 ## Background & Architecture
 
@@ -53,20 +53,12 @@ All key buttons belong to a radio group bound to `ResetOnGestureEnd/Parameter <T
 - `98`: OK (`OK`) - commits string to target (macro name or LFO shape) and sets context to 0.
 - `99`: Cancel (`CANCEL` / Header Close) - discards edits and sets context to 0.
 
-## Plugin-Side Handles (to be added in C++)
+## Plugin-Side Handles (appended after the last handle block, `shell-mpc/native_ui_params.h`: `kTextEdit`)
 
-1. **`TextEdit Context`** (`kTextEntryContext = kLfoTargetsAction + 1`, offset 963):
-   - Range: 0..10 (0 = closed, 1..8 = Macro 1..8, 9 = Shape Save As, 10 = Shape Rename).
-   - Display string: Context title (`<=31` bytes, e.g. "NAME MACRO 1").
-2. **`TextEdit Key`** (`kTextEntryKey = kTextEntryContext + 1`, offset 964):
-   - Range: 0..99 (100 steps).
-   - Driven by host touch events; consumed immediately on the audio/parameter thread.
-3. **`TextEdit Text`** (`kTextEntryText = kTextEntryKey + 1`, offset 965):
-   - Range: 0..1023 (step counter).
-   - Display string: Current text buffer + caret (`<=31` bytes).
+1. **`TextEdit Context`** (`kTextEditContext`, Parameter 3887): 0..10 (0 = closed, 1..8 = Macro 1..8, 9 = Shape Save As, 10 = Shape Rename). Display string: the title ("NAME MACRO 1"). The instances show the keyboard while it is in range.
+2. **`TextEdit Key`** (`kTextEditKey`, Parameter 3888): 0..99, `ResetOnGestureEnd`. The plugin debounces 250 ms per key (the host delivers one tap as two press events).
+3. **`TextEdit Text`** (`kTextEditText`, Parameter 3889): read-only. Display string: the text and the caret (the end of it when it does not fit the 31 bytes of the host).
 
-## Environment Guard & Activation
+## Skin
 
-The keyboard overlay generation is intentionally guarded:
-- Environment variable: `SYNTHYBOY_NATIVE_KEYBOARD=1`.
-- When unset, `96_native_keyboard.py` returns immediately, ensuring default skin generation and packaged `TUI.json` remain byte-identical.
+ONE definition `native keyboard overlay` in `skin/TUI.json` (built by `build_keyboard_overlay_definition`, an inline modal component, `ignoreMousePresses: false`), 16 instances named `Native Keyboard` (Macros; Play; LFO 1-10; RND 1-4), bounds `0 0 1280 628`, gated by `RangedEnabling/<1|9>/<8|10>/11/Parameter 3887`. There is no generator: a change of the recipe is applied to `skin/TUI.json` by replacing the definition (ordered-pairs edit, then `scripts/skin-format.py`).

@@ -33,7 +33,7 @@ display path reads the topic files below that touch its work **before** writing 
 | [arm-denormals.md](arm-denormals.md) | ARM32 (`FPSCR.FZ`) and AArch64 (`FPCR.FZ`) denormal protection in the MPC shell and verification status |
 | [vector-paths.md](vector-paths.md) | Every NEON path of the engine: its scalar reference, the bit-identity test, status; the compiled-code check for fused multiply-add and estimates (`scripts/check-no-fma.sh`) |
 | [mpc-display.md](mpc-display.md) | The MPC host's display pipeline (DRM planes, commits) and our overlay |
-| [native-text-entry.md](native-text-entry.md) | Factory text keyboard, XL numeric input and verified host string-setter gate |
+| [native-text-entry.md](native-text-entry.md) | Native text keyboard design, factory text keyboard, XL numeric input and verified host string-setter gate |
 | [skin-host-behaviour.md](skin-host-behaviour.md) | How the host treats our skin: list selection and closing, a skin change that froze the host, tab backgrounds (measured) |
 | [mpc-expert-runtime.md](mpc-expert-runtime.md) | Expert startup, background source refresh and source-cited lexical retrieval index |
 | [mpc-host-scripting.md](mpc-host-scripting.md) | The host's embedded Lua API (Q-Link Touch / Rotate / SetPosition), device scripts, control surface; fact sheet, not a release path |
