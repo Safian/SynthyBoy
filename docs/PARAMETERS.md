@@ -2,7 +2,7 @@
 
 <!-- Edit this file directly; the machine readable table is docs/params.json. -->
 
-The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 6 stores every parameter by key (docs/ARCHITECTURE.md 4.2).
+The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 4.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (the machine readable table). State format version 6 stores every parameter by key (docs/ARCHITECTURE.md 4.2).
 
 **2637 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of every build) acts on the parameter; every parameter is stored, saved and read back by the engine whether it acts on it or not.
 

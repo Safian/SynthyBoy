@@ -4,14 +4,14 @@ SynthyBoy for the MPC is a synthesizer plugin (VST2) for standalone Akai MPC har
 It runs the project's own sound engine with a quality profile per device: the MPC XL plays 16 voices, up to 16 unison voices and all effects, the MPC Key 61 plays 8 voices, at most 3 unison voices and skips five effects (docs/MPC.md#quality-profile-per-device).
 On the compact Play page, the MPC skin provides the selectors and dials. SynthyBoy draws the oscillator, envelope and LFO curves on its display overlay. The hardware Q-Link knobs follow the active page (docs/MPC.md#q-proxies-and-the-display-pages-overlay-build).
 The instrument has 184 factory presets, 72 factory wavetables in six categories, 3 oscillators (wavetable, sample, granular, spectral, multisample), a sub oscillator and a noise source, 27 filter models in 12 styles, 6 envelopes, 10 LFOs and 4 random LFOs, a 64-slot modulation matrix and 13 effect types plus 3 band splitters (docs/params.json, docs/MPC.md#filter-ui, docs/MPC.md#mod-matrix-and-macros, docs/release/WAVETABLE-PACK.md).
-The same codebase also builds the desktop plugin (VST3, CLAP, Audio Unit); this change log covers the MPC release only (README.md#synthyboy).
+This change log covers the MPC release (README.md#synthyboy).
 
 ---
 
 ## State of the MPC Build
 
 ### Sound Engine
-- **Engine codebase**: The MPC build runs SynthyBoy's own engine (`core/engine-own`), an original C++17 DSP codebase completely free of JUCE and isolated from GPL Vital source code (docs/ARCHITECTURE.md#22-licence-hygiene, core/engine-own/README.md).
+- **Engine codebase**: The MPC build runs SynthyBoy's own engine (`core/engine-own`), an original C++17 DSP codebase with no code derived from another synthesizer (core/engine-own/README.md).
 - **Quality profile per device**: the shell picks the engine's quality once per process from the device name: MPC XL `high,voices=16,control=economy` (16 voices, unison up to 16, all effects, warps 4x oversampled, full-rate spectral morph, exact maths), MPC Key 61 and any unknown device `low` (8 voices, at most 3 unison voices, 2x warps, five effects bypassed); presets and projects store nothing of the profile, so they move between devices unchanged (`shell-mpc/device_profile.h`, docs/MPC.md#quality-profile-per-device, docs/MPC.md#projects-move-between-devices-unchanged).
 - **Oscillator models**: Features 3 main oscillators supporting Wavetable (with spectral morph and two warp slots, each with its own phase), Sample, Granular, Spectral, and Multisample modes, plus a dedicated Sub oscillator (6 shapes) and Noise source (9 noise types / sample) (docs/MPC.md#oscillator-ui, docs/ARCHITECTURE.md#32-oscillators, d90e1a0a, 42682c52).
 - **Oscillator options**: Improved functionality with fixed pitch (while tracking is off), transpose snap with 12-note mask, key fold, key warp, phase memory (all voices, contiguous, per voice), and phase legato; includes sustain pedal, All Notes Off, and All Sound Off behaviour (docs/MPC.md#every-oscillator-parameter-has-a-control, docs/MPC.md#led-controls-and-the-transpose-snap-editor).

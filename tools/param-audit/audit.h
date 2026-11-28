@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // One engine ("rig"), a reference patch, a script of notes, deterministic offline renders and the metrics measured on them. Stage 1 (tools/param-audit/param_audit.cpp) sweeps
-// every key through its context; stage 2 (tools/param-audit/test_param_semantics.cpp) asserts the expected curves of the parameter families. No host, no JUCE, no files.
+// every key through its context; stage 2 (tools/param-audit/test_param_semantics.cpp) asserts the expected curves of the parameter families. No host, no files.
 // Fault injection for the self test: the environment variable SYNTHYBOY_AUDIT_FAULT names a fault that changes the value the harness hands to the engine (see faultFor ()).
 #pragma once
 

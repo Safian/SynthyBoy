@@ -85,4 +85,4 @@ The bit identity against the engine BEFORE the change (alpha 0) is a two-build c
 6. The levelling again (section 4) and `synthyboy_test_output_stage_presets` with the new held-back list; the preset gate (`synthyboy_preset_render --engine own --summary-only`).
 7. On the devices: the CPU of the heaviest presets (the extra cost is one ramp and multiply per sample per used target and two log / exp per control period) and a listening check of section 7.
 
-The desktop shells: the JUCE shell uses the engine of `SYNTHYBOY_SHELL_ENGINE` (Vital by default where it is built): the voice-count gain reaches the desktop only with the own engine; the levelling and the MPC use the own engine.
+The levelling and the MPC use the own engine.

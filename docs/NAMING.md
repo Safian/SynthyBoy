@@ -5,7 +5,7 @@ trademark of Steinberg Media Technologies GmbH; only the factual compatibility s
 
 ## Rules
 
-- Product / bundle / CLAP name: `SynthyBoy`. CLAP id: `com.safian.synthyboy`. VST3 bundle: `SynthyBoy.vst3`; CLAP bundle: `SynthyBoy.clap`.
+- Product / plugin name: `SynthyBoy`. Plugin id: `com.safian.synthyboy`. MPC package folder: `Safian - VST - SynthyBoy`.
 - Do not use "Vital", "Vital Audio", "Tytel", "Matt Tytel" in the product name or marketing (upstream README). The factual
   statement "the engine is derived from Vital" was allowed in `NOTICE`/About while the Vital-derived engine existed; it is removed and the statement is no longer made.
 - Do not use "VST" in the product name; do not use the VST3 logo.
@@ -30,9 +30,9 @@ says nothing about registered trademarks.
 
 1. **Official registers** (need interactive access): USPTO Trademark Search, EUIPO eSearch plus / TMview, WIPO Global Brand
    Database; classes 9 (software, audio plugins), 41/42 as relevant. Check the phonetic variants `SynthBoy`, `Synthy Boy`, `SynthiBoy`.
-2. **Plugin databases:** KVR product database, clapdb.tech (CLAP Audio Software Database), Plugin Boutique / VST4You,
+2. **Plugin databases:** KVR product database, Plugin Boutique / VST4You,
    Audio Plugin Directory, GitHub/GitLab topics — by hand, with the same variants.
-3. **Stores:** Apple App Store and Google Play name search (also relevant for the Kick mobile app that bundles the plugin).
+3. **Stores:** Apple App Store and Google Play name search.
 4. **Domains and handles:** synthyboy.com/.app/.audio, social handles — availability only matters if a public site is planned.
 5. Decide whether to register the mark (EUIPO / HUIPO / USPTO) before the first public release.
 

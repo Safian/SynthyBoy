@@ -1,5 +1,5 @@
 // SynthyBoy - core tests: block B17 (compressor, delay, distortion, phaser, reverb extras; docs/ui-design/13-new-keys.md 4.17): the 14 keys,
-// their positions, neutral defaults, destination numbers, the appended distortion types, the Kick pages and the X-Shaper curves of the
+// their positions, neutral defaults, destination numbers, the appended distortion types and the X-Shaper curves of the
 // content section.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -10,7 +10,6 @@
 
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine_caps.h"
-#include "synthyboy/kick_pages.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/state.h"
@@ -103,21 +102,6 @@ TEST (b17_choice_lists_and_names)
     CHECK_EQ (choiceCount (byKey ("reverb.room")), static_cast<size_t> (5));
     CHECK (std::strcmp (choiceName (byKey ("reverb.room"), 0), "Space") == 0);
     CHECK (std::strcmp (choiceName (byKey ("reverb.room"), 4), "Box") == 0);
-}
-
-TEST (b17_kick_pages_reach_every_key)
-{
-    CHECK_EQ (kickPageCount(), static_cast<size_t> (160)); // REFCOMPARE B34 adds the page fx_eq_band2; REMAINDER B31 adds the 4 pages mod_slot_N_slew; // GROUPC B28 adds the 6 pages oscN_gran_1 / 2, B29 the 3 pages oscN_spec_1, B30 the 3 pages oscN_multi_1, B26 adds the 8 pages voicectl_*, B18 adds sub_main, B15 adds voice_global and quality_options, B21 adds mix_env1, B22 the 16 pages fxi01 .. fxi16
-    const Page* pages = kickPageTable();
-    for (const Key& k : kKeys)
-    {
-        bool found = false;
-        for (size_t page = 0; page < kickPageCount() && ! found; ++page)
-            for (size_t i = 0; i < pages[page].count; ++i)
-                found = found || (pages[page].keys[i] != nullptr && std::strcmp (pages[page].keys[i], k.key) == 0);
-        if (! CHECK (found))
-            std::printf ("    %s\n", k.key);
-    }
 }
 
 TEST (x_shaper_curves_round_trip_and_are_validated)

@@ -22,7 +22,6 @@ add_library(synthyboy_core STATIC
     src/wavetable_catalogue.cpp
     src/user_library.cpp
     src/library_items.cpp
-    src/kick_pages.cpp
     src/shell_features.cpp
     src/preferences.cpp
     src/offline_render.cpp

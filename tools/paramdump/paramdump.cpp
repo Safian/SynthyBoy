@@ -1,10 +1,9 @@
-// SynthyBoy - paramdump: the whole parameter table as JSON, the machine readable description that Kick's own UI consumes
+// SynthyBoy - paramdump: the whole parameter table as JSON, the machine readable description of the parameters
 // (docs/ARCHITECTURE.md R4). docs/params.json is this output; hand editing turns it into docs/PARAMETERS.md.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_paramdump            writes the parameter table JSON to stdout
-//   synthyboy_paramdump --kick-pages  writes the Kick remote-control pages JSON to stdout
 //   synthyboy_paramdump --own-engine-gap  one line per key (tab separated): key, group, live (the own engine acts on it), dimmed (the UI draws it dimmed with the own engine's
 //                                     capability words), the capability bits it lacks (comma separated); input of hand editing
 //
@@ -19,7 +18,6 @@
 
 #include "number.h"
 #include "synthyboy/engine.h"
-#include "synthyboy/kick_pages.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/state.h"
@@ -241,23 +239,6 @@ std::string deriveShortLabel (const ParamInfo& p)
     return name;
 }
 
-const char* deriveWidget (const ParamInfo& p)
-{
-    const std::string key = p.key;
-    const size_t len = key.length();
-    if ((len >= 3 && key.compare (len - 3, 3, ".on") == 0) ||
-        (len >= 7 && key.compare (len - 7, 7, ".bypass") == 0) ||
-        (len >= 7 && key.compare (len - 7, 7, "_bypass") == 0))
-    {
-        return "toggle";
-    }
-    if (p.scale == Scale::stepped)
-        return "stepped";
-    if (p.min < 0.0f)
-        return "bipolar_knob";
-    return "knob";
-}
-
 int dumpParams()
 {
     const auto engine = createOwnEngine();
@@ -314,98 +295,7 @@ int dumpParams()
     return 0;
 }
 
-int dumpKickPages()
-{
-    std::string out;
-    out += "{\n";
-    out += "  \"format\": \"synthyboy-kick-pages\",\n";
-    out += "  \"version\": 1,\n";
-    out += "  \"pluginId\": \"com.safian.synthyboy\",\n";
-    out += "  \"macroDefaults\": {\n";
-
-    const size_t catCount = categoryMacroDefaultCount();
-    for (size_t c = 0; c < catCount; ++c)
-    {
-        const auto& cat = categoryMacroDefaults()[c];
-        out += (c > 0 ? ",\n" : "");
-        out += "    " + quote (cat.category) + ": [\n";
-        for (size_t m = 0; m < 4; ++m)
-        {
-            const auto& mac = cat.macros[m];
-            out += (m > 0 ? ",\n" : "");
-            out += "      {\n";
-            out += "        \"macroKey\": " + quote (mac.macroKey) + ",\n";
-            out += "        \"label\": " + quote (mac.label) + ",\n";
-            out += "        \"targets\": [";
-            for (size_t t = 0; t < mac.targetCount; ++t)
-            {
-                const auto& tgt = mac.targets[t];
-                out += (t > 0 ? ",\n          " : "\n          ");
-                out += "{\"destination\": " + quote (tgt.destination)
-                     + ", \"amount\": " + num (tgt.amount)
-                     + ", \"bipolar\": " + (tgt.bipolar ? "true" : "false") + "}";
-            }
-            out += "\n        ]\n";
-            out += "      }";
-        }
-        out += "\n    ]";
-    }
-    out += "\n  },\n";
-
-    out += "  \"pages\": [";
-    const size_t pageCount = kickPageCount();
-    for (size_t p = 0; p < pageCount; ++p)
-    {
-        const auto& page = kickPageTable()[p];
-        out += (p > 0 ? ",\n" : "\n");
-        out += "    {\n";
-        out += "      \"id\": " + quote (page.id) + ",\n";
-        out += "      \"section\": " + quote (page.section) + ",\n";
-        out += "      \"title\": " + quote (page.title) + ",\n";
-        out += "      \"knobs\": [";
-
-        for (size_t k = 0; k < kMaxKnobsPerPage; ++k)
-        {
-            out += (k > 0 ? ",\n        " : "\n        ");
-            if (k < page.count && page.keys[k] != nullptr)
-            {
-                const ParamInfo* info = findParamByKey (page.keys[k]);
-                const std::string shortLabel = (info != nullptr) ? deriveShortLabel (*info) : "";
-                const std::string widget = (info != nullptr) ? deriveWidget (*info) : "knob";
-                out += "{\"key\": " + quote (page.keys[k])
-                     + ", \"shortLabel\": " + quote (shortLabel.c_str())
-                     + ", \"widget\": " + quote (widget.c_str()) + "}";
-            }
-            else
-            {
-                out += "null";
-            }
-        }
-        out += "\n      ]";
-
-        if (page.moreKeys != nullptr && page.moreCount > 0)
-        {
-            out += ",\n      \"moreKeys\": [";
-            for (size_t m = 0; m < page.moreCount; ++m)
-            {
-                out += (m > 0 ? ",\n        " : "\n        ");
-                out += quote (page.moreKeys[m]);
-            }
-            out += "\n      ]\n";
-        }
-        else
-        {
-            out += "\n";
-        }
-        out += "    }";
-    }
-    out += "\n  ]\n";
-    out += "}\n";
-
-    std::fputs (out.c_str(), stdout);
-    return 0;
-}
-/** What the bitmap GUI shows with the own engine, key by key (docs/ui-design/OWN-ENGINE-GAP.md): "live" = IEngine::supportsParam, "dimmed" = the rule of the UI (shell-juce/ui/model/ControlModel.cpp,
+/** What the own engine acts on, key by key (docs/ui-design/OWN-ENGINE-GAP.md): "live" = IEngine::supportsParam, "dimmed" = the rule of the UI (shell-juce/ui/model/ControlModel.cpp,
     capStateForKey): a key whose required capability bits the engine does not report is drawn dimmed. A key that is neither live nor dimmed is editable, stored and has no effect. */
 int dumpOwnEngineGap()
 {
@@ -435,9 +325,6 @@ int main (int argc, char** argv)
 {
     if (argc > 1 && std::strcmp (argv[1], "--own-engine-gap") == 0)
         return dumpOwnEngineGap();
-
-    if (argc > 1 && std::strcmp (argv[1], "--kick-pages") == 0)
-        return dumpKickPages();
 
     return dumpParams();
 }
