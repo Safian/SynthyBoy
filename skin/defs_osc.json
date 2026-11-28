@@ -18222,7 +18222,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -18294,7 +18294,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -18366,7 +18366,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -18434,7 +18434,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "Yes",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -22741,7 +22741,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -22846,7 +22846,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -22955,7 +22955,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -23064,7 +23064,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -23173,7 +23173,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -23244,7 +23244,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -23507,7 +23507,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -23612,7 +23612,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -23718,7 +23718,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -23832,7 +23832,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -24068,7 +24068,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -24173,7 +24173,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -24279,7 +24279,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -24393,7 +24393,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -24527,7 +24527,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -24632,7 +24632,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Yes",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -24746,7 +24746,7 @@
        },
        "bounds": {
         "version": 2,
-        "acceptsHWFocus": "No",
+        "acceptsHWFocus": "Children",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
