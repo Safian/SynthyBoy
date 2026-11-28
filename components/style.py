@@ -85,7 +85,7 @@ def native_font_em(height):
     The host is JUCE: a Font height is ascent + descent (Titillium Web: 1133 + 388 per 1000
     em = font.host.height.per.em), so a TUI height of 15 draws 9.9 px em glyphs. The GPU
     overlay and Pillow take the size as the em. Previews of native labels use this to show
-    the device size; measured on the Key 61 .
+    the device size; measured on the Key 61.
     """
     return float(height) / size("font.host.height.per.em")
 

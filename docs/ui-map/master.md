@@ -274,7 +274,7 @@ All standard synthesis parameters on the Master tab are converted to native MPC 
 ## Questionable
 1. FIXED: **NumberField controls wrote the step index instead of the value.** `MasterUi::handle` now writes `ch.value` for a `T::Number` item and `ch.index` only for the other item types (`shell-mpc/overlay/master_ui.h`, `case ui::ChangeKind::Index`).
 
-2. REMOVED: **The numeric keypad title appended "dB" to every parameter.** The `TextEntry` page that built that title no longer exists in `MasterUi` (see Opens); the host `NumericOverlay` is used instead.
+2. REMOVED: **The numeric keypad title appended "dB" to every parameter.** The `TextEntry` page that built that title is not used by `MasterUi` (see Opens); the host `NumericOverlay` is used instead.
 
 3. **Unhandled `ChangeKind::ModsRequest` (Unwired modulation details)**:
    - `Knob::tick` and `NumberField::tick` (`shell-mpc/ui/base.h`) emit `ChangeKind::ModsRequest` after a 600 ms long press.

@@ -1,7 +1,7 @@
 # ListPopup
 
 ## What it is
-A popup list of choices with a dimmed backdrop: a box of rows of 56 px whose height follows the rows (a list of three rows is a box of three rows, not a fixed tall box); tap a row to choose, tap outside to close. Scrolls when the list is longer than the box. Use it as the list behind a [Stepper](stepper.md) with `listable` (its `Request`), a dropdown button, or a file list (a header with a back arrow). Not for 2 to 8 values (use [LedList](led-list.md)).
+A popup list of choices with a dimmed backdrop: a box of rows of 56 px whose height follows the rows (a list of three rows is a box of three rows, not a fixed tall box); tap a row to choose, tap outside to close. Scrolls when the list is longer than the box. Use it as the list behind a dropdown button or a file list (a header with a back arrow).
 
 ## Header and types
 `shell-mpc/ui/list.h`: `ListPopup`, `ListPopup::State`.
@@ -68,5 +68,5 @@ Every `*_ui.h` that has a stepper with a list: `shell-mpc/overlay/voice_ui.h` (`
 
 ## Limits and pitfalls
 - `items` is a pointer to the owner's array: it must outlive the popup.
-- A popup is drawn over everything: draw it last. It is not a `Composite` child of the page.
+- A popup is drawn over everything: draw it last. It is not a child of the page.
 - Item text is fitted to the row box with `Pen::textLeft` (with an ellipsis when it does not fit).

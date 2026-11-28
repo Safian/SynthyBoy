@@ -4,7 +4,7 @@ Our dial face without the gradient value arc, with 2 to 8 stops: a dark track ri
 
 ## Structure
 
-- It is the Level / Pan dial recipe: `level.render_dial_frame(diameter, position / (N - 1), value_arc=False, stops=N)` (the ui::Knob geometry). `value_arc=False` leaves out the flow-gradient arc, `stops=N` adds the dots; with the defaults (`value_arc=True`, `stops=0`) the Pan and Level pictures stay byte-identical (tested by test_native_dial_catalog.py and the default-equality test here).
+- It is the Level / Pan dial recipe: `level.render_dial_frame(diameter, position / (N - 1), value_arc=False, stops=N)` (the Level dial geometry). `value_arc=False` leaves out the flow-gradient arc, `stops=N` adds the dots; with the defaults (`value_arc=True`, `stops=0`) the Pan and Level pictures stay byte-identical (tested by test_native_dial_catalog.py and the default-equality test here).
 - Stop angle: `knob.start.degrees` (135) + i x `knob.sweep.degrees` (270) / (N - 1), clockwise from 3 o'clock; the thumb sits on the track at the selected angle.
 - Stop dots: radius = half the value stroke x `knob.stop.ratio` (1.0); the selected stop in the pointer colour (under the thumb), the others in the dial's dim text colour (`textDim`).
 - Diameters: `stepped_dial.diameters` = 36 / 40 / 48 / 56; stops 2 to `stepped_dial.max_stops` (8).

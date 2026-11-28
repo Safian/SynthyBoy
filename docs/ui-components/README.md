@@ -10,7 +10,7 @@ A képes katalógus kizárólag az önálló MPC host natív skin-komponenseit m
 
 ### Tárcsák (Pan, Level): szöveg nélküli méretváltozatok
 
-A Pan és a Level kártyája a `components/native/<név>/catalog.json` `dial` bejegyzéséből készül: csak a tárcsa rajza, felirat és érték nélkül, az `ui::Knob`-recept (`level.render_dial_frame`) szerint, minden változat a valós méretén (1:1, nincs átméretezés). A `level.render_dial_preview` a feliratot paraméterrel kapcsolja ki, nem vágással. A méretfeliratot (`Normál · 90 × 90 px`) a HTML adja, nem a kép.
+A Pan és a Level kártyája a `components/native/<név>/catalog.json` `dial` bejegyzéséből készül: csak a tárcsa rajza, felirat és érték nélkül, a Level tárcsa receptje (`level.render_dial_frame`) szerint, minden változat a valós méretén (1:1, nincs átméretezés). A `level.render_dial_preview` a feliratot paraméterrel kapcsolja ki, nem vágással. A méretfeliratot (`Normál · 90 × 90 px`) a HTML adja, nem a kép.
 
 Új méret felvétele: egy elem a `dial.variants` listába (`id`, `label`, `diameter` = `components/sizes.json` egész méret-token, `file`, `alt`), majd `python3 scripts/render_native_catalog_cards.py` (a képek), végül a katalógus HTML kézi szerkesztése. A `state`-ek (`dial.states`) és az állapotok közti távolság (`dial.state_gap`) közösek; az új változat a `scripts/tests/test_native_dial_catalog.py` ellenőrzéseit automatikusan megkapja. A skin filmstripjeit ez nem érinti.
 
