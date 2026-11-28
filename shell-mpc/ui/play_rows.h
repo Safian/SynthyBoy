@@ -61,17 +61,16 @@ constexpr int kCompactRowH = 60, kCompactTwoRowH = 94;      // a titled dropdown
 
 /** The header band of a third: the selector row at its top. */
 inline Rect headerBandRect (const Rect& third) noexcept { return { third.x + kMargin, third.y + kMargin, std::max (0, third.w - 2 * kMargin), kSelectorH }; }
-/** The power button slot (oscillator only): the left end of the header band. */
-inline Rect headerPowerRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.x, h.y, kHeaderButtonSlot, kSelectorH }; }
-/** The full screen (expand) button slot: the right end of the header band, the same place in the three thirds. */
-/** The route cell (oscillator, not Sub): left of the full screen button. */
-inline Rect headerRouteRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.right() - kHeaderButtonSlot - kHeaderRouteSlot, h.y, kHeaderRouteSlot, kSelectorH }; }
-/** The selector (dropdown) slot between the power button (or the left pad) and the route cell (or the full screen button). */
+/** The power button slot (oscillator only): its 40 px face (8 px inside the 56 px slot) starts at the left edge of the display below, so the slot starts kHeaderPad left of the header band. */
+inline Rect headerPowerRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.x - kHeaderPad, h.y, kHeaderButtonSlot, kSelectorH }; }
+/** The route cell (oscillator, not Sub): the right end of the header band; its 64 px face (8 px inside the 72 px cell) ends at the right edge of the display below. The expand buttons are gone. */
+inline Rect headerRouteRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.right() - kHeaderRouteSlot, h.y, kHeaderRouteSlot, kSelectorH }; }
+/** The selector (dropdown) slot: its left edge is the left edge of the display (no power button) or the right edge of the power slot, its right edge the right edge of the display or the left edge of the route cell. */
 inline Rect headerSelectorRect (const Rect& third, bool hasPower, bool hasRoute) noexcept
 {
     const Rect h = headerBandRect (third);
-    const int x0 = hasPower ? h.x + kHeaderButtonSlot : h.x + kHeaderPad;
-    const int x1 = hasRoute ? h.right() - kHeaderButtonSlot - kHeaderRouteSlot : h.right() - kHeaderButtonSlot;
+    const int x0 = hasPower ? headerPowerRect (third).right() : h.x;
+    const int x1 = hasRoute ? headerRouteRect (third).x : h.right();
     return { x0, h.y, std::max (0, x1 - x0), kSelectorH };
 }
 /** The plot area of a display without a band (the Play compact views since phase 2: the buttons stand in the header band above the display). */
