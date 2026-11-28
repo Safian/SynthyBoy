@@ -45,6 +45,15 @@ def current_hashes(tui_path):
             for d in definitions}
 
 
+def check_handle_list_shape(page):
+    """additionalInvalidatingHandles must be a flat list of strings: a nested list made the host drop the whole TUI (blank page, Key 61 2026-11-28)."""
+    for node in walk(page):
+        if isinstance(node, dict) and "additionalInvalidatingHandles" in node:
+            handles = node["additionalInvalidatingHandles"]
+            if not isinstance(handles, list) or not all(isinstance(h, str) for h in handles):
+                raise ValueError("additionalInvalidatingHandles must be a flat list of strings: %r" % (handles,))
+
+
 def plugin_param_count():
     """Engine parameters (docs/params.json) plus the MPC shell extras, computed from the committed headers."""
     engine = json.loads((ROOT / "docs/params.json").read_bytes())["count"]
@@ -109,6 +118,7 @@ def validate_package(package, *, check_live=False):
     page = json.loads((skins / "TUI.json").read_bytes())["pageData"]
     qlinks = json.loads((skins / "Q-Links.json").read_bytes())
     check_parameter_handles(page)
+    check_handle_list_shape(page)
     check_baseline(page)
     if check_live:
         check_display_bindings(page, qlinks)
