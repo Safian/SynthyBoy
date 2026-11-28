@@ -38,7 +38,7 @@ A `components/native/header/` bejegyzés a fejléc-sor nyolc példáját mutatja
 
 A HTML generált fájl; közvetlenül ne szerkeszd. Újragenerálás a repó gyökeréből:
 
-The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly.
+The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly. The tool for it: `python3 scripts/render-component-images.py` (table of identical / changed images; `--write` updates the changed ones; images without a renderer are listed). After a changed image, update its `?v=` hash in the page (first 12 hex digits of its sha256).
 
 Nincs pre-commit hook és nincs generátor: a katalógus-HTML-t kézzel szerkesztjük.
 
