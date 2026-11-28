@@ -2219,7 +2219,11 @@ struct PluginInstance
                 || offset == nativeui::kFxChain + nativeui::fxchain::View);
         const bool switchingLfoLayout = offset == nativeui::kLfoBase + nativeui::lfo::kLayout
             && value != nativeUiReported[offset];
-        if (value > 0.0f && (enteringLayout || switchingLfoLayout))
+        const bool switchingOscLayout = (offset == nativeui::kOscBase + nativeui::osc::kVisibility
+                                           || offset == nativeui::kOscBase + nativeui::osc::kSource
+                                           || offset == nativeui::kOscSettingsView)
+            && value != nativeUiReported[offset];
+        if (value > 0.0f && (enteringLayout || switchingLfoLayout || switchingOscLayout))
             nativePagePaintUntil = steadyMs() + kNativePaintWindowMs;
         nativeUiReported[offset] = value;
         audioMaster (e, audioMasterAutomate, nativeUiBase() + offset, 0, nullptr, value);
