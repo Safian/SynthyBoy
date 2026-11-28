@@ -53,8 +53,7 @@ public:
             tabSelection_ = tabSelection;
             preset_ = generation;
             osc_.dropGesture();
-            hideNativeSettings (inst);
-            hideNativeDetail (inst);
+            inst.suspendNativeOsc();
             setSelection (tabSelection_);
             if (! keepDetail && stack.element() == kElementPage && stack.depth() > 1)
                 stack.openFull (kElementPage);
@@ -229,11 +228,25 @@ public:
     {
         setNativeActionPopup (inst, -1);
         osc_.hideNativeModulations (inst);
+        osc_.hideNativeNoteMask (inst);
         dropGesture();
-        hideNative (inst);
-        hideNativeSettings (inst);
-        hideNativeDetail (inst);
+        const bool wasRoot = nativePublished_ && osc_.topPage() == 0 && sel_ == tabSelection_;
         setSelection (tabSelection_);
+        if (wasRoot || (! nativeSelector_ && ! nativeRouting_ && ! osc_.full().hasNativePower()))
+            inst.suspendNativeOsc();
+        else if (tabSelection_ >= 1 && tabSelection_ <= playosc::kInstances)
+        {
+            auto root = osc_.prepareStandaloneRoot (inst, tabSelection_, preset_);
+            const bool powered = isInstanceOn (inst, tabSelection_);
+            const nativeui::osc::ViewState view { tabSelection_, nativeRouting_ && powered, preset_,
+                                                  currentDestination (inst, tabSelection_), powered };
+            inst.suspendNativeOscRoot (view, root.settingsView, root.settingsFields.data(),
+                                       root.warpMask, root.sourceLabel.c_str(), root.detail);
+            nativePublished_ = true;
+            nativeSettingsPowered_ = powered;
+            nativeSettingsPublished_ = root.settingsView != nativeui::osc::SettingsHidden;
+            nativeDetailPublished_ = root.detail.frame != nativeui::oscdetail::Hidden;
+        }
         osc_.closePopups();
     }
     int topPage() const noexcept { return osc_.topPage(); }

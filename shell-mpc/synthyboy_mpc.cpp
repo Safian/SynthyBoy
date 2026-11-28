@@ -544,18 +544,27 @@ struct PluginInstance
             inst.nativePzAcks[filter - 1] = true;
             return true;
         }
-        void setNativeOscState (const nativeui::osc::ViewState& state) noexcept override { inst.nativeOsc.publish (state); }
+        void setNativeOscState (const nativeui::osc::ViewState& state) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
+            if (state.source != 0 && state.preset != stateGeneration())
+                return;
+            inst.nativeOsc.publish (state);
+        }
         bool takeNativeOsc (const nativeui::osc::ViewState& state, int field, int& choice) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
             return inst.nativeOsc.take (state, field, choice);
         }
         bool nativeOscSettingsSupported() const noexcept override { return true; }
         void setNativeOscSettings (int view, const nativeui::FxCell* fields) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
             inst.nativeOscSettings.publish (view, fields);
         }
         bool takeNativeOscSetting (int field, const nativeui::FxCell& expected, float& value) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
             if (! inst.nativeOscSettings.take (field, expected, value))
                 return false;
             if (nativeui::osc::settingsAction (expected.kind))
@@ -564,23 +573,50 @@ struct PluginInstance
         }
         void setNativeOscAbcState (int warpMask, const char* label) override
         {
-            inst.nativeOscWarpMask.store (warpMask, std::memory_order_relaxed);
-            const auto old = std::atomic_load (&inst.nativeOscSourceLabel);
-            if ((! old && label[0] == '\0') || (old && *old == label))
-                return;
-            std::atomic_store (&inst.nativeOscSourceLabel, std::make_shared<const std::string> (label));
-            inst.nativeOscSourceLabelChanged = true;
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
+            inst.publishOscAbcState (warpMask, label);
         }
         bool nativeOscDetailSupported() const noexcept override { return true; }
-        void setNativeOscDetail (const nativeui::oscdetail::State& state) noexcept override { inst.nativeOscDetail.publish (state); }
-        void setNativeOscDetailMenu (int menu) noexcept override { inst.nativeOscDetail.setMenu (menu); }
+        void setNativeOscDetail (const nativeui::oscdetail::State& state) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
+            if (state.frame != nativeui::oscdetail::Hidden && state.preset != stateGeneration())
+                return;
+            inst.nativeOscDetail.publish (state);
+        }
+        void setNativeOscDetailMenu (int menu) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
+            inst.nativeOscDetail.setMenu (menu);
+        }
         bool takeNativeOscDetail (const nativeui::oscdetail::State& state, int field, float& value) noexcept override
         {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
             if (! inst.nativeOscDetail.take (state, field, value))
                 return false;
             if (field >= nativeui::oscdetail::kCells || state.fields[field].kind == nativeui::oscdetail::Action)
                 inst.nativeOscDetailAcks[field] = true;
             return true;
+        }
+        void suspendNativeOsc() noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
+            inst.nativeOsc.suspend();
+            inst.nativeOscSettings.suspend();
+            inst.nativeOscDetail.suspend();
+        }
+        void suspendNativeOscRoot (const nativeui::osc::ViewState& view, nativeui::osc::SettingsView settingsView,
+                                   const nativeui::FxCell* settingsFields, int warpMask, const char* sourceLabel,
+                                   const nativeui::oscdetail::State& detail) noexcept override
+        {
+            std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
+            if (view.preset != stateGeneration())
+                return;
+            inst.nativeOsc.publish (view, false);
+            inst.nativeOscSettings.publish (settingsView, settingsFields, false);
+            if (settingsView >= nativeui::osc::SettingsWavetable)
+                inst.publishOscAbcState (warpMask, sourceLabel);
+            inst.nativeOscDetail.publish (detail, false);
         }
         void setNativeMasterView (nativeui::master::View view) noexcept override
         {
@@ -1617,14 +1653,27 @@ struct PluginInstance
     std::atomic<uint64_t> nativePzToolbarPreset {};
     std::atomic<int> nativePzPresentation {0};
     std::array<bool, 2> nativePzAcks {};
+    std::mutex oscPresentationMutex;
+    std::atomic<bool> preparedOscTabDue { false }, preparedOscSettingsDue { false }, preparedOscDetailDue { false };
     nativeui::osc::Bank nativeOsc;
-    nativeui::NativeCellBank<nativeui::osc::kSettingsAll> nativeOscSettings;
+    nativeui::osc::SettingsBank nativeOscSettings;
     nativeui::oscdetail::Bank nativeOscDetail;
     std::array<bool, nativeui::oscdetail::kBindings> nativeOscDetailAcks {};
     std::atomic<int> nativeOscWarpMask { 0 };
     std::shared_ptr<const std::string> nativeOscSourceLabel;
     std::array<bool, nativeui::osc::kSettingsAll> nativeOscSettingAcks {};   // display thread only
-    bool nativeOscSourceLabelChanged = false;                               // display thread only
+    std::atomic<bool> nativeOscSourceLabelChanged { false };
+
+    void publishOscAbcState (int warpMask, const char* label)
+    {
+        nativeOscWarpMask.store (warpMask, std::memory_order_relaxed);
+        const char* safeLabel = label != nullptr ? label : "";
+        const auto old = std::atomic_load (&nativeOscSourceLabel);
+        if ((! old && safeLabel[0] == '\0') || (old && *old == safeLabel))
+            return;
+        std::atomic_store (&nativeOscSourceLabel, std::make_shared<const std::string> (safeLabel));
+        nativeOscSourceLabelChanged.store (true, std::memory_order_release);
+    }
     std::atomic<int> nativeMasterView { 0 };
     std::atomic<int> nativeMasterSkinPanel { nativeui::master::Main };
     // One atomic mailbox per instrument. A new capture replaces the previous pending root.
@@ -2170,7 +2219,11 @@ struct PluginInstance
                 || offset == nativeui::kFxChain + nativeui::fxchain::View);
         const bool switchingLfoLayout = offset == nativeui::kLfoBase + nativeui::lfo::kLayout
             && value != nativeUiReported[offset];
-        if (value > 0.0f && (enteringLayout || switchingLfoLayout))
+        const bool switchingOscLayout = (offset == nativeui::kOscBase + nativeui::osc::kVisibility
+                                           || offset == nativeui::kOscBase + nativeui::osc::kSource
+                                           || offset == nativeui::kOscSettingsView)
+            && value != nativeUiReported[offset];
+        if (value > 0.0f && (enteringLayout || switchingLfoLayout || switchingOscLayout))
             nativePagePaintUntil = steadyMs() + kNativePaintWindowMs;
         nativeUiReported[offset] = value;
         audioMaster (e, audioMasterAutomate, nativeUiBase() + offset, 0, nullptr, value);
@@ -2264,15 +2317,40 @@ struct PluginInstance
         auto lfo = std::make_unique<ov::LfoUi>();
         lfo->prepareCompactPresentation (overlayView);
         const auto envLfo = ov::PlayEnvLfo::compactPresentation (overlayView, *lfo);
-        std::lock_guard<std::mutex> guard (playPresentationMutex);
-        if (oscState.preset != overlayView.stateGeneration() || oscState.selection != overlayView.playOscSelectionRevision()
-            || envLfo.context.preset != oscState.preset || envLfo.context.selection != overlayView.nativePlayEnvLfoRevision())
+        {
+            std::lock_guard<std::mutex> guard (playPresentationMutex);
+            if (oscState.preset == overlayView.stateGeneration() && oscState.selection == overlayView.playOscSelectionRevision()
+                && envLfo.context.preset == oscState.preset && envLfo.context.selection == overlayView.nativePlayEnvLfoRevision())
+            {
+                nativePlayOsc.publish (oscState, false);
+                nativePlayEnvLfo.publish (envLfo, false);
+                std::atomic_store (&nativePlayOscSourceName, std::make_shared<const std::string> (std::move (sourceName)));
+                preparedOscDue.store (true, std::memory_order_release);
+                preparedEnvLfoDue.store (true, std::memory_order_release);
+            }
+        }
+        // Seed the standalone Osc A read-only presentation without claiming gestures or Q groups.
+        const uint64_t oscPreset = overlayView.stateGeneration();
+        auto standaloneOsc = std::make_unique<ov::OscUi>();
+        const auto oscRoot = standaloneOsc->prepareStandaloneRoot (overlayView, synthyboy_mpc::playosc::kOscA, oscPreset);
+        const bool oscPowered = ov::OscPageUi::isInstanceOn (overlayView, synthyboy_mpc::playosc::kOscA);
+        const nativeui::osc::ViewState oscView {
+            synthyboy_mpc::playosc::kOscA, oscPowered, oscPreset,
+            ov::OscPageUi::currentDestination (overlayView, synthyboy_mpc::playosc::kOscA), oscPowered
+        };
+        std::lock_guard<std::mutex> oscGuard (oscPresentationMutex);
+        if (oscPreset != overlayView.stateGeneration())
             return;
-        nativePlayOsc.publish (oscState, false);
-        nativePlayEnvLfo.publish (envLfo, false);
-        std::atomic_store (&nativePlayOscSourceName, std::make_shared<const std::string> (std::move (sourceName)));
-        preparedOscDue.store (true, std::memory_order_release);
-        preparedEnvLfoDue.store (true, std::memory_order_release);
+        if (nativeOsc.snapshot().source() != 0 && ! nativeOsc.suspended() && nativeOsc.preset() == oscPreset)
+            return;
+        nativeOsc.publish (oscView, false);
+        nativeOscSettings.publish (oscRoot.settingsView, oscRoot.settingsFields.data(), false);
+        if (oscRoot.settingsView >= nativeui::osc::SettingsWavetable)
+            publishOscAbcState (oscRoot.warpMask, oscRoot.sourceLabel.c_str());
+        nativeOscDetail.publish (oscRoot.detail, false);
+        preparedOscTabDue.store (true, std::memory_order_release);
+        preparedOscSettingsDue.store (true, std::memory_order_release);
+        preparedOscDetailDue.store (true, std::memory_order_release);
     }
 
     void nativePlayOscPoll (AEffect* e)
@@ -2371,10 +2449,12 @@ struct PluginInstance
     void nativeOscPoll (AEffect* e)
     {
         namespace n = nativeui::osc;
-        const auto state = nativeOsc.snapshot();
-        if (state.revision() == nativeOscAnnounced && state.source() == 0)
+        if (! preparedOscTabDue.exchange (false, std::memory_order_acq_rel) && nativeOsc.suspended())
             return;
-        const bool moved = state.revision() != nativeOscAnnounced;
+        const auto state = nativeOsc.snapshot();
+        if (state.bindingRevision() == nativeOscAnnounced && state.source() == 0)
+            return;
+        const bool moved = state.bindingRevision() != nativeOscAnnounced;
         for (int source = 1; source <= n::kLastSource; ++source)
         {
             reportNativeValue (e, nativeui::kOscPower + source - 1, state.powerValue (source), moved && source == state.source());
@@ -2388,7 +2468,7 @@ struct PluginInstance
         }
         reportNativeValue (e, nativeui::kOscBase + n::kVisibility, state.value (n::kVisibility));
         nativeOsc.report (state);
-        nativeOscAnnounced = state.revision();
+        nativeOscAnnounced = state.bindingRevision();
     }
 
     void nativeMasterPoll (AEffect* e)
@@ -2414,6 +2494,8 @@ struct PluginInstance
     {
         namespace n = nativeui::oscdetail;
         constexpr int base = nativeui::kOscDetail;
+        if (! preparedOscDetailDue.exchange (false, std::memory_order_acq_rel) && nativeOscDetail.suspended())
+            return;
         const float view = nativeUiValue (base);
         if (view == 0.0f && nativeUiReported[base] == 0.0f)
             return;
@@ -2450,11 +2532,12 @@ struct PluginInstance
 
     void nativeOscSettingsPoll (AEffect* e)
     {
+        if (! preparedOscSettingsDue.exchange (false, std::memory_order_acq_rel) && nativeOscSettings.suspended())
+            return;
         const float view = nativeUiValue (nativeui::kOscSettingsView);
         if (view == 0.0f && nativeUiReported[nativeui::kOscSettingsView] == 0.0f)
             return;
-        bool changed = nativeOscSourceLabelChanged;
-        nativeOscSourceLabelChanged = false;
+        bool changed = nativeOscSourceLabelChanged.exchange (false, std::memory_order_acq_rel);
         for (int field = 0; field < nativeui::osc::kSettingsAll; ++field)
         {
             const auto snapshot = nativeOscSettings.at (field);

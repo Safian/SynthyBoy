@@ -47,8 +47,21 @@ struct State
 class Bank : public NativeCellBank<kBindings>
 {
 public:
-    void publish (const State& next) noexcept
+    void suspend() noexcept
     {
+        suspended_.store (true, std::memory_order_release);
+        setMenu (-1);
+        renewInputRevisions();
+    }
+
+    void publish (const State& next, bool interactive = true) noexcept
+    {
+        if (! interactive)
+            suspended_.store (true, std::memory_order_release);
+        if (suspended_.load (std::memory_order_relaxed))
+            renewInputRevisions();
+        if (next.frame == Hidden)
+            setMenu (-1);
         if (source_ != next.source || page_ != next.page || type_ != next.type || preset_ != next.preset)
             invalidate();
         source_ = next.source;
@@ -59,7 +72,10 @@ public:
             names_[i].store (next.labels[i], std::memory_order_release);
         NativeCellBank<kBindings>::publish (next.frame, next.fields.data());
         announcedPreset_.store (next.preset, std::memory_order_release);
+        suspended_.store (! interactive, std::memory_order_release);
     }
+
+    bool suspended() const noexcept { return suspended_.load (std::memory_order_acquire); }
 
     const char* name (int i) const noexcept
     {
@@ -68,6 +84,8 @@ public:
 
     void post (Snapshot link, float value, uint64_t preset) noexcept
     {
+        if (suspended_.load (std::memory_order_acquire))
+            return;
         if (announcedPreset_.load (std::memory_order_acquire) == preset)
             NativeCellBank<kBindings>::post (link, value);
     }
@@ -83,7 +101,7 @@ public:
 
     void postMenu (int menu, float value, uint64_t preset) noexcept
     {
-        if (menu < 0 || menu >= kMenus)
+        if (suspended_.load (std::memory_order_acquire) || menu < 0 || menu >= kMenus)
             return;
         const auto snapshot = domain (kFirstMenuKind + menu);
         if (snapshot.link != 0 && menus_[menu].load (std::memory_order_acquire) == snapshot.link)
@@ -92,13 +110,14 @@ public:
 
     bool take (const State& expected, int field, float& value) noexcept
     {
-        if (field < 0 || field >= kBindings)
+        if (suspended_.load (std::memory_order_relaxed) || field < 0 || field >= kBindings)
             return false;
         const bool match = source_ == expected.source && page_ == expected.page && type_ == expected.type && preset_ == expected.preset;
         return NativeCellBank<kBindings>::take (field, match ? expected.fields[field] : FxCell {}, value);
     }
 
 private:
+    std::atomic<bool> suspended_ { true };
     int source_ = 0, page_ = 0, type_ = 0;
     uint64_t preset_ = 0;
     std::atomic<uint64_t> announcedPreset_ { 0 };

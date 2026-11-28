@@ -28,6 +28,7 @@
 #include "../native_lfo_editor.h"
 #include "../native_master_controls.h"
 #include "../native_osc_controls.h"
+#include "../native_osc_detail.h"
 #include "../native_text.h"
 #include "../native_play_osc.h"
 #include "../native_voice_controls.h"
@@ -146,6 +147,19 @@ public:
     virtual void setNativeOscDetail (const nativeui::oscdetail::State&) noexcept {}
     virtual bool takeNativeOscDetail (const nativeui::oscdetail::State&, int, float&) noexcept { return false; }
     virtual void setNativeOscDetailMenu (int) noexcept {}
+    virtual void suspendNativeOsc() noexcept
+    {
+        setNativeOscState ({});
+        setNativeOscSettings (nativeui::osc::SettingsHidden, nullptr);
+        setNativeOscAbcState (0, "");
+        setNativeOscDetail ({});
+    }
+    virtual void suspendNativeOscRoot (const nativeui::osc::ViewState&, nativeui::osc::SettingsView,
+                                       const nativeui::FxCell*, int /*warpMask*/, const char* /*sourceLabel*/,
+                                       const nativeui::oscdetail::State&) noexcept
+    {
+        suspendNativeOsc();
+    }
     virtual void setNativeMasterView (nativeui::master::View /*view*/) noexcept {}
     virtual void leaveNativeMasterView (nativeui::master::View /*returnPanel*/) noexcept { setNativeMasterView (nativeui::master::Hidden); }
     virtual bool masterScaleInputActive() const noexcept { return false; }
