@@ -69,10 +69,9 @@ public:
         return c >= 0 && c < kProgramCalls ? kNames[c] : "?";
     }
 
-    /** The mode of the program list and its length (set once at start; the pointer is a string literal). */
-    void setProgramMode (const char* mode, int numPrograms) noexcept
+    /** The length of the program list (set once at start). */
+    void setProgramCount (int numPrograms) noexcept
     {
-        programMode_.store (mode, std::memory_order_relaxed);
         programCount_.store (numPrograms, std::memory_order_relaxed);
     }
     /** One call of the host about the program list. `category` is the `value` argument; only the two category calls (effGetProgramNameIndexed, effGetNumProgramCategories) are counted per value. Any thread. */
@@ -293,8 +292,7 @@ public:
         std::snprintf (line, sizeof line, "open_ms_detail_wavetables: %.3f\nopen_ms_detail_prepare_voices: %.3f\nopen_ms_detail_prepare_fx: %.3f\n", wavetableMs_.load (std::memory_order_relaxed), voicesMs_.load (std::memory_order_relaxed), fxMs_.load (std::memory_order_relaxed));
         out += line;
         {
-            const char* mode = programMode_.load (std::memory_order_relaxed);
-            std::snprintf (line, sizeof line, "program_groups_mode: %s\nprogram_list_length: %d\n", mode != nullptr ? mode : "n/a", programCount_.load (std::memory_order_relaxed));
+            std::snprintf (line, sizeof line, "program_list_length: %d\n", programCount_.load (std::memory_order_relaxed));
             out += line;
             for (int c = 0; c < kProgramCalls; ++c)
             {
@@ -343,7 +341,6 @@ public:
             programCalls_[c].store (0);
             for (int b = 0; b < kCategoryBuckets; ++b) programCategory_[c][b].store (0);
         }
-        programMode_.store (nullptr);
         programCount_.store (0);
         wavetableMs_.store (0.0);
         voicesMs_.store (0.0);
@@ -359,7 +356,6 @@ private:
     std::atomic<unsigned long> callCount_[kCalls] = {};
     std::atomic<unsigned long> programCalls_[kProgramCalls] = {};
     std::atomic<unsigned long> programCategory_[kProgramCalls][kCategoryBuckets] = {};
-    std::atomic<const char*> programMode_ { nullptr };
     std::atomic<int> programCount_ { 0 };
     std::atomic<int64_t> callSum_[kCalls] = {}, callMax_[kCalls] = {};
     std::atomic<double> wavetableMs_ { 0.0 }, voicesMs_ { 0.0 }, fxMs_ { 0.0 };

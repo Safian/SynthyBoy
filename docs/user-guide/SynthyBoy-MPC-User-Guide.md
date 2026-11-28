@@ -881,7 +881,7 @@ Knobs show the modulation: a marker at the live (modulated) value, and an arc fr
 
 ## 7. Presets
 
-Program 0 is Init. The full factory pack adds 184 sounds in six categories. The grouping mode determines the order and whether the host also shows group headers.
+Program 0 is Init. The full factory pack adds 184 sounds in six categories. The list is flat, ordered by folder category and then by name.
 
 Each preset is saved as a `.sbpreset` file holding a `synthyboy-state` version 4 document with all 2637 parameter keys explicit, identical in count and state version to the engine's parameter table (`docs/params.json`). In code, the state format version is 5 (`kStateVersion` 5, `core/include/synthyboy/state.h`), which stores the grid settings of drawn LFO shapes (`grid_x` and `grid_y`) with the shape; presets and documents of version 4 load seamlessly with the grid inferred from the points, and version 4 readers safely read version 5 documents.
 

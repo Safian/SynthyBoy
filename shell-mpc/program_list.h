@@ -25,7 +25,6 @@ struct ProgramEntry
     std::string name;
     std::string category;
     std::string path;
-    std::string group;   // the Sounds browser group (scripts/factory-preset-categories.json), from the preset index; empty when the list came from the scan
 };
 
 /** The order of the programs: by category (plain <), then by name case-insensitively (ASCII tolower), then by path. The scan and the index use this one rule, so the program numbers the host
@@ -231,7 +230,7 @@ inline bool loadPresetIndex (const std::string& presetsDir, std::vector<ProgramE
         programs.reserve (static_cast<size_t> (count));
         for (unsigned long long i = 0; i < count; ++i)
         {
-            std::string path, name, category, group, hash;
+            std::string path, name, category, group, hash;   // `group` (the Sounds browser group) is part of the index format, not used by the shell
             unsigned long long size = 0, fv = 0, sv = 0;
             if (! (lit (p, end, "{\"path\":") && str (p, end, path) && lit (p, end, ",\"name\":") && str (p, end, name) && lit (p, end, ",\"category\":") && str (p, end, category)
                    && lit (p, end, ",\"group\":") && str (p, end, group) && lit (p, end, ",\"size\":") && num (p, end, size) && lit (p, end, ",\"hash\":") && str (p, end, hash)
@@ -253,7 +252,6 @@ inline bool loadPresetIndex (const std::string& presetsDir, std::vector<ProgramE
             ProgramEntry e;
             e.name = std::move (name);
             e.category = std::move (category);
-            e.group = std::move (group);
             e.path = presetsDir + "/" + path;
             programs.push_back (std::move (e));
             files.emplace_back (std::move (path), size);
@@ -317,42 +315,12 @@ inline std::vector<ProgramEntry> loadPrograms (const std::string& presetsDir, st
 }
 
 // ---------------------------------------------------------------------------
-// The program list the host sees (docs/MPC.md "Preset list of a plugin track"): the presets in the order of `loadPrograms` seen through one of five modes.
-// Program numbers: 0 = "Init", then (mode "off") one per preset in the order of sortPrograms, or (the other modes) in the order of the Sounds browser groups; mode "headers"
-// has a header entry before every group. The chunk always carries the preset's own name, never the label of a mode, so a project saved in one mode loads in another.
+// The program list the host sees (docs/MPC.md "Preset list of a plugin track"): one plain list. Program 0 is "Init", program i >= 1 is the i-th preset in the order of `loadPrograms`.
+// The chunk carries the preset's own name, so a project loads even when the numbering changed (resolveProgram).
 // ---------------------------------------------------------------------------
-
-enum class GroupMode : int { off = 0, prefixShort = 1, prefixGroup = 2, headers = 3, vstCategories = 4 };
-
-inline const char* groupModeName (GroupMode m) noexcept
-{
-    switch (m)
-    {
-        case GroupMode::prefixShort: return "prefix-short";
-        case GroupMode::prefixGroup: return "prefix-group";
-        case GroupMode::headers: return "headers";
-        case GroupMode::vstCategories: return "vst-categories";
-        default: return "off";
-    }
-}
-
-inline bool parseGroupMode (const std::string& text, GroupMode& out) noexcept
-{
-    for (int i = 0; i <= 4; ++i)
-        if (text == groupModeName (static_cast<GroupMode> (i)))
-        {
-            out = static_cast<GroupMode> (i);
-            return true;
-        }
-    return false;
-}
 
 /** What the host's name buffers hold: kVstMaxProgNameLen (24) characters and the NUL (the SDK says char[kVstMaxProgNameLen+1] for effGetProgramName; effGetProgramNameIndexed gives no size, so the same is assumed). */
 constexpr size_t kProgramNameMax = 24;
-
-/** The browser groups in the order of the Sounds browser files: the list `groups` of scripts/factory-preset-categories.json (programs_test checks that the two are the same). */
-constexpr const char* kFactoryGroups[] = { "Bass Sub+808", "Bass Reese", "Bass Acid", "Bass Synth", "Lead Synth", "Lead Sync+FM", "Pad Warm", "Pad Evolving", "Keys", "Pluck", "Bells+Mallets", "Strings+Brass", "Sequence", "Texture", "FX" };
-constexpr int kFactoryGroupCount = static_cast<int> (sizeof (kFactoryGroups) / sizeof (kFactoryGroups[0]));
 
 /** `s` cut to at most `maxBytes` bytes, never inside a UTF-8 sequence; trailing blanks of the cut are dropped. */
 inline std::string truncateUtf8 (const std::string& s, size_t maxBytes)
@@ -365,167 +333,6 @@ inline std::string truncateUtf8 (const std::string& s, size_t maxBytes)
     while (n > 0 && s[n - 1] == ' ')
         --n;
     return s.substr (0, n);
-}
-
-namespace group_detail
-{
-/** The group a preset sorts into: its browser group, else (index missing, scan, user preset) its folder category, after the factory groups in the order of the folders (as content/mpc-presets does). */
-inline const std::string& label (const ProgramEntry& e) { return e.group.empty() ? e.category : e.group; }
-inline int rank (const ProgramEntry& e)
-{
-    for (int i = 0; i < kFactoryGroupCount; ++i)
-        if (label (e) == kFactoryGroups[i])
-            return i;
-    static const char* const folders[] = { "Bass", "FX", "Keys", "Lead", "Pad", "Pluck" };
-    for (int i = 0; i < 6; ++i)
-        if (e.category == folders[i])
-            return kFactoryGroupCount + i;
-    return kFactoryGroupCount + 6;
-}
-inline std::string upperAscii (const std::string& s)
-{
-    std::string o;
-    for (unsigned char c : s)
-        o += (c >= 0x20 && c < 0x7f) ? static_cast<char> (std::toupper (c)) : '?';
-    return o;
-}
-} // namespace group_detail
-
-struct ProgramView
-{
-    struct Item
-    {
-        bool header = false;
-        int preset = -1;            // index into the preset list (-1: Init and headers)
-        int group = -1;             // index into `groupNames` (-1: Init)
-        std::string baseName;       // the preset's own name ("Init" for program 0, the header text for a header)
-        std::string label;          // what effGetProgramNameIndexed gives (before the cut to kProgramNameMax at the write)
-    };
-    GroupMode mode = GroupMode::off;
-    std::vector<Item> items;                // program number -> item; items[0] is Init
-    std::vector<int> legacyToNumber;        // program number of mode "off" (0 = Init, i = preset i-1) -> program number here
-    std::vector<std::string> groupNames;    // the groups in use, in order (empty in mode "off")
-    std::vector<int> groupFirst, groupCount;   // per group: the program number of its first preset and the number of presets (no header counted)
-
-    int numPrograms() const noexcept { return static_cast<int> (items.size()); }
-    bool isHeader (int n) const noexcept { return n >= 0 && n < numPrograms() && items[static_cast<size_t> (n)].header; }
-    const std::string& label (int n) const { return items[static_cast<size_t> (n)].label; }
-};
-
-/** The view of `presets` (the order of loadPrograms) in `mode`. Mode "off" is today's list: Init, then the presets in the given order under their own names. */
-inline ProgramView buildProgramView (const std::vector<ProgramEntry>& presets, GroupMode mode)
-{
-    ProgramView v;
-    v.mode = mode;
-    ProgramView::Item init;
-    init.baseName = "Init";
-    init.label = "Init";
-    v.items.push_back (init);
-    v.legacyToNumber.assign (presets.size() + 1, 0);
-
-    std::vector<size_t> order (presets.size());
-    for (size_t i = 0; i < order.size(); ++i)
-        order[i] = i;
-    if (mode != GroupMode::off)
-    {
-        // sortPrograms' rule inside a group (name case-insensitive, then path); the groups in the order of kFactoryGroups
-        std::stable_sort (order.begin(), order.end(), [&] (size_t a, size_t b)
-        {
-            const ProgramEntry& x = presets[a]; const ProgramEntry& y = presets[b];
-            const int rx = group_detail::rank (x), ry = group_detail::rank (y);
-            if (rx != ry) return rx < ry;
-            if (group_detail::label (x) != group_detail::label (y)) return group_detail::label (x) < group_detail::label (y);
-            auto lc = [] (char c) { return static_cast<char> (std::tolower (static_cast<unsigned char> (c))); };
-            auto cmp = [&] (char p, char q) { return lc (p) < lc (q); };
-            if (std::lexicographical_compare (x.name.begin(), x.name.end(), y.name.begin(), y.name.end(), cmp)) return true;
-            if (std::lexicographical_compare (y.name.begin(), y.name.end(), x.name.begin(), x.name.end(), cmp)) return false;
-            return x.path < y.path;
-        });
-    }
-
-    for (size_t k = 0; k < order.size(); ++k)
-    {
-        const ProgramEntry& e = presets[order[k]];
-        int gi = -1;
-        if (mode != GroupMode::off)
-        {
-            const std::string& g = group_detail::label (e);
-            if (v.groupNames.empty() || v.groupNames.back() != g)
-            {
-                v.groupNames.push_back (g);
-                v.groupFirst.push_back (static_cast<int> (v.items.size()) + (mode == GroupMode::headers ? 1 : 0));
-                v.groupCount.push_back (0);
-                if (mode == GroupMode::headers)
-                {
-                    ProgramView::Item h;
-                    h.header = true;
-                    h.group = static_cast<int> (v.groupNames.size()) - 1;
-                    h.baseName = "-- " + group_detail::upperAscii (g) + " --";
-                    h.label = truncateUtf8 (h.baseName, kProgramNameMax);
-                    v.items.push_back (h);
-                }
-            }
-            gi = static_cast<int> (v.groupNames.size()) - 1;
-            ++v.groupCount.back();
-        }
-        ProgramView::Item it;
-        it.preset = static_cast<int> (order[k]);
-        it.group = gi;
-        it.baseName = e.name;
-        switch (mode)
-        {
-            case GroupMode::prefixShort:
-                it.label = truncateUtf8 (truncateUtf8 (e.category, 5) + ": " + e.name, kProgramNameMax);
-                break;
-            case GroupMode::prefixGroup:
-                it.label = group_detail::label (e) + ": " + e.name;   // may be longer than the buffer: the write cuts it
-                break;
-            default:
-                it.label = e.name;
-                break;
-        }
-        v.items.push_back (it);
-    }
-
-    // legacy numbers: the order of `presets` is the numbering of mode "off"
-    for (int n = 1; n < v.numPrograms(); ++n)
-        if (v.items[static_cast<size_t> (n)].preset >= 0)
-            v.legacyToNumber[static_cast<size_t> (v.items[static_cast<size_t> (n)].preset) + 1] = n;
-    return v;
-}
-
-/** The program the host's effSetProgram(requested) really loads. A header loads the first preset of its group, except when that preset is already the current program: then the host is stepping
-    backwards (Previous Preset from the first preset of a group lands on the header), and the program before the header is loaded (the last preset of the group before, or Init), so stepping
-    never gets stuck on a header. Stepping forward from the last preset of a group (header) lands on the first preset of the next group; the host's own counter, if it keeps one, is
-    then one behind (the header), and its next step forward reaches the first preset again (the second one when it asks us for the current program). -1: not a program. */
-inline int effectiveProgram (const ProgramView& v, int requested, int current) noexcept
-{
-    if (requested < 0 || requested >= v.numPrograms())
-        return -1;
-    if (! v.isHeader (requested))
-        return requested;
-    if (current == requested + 1)
-        return requested - 1;
-    return requested + 1;
-}
-
-/** Number of VST program categories this build reports (mode "vst-categories"; 0 in the others: a flat list). */
-inline int numProgramCategories (const ProgramView& v) noexcept
-{
-    return v.mode == GroupMode::vstCategories ? static_cast<int> (v.groupNames.size()) : 0;
-}
-
-/** effGetProgramNameIndexed(index, category): the program number it names, or -1. Category < 0 (or a mode without categories, or a host that never asked for the number of categories): `index` is
-    the program number. Category c >= 0: `index` is the position inside group c (Init is not in a category). */
-inline int programOfIndexed (const ProgramView& v, int index, int category, bool hostAskedCategories) noexcept
-{
-    if (index < 0)
-        return -1;
-    if (v.mode != GroupMode::vstCategories || category < 0 || ! hostAskedCategories)
-        return index < v.numPrograms() ? index : -1;
-    if (category >= static_cast<int> (v.groupNames.size()) || index >= v.groupCount[static_cast<size_t> (category)])
-        return -1;
-    return v.groupFirst[static_cast<size_t> (category)] + index;
 }
 
 /** The mark of a "modified" program that older plugin versions appended to the name ("Name *"; saved in the chunk of a project): a trailing "*" and the spaces before it are cut off. The plugin never writes the mark
@@ -542,26 +349,6 @@ inline std::string stripModifiedMark (std::string name)
         while (! name.empty() && name.back() == ' ')
             name.pop_back();
     return name;
-}
-
-/** Like resolveProgram, for a view. The name is the preset's own name. Order: the stored number when that item has the name; the preset that had the stored number in the old (mode "off") list when it has
-    the name; the first preset of that name; -1. A chunk without a name: the stored number is a number of the old list. Never returns a header. */
-inline int resolveProgramInView (const ProgramView& v, const std::vector<ProgramEntry>& presets, int storedIndex, bool hasName, const std::string& nameWithMark) noexcept
-{
-    const std::string name = stripModifiedMark (nameWithMark);
-    const int count = static_cast<int> (presets.size());
-    if (! hasName)
-        return storedIndex >= 0 && storedIndex <= count ? v.legacyToNumber[static_cast<size_t> (storedIndex)] : -1;
-    if (storedIndex == 0 && name == "Init")
-        return 0;
-    if (storedIndex >= 1 && storedIndex < v.numPrograms() && ! v.isHeader (storedIndex) && v.items[static_cast<size_t> (storedIndex)].baseName == name)
-        return storedIndex;
-    if (storedIndex >= 1 && storedIndex <= count && presets[static_cast<size_t> (storedIndex - 1)].name == name)
-        return v.legacyToNumber[static_cast<size_t> (storedIndex)];
-    for (int n = 1; n < v.numPrograms(); ++n)
-        if (! v.isHeader (n) && v.items[static_cast<size_t> (n)].baseName == name)
-            return n;
-    return -1;
 }
 
 // ---------------------------------------------------------------------------
