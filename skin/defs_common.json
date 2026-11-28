@@ -272,13 +272,6 @@
      "actions": [
       {
        "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Toggle Switch",
-       "handleName": "Data",
-       "additionalData": ""
-      },
-      {
-       "version": 1,
        "onAction": "Enter Pressed",
        "handler": "Toggle Switch",
        "handleName": "Data",
@@ -391,6 +384,35 @@
         "additionalInvalidatingHandles": [
          "Arrow"
         ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Tap",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 640 72"
        }
       }
      ]
