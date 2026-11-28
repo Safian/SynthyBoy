@@ -1,0 +1,10 @@
+{
+  "file": "skin/defs_macro.json",
+  "prefix": "macroHeader",
+  "forms": ["macros"],
+  "instances": [
+    {"name": "Macro Header", "tab": "Macros", "replaces": ["Macro Title"], "form": "macros", "data": "Parameter 0",
+     "gate": ["RangedEnabling/0/18/33/Parameter 2675", "IndexedEnabling/0/2/Parameter 3835"], "show": "Hide", "focus": "No",
+     "remap": {"HdrTitle": "Parameter 0"}}
+  ]
+}

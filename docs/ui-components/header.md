@@ -1,6 +1,6 @@
 # HEADER (design proposal v0; the oscillator screens use it)
 
-The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise) uses it in the skin (see "Skin: the oscillator headers" below); no other screen does yet. The catalogue (`kepes-katalogus.html`) shows eleven examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
+The full-width top row of a page or of a Play third. The oscillator screen family (Osc A/B/C, Sub, Noise) uses it in the skin (see "Skin: the oscillator headers" below), and so do Master, Tuning, Voice and Macros ("Skin: Master, Tuning, Voice, Macros"); FX and Play do not yet ("Not yet: FX and Play"). The catalogue (`kepes-katalogus.html`) shows fourteen examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
 
 ## Geometry (tokens in `components/sizes.json`)
 
@@ -45,8 +45,8 @@ One example per slot kind (`kind`, then the fields; every slot may carry `role` 
 | left | `title` | `{"kind": "title", "text": "OSC A", "slot": 67}` | `text`; `slot` = reserved width in px (a family of pages with different titles keeps POWER fixed) |
 | left | `power` | `{"kind": "power", "state": "on"}` | `state` on / off (the catalogue picture; the skin always gets both looks from the one slot) |
 | centre | `dropdown` | `{"kind": "dropdown", "role": "type", "value": "Wavetable", "width": "header.dropdown.min_width", "fill": true}` | `width` (size token) or `width_px`; `fill` (at most one); `height` token |
-| centre | `field` | `{"kind": "field", "role": "oct", "name": "OCT", "value": "+0", "width_px": 112, "box_px": 68}` | name outside, value box inside |
-| centre | `button` | `{"kind": "button", "role": "browse", "text": "BROWSE"}` | `text` |
+| centre | `field` | `{"kind": "field", "role": "oct", "name": "OCT", "value": "+0", "width_px": 112, "box_px": 68}` | name outside, value box inside; `caption` (`"Name"` or `"Value"`): the skin face is blank and the host draws the name in a Label bound by the handle `Hdr<Role>Caption` (the Voice step value shows the selected row's name) |
+| centre | `button` | `{"kind": "button", "role": "browse", "text": "BROWSE"}` | `text`; `width_px` (a fixed width); `on_text` (a toggle: its own text while pressed / active, same width; only in a header without POWER) |
 | right | `more` | `{"kind": "more"}` | the common MORE button |
 | right | `dropdown` | `{"kind": "dropdown", "role": "route", "value": "Filter 1", "width_px": 150}` | as the centre dropdown |
 
@@ -73,19 +73,22 @@ A slot that is built into the skin names its cells: `"skin": {"cells": [{"name":
 | `page` | also gated by the form's `page_gate` (the Route stays visible when POWER is off) |
 | `wrapper` | `NativeActive`: keep the proven NativeActive / NativeInactive pattern (see below) |
 | `focus`, `show` | a Focus child; the instance's showWhenDataModelInvalid (default `Show`) |
+| `hwfocus` | the cell instance's acceptsHWFocus in the form (default `No`: the Osc cells are reached through the header instance; `Yes` for a cell that is its own focus stop, the Voice controls) |
 
-`role` gives the remap name `Hdr<Role>` (`type` -> `HdrType`) that the instance binds to a parameter.
+`role` gives the remap name `Hdr<Role>` (`type` -> `HdrType`) that the instance binds to a parameter. A `gate` entry is a remap name as well (`HdrPage`, `HdrView`): the instance binds it to the gating handle.
+
+A header WITHOUT a `power` slot (Master, Tuning, Voice, Macros) has no `HdrOn` / `HdrOff` state and no disabled look: its title is a static Text Label (the spec's text; `HdrTitle` is bound to `Parameter 0` as the former caption was) as wide as the room up to the next control, the cells carry only their own gates.
 
 ### Instances and the tool
 
-The instances (which parameters, which page gate) of one screen family are a list in `components/native/header/skin-<family>.json` (`skin-osc.json`): `{"name", "form" (an example id), "title", "power": "Parameter N", "data", "gate", "remap": {"Hdr<Role>": handle, ...}}`. The tool derives `HdrTitle` (`WithName[<title>]/<power>`), `HdrPower`, `HdrOn` / `HdrOff` (`IndexedEnabling/1|0/2/<power>`) from `power`. Hand-run, nothing at build time:
+The instances (which parameters, which page gate) of one screen family are a list in `components/native/header/skin-<family>.json` (`skin-osc.json`): `{"name", "form" (an example id), "title", "power": "Parameter N", "data", "gate", "remap": {"Hdr<Role>": handle, ...}}`; optional `show` (default `Hide`), `focus` (acceptsHWFocus of the instance, default `Yes`; `Children` where the cells are their own focus stops, `No` for a title only) and, instead of the family's `layer`, `tab` (the instance sits in that tab of `skin/TUI.json`) with `replaces` (the names of the former ad hoc items it takes the place of; they are removed). The tool derives `HdrTitle` (`WithName[<title>]/<power>`), `HdrPower`, `HdrOn` / `HdrOff` (`IndexedEnabling/1|0/2/<power>`) from `power`. Hand-run, nothing at build time:
 
 ```
 python3 scripts/header-skin.py components/native/header/skin-osc.json     # definitions + instances + faces (skin/hdr_*.png)
 python3 scripts/skin-format.py && python3 scripts/skin-baseline-update.py   # as after every skin edit
 ```
 
-The tool replaces every definition and instance whose name starts with the family prefix (`oscHeader`), in place, and removes faces nothing uses; the test `HeaderSkinSpecTests` fails if the committed skin differs from what the spec produces. Rolling the Header out to another screen = one `skin` block per example, one `skin-<family>.json`, one tool run.
+The tool replaces every definition and instance whose name starts with the family prefix (`oscHeader`), in place, and removes `hdr_*.png` faces no skin file names any more (the families share the directory); the test `HeaderSkinSpecTests` fails if the committed skin differs from what the spec produces. Rolling the Header out to another screen = one `skin` block per example, one `skin-<family>.json`, one tool run.
 
 ### Why the number of definitions is small
 
@@ -125,3 +128,18 @@ The skin definitions `oscHeaderAbc`, `oscHeaderSub`, `oscHeaderNoise`, `oscHeade
 - Recipe extensions made for it: right-zone `dropdown` (the Filter route), centre `field` (name + number box), `title_slot`, and `skin_parts()` (textless faces plus the disabled look).
 - C++: `layoutFull` (`shell-mpc/overlay/osc_model.h`) follows the TYPE / SOURCE / BROWSE rectangles of the abc column case. The Sub / Noise rows of that function keep their old generic layout (plain data only).
 - The examples 7-11 of the catalogue are new and not yet approved by the owner (`approved` in `catalog.json` stays as it was).
+
+## Skin: Master, Tuning, Voice, Macros (owner order 2026-11-28)
+
+The four screens have no POWER: the header is the title and, on Tuning and Voice, controls. Each is a 1280 x 56 instance of a form in the screen's family file (`skin/defs_master.json` `masterHeader`, `defs_tuning.json` `tuningHeader` + cell `tuningHeaderScale`, `defs_voice.json` `voiceHeader` + cells `voiceHeaderStep`, `voiceHeaderLength`, `voiceHeaderStepValue`, `defs_macro.json` `macroHeader`), generated from `skin-master.json`, `skin-tuning.json`, `skin-voice.json`, `skin-macro.json` (examples `master`, `tuning`, `voice`, `macros`). Every handle, gate, button id and action is the former one (checked: the resolved Button / Label / action records of every tab before and after are identical, label font sizes aside); positions and faces follow the Header (title at 8 px, controls 40 px high in the content row; the old rows were 56 px high at y 4, the old title at x 64).
+
+- **Master**: the title `MASTER` (the former `Native Caption master header 0`, same font and colour, now the Header title slot).
+- **Tuning**: `TUNING & MPE` and the scale-input toggle (`Master Scale Input` -> cell `Scale Input`, handle `Parameter 3657`, gated by the Tuning view): a text button, 520 px wide, resting text `ACTIVATE SCALE INPUT` (offImage) and, while the mode is on, `KEY MODE · SELECT ROOT · TAP TO PLAY` (onImage). The old picture separated the three phrases with a small square; the Header's own font draws a middle dot.
+- **Voice**: `VOICE CONTROL`, STEP dropdown (220 px, overlay `fx editor choice menu`), LENGTH number field (200 px, box 80, `fx editor number menu`), the selected row's step value (228 px, box 112, name from `FromGesture/Parameter 2961`). All three keep their former gate (`RangedEnabling/0/18/33/Parameter 2675`, bound as `HdrPage`) and are their own hardware focus stops (instance `Children`, cells `Yes`); the old three definitions `voiceNativeStepSelect`, `voiceNativeNumber`, `voiceNativeStepValue` and their faces are gone.
+- **Macros**: the title `MACROS`, gated as before (`RangedEnabling/0/18/33/Parameter 2675`, `IndexedEnabling/0/2/Parameter 3835`). The targets sub-page and the picker have their own titles and are page content, not this header.
+- **Page markers**: the title now starts at x 8, over the old marker spots (tab y 24), so the markers and the instance picture of these four views moved to tab y 1 (page y 111, the spot Play and FX use; x unchanged): `skin/TUI.json`, `shell-mpc/overlay/overlay_layout.json` and `overlay_layout.h`, `docs/dsp-knowledge/mpc-display.md`. Device check of the detection: open.
+
+## Not yet: FX and Play (the spec cannot express them)
+
+- **FX** (`fxNativeHeader`, the row shown while an effect is open): power 56 x 56 at x 8, a TWO-line title (the rack path above the effect name, `Name` Labels of the `Rack` and `Power` handles), a notice Label that replaces the title in some states, the RACK selector as a two-line caption-over-value box (`fxNativeHeaderRack` / `fxNativeHeaderPoolRack`, two overlays by rack kind) and a REMOVE text button on the right. The Header has a one-line title, a 40 px POWER, a value-only dropdown and no right-zone text button. The panel page strip and the band tiles in the same definition (y 64 and 376) and the chain cards, MOVE, +ADD are page content, not the header.
+- **Play** (the three column headers: power 6,10 56 x 56; selector 62,10 360 / 288 x 56 with the 72 x 56 route field; envelope 446,10 388 x 56; LFO 864,10 396 x 56): the order is to keep these rects exactly (they align with the display containers and are mirrored in `shell-mpc/ui/play_rows.h`, `osc_model.h`, `lfo_layout.h`, `play_osc_native_contract.h`). The Header row is 56 high with 8 px padding and 40 px controls, the dropdown sizes are 32 / 40 / 48, and the column x offsets are not a zone flow, so the rects cannot come out of a spec. Needed first: an owner decision between the Header geometry in the Play thirds (rects move, the C++ mirrors change with them) and a Header variant with a 56 px content row, no padding and per-slot x.

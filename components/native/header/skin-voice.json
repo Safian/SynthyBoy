@@ -1,0 +1,11 @@
+{
+  "file": "skin/defs_voice.json",
+  "prefix": "voiceHeader",
+  "forms": ["voice"],
+  "instances": [
+    {"name": "Voice Header", "tab": "Voice", "replaces": ["Native Caption voice 0", "Voice Step Select", "Voice Length", "Voice Step Value"], "form": "voice",
+     "data": "Parameter 0", "gate": [], "show": "Show", "focus": "Children",
+     "remap": {"HdrTitle": "Parameter 0", "HdrPage": "RangedEnabling/0/18/33/Parameter 2675", "HdrStep": "Parameter 2962", "HdrLength": "Parameter 2063",
+               "HdrLengthCaption": "WithName[LENGTH]/Parameter 2063", "HdrStepvalue": "Parameter 2963", "HdrStepvalueCaption": "FromGesture/Parameter 2961"}}
+  ]
+}

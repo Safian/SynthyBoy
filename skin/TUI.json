@@ -8122,25 +8122,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Macro Title",
-        "type": "Label",
+        "name": "Macro Header",
+        "type": "macroHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "MACROS"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -8148,6 +8134,10 @@
         "map": [
          {
           "key": "Data",
+          "value": "Parameter 0"
+         },
+         {
+          "key": "HdrTitle",
           "value": "Parameter 0"
          }
         ]
@@ -8158,7 +8148,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "64 4 260 56",
+        "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/0/18/33/Parameter 2675",
          "IndexedEnabling/0/2/Parameter 3835"
@@ -9018,7 +9008,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "33 24 6 6"
+        "bounds": "33 1 6 6"
        }
       },
       {
@@ -9044,7 +9034,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1241 24 6 6"
+        "bounds": "1241 1 6 6"
        }
       },
       {
@@ -9077,7 +9067,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "45 24 6 6"
+        "bounds": "45 1 6 6"
        }
       },
       {
@@ -33178,7 +33168,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "33 24 6 6"
+        "bounds": "33 1 6 6"
        }
       },
       {
@@ -33204,7 +33194,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1241 24 6 6"
+        "bounds": "1241 1 6 6"
        }
       },
       {
@@ -33237,32 +33227,18 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "45 24 6 6"
+        "bounds": "45 1 6 6"
        }
       },
       {
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Caption master header 0",
-        "type": "Label",
+        "name": "Master Header",
+        "type": "masterHeader",
         "data": {
          "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "MASTER"
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -33270,6 +33246,10 @@
         "map": [
          {
           "key": "Data",
+          "value": "Parameter 0"
+         },
+         {
+          "key": "HdrTitle",
           "value": "Parameter 0"
          }
         ]
@@ -33280,7 +33260,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "64 4 220 56"
+        "bounds": "0 0 1280 56"
        }
       },
       {
@@ -33921,16 +33901,11 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Master Scale Input",
-        "type": "Button",
+        "name": "Tuning Header",
+        "type": "tuningHeader",
         "data": {
-         "version": 2,
-         "onImage": "native_action_f998c04543207ac20781.png",
-         "offImage": "native_action_fdf4f74b0ffd373b0c82.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
+         "version": 1,
+         "handleName": "Data"
         }
        },
        "handle remapping": {
@@ -33938,20 +33913,29 @@
         "map": [
          {
           "key": "Data",
+          "value": "Parameter 0"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "Parameter 0"
+         },
+         {
+          "key": "HdrScale",
           "value": "Parameter 3657"
+         },
+         {
+          "key": "HdrView",
+          "value": "IndexedEnabling/2/3/Parameter 2879"
          }
         ]
        },
        "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
+        "version": 1,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "704 4 520 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "bounds": "0 0 1280 56"
        }
       },
       {
@@ -33977,7 +33961,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "33 24 6 6"
+        "bounds": "33 1 6 6"
        }
       },
       {
@@ -34003,7 +33987,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1241 24 6 6"
+        "bounds": "1241 1 6 6"
        }
       },
       {
@@ -34036,50 +34020,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "45 24 6 6"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Caption tuning header 0",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "TUNING & MPE"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 0"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "64 4 260 56"
+        "bounds": "45 1 6 6"
        }
       },
       {
@@ -34564,8 +34505,8 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Voice Length",
-        "type": "voiceNativeNumber",
+        "name": "Voice Header",
+        "type": "voiceHeader",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -34576,24 +34517,45 @@
         "map": [
          {
           "key": "Data",
+          "value": "Parameter 0"
+         },
+         {
+          "key": "HdrTitle",
+          "value": "Parameter 0"
+         },
+         {
+          "key": "HdrPage",
+          "value": "RangedEnabling/0/18/33/Parameter 2675"
+         },
+         {
+          "key": "HdrStep",
+          "value": "Parameter 2962"
+         },
+         {
+          "key": "HdrLength",
           "value": "Parameter 2063"
          },
          {
-          "key": "Caption",
+          "key": "HdrLengthCaption",
           "value": "WithName[LENGTH]/Parameter 2063"
+         },
+         {
+          "key": "HdrStepvalue",
+          "value": "Parameter 2963"
+         },
+         {
+          "key": "HdrStepvalueCaption",
+          "value": "FromGesture/Parameter 2961"
          }
         ]
        },
        "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
+        "version": 1,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "788 4 200 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/0/18/33/Parameter 2675"
-        ]
+        "bounds": "0 0 1280 56"
        }
       },
       {
@@ -34627,78 +34589,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 98 240 208",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/0/18/33/Parameter 2675"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Voice Step Select",
-        "type": "voiceNativeStepSelect",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2962"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "560 4 220 56",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/0/18/33/Parameter 2675"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Voice Step Value",
-        "type": "voiceNativeStepValue",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2963"
-         },
-         {
-          "key": "Caption",
-          "value": "FromGesture/Parameter 2961"
-         },
-         {
-          "key": "Row",
-          "value": "Parameter 2961"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "996 4 228 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/0/18/33/Parameter 2675"
         ]
@@ -37497,7 +37387,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "33 24 6 6"
+        "bounds": "33 1 6 6"
        }
       },
       {
@@ -37523,7 +37413,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1241 24 6 6"
+        "bounds": "1241 1 6 6"
        }
       },
       {
@@ -37556,50 +37446,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "45 24 6 6"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Caption voice 0",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "VOICE CONTROL"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 0"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "64 4 260 56"
+        "bounds": "45 1 6 6"
        }
       },
       {
