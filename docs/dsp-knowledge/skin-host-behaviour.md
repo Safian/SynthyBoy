@@ -29,7 +29,7 @@ Facts about how the MPC host treats our skin, each with its evidence. Raw files:
 
 - FACT: after a Key 61 reboot the DRM card number can change (the host picture was on card1 before, card0 after); the capture tools must try the cards in turn.
 
-## importFiles: splitting the skin into files (expert research 2026-11-28, sources only, no device run)
+## importFiles: splitting the skin into files (expert research 2026-11-28; device measurement Key 61 2026-11-28 below)
 
 Question: can `TUI.json` be split into one file per screen / component definition, joined by the host's `pageData.componentDefinitions.importFiles`? SDK = official SDK doc (active SDK febd2ca, byte-equal ui-reference to upstream e78bad5 per `sources/runtime-sdk-docs/`); DEVICE = factory file read on the XL; all paths under `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-knowledge/` (KB) unless noted.
 
@@ -47,15 +47,22 @@ Question: can `TUI.json` be split into one file per screen / component definitio
 - Our own tooling: `scripts/validate_synthyboy_skin.py:121-122` rejects any non-empty `importFiles` ("native components must be self-contained") and reads only `TUI.json` definitions (line 43, 109); `scripts/build-mpc.sh:235` copies the whole `skin/` tree with `cp -R`, `scripts/install-mpc-package.sh:75,77,117` hashes and tars the whole `Plugin Skins` tree (subfolders survive); the validator and every tool that reads `localComponentDefinitions` must resolve the imports (merge them as the host would) before the split is installed.
 
 Verdict (path -> status):
-- Definitions in files via `importFiles`, relative path, version 2: SDK-documented and factory-proven on the device; for a third-party plugin folder UNKNOWN (never measured).
+- Definitions in files via `importFiles`, relative path, version 2: SDK-documented and factory-proven on the device; for a third-party plugin folder MEASURED on the Key 61 (see "Measured" below); XL not yet checked.
 - Absolute `/nvme/...` or `/sdcard/...` path: NOT usable (the two devices differ; community only shows absolute paths into the factory `/usr/share/Akai/Content/Synths/`).
 - Tab bodies as imported definitions (tab entry keeps `componentName`): usable in principle (SDK), same UNKNOWN.
 - The `tabs` array / `info` / `replacementStrings` in separate files: NOT usable (no mechanism).
-- Wrapper shape of our own imported file: device shape (wrapped) preferred; SDK shape UNKNOWN.
+- Wrapper shape of our own imported file: the device (wrapped) shape is REQUIRED; the SDK (unwrapped) shape did not resolve on the Key 61 (see "Measured").
+
+Measured (Key 61, 2026-11-28, run by the coordinator with a trial skin and the real plugin folder; the raw evidence belongs under `.hw-local/mpc-perf/`, the XL has not been checked):
+- FACT (measured): an import file in the WRAPPED shape `{"componentDefinitions": {"version": 2, "importFiles": [...], "localComponentDefinitions": [...]}}`, loaded from a relative path (`defs/lfo.json`, next to `TUI.json`), resolved its definitions.
+- FACT (measured): the UNWRAPPED SDK shape (`{"version": 2, "importFiles": [...], "localComponentDefinitions": [...]}` at the top level, as `ui-reference.md` section 3.2 describes it) did NOT resolve at all. The SDK text is wrong for a third-party skin here; copy the factory (wrapped) shape.
+- FACT (measured): image paths inside an imported file resolve relative to the IMPORTED FILE'S folder (as `ui-reference.md` says). Two runs: a wrapped file at the skin ROOT next to `TUI.json` and the PNGs (`"importFiles": ["lfo_defs.json"]`) resolved all 43 imported definitions AND their images, the LFO tab drew identically to the inline skin; the same file in `defs/` resolved the definitions but showed no images, because the PNGs are in the skin root.
+- Consequence: put import files in the skin root (flat) while the PNGs stay there, or rewrite image paths in the build (`../name.png` was not measured). A `defs/` folder is free only for definitions without images.
+- Still UNMEASURED: nesting (an imported file importing another), the local-wins duplicate-key rule on a third-party skin, `../x.png`, the XL, load time / freeze behaviour of a split skin versus the single file.
 
 ONE minimal measurement that settles all UNKNOWNs (not run; Key 61 first, then XL, any trial skin, plugin folder with the real plugin): a skin with 4 tabs. `TUI.json` `importFiles: ["defs/a.json", "defs/b.json"]`. `defs/a.json` is wrapped like the factory files, imports `c.json` (same folder), defines tab root `tabA` (a coloured Label plus an Image `a.png` that sits in `defs/`) and a key `dup` (red). `defs/b.json` is SDK-unwrapped and defines `tabB` (green Label). `defs/c.json` defines `tabC`. `TUI.json` defines locally `tabD` and its own `dup` (blue), and tab D's second child uses the type `dup`. Read: tab A visible and image drawn (relative path, wrapped shape, image relative to the imported file); tab B visible or blank (unwrapped shape); tab C (nesting); the colour of `dup` (local wins); plus once a `../x.png` image reference from `defs/a.json`. Record the result and raw photos under `.hw-local/mpc-perf/` and correct this section.
 
-Recommendation: keep `pageData.tabs`, `info`, `replacementStrings` and the 37 tab entries in `TUI.json` (a small file); move each tab-root definition and each shared component definition to `defs/<name>.json` files in the wrapped factory shape, with `TUI.json` `importFiles` listing them (flat, one level; nesting is not needed), a version-2 relative path (`defs/x.json`), globally unique keys and the PNGs left next to `TUI.json` with image paths adjusted by the build only if the `..` test fails. Do not start the work before the measurement above: if the 4-tab test fails on a device, the split would silently produce blank tabs there.
+Recommendation: keep `pageData.tabs`, `info`, `replacementStrings` and the 37 tab entries in `TUI.json` (a small file); move each tab-root definition and each shared component definition to import files in the skin ROOT (not `defs/`: the PNGs sit there, see "Measured") in the wrapped factory shape, with `TUI.json` `importFiles` listing them (flat, one level; nesting is not needed), a version-2 relative path (`x_defs.json`), globally unique keys and the PNGs left next to `TUI.json` (image paths unchanged). Key 61 resolves it; check the XL (and its load/freeze behaviour with the full skin) before a split skin is installed there: a failed import is silent and produces blank tabs.
 
 ## Gating a cell on a text line (2026-11-28, UNVERIFIED on a device)
 
