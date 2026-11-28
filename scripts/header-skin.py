@@ -53,13 +53,14 @@ def instance_component(inst, form_key):
     power = inst.get("power")
     remap = [("Data", inst["data"])]
     if power:
-        remap += [("HdrTitle", f"WithName[{inst['title']}]/{power}"), ("HdrPower", power),
+        title = inst["remap"].get("HdrTitle") or f"WithName[{inst['title']}]/{power}"
+        remap += [("HdrTitle", title), ("HdrPower", power),
                   ("HdrOn", f"IndexedEnabling/1/2/{power}"), ("HdrOff", f"IndexedEnabling/0/2/{power}")]
     elif inst.get("title_handle"):
         remap.append(("HdrTitle", f"WithName[{inst['title']}]/{inst['title_handle']}"))
     if inst.get("title_gate"):
         remap.append(("HdrTitleGate", inst["title_gate"]))
-    remap += list(inst["remap"].items())
+    remap += [(k, v) for k, v in inst["remap"].items() if not (power and k == "HdrTitle")]
     gate = inst.get("gate", [])
     bounds = {"version": 2 if "gate" in inst else 1, "acceptsHWFocus": inst.get("focus", "Yes"),
               "showWhenDataModelInvalid": inst.get("show", "Hide"), "whenVisible": "Always", "boundsType": "Absolute", "bounds": "0 0 1280 56"}
