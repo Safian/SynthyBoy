@@ -54,6 +54,8 @@
 
 ## Eszközellenőrzések (Key 61 és XL), egy közös készülékteszt
 
+- [ ] Play 2. fázis kézi ellenőrzés (Key 61, majd XL; a végén): a hosszú SOURCE-nevek csonkolása a legördülőben (három pont vagy balra igazítás), a 40 px-es fejléc-felületek érinthetősége az 56 px-es helyen, a ROUTE/Sub választó szélességváltása (2676-os kapu). Kész, ha mind rendben van a készüléken.
+- [ ] Mixer csíkcímek 22-es betűvel (Key 61, majd XL; a végén): a 115×17 px-es névdoboz nem vágja le a címeket (SUB, A, B, C, NOISE, F1, F2, BUS 1/2, MAIN). Kész, ha olvashatók és nem vágódnak; ha vágódnak, a betűméret vagy a doboz változik.
 - [ ] Egyeztesd a `docs/release/DEVICE-CHECKLIST.md` nyitott próbáit a végleges csomag jegyzőkönyvével.
 - [ ] MixerStrip XL (teljes lap, 115 × 606 px csíkok): Solo/Mute/Implicit Dim/Source OFF/Master FX állapotok, −60..0 dBFS mérők, fader-skálafeliratok; valós sztereó mérők mind a 10 sávon (független L/R csúcs, hold, clip); peak/hold, érintés, Q-Link, presetváltás.
 - [ ] OSC A/B/C 48 px-es fejléc: PAN/LEVEL csak a kijelölt oszcillátort állítja, a ROUTE a célt mutatja és példányváltás után megmarad, OFF alatt védett.
