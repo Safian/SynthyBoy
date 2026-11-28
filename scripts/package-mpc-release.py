@@ -25,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import struct
 import subprocess
@@ -414,14 +415,11 @@ def package_mpc(
     if version is not None and not str(version).strip():
         version = None
     if not version:
-        version = manifest.get("version")
-        if not version:
-            root_manifest = repo_root / "plugin.json"
-            if root_manifest.is_file():
-                try:
-                    version = json.loads(root_manifest.read_text(encoding="utf-8")).get("version")
-                except Exception:
-                    pass
+        version_xml = plugin_dir / "version.xml"
+        if version_xml.is_file():
+            m = re.search(r"<version>\s*(\d+\.\d+\.\d+)\.\d+\s*</version>", version_xml.read_text(encoding="utf-8"))
+            if m:
+                version = m.group(1)
     if not version:
         raise PackageError("version could not be determined; specify --version")
     version = str(version).strip()
@@ -506,7 +504,7 @@ def main(argv=None):
         default="all",
         help="target architecture: all (default: two zips: armv7 and aarch64), armv7 (or arm32), aarch64 (or arm64), combined (single legacy zip)",
     )
-    parser.add_argument("--version", help="release version (default: from plugin.json)")
+    parser.add_argument("--version", help="release version (default: from version.xml)")
     parser.add_argument("--license", help="path to LICENSE file (default: from repo or plugin dir)")
 
     args = parser.parse_args(argv)

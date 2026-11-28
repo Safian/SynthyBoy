@@ -23,7 +23,16 @@ cmake_minimum_required(VERSION 3.22)
 # (arm64 on Apple Silicon); pass -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" for a universal build.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment target")
 
-project(SynthyBoy VERSION 0.1.0 LANGUAGES C CXX)
+# The product version has ONE source: <version>major.minor.patch.build</version> in mpc-package/version.xml (scripts/product_version.py reads the same file).
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/mpc-package/version.xml" SYNTHYBOY_VERSION_XML)
+if(NOT SYNTHYBOY_VERSION_XML MATCHES "<version>([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)</version>")
+    message(FATAL_ERROR "mpc-package/version.xml has no <version>major.minor.patch.build</version>")
+endif()
+set(SYNTHYBOY_PRODUCT_VERSION "${CMAKE_MATCH_1}")
+set(SYNTHYBOY_BUILD_NUMBER "${CMAKE_MATCH_2}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/mpc-package/version.xml")
+
+project(SynthyBoy VERSION ${SYNTHYBOY_PRODUCT_VERSION} LANGUAGES C CXX)
 
 # Compiler cache (optional): with ccache installed the compile steps of an unchanged translation unit are served from its cache (a rebuild after a branch switch or in a
 # fresh build directory). ON by default only when ccache is found; a missing ccache is never an error. A launcher the caller set (CMAKE_<LANG>_COMPILER_LAUNCHER) is kept.
@@ -46,7 +55,6 @@ elseif(SYNTHYBOY_USE_CCACHE)
     message(STATUS "ccache: not found (SYNTHYBOY_USE_CCACHE has no effect)")
 endif()
 
-set(SYNTHYBOY_BUILD_NUMBER 1)
 math(EXPR SYNTHYBOY_VST2_VERSION "${PROJECT_VERSION_MAJOR} * 1000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH} * 10 + ${SYNTHYBOY_BUILD_NUMBER}")
 
 # The version shown in Preferences / About (UiHost::aboutText, S15-20): the project version above, for every target (the plug-in shells and the tests)

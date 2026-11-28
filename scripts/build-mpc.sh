@@ -238,16 +238,23 @@ fi
 rm -rf "$plugin_folder/Plugin Skins"
 cp -R "${skins_dir:-$repo_root/skin}" "$plugin_folder/Plugin Skins"
 
-# plugin.json and version.xml: the committed files (mpc-package/ of SynthyBoy, package/ of the other plugin) are copied; plugin.json keeps file32 / file64 only for the binaries that exist
+# plugin.json and version.xml: the committed files (mpc-package/) are copied; plugin.json gets its version and build from version.xml and keeps file32 / file64 only for the binaries that exist
 # (a --skin-only folder without any binary keeps both). Nothing is generated.
 pkg_src="$repo_root/mpc-package"
 python3 -I - "$pkg_src/plugin.json" "$plugin_folder" "$skin_only" <<'PYTHON'
 import json
+import re
 import sys
 from pathlib import Path
 
 source, folder, skin_only = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] == "1"
 manifest = json.loads(source.read_text(encoding="utf-8"))
+# the product version has one source, <version>major.minor.patch.build</version> of version.xml; plugin.json gets "version" and "build" from it
+m = re.search(r"<version>\s*(\d+\.\d+\.\d+)\.(\d+)\s*</version>", (source.parent / "version.xml").read_text(encoding="utf-8"))
+if not m:
+    sys.exit("build-mpc.sh: no <version>major.minor.patch.build</version> in %s" % (source.parent / "version.xml"))
+manifest = {k: v for key, value in manifest.items() for k, v in (
+    [("version", m.group(1)), ("build", int(m.group(2))), (key, value)] if key == "description" else [(key, value)])}
 missing = [k for k in ("file32", "file64") if k in manifest and not (folder / manifest[k]).is_file()]
 present = [k for k in ("file32", "file64") if k in manifest and k not in missing]
 if not present and not skin_only:

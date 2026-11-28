@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,11 +34,12 @@ class TestProductVersion(unittest.TestCase):
         self.assertEqual(vst2_int, 101)
         self.assertEqual(four_part, "0.1.0.1")
 
-    def test_load_custom_manifest(self):
+    def test_load_custom_version_xml(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_root = Path(tmp_dir)
-            (tmp_root / "plugin.json").write_text(
-                json.dumps({"version": "1.2.3", "build": 4}),
+            (tmp_root / "mpc-package").mkdir()
+            (tmp_root / "mpc-package" / "version.xml").write_text(
+                "<plugincontent><version>1.2.3.4</version></plugincontent>",
                 encoding="utf-8",
             )
             version_text, build, vst2_int, four_part = product_version.load(tmp_root)

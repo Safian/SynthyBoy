@@ -52,7 +52,6 @@ class TestPackageMpcRelease(unittest.TestCase):
             "name": "SynthyBoy",
             "manufacturer": "Safian",
             "uid": "SfSB",
-            "version": "0.1.0",
             "format": "vst2",
             "kind": "instrument",
         }

@@ -13,9 +13,6 @@
 #       verifies DIR and writes OUTDIR/<id>-<version>.zip (contentpack.json + the listed files at the zip root, byte for byte
 #       reproducible: sorted entries, fixed timestamps), verifies the zip again and refuses a zip over --max-size (default
 #       2e9 bytes, GitHub's limit per release asset is 2 GiB): split such a pack per instrument with `split`.
-#   contentpack.py build-all --manifest plugin.json --out OUTDIR
-#       builds every pack that plugin.json declares in "contentPacks" (from its "path", relative to the manifest's folder) and checks
-#       that the zip is the pack plugin.json names (same id and version); the release job and scripts/make-local-release.sh use it.
 #   contentpack.py split --dir DIR --out OUTDIR
 #       one pack per top level directory of DIR (an instrument per directory): OUTDIR/<slug>/ with its own contentpack.json
 #       (id "<id>-<slug>", same version / licence / attribution), files hard-linked (copied where that is not possible).
@@ -24,7 +21,6 @@
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -50,15 +46,96 @@ class PackError(Exception):
     pass
 
 
-def _load_checker():
-    """scripts/check-manifest.py holds the JSON schema validator (loaded by path: its name has a hyphen)."""
-    spec = importlib.util.spec_from_file_location("sb_check_manifest", ROOT / "scripts" / "check-manifest.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+# A small JSON-schema validator (the keywords schema/contentpack.schema.json uses; stdlib only).
+ANNOTATIONS = {"$schema", "$id", "$defs", "title", "description", "default", "examples", "$comment"}
+SUPPORTED = {"type", "required", "enum", "const", "pattern", "properties", "additionalProperties", "items",
+             "minimum", "minLength", "maxLength", "minItems", "$ref"}
 
 
-_checker = _load_checker()
+def type_ok(value, name):
+    if name == "object":
+        return isinstance(value, dict)
+    if name == "array":
+        return isinstance(value, list)
+    if name == "string":
+        return isinstance(value, str)
+    if name == "boolean":
+        return isinstance(value, bool)
+    if name == "null":
+        return value is None
+    if name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool) or (isinstance(value, float) and value.is_integer())
+    if name == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    raise ValueError("unsupported type in schema: %r" % name)
+
+
+def resolve(root, ref):
+    if not ref.startswith("#/"):
+        raise ValueError("only local $ref is supported: %r" % ref)
+    node = root
+    for part in ref[2:].split("/"):
+        node = node[part.replace("~1", "/").replace("~0", "~")]
+    return node
+
+
+def validate(value, schema, root, path, errors):
+    if isinstance(schema, bool):
+        if not schema:
+            errors.append("%s: not allowed" % path)
+        return
+    for key in schema:
+        if key not in SUPPORTED and key not in ANNOTATIONS:
+            raise ValueError("schema keyword not supported by contentpack.py: %r" % key)
+
+    if "$ref" in schema:
+        validate(value, resolve(root, schema["$ref"]), root, path, errors)
+
+    if "type" in schema:
+        types = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
+        if not any(type_ok(value, t) for t in types):
+            errors.append("%s: expected type %s, got %s" % (path, "/".join(types), type(value).__name__))
+            return
+
+    if "enum" in schema and value not in schema["enum"]:
+        errors.append("%s: %r is not one of %r" % (path, value, schema["enum"]))
+    if "const" in schema and value != schema["const"]:
+        errors.append("%s: must be %r" % (path, schema["const"]))
+
+    if isinstance(value, str):
+        if "pattern" in schema and re.search(schema["pattern"], value) is None:
+            errors.append("%s: %r does not match %s" % (path, value, schema["pattern"]))
+        if "minLength" in schema and len(value) < schema["minLength"]:
+            errors.append("%s: shorter than %d" % (path, schema["minLength"]))
+        if "maxLength" in schema and len(value) > schema["maxLength"]:
+            errors.append("%s: longer than %d" % (path, schema["maxLength"]))
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in schema and value < schema["minimum"]:
+            errors.append("%s: %r is below %r" % (path, value, schema["minimum"]))
+
+    if isinstance(value, dict):
+        for name in schema.get("required", []):
+            if name not in value:
+                errors.append("%s: missing required property %r" % (path, name))
+        props = schema.get("properties", {})
+        for name, sub in props.items():
+            if name in value:
+                validate(value[name], sub, root, "%s.%s" % (path, name), errors)
+        extra = schema.get("additionalProperties", True)
+        for name in value:
+            if name not in props:
+                if extra is False:
+                    errors.append("%s: unexpected property %r" % (path, name))
+                elif isinstance(extra, dict):
+                    validate(value[name], extra, root, "%s.%s" % (path, name), errors)
+
+    if isinstance(value, list):
+        if "minItems" in schema and len(value) < schema["minItems"]:
+            errors.append("%s: fewer than %d items" % (path, schema["minItems"]))
+        if "items" in schema:
+            for i, item in enumerate(value):
+                validate(item, schema["items"], root, "%s[%d]" % (path, i), errors)
 
 
 def sha256_file(path):
@@ -75,7 +152,7 @@ def sha256_file(path):
 def schema_errors(manifest, label):
     schema = json.loads((ROOT / "schema" / "contentpack.schema.json").read_text(encoding="utf-8"))
     errors = []
-    _checker.validate(manifest, schema, schema, label, errors)
+    validate(manifest, schema, schema, label, errors)
     return errors
 
 
@@ -391,25 +468,6 @@ def cmd_build(args):
     return 0
 
 
-def cmd_build_all(args):
-    manifest_file = Path(args.manifest)
-    try:
-        plugin = json.loads(manifest_file.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
-        raise PackError("cannot read %s: %s" % (manifest_file, e))
-    packs = plugin.get("contentPacks", [])
-    if not packs:
-        raise PackError("%s declares no contentPacks" % manifest_file)
-    for cp in packs:
-        pack_dir = manifest_file.resolve().parent / cp["path"]
-        summary = build_pack(pack_dir, args.out, args.max_size)
-        if summary["id"] != cp["id"] or summary["version"] != cp["version"]:
-            raise PackError("%s declares %s %s but %s holds %s %s" % (manifest_file.name, cp["id"], cp["version"], cp["path"],
-                                                                      summary["id"], summary["version"]))
-        print("built %s: %d bytes, sha256 %s, %d files" % (summary["file"], summary["size"], summary["sha256"], summary["files"]))
-    return 0
-
-
 def cmd_split(args):
     for item in split_pack(args.dir, args.out):
         print("%s  %s  (%d files, %d bytes)" % (item["id"], item["path"], item["files"], item["bytes"]))
@@ -440,12 +498,6 @@ def main(argv=None):
     p.add_argument("--max-size", type=int, default=DEFAULT_MAX_BYTES)
     p.add_argument("--summary")
     p.set_defaults(func=cmd_build)
-
-    p = sub.add_parser("build-all", help="build every pack that plugin.json declares")
-    p.add_argument("--manifest", default=str(ROOT / "plugin.json"))
-    p.add_argument("--out", required=True)
-    p.add_argument("--max-size", type=int, default=DEFAULT_MAX_BYTES)
-    p.set_defaults(func=cmd_build_all)
 
     p = sub.add_parser("split", help="one pack per top level directory")
     p.add_argument("--dir", required=True)

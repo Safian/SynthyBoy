@@ -1,4 +1,4 @@
-# SynthyBoy - tests of the release scripts (package-release.py, fill-manifest.py, check-manifest.py) and of plugin.json. Added by the
+# SynthyBoy - tests of the Python scripts (release packaging, skin, presets, docs). Added by the
 # top level CMakeLists.txt when SYNTHYBOY_BUILD_TESTS is ON.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -10,7 +10,4 @@ if(Python3_Interpreter_FOUND)
     # label `slow` (more than about 5 s alone: `ctest -LE slow` is the quick set, docs/dsp-knowledge/testing.md)
     set_tests_properties(synthyboy_test_release_scripts PROPERTIES LABELS slow)
 
-    # the checked-in plugin.json against schema/plugin-manifest.schema.json, CMakeLists.txt and the content packs it declares
-    add_test(NAME synthyboy_manifest_check
-             COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/scripts/check-manifest.py")
 endif()
