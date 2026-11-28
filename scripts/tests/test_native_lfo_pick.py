@@ -43,6 +43,7 @@ class LfoPickTest(unittest.TestCase):
         cls.doc = json.loads((ROOT / "docs" / "params.json").read_text(encoding="utf-8"))
         cls.tmp = tempfile.TemporaryDirectory()
         cls.ctx = Context(cls.doc, cls.tmp.name)
+        cls.ctx.add_component_definition("lfoNativeFullEditor", {"componentsData": []})
         lfo_pick.apply(cls.ctx.tui, {}, cls.ctx)
         cls.page = cls.ctx.tui["pageData"]
         cls.base = handles.native_base_index(cls.ctx.param_count)
@@ -53,13 +54,19 @@ class LfoPickTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def test_handle_block_is_contiguous_and_after_the_reserved_text_edit_handles(self):
-        self.assertEqual(handles.TEXT_EDIT_RESERVED, handles.LFO_TARGETS_ACTION + 1)
-        self.assertEqual(handles.LFO_PICK, handles.TEXT_EDIT_RESERVED + handles.TEXT_EDIT_RESERVED_COUNT)
+    def test_handle_block_follows_the_band_lanes_and_matches_the_cpp_constants(self):
+        self.assertEqual(handles.LFO_PICK, handles.FX_BANDS + handles.FX_BANDS_LANES * handles.FX_BANDS_LANE_HANDLES)
         self.assertEqual(handles.NATIVE_PARAMS, handles.LFO_PICK + handles.LFO_PICK_HANDLES)
         header = (ROOT / "shell-mpc" / "native_ui_params.h").read_text(encoding="utf-8")
         self.assertIn("constexpr int kLfoPickHandles = %d;" % handles.LFO_PICK_HANDLES, header)
-        self.assertIn("constexpr int kTextEditReservedCount = %d;" % handles.TEXT_EDIT_RESERVED_COUNT, header)
+        self.assertIn("constexpr int kLfoPick = kFxBandLanes + fxbands::kHandles;", header)
+
+    def test_point_source_cells_are_in_the_shared_editor(self):
+        editor = self.definitions["lfoNativeFullEditor"]["componentsData"]
+        names = [c["componentData"]["name"] for c in editor]
+        self.assertIn("LFO 1 Native Detail SOURCE", names)
+        self.assertIn("LFO 1 Native Detail SOURCE unavailable 0", names)
+        self.assertEqual(len(self.strings[f"Parameter {self.base + handles.LFO_PICK_SOURCE}"]), 58)
 
     def test_only_the_lfo_tabs_and_play_carry_the_choices(self):
         carrying = {tab["tabName"] for tab in self.page["tabs"] if tab["componentDefinition"]["componentsData"]}

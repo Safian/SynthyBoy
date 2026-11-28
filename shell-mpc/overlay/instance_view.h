@@ -15,6 +15,7 @@
 #include "../native_fx_cells.h"
 #include "../native_fx_header.h"
 #include "../native_fx_chain.h"
+#include "../native_fx_bands.h"
 #include "../native_play_env_lfo.h"
 #include "../spectrum.h"
 #include "../ui/clip_hold.h"
@@ -124,6 +125,8 @@ public:
     virtual void setNativeFxChain (const nativeui::fxchain::State&) noexcept {}
     virtual void setNativeFxAddPopup (bool /*active*/) noexcept {}
     virtual bool takeNativeFxChain (int /*field*/, const nativeui::fxchain::State&, float& /*value*/) noexcept { return false; }
+    virtual void setNativeFxBands (const nativeui::fxbands::State&) noexcept {}
+    virtual bool takeNativeFxBands (int /*handle*/, const nativeui::fxbands::State&, float& /*value*/) noexcept { return false; }
     virtual void setNativeFilterControls (int /*view*/, const nativeui::FxCell* /*cells*/, const float* /*curveValues*/, const int* /*indicators*/) noexcept {}
     virtual bool takeNativeFilterSlot (int /*slot*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
     virtual bool nativeMacroTargetsSupported() const noexcept { return false; }

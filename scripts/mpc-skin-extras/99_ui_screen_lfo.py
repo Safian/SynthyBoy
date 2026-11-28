@@ -169,7 +169,7 @@ REBUILT_NATIVE_COMPONENTS = (
         "kind": "lfoDetailRow / lfoDetailHeader",
         "rect": tuple(_ui_style.size('screen.ui_screen_lfo.rect.rect.14')),
         "role": "Szerkesztett pontok és modulációk részletes listanézete",
-        "status": "MEGÉPÍTETT (20 Shape Detail widget)",
+        "status": "MEGÉPÍTETT (18 Shape Detail widget)",
     },
 )
 
@@ -328,8 +328,8 @@ def apply(tui, qlinks, ctx):
         raise ValueError("Expected twelve layout-gated native LFO group captions")
     if len(editor_items) != 29:
         raise ValueError(f"Expected 29 Shape Editor widgets, found {len(editor_items)}")
-    if len(detail_items) != 20:   # 18 and the SOURCE choice of the point modulation with its unavailable face
-        raise ValueError(f"Expected 20 Shape Detail widgets, found {len(detail_items)}")
+    if len(detail_items) != 18:
+        raise ValueError(f"Expected 18 Shape Detail widgets, found {len(detail_items)}")
 
     # 5. Verify widget dimensions: min(w, h) >= 56 for interactive cells, fit within 1280x628
     for item in root_items:

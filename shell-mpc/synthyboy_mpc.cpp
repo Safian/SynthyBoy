@@ -588,6 +588,14 @@ struct PluginInstance
         {
             return inst.nativeFxChain.take (field, state, value);
         }
+        void setNativeFxBands (const nativeui::fxbands::State& state) noexcept override
+        {
+            inst.nativeFxBands.publish (state, inst.stateGeneration.load (std::memory_order_acquire));
+        }
+        bool takeNativeFxBands (int handle, const nativeui::fxbands::State& state, float& value) noexcept override
+        {
+            return inst.nativeFxBands.take (handle, state, value);
+        }
         void setNativeFilterControls (int view, const nativeui::FxCell* cells, const float* fields, const int* indicators) noexcept override
         {
             for (int i = 0; i < 2 * nativeui::kFilterCurveFields; ++i)
@@ -1767,6 +1775,7 @@ struct PluginInstance
     nativeui::FxCellBank nativeFxCells;
     nativeui::fxheader::Bank nativeFxHeader;
     nativeui::fxchain::Bank nativeFxChain;
+    nativeui::fxbands::Bank nativeFxBands;
     nativeui::lfo::Bank nativeLfo;
     uint64_t nativeLfoAnnounced = 0;
     nativeui::lfoeditor::Bank nativeLfoEditor;
@@ -2045,8 +2054,8 @@ struct PluginInstance
             return handle == n::kViewHandle ? static_cast<float> (nativeLfoPick.view()) / n::LastView
                                             : nativeLfoPick.value (n::handleField (handle));
         }
-        if (nativeui::isTextEditReservedOffset (offset))
-            return 0.0f;
+        if (nativeui::isFxBandsOffset (offset))
+            return nativeFxBands.value (offset - nativeui::kFxBandLanes);
         if (offset == nativeui::kLfoTargetsAction)
             return 0.0f;
         if (offset == nativeui::kFxEditorPower)
@@ -2661,6 +2670,14 @@ struct PluginInstance
         return labelChanged;
     }
 
+    bool nativeFxBandsPoll (AEffect* e)
+    {
+        return nativeFxBands.poll ([&] (int handle, float value, bool force)
+        {
+            reportNativeValue (e, nativeui::kFxBandLanes + handle, value, force);
+        });
+    }
+
     void refreshNativeMixerVisuals() noexcept
     {
         if (! nativeMixerActive.load (std::memory_order_relaxed) || engine == nullptr)
@@ -2723,6 +2740,7 @@ struct PluginInstance
         const float currentFxSource = nativeUiReported[nativeui::kFxHeader];
         fxCardChangedThisPoll = previousFxSource > 0.0f && currentFxSource > 0.0f && previousFxSource != currentFxSource;
         fxLabelsChanged |= nativeFxChainPoll (e);
+        fxLabelsChanged |= nativeFxBandsPoll (e);
         nativeLfoPoll (e);
         nativeLfoEditorPoll (e);
         nativeLfoDetailPoll (e);
@@ -4268,16 +4286,29 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             // may supply an uninitialised buffer while enumerating a saved track.
             buf[0] = '\0';
             const int offset = index - PluginInstance::nativeUiBase();
+            if (nativeui::isFxBandsOffset (offset))
+            {
+                namespace b = nativeui::fxbands;
+                const int handle = offset - nativeui::kFxBandLanes;
+                const int lane = handle / b::kLaneHandles + 1, field = handle % b::kLaneHandles;
+                if (opcode == effGetParamName)
+                {
+                    constexpr const char* fixed[] { "State", "Range", "Info", "Count", "Open", "Add", "Add Available" };
+                    if (field < b::Select)
+                        std::snprintf (buf, kCap, "FX Band %d %s", lane, fixed[field]);
+                    else if (field < b::Power)
+                        std::snprintf (buf, kCap, "FX Band %d Select %d", lane, field - b::Select + 1);
+                    else
+                        std::snprintf (buf, kCap, "FX Band %d Power %d", lane, field - b::Power + 1);
+                }
+                else if (opcode == effGetParamDisplay)
+                    inst->nativeFxBands.text (handle, buf, kCap);
+                return 1;
+            }
             if (offset == nativeui::kLfoTargetsAction)
             {
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, "LFO Targets");
-                return 1;
-            }
-            if (nativeui::isTextEditReservedOffset (offset))
-            {
-                if (opcode == effGetParamName)
-                    std::snprintf (buf, kCap, "Text Edit %d", offset - nativeui::kTextEditReserved + 1);
                 return 1;
             }
             if (nativeui::isLfoPickOffset (offset))
@@ -5698,13 +5729,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
 #if SYNTHYBOY_MPC_OVERLAY
         const int nativeOffset = index - PluginInstance::nativeUiBase();
-        if (nativeui::isTextEditReservedOffset (nativeOffset))
-        {
-            std::memset (props, 0, sizeof (*props));
-            props->flags = kVstParameterUsesIntegerMinMax;
-            props->maxInteger = props->stepInteger = 1;
-            return 1;
-        }
         if (nativeui::isLfoPickOffset (nativeOffset))
         {
             namespace n = nativeui::lfopick;
@@ -5716,6 +5740,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->maxInteger = std::max (1, last);
             props->stepInteger = 1;
             props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+            return 1;
+        }
+        if (nativeui::isFxBandsOffset (nativeOffset))
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax;
+            props->maxInteger = nativeui::fxbands::maxOf ((nativeOffset - nativeui::kFxBandLanes) % nativeui::fxbands::kLaneHandles);
+            if (props->maxInteger == 1)
+                props->flags |= kVstParameterIsSwitch;
+            props->stepInteger = 1;
             return 1;
         }
         if (nativeOffset == nativeui::kFxEditorPower || nativeOffset == nativeui::kLfoTargetsAction)
@@ -6632,13 +6666,17 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
-                if (nativeui::isTextEditReservedOffset (offset))
-                    return;
                 if (nativeui::isLfoPickOffset (offset))
                 {
                     const int field = nativeui::lfopick::handleField (offset - nativeui::kLfoPick);
                     if (field >= 0 && std::isfinite (parameter) && std::fabs (parameter - inst->nativeLfoPick.value (field)) > 1.0e-6f)
                         inst->nativeLfoPick.post (inst->nativeLfoPick.at (field), parameter);
+                    return;
+                }
+                if (nativeui::isFxBandsOffset (offset))
+                {
+                    if (std::fabs (parameter - inst->nativeUiValue (offset)) > 1.0e-6f)
+                        inst->nativeFxBands.post (offset - nativeui::kFxBandLanes, parameter, inst->stateGeneration.load (std::memory_order_acquire));
                     return;
                 }
                 if (offset == nativeui::kLfoTargetsAction)

@@ -50,7 +50,7 @@ def validate():
         elif path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
             if filename in retired:
                 errors.append(f'{filename}: retired screenshot; use docs/screens/<screen>.jpg')
-            elif filename not in assets and not filename.startswith(('components/native/', 'scripts/mpc-skin-extras/overlay-backgrounds/')):
+            elif filename not in assets and not filename.startswith(('components/native/', 'skin/', 'scripts/mpc-skin-extras/overlay-backgrounds/')):
                 errors.append(f'{filename}: screenshot must be in docs/screens; a genuine non-screen asset must be declared in scripts/screen-assets.json')
             elif '/overlay-backgrounds/preview/' in filename:
                 errors.append(f'{filename}: screenshot previews are not operational background assets')

@@ -43,7 +43,6 @@ _spec_99_lfo.loader.exec_module(ui_screen_lfo_extra)
 
 class MockContext:
     def __init__(self, params_dict):
-        self.doc = params_dict
         self.params = params_dict["params"]
         self._index = {p["key"]: i for i, p in enumerate(self.params)}
         self.param_count = len(self.params)
@@ -145,7 +144,7 @@ class TestUiScreenLfo(unittest.TestCase):
         self.assertEqual(tab["qlinkBoundsData"], [])
 
     def test_all_contract_counts(self):
-        """Verify the 29 base standalone widgets, 29 Shape Editor widgets, and 20 Shape Detail widgets."""
+        """Verify the 29 base standalone widgets, 29 Shape Editor widgets, and 18 Shape Detail widgets."""
         lfo_extra_53.apply(self.ctx.tui, {}, self.ctx)
         ui_screen_lfo_extra.apply(self.ctx.tui, {}, self.ctx)
 
@@ -159,7 +158,7 @@ class TestUiScreenLfo(unittest.TestCase):
 
         self.assertEqual(len(root), 29)
         self.assertEqual(len(editor), 29)
-        self.assertEqual(len(detail), 20)
+        self.assertEqual(len(detail), 18)
 
     def test_preview_images_present_and_valid(self):
         """Generated preview images exist, have valid dimensions, and have 0 yellow Q-Link badge pixels."""

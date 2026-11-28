@@ -16,6 +16,7 @@ gated by the page of the editor (the LFO tabs and the Play page's expanded LFO) 
 the other owners of the shared editor (Macros, Env, Filter, Mod, Osc) keep their own ADD cell.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -63,12 +64,45 @@ def _choice(ctx, kind, rect, caption):
         label_height=_style.size("screen.lfo_smooth.choice.label_height")))
 
 
+POINT_SOURCE_RECT = [636, 24, 220, 56]   # the SOURCE choice of the point modulation page, right of REMOVE (native_lfo_pick.h)
+
+
+def _is_lfo_tab(name):
+    return name in LFO_TAB_NAMES or re.fullmatch(r"(LFO|RND) \d+", name) is not None
+
+
+def point_source_cells(ctx, tui):
+    """SOURCE of a point modulation: two cells (available / unavailable face) inside the shared `lfoNativeFullEditor`, beside REMOVE, available like MODULATE (points selected)."""
+    from native_ui_params import LFO_DETAIL, LFO_PICK_SOURCE
+    page = tui["pageData"]
+    definitions = {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}
+    editor = definitions["lfoNativeFullEditor"]["componentsData"]
+    if any(c["componentData"]["name"] == "LFO 1 Native Detail SOURCE" for c in editor):
+        return
+    base = native_base_index(ctx.param_count)
+    detail = base + LFO_DETAIL
+    point_view, point = f"IndexedEnabling/1/4/Parameter {detail}", f"Parameter {detail + 5}"
+    source = f"Parameter {base + LFO_PICK_SOURCE}"
+    kind = "lfoNativeChoice_220x56_source"
+    _choice(ctx, kind, POINT_SOURCE_RECT, "SOURCE")
+    inactive = _style.apply_control_state(
+        {d["key"]: d["value"] for d in page["componentDefinitions"]["localComponentDefinitions"]}[kind], ctx.skins_dir, active=False)
+    ctx.add_component_definition(kind + "Inactive", inactive)
+    editor.append(_entry("LFO 1 Native Detail SOURCE", kind, POINT_SOURCE_RECT, (("Data", source),),
+                         (point_view, f"RangedEnabling/1/4/5/{point}"), "Yes"))
+    editor.append(_entry("LFO 1 Native Detail SOURCE unavailable 0", kind + "Inactive", POINT_SOURCE_RECT, (("Data", source),),
+                         (point_view, f"IndexedEnabling/0/5/{point}"), "No"))
+    page.setdefault("replacementStrings", []).append(
+        {"key": source, "value": ["NONE"] + [m["name"] for m in sorted(ctx.doc["modSources"], key=lambda m: int(m["choice"]))]})
+
+
 def apply(tui, qlinks, ctx):
     if (ctx.meta or {}).get("variant") != "overlay":
         return
-    tabs = [tab for tab in tui["pageData"]["tabs"] if tab["tabName"] in (*LFO_TAB_NAMES, "Play")]
+    tabs = [tab for tab in tui["pageData"]["tabs"] if _is_lfo_tab(tab["tabName"]) or tab["tabName"] == "Play"]
     if not tabs:
         return
+    point_source_cells(ctx, tui)
     groups = destination_groups(ctx.doc)
     if len(groups) > LFO_PICK_MAX_GROUPS:
         raise ValueError("the matrix has %d destination groups, native_lfo_pick.h holds %d" % (len(groups), LFO_PICK_MAX_GROUPS))

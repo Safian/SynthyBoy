@@ -21,15 +21,15 @@
 
 namespace synthyboy_mpc { namespace overlay {
 
-/** The lanes of the page of a splitter: per band the tile (name, range, state) and the cards of its rack, as plain data. */
+/** The lanes of the page of a splitter as plain data: per band the facts of the tile and the cards of its rack (the native band lanes draw them, nativeui::fxbands). */
 struct FxBandData
 {
     static constexpr int kMaxBands = 3, kMaxCards = 13;
-    struct Card { int slot = 0, type = 0, rack = 0; bool on = false, selected = false; char name[24] = {}; };
+    struct Card { int item = -1, type = 0; bool on = false; };
     struct Lane
     {
-        char name[16] = {}, range[32] = {}, info[24] = {};
-        int colour = 0, numCards = 0;
+        int kind = 0, band = 0, colour = 0, numCards = 0;
+        float low = 0.0f, high = 0.0f;   // the crossover frequencies in Hz
         bool bypassed = false, idle = false, addEnabled = true;
         Card cards[kMaxCards];
     };

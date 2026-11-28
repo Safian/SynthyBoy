@@ -125,15 +125,20 @@ constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = kFilterChainRoutes - 1;   // the routing only (Parallel, F1 to F2, F2 to F1)
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
 constexpr int kLfoTargetsAction = kFxEditorPower + 1;
-// Three handles are RESERVED for the native text keyboard (TextEdit Context, Key, Text: scripts/mpc-skin-extras/96_native_keyboard.py builds the skin on them); they stay before the LFO choices so that no packaged index moves.
-constexpr int kTextEditReserved = kLfoTargetsAction + 1;
-constexpr int kTextEditReservedCount = 3;
-// The host choices of the LFO (native_lfo_pick.h): the SOURCE of a point modulation, ADD SOURCE and ADD TARGET (GROUP and one TARGET list per group).
-constexpr int kLfoPick = kTextEditReserved + kTextEditReservedCount;
+// The band lanes of an FX splitter (components/native/band_lane): lane after lane, kLaneHandles each (shell-mpc/native_fx_bands.h, scripts/native_ui_params.py).
+namespace fxbands
+{
+constexpr int kLanes = 3, kCards = 13;
+enum Field { Tile = 0, Range = 1, Info = 2, Count = 3, Open = 4, Add = 5, AddAvail = 6, Select = 7, Power = Select + kCards, kLaneHandles = Power + kCards };
+constexpr int kHandles = kLanes * kLaneHandles;
+}
+constexpr int kFxBandLanes = kLfoTargetsAction + 1;
+// The host choices of the LFO (native_lfo_pick.h): the SOURCE of a point modulation, ADD SOURCE and ADD TARGET (GROUP and one TARGET list per group); appended after the band lanes.
+constexpr int kLfoPick = kFxBandLanes + fxbands::kHandles;
 constexpr int kLfoPickHandles = 44;
 constexpr int kCount = kLfoPick + kLfoPickHandles;
-constexpr bool isTextEditReservedOffset (int offset) noexcept { return offset >= kTextEditReserved && offset < kLfoPick; }
 constexpr bool isLfoPickOffset (int offset) noexcept { return offset >= kLfoPick && offset < kCount; }
+constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kCount; }
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }
