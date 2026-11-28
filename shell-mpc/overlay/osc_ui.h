@@ -508,7 +508,7 @@ public:
 
     // ---- the lists and the note mask as native cells
     /** The list on the screen as the cells of the modulation picker (nativeui::modboard, the skin of 72_osc_lists.py): kListRows rows a page, BACK, the way UP (the header of a browser) or the groups of the sources, PREVIOUS and NEXT.
-        The names are the plugin's (IInstanceView::setNativeListText), the taps come back through takeNativeModBoard and make the same changes the plugin-drawn list made (kList, kListBackdrop, kListHeader). */
+        The names are the plugin's (IInstanceView::setNativeListText), the taps come back through takeNativeModBoard and make the same changes the overlay list made (kList, kListBackdrop, kListHeader). */
     void publishNativeLists (IInstanceView& inst, UiStack& stack)
     {
         namespace nb = nativeui::modboard;

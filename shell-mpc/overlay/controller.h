@@ -243,7 +243,7 @@ public:
         return slots_.slotOf (view);
     }
 
-    // ---- the plugin-drawn pages of an instance (ui_stack.h): main -> full(element) -> detail(page) ... Per instance (slot), never saved. The UI (the overlay thread) calls these; the lock makes them safe
+    // ---- the overlay pages of an instance (ui_stack.h): main -> full(element) -> detail(page) ... Per instance (slot), never saved. The UI (the overlay thread) calls these; the lock makes them safe
     // against attach / detach. The whole stack of an instance closes when its page is no longer on screen (closeUiWhenLeft).
     bool openFull (int slot, int element) { return withUi (slot, [&] (UiStack& u) { return u.openFull (element); }); }
     bool openDetail (int slot, int page) { return withUi (slot, [&] (UiStack& u) { return u.openDetail (page); }); }
@@ -373,7 +373,7 @@ public:
             if (gpu_)
                 wait = guardRetry_.limit (wait, guardWatch_, guardWatchEpoch_);   // woken on the vblank timer ONLY while a guard is pending (counted); at rest the wait is the step's own
             if ((touchIn_ != nullptr || mouse_) && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
-                wait = std::min (wait, kTouchPollMs);   // the plugin-drawn pages are on screen: look at the touch screen often
+                wait = std::min (wait, kTouchPollMs);   // the overlay pages are on screen: look at the touch screen often
             tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - tickStartedAt_).count());
             return wait;
         }
@@ -609,7 +609,7 @@ private:
                 }
                 if (d.slot == kSlotUnknown && activeSlot_ >= 0 && slots_.at (activeSlot_) != nullptr && (! ui_[activeSlot_].isMain() || nowMs < blankGraceUntilMs_[activeSlot_]) && isUiPage (view))
                 {
-                    slot = activeSlot_;   // the plugin-drawn full screen is open for this instance (or was closed a moment ago): the instance reports the frame the skin hides the host widgets at (a blank picture), by design
+                    slot = activeSlot_;   // the overlay full screen is open for this instance (or was closed a moment ago): the instance reports the frame the skin hides the host widgets at (a blank picture), by design
                 }
                 else if (d.slot == kSlotUnknown)
                 {
@@ -1007,7 +1007,7 @@ private:
         return factory_.make (pages_.page (i));   // (the plugin's factory: SynthyBoy's is in pages.h)
     }
 
-    /** The touch screen is read for the plugin-drawn pages only while a view of the Play page is on screen (by what the last page check said). */
+    /** The touch screen is read for the overlay pages only while a view of the Play page is on screen (by what the last page check said). */
     bool touchEligible() const noexcept { return ! nativeParameterModal_ && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0 && presenter_.opened(); }
 
     const char* nativeEditorStatus() const noexcept
@@ -1194,7 +1194,7 @@ private:
         needFrame_ = true;
     }
 
-    /** The mouse: like the touch screen only while a plugin-drawn page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
+    /** The mouse: like the touch screen only while a overlay page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
     void pollMouse (double nowMs)
     {
         if (! mouse_)
@@ -2007,7 +2007,7 @@ private:
 
     std::mutex mu_;
     InstanceSlots slots_;                    // under mu_
-    UiStack ui_[mpckit::kMaxInstances];      // under mu_: the plugin-drawn pages of the instance in each slot
+    UiStack ui_[mpckit::kMaxInstances];      // under mu_: the overlay pages of the instance in each slot
     int uiGroup_[mpckit::kMaxInstances];     // under mu_: the group of views (ensureUiPage) the stack of each slot belongs to; -1: none yet
     bool uiOpenSeen_[mpckit::kMaxInstances] = {};         // under mu_: the stack of each slot was not in main at the last page check
     double blankGraceUntilMs_[mpckit::kMaxInstances] = {};   // under mu_: until when a blank instance picture still keeps the page of that slot (the stack went to main at a check)

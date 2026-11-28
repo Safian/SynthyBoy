@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: what the plugin-drawn element UIs (env_ui.h, and the ones to come) share when they bind library components to the engine's parameters: the table lookups, the writes through
+// SynthyBoy - MPC overlay: what the overlay element UIs (env_ui.h, and the ones to come) share when they bind library components to the engine's parameters: the table lookups, the writes through
 // IInstanceView (normalised, the plugin tells the host), the text of a value with its unit, and the modulation matrix seen from a parameter (which slots move it) and from a source (which slots it drives).
 // Pure: no OS headers, no state. The same code is in osc_ui.h as private members (the oscillator UI was first); the element UIs use this file.
 // Copyright (C) 2026 Safian Szabolcs

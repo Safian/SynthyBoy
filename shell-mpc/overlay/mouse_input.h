@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: a USB mouse on the plugin-drawn pages, as one finger. The mouse is read from its evdev node (the buttons and the wheel only, read only, never grabbed: the host keeps getting its
+// SynthyBoy - MPC overlay: a USB mouse on the overlay pages, as one finger. The mouse is read from its evdev node (the buttons and the wheel only, read only, never grabbed: the host keeps getting its
 // events), the position is NOT integrated from the relative movements: the host owns the pointer and its acceleration, so the position is read from the host's pointer plane (the application's small plane on
 // our CRTC: its CRTC_X / CRTC_Y), moved by the arrow's hot spot, and mapped to the UI with the rotation mapping the overlay already has (geometry.h). Left button = touch down / up, movement with the button
 // held = touch move (read at the display rate), the wheel = steps of the control under the pointer. Pure logic here: the decoder of the evdev events, the interfaces, the hot spot and the mapping.

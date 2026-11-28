@@ -1160,7 +1160,7 @@ struct PluginInstance
         }
         return s;
     }
-    // ---- the drawn shapes of the LFOs the plugin-drawn LFO page writes (overlay/lfo_ui.h): the overlay thread posts the shape (the latest per LFO wins), the display thread puts it into the content (under `contentMutex`
+    // ---- the drawn shapes of the LFOs the overlay LFO page writes (overlay/lfo_ui.h): the overlay thread posts the shape (the latest per LFO wins), the display thread puts it into the content (under `contentMutex`
     // like every change of `content`), gives it to the engine and to the overlay's copy. A shape the content validation would refuse (it would make saveState drop the whole section) is not applied.
     std::mutex lfoShapeMutex;
     synthyboy::ContentLfoShape lfoShapeReq[synthyboy::kMaxContentLfoShapes];
@@ -1213,7 +1213,7 @@ struct PluginInstance
         engine->setContent (content);
         publishOverlayContent();
     }
-    // ---- the NOTE / VELO curves the plugin-drawn curve editor writes (overlay/scalar_curve_ui.h): the same hand-over as the LFO shapes (the overlay thread posts, the latest per source wins; the display thread puts the points into the
+    // ---- the NOTE / VELO curves the overlay curve editor writes (overlay/scalar_curve_ui.h): the same hand-over as the LFO shapes (the overlay thread posts, the latest per source wins; the display thread puts the points into the
     // content under `contentMutex`, gives it to the engine and to the overlay's copy; a curve the content validation would refuse is not applied and the old one stays).
     std::mutex scalarCurveMutex;
     std::vector<synthyboy::ContentPoint> scalarCurveReq[2];
@@ -1672,7 +1672,7 @@ struct PluginInstance
     }
 #endif
 
-    // ---- the writes of the plugin-drawn pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
+    // ---- the writes of the overlay pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
     // own widgets follow. The overlay thread sets the dirty bit, the display thread reports it (one value per parameter, the latest).
     std::atomic<int> playLastSel { 0 };                          // 0 none, 1 envelope, 2 LFO: which of the two Play selectors was set last (the modulation source the UI calls "selected")
     std::atomic<uint64_t> uiDirty[synthyboy::kMaxParams / 64] {};
@@ -1691,7 +1691,7 @@ struct PluginInstance
     }
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
     /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-ui-fake-write exists (SYNTHYBOY_MPC_UI_FAKE_WRITE changes the path) its first line "key plainvalue" is written through uiWrite, the path the
-        plugin-drawn pages use (so the host's reaction can be looked at while ANOTHER page is on screen); the file is deleted. Display thread. Read with safe_file.h (a FIFO, a symlink or a huge file is ignored). */
+        overlay pages use (so the host's reaction can be looked at while ANOTHER page is on screen); the file is deleted. Display thread. Read with safe_file.h (a FIFO, a symlink or a huge file is ignored). */
     void uiFakeWrite()
     {
         static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_UI_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-ui-fake-write"); }();
@@ -3124,7 +3124,7 @@ struct PluginInstance
         flushProxyNames (e, steadyMs());
     }
     /** The group changed: the names, units and value texts of the Q proxies are other now. The host keeps what it read for good unless it is told (measured on the Key 61, docs/MPC.md "Q proxies and the
-        plugin-drawn pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
+        overlay pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
     void qNotifyGroup (AEffect* e)
     {
         audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
@@ -3326,7 +3326,7 @@ struct PluginInstance
     // when the display thread reports it (audioMasterAutomate): once after creation, when the value changes and whenever the overlay thread asks (requestOverlayReport).
     std::atomic<int> overlaySlot { -1 };                       // the slot the overlay service gave this instance (-1: none, the instance never shows the overlay)
     std::atomic<float> overlayValue { synthyboy_mpc::overlay::instanceParamValue (-1) };   // what getParameter says: slot, or what the debug file asks for
-    std::atomic<bool> uiFullOpen { false };                    // a plugin-drawn full screen page is open for this instance: the frame the skin hides the host widgets of the Play page at
+    std::atomic<bool> uiFullOpen { false };                    // a overlay full screen page is open for this instance: the frame the skin hides the host widgets of the Play page at
     std::atomic<bool> overlayReportDue { false };              // set by any thread; the display thread makes the host call
     std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
     bool overlayStaleReleased = false;                         // display thread only
@@ -3539,7 +3539,7 @@ struct PluginInstance
         display.add ("Native UI", [&] { nativeUiPoll (e); });
         display.add ("macro name", [&] { injectFault ("macro"); macroNamePoll(); });
         display.add ("Q proxies", [&] { injectFault ("q"); qPoll (e); });                                                          // the Q proxies after them
-        display.add ("page writes", [&] { injectFault ("ui"); uiPoll (e); });                                                      // what the plugin-drawn pages wrote
+        display.add ("page writes", [&] { injectFault ("ui"); uiPoll (e); });                                                      // what the overlay pages wrote
         display.add ("content loading", [&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
         display.add ("LFO shape", [&] { injectFault ("shape"); lfoShapePoll(); });                                                 // a drawn LFO shape the LFO page wrote
         display.add ("Scalar curve", [&] { scalarCurvePoll(); });                                                                  // a NOTE / VELO curve the curve editor wrote

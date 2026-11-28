@@ -491,7 +491,7 @@ public:
     }
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    /** One touch event in UI pixels (the whole screen), `stack` is the instance's stack (the caller holds its lock). true: the touch belongs to the plugin-drawn pages. */
+    /** One touch event in UI pixels (the whole screen), `stack` is the instance's stack (the caller holds its lock). true: the touch belongs to the overlay pages. */
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
         const int x = ev.x, y = ev.y;

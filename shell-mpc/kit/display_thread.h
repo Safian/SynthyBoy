@@ -1,4 +1,4 @@
-// MpcKit - the DISPLAY THREAD of a plugin: a normal-priority thread (never the audio thread) that tells the host what changed since the last look - a parameter a plugin-drawn page wrote, a Q proxy whose
+// MpcKit - the DISPLAY THREAD of a plugin: a normal-priority thread (never the audio thread) that tells the host what changed since the last look - a parameter a overlay page wrote, a Q proxy whose
 // target moved, the instance frame of "Overlay Instance", a live display value - with audioMasterAutomate / audioMasterUpdateDisplay. The plugin REGISTERS its features; the class runs them in order once
 // a tick, each inside a PollGuard (shell-mpc/poll_guard.h): an exception is caught, counted, written to the status file and, five times in a row, switches that feature off - it never leaves the thread
 // (std::terminate would end the MPC application). The thread sleeps on a fixed grid: a short period while something is going on (a feature says so with setBusy), a long one otherwise.

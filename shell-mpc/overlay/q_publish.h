@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: how a plugin-drawn page publishes its Q slots. A page knows its Q GROUPS in reading order (four values each) and which one is active; QRouter::mapGroups puts the active group on the Q proxies
+// SynthyBoy - MPC overlay: how a overlay page publishes its Q slots. A page knows its Q GROUPS in reading order (four values each) and which one is active; QRouter::mapGroups puts the active group on the Q proxies
 // 1 .. 4 and the next groups of the page (wrapping, each once) on 5 .. 8, 9 .. 12 and 13 .. 16. The page asks for the slots of its groups with a callback and hands them over here; the router is told only when a slot changed.
 // A page that only knows one group publishes it with groups = 1 (the slots 5 .. 16 have no target). This header knows no engine: the helpers for the modulation rows (modRowTargets, setRowBlocks) are in q_publish_mod.h.
 // Copyright (C) 2026 Safian Szabolcs

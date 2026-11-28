@@ -1,6 +1,6 @@
 // SynthyBoy - MPC overlay: the PAGE view of SynthyBoy: page_view_base.h (the generic view of a page the plugin draws entirely: BasicPageView, NoHooks, the ground and the scene hash) with SynthyBoy's hooks - the macro
 // names of the instance on screen (macro_names.h) active while a page updates, draws and handles input, the loading bar of IInstanceView::tablesLoading () and the live values of the engine for the page
-// (page::Input). PageView<Ui> is BasicPageView<Ui, MacroNameHooks>. Docs: docs/MPC.md "Plugin-drawn pages".
+// (page::Input). PageView<Ui> is BasicPageView<Ui, MacroNameHooks>.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

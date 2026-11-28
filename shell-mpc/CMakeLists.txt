@@ -378,9 +378,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(inhost_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME inhost_host COMMAND inhost_host)
 
-    # the automatic layout lint of the plugin-drawn pages (every page, Init and every factory preset): a finding that is not in the baseline fails it, a baseline entry that no longer occurs too
+    # the automatic layout lint of the overlay pages (every page, Init and every factory preset): a finding that is not in the baseline fails it, a baseline entry that no longer occurs too
 
-    # the names of the macros on the plugin-drawn pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
+    # the names of the macros on the overlay pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
 
 
 

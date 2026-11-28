@@ -26,7 +26,7 @@ struct ViewInput
     IFrameSource* frames = nullptr;                // the application's primary framebuffer (the envelope view checks the line colour with it)
     int rotation = 90;
     int panelEdgeX = 1280;                         // the x the picture is cut at: right of it the host shows through (its Q-Link panel, which slides in and out; panel_key.h); 1280: nothing of the host over the tab
-    mpckit::IInstance* io = nullptr;               // the same instance, writable: the plugin-drawn pages write parameters through it (null in a test that has none)
+    mpckit::IInstance* io = nullptr;               // the same instance, writable: the overlay pages write parameters through it (null in a test that has none)
     UiStack* ui = nullptr;                         // the instance's page stack, guarded by the controller. Native page actions use the same stack as overlay touch.
 };
 
@@ -58,14 +58,14 @@ public:
         stack of the instance when the view changes. -1: the view has no page of its own (the Play view opens its elements itself). */
     virtual int pageElement() const noexcept { return -1; }
     /** A touch in UI pixels (screen coordinates). `stack` is the instance's UiStack (the caller holds its lock: the view may open and close pages), `io` the instance. true: the touch belongs to this
-        view's plugin-drawn pages (the application gets it as well: the screen cannot keep it from the host). */
+        view's overlay pages (the application gets it as well: the screen cannot keep it from the host). */
     virtual bool onTouch (const TouchEvent&, UiStack&, mpckit::IInstance&, double /*nowMs*/) { return false; }
     /** The mouse wheel at (x, y) in UI pixels, `notches` positive away from the user: the control under the pointer takes it (a knob a Q-Link step, a stepper or a list one step, a scrolled list scrolls). true: it
-        lay over a control of this view's plugin-drawn pages. `stack` as for onTouch. */
+        lay over a control of this view's overlay pages. `stack` as for onTouch. */
     virtual bool onWheel (int /*x*/, int /*y*/, int /*notches*/, UiStack&, mpckit::IInstance&, double /*nowMs*/) { return false; }
     /** The clock while a finger is down (long press). */
     virtual void onTick (UiStack&, mpckit::IInstance&, double /*nowMs*/) {}
-    /** A finger is down on the plugin-drawn pages (the controller keeps its pace fast). */
+    /** A finger is down on the overlay pages (the controller keeps its pace fast). */
     /** The view comes on screen again after another view (or none) was on it: whatever it set in a shared place (the Q group of the four hardware knobs: the router keeps what the LAST page set) is to be set again. */
     virtual void onShown() {}
     virtual bool fingerDown() const noexcept { return false; }

@@ -3,7 +3,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// HOW THE Q-LINKS WORK ON THE MPC (docs/MPC.md "Q proxies"). A plugin-drawn page has no host widgets, so the hardware knobs (Q-Links) of the host cannot be mapped to the plugin's own parameters by
+// HOW THE Q-LINKS WORK ON THE MPC (docs/MPC.md "Q proxies"). A overlay page has no host widgets, so the hardware knobs (Q-Links) of the host cannot be mapped to the plugin's own parameters by
 // the skin: the skin maps them to 16 extra parameters "Q 1" .. "Q 16" of the plugin, and the PLUGIN decides at every moment what a proxy stands for. A proxy has no value of its own:
 //   getParameter (Q n)    the normalised value of its target now (0 when it has none);
 //   setParameter (Q n)    the same write as the host's own write to the target;

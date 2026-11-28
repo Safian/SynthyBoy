@@ -1,4 +1,4 @@
-// MpcKit - what the overlay thread and the plugin-drawn pages may ask of ONE plugin instance (IInstance), and the shell-level settings of an instance that are saved in its chunk (IInstanceState,
+// MpcKit - what the overlay thread and the overlay pages may ask of ONE plugin instance (IInstance), and the shell-level settings of an instance that are saved in its chunk (IInstanceState,
 // SettingsStore).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -89,7 +89,7 @@ public:
     virtual void diagnostics (std::string& /*out*/) const {}
 
     // ---- the overlay's own bookkeeping
-    /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets (the display parameter "Overlay Instance" takes the frame the skin hides them at). */
+    /** A overlay full screen page is open for this instance: the plugin hides the host widgets (the display parameter "Overlay Instance" takes the frame the skin hides them at). */
     virtual void setUiFullOpen (bool /*open*/) noexcept {}
     /** Asks the instance to report its display parameter "Overlay Instance" to the host again soon. It must only set a flag (the instance's display thread makes the call). */
     virtual void requestOverlayReport() noexcept {}

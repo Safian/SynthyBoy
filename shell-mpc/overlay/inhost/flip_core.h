@@ -345,7 +345,7 @@ public:
     /** The picture of the frame is gone (the overlay hid it): the belief about the buffer's content is dropped. */
     void forgetFront() noexcept { belief_.valid = false; }
     /** The overlay hid our picture while the host is idle (no flip will repaint the buffer): the page's region of the buffer on screen gets the skin's dark page background instead of a picture that is no longer
-        ours to show. (The host's own pixels under it are not kept: reading them back from write-combined memory costs 14 ms; for the plugin-drawn pages they are this background anyway: the skin hides the host
+        ours to show. (The host's own pixels under it are not kept: reading them back from write-combined memory costs 14 ms; for the overlay pages they are this background anyway: the skin hides the host
         widgets there.) Writer thread. */
     void eraseFront (const SamplePlan& plan) noexcept
     {

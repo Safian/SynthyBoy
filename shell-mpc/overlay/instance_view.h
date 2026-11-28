@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: IInstanceView, one plugin instance as the overlay and the plugin-drawn pages of SynthyBoy see it. The generic half is mpckit::IInstance (kit/instance.h); this class adds what is SynthyBoy's: the
+// SynthyBoy - MPC overlay: IInstanceView, one plugin instance as the overlay and the overlay pages of SynthyBoy see it. The generic half is mpckit::IInstance (kit/instance.h); this class adds what is SynthyBoy's: the
 // live values of the engine, the content of the state, the spectrum ring, the Play selectors, the content browser, the pad pressure layer, the macro names. Split from curve_source.h (migration step 7 of
 // docs/ui-components/TEMPLATE.md): the filter curve (CurveSource) stays there.
 // Copyright (C) 2026 Safian Szabolcs
@@ -176,7 +176,7 @@ public:
     /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */
     virtual void setNativeNoteMask (bool /*shown*/, const nativeui::FxCell* /*fields*/) noexcept {}
     virtual bool takeNativeNoteMask (int /*field*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
-    /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the plugin-drawn pages show a thin amber bar at the top of the tab. */
+    /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the overlay pages show a thin amber bar at the top of the tab. */
     virtual bool tablesLoading() const noexcept { return false; }
     /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */
     virtual std::shared_ptr<const synthyboy::StateContent> content() const { return nullptr; }
@@ -193,7 +193,7 @@ public:
     virtual void setNativePlayOscPopup (int /*field*/) noexcept {}
     /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
-    /** The plugin-drawn compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */
+    /** The overlay compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */
     virtual void setPlaySelection (int /*group*/, int /*instance*/) noexcept {}
     /** The chunk-only view state of the merged tabs (`mpcTabView`, no host parameter, no engine parameter; docs/MPC.md "Tab view state"): `what` kTabViewRnd = the random LFO being edited (0 = a standard LFO, 1 .. 4), kTabViewFilter =
         the state of the Filter tab (0 F1, 1 F2, 2 NOTE, 3 VELO). Default 0. A project reload (effSetChunk) restores it, a chunk without it gives 0; a program change leaves it. Lock free. The Env and LFO selections themselves are
@@ -204,7 +204,7 @@ public:
     virtual int lastPlayed (int /*which*/) const noexcept { return -1; }
     virtual int tabView (int /*what*/) const noexcept { return 0; }
     virtual void setTabView (int /*what*/, int /*value*/) noexcept {}
-    /** Which of the Play page's envelope / LFO selectors was touched last: 0 none yet, 1 envelope, 2 LFO (the modulation source the plugin-drawn pages treat as "selected"). */
+    /** Which of the Play page's envelope / LFO selectors was touched last: 0 none yet, 1 envelope, 2 LFO (the modulation source the overlay pages treat as "selected"). */
     virtual int playLastSelector() const noexcept { return 0; }
     /** The places the content browser of the oscillator UI starts from (label, absolute folder): the plugin offers the ones that exist on this machine (the SD card, its own content folder, the USB drives).
         Fills `out` (cleared first). Empty: this instance cannot load content. */
@@ -226,11 +226,11 @@ public:
     /** The steps the Q knob of oscillator `osc` made while its table is a file (-1 / +1 summed since the last call; the Q knob of the stepper does not move the parameter then): the overlay loads the previous / next file of the
         category for them. Lock free, 0 when there are none. */
     virtual int takeWavetableSteps(int /*osc*/) noexcept { return 0; }
-    /** The plugin-drawn LFO page writes the DRAWN shape of LFO `lfo` (1 .. 10) into the content of the state (a shape with 2 .. 128 points, the loop point, the smooth flag): a request, applied by the plugin's display
+    /** The overlay LFO page writes the DRAWN shape of LFO `lfo` (1 .. 10) into the content of the state (a shape with 2 .. 128 points, the loop point, the smooth flag): a request, applied by the plugin's display
         thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
         thread; it only stores the request. */
     virtual void setLfoShape (int /*lfo*/, const synthyboy::ContentLfoShape& /*shape*/) {}
-    /** The plugin-drawn NOTE / VELO curve editor writes the curve of the source `which` (0 velocity, 1 note) into the content of the state (content.curves.velocity / .note: 2 .. 64 points of x, y, power with ascending x; an EMPTY vector
+    /** The overlay NOTE / VELO curve editor writes the curve of the source `which` (0 velocity, 1 note) into the content of the state (content.curves.velocity / .note: 2 .. 64 points of x, y, power with ascending x; an EMPTY vector
         is the identity): a request, applied by the plugin's display thread exactly like setLfoShape (the engine gets the new content, the chunk keeps it, content () shows it a moment later; a newer request for the same source
         replaces an older one that was not applied yet; a curve the content validation would refuse is not applied). There is no engine parameter for the points; the two legato keys are ordinary parameters (writeParam). Called from the
         overlay thread; it only stores the request. */
@@ -247,7 +247,7 @@ public:
     virtual bool outputLimiter (bool& /*on*/) const noexcept { return false; }
     /** The Master page switches the limiter (the instance applies it to its output stage, the chunk keeps it). Lock free. */
     virtual void setOutputLimiter (bool /*on*/) noexcept {}
-    /** The plugin-drawn Macros page names macro `macro` (0 .. 7): `name` is cleaned and cut (synthyboy::sanitizeMacroName), "" is the default name. A request, applied by the plugin's display thread
+    /** The overlay Macros page names macro `macro` (0 .. 7): `name` is cleaned and cut (synthyboy::sanitizeMacroName), "" is the default name. A request, applied by the plugin's display thread
         (the state's content, the chunk and content () show it a moment later; the host is told the names of the Q proxies changed); a newer request for the same macro replaces an older one that was
         not applied yet. Called from the overlay thread; it only stores the request. */
     virtual void setMacroName (int /*macro*/, const std::string& /*name*/) {}

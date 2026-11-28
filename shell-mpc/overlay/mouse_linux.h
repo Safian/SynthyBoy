@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the evdev reader of the mice (EVIOCGBIT). Every node /dev/input/event0 .. 31 that has relative X and Y axes and the left button is a mouse; several at once; a mouse that
-// is plugged in while the plugin runs is picked up at the next scan (every 2 s while the plugin-drawn pages are on screen), one that is unplugged is dropped (a button that was down ends with an Up).
+// is plugged in while the plugin runs is picked up at the next scan (every 2 s while the overlay pages are on screen), one that is unplugged is dropped (a button that was down ends with an Up).
 // The nodes are opened read only and non blocking and are NEVER grabbed (no EVIOCGRAB): the host keeps getting every event. Same syscall seam as the touch reader, so the tests have fakes.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
