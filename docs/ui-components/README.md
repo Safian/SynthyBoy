@@ -52,7 +52,7 @@ Hordozható terjesztéskor a komponens saját modulja és `img/` mappája mellé
 
 ### Natív Selector és ikongomb
 
-A natív komponensek forrása az [inMusic MPC Plugin Builder SDK UI-referenciája](https://github.com/inmusic-software/mpc-plugin-builder-sdk/blob/main/docs/ui-reference.md). A SynthyBoy Selector paraméterei: opcionális ikon, a fő értéket adó title és opcionális második felirat (name). A lefelé mutató nyíl beépített. Az egysoros felület 48 px, a kétsoros 56 px magas, és a rendelkezésre álló cellában függőlegesen középre kerül. A Power és Expand ikon gombfelülete 48 px magas a meglévő 64 × 56 px-es érintési cellában; a galéria képaláírása a cellán kívül található.
+A natív komponensek forrása az [inMusic MPC Plugin Builder SDK UI-referenciája](https://github.com/inmusic-software/mpc-plugin-builder-sdk/blob/main/docs/ui-reference.md). A SynthyBoy Selector paraméterei: opcionális ikon, a fő értéket adó title és opcionális második felirat (name). A lefelé mutató nyíl beépített. Az egysoros felület 48 px, a kétsoros 56 px magas, és a rendelkezésre álló cellában függőlegesen középre kerül. A Power ikon gombfelülete 48 px magas a meglévő 64 × 56 px-es érintési cellában; a galéria képaláírása a cellán kívül található.
 
 #### Címkézett Selector összetett gyártó (Titled Selector Factory)
 
