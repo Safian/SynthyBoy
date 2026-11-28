@@ -10,7 +10,7 @@ function(synthyboy_add_test name)
     cmake_parse_arguments(ARG "" "" "LINK" ${ARGN})
     add_executable(${name} ${ARG_UNPARSED_ARGUMENTS} "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_link_libraries(${name} PRIVATE synthyboy_core Threads::Threads ${ARG_LINK})
-    target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/core/src" "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/shell-clap" "${CLAP_INCLUDE_DIR}")
+    target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/core/src" "${PROJECT_SOURCE_DIR}/core/tests")
     set_target_properties(${name} PROPERTIES CXX_EXTENSIONS OFF)
     if(MSVC)
         target_compile_options(${name} PRIVATE /W4)
@@ -48,7 +48,6 @@ synthyboy_add_test(synthyboy_test_events     test_events.cpp)
 synthyboy_add_test(synthyboy_test_shell_features test_shell_features.cpp)
 synthyboy_add_test(synthyboy_test_preferences test_preferences.cpp)
 synthyboy_add_test(synthyboy_test_preset     test_preset.cpp)
-synthyboy_add_test(synthyboy_test_shell_clap test_shell_clap.cpp LINK synthyboy_static)
 synthyboy_add_test(synthyboy_test_engine     test_engine.cpp)
 synthyboy_add_test(synthyboy_test_own_engine test_own_engine.cpp)
 synthyboy_add_full_run(synthyboy_test_own_engine)
@@ -312,7 +311,6 @@ synthyboy_add_test(synthyboy_test_wavetable_file test_wavetable_file.cpp)
 synthyboy_add_test(synthyboy_test_wavetable_catalogue test_wavetable_catalogue.cpp)
 synthyboy_add_test(synthyboy_test_user_content test_user_content.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp")
 target_include_directories(synthyboy_test_user_content PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests")
-synthyboy_add_test(synthyboy_test_clap_content test_clap_content.cpp LINK synthyboy_static ${CMAKE_DL_LIBS})
 # GROUPD (WP-14 / 15 / 16): sample -> wavetable, frame <-> LFO shape, WAV of a render, the offline render driver on the own engine
 synthyboy_add_test(synthyboy_test_wave_convert test_wave_convert.cpp)
 synthyboy_add_test(synthyboy_test_own_ladder_range test_own_ladder_range.cpp)
@@ -354,7 +352,7 @@ endforeach()
 
 # More than about 5 s alone (measured, docs/dsp-knowledge/testing.md): not part of the quick set (`ctest -LE slow`). The tests that already carry the label are set where they are
 # defined (output_stage_presets, own_voice_count_gain above; the audit and preset_sanity tests in their own directories); the binaries with an SB_TEST_FULL switch stay in the quick set.
-foreach(slow_test synthyboy_test_own_lib_quantize_levels synthyboy_test_rt synthyboy_test_clap_content synthyboy_test_own_note_storm synthyboy_test_own_filter_response
+foreach(slow_test synthyboy_test_own_lib_quantize_levels synthyboy_test_rt synthyboy_test_own_note_storm synthyboy_test_own_filter_response
                   synthyboy_test_fxopt_reverb_vintage)
     if(TEST ${slow_test})
         set_property(TEST ${slow_test} APPEND PROPERTY LABELS slow)

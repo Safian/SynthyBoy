@@ -1,2 +1,0 @@
-_clap_entry
-_synthyboy_clap_get_entry

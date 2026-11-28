@@ -40,13 +40,7 @@ A HTML generált fájl; közvetlenül ne szerkeszd. Újragenerálás a repó gy�
 
 The catalogue pictures are redrawn with the component's own recipe on explicit command (output committed); the catalogue page `docs/ui-components/kepes-katalogus.html` is hand-maintained: edit it directly, there is no generator.
 
-A commit előtti Git-hook automatikusan újragenerálja és a commitba teszi a HTML-t, ha a komponenskönyvtár, a generátor vagy a sablon változik. Kizárólag a stage-elt fájlokból dolgozik. Ebben a checkoutban engedélyezve van; új klónban egyszer állítsd be:
-
-```sh
-git config core.hooksPath .githooks
-```
-
-A futtatáshoz Python 3 és Pillow szükséges. Hibás metaadat vagy hiányzó kép esetén a commit leáll. Új, elfogadott komponens a saját `catalog.json` fájljával automatikusan bekerül; üres könyvtár nem jelenik meg.
+Nincs pre-commit hook és nincs generátor: a katalógus-HTML-t kézzel szerkesztjük.
 
 Minden jóváhagyott natív komponens a saját `components/native/<név>/catalog.json` fájljában választja ki a saját `img/` könyvtárából bemutatandó képeket. A generátor a valódi `<név>/<név>.py` modullal rendelkező könyvtárakat fedezi fel; szimbolikus alias és régi segédkönyvtár nem kerül be. Új komponenshez elegendő a saját modul, képek és metaadat: nincs központi komponenslista.
 
