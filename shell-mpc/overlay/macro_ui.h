@@ -53,30 +53,18 @@ public:
     static constexpr int kElementMacros = kElementPage;
     enum Page { kPageTargets = 50, kPageList = 51, kPageKeyboard = 52 };
 
-    enum Id : int
-    {
-        kMacroKnobBase = 100,    // 100 .. 107
-        kMacroCardBase = 200,    // 200 .. 207: the chips/target of a card ask for the targets of the macro
-        kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
-        kList = 400, kListBackdrop, kListHeader,
-        kMacroNameBase = 500    // 500 .. 507: the name of a card (a tap opens the keyboard page)
-    };
     using ModRow = uibind::ModRow;
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     static constexpr int kNumMacros = 8, kBanks = 2, kPerPage = nativeui::targets::kRows;
     static constexpr double kModsRefreshMs = 100.0;
 
-    // ---- the parameter rows: the eight macro dials (row i = macro i + 1), then the eight target chips and the eight names (commands: no engine parameter)
+    // ---- the parameter rows: the eight macro dials (row i = macro i + 1)
 #define SB_MACRO_KNOB(N, G, S) binding::Row { 100 + (N) - 1, "macro." #N, binding::Kind::Continuous, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, G, S, false }
-#define SB_MACRO_CMD(ID) binding::Row { ID, "", binding::Kind::Command, 0, 0, 0, 0, binding::Format::Engine, nullptr, 0, -1, -1, false }
-    static constexpr binding::Row kRows[3 * kNumMacros] = {
+    static constexpr binding::Row kRows[kNumMacros] = {
         SB_MACRO_KNOB (1, 0, 0), SB_MACRO_KNOB (2, 0, 1), SB_MACRO_KNOB (3, 0, 2), SB_MACRO_KNOB (4, 0, 3),
-        SB_MACRO_KNOB (5, 1, 0), SB_MACRO_KNOB (6, 1, 1), SB_MACRO_KNOB (7, 1, 2), SB_MACRO_KNOB (8, 1, 3),
-        SB_MACRO_CMD (200), SB_MACRO_CMD (201), SB_MACRO_CMD (202), SB_MACRO_CMD (203), SB_MACRO_CMD (204), SB_MACRO_CMD (205), SB_MACRO_CMD (206), SB_MACRO_CMD (207),
-        SB_MACRO_CMD (500), SB_MACRO_CMD (501), SB_MACRO_CMD (502), SB_MACRO_CMD (503), SB_MACRO_CMD (504), SB_MACRO_CMD (505), SB_MACRO_CMD (506), SB_MACRO_CMD (507)
+        SB_MACRO_KNOB (5, 1, 0), SB_MACRO_KNOB (6, 1, 1), SB_MACRO_KNOB (7, 1, 2), SB_MACRO_KNOB (8, 1, 3)
     };
-#undef SB_MACRO_CMD
 #undef SB_MACRO_KNOB
     /** The Q banks as row indices: bank 1 = macros 1 .. 4, bank 2 = macros 5 .. 8. */
     static constexpr binding::QTable<kBanks> kQ { { { 0, 1, 2, 3 }, { 4, 5, 6, 7 } } };
@@ -90,7 +78,6 @@ public:
     static ui::Rect inCard (int m, const ui::Rect& r) noexcept { const ui::Rect c = cardRect (m); return { c.x + r.x, c.y + r.y, r.w, r.h }; }
     static ui::Rect nativeKnobArea (int m) noexcept { return inCard (m, ui::macrocard::kNativeKnobRect); }
     static ui::Rect nativeTargetArea (int m) noexcept { return inCard (m, ui::macrocard::kTargetRect); }
-    static ui::Rect nameLabelRect (int m) noexcept { return inCard (m, ui::macrocard::kNameBoxRect); }
     /** The touch target of the name below the value (56 pixels high, non-overlapping). */
     static ui::Rect nameRect (int m) noexcept { return inCard (m, ui::macrocard::kNameHitRect); }
     static ui::Rect spectrumRect() noexcept { const auto& r = ui::macrocard::kSpectrumRect; return { r.x, kTabY + r.y, r.w, r.h }; }
@@ -102,13 +89,6 @@ public:
             if (nativeKnobArea (m).contains (x, y))
                 return m;
         return -1;
-    }
-    // ---- the native picker of the add-target list (tokens mod_picker.*, generated into ui/macro_card_contract.h; tab coordinates, the page is placed at kTabY)
-    static ui::Rect pickerRect (const ui::Rect& r) noexcept { return { r.x, kTabY + r.y, r.w, r.h }; }
-    static ui::Rect pickerRow (int row) noexcept
-    {
-        const ui::Rect& r = ui::macrocard::kPickerRow;
-        return pickerRect ({ r.x, r.y + row * ui::macrocard::kPickerRowStep, r.w, r.h });
     }
     static bool isNativeControl (int x, int y) noexcept
     {
@@ -124,7 +104,6 @@ public:
     static ui::Rect tgAdd() noexcept { return { 1076, kTabY + 32, 200, kTgH }; }
     static ui::Rect tgPage() noexcept { return { 864, kTabY + 32, 208, kTgH }; }
     static ui::Rect tgRowBand (int row) noexcept { return { 0, kTabY + kTgRowTop + row * kTgStride - 8, kCanvasW, kTgStride }; }
-    static ui::Rect tgName (int row) noexcept { return { 8, kTabY + kTgRowTop + row * kTgStride, 324, kTgH }; }
     static ui::Rect tgDepth (int row) noexcept { return { 344, kTabY + kTgRowTop + row * kTgStride, 712, kTgH }; }
     static ui::Rect tgPolarity (int row) noexcept { return { 1060, kTabY + kTgRowTop + row * kTgStride, 72, kTgH }; }
     static ui::Rect tgBypass (int row) noexcept { return { 1136, kTabY + kTgRowTop + row * kTgStride, 72, kTgH }; }
@@ -427,14 +406,6 @@ public:
             uibind::writeNorm (v, macroParams_[r], binding::turnNorm (uibind::normOf (macroParams_[r], v.param (macroParams_[r])), delta));
     }
 
-    /** The native bridge: a native dial of the card wrote `value` (normalised) into macro `macro` (0 .. 7). */
-    void writeCell (int id, double value, IInstanceView& v) const
-    {
-        const int m = id - kMacroKnobBase;
-        if (m >= 0 && m < kNumMacros && macroParams_[m] >= 0)
-            uibind::writeNorm (v, macroParams_[m], value);
-    }
-
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
@@ -452,11 +423,8 @@ public:
             c = static_cast<char> (std::toupper (static_cast<unsigned char> (c)));
         return s;
     }
-    const Targets& targets() const noexcept { return targets_; }
-    const ModRow& targetRow (int i) const noexcept { return targetRows_[std::clamp (i, 0, kPerPage - 1)]; }
     int bank() const noexcept { return bank_; }
     void setBank (int b) noexcept { bank_ = b == 1 ? 1 : 0; }
-    const SpectrumCurve* spectrum() const noexcept { return curve_.get(); }
 
     int listCount() const noexcept
     {
