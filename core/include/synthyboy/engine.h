@@ -254,18 +254,17 @@ float ownVoiceCountGain (const IEngine& engine) noexcept;
 
 enum class EngineKind
 {
-    own,  // engine-own: the engine
-    vital // only a name for old callers and saved settings that still carry it: it is the own engine (docs/plans/vital-removal.md V7)
+    own  // engine-own: the engine
 };
 
-/** True if the engine of this kind is part of this build (every kind: they all are the own engine). */
+/** True if the engine of this kind is part of this build. */
 bool isEngineAvailable (EngineKind kind) noexcept;
 
-/** Short stable name ("own"; EngineKind::vital is the own engine too), for logs and command lines. */
+/** Short stable name ("own"), for logs and command lines. */
 const char* engineName (EngineKind kind) noexcept;
 
 /**
- * Creates an engine of the given kind: the own engine for every kind (EngineKind::vital is its old name). Returns nullptr only for a
+ * Creates an engine of the given kind: the own engine. Returns nullptr only for a
  * kind outside the enum; if errorMessage is not null it then receives a static, human readable text (and nullptr otherwise).
  */
 std::unique_ptr<IEngine> createEngine (EngineKind kind, const char** errorMessage = nullptr);

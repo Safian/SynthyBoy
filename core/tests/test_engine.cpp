@@ -78,14 +78,11 @@ TEST (engine_factory)
     CHECK (createEngine (EngineKind::own) != nullptr); // null error pointer is fine
 }
 
-// V7 (docs/plans/vital-removal.md): EngineKind::vital is only a name that old callers and saved settings may still carry; the engine is the
-// own engine (the state format names no engine, the parameter table is shared), so a version 2 state of the Vital days loads and sounds.
-TEST (engine_kind_vital_is_an_alias_of_the_own_engine)
+// A version 2 state loads into the own engine and sounds (the state format names no engine, the parameter table is shared).
+TEST (state_version_2_loads_and_sounds)
 {
-    CHECK (isEngineAvailable (EngineKind::vital));
-    CHECK (std::strcmp (engineName (EngineKind::vital), "own") == 0);
     const char* error = "unset";
-    auto engine = createEngine (EngineKind::vital, &error);
+    auto engine = createEngine (EngineKind::own, &error);
     CHECK (engine != nullptr && error == nullptr);
     if (engine == nullptr)
         return;
