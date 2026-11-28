@@ -125,7 +125,16 @@ constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = kFilterChainRoutes - 1;   // the routing only (Parallel, F1 to F2, F2 to F1)
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
 constexpr int kLfoTargetsAction = kFxEditorPower + 1;
-constexpr int kCount = kLfoTargetsAction + 1;
+// The band lanes of an FX splitter (components/native/band_lane): lane after lane, kLaneHandles each (shell-mpc/native_fx_bands.h, scripts/native_ui_params.py).
+namespace fxbands
+{
+constexpr int kLanes = 3, kCards = 13;
+enum Field { Tile = 0, Range = 1, Info = 2, Count = 3, Open = 4, Add = 5, AddAvail = 6, Select = 7, Power = Select + kCards, kLaneHandles = Power + kCards };
+constexpr int kHandles = kLanes * kLaneHandles;
+}
+constexpr int kFxBandLanes = kLfoTargetsAction + 1;
+constexpr int kCount = kFxBandLanes + fxbands::kHandles;
+constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kCount; }
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }

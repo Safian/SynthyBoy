@@ -22,12 +22,14 @@ from components.native.pan.pan import synthyboy_dial_data as pan_dial_data
 from components.native.level.level import compact_dial_definition, default_level_template, synthyboy_dial_data
 from components.native.active_text.active_text import write_active_text_assets, active_text_child
 from components.native.radio_button.radio_button import create_segmented_radio_button_group, render_segmented_button_art
+from components.native.band_lane.band_lane import (
+    build_band_lane_definition, build_band_lane_instance, fx_card_definition, lane_rect, LANES)
 from components.native.button.button import action_button, action_art, in_slot, button as native_button, write_transparent_hit
 
 from native_ui_params import (FX_CELL_COUNT, FX_DOMAIN_COUNT, FX_DOMAIN_OFFSET,
                               FX_BAND_BASE, FX_BAND_MODE, FX_EDITOR_POWER, FX_HEADER, FX_HEADER_FIELDS, FX_HEADER_ITEMS,
                               FX_KIND_OFFSET, FX_LAYOUT_OFFSET, FX_VALUE_OFFSET,
-                              FX_CHAIN,
+                              FX_CHAIN, FX_BANDS,
                               native_base_index)
 
 CONTRACT = Path(__file__).with_name("fx-native-contract.json")
@@ -490,35 +492,8 @@ def _add_native_chain(tui, tab, ctx, contract, base):
     w, h = power_rect[2:]
     down = select_rect[1] - power_rect[1]
     size = (w, h)
-    power_on = art("on", size, "power")
-    power_off = art("off", size, "power", inactive=True)
-    select_on = art("selected", size, "box", active=True)
-    select_off = art("unselected", size, "box")
-    select_bypassed = art("bypassed", size, "box", inactive=True)
-    select_bypassed_on = art("bypassed_selected", size, "box", active=True, inactive=True)
-    toggle_power = button("power", None, (0, 0, w, h), (), power_off, power_on)
-    toggle_power["handle remapping"]["map"] = [{"key": "Data", "value": "Power"}]
-    card_widgets = [toggle_power]
-    for enabled, idle, active in ((0, select_bypassed, select_bypassed_on), (1, select_off, select_on)):
-        gates = ("Powered" if enabled else "Bypassed",)
-        for selection, image in (("Unselected", idle), ("Selected", active)):
-            card_widgets.append(_native_entry(
-                "Selection face", "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": image},
-                (0, down, w, h), gates=(*gates, selection)))
-        for handle, offsets, height in style.size("fx.chain.card.labels"):
-            left, top, reserved, label_height = offsets
-            label_bounds = (left, down + top, w - reserved, label_height)
-            label = _native_label("Value", label_bounds, height)
-            label["handle remapping"]["map"] = [{"key": "Data", "value": handle}]
-            label["componentData"]["data"]["textStyle"]["colour"] = style.argb("text.icon") if enabled else style.argb("fx.legacy.959595")
-            label["bounds"]["version"] = 2
-            label["bounds"]["additionalInvalidatingHandles"] = list(gates)
-            card_widgets.append(label)
-    # The single foreground hit target receives presses anywhere on either caption.
-    select_card = native_button("select", (0, down, w, h), write_transparent_hit(ctx.skins_dir),
-                                index=1, count=2, remaps=(("Data", "Select"),))
-    card_widgets.append(select_card)
-    ctx.add_component_definition("fxNativeChainCard", transparent(card_widgets, True))
+    ctx.add_component_definition("fxNativeChainCard", fx_card_definition(
+        ctx.skins_dir, "fx_chain", size, size, down, style.size("fx.chain.card.labels")))
     tiles = []
     for slot, (power_box, _) in enumerate(contract["cards"]):
         tile = _native_entry(f"Slot {slot + 1}", "fxNativeChainCard",
@@ -581,6 +556,14 @@ def _add_native_chain(tui, tab, ctx, contract, base):
                  f"IndexedEnabling/1/2/Parameter {increment(param)}")
     tui["pageData"].setdefault("replacementStrings", []).append(
         {"key": f"Parameter {menu}", "value": ["Select an effect"] + [name for name, _ in contract["gallery"]]})
+
+
+def _add_native_bands(ctx, items, base):
+    """The band lanes of a splitter page: one `fxNativeBandLane` definition, one entry per lane (components/native/band_lane)."""
+    for name, definition in build_band_lane_definition(ctx.skins_dir).items():
+        ctx.add_component_definition(name, definition)
+    for lane in range(LANES):
+        items.append(build_band_lane_instance(f"FX Band Lane {lane + 1}", lane_rect(lane), base, lane))
 
 
 def _add_native_header(tui, tab, ctx, headers, band, base, panels, gallery):
@@ -728,6 +711,7 @@ def _apply_native_editor(tui, tab, ctx):
     items.clear()
     _add_native_header(tui, tab, ctx, manifest["editor_headers"], manifest["chain"]["band"], base, manifest["panels"], manifest["chain"]["gallery"])
     _add_native_chain(tui, tab, ctx, manifest["chain"], base + FX_CHAIN)
+    _add_native_bands(ctx, items, base + FX_BANDS)
     cells_start = len(items)
     scalars = {FX_DIAL: "fxNativeCellUni", FX_TOGGLE: "fxNativeCellSwitch", manifest["kind_last"]: "fxNativeCellBi"}
     for layout, slot, kind in manifest["widgets"]:

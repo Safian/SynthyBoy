@@ -14,8 +14,7 @@
 // THE RACKS OF THE BANDS: the page of a splitter has the data of one lane per band (FxBandData: the tile and the chain of the band). The commands of a lane (openBand, bandAdd, bandSelect, bandPower, bandMove) open the chain
 // of the band (scope_): the chain bar then holds the cards of that band (engine racks 3 .. 9; only the 13 modules of instance 0 that are no splitters sit in them), a BACK card first (the way up to the splitter), and the page
 // of the selected effect is the same table page as in the Main chain; the place stands over the name ("MAIN CHAIN > SPLITTER L/M/H > MID BAND"). The chain offers the types whose module is free (off and not in a band), moves the
-// module into the band and switches it on; a drag reorders; the rack switch of the page moves the effect to any of the ten racks; REMOVE switches the effect off and takes it out of its band. The skin has no native lane
-// component yet (case (c) of docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md): the commands are the hooks of the native bridge it will get.
+// module into the band and switches it on; a drag reorders; the rack switch of the page moves the effect to any of the ten racks; REMOVE switches the effect off and takes it out of its band. The lanes are the native BandLane component (components/native/band_lane, handles nativeui::fxbands): the tile and ADD open the band, a card selects or switches, a drag of the MOVE grip of a card reorders it (the commands below).
 #pragma once
 
 #include <cstdint>
@@ -28,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "../native_fx_bands.h"
 #include "../native_fx_chain.h"
 #include "../native_fx_cells.h"
 #include "../native_fx_header.h"
@@ -81,6 +81,35 @@ public:
     }
     ui::Rect nativePowerRect (int i) const noexcept { const auto r = nativeSlotRect (i); return { r.x, r.y, r.w, kNativeCell }; }
     ui::Rect nativeSelectRect (int i) const noexcept { const auto r = nativeSlotRect (i); return { r.x, r.bottom() - kNativeCell, r.w, kNativeCell }; }
+    // ---- the native band lanes of a splitter page (nativeui::fxbands::geometry: the skin's fxNativeBandLane entries; screen coordinates) -------------------------------------------------------------------------
+    static_assert (kTabY + nativeui::fxbands::geometry::kY == FxEditorModel::kEditorY + 2 * FxEditorModel::kMargin + FxEditorModel::kHeaderH, "the lanes stand where the display of a splitter page stands");
+    ui::Rect bandLaneRect (int lane) const noexcept
+    {
+        namespace g = nativeui::fxbands::geometry;
+        return { g::kX, kTabY + g::kY + lane * g::kPitch, g::kAddX + g::kAddW, g::kHeight };
+    }
+    ui::Rect bandTileRect (int lane) const noexcept { const auto r = bandLaneRect (lane); return { r.x, r.y, nativeui::fxbands::geometry::kTileW, r.h }; }
+    ui::Rect bandAddRect (int lane) const noexcept { const auto r = bandLaneRect (lane); return { r.x + nativeui::fxbands::geometry::kAddX, r.y, nativeui::fxbands::geometry::kAddW, r.h }; }
+    ui::Rect bandCardRect (int lane, int card) const noexcept
+    {
+        namespace g = nativeui::fxbands::geometry;
+        const auto r = bandLaneRect (lane);
+        return { r.x + g::kCardX + card * g::kCardPitch, r.y, g::kCardW, r.h };
+    }
+    ui::Rect bandPowerRect (int lane, int card) const noexcept { auto r = bandCardRect (lane, card); r.h = nativeui::fxbands::geometry::kPowerH; r.w = nativeui::fxbands::geometry::kGripX; return r; }
+    ui::Rect bandGripRect (int lane, int card) const noexcept
+    {
+        namespace g = nativeui::fxbands::geometry;
+        const auto r = bandCardRect (lane, card);
+        return { r.x + g::kGripX, r.y, g::kGripW, g::kGripH };
+    }
+    ui::Rect bandSelectRect (int lane, int card) const noexcept
+    {
+        namespace g = nativeui::fxbands::geometry;
+        const auto r = bandCardRect (lane, card);
+        return { r.x, r.y + g::kPowerH, r.w, r.h - g::kPowerH };
+    }
+    bool bandsShown() const noexcept { return editorShown_ && editor_.hasBands() && editor_.bands.numBands > 0 && scope_ == 0; }
     /** The area of the gallery of an empty chain (under the chain bar). */
     ui::Rect galleryRect() const noexcept
     {
@@ -122,6 +151,7 @@ public:
         inst.setNativeFxCells (0, nullptr);
         inst.setNativeFxHeader ({});
         inst.setNativeFxChain ({});
+        inst.setNativeFxBands ({});
     }
     void setNativeActionPopup (IInstanceView& inst, int action) noexcept
     {
@@ -169,12 +199,14 @@ public:
         // The native editor uses the regular instance marker: the page never needs to mask the underlying tab.
         inst.setUiFullOpen (false);
         if (syncNativeChain (inst)
+            || syncNativeBands (inst)
             || syncNativeHeader (inst))
         {
             readRackStructure (inst);
             refreshEditor (inst, structureSignature());
         }
         inst.setNativeFxChain (nativeChain());
+        inst.setNativeFxBands (nativeBands());
         inst.setNativeFxHeader (nativeHeader());
         syncNativeCells (inst);
         publishQGroup (inst);
@@ -240,7 +272,37 @@ public:
                 gestureDown_ = true;
                 return true;
             }
-            gestureDown_ = true;   // the touch of a part of the page the overlay owns (the display): swallowed
+            if (bandsShown())
+                for (int l = 0; l < editor_.bands.numBands && bandDrag_.lane < 0; ++l)
+                    for (int i = 0; i < editor_.bands.lane[l].numCards; ++i)
+                        if (editor_.bands.lane[l].cards[i].on && bandGripRect (l, i).contains (ev.x, ev.y))
+                        {
+                            bandDrag_ = { l, i };   // the MOVE grip of a card of a lane: the drop picks the place in that lane
+                            break;
+                        }
+            gestureDown_ = true;   // the touch of a part of the page the overlay owns (the display, a MOVE grip): swallowed
+            return true;
+        }
+        if (bandDrag_.lane >= 0)
+        {
+            if (ev.kind == TouchEvent::Up)
+            {
+                const int lane = bandDrag_.lane, card = bandDrag_.card, count = editor_.bands.lane[lane].numCards;
+                int target = card, best = 1 << 30;   // the card the finger was released over (the nearest one)
+                for (int i = 0; i < count; ++i)
+                {
+                    const ui::Rect r = bandCardRect (lane, i);
+                    const int d = std::abs (ev.x - (r.x + r.w / 2));
+                    if (d < best)
+                    {
+                        best = d;
+                        target = i;
+                    }
+                }
+                if (target != card)
+                    bandMove (inst, lane, card, target);
+                dropGesture();
+            }
             return true;
         }
         if (draggedItem_.index >= 0)
@@ -282,6 +344,7 @@ public:
     {
         gestureDown_ = false;
         draggedItem_ = { false, -1 };
+        bandDrag_ = {};
     }
     void forgetQGroup() noexcept { qSlots_.forget(); }
     /** The hardware knob `knobIndex` (0 .. 3) of the active row turned by `delta`: the member of the row in that slot. A knob moves by `delta` (normalised units), a number or a choice by whole steps, a toggle on / off by the sign. */
@@ -696,6 +759,92 @@ private:
         if (galleryShown())
             for (int i = 0; i < galleryN_; ++i)
                 visit (galleryCardRect (i));
+        if (bandsShown())
+            for (int l = 0; l < editor_.bands.numBands; ++l)
+            {
+                const FxBandData::Lane& lane = editor_.bands.lane[l];
+                visit (bandTileRect (l));
+                if (lane.addEnabled)
+                    visit (bandAddRect (l));
+                for (int i = 0; i < lane.numCards; ++i)
+                {
+                    visit (bandPowerRect (l, i));
+                    visit (bandSelectRect (l, i));
+                }
+            }
+    }
+
+    nativeui::fxbands::State nativeBands() const noexcept
+    {
+        namespace b = nativeui::fxbands;
+        b::State state;
+        if (! bandsShown())
+            return state;
+        state.shown = true;
+        state.bands = editor_.bands.numBands;
+        state.structure = chainSig_ ^ 0x5bd1e995u;
+        for (int l = 0; l < state.bands; ++l)
+        {
+            const FxBandData::Lane& in = editor_.bands.lane[l];
+            b::Lane& out = state.lane[static_cast<size_t> (l)];
+            out.kind = in.kind;
+            out.band = in.band;
+            out.colour = in.colour;
+            out.count = in.numCards;
+            out.low = in.low;
+            out.high = in.high;
+            out.bypassed = in.bypassed;
+            out.idle = in.idle;
+            out.addAvail = in.addEnabled;
+            for (int i = 0; i < in.numCards; ++i)
+                out.cards[static_cast<size_t> (i)] = { in.cards[i].item, in.cards[i].type, in.cards[i].on };
+        }
+        return state;
+    }
+
+    /** The presses of the native lanes: the tile and ADD open the band, a card selects it or switches its power. */
+    bool syncNativeBands (IInstanceView& inst)
+    {
+        namespace b = nativeui::fxbands;
+        const auto state = nativeBands();
+        if (! state.shown)
+            return false;
+        for (int handle = 0; handle < b::kHandles; ++handle)
+        {
+            float value;
+            if (! inst.takeNativeFxBands (handle, state, value))
+                continue;
+            const int lane = handle / b::kLaneHandles, field = handle % b::kLaneHandles;
+            bool applied = false;
+            if (field == b::Open && value >= 0.5f)
+            {
+                openBand (lane);
+                applied = true;
+            }
+            else if (field == b::Add && value >= 0.5f)
+            {
+                bandAdd (lane);
+                applied = true;
+            }
+            else if (field >= b::Select && field < b::Power && value >= 0.5f)
+            {
+                bandSelect (lane, field - b::Select);
+                applied = true;
+            }
+            else if (field >= b::Power && field < b::Power + b::kCards && field - b::Power < state.lane[static_cast<size_t> (lane)].count
+                     && state.lane[static_cast<size_t> (lane)].cards[static_cast<size_t> (field - b::Power)].on != (value >= 0.5f))
+            {
+                bandPower (inst, lane, field - b::Power, value >= 0.5f);
+                applied = true;
+            }
+            if (applied)
+            {
+                leftTab (inst);
+                dropGesture();
+                return true;
+            }
+        }
+        return false;
     }
 
 
@@ -1029,7 +1178,7 @@ private:
         ed.setPath (path);
     }
 
-    /** The lanes of the page of a splitter: per band the tile (name, range, state) and the cards of its rack. */
+    /** The lanes of the page of a splitter: per band the facts of the tile and the cards of its rack. */
     void pullBands (IInstanceView& inst, const Item& item, int kind)
     {
         FxBandData& board = editor_.bands;
@@ -1037,20 +1186,13 @@ private:
         const bool splitterOn = synthyboy::fxItemOn (plain_.data(), item);
         const char* const pre = kind == ui::fxl::kKindSplitterLh ? "splitter_lh." : (kind == ui::fxl::kKindSplitterLmh ? "splitter_lmh." : "splitter_ms.");
         auto val = [&] (const char* suffix, float def) { return plainOfKey (item, kind, inst, (std::string (pre) + suffix).c_str(), def); };
-        auto hz = [] (float f, char* out, size_t n)
-        {
-            if (f >= 1000.0f)
-                std::snprintf (out, n, "%.1f kHz", static_cast<double> (f) / 1000.0);
-            else
-                std::snprintf (out, n, "%.0f Hz", static_cast<double> (f));
-        };
-        char f1[16] = {}, f2[16] = {};
+        float f1 = 0.0f, f2 = 0.0f;
         if (kind == ui::fxl::kKindSplitterLh)
-            hz (val ("freq", 500.0f), f1, sizeof f1);
+            f1 = val ("freq", 500.0f);
         else if (kind == ui::fxl::kKindSplitterLmh)
         {
-            hz (val ("freq_low", 200.0f), f1, sizeof f1);
-            hz (val ("freq_high", 3000.0f), f2, sizeof f2);
+            f1 = val ("freq_low", 200.0f);
+            f2 = val ("freq_high", 3000.0f);
         }
         board.numBands = std::min (nb, FxBandData::kMaxBands);
         for (int b = 0; b < board.numBands; ++b)
@@ -1059,43 +1201,25 @@ private:
             const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
             const int n = std::min (static_cast<int> (items.size()), FxBandData::kMaxCards);
             FxBandData::Lane& lane = board.lane[b];
+            lane.kind = kind;
+            lane.band = b;
             lane.numCards = n;
             for (int i = 0; i < n; ++i)
             {
                 FxBandData::Card& card = lane.cards[i];
-                card.slot = i;
+                card.item = items[static_cast<size_t> (i)].index;
                 card.type = kindOfItem (items[static_cast<size_t> (i)]);
                 card.on = synthyboy::fxItemOn (plain_.data(), items[static_cast<size_t> (i)]);
-                card.rack = rack;
-                card.selected = false;
-                std::snprintf (card.name, sizeof card.name, "%.23s", synthyboy::fxItemName (plain_.data(), items[static_cast<size_t> (i)]));
             }
-            lane.addEnabled = numFreeModules() > 0;
-            std::snprintf (lane.name, sizeof lane.name, "%s", ui::fxl::bandName (kind, b));
+            lane.addEnabled = numFreeModules() > 0 && n < FxBandData::kMaxCards;
             lane.idle = ! splitterOn;
+            lane.low = f1;
+            lane.high = f2;
             lane.colour = kind == ui::fxl::kKindSplitterMs ? (b == 0 ? 0 : 3) : (b == 0 ? 0 : (b == nb - 1 ? 3 : 1));
             if (kind == ui::fxl::kKindSplitterMs)
-            {
-                std::snprintf (lane.range, sizeof lane.range, "%s", b == 0 ? "the centre of the picture" : "what makes it wide");
                 lane.bypassed = val (b == 0 ? "mid_bypass" : "side_bypass", 0.0f) > 0.5f;
-            }
             else
-            {
-                const bool low = b == 0, high = b == nb - 1;
-                if (low)
-                    std::snprintf (lane.range, sizeof lane.range, "below %s", f1);
-                else if (high)
-                    std::snprintf (lane.range, sizeof lane.range, "above %s", nb == 3 ? f2 : f1);
-                else
-                    std::snprintf (lane.range, sizeof lane.range, "%s to %s", f1, f2);
-                lane.bypassed = val (low ? "low_bypass" : (high ? "high_bypass" : "mid_bypass"), 0.0f) > 0.5f;
-            }
-            if (! splitterOn)
-                std::snprintf (lane.info, sizeof lane.info, "SPLITTER OFF");
-            else if (n == 0)
-                std::snprintf (lane.info, sizeof lane.info, "no effect");
-            else
-                std::snprintf (lane.info, sizeof lane.info, "%d effect%s", n, n == 1 ? "" : "s");
+                lane.bypassed = val (b == 0 ? "low_bypass" : (b == nb - 1 ? "high_bypass" : "mid_bypass"), 0.0f) > 0.5f;
         }
     }
 
@@ -1463,6 +1587,7 @@ private:
     bool haveFilter_ = false;
 
     Item draggedItem_ { false, -1 };
+    struct BandDrag { int lane = -1, card = -1; } bandDrag_;   // the card of a lane whose MOVE grip the finger holds
     uint32_t dragSignature_ = 0;
     bool dragOverPage_ = false;
     bool gestureDown_ = false;
