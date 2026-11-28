@@ -54,7 +54,7 @@
     {
       "name": "fx",
       "title": "FX",
-      "status": "Szintetikus előnézet (nem hardverfotó) · Distortion, display bal / vezérlők jobb · scripts/render_ui_screen_fx_preview.py"
+      "status": "Szintetikus előnézet (nem hardverfotó) · Distortion, display bal / vezérlők jobb"
     },
     {
       "name": "mixer",

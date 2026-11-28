@@ -64,7 +64,7 @@ const int offenders = g.check (leaves, n);   // must be 0
 ```
 
 ## Used on
-Every full screen: `OscillatorFullScreen::groups`, `EnvFullScreen::groups`, `LfoFullScreen::groups`, `FilterFullScreen::groups`, `MixerFullScreen::groups` (one per strip), `MasterScreen::groups`, `VoiceScreen::groups`, `ModSlotDetail::groups`, `MacroView::qgroup`, `ModMatrixView::qgroup`, `FxSlotEditor::groups`, `DetailPage::groups`.
+Every full screen: `OscillatorFullScreen::groups`, `EnvFullScreen::groups`, `LfoFullScreen::groups`, `FilterFullScreen::groups`, `MixerFullScreen::groups` (one per strip), `MasterScreen::groups`, `VoiceScreen::groups`, `ModSlotDetail::groups`, `MacroView::qgroup`, `ModMatrixView::qgroup`, `DetailPage::groups`.
 
 ## Limits and pitfalls
 - Members must be adjacent: the layout test calls `check`; a foreign control inside the union is a defect.

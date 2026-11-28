@@ -1,6 +1,6 @@
 // SynthyBoy - MPC plugin-drawn layer: the FX DISPLAY component (FxDisplay): the picture of what an effect does, drawn from the parameters of the selected slot with thin smooth lines:
 //   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass) as the engine's equalizer makes it in either law (state variable or
-//               cookbook biquads, with the engine's Q of the resonance; ui_fx_editor_host compares it with the engine's impulse response), with a dot at the centre of each band
+//               cookbook biquads, with the engine's Q of the resonance), with a dot at the centre of each band
 //   COMPRESSOR  the transfer curve (the peak level of a steady tone in, out) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): the
 //               upward stage under the lower threshold, the downward stage above the upper one (Limit: the ceiling), the make-up gain and the mix, as the engine's gain computer sets them
 //   DELAY       the echoes of a click in time (left above the line, right under it) by the network of the engine's style, with the offsets of the two times, the time axis in milliseconds (a tempo sync is
@@ -80,7 +80,7 @@ public:
     }
 
     static constexpr int kPoints = 192;
-    /** The gain in dB of one EQ band at `f` Hz, as the engine's equalizer makes it (core/engine-own/fx/fx_eq.h; ui_fx_editor_host compares the two):
+    /** The gain in dB of one EQ band at `f` Hz, as the engine's equalizer makes it (core/engine-own/fx/fx_eq.h):
           law 0, STATE VARIABLE: the trapezoidal state variable section, whose response is the analog section (wh s^2 + wb s + wl) / (s^2 + R s + 1) at s = j tan (pi f / fs) / tan (pi fc / fs), with
                  Q = 0.5 + 15.5 r^3 (R = 1 / Q, r the resonance 0 .. 1) and the output weights of the shelves and the bell from the amplitude A = 10^(gain / 20)
           law 1, COOKBOOK: the biquads of the Audio EQ Cookbook with Q = 0.4 + 1.7417 r^3 for a shelf and 0.1 + 18.9053 r^4 for the others.

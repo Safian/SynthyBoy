@@ -8,11 +8,11 @@ Ten strips left to right: SUB, A, B, C, NOISE (`mixerStripSourceFrame`), F1, F2 
 
 ## Definitions
 
-`skin/defs_mixer.json` (16): the four strip frames, the sliders and their inactive twins, the destination field.
+`skin/defs_mixer.json` (13): the four strip frames, the pan and send sliders with their inactive twins, and the three label styles (destination, level 254, level 470).
 
 ## Data
 
-Blocks of `shell-mpc/native_ui_params.h`: `kMixerPeakBase`, `kMixerHoldBase` (the meters), `kMixerControl` (`mixer::kSolo`, `kMute`), `kMixerSoloVisual`, `kMixerMuteVisual`, `kMixerStereoBase` (PeakL, PeakR, HoldL, HoldR, ClipL, ClipR per strip), `kMasterScaleInput`. The faders, pans, sends and destinations bind engine parameters directly.
+Blocks of `shell-mpc/native_ui_params.h`: `kMixerPeakBase`, `kMixerHoldBase` (the meters), `kMixerControl` (`mixer::kSolo`, `kMute`), `kMixerSoloVisual`, `kMixerMuteVisual`, `kMixerStereoBase` (PeakL, PeakR, HoldL, HoldR, ClipL, ClipR per strip). The faders, pans, sends and destinations bind engine parameters directly.
 
 ## Q groups
 
@@ -20,4 +20,4 @@ On the XL Q 1 .. Q 10 follow the ten LEVEL faders; the four-knob banks are [SUB,
 
 ## C++ owners
 
-`shell-mpc/overlay/mixer_ui.h` (rows, Q banks, meters, native bridge), `shell-mpc/output_peak.h`; strip component: [../mixer_strip.md](../mixer_strip.md), [../native-mixer-strip.md](../native-mixer-strip.md).
+`shell-mpc/overlay/mixer_ui.h` (rows, Q banks, meters); strip component: [../mixer_strip.md](../mixer_strip.md), [../native-mixer-strip.md](../native-mixer-strip.md).

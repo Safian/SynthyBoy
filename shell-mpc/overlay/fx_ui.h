@@ -58,7 +58,6 @@ class FxUi
 {
 public:
     static constexpr int kElementPage = 6;        // the page of the FX tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
-    static constexpr int kElementFx = kElementPage;
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
 
@@ -388,7 +387,6 @@ public:
         if (std::fabs (next - cur) >= 1.0e-12)
             uibind::writeNorm (inst, idx, next);
     }
-    bool listOpen() const noexcept { return false; }
 
     /** The table index of control p of the effect on the page (-1 none): the parameter of the slot of the pool for a control that is one of the type's own, else the engine's key of the control itself (the splitters,
         the modules of the fixed chain, the force enable of the reverb). The page is the one of `item` (the selected effect). */

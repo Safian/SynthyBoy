@@ -42,7 +42,6 @@ class MixerUi
 {
 public:
     static constexpr int kElementPage = 5;          // the page of the Mixer tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
-    static constexpr int kElementMixer = kElementPage;
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     static constexpr int kStrips = 10, kMaxGroups = 3;
@@ -133,7 +132,6 @@ public:
     }
 
     // ---- the geometry of the native cells (the rectangles of the host skin the page leaves open) ------------------------------------------------------------------------------------------------
-    static constexpr int kCellH = 56, kQLane = 16, kPad = 4;
     ui::Rect tabRect() const noexcept { return { 0, kTabY, w_, kTabH }; }
     ui::Rect stripRect (int s) const noexcept
     {
@@ -142,40 +140,6 @@ public:
         const int stripW = (w_ - 2 * pad - (kStrips - 1) * gap) / kStrips;
         return { pad + s * (stripW + gap), topY, stripW, stripH };
     }
-    /** The cell of a control of strip s (an empty rectangle: the strip has no such control). */
-    ui::Rect cellRect (int s, int type) const noexcept
-    {
-        const StripBinding& b = bindings_[s];
-        const ui::Rect r = stripRect (s);
-        const int innerW = r.w - 2 * kPad;
-        int y = r.y + kPad;
-        const ui::Rect power { r.x + kPad, y, innerW, kCellH };
-        y += kCellH + kPad;
-        const ui::Rect dest = b.destParam >= 0 ? ui::Rect { r.x + kPad, y, innerW, kCellH } : ui::Rect {};
-        y += kCellH + kPad + kQLane;
-        const bool lower = b.panParam >= 0 || b.send1Param >= 0 || b.send2Param >= 0;
-        if (type == kPower) return power;
-        if (type == kDest) return dest;
-        if (! lower)
-            return type == kLevel ? ui::Rect { r.x + kPad, y, innerW, std::max (96, r.bottom() - kPad - y) } : ui::Rect {};
-        const int bottomY = r.bottom() - kPad - 3 * kCellH - 3 * kQLane;
-        const ui::Rect fader { r.x + kPad, y, innerW, std::max (96, bottomY - y) };
-        int ly = std::max (y + 96, bottomY) + kQLane;
-        const ui::Rect pan { r.x + kPad, ly, innerW, kCellH };
-        ly += kCellH + kQLane;
-        const ui::Rect send1 { r.x + kPad, ly, innerW, kCellH };
-        ly += kCellH + kQLane;
-        const ui::Rect send2 { r.x + kPad, ly, innerW, kCellH };
-        switch (type)
-        {
-            case kPan: return b.panParam >= 0 ? pan : ui::Rect {};
-            case kSend1: return b.send1Param >= 0 ? send1 : ui::Rect {};
-            case kSend2: return b.send2Param >= 0 ? send2 : ui::Rect {};
-            case kLevel: return b.levelParam >= 0 ? fader : ui::Rect {};
-            default: return {};
-        }
-    }
-
 
     bool hostConfirmed() const noexcept
     {
@@ -188,34 +152,8 @@ public:
     int topPage() const noexcept { return 0; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
-    const char* qGroupName() const noexcept { return groupName (activeGroup_); }
-    static const char* groupName (int g) noexcept
-    {
-        static const char* const kNames[kMaxGroups] = { "LEVELS SUB A B C", "LEVELS NOISE F1 F2 MAIN", "LEVELS BUS 1 2" };
-        static const char* const wideNames[kMaxGroups] = { "LEVELS SUB A B C", "LEVELS NOISE F1 F2 BUS1", "LEVELS BUS2 MAIN" };
-        return g >= 0 && g < kMaxGroups ? (ui::QGroup::wideDevice() ? wideNames[g] : kNames[g]) : "";
-    }
-
     void setHostBackground (bool on) noexcept { drawPass_ = on ? DrawPass::LiveOnly : DrawPass::All; }
     bool hostBackground() const noexcept { return hostConfirmed(); }
-
-    /** The value of a row as text, by the row's own rule (the cell value of the native bridge, effGetParamDisplay). */
-    static void formatRow (const binding::Row& row, int param, float plain, char* out, size_t cap)
-    {
-        if (param < 0)
-        {
-            std::snprintf (out, cap, "-");
-            return;
-        }
-        if (! binding::formatPlain (row.format, plain, out, cap))
-            uibind::formatValue (uibind::info (param), plain, out, cap);
-    }
-    /** The text of the level / pan / send of strip s as the page shows it in the Q display (the parameter's own format; the pan as C / L 35 / R 35). */
-    void valueText (IInstanceView& inst, int s, int type, char* out, size_t cap) const
-    {
-        const int param = paramOf (s, type);
-        formatRow (kRows[rowOf (s, type)], param, param >= 0 ? inst.param (param) : 0.0f, out, cap);
-    }
 
     /** Reads the instance: the switches, the meters, the pages of the stack, the Q group. */
     void update (IInstanceView& inst, UiStack& stack, double nowMs, const page::Input& in)
@@ -238,7 +176,6 @@ public:
         {
             const float readout = in.live != nullptr ? in.live->stripPeak[s] : 0.0f;
             const float pk = std::isfinite (readout) ? readout : 0.0f;
-            peak_[s] = pk;
             peakHold_[s] = std::max (pk, peakHold_[s] - fall);
             if (nativeBase())
             {
@@ -332,27 +269,6 @@ public:
             uibind::writeNorm (inst, p, next);
     }
 
-    /** The native bridge: a cell of the skin wrote `value` (normalised for a slider / fader, 0 / 1 for the switch, the choice index for the destination) into the row with page id `id`. */
-    void writeCell (int id, double value, IInstanceView& inst) const
-    {
-        const int s = (id - kStripBase) / 10, type = (id - kStripBase) % 10;
-        if (id < kStripBase || s < 0 || s >= kStrips || type < 0 || type >= kTypes)
-            return;
-        const StripBinding& b = bindings_[s];
-        if (type != kPower && ! b.powerInverted && b.powerParam >= 0 && inst.param (b.powerParam) < 0.5f)
-            return;   // a switched-off strip takes no edit
-        const int p = paramOf (s, type);
-        if (p < 0)
-            return;
-        if (type == kPower)
-            uibind::writePlain (inst, p, binding::toggleStore (value >= 0.5, b.powerInverted));
-        else if (type == kDest)
-            uibind::writePlain (inst, p, value);
-        else
-            uibind::writeNorm (inst, p, value);
-    }
-    bool listOpen() const noexcept { return false; }
-
 private:
     int w_ = kCanvasW, h_ = kCanvasH;
     bool nativeCellsEnabled_ = true;
@@ -360,7 +276,7 @@ private:
     DrawPass drawPass_ = DrawPass::All;
     StripBinding bindings_[kStrips];
     bool powerOn_[kStrips] = {}, levelEnabled_[kStrips] = {};
-    float peak_[kStrips] = {}, peakHold_[kStrips] = {};
+    float peakHold_[kStrips] = {};
     int selectedStrip_ = 0, activeGroup_ = 0;
     QSlots qSlots_;
     double lastMs_ = 0.0;
