@@ -41,12 +41,13 @@ SDK_TEMPLATES = {"knobUni", "knobBi", "knob overlay", "menu overlay", "toggle", 
                  "radio3", "radio4", "sliderWithFocus", "sliderWithFocusMenu"}
 
 
-# Repeating screens: one '<family>Screen' definition (skin/defs_<family>.json) used once by every tab of the family.
+# Repeating screens: the items shared by every tab of a family live in '<family>Screen' definitions (skin/defs_<family>.json), one per run of shared
+# items between the per-tab items (<family>Screen, <family>ScreenTop, ...). Every tab of the family holds those instances, in that order (z-order).
 SCREEN_FAMILIES = {
-    "oscScreen": ["Osc A", "Osc B", "Osc C", "Sub", "Noise"],
-    "envScreen": [f"Env {i}" for i in range(1, 7)],
-    "lfoScreen": [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)],
-    "filterScreen": ["Filter 1", "Filter 2"],
+    ("oscScreen", "oscScreenTop"): ["Osc A", "Osc B", "Osc C", "Sub", "Noise"],
+    ("envScreen", "envScreenTop"): [f"Env {i}" for i in range(1, 7)],
+    ("lfoScreen", "lfoScreenTop", "lfoScreenTop2", "lfoScreenTop3"): [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)],
+    ("filterScreen", "filterScreenTop"): ["Filter 1", "Filter 2"],
 }
 
 
@@ -332,14 +333,15 @@ def tui_semantics(page, schema, skins, findings):
         seen[position] = i
         check_definition(tab["componentDefinition"], ["pageData", "tabs", i, "componentDefinition"], f"tab '{tab.get('tabName')}'")
     tab_by_name = {tab.get("tabName"): tab for tab in page["tabs"]}
-    for family_key, tab_names in SCREEN_FAMILIES.items():
-        if family_key not in local:
-            findings.error(json_path(defs_path), f"screen definition '{family_key}' is missing")
+    for family_keys, tab_names in SCREEN_FAMILIES.items():
+        for family_key in family_keys:
+            if family_key not in local:
+                findings.error(json_path(defs_path), f"screen definition '{family_key}' is missing")
         for tab_name in tab_names:
-            tab = tab_by_name.get(tab_name)
-            instances = [e for e in (tab or {}).get("componentDefinition", {}).get("componentsData", []) if e.get("componentData", {}).get("type") == family_key]
-            if len(instances) != 1:
-                findings.error(json_path(["pageData", "tabs", tab_name]), f"tab '{tab_name}' must hold exactly one '{family_key}' instance (found {len(instances)}): the repeating screens share one definition")
+            entries = (tab_by_name.get(tab_name) or {}).get("componentDefinition", {}).get("componentsData", [])
+            used = [e["componentData"]["type"] for e in entries if e.get("componentData", {}).get("type") in family_keys]
+            if used != list(family_keys):
+                findings.error(json_path(["pageData", "tabs", tab_name]), f"tab '{tab_name}' must hold the instances {list(family_keys)} in this order, found {used}: the repeating screens share their definitions")
     for k, item in enumerate(page["replacementStrings"]):
         check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
     if len(page["tabs"]) > PROVEN_MAX_TABS:

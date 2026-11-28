@@ -1870,7 +1870,31 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 628"
        }
+      }
+     ]
+    }
+   },
+   {
+    "key": "envScreenTop",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
       },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
       {
        "version": 2,
        "componentData": {

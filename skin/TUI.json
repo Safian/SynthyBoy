@@ -9291,6 +9291,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "oscScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Osc Missing Page",
         "type": "Label",
         "data": {
@@ -9576,6 +9601,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "988 0 282 36"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top",
+        "type": "oscScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -9873,6 +9923,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "oscScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Osc Missing Page",
         "type": "Label",
         "data": {
@@ -10164,6 +10239,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "oscScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Osc Missing Page",
         "type": "Label",
         "data": {
@@ -10449,6 +10549,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "988 0 282 36"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top",
+        "type": "oscScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -10887,6 +11012,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "envScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel env1",
         "type": "Image",
         "data": {
@@ -11229,6 +11379,31 @@
         "additionalInvalidatingHandles": [
          "IndexedEnabling/0/2/Parameter 3588"
         ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top",
+        "type": "envScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -11583,6 +11758,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "envScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel env3",
         "type": "Image",
         "data": {
@@ -11925,6 +12125,31 @@
         "additionalInvalidatingHandles": [
          "IndexedEnabling/0/2/Parameter 3588"
         ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top",
+        "type": "envScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -12279,6 +12504,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "envScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel env5",
         "type": "Image",
         "data": {
@@ -12627,6 +12877,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "envScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel env6",
         "type": "Image",
         "data": {
@@ -12683,6 +12958,31 @@
         "version": 1,
         "name": "Screen",
         "type": "lfoScreen",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -12834,6 +13134,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo1",
         "type": "Image",
         "data": {
@@ -12854,6 +13179,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -12998,6 +13348,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo2 title",
         "type": "Label",
         "data": {
@@ -13041,6 +13416,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo2",
         "type": "Image",
         "data": {
@@ -13061,6 +13461,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -13205,6 +13630,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo3 title",
         "type": "Label",
         "data": {
@@ -13248,6 +13698,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo3",
         "type": "Image",
         "data": {
@@ -13268,6 +13743,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -13412,6 +13912,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo4 title",
         "type": "Label",
         "data": {
@@ -13455,6 +13980,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo4",
         "type": "Image",
         "data": {
@@ -13475,6 +14025,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -13619,6 +14194,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo5 title",
         "type": "Label",
         "data": {
@@ -13662,6 +14262,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo5",
         "type": "Image",
         "data": {
@@ -13682,6 +14307,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -13826,6 +14476,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo6 title",
         "type": "Label",
         "data": {
@@ -13869,6 +14544,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo6",
         "type": "Image",
         "data": {
@@ -13889,6 +14589,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -14033,6 +14758,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo7 title",
         "type": "Label",
         "data": {
@@ -14076,6 +14826,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo7",
         "type": "Image",
         "data": {
@@ -14096,6 +14871,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -14240,6 +15040,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo8 title",
         "type": "Label",
         "data": {
@@ -14283,6 +15108,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo8",
         "type": "Image",
         "data": {
@@ -14303,6 +15153,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -14447,6 +15322,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo9 title",
         "type": "Label",
         "data": {
@@ -14490,6 +15390,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo9",
         "type": "Image",
         "data": {
@@ -14510,6 +15435,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -14654,6 +15604,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption lfo10 title",
         "type": "Label",
         "data": {
@@ -14697,6 +15672,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel lfo10",
         "type": "Image",
         "data": {
@@ -14717,6 +15717,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -14861,6 +15886,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption rnd1 title",
         "type": "Label",
         "data": {
@@ -14904,6 +15954,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel rnd1",
         "type": "Image",
         "data": {
@@ -14924,6 +15999,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -15068,6 +16168,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption rnd2 title",
         "type": "Label",
         "data": {
@@ -15111,6 +16236,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel rnd2",
         "type": "Image",
         "data": {
@@ -15131,6 +16281,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -15275,6 +16450,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption rnd3 title",
         "type": "Label",
         "data": {
@@ -15318,6 +16518,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel rnd3",
         "type": "Image",
         "data": {
@@ -15338,6 +16563,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -15482,6 +16732,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "lfoScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Caption rnd4 title",
         "type": "Label",
         "data": {
@@ -15525,6 +16800,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top 2",
+        "type": "lfoScreenTop2",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel rnd4",
         "type": "Image",
         "data": {
@@ -15545,6 +16845,31 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "900 2 5 5"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top 3",
+        "type": "lfoScreenTop3",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       }
      ]
@@ -22862,6 +24187,31 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Screen Top",
+        "type": "filterScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Overlay Background Sentinel filter1",
         "type": "Image",
         "data": {
@@ -23066,6 +24416,31 @@
         "additionalInvalidatingHandles": [
          "IndexedEnabling/0/2/Parameter 3588"
         ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Screen Top",
+        "type": "filterScreenTop",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": []
        }
       },
       {
