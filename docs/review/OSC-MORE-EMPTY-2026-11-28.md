@@ -210,3 +210,34 @@ Because `explicit.json` (`af97c588`) already proved on Key 61 that keeping the `
 ```json
         "acceptsHWFocus": "Children",
 ```
+
+---
+
+## 4. UNISON Page Findings (`kPageUnison = 10`)
+
+### 4.1 Historical timeline (`a1282cda` / `3bb27424` -> `11fb5764` -> `HEAD`)
+
+- **FACT (`docs/screens/old/osc_unison_detail_wave_old.jpg`, `.hw-local/mpc-builds/old-ui-3bb27424/`)**:
+  - In `a1282cda` (and `3bb27424`), UNISON originally failed inside `oscDetailGraphGrid` for the exact same reason `MORE` fails (`58_osc_detail.py:137-138`: *"On Key 61 the dynamic grid stayed blank even with seven live value/kind bindings in the VST"*).
+  - `a1282cda` worked around it by mounting `Unison 0` (`oscDetailUnisonMode`), `Unison 1` (`oscNativeSetting_menu`, `STACK`), and `Unison 2..6` (`oscNativeSetting_dial_uni` / `oscNativeSetting_dial_bi`) **directly** inside `oscNativeDetail` at `"y = 312"`, with `"Absolute"` bounds, direct `"IndexedEnabling/.../Parameter 3419..3439"` gates, and explicit `"Data"` + `"Caption"` mappings (`old-ui-3bb27424/Plugin Skins/TUI.json`). That direct mount worked on Key 61 (`osc_unison_detail_wave_old.jpg` shows `MODE`, `STACK`, `WIDTH`, `RANGE`, `WT POS`, `WARP 1`, `WARP 2` all visible).
+- **FACT (`11fb5764`, `skin/defs_osc.json:18966-19496`, `shell-mpc/overlay/osc_ui.h:1003`)**:
+  - Commit `11fb5764` deleted those working `Unison 0..6` direct entries from `oscNativeDetail`, unified `Plain` + `Graph` into `oscDetailGrid` (`y = 172 + 116*r`), shifted `Graph` blocks down by `+1` row (`row = block / 2 + (graph ? 1 : 0)`, `osc_ui.h:1003`), and routed `UNISON` into `oscDetailGrid` row 1 (`oscDetailTilem0m1m2m4m7m8`, `skin/defs_osc.json:19032`).
+  - As a result, `HEAD` (`16316492`) puts `UNISON` back onto the exact broken `oscDetailGrid` -> `oscDetailTile*` path, re-exposing the Key 61 empty-controls bug (`TODO.md:16`).
+
+### 4.2 Gate & binding table for Wavetable Osc A `UNISON` on `HEAD`
+
+`kPageUnison = 10` (`osc_ui.h:1948-1950`, `osc_presets.h:65-75, 191`): `graph = true`, `nativeDetail_ = n::Graph (4)` (`Parameter 3334 = 4/5 = 0.8f`), `oscDetailGrid` gate `RangedEnabling/3/5/6/Parameter 3334` matches (`round(0.8 * 5) = 4` in `[3,5]`), and `oscUi::publishTexts` (`osc_ui.h:1331-1338`) maps `blocks[0..1]` (`"UNISON"`, `"VOICE SPREAD"`) to `Native Osc Block 2..3` (`Parameter 3850..3851`, `y = 272`, above row 1 at `y = 288..380`) and sets `OscDetailGraph (3859) = "1"`.
+
+For every cell `c = 0..6`, `block = g = 0` (`MODE..RANGE`) or `1` (`WT POS..WARP 2`), `row = 1`, `slot = c * 4 + 1` (`1, 5, 9, 13, 17, 21, 25`):
+
+| Slot `(col, row)` | Label & Engine Suffix (`osc_presets.h:65-71`, `osc_ui.h:1622-1628`) | Native `Value` / `Step` / `Kind` Params | Plugin `Kind` Published (`synthyboy_mpc.cpp:1864-1865`) | Tile `oscDetailTilem0m1m2m4m7m8` (`skin/defs_osc.json:24984-25450`) | Match / Break |
+|---|---|---|---|---|---|
+| `(0, 1)` -> `1` | `MODE` (`unison.mode`) | `3336` / `3368` / `3400` | `n::Choice (5)` -> `5/16 = 0.3125f` | `NonZero/Kind`; child `"5"` (`oscDetailStepper`), `IndexedEnabling/5/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 (`oscDetailGrid` / `oscDetailTilem0m1m2m4m7m8`) |
+| `(1, 1)` -> `5` | `STACK` (`unison.stack`) | `3340` / `3372` / `3404` | `kMenuSuffixes[7]` -> `kind = 17` -> `n::kind(17) = 14` (`14/16 = 0.875f`); value on `kMenusBase + 7 = Parameter 3441` | `NonZero/Kind`; `"Menu face"` (`map` omits `Data`) + child `"14"` (`oscNativeSetting_menuDetailValue`, `Data -> Parameter 3441`, `Caption -> Data`, `IndexedEnabling/14/17/Kind`) | **Numeric Match** (`menu 7` IS present in `oscDetailTilem0m1m2m4m7m8:25369-25403`); broken by Break Point 2 |
+| `(2, 1)` -> `9` | `WIDTH` (`unison.spread`) | `3344` / `3376` / `3408` | `n::Uni (1)` -> `1/16 = 0.0625f` | `NonZero/Kind`; child `"1"` (`oscNativeSetting_dial_uni`), `IndexedEnabling/1/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 |
+| `(3, 1)` -> `13` | `RANGE` (`unison.range`) | `3348` / `3380` / `3412` | `n::Uni (1)` -> `1/16 = 0.0625f` | `NonZero/Kind`; child `"1"` (`oscNativeSetting_dial_uni`), `IndexedEnabling/1/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 |
+| `(4, 1)` -> `17` | `WT POS` (`frame_spread`) | `3352` / `3384` / `3416` | `n::Bi (2)` -> `2/16 = 0.125f` (`oscmodel.h` / `unison`: `pi.min < 0 && pi.max > 0`) | `NonZero/Kind`; child `"2"` (`oscNativeSetting_dial_bi`), `IndexedEnabling/2/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 |
+| `(5, 1)` -> `21` | `WARP 1` (`warp.spread`) | `3356` / `3388` / `3420` | `n::Bi (2)` -> `2/16 = 0.125f` | `NonZero/Kind`; child `"2"` (`oscNativeSetting_dial_bi`), `IndexedEnabling/2/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 |
+| `(6, 1)` -> `25` | `WARP 2` (`warp2.spread`) | `3360` / `3392` / `3424` | `n::Bi (2)` -> `2/16 = 0.125f` | `NonZero/Kind`; child `"2"` (`oscNativeSetting_dial_bi`), `IndexedEnabling/2/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 |
+
+Note: Applying Fix 3.2 (flat direct controls in `oscDetailGrid` keyed by `(col, row, kind)` without `repeats: 8`, `NonZero/Kind`, or `oscDetailTile*`) fixes **both** `MORE` and `UNISON` (plus `OPTIONS`, `MAP`, `GRAIN`, `SAMPLE REGION/SLICE`, `SPECTRAL FILTER/SCAN`, `ENVELOPE`, `ROUTING`) uniformly through one mechanism.
