@@ -26,7 +26,7 @@ class TestNativeMacroCard(unittest.TestCase):
         self.tmp_dir.cleanup()
 
     def test_level_definition_matches_playsublevel_factory(self):
-        """Verify macro_level_definition matches playSubLevel: 90px FilmStrip knob, name right, value beneath."""
+        """Verify macro_level_definition matches the Play sub level dial: 90px FilmStrip knob, name right, value beneath."""
         defn = nmc.macro_level_definition(skins_dir=self.skins_dir)
 
         self.assertEqual(defn.get("version"), 2)

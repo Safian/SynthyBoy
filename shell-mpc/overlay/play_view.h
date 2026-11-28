@@ -533,7 +533,7 @@ private:
             return;
         }
         // the order is the layers' (scene.h, CellBegin): first every cached cell that lies under the live parts (the page, the picture of the data), then what moves (the running point and the cursor of the panels,
-        // the live read-outs over the picture), then the cached cells that lie over them (the full screen button of the compact view, the popups)
+        // the live read-outs over the picture), then the cached cells that lie over them
         const ui::Rect r = osc_->displayRect();
         osc_->drawPage (sb);
         const auto& nativeHeader = osc_->compactNativeHeader();

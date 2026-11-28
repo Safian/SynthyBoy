@@ -14,7 +14,7 @@ Texts: `Native Osc Missing Compact` (a source that is missing) and `Native Osc M
 
 ## Definitions
 
-`skin/defs_play.json` (96 definitions: `play*` fields and selectors, `playEnvLfoChoice` / `playEnvLfoMenu` menus, the compact dials) and the compact dial family in `defs_common.json` (`compactNativeDial`, `compactNativeRiseDial`, `compactNativeSmoothWithIndicator`, `compactNativeSmoothReadout`).
+`skin/defs_play.json` (56 definitions: the four header selectors, the titled `play*Titled` fields, `playEnvLfoMenu` menus, the 56 px dials `compactNativeDial56`, `compactNativeRiseDial56`, `compactNativeSmoothWithIndicator56`, `compactNativeSmoothReadout56` and their NativeActive/NativeInactive pairs).
 
 ## Data
 
