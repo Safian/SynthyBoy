@@ -2317,15 +2317,40 @@ struct PluginInstance
         auto lfo = std::make_unique<ov::LfoUi>();
         lfo->prepareCompactPresentation (overlayView);
         const auto envLfo = ov::PlayEnvLfo::compactPresentation (overlayView, *lfo);
-        std::lock_guard<std::mutex> guard (playPresentationMutex);
-        if (oscState.preset != overlayView.stateGeneration() || oscState.selection != overlayView.playOscSelectionRevision()
-            || envLfo.context.preset != oscState.preset || envLfo.context.selection != overlayView.nativePlayEnvLfoRevision())
+        {
+            std::lock_guard<std::mutex> guard (playPresentationMutex);
+            if (oscState.preset == overlayView.stateGeneration() && oscState.selection == overlayView.playOscSelectionRevision()
+                && envLfo.context.preset == oscState.preset && envLfo.context.selection == overlayView.nativePlayEnvLfoRevision())
+            {
+                nativePlayOsc.publish (oscState, false);
+                nativePlayEnvLfo.publish (envLfo, false);
+                std::atomic_store (&nativePlayOscSourceName, std::make_shared<const std::string> (std::move (sourceName)));
+                preparedOscDue.store (true, std::memory_order_release);
+                preparedEnvLfoDue.store (true, std::memory_order_release);
+            }
+        }
+        // Seed the standalone Osc A read-only presentation without claiming gestures or Q groups.
+        const uint64_t oscPreset = overlayView.stateGeneration();
+        auto standaloneOsc = std::make_unique<ov::OscUi>();
+        const auto oscRoot = standaloneOsc->prepareStandaloneRoot (overlayView, synthyboy_mpc::playosc::kOscA, oscPreset);
+        const bool oscPowered = ov::OscPageUi::isInstanceOn (overlayView, synthyboy_mpc::playosc::kOscA);
+        const nativeui::osc::ViewState oscView {
+            synthyboy_mpc::playosc::kOscA, oscPowered, oscPreset,
+            ov::OscPageUi::currentDestination (overlayView, synthyboy_mpc::playosc::kOscA), oscPowered
+        };
+        std::lock_guard<std::mutex> oscGuard (oscPresentationMutex);
+        if (oscPreset != overlayView.stateGeneration())
             return;
-        nativePlayOsc.publish (oscState, false);
-        nativePlayEnvLfo.publish (envLfo, false);
-        std::atomic_store (&nativePlayOscSourceName, std::make_shared<const std::string> (std::move (sourceName)));
-        preparedOscDue.store (true, std::memory_order_release);
-        preparedEnvLfoDue.store (true, std::memory_order_release);
+        if (nativeOsc.snapshot().source() != 0 && ! nativeOsc.suspended() && nativeOsc.preset() == oscPreset)
+            return;
+        nativeOsc.publish (oscView, false);
+        nativeOscSettings.publish (oscRoot.settingsView, oscRoot.settingsFields.data(), false);
+        if (oscRoot.settingsView >= nativeui::osc::SettingsWavetable)
+            publishOscAbcState (oscRoot.warpMask, oscRoot.sourceLabel.c_str());
+        nativeOscDetail.publish (oscRoot.detail, false);
+        preparedOscTabDue.store (true, std::memory_order_release);
+        preparedOscSettingsDue.store (true, std::memory_order_release);
+        preparedOscDetailDue.store (true, std::memory_order_release);
     }
 
     void nativePlayOscPoll (AEffect* e)
