@@ -10,7 +10,8 @@
 // What it does with a touch: the host's native cell writes the value (native bridge: applyNativeSetting / applyNativeDetail, the id of the cell says which parameter and how the value converts); the write goes through
 // IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back into the cells, so host automation, presets and the host's own widgets show on the next frame.
 // Controls whose engine parameter does not exist or is not read by the engine are DISABLED (docs/MPC.md "Oscillator UI": WARP Var, phase memory, the source list of the sample types, the source dropdown).
-// Kept as case (c) (no native replacement yet, TODO.md): the list of the content browser, of the wavetable browser and of the source of a new modulation (ui::ListPopup), and the mask of the transpose snap (ui::NoteMask).
+// The lists (the content browser, the wavetable browser, the source of a new modulation) are the native cells of the modulation picker (nativeui::modboard, names through IInstanceView::setNativeListText) and the mask of the transpose snap is
+// twelve native toggle cells (nativeui::kNoteMask): the plugin holds the data of both (listData_, maskItem_) and takes their gestures (publishNativeLists, publishNativeNoteMask).
 #pragma once
 
 #include <algorithm>
@@ -29,9 +30,7 @@
 #include "../ui/content_name.h"
 #include "../ui/core.h"
 #include "../ui/display.h"
-#include "../ui/list.h"
 #include "../ui/native_apertures.h"
-#include "../ui/note_mask.h"
 #include "../ui/play_rows.h"
 #include "../ui/qgroup.h"
 #include "content_browser.h"
@@ -220,11 +219,6 @@ public:
         compactRect_ = { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
         tabRect_ = tab;
         full_.place (tab);
-        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (tab);
-        list_.setId (kList);
-        list_.setBackdropId (kListBackdrop);
-        list_.setHeaderId (kListHeader);
         spec_.place (tab);
         mods_.place (tab);
         mods_.setIds (kModsBack, kModsAdd, kModsPage, kModsRow);
@@ -288,6 +282,7 @@ public:
             updateEnvelope();
         const bool standaloneNative = isPage() && ! expandedPlay && (nativeSelector_ || nativeRouting_);
         inst.setUiFullOpen (standaloneNative ? (pageTop_ != 0) : ! stack.isMain());
+        publishNativeLists (inst, stack);
         publishQGroup (inst);
     }
 
@@ -299,11 +294,13 @@ public:
     /** The rectangle (canvas coordinates) the picture of the oscillator goes into now; empty when the current page shows none. */
     ui::Rect displayRect() const noexcept
     {
+        if (listOpen())
+            return {};   // the native list cells fill the tab: no picture under them
         if (nativeDetail_ >= nativeui::oscdetail::Graph && nativeDetailState_.page == pageTop_ && pageTop_ != kPageEnvelope)
             return nativeDetailGraphRect();
         if (stackDepth_ == 0)
             return cl_.display;
-        if (stackDepth_ == 1 || pageTop_ == kPageList)
+        if (stackDepth_ == 1)
             return full_.displayRect();
         if (oscspec::isSpecPage (pageTop_))
             return spec_.displayRect();
@@ -345,11 +342,7 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
 
-    void draw (gpu::SceneBuilder& sb) const
-    {
-        drawPage (sb);
-        drawPopup (sb);
-    }
+    void draw (gpu::SceneBuilder& sb) const { drawPage (sb); }
     /** The page without its popups (the picture of the oscillator goes on it, then the popups): the native detail pages' title, block names and note mask; the controls are the host's. */
     void drawPage (gpu::SceneBuilder& sb) const
     {
@@ -375,12 +368,6 @@ public:
         m.n = kEnvPoints;
         ui::display::drawModule (sb, m);
     }
-    /** The list of the content browser, the wavetable browser and the source of a new modulation (case (c): no native list for these yet). */
-    void drawPopup (gpu::SceneBuilder& sb) const
-    {
-        if (listOpen())
-            list_.draw (sb);
-    }
     /** What goes on top of the picture in the display rectangle: the line of the content that is missing. */
     void drawOnDisplay (gpu::SceneBuilder& sb) const { drawMissing (sb); }
     /** The empty state of a type that plays a file (sample, grain, spectral, multisample) while no file is loaded: the native LOAD cell over the display (opens the browser). */
@@ -389,8 +376,8 @@ public:
     const oscspec::OscSpecPage& specPage() const noexcept { return spec_; }
     oscspec::OscSpecPage& specPage() noexcept { return spec_; }
     const ui::Rect& marksRect() const noexcept { return marksRect_; }
-    /** One of the lists (the content browser, the wavetable browser, the source of a new modulation) is on the screen. */
-    bool listOpen() const noexcept { return pageTop_ == kPageList || (pageTop_ == kPageMods && modsPicking_); }
+    /** One of the lists (the content browser, the wavetable browser, the source of a new modulation) is on the screen: the modulations page of a control that has no modulation yet is the list of the sources. */
+    bool listOpen() const noexcept { return pageTop_ == kPageList || (pageTop_ == kPageMods && modsBoard()); }
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
     bool covers (int x, int y) const noexcept
     {
@@ -418,81 +405,40 @@ public:
     }
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    /** One touch event in UI pixels (the whole screen), `stack` is the instance's stack (the caller holds its lock). Returns true when the touch belongs to the plugin-drawn pages (the lists and the note mask: the cells of the controls
-        are the host's). */
-    bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
+    /** One touch event in UI pixels (the whole screen), `stack` is the instance's stack (the caller holds its lock). A touch on a row of the modulations page makes it the active one; every control of the pages is a native cell of
+        the host (the gestures arrive through the native bridge), so nothing here takes a touch: false. */
+    bool touch (const TouchEvent& ev, UiStack&, IInstanceView& inst, double)
     {
-        const int x = ev.x, y = ev.y;
-        ui::Component* top = nativeDetail_ >= nativeui::oscdetail::Plain ? static_cast<ui::Component*> (nativeDetailMask_) : topComponent();
-        if (ev.kind == TouchEvent::Down)
+        if (ev.kind != TouchEvent::Down || pageTop_ != kPageMods)
+            return false;
+        int nativeRow = -1;
+        if (modsNativeHit (ev.x, ev.y, &nativeRow))
         {
-            gesture_ = nullptr;
-            int nativeRow = -1;
-            if (pageTop_ == kPageMods && modsNativeHit (x, y, &nativeRow))
+            if (nativeRow >= 0)
             {
-                if (nativeRow >= 0)
+                mods_.selectRow (nativeRow);
+                publishQGroup (inst);
+            }
+            return false;
+        }
+        if (! listOpen())
+            for (int i = 0; i < mods_.numRows(); ++i)   // a touch on a row makes it the active one
+                if (ev.y >= mods_.rowY (i) && ev.y < mods_.rowY (i) + ModRowsPage::kRowH)
                 {
-                    mods_.selectRow (nativeRow);
+                    mods_.selectRow (i);
                     publishQGroup (inst);
+                    break;
                 }
-                return false;
-            }
-            if (pageTop_ == kPageMods && ! modsPicking_)
-                for (int i = 0; i < mods_.numRows(); ++i)   // a touch on a row makes it the active one
-                    if (y >= mods_.rowY (i) && y < mods_.rowY (i) + ModRowsPage::kRowH)
-                    {
-                        mods_.selectRow (i);
-                        publishQGroup (inst);
-                        break;
-                    }
-            if (! covers (ev.x, ev.y) || ! top)
-                return false;
-            if (nativeDetail_ >= nativeui::oscdetail::Plain)
-            {
-                if (! top->rect().contains (x, y))
-                    return false;
-                focusNativeDetailMask (inst);
-            }
-            gesture_ = top;
-            gestureDown_ = true;
-            handle (top->touchDown (x, y, nowMs), stack, inst);
-            return true;
-        }
-        if (! gesture_ || ! gestureDown_)
-            return false;
-        if (ev.kind == TouchEvent::Move)
-            handle (gesture_->touchMove (x, y), stack, inst);
-        else
-        {
-            handle (gesture_->touchUp (x, y), stack, inst);
-            gestureDown_ = false;
-            gesture_ = nullptr;
-        }
-        return true;
+        return false;
     }
-    /** The clock while a finger is down. */
-    void tick (double nowMs, UiStack& stack, IInstanceView& inst)
-    {
-        if (gesture_ && gestureDown_)
-            handle (gesture_->tick (nowMs), stack, inst);
-    }
-    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the list or the note mask under the pointer takes it as steps of its own. false: nothing of this page lies there, or a finger is down on it. */
-    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
-    {
-        ui::Component* top = nativeDetail_ >= nativeui::oscdetail::Plain ? static_cast<ui::Component*> (nativeDetailMask_) : topComponent();
-        if (gestureDown_ || ! top || ! covers (x, y))
-            return false;
-        ui::Change ch;
-        if (! top->wheelOver (x, y, notches, ch))
-            return false;
-        handle (ch, stack, inst);
-        (void) nowMs;
-        return true;
-    }
+    /** The mouse wheel: nothing of this page takes it (the cells are the host's). */
+    bool wheel (int, int, int, UiStack&, IInstanceView&, double) { return false; }
+    /** The clock: nothing of this page runs a gesture of its own. */
+    void tick (double, UiStack&, IInstanceView&) {}
 
-    bool fingerDown() const noexcept { return gestureDown_; }
-    /** The stack changed behind the UI's back (the page left, another instance): the gesture is dropped. */
-    void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    bool fingerDown() const noexcept { return false; }
+    /** The stack changed behind the UI's back (the page left, another instance): nothing to drop (the gestures are the host's). */
+    void dropGesture() noexcept {}
     /** The page went off the screen (a host dialog over it): nothing of ours stays open on the third. */
     void closePopups() {}
     bool popupOpen() const noexcept { return false; }
@@ -564,8 +510,109 @@ public:
     void hideNativeModulations (IInstanceView& inst)
     {
         nativeModulations_.hide (inst, mods_);
+        hideNativeLists (inst);
     }
-    ui::ListPopup& list() noexcept { return list_; }
+
+    // ---- the lists and the note mask as native cells
+    /** The list on the screen as the cells of the modulation picker (nativeui::modboard, the skin of 72_osc_lists.py): kListRows rows a page, BACK, the way UP (the header of a browser) or the groups of the sources, PREVIOUS and NEXT.
+        The names are the plugin's (IInstanceView::setNativeListText), the taps come back through takeNativeModBoard and make the same changes the plugin-drawn list made (kList, kListBackdrop, kListHeader). */
+    void publishNativeLists (IInstanceView& inst, UiStack& stack)
+    {
+        namespace nb = nativeui::modboard;
+        if (! listOpen())
+        {
+            hideNativeLists (inst);
+            return;
+        }
+        const int count = listData_.count;
+        const int lastFirst = std::max (0, ((count - 1) / nb::kListRows) * nb::kListRows);
+        nativeListFirst_ = std::clamp (nativeListFirst_ - nativeListFirst_ % nb::kListRows, 0, lastFirst);
+        const bool up = pageTop_ == kPageList && (wtMode_ || browseMode_);   // a browser: its header is the way UP
+        nativeui::nativetext::ListPage page;
+        std::snprintf (page.title, sizeof page.title, "%s", listData_.header != nullptr ? listData_.header : up ? "" : "SELECT MODULATION SOURCE");
+        page.up = up;
+        page.count = std::clamp (count - nativeListFirst_, 0, nb::kListRows);
+        uint32_t signature = 2166136261u;
+        auto mix = [&] (const char* text) { for (const char* c = text; *c != '\0'; ++c) signature = (signature ^ static_cast<unsigned char> (*c)) * 16777619u; signature = (signature ^ 0xffu) * 16777619u; };
+        mix (page.title);
+        for (int row = 0; row < page.count; ++row)
+        {
+            std::snprintf (page.rows[row], sizeof page.rows[row], "%s", listData_.items != nullptr && listData_.items[nativeListFirst_ + row] != nullptr ? listData_.items[nativeListFirst_ + row] : "");
+            mix (page.rows[row]);
+        }
+        signature = (signature ^ static_cast<uint32_t> (nativeListFirst_ * 4 + count * 64 + (up ? 1 : 0) + (listData_.headerBack ? 2 : 0))) * 16777619u;
+        if (! listPublished_ || signature != nativeListSignature_)
+        {
+            nativeListSignature_ = signature;
+            nativeListSerial_ = (nativeListSerial_ + 1) % 8000;
+            inst.setNativeListText (&page);
+            listPublished_ = true;
+        }
+        const int identity = nativeListSerial_ + 1;   // a new page: new cell codes, so the host reads the names again
+        std::array<nativeui::FxCell, nb::kHandles> fields {};
+        for (int row = 0; row < page.count; ++row)
+        {
+            fields[nb::ListRow + row] = { nb::kChoiceBias + nativeListFirst_ + row, identity, nativeui::kFxDial };
+            fields[nb::ListRowGate + row] = { 1, 1, nativeui::kFxToggle };
+        }
+        for (int field : { nb::ListBack, nb::ListPrev, nb::ListNext, nb::ListGroups, nb::ListGate, nb::ListTitle })
+            fields[field] = { 1, identity, nativeui::kFxToggle };
+        inst.setNativeModBoard (2, fields.data());
+        for (int field = nb::ListRow; field < nb::ListGate; ++field)
+        {
+            float value = 0.0f;
+            if (! inst.takeNativeModBoard (field, fields[field], value) || value < 0.5f)
+                continue;
+            if (field < nb::ListBack)
+                handle (ui::Change::indexed (kList, nativeListFirst_ + field - nb::ListRow, value), stack, inst);
+            else if (field == nb::ListBack)
+                handle (ui::Change::request (kListBackdrop), stack, inst);
+            else if (field == nb::ListGroups)
+                handle (ui::Change::request (kListHeader), stack, inst);
+            else
+                nativeListFirst_ = std::clamp (nativeListFirst_ + (field == nb::ListPrev ? -nb::kListRows : nb::kListRows), 0, lastFirst);
+            inst.setNativeModBoard (0, nullptr);   // the gesture is used: new cells at the next update (an unused gesture of the old page cannot act on the new one)
+            return;
+        }
+    }
+    void hideNativeLists (IInstanceView& inst)
+    {
+        if (! listPublished_)
+            return;
+        inst.setNativeModBoard (0, nullptr);
+        inst.setNativeListText (nullptr);
+        listPublished_ = false;
+    }
+    /** The twelve notes of the transpose snap as native toggle cells over the mask area of the OPTIONS page (nativeui::kNoteMask, the skin of 72_osc_lists.py): a tap sets or clears one bit of the parameter (bit 12, SNAP NOTE, is kept). */
+    void publishNativeNoteMask (IInstanceView& inst, bool consume)
+    {
+        if (maskItem_ == nullptr || ! maskItem_->hasCell || maskItem_->param < 0)
+        {
+            if (maskPublished_)
+            {
+                inst.setNativeNoteMask (false, nullptr);
+                maskPublished_ = false;
+            }
+            return;
+        }
+        std::array<nativeui::FxCell, nativeui::kNoteMaskHandles> fields {};
+        fields.fill ({ maskItem_->param, maskItem_->id, nativeui::kFxToggle });
+        inst.setNativeNoteMask (true, fields.data());
+        maskPublished_ = true;
+        if (! consume)
+            return;
+        for (int note = 0; note < 12; ++note)
+        {
+            float value = 0.0f;
+            if (! inst.takeNativeNoteMask (note, fields[note], value))
+                continue;
+            focusNativeDetail (*maskItem_, inst);
+            const int current = static_cast<int> (std::lround (inst.param (maskItem_->param)));
+            const int bit = 1 << note, mask = value >= 0.5f ? (current | bit) : (current & ~bit);
+            writePlain (inst, maskItem_->param, (current & 4096) | (mask & 4095));
+            return;
+        }
+    }
     const std::vector<Item>& items() const noexcept { return main_; }
     const std::vector<Item>& pageItems() const noexcept { return page_; }
     using CompactNativeCells = std::array<ui::Rect, nativeui::playoscui::kFields>;
@@ -852,7 +899,7 @@ public:
         namespace n = nativeui::oscdetail;
         nativeDetailItems_.fill (nullptr);
         nativeDetailBlocks_.fill (nullptr);
-        nativeDetailMask_ = nullptr;
+        maskItem_ = nullptr;
         nativeDetailTitle_ = "";
         nativeDetailState_ = {};
         nativeDetailState_.preset = preset;
@@ -932,11 +979,11 @@ public:
             nativeDetailItems_[field] = item;
             if (item->type == T::Mask)
             {
-                nativeDetailMask_ = &mask_;
-                auto area = nativeDetailRect (field);
-                area.w *= 3;
-                area.h = nativeDetailMask_->minSize().h;
-                nativeDetailMask_->place (area);
+                // the twelve notes: three cells wide, two rows of kMaskRowH and a gap (the native cells of the skin, components/native/note_mask)
+                maskItem_ = item;
+                maskArea_ = nativeDetailRect (field);
+                maskArea_.w *= 3;
+                maskArea_.h = kMaskHeight;
                 return;
             }
             const int target = item->param;
@@ -1277,17 +1324,6 @@ private:
             detailActive_ = group;
         publishQGroup (v);
     }
-    /** A touch on the note mask makes the group it is the member of the active one. */
-    void focusNativeDetailMask (IInstanceView& v)
-    {
-        for (const Item& it : page_)
-            if (it.type == T::Mask)
-            {
-                focusNativeDetail (it, v);
-                return;
-            }
-    }
-
     void drawNativeDetail (gpu::SceneBuilder& sb) const
     {
         namespace n = nativeui::oscdetail;
@@ -1313,8 +1349,6 @@ private:
                 ui::Cell cell (sb, area);
                 pen.textLeft (area, title, look.fLabel, pen.c (look.textDim, 255), look.fMin);
             }
-        if (nativeDetailMask_ != nullptr)
-            nativeDetailMask_->draw (sb);
         drawNativeDetailQFrame (sb);
     }
 
@@ -1332,7 +1366,7 @@ private:
             if (const auto* part = nativeDetailItems_[i])
                 if (pageTop_ == kPageRoute || nativeDetailQ (part).first == active)
                 {
-                    const auto rect = part->type == T::Mask ? mask_.rect() : nativeDetailRect (i);
+                    const auto rect = part->type == T::Mask ? maskArea_ : nativeDetailRect (i);
                     frame = frame.empty() ? rect : ui::Rect::unite (frame, rect);
                 }
         if (! frame.empty())
@@ -1460,7 +1494,6 @@ private:
         modsDirty_ = true;
         qSlots_.clear();
         qSlots_.forget();
-        gesture_ = nullptr; gestureDown_ = false;
         relayout();
     }
 
@@ -1906,8 +1939,6 @@ private:
         const int sig = top * 16 + (top == kPageMods ? modsTarget_ & 0xff : 0);
         if (top != pageTop_ || sig != pageSig_)
         {
-            if (gesture_ != nullptr && pageTop_ != top)
-                dropGesture();
             if (top == kPageRoute && pageTop_ != kPageRoute)
             {
                 savedGroup_ = fullActive_;
@@ -1997,11 +2028,6 @@ private:
                 const int pi = indexOfKey (prefix_ + c.key);
                 if (pi >= 0 && info (pi).choices != nullptr)
                     it.cell.count = std::min (static_cast<int> (info (pi).numChoices), 8);
-            }
-            else if (c.kind == oscspec::K::Mask)
-            {
-                mask_.setId (kSpec + i);
-                mask_.setLabel (c.label);
             }
         }
         spec_.relayoutNow();
@@ -2122,8 +2148,8 @@ private:
                 modsListNames_.push_back (uibind::sourceGroupName (g));
                 modsListChoices_.push_back (-g);
             }
-            list_.state.header = nullptr;
-            list_.state.headerBack = false;
+            listData_.header = nullptr;
+            listData_.headerBack = false;
         }
         else
         {
@@ -2133,13 +2159,13 @@ private:
                     modsListNames_.push_back (uibind::sourceName (c));
                     modsListChoices_.push_back (c);
                 }
-            list_.state.header = uibind::sourceGroupName (modsListGroup_);
-            list_.state.headerBack = true;
+            listData_.header = uibind::sourceGroupName (modsListGroup_);
+            listData_.headerBack = true;
         }
-        list_.state.items = modsListNames_.data();
-        list_.state.count = static_cast<int> (modsListNames_.size());
-        list_.state.current = -1;
-        list_.showCurrent();
+        listData_.items = modsListNames_.data();
+        listData_.count = static_cast<int> (modsListNames_.size());
+        listData_.current = -1;
+        showCurrentRow();
         modsListFilled_ = true;
     }
     int modsTargetParam_ = -1, savedGroup_ = -1;
@@ -2243,7 +2269,7 @@ private:
                 }
                 case T::Toggle: c.on = plain >= 0.5f; break;
                 case T::SnapBit: c.on = (static_cast<int> (std::lround (plain)) & 4096) != 0; break;
-                case T::Mask: mask_.state.mask = static_cast<int> (std::lround (plain)) & 4095; break;
+                case T::Mask: break;   // the host reads the mask from the parameter (nativeui::kNoteMask)
                 case T::List: c.index = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, c.count - 1)); break;
                 case T::UpDown: c.value = static_cast<int> (std::lround (plain)); break;
                 case T::Picto:
@@ -2397,14 +2423,6 @@ private:
         for (Item& it : main_) if (it.id == id) return &it;
         return nullptr;
     }
-    /** The component of the page that takes a touch: the list of the browsers and of the source of a new modulation (case (c)); every other control of the pages is the host's. */
-    ui::Component* topComponent() noexcept
-    {
-        if (listOpen())
-            return &list_;
-        return nullptr;
-    }
-
     void handle (const ui::Change& c, UiStack& stack, IInstanceView& v)
     {
         if (! c)
@@ -2443,7 +2461,7 @@ private:
                     stack.openDetail (kPageRoute);
                     return;
                 case kListBackdrop:
-                    if (pageTop_ == kPageMods && modsPicking_)
+                    if (pageTop_ == kPageMods && modsPicking_ && mods_.numRows() > 0)
                         closeModsPicking();
                     else
                         stack.back();
@@ -2573,10 +2591,6 @@ private:
             loadMods (v);
             return;
         }
-        // ---- the note mask of the transpose snap (case (c)): the only control of the pages that is still the plugin's
-        Item* it = find (id);
-        if (it != nullptr && it->hasCell && it->param >= 0 && it->type == T::Mask && c.kind == K::Index)
-            writePlain (v, it->param, (static_cast<int> (std::lround (v.param (it->param))) & 4096) | (c.index & 4095));
     }
     void closeModsPicking()
     {
@@ -2888,12 +2902,12 @@ private:
     void fillWavetableList()
     {
         // the header is the list's own bar (the way up and the title), the rows are the categories or the tables
-        list_.state.header = wtBrowser_.title().c_str();
-        list_.state.headerBack = ! wtBrowser_.atCategories();
-        list_.state.items = wtBrowser_.items();
-        list_.state.count = wtBrowser_.count();
-        list_.state.current = wtBrowser_.currentRow();
-        list_.showCurrent();
+        listData_.header = wtBrowser_.title().c_str();
+        listData_.headerBack = ! wtBrowser_.atCategories();
+        listData_.items = wtBrowser_.items();
+        listData_.count = wtBrowser_.count();
+        listData_.current = wtBrowser_.currentRow();
+        showCurrentRow();
     }
     void chooseWavetableRow (int row, UiStack& stack, IInstanceView& v)
     {
@@ -2947,13 +2961,19 @@ private:
     {
         // the header (the way up and the path) is the list's own bar, the rows are the ones below the first
         browserTitle_ = browser_.title();
-        list_.state.header = browserTitle_.c_str();
-        list_.state.headerBack = ! browser_.atRoots();
-        list_.state.items = browser_.items() + 1;
-        list_.state.count = std::max (0, browser_.count() - 1);
+        listData_.header = browserTitle_.c_str();
+        listData_.headerBack = ! browser_.atRoots();
+        listData_.items = browser_.items() + 1;
+        listData_.count = std::max (0, browser_.count() - 1);
         const int cur = browser_.rowOf (lastChosen_[browser_.kind() - 1]);
-        list_.state.current = cur > 0 ? cur - 1 : -1;
-        list_.showCurrent();
+        listData_.current = cur > 0 ? cur - 1 : -1;
+        showCurrentRow();
+    }
+
+    /** The page of the list that holds the current row (the list opens there). */
+    void showCurrentRow() noexcept
+    {
+        nativeListFirst_ = listData_.current > 0 ? listData_.current - listData_.current % nativeui::modboard::kListRows : 0;
     }
 
     /** The detail page a page button of MORE opens (by the token of its key in osc_spec_page.h). */
@@ -3122,8 +3142,22 @@ private:
     QGroupIds detailGroups_[kMaxDetailGroups];
     int nDetailGroups_ = 0, detailActive_ = 0;
     ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
-    ui::ListPopup list_;
-    ui::NoteMask mask_;                                        // case (c): the mask of the transpose snap, the only control the plugin still draws and handles
+    /** The list on the screen (the content browser, the wavetable browser, the source of a new modulation): the header (the way up and the title), the rows. Plain data; the host skin shows it with the cells of the modulation picker. */
+    struct ListData
+    {
+        const char* header = nullptr;
+        bool headerBack = false;
+        const char* const* items = nullptr;
+        int count = 0, current = -1;
+    };
+    ListData listData_;
+    int nativeListFirst_ = 0;            // the first row of the page of the list shown
+    uint32_t nativeListSignature_ = 0;   // what the host was told last (the names, the page): a new one makes new cells and a new text page
+    int nativeListSerial_ = 0;
+    bool listPublished_ = false, maskPublished_ = false;
+    Item* maskItem_ = nullptr;           // the note mask of the transpose snap on the detail page now (the item holds the parameter)
+    ui::Rect maskArea_;
+    static constexpr int kMaskHeight = 120;   // two rows of 56 and a gap of 8 (components/native/note_mask)
     bool modsPicking_ = false, modsListFilled_ = false;
     int modsListGroup_ = -1;
     std::vector<const char*> modsListNames_;
@@ -3137,7 +3171,6 @@ private:
     std::array<Item*, nativeui::oscdetail::kCells> nativeDetailItems_ {};
     std::array<const char*, oscspec::OscSpecPage::kMaxBlocks> nativeDetailBlocks_ {};
     const char* nativeDetailTitle_ = "";
-    ui::NoteMask* nativeDetailMask_ = nullptr;
     bool nativeRouting_ = false;
     oscspec::OscSpecPage spec_;
     ui::Rect loadRect_;
@@ -3156,8 +3189,7 @@ private:
     std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     std::vector<Item> main_, page_;
     bool bindingFull_ = false;   // bind () marks the rows of the full screen
-    ui::Component* gesture_ = nullptr;
-    bool gestureDown_ = false, configured_ = false, modsDirty_ = true;
+    bool configured_ = false, modsDirty_ = true;
     int pageSel_ = 0;   // the oscillator of a page of the OSC tab (setPage), 0: the Play page's UI
     int noiseSample_ = -1;
     int w_ = 1280, h_ = 628, sel_ = 2, typeRaw_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, pageLoaded_ = 0, qActive_ = 0;

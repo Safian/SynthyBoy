@@ -125,7 +125,7 @@ constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = kFilterChainRoutes - 1;   // the routing only (Parallel, F1 to F2, F2 to F1)
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
 constexpr int kLfoTargetsAction = kFxEditorPower + 1;
-// Appended 2026-11-28 (ng/modosc): read-only dynamic text lines of the Mod page (native_text.h) and the twelve notes of the transpose snap (native_note_mask.h).
+// Appended 2026-11-28 (ng/modosc): read-only dynamic text lines of the Mod page (native_text.h) and the twelve notes of the transpose snap (cells bound by osc_ui.h publishNativeNoteMask).
 constexpr int kNativeText = kLfoTargetsAction + 1;
 constexpr int kNativeTextLines = 5;
 constexpr int kNoteMask = kNativeText + kNativeTextLines;

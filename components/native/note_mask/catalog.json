@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "approved": false,
+  "order": 49,
+  "title": "NoteMask",
+  "sections": [],
+  "note_mask": {
+    "samples": [
+      {
+        "id": "c-major",
+        "file": "note-mask-c-major.png",
+        "alt": "NoteMask, C-dúr hangjai",
+        "caption": "C D E F G A B bekapcsolva · 474 px széles",
+        "mask": 2741,
+        "width": 474,
+        "state": "enabled"
+      },
+      {
+        "id": "empty",
+        "file": "note-mask-empty.png",
+        "alt": "NoteMask, egy hang sincs bekapcsolva",
+        "caption": "üres halmaz · 474 px széles",
+        "mask": 0,
+        "width": 474,
+        "state": "enabled"
+      },
+      {
+        "id": "pentatonic",
+        "file": "note-mask-pentatonic.png",
+        "alt": "NoteMask, pentaton skála",
+        "caption": "C D E G A, szűkebb 420 px",
+        "mask": 661,
+        "width": 420,
+        "state": "enabled"
+      },
+      {
+        "id": "disabled",
+        "file": "note-mask-disabled.png",
+        "alt": "NoteMask letiltva",
+        "caption": "letiltva (OFF modul) · 474 px széles",
+        "mask": 2741,
+        "width": 474,
+        "state": "disabled"
+      }
+    ]
+  }
+}

@@ -36,7 +36,7 @@ For AI coding agents. Imperative and terse. Human docs with one page per compone
 | continuous value | `Knob` (row cell: `SliderBar`, `HBar`) |
 | whole number | `NumberField` (small integer: `UpDownStepper`) |
 | level + meter | `Fader` |
-| set of notes | `NoteMask` |
+| set of notes | native `NoteMask` (`components/native/note_mask`, twelve host Buttons; no C++ control) |
 | open a page / popup | `MenuButton`, `DetailButton`, `RouteButton` |
 | name something | `TextEntry` |
 | four values on four knobs | `QGroup` |
@@ -121,7 +121,6 @@ SliderBar | mixer_strip.h | horizontal slider in a 56 px cell | V
 Fader | mixer_strip.h | vertical level fader with meter | V
 StripPower | mixer_strip.h | power glyph + name | I
 PictogramSelector | base.h | row of pictograms | I
-NoteMask | note_mask.h | 12 note LED cells, mask | I
 ListPopup | list.h | popup list with backdrop, scroll | I R
 TextEntry | text_entry.h | on-screen keyboard page | R
 ModSourceBoard | mod_board.h | chips of modulation sources | I

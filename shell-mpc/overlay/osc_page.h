@@ -127,7 +127,6 @@ public:
                 marks_.draw (sb, r);
         }
         osc_.drawOnDisplay (sb);
-        osc_.drawPopup (sb);
         osc_.clearNativeDetailPixels (sb);
         if (osc_.topPage() == 0 && osc_.full().hasNativePower())
             ui::clearNativeCell (sb, powerArea());
@@ -533,6 +532,7 @@ private:
             return false;
         inst.setNativeOscDetail (state);
         nativeDetailPublished_ = state.frame != n::Hidden;
+        osc_.publishNativeNoteMask (inst, consume && nativeDetailPublished_);
         if (! consume || ! nativeDetailPublished_)
             return false;
         const auto apply = [&] (int field)
@@ -561,6 +561,7 @@ private:
     {
         if (nativeDetailPublished_)
             inst.setNativeOscDetail (osc_.prepareNativeDetail (false, preset_));
+        osc_.publishNativeNoteMask (inst, false);   // the mask item is gone after prepareNativeDetail (false): the cells go
         nativeDetailPublished_ = false;
         nativePress_ = {-1, -1};
     }

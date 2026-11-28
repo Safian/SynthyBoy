@@ -766,7 +766,6 @@ private:
         if (compact && osc_->selection() == playosc::kSub)
             for (const auto& cell : osc_->compactNativeCells())
                 ui::clearNativeCell (sb, cell);
-        osc_->drawPopup (sb);   // the popups lie over the picture
         if (osc_->isMain() && env_ && lfo_)
             nativeEnvLfo_.drawApertures (sb, *env_, *lfo_);
     }
