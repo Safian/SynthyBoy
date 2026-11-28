@@ -100,7 +100,7 @@ A change that is mechanical (renaming a class or token, replacing a widget by a 
 
 The proven fast Key 61 page-load pattern (Voice, Master, FX card switch) applies to EVERY screen; a screen that breaks a rule is a defect. Evidence, per-screen audit, ranking and the worst-five remediations: [docs/review/page-load-pattern.md](docs/review/page-load-pattern.md); measured facts: [docs/dsp-knowledge/mpc-display.md](docs/dsp-knowledge/mpc-display.md). Checklist:
 
-1. **Compact tab tree:** keep each tab ≤ ~450 expanded components (never > 1,000); measure with the ordered-pairs expander over `skin/TUI.json` + `skin/defs_*.json`.
+1. **Compact tab tree:** keep each tab ≤ ~450 expanded components (never > 1,000); measure with the ordered-pairs expander over `skin/TUI.json` + `skin/defs_*.json`, counting `repeats` multiplication (`size = children * repeats`, since e.g. `"repeats": 8` multiplies every child node by 8).
 2. **Retarget, do not duplicate:** share one `<family>Screen` per repeating tab family and retarget one shared slot bank instead of per-state, per-item, per-source, or per-model copies.
 3. **No blank-at-0 root gates:** bind standalone tab roots to direct engine params or always-valid cached handles, never a zero-default or cross-tab view gate; gate text-owned cells only on 0/1 `kTextGate` (`UNSURE` on Key 61).
 4. **Lean artwork:** use plain `backgroundData` colour (`ff090d19`, `image: ""`) and shared control filmstrips; avoid embedding large hidden modals (e.g. keyboard) across repeating tabs.
