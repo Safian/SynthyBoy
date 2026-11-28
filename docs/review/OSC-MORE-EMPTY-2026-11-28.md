@@ -241,3 +241,25 @@ For every cell `c = 0..6`, `block = g = 0` (`MODE..RANGE`) or `1` (`WT POS..WARP
 | `(6, 1)` -> `25` | `WARP 2` (`warp2.spread`) | `3360` / `3392` / `3424` | `n::Bi (2)` -> `2/16 = 0.125f` | `NonZero/Kind`; child `"2"` (`oscNativeSetting_dial_bi`), `IndexedEnabling/2/17/Kind`, `map` omits `Data` | **Numeric Match**; broken by Break Points 1 & 2 |
 
 Note: Applying Fix 3.2 (flat direct controls in `oscDetailGrid` keyed by `(col, row, kind)` without `repeats: 8`, `NonZero/Kind`, or `oscDetailTile*`) fixes **both** `MORE` and `UNISON` (plus `OPTIONS`, `MAP`, `GRAIN`, `SAMPLE REGION/SLICE`, `SPECTRAL FILTER/SCAN`, `ENVELOPE`, `ROUTING`) uniformly through one mechanism.
+
+---
+
+## 5. What Could Not Be Decided From Source
+
+1. **Exact Key 61 host rule(s) inside Break Point 2 that drop `oscDetailGrid` and `explicit.json` (`HYPOTHESIS`)**:
+   - **Proven (`FACT`)**: C++ publishes the right parameter values (`detail-osca-unison.vst.json`, `osc_ui.h:942-1060`), direct controls in `oscNativeDetail` (`Unison 0..6` in `3bb27424`) render on Key 61 (`osc_unison_detail_wave_old.jpg`), and unrolling `repeats: 8` + removing `{Increment}` inside `oscDetailTile` (`explicit.json` `af97c588`) still renders zero controls on Key 61.
+   - **Undecided from source alone**: Which exact subset of (a) `NonZero/Kind` / `NonZero/Parameter <KindP>` on the 17-step `Kind` parameter, (b) `IndexedEnabling/.../Kind` / custom-remapped gate alias chaining, (c) missing `Data -> Data` in `"1".."5"`/`"Menu face"` `map`, and (d) 3-level `oscDetailGrid -> oscDetailTile* (Proportional 0 0 1 1) -> oscNativeSetting_* (Absolute)` causes the Key 61 host to hide the tiles, and whether `"repeats": 8` works without `oscDetailTile*` (as in `fxNativeGalleryRow1/2` in `skin/defs_fx.json`).
+   - **Single minimal Key 61 probe to settle it** (4 test instances for `SEM` `col=0, row=0`, `Value = Parameter 3335`, `Kind = Parameter 3399`, placed directly in `oscNativeDetail` alongside `back` on `MORE`):
+     1. Direct `oscNativeSetting_dial_uni` (`Absolute`, `Data -> 3335`, `Caption -> 3335`, gate `["IndexedEnabling/4/17/Parameter 3399"]`) — tests the baseline Fix 3.2 control.
+     2. Same as (1) with `["NonZero/Parameter 3399", "IndexedEnabling/4/17/Parameter 3399"]` — isolates `NonZero` on 17-step `Kind`.
+     3. Wrapped in a 1-child `oscDetailTile` with `Proportional 0 0 1 1`, explicit `Data -> Data`, `Caption -> Data`, and direct gate `["IndexedEnabling/4/17/Parameter 3399"]` — isolates the `Proportional` 3-level wrapper.
+     4. A `version: 3, repeats: 2` container holding (1) with `Data -> Parameter {Increment:Base=3335,Step=4}`, `Caption -> Parameter {Increment:Base=3335,Step=4}`, and gate `["IndexedEnabling/4/17/Parameter {Increment:Base=3399,Step=4}"]` — settles whether `repeats` can halve Fix 3.2's node count on `oscDetailGrid` without hiding controls.
+
+2. **MPC XL (`aarch64`) behaviour (`HYPOTHESIS`)**:
+   - No XL screenshot of `MORE` (`3bb27424`, `33ca2ed6`, or `HEAD`) exists in the repository or `.hw-local/mpc-perf/`. Because the skin parser differs in known ways between 32-bit Key 61 and 64-bit XL (`docs/dsp-knowledge/skin-host-behaviour.md`), one XL capture on `Osc A -> MORE` settles whether XL shows the same empty grid.
+
+3. **Other Detail pages (`OPTIONS`, `MAP`, `GRAIN`, `SAMPLE REGION/SLICE`, `SPECTRAL FILTER/SCAN`, `ENVELOPE`) (`HYPOTHESIS`)**:
+   - All of them traverse the exact same `oscDetailGrid` -> `oscDetailTile*` tree on `HEAD` (`skin/defs_osc.json:18966-19149`), and earlier Key 61 captures (`docs/screens/old/osc_more_*_old.jpg`, `osc_frame_map_old.jpg`) showed empty block frames there too. Exact per-control visibility, menu choices (`WARP 2` long list, `gran.*`, `spec.*`, `sample.*`), and `oscNoteMask` (`OPTIONS`) cannot be verified until Fix 3.2 is deployed and photographed on device (`TODO.md:21, 84, 103`).
+
+4. **Live Key 61 `.vst.json` readout from `HEAD` (`16316492`) on `MORE` (`HYPOTHESIS` -> `FACT` parity check)**:
+   - While `prepareNativeDetail`, `nativeOscDetailPoll`, and `oscDetailValue` are verified from source and `detail-osca-unison.vst.json` confirmed live VST values on `UNISON`, no `.vst.json` capture was taken during `05:27` or `HEAD` while `MORE` was open. One VST parameter dump on Key 61 with `Osc A -> MORE` open settles runtime values of `Parameter 3334` (`0.6`) and `3399, 3403, 3407, 3415, 3416, 3420, 3401, 3405`.
