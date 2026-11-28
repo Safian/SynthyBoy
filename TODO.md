@@ -54,6 +54,7 @@
 
 ## Eszközellenőrzések (Key 61 és XL), egy közös készülékteszt
 
+- [ ] Osc szentinel áthelyezés (900,8 -> 1180,2; `backgrounds_manifest.h` + 5 Osc fül): Key 61-en az Osc A/B/C/Sub/Noise lapokon az overlay felismerése (a lap kirajzolódik) és a BROWSE szélén nincs sötét rovátka. Ha a felismerés elromlik: vissza (900,8).
 - [ ] Play 2. fázis kézi ellenőrzés (Key 61, majd XL; a végén): a hosszú SOURCE-nevek csonkolása a legördülőben (három pont vagy balra igazítás), a 40 px-es fejléc-felületek érinthetősége az 56 px-es helyen, a ROUTE/Sub választó szélességváltása (2676-os kapu). Kész, ha mind rendben van a készüléken.
 - [ ] Mixer csíkcímek 22-es betűvel (Key 61, majd XL; a végén): a 115×17 px-es névdoboz nem vágja le a címeket (SUB, A, B, C, NOISE, F1, F2, BUS 1/2, MAIN). Kész, ha olvashatók és nem vágódnak; ha vágódnak, a betűméret vagy a doboz változik.
 - [ ] Egyeztesd a `docs/release/DEVICE-CHECKLIST.md` nyitott próbáit a végleges csomag jegyzőkönyvével.
