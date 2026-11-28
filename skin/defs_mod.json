@@ -1908,7 +1908,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 120 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Confirm"
+         "Confirm0"
         ]
        }
       },
@@ -1945,7 +1945,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 120 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Confirm"
+         "Confirm1"
         ]
        }
       }
