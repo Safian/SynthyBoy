@@ -252,6 +252,7 @@ public:
         nativePublished_ = false;
         publishNativeEditor (inst, {});
         publishNativeDetail (inst, {});
+        publishTexts (inst);
         dropGesture();
     }
 
@@ -266,8 +267,6 @@ public:
     bool isMain() const noexcept { return stackDepth_ == 0; }
     void setHostBackground (bool confirmed) noexcept { nativeGround_ = confirmed; }
     bool hostBackground() const noexcept { return nativeGround_ && nativePage_ && pageTop_ == 0; }
-
-    void drawPageGround (gpu::SceneBuilder&) const {}
 
     ui::Rect nativeRect (int field, int action = nativeui::lfo::kTargets) const noexcept
     {
@@ -337,76 +336,23 @@ public:
         return {};
     }
 
-    // ---- the drawing (a picture is one scene of cached cells, then the live parts, then the popups)
-    void drawCompact (gpu::SceneBuilder& sb, bool nativeBackground = false) const
+    // ---- the drawing: only the live display (the shape of one cycle / the trace) and the editor canvas; the ground, the frames and every text are native cells of the host skin
+    void drawCompact (gpu::SceneBuilder& sb) const
     {
-        const ui::theme::Look& L = ui::theme::L();
-        auto ground = [&] (int x, int y, int w, int h)
-        {
-            if (nativeBackground)
-                return;   // Native Play background also owns the gaps between controls.
-            if (w <= 0 || h <= 0)
-                return;
-            ui::Cell cell (sb, { x, y, w, h }, 0);
-            sb.gradientRect (static_cast<float> (x), static_cast<float> (y), static_cast<float> (x + w), static_cast<float> (y + h), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
-        };
-        const ui::Rect header { kCompactX + 6, kTabY + 10, kCompactW - 12, 56 };
-        ground (kGroundX0, kTabY, kGroundX1 - kGroundX0, header.y - kTabY);
-        ground (kGroundX0, header.y, header.x - kGroundX0, header.h);
-        ground (header.right(), header.y, kGroundX1 - header.right(), header.h);
-        const int midY = header.bottom();
-        if (rnd_ == 0)
-        {
-            const ui::Rect rise = compG_.rise;
-            const ui::Rect smooth = compG_.smoothTime;
-            ground (kGroundX0, midY, kGroundX1 - kGroundX0, rise.y - midY);
-            ground (kGroundX0, rise.y, rise.x - kGroundX0, rise.h);
-            ground (rise.right(), rise.y, smooth.x - rise.right(), rise.h);
-            ground (smooth.right(), rise.y, kGroundX1 - smooth.right(), rise.h);
-            ground (kGroundX0, rise.bottom(), kGroundX1 - kGroundX0, kTabY + kTabH - rise.bottom());
-        }
-        else
-            ground (kGroundX0, midY, kGroundX1 - kGroundX0, kTabY + kTabH - midY);
-        {
-            ui::Pen pen (sb, true);
-            ui::Cell cell (sb, compG_.display);
-            pen.block (compG_.display);   // the frame of the display
-        }
         ui::lfodisplay::draw (sb, compG_.display, compactData(), ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);   // hot: the data follows with the live parts (drawLive), the cells keep their groups
     }
-    /** The opaque ground of the whole tab and the page of the stack (the full screen, the editor, the targets, the modulations of a control). */
+    /** The page of the stack: the marker covers, the editor canvas, the name keyboard (kept until the native keyboard), the Q frames of the targets pages and the display. */
     void drawPage (gpu::SceneBuilder& sb) const
     {
         if (page_ && pageTop_ == 0)
             drawNativeMarkerCovers (sb, "lfo1");
         if (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor))
         {
-            std::array<ui::Rect, nativeui::lfoeditor::kCount> cells {};
-            for (int field = 0; field < nativeui::lfoeditor::kCount; ++field)
-                cells[field] = nativeEditorRect (field);
-            ui::outsideNativeCells (ui::Rect { 0, kTabY, w_, kTabH }, cells,
-                                    [&] (ui::Rect strip) { drawRootGround (sb, strip); });
-        }
-        else if (pageTop_ == kPagePointMod)
-        {
-            std::array<ui::Rect, nativeui::lfodetail::Header> cells {};
-            for (size_t i = 0; i < cells.size(); ++i)
-                cells[i] = pointMod_.rect (static_cast<int> (i));
-            ui::outsideNativeCells (ui::Rect { 0, kTabY, w_, kTabH }, cells,
-                                    [&] (ui::Rect strip) { drawRootGround (sb, strip); });
-        }
-        else if (pageTop_ != 0 && pageTop_ != kPageList)
-            drawRootGround (sb, { 0, kTabY, w_, kTabH });
-        if (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor))
-        {
-            drawEditor (sb);
+            editor_.canvas.draw (sb);
             return;
         }
         if (pageTop_ == kPagePointMod)
-        {
-            drawPointMod (sb);
             return;
-        }
         if (pageTop_ == kPageKeyboard)
         {
             entry_.draw (sb);
@@ -419,26 +365,15 @@ public:
         else
         {
             if (! page_)
-                drawFullFurniture (sb);
+                drawActiveBlock (sb);
             ui::lfodisplay::draw (sb, fullG_.display, fullDisplayData(), ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);
         }
     }
+    /** The scroll thumb of a long list (a live indicator: its place follows the scrolling); the rows, the header, the backdrop and the box are native cells. */
     void drawPopup (gpu::SceneBuilder& sb) const
     {
-        if (stackDepth_ > 0 && pageTop_ == kPageList)
-        {
-            namespace n = nativeui::lfodetail;
-            drawMenuChrome (sb);
-            auto cut = [&] (ui::Rect cell)
-            {
-                const gpu::ScopedClip clip (sb, cell.x, cell.y, cell.right(), cell.bottom());
-                if (clip)
-                    sb.clear (0u);
-            };
-            cut (menu_.headerRect());
-            if (listNativeRows() > 0)
-                cut (ui::Rect::unite (nativeDetailRect (n::FirstRow), nativeDetailRect (n::FirstRow + listNativeRows() - 1)));
-        }
+        if (stackDepth_ > 0 && pageTop_ == kPageList && menu_.scrolls())
+            drawMenuThumb (sb);
     }
     /** The cursors of the voices / the newest value of the trace (the display that is on screen). */
     void drawLive (gpu::SceneBuilder& sb) const
@@ -455,8 +390,6 @@ public:
             if (displayHot_)
                 ui::lfodisplay::draw (sb, fullG_.display, data, false, ui::lfodisplay::Part::Data);
             ui::lfodisplay::drawLive (sb, fullG_.display, data);
-            if (nativePlayEditor_ && pageTop_ == 0)
-                ui::clearNativeCell (sb, fullG_.close);
         }
     }
     /** What the current state draws, as one number (the picture changes when it does): a scene of everything, the live parts included. */
@@ -852,20 +785,6 @@ private:
     bool editShown() const noexcept { return editShown_ && ! random(); }
 
 
-    /** Paint the corresponding slice of the same gradient exported for the host skin. */
-    static void drawRootGround (gpu::SceneBuilder& sb, const ui::Rect& area)
-    {
-        if (area.empty())
-            return;
-        const auto& look = ui::theme::L();
-        ui::Cell cell (sb, area, 0);
-        const float y = static_cast<float> (area.y) - 0.001f;
-        const float rows[2] { y, y };
-        if (sb.curve (rows, 2, area.x, area.w) >= 0)
-            sb.fillGradient (static_cast<float> (area.bottom()), page::kTabY, page::kTabY + page::kTabH,
-                             ui::theme::rgba (look.bg0), ui::theme::rgba (look.bg1));
-    }
-
     void updateHostedEditor (IInstanceView& inst, UiStack& stack, int highlight, double nowMs,
                              const synthyboy::LiveValues* live, bool refresh)
     {
@@ -894,6 +813,7 @@ private:
             publishNativeDetail (inst, nativeDetailView (inst, stack));
             updateNativePick (inst, stack);
         }
+        publishTexts (inst);
         if (! nativePage_)
         {
             if (nativePublished_)
@@ -3389,77 +3309,56 @@ private:
     }
 
     // ======================================================================================================================================================================
-    // the parts of the pages the host cannot draw: the texts and frames of the ground, the canvas, the menu chrome
-    void drawEditor (gpu::SceneBuilder& sb) const
+    // what is left to draw: the frame of the active block of the Play expansion and the scroll thumb of a list (live Q / scroll indicators)
+    void drawActiveBlock (gpu::SceneBuilder& sb) const
     {
-        editor_.canvas.draw (sb);
-        ui::Pen p (sb, true);
-        ui::Cell cell (sb, { 0, kTabY, w_, kTabH });
-        const ui::theme::Look& T = ui::theme::L();
-        const ui::Rect titleEdit = editor_.titleRect (0);
-        if (! titleEdit.empty())
-            p.textLeft (titleEdit, "SELECTED POINT", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-        if (editor_.canvas.selection().count() == 0 && ! titleEdit.empty())
-        {
-            const ui::Rect hint { titleEdit.x + 170, titleEdit.y, std::max (0, titleEdit.w - 170), titleEdit.h };
-            p.textRight (hint, "TAP A POINT OR TURN Q1", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
-        }
-        p.textLeft (editor_.titleRect (1), "GRID", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-        p.textLeft (editor_.titleRect (2), "TRIGGER", T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-        const ui::Rect cr = editor_.canvasRect();
-        p.textRight ({ cr.right() - 8 - 220, cr.y + 6, 220, 18 }, editor_.info(), T.fLabel - 3.0f, p.c (T.textFaint, 255), T.fMin);
-        if (editor_.status()[0] != '\0')
-            p.textLeft ({ cr.x + 14, cr.y + 6, std::max (0, cr.w - 260), 22 }, editor_.status(), T.fLabel - 2.0f, p.c (T.flow[0], 255), T.fMin);
-    }
-    void drawPointMod (gpu::SceneBuilder& sb) const
-    {
-        ui::Pen p (sb, true);
-        ui::Cell cell (sb, { 0, kTabY, w_, kTabH });
-        const ui::theme::Look& T = ui::theme::L();
-        const int y = kTabY + 8 + ui::kQLane;
-        p.textLeft ({ 640, y, std::max (0, w_ - 640 - 8), 56 }, pointMod_.summary(), T.fLabel + 2.0f, p.c (T.text, 255), T.fMin);
-    }
-    /** The frames and the captions of the full screen of the Play page's expansion: the display block, the blocks of the bottom band with their titles. */
-    void drawFullFurniture (gpu::SceneBuilder& sb) const
-    {
-        ui::Pen p (sb, true);
-        ui::Cell cell (sb, fullG_.tab);
-        const ui::theme::Look& T = ui::theme::L();
-        if (fullG_.edit.empty())
-            p.block (fullG_.display);
         buildGroups();
         const int act = activeGroup();
         const int activeBlock = act >= 0 && act < nGroups_ ? groups_[act].block : -1;
-        for (int i = 0; i < fullG_.nBlocks; ++i)
-            p.rrect (fullG_.blocks[i], T.rBlock, p.c (ui::colour::rgba (i == activeBlock ? T.keylineHi : T.keyline, 255)), T.frame);
-        p.textLeft ({ fullG_.tab.x + 8 + 84 + lfolayout::kGap, fullG_.tab.y + 2 + ui::kQLane, 56, 56 }, "LFO", T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
-        static const char* const kShape[3] = { "RATE", "TIMING", "MOTION" }, * const kRandom[1] = { "RANDOM" };
-        for (int i = 0; i < fullG_.nBlocks; ++i)
-        {
-            const char* title = random() ? kRandom[i] : kShape[i];
-            if (i == 0 && keyActive_)
-                title = random() ? "RANDOM - RATE FOLLOWS THE KEY" : "RATE - FOLLOWS THE KEY";
-            p.textLeft ({ fullG_.blocks[i].x + 10, fullG_.blocks[i].y + 4, std::max (0, fullG_.blocks[i].w - 20), 18 }, title, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        }
+        if (activeBlock < 0 || activeBlock >= fullG_.nBlocks)
+            return;
+        ui::Pen p (sb, true);
+        ui::Cell cell (sb, fullG_.tab);
+        const ui::theme::Look& T = ui::theme::L();
+        p.rrect (fullG_.blocks[activeBlock], T.rBlock, p.c (ui::colour::rgba (T.keylineHi, 255)), T.frame);
     }
-    /** The dimmed ground and the frame of the list menu (the rows and the header are native cells of the host). */
-    void drawMenuChrome (gpu::SceneBuilder& sb) const
+    void drawMenuThumb (gpu::SceneBuilder& sb) const
     {
         const ui::theme::Look& T = ui::theme::L();
         ui::Pen p (sb, true);
         ui::Cell cell (sb, menu_.parent);
-        p.rect (menu_.parent, ui::colour::rgba (T.bg1, 190));
         const ui::Rect b = menu_.box();
-        p.block (b, true);
-        p.rrect (b, T.rBlock, p.c (T.flow[0], 255), 1.6f);
-        if (menu_.scrolls())
+        const ui::Rect th = menu_.thumbRect();
+        p.rrect ({ th.x, b.y + lfolayout::Menu::kPad + menu_.headerH(), lfolayout::Menu::kBarW, b.h - 2 * lfolayout::Menu::kPad - menu_.headerH() }, 5.0f, p.c (T.track, 255));
+        p.paintY2 (static_cast<float> (th.y), static_cast<float> (th.bottom()), T.flow[0], T.flow[3], 255);
+        p.rrect (th, 5.0f, 255);
+        p.paintOff();
+    }
+
+    /** The texts of the shape editor and of the point modulation page for the native Labels (an empty text hides the Label): published after every update (a line changes its value only when its text does). */
+    void publishTexts (IInstanceView& v)
+    {
+        namespace t = nativeui::nativetext;
+        const bool editorUp = stackDepth_ > 0 && (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor)) && (page_ || nativePlayEditor_);
+        const bool pointUp = stackDepth_ > 0 && pageTop_ == kPagePointMod && (page_ || nativePlayEditor_);
+        std::array<std::string, 8> next;   // EdSelected, EdHint, EdGrid, EdTrigger, EdInfo, EdStatus, EdMarkerHint, PointModSummary
+        if (editorUp)
         {
-            const ui::Rect th = menu_.thumbRect();
-            p.rrect ({ th.x, b.y + lfolayout::Menu::kPad + menu_.headerH(), lfolayout::Menu::kBarW, b.h - 2 * lfolayout::Menu::kPad - menu_.headerH() }, 5.0f, p.c (T.track, 255));
-            p.paintY2 (static_cast<float> (th.y), static_cast<float> (th.bottom()), T.flow[0], T.flow[3], 255);
-            p.rrect (th, 5.0f, 255);
-            p.paintOff();
+            next[0] = "SELECTED POINT";
+            if (editor_.canvas.selection().count() == 0)
+                next[1] = "TAP A POINT OR TURN Q1";
+            next[2] = "GRID";
+            next[3] = "TRIGGER";
+            next[4] = editor_.info();
+            next[5] = editor_.status();
+            const auto& cs = editor_.canvas.state;
+            if (cs.markerX >= 0.0f && cs.markerKind != ui::ShapeCanvas::MarkerNone && ! editor_.canvas.markerLive())
+                next[6] = ui::ShapeCanvas::markerHint (cs.markerKind);
         }
+        if (pointUp)
+            next[7] = pointMod_.summary();
+        for (int i = 0; i < 8; ++i)
+            v.setNativeText (t::EdSelected + i, next[static_cast<size_t> (i)].c_str());
     }
 
     // ======================================================================================================================================================================

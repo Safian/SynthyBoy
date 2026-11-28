@@ -29,7 +29,7 @@ namespace page
 {
 constexpr int kW = 1280, kH = 800, kTabY = 110, kTabH = 628;   // the screen, and the tab (the host's top bar above it, its function key bar below it)
 
-/** The opaque ground of the tab (a gradient: a cached cell). */
+/** The opaque ground of the tab (a gradient: a cached cell). Only the pages that still draw their own ground call it (it goes with their native ports). */
 inline void ground (gpu::SceneBuilder& sb)
 {
     const ui::theme::Look& T = ui::theme::L();
@@ -94,18 +94,6 @@ inline bool checkHostBackground (const Ui& ui) noexcept
         return false;
 }
 
-template <class Ui>
-auto drawGround (const Ui& ui, gpu::SceneBuilder& sb, int) -> decltype (ui.drawPageGround (sb), void())
-{
-    ui.drawPageGround (sb);
-}
-
-template <class Ui>
-void drawGround (const Ui& ui, gpu::SceneBuilder& sb, long)
-{
-    if (! checkHostBackground (ui))
-        ground (sb);
-}
 } // namespace page
 
 /** The hooks of a page view for a page that needs nothing of the plugin around it (a page of the kit over mpckit::IInstance): no names to load, no loading bar. A plugin with its own
@@ -265,13 +253,12 @@ public:
     const Ui& ui() const noexcept { return ui_; }
 
 private:
-    /** The whole picture: transparent where the host keeps the screen (above the tab, in the strip of the Q-Link panel), the ground of the tab, the page. */
+    /** The whole picture: transparent where the host keeps the screen (above the tab, in the strip of the Q-Link panel), the page (the ground of the tab is the host skin's). */
     void buildPicture (gpu::SceneBuilder& sb) const
     {
         sb.clear (0u);
         if (edgeX_ < page::kW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge
             sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (page::kH));
-        page::drawGround (ui_, sb, 0);
         ui_.draw (sb);
         if (loading_)   // the loading mark: a 4 px amber bar along the top edge of the tab (inside the Q-Link panel cut), drawn over the page, no text, no touch target
         {

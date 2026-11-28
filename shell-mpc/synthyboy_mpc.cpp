@@ -4016,6 +4016,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                         const int param = synthyboy::modDestinationParamIndex (static_cast<size_t> (cell.source));
                         name = param >= 0 ? synthyboy::paramTable()[param].name : "";
                     }
+                    else if (part == n::Amount && cell.target >= 0)   // a modulations page: the row is named after the source (it was drawn by the overlay)
+                        name = synthyboy_mpc::overlay::uibind::sourceName (cell.source);
                     else if (part >= 0)
                     {
                         constexpr const char* fields[] {"Amount", "Polarity", "Active", "Remove"};

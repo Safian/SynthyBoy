@@ -189,6 +189,8 @@ public:
         // ---- the overlay oscillator pages: they read their parameters and the Q group; what they draw changes the picture
         if (usePageUi)
         {
+            if (! expandedOscActive_)
+                io->setNativeText (nativeui::nativetext::OscMessage, osd_.message());
             if (! osc_)
             {
                 osc_ = std::make_unique<OscUi>();
@@ -646,63 +648,14 @@ private:
         return lfoCursorPx_ < 0 ? -1.0f : lfoCursorX_;
     }
 
-    static int panelX (int p) noexcept { return p * (play::kPanelW + play::kPanelGap); }
-    static double plotY (double v01, int h, double margin) noexcept   // v01 in 0 .. 1 (1 = top) to a canvas row of the plot area
-    {
-        const double top = play::kPlotTop + margin, bottom = h - play::kPlotBottomMargin - margin;
-        return top + (1.0 - v01) * (bottom - top);
-    }
 
     /** The whole picture of the view as a scene: the Env and LFO panels, then the overlay oscillator UI with the cycle picture in its display rectangle. */
     void build (gpu::SceneBuilder& sb) const
     {
-        const ui::theme::Look& T = ui::theme::L();
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
         if (edgeX_ < play::kRegionW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge, the picture is the host's there
             sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (play::kRegionH));
         const bool compact = osc_ != nullptr && osc_->isMain();
-        const bool oscOff = compact && ! osc_->powerOn();
-        const float selectorTop = static_cast<float> (play::kTabY + play::kNativeSelectorY);
-        const float selectorBottom = selectorTop + static_cast<float> (play::kNativeSelectorH);
-        auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field): a cached cell
-        {
-            if (x1 <= x0 || y1 <= y0)
-                return;
-            ui::Cell cell (sb, { static_cast<int> (x0), static_cast<int> (y0), static_cast<int> (x1 - x0), static_cast<int> (y1 - y0) }, 0);
-            const uint32_t top = ui::theme::rgba (T.bg0), bottom = ui::theme::rgba (T.bg1);
-            sb.gradientRect (x0, y0, x1, y1, oscOff ? ui::Pen::inactiveGrey (top) : top, oscOff ? ui::Pen::inactiveGrey (bottom) : bottom);
-        };
-        auto compactGround = [&] (float x0, float x1)
-        {
-            if (! compact)
-            {
-                ground (x0, static_cast<float> (play::kTabY), x1, static_cast<float> (play::kTabY + play::kTabH));
-                return;
-            }
-            if (! osc_->compactNativeHeader()[0].empty())
-            {
-                // The native skin owns the complete compact background, including
-                // the transparent padding of its rounded controls.
-                return;
-            }
-            // Keep the native header row transparent without redrawing any
-            // component or live curve a second time.
-            ground (x0, static_cast<float> (play::kTabY), x1, selectorTop);
-            if (oscOff)
-            {
-                // The host selector starts at x=70 (right of the power button) and ends at x=422. Leave
-                // its body visible while hiding the coloured native header gutters.
-                ground (x0, selectorTop, 70.0f, selectorBottom);
-                ground (422.0f, selectorTop, x1, selectorBottom);
-            }
-            const float dialTop = 634.0f;
-            const float dialBottom = 728.0f;
-            ground (x0, selectorBottom, x1, dialTop);
-            ground (x0, dialTop, 14.0f, dialBottom);
-            ground (214.0f, dialTop, 222.0f, dialBottom);
-            ground (422.0f, dialTop, x1, dialBottom);
-            ground (x0, dialBottom, x1, static_cast<float> (play::kTabY + play::kTabH));
-        };
         if (env_ != nullptr && ! env_->isMain())   // the full screen of the envelope covers the whole plugin area of the page: its page, its dots, its popups
         {
             env_->drawPage (sb);
@@ -712,7 +665,6 @@ private:
         }
         if (lfo_ != nullptr && ! lfo_->isMain())   // the full screen of the LFO likewise: its page (the editor, the targets), its cursors, its popups
         {
-            lfo_->drawPageGround (sb);
             lfo_->drawPage (sb);
             lfo_->drawLive (sb);
             lfo_->drawPopup (sb);
@@ -727,12 +679,6 @@ private:
         {
             ui::Cell markers (sb, { 0, play::kTabY, play::kRegionW, play::kNativeSelectorY }, 0);
             drawNativeMarkerCovers (sb, "play1");
-        }
-        if (osc_ != nullptr)
-        {
-            // opaque under the plugin's own pages: the whole tab for a full screen, a detail page and the popup's backdrop; the oscillator third in main (the host's panel picture, its Q-Link focus frame)
-            const float w = osc_->isMain() ? 432.0f : static_cast<float> (play::kRegionW);
-            compactGround (0.0f, w);
         }
         if (osc_ == nullptr || osc_->isMain())
             paintPanels (sb, false);   // the Env and LFO panels (not drawn while a full screen covers them): cached cells
@@ -758,54 +704,26 @@ private:
         else
             sb.clipOff();
         osc_->drawOnDisplay (sb);
-        if (compact && osc_->selection() == playosc::kSub)
-            for (const auto& cell : osc_->compactNativeCells())
-                ui::clearNativeCell (sb, cell);
         if (osc_->isMain() && env_ && lfo_)
             nativeEnvLfo_.drawApertures (sb, *env_, *lfo_);
     }
 
-    /** The Env and LFO panels in the language of the look (ui/display.h drawModule): a block each, the curve as a line of light, the running dot / cursor. */
+    /** The Env and LFO panels: the live graphs only (env_ui.h, lfo_ui.h); the frames, the ground and the titles are native cells of the Play skin. */
     void paintPanels (gpu::SceneBuilder& sb, bool live) const
     {
-        using namespace play;
-        float v[kEnvPoints > LfoView::kPoints ? kEnvPoints : LfoView::kPoints];
-        for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the overlay compact view now (osc_ui.h)
+        if (env_ != nullptr)
         {
-            if (p == 1 && env_ != nullptr)   // so is the envelope (env_ui.h): its own ground, the graph, the knobs; the running dots live
-            {
-                if (live)
-                    env_->drawLive (sb);
-                else
-                    env_->drawCompact (sb, true);
-                continue;
-            }
-            if (p == 2 && usePageLfo_)   // and the LFO (lfo_ui.h): the display with the cursors of the voices, the Q group RATE
-            {
-                if (live)
-                    lfo_->drawLive (sb);
-                else
-                    lfo_->drawCompact (sb, true);
-                continue;
-            }
-            ui::display::Module m;
-            const int x0 = kOx + panelX (p), y0 = kOy + kTabY;
-            m.rect = { x0, y0, kPanelW, kPanelH };
-            const int top = y0 + static_cast<int> (std::lround (plotY (1.0, kPanelH, 6.0))), bottom = y0 + static_cast<int> (std::lround (plotY (0.0, kPanelH, 6.0)));
-            m.plot = { x0 + kPlotX, top, kPlotW, bottom - top };
-            m.env = p == 1;
-            m.highlighted = highlight_ == p + 1;
-            const std::string tt = title (p, sel_[p]);
-            m.title = tt.c_str();
-            m.n = p == 1 ? kEnvPoints : LfoView::kPoints;
-            for (int i = 0; i < m.n; ++i)
-                v[i] = p == 1 ? envY_[static_cast<size_t> (i)] : 0.5f + 0.5f * lfoY_[static_cast<size_t> (i)];
-            m.v = v;
-            m.dot = p == 1 ? (envDotPx_ >= 0 ? static_cast<float> (envDotX_) : -1.0f) : (lfoCursorPx_ >= 0 ? lfoCursorX_ : -1.0f);
             if (live)
-                ui::display::drawModuleLive (sb, m);
+                env_->drawLive (sb);
             else
-                ui::display::drawModule (sb, m);
+                env_->drawCompact (sb, true);
+        }
+        if (usePageLfo_ && lfo_ != nullptr)
+        {
+            if (live)
+                lfo_->drawLive (sb);
+            else
+                lfo_->drawCompact (sb);
         }
     }
 
