@@ -502,24 +502,6 @@ protected:
             p.plain();
         }
 
-        // ---- the value of the selected / dragged handle over it
-        const int sh = drag_ != envgraph::None ? drag_ : (downHandle_ != envgraph::None ? downHandle_ : state.selected);
-        if (sh != envgraph::None && state.text[sh][0] != '\0')
-        {
-            double hx, hy;
-            handlePointOf (g, state.shape, sh, hx, hy);
-            const float size = T.fValue;
-            const int tw = static_cast<int> (std::ceil (Pen::textWidth (state.text[sh], size))) + 16, th = 26;
-            int bx = static_cast<int> (std::lround (hx)) - tw / 2, by = static_cast<int> (std::lround (hy)) - th - 12;
-            const int topLimit = plotArea.empty() ? rect_.y + 2 : plotArea.y;   // with a plot area (the header band above it holds the buttons) the bubble stays in it
-            if (by < topLimit)
-                by = static_cast<int>(std::lround (hy)) + 14;
-            bx = std::clamp (bx, rect_.x + 2, std::max (rect_.x + 2, rect_.right() - tw - 2));
-            const Rect bubble { bx, by, tw, th };
-            p.rrect (bubble, T.rChip, p.c (T.bg1, 235));
-            p.rrect (bubble, T.rChip, p.c (T.keylineHi, 255), 1.2f);
-            p.textCentered (bubble, state.text[sh], size, p.c (T.text, 255), T.fMin);
-        }
     }
     bool isZero (int stage) const noexcept   // stage 0 .. 5: a time stage whose time is 0
     {

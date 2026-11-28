@@ -301,20 +301,6 @@ protected:
             p.disc (hx2, hy2, 4.0f, p.c (col2, 255));
             p.arc (hx2, hy2, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (col2, 220));
 
-            if (dragging_)
-            {
-                const double curCut = state.activeFilter == 2 ? state.cutoffHz2 : state.cutoffHz1;
-                const double curRes = state.activeFilter == 2 ? state.resonancePct2 : state.resonancePct1;
-                const float curHx = state.activeFilter == 2 ? hx2 : hx1;
-                const float curHy = state.activeFilter == 2 ? hy2 : hy1;
-                char hz[16], text[40];
-                if (curCut >= 1000.0)
-                    std::snprintf (hz, sizeof hz, "%.2f kHz", curCut / 1000.0);
-                else
-                    std::snprintf (hz, sizeof hz, "%.0f Hz", curCut);
-                std::snprintf (text, sizeof text, "F%d: %s   RESO %.0f%%", state.activeFilter, hz, curRes);
-                bubble (p, in, curHx, curHy, text);
-            }
         }
         else
         {
@@ -323,16 +309,6 @@ protected:
             const uint32_t handleCol = filterColour (state.activeFilter);
             p.disc (hx, hy, 4.0f, p.c (handleCol, 255));
             p.arc (hx, hy, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (handleCol, 220));
-            if (dragging_)
-            {
-                char hz[16], text[40];
-                if (state.cutoffHz >= 1000.0)
-                    std::snprintf (hz, sizeof hz, "%.2f kHz", state.cutoffHz / 1000.0);
-                else
-                    std::snprintf (hz, sizeof hz, "%.0f Hz", state.cutoffHz);
-                std::snprintf (text, sizeof text, "%s   RESO %.0f%%", hz, state.resonancePct);
-                bubble (p, in, hx, hy, text);
-            }
         }
     }
 
@@ -379,30 +355,8 @@ protected:
         const uint32_t col = filterColour (state.activeFilter);
         p.disc (hx, hy, 5.0f, p.c (col, 255));
         p.arc (hx, hy, 12.0f, 0.0f, 2.0f * kPi, 1.8f, p.c (col, 220));
-        if (dragging_)
-        {
-            char text[40];
-            std::snprintf (text, sizeof text, "X %.0f%%   Y %.0f%%", state.formantX, state.formantY);
-            bubble (p, in, hx, hy, text);
-        }
 
         p.textLeft ({ in.x + 4, in.y + 2, 140, 16 }, "FORMANT  X / Y", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-    }
-
-    /** The value of the dragged point as a small box beside it (on the side that has room). */
-    void bubble (Pen& p, const Rect& in, float hx, float hy, const char* text) const
-    {
-        const theme::Look& T = theme::L();
-        const float tw = Pen::textWidth (text, T.fValue - 4.0f);
-        const int w = static_cast<int>(std::ceil (tw)) + 20, h = 30;
-        int x = static_cast<int> (hx) + 18, y = static_cast<int> (hy) - h - 12;
-        if (x + w > in.right())
-            x = static_cast<int> (hx) - 18 - w;
-        if (y < in.y)
-            y = static_cast<int> (hy) + 14;
-        const Rect box { std::max (in.x, x), std::min (std::max (in.y, y), in.bottom() - h), w, h };
-        { p.rrect (box, T.rControl, p.c (T.panel1, 255)); p.rrect (box, T.rControl, p.c (T.keylineHi, 255), T.frame); }
-        p.textCentered (box.inset (2), text, T.fValue - 4.0f, p.c (T.text, 255), T.fMin);
     }
 
     static float dbToY (double db, const Rect& in) noexcept
