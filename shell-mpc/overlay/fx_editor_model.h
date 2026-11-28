@@ -42,7 +42,6 @@ public:
     static constexpr int kMaxParams = synthyboy::kFxInstanceParams;   // 24
     static constexpr int kMaxRows = ui::fxl::kMaxRows;                 // rows (blocks) of a table
     static constexpr int kSel = kMaxParams;                            // the control number of the band selector in the cells (after the parameters' numbers)
-    static constexpr int kMaxListOptions = 8;                          // a choice with more values is a dropdown (the stepper of the old editor)
     // the geometry of the page (1280 x 628 tab; the chain bar of the native chain is 120 px high, the editor lies under it)
     static constexpr int kTabY = 110, kTabH = 628, kHeaderH = 56, kQLane = 16, kMargin = 8, kChainBarH = 120;
     static constexpr int kEditorY = kTabY + kMargin + kChainBarH + kMargin;
@@ -188,7 +187,7 @@ public:
 
     // ---- the effect on the page ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     /** How a parameter is shown by its values alone. */
-    enum class Kind : uint8_t { Dial, Choice, List, Toggle, Number };
+    enum class Kind : uint8_t { Dial, Choice, Toggle, Number };
 
     int currentType() const noexcept { return kind_; }
     int numParams() const noexcept { return numParams_; }
@@ -266,7 +265,7 @@ public:
         const synthyboy::ParamInfo* pi = infoOf (p);
         return pi != nullptr && pi->numChoices > 0 && pi->choices != nullptr;
     }
-    /** The kind a parameter is shown as by its values alone: a knob, a number (whole numbers), an on / off toggle, a list of 3 .. 8 values (or two named ones), a dropdown for more than 8. */
+    /** The kind a parameter is shown as by its values alone: a knob, a number (whole numbers), an on / off toggle, a dropdown for the other choices. */
     Kind baseKind (int p) const noexcept
     {
         const synthyboy::ParamInfo* pi = infoOf (p);
@@ -274,11 +273,9 @@ public:
             return Kind::Dial;
         if (pi->numChoices <= 0 || pi->choices == nullptr)
             return pi->interval == 1.0f && pi->max - pi->min <= 100.0f ? Kind::Number : Kind::Dial;
-        if (pi->numChoices > kMaxListOptions)
-            return Kind::Choice;
         if (pi->numChoices == 2 && std::strcmp (pi->choices[0], "Off") == 0 && std::strcmp (pi->choices[1], "On") == 0)
             return Kind::Toggle;
-        return Kind::List;
+        return Kind::Choice;
     }
 
     /** Disables the editing of the effect's parameters while POWER and the panel navigation stay (the module is off). */

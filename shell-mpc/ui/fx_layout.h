@@ -31,7 +31,7 @@ namespace synthyboy_mpc { namespace ui { namespace fxl {
 /** The pages of the effects: kind 1 .. 13 is a type of the pool (synthyboy::FxInstanceType), then the three splitters (modules of the fixed chain: item index 13 .. 15 of the racks, no type of the pool). */
 constexpr int kKindSplitterLh = synthyboy::kNumFxInstanceTypes, kKindSplitterLmh = kKindSplitterLh + 1, kKindSplitterMs = kKindSplitterLh + 2;
 constexpr int kNumKinds = kKindSplitterMs + 1;
-constexpr int kMaxRows = 8, kMaxPageRows = 4, kMaxDefaultRows = 2, kMaxDefaultCells = 8;
+constexpr int kMaxRows = 8, kMaxPageRows = 4;
 
 /** The condition a control is live under: the parameter `key` (of the same effect) rounds to one of the values whose bit is set in `modes`; key == nullptr: always live. */
 struct Live
@@ -82,7 +82,6 @@ struct Layout
     int rowsPerPage = 3;      // the rows of a page (3 or 4 without a display, 2 or 3 under one)
     int displayH = 0;         // the height of the display (0: the effect has none)
     int numRows = 0;
-    int defaultRows = 0;      // historical table metadata; panelsOf() owns current row-to-panel assignment
     Row row[kMaxRows];
     /** DISPLAY LEFT, CONTROLS RIGHT: the display takes the left half of the page over its whole height and the controls stand in two columns (cells of two per line) at the right (a Q group of four is a block of two
         lines). Used when the visible rows of the panel fit the height at the right (side mode); otherwise the standard stacked layout applies. Effects with a
@@ -149,8 +148,8 @@ inline const Layout& layoutOf (int kind) noexcept
     using namespace dsl;
     static const Layout kAll[kNumKinds] = {
         // 0: none
-        Layout { 0, "None", 3, 0, 0, 0, {} },
-        Layout { synthyboy::kFxTypeChorus, "Chorus", 3, 0, 3, 3, {
+        Layout { 0, "None", 3, 0, 0, {} },
+        Layout { synthyboy::kFxTypeChorus, "Chorus", 3, 0, 3, {
             row ("MODULATION", rate ("chorus.rate", "chorus.division", "chorus.sync"), c ("chorus.sync"), c ("chorus.depth"), c ("chorus.feedback")),
             row ("VOICES, DELAYS AND MIX", c ("chorus.voices"), c ("chorus.delay1"), c ("chorus.delay2"), c ("chorus.mix")),
             row ("FILTER AND OUTPUT", c ("chorus.filter_cutoff"), c ("chorus.filter_spread"), c ("chorus.level")) } },
@@ -158,7 +157,7 @@ inline const Layout& layoutOf (int kind) noexcept
         // Single band). THRESHOLD and RATIO are the UPPER pair of the band (the downward compression above the threshold: the pair that makes the character; the lower pair is the upward stage, ratio 0 by default); in Limit mode the
         // threshold is the ceiling and the upper ratio is not used (fx_compressor.h: the limiter replaces the downward stage), so RATIO is hidden there. The MODE (Compress / Limit / Serum peak compressor) changes what the
         // one tap of the selector away.
-        Layout { synthyboy::kFxTypeCompressor, "Compressor", 2, 160, 6, 2, {
+        Layout { synthyboy::kFxTypeCompressor, "Compressor", 2, 160, 6, {
             row ("COMPRESSOR", c ("compressor.mix"), c ("compressor.attack"), c ("compressor.release"), c ("compressor.bands")),
             row ("BAND", c ("compressor.limit"),
                  triple (when ("compressor.low.upper_threshold", kViewBand, 1u << 0, "THRESHOLD"), when ("compressor.mid.upper_threshold", kViewBand, 1u << 1, "THRESHOLD"), when ("compressor.high.upper_threshold", kViewBand, 1u << 2, "THRESHOLD")),
@@ -173,26 +172,26 @@ inline const Layout& layoutOf (int kind) noexcept
             row ("LOWER (UPWARD) HIGH", when ("compressor.high.lower_threshold", "compressor.bands", (1u << 0) | (1u << 2), "HIGH THRESH"), when ("compressor.high.lower_ratio", "compressor.bands", (1u << 0) | (1u << 2), "HIGH RATIO")) }, true },
         // Delay: the times of the two sides stand together (TIME: Q 1 .. 4), then the loop (the feedback and its band pass) and the mix. OFFSET L / R are the factors of the left / right time
         // (core/engine-own/fx/fx_modules.cpp: delay.offset_left -> offsetL, delay.offset -> offsetR; the engine name "Delay Offset" of the right one read like a common offset).
-        Layout { synthyboy::kFxTypeDelay, "Delay", 2, 176, 4, 2, {
+        Layout { synthyboy::kFxTypeDelay, "Delay", 2, 176, 4, {
             row ("TIME", c ("delay.style"), c ("delay.sync"), pair (when ("delay.time", "delay.sync", kSyncFree), when ("delay.division", "delay.sync", kSyncTempo)),
                  pair (when2 ("delay.time2", "delay.sync", kSyncFree, "delay.style", kStyleSecondTime), when2 ("delay.division2", "delay.sync", kSyncTempo, "delay.style", kStyleSecondTime))),
             row ("FEEDBACK AND MIX", c ("delay.feedback"), c ("delay.filter_cutoff"), c ("delay.filter_spread"), c ("delay.mix")),
             row ("OUTPUT AND QUALITY", c ("delay.level"), c ("delay.hq")),
             row ("TIME OFFSETS", c ("delay.offset_left", "OFFSET L"), c ("delay.offset", "OFFSET R")) }, true },
-        Layout { synthyboy::kFxTypeDistortion, "Distortion", 3, 160, 3, 2, {
+        Layout { synthyboy::kFxTypeDistortion, "Distortion", 3, 160, 3, {
             row ("DISTORTION", c ("distortion.type"), c ("distortion.drive"), c ("distortion.mix"), c ("distortion.level")),
             row ("FILTER", c ("distortion.filter_order"), when ("distortion.filter_cutoff", "distortion.filter_order", (1u << 1) | (1u << 2)),
                  when ("distortion.filter_resonance", "distortion.filter_order", (1u << 1) | (1u << 2))),
             row ("FILTER SHAPE", when ("distortion.filter_blend", "distortion.filter_order", (1u << 1) | (1u << 2)), when ("distortion.filter_keytrack", "distortion.filter_order", (1u << 1) | (1u << 2))) }, true },
         // EQ: a GAIN is live only in the band's mode that has one (shelf, peak): the high pass, the notch and the low pass of the engine do not read it (core/engine-own/fx/fx_eq.h, both laws)
-        Layout { synthyboy::kFxTypeEq, "EQ", 3, 160, 5, 2, {
+        Layout { synthyboy::kFxTypeEq, "EQ", 3, 160, 5, {
             row ("LOW AND MID BANDS", c ("eq.low.cutoff"), when ("eq.low.gain", "eq.low.mode", 1u << 0), c ("eq.mid.cutoff"), when ("eq.mid.gain", "eq.mid.mode", 1u << 0)),
             row ("HIGH BAND AND OUTPUT", c ("eq.high.cutoff"), when ("eq.high.gain", "eq.high.mode", 1u << 0), c ("eq.level")),
             row ("MODES", c ("eq.low.mode"), c ("eq.mid.mode"), c ("eq.high.mode"), c ("eq.law")),
             row ("RESONANCE", c ("eq.low.resonance"), c ("eq.mid.resonance"), c ("eq.high.resonance")),
             row ("MID BAND 2", c ("eq.mid2.mode"), when ("eq.mid2.cutoff", "eq.mid2.mode", (1u << 1) | (1u << 2)), when ("eq.mid2.gain", "eq.mid2.mode", 1u << 1),
                  when ("eq.mid2.resonance", "eq.mid2.mode", (1u << 1) | (1u << 2))) }, true },
-        Layout { synthyboy::kFxTypeFilter, "FX Filter", 3, 160, 5, 2, {
+        Layout { synthyboy::kFxTypeFilter, "FX Filter", 3, 160, 5, {
             row ("FILTER", c ("fxfilter.model"), c ("fxfilter.style"), c ("fxfilter.cutoff"), c ("fxfilter.resonance")),
             row ("MODEL", c ("fxfilter.drive"), c ("fxfilter.mix"), pair (when ("fxfilter.comb_offset", "fxfilter.model", 1u << 6), when ("fxfilter.formant.x", "fxfilter.model", 1u << 5)),
                  when ("fxfilter.formant.y", "fxfilter.model", 1u << 5)),
@@ -200,14 +199,14 @@ inline const Layout& layoutOf (int kind) noexcept
             row ("SHAPE", c ("fxfilter.blend"), c ("fxfilter.keytrack"), c ("fxfilter.clean_mode"), c ("fxfilter.var")),
             row ("OUTPUT", c ("fxfilter.pan"), c ("fxfilter.level")) }, true },
         // Flanger and Phaser: the same first two blocks (MODULATION, then FEEDBACK / PHASE OFFSET / MIX / LEVEL on Q 5 .. 8); the phaser's second sweep stands last
-        Layout { synthyboy::kFxTypeFlanger, "Flanger", 3, 0, 2, 2, {
+        Layout { synthyboy::kFxTypeFlanger, "Flanger", 3, 0, 2, {
             row ("MODULATION", rate ("flanger.rate", "flanger.division", "flanger.sync"), c ("flanger.sync"), c ("flanger.depth"), c ("flanger.center")),
             row ("FEEDBACK AND OUTPUT", c ("flanger.feedback"), c ("flanger.phase_offset"), c ("flanger.mix"), c ("flanger.level")) } },
-        Layout { synthyboy::kFxTypePhaser, "Phaser", 3, 0, 3, 2, {
+        Layout { synthyboy::kFxTypePhaser, "Phaser", 3, 0, 3, {
             row ("MODULATION", rate ("phaser.rate", "phaser.division", "phaser.sync"), c ("phaser.sync"), c ("phaser.depth"), c ("phaser.center")),
             row ("FEEDBACK AND OUTPUT", c ("phaser.feedback"), c ("phaser.phase_offset"), c ("phaser.mix"), c ("phaser.level")),
             row ("SWEEP", c ("phaser.depth2"), c ("phaser.blend")) } },
-        Layout { synthyboy::kFxTypeReverb, "Reverb", 3, 0, 7, 3, {
+        Layout { synthyboy::kFxTypeReverb, "Reverb", 3, 0, 7, {
             row ("REVERB", c ("reverb.mix"), c ("reverb.type"), c ("reverb.size"), c ("reverb.decay")),
             row ("ALGORITHM", c ("reverb.predelay"), c ("reverb.width"), when ("reverb.room", "reverb.type", 1u << 4), when ("reverb.feedback", "reverb.type", (1u << 4) | (1u << 5))),
             row ("OUTPUT", c ("reverb.level"), c ("reverb.force_enable", "FORCE ON")),
@@ -216,29 +215,29 @@ inline const Layout& layoutOf (int kind) noexcept
             row ("DIFFUSION", c ("reverb.er_size"), c ("reverb.diff_a"), c ("reverb.diff_b")),
             row ("MODULATION", c ("reverb.chorus_amount"), c ("reverb.chorus_rate")) } },
         // Hyper / Dimension: the unison block (rate, voices, detune, retrigger), then the dimension (size and mix) and the output
-        Layout { synthyboy::kFxTypeHyperDimension, "Hyper/Dimension", 3, 0, 2, 2, {
+        Layout { synthyboy::kFxTypeHyperDimension, "Hyper/Dimension", 3, 0, 2, {
             row ("HYPER", c ("hyperdim.rate"), c ("hyperdim.unison"), c ("hyperdim.detune"), c ("hyperdim.retrig")),
             row ("DIMENSION AND OUTPUT", c ("hyperdim.dim_size"), c ("hyperdim.dim_mix"), c ("hyperdim.mix"), c ("hyperdim.level", "LEVEL")) } },
-        Layout { synthyboy::kFxTypeUtility, "Utility", 3, 0, 3, 2, {
+        Layout { synthyboy::kFxTypeUtility, "Utility", 3, 0, 3, {
             row ("STEREO AND FILTERS", c ("utility.width"), c ("utility.pan"), c ("utility.lpf"), c ("utility.hpf")),
             row ("MONO BASS AND MIX", c ("utility.mono_bass"), when ("utility.mono_freq", "utility.mono_bass", 1u << 1), c ("utility.mix")),
             row ("POLARITY AND OUTPUT", c ("utility.polarity_l"), c ("utility.polarity_r"), c ("utility.level")) } },
-        Layout { synthyboy::kFxTypeBode, "Bode", 4, 0, 4, 4, {
+        Layout { synthyboy::kFxTypeBode, "Bode", 4, 0, 4, {
             row ("SHIFT", c ("bode.shift"), c ("bode.range"), c ("bode.dir"), c ("bode.balance")),
             row ("FEEDBACK AND OUTPUT", c ("bode.feed"), c ("bode.mix")),
             row ("DELAY", rate ("bode.delay", "bode.division", "bode.sync", "DELAY", "DIVISION"), c ("bode.sync"), c ("bode.blur"), c ("bode.width")),
             row ("STEREO AND OUTPUT", c ("bode.mono_input"), c ("bode.retrig"), c ("bode.level")) } },
-        Layout { synthyboy::kFxTypeConvolve, "Convolve", 4, 0, 4, 4, {
+        Layout { synthyboy::kFxTypeConvolve, "Convolve", 4, 0, 4, {
             row ("IMPULSE", c ("convolve.ir"), c ("convolve.size"), c ("convolve.tone"), rate ("convolve.predelay", "convolve.division", "convolve.sync", "PRE-DELAY", "PRE-DELAY")),
             row ("ENVELOPE AND OUTPUT", c ("convolve.attack"), c ("convolve.decay"), c ("convolve.mix")),
             row ("TAIL", c ("convolve.sync"), c ("convolve.phi_min"), c ("convolve.damp"), c ("convolve.ir_gain")),
             row ("LAW AND OUTPUT", c ("convolve.law"), c ("convolve.level")) } },
-        Layout { kKindSplitterLh, "Splitter L/H", 1, 206, 1, 1, {
+        Layout { kKindSplitterLh, "Splitter L/H", 1, 206, 1, {
             row ("SPLIT", c ("splitter_lh.freq", "SPLIT FREQUENCY"), c ("splitter_lh.low_bypass", "LOW BYPASS"), c ("splitter_lh.high_bypass", "HIGH BYPASS"), c ("splitter_lh.level", "LEVEL")) } },
-        Layout { kKindSplitterLmh, "Splitter L/M/H", 2, 240, 2, 2, {
+        Layout { kKindSplitterLmh, "Splitter L/M/H", 2, 240, 2, {
             row ("SPLIT", c ("splitter_lmh.freq_low", "LOW SPLIT"), c ("splitter_lmh.freq_high", "HIGH SPLIT"), c ("splitter_lmh.level", "LEVEL")),
             row ("BYPASS", c ("splitter_lmh.low_bypass", "LOW BYPASS"), c ("splitter_lmh.mid_bypass", "MID BYPASS"), c ("splitter_lmh.high_bypass", "HIGH BYPASS")) } },
-        Layout { kKindSplitterMs, "Splitter M/S", 1, 206, 1, 1, {
+        Layout { kKindSplitterMs, "Splitter M/S", 1, 206, 1, {
             row ("MID / SIDE", c ("splitter_ms.mid_bypass", "MID BYPASS"), c ("splitter_ms.side_bypass", "SIDE BYPASS"), c ("splitter_ms.level", "LEVEL")) } },
     };
     return kAll[kind >= 0 && kind < kNumKinds ? kind : 0];
