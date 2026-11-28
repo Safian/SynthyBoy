@@ -20,8 +20,18 @@
 
 namespace synthyboy_mpc::nativeui::nativetext
 {
-enum Line { ModTitle, ModCount, ModDetail, ModEmpty1, ModEmpty2, kLines };
-constexpr int kLineLen = 48;
+enum Line
+{
+    ModTitle, ModCount, ModDetail, ModEmpty1, ModEmpty2,
+    kLegacyLines,   // the lines above sit at nativeui::kNativeText; the ones below at nativeui::kDrawText (appended 2026-11-28: the texts the pages of the overlay used to draw)
+    TargetsTitle = kLegacyLines, TargetsCount, TargetsEmpty,                                  // the TARGETS / MODULATIONS pages (mod_rows_page.h): title, count (or the value of the control), the empty hint
+    EdSelected, EdHint, EdGrid, EdTrigger, EdInfo, EdStatus, EdMarkerHint, PointModSummary,   // the LFO shape editor and its point modulation page
+    OscDetailTitle, OscDetailBlock0, OscDetailBlock1, OscDetailBlock2, OscDetailBlock3, OscDetailBlock4, OscDetailBlock5, OscDetailBlock6, OscDetailBlock7,   // the title and the block titles of the oscillator detail pages
+    OscMissingCompact, OscMissingPage,                                                         // the "content missing" line of the oscillator display (Play compact view, oscillator page)
+    kLines
+};
+constexpr int kDrawLines = kLines - kLegacyLines;
+constexpr int kLineLen = 80;
 
 class Lines
 {

@@ -1883,7 +1883,7 @@ struct PluginInstance
     float nativeUiValue (int offset) const noexcept
     {
         if (nativeui::isNativeTextOffset (offset))
-            return nativeText.value (offset - nativeui::kNativeText);
+            return nativeText.value (nativeui::nativeTextLine (offset));
         if (nativeui::isNoteMaskOffset (offset))
         {
             const int field = offset - nativeui::kNoteMask;
@@ -2630,7 +2630,7 @@ struct PluginInstance
             }
         }
         for (int line = 0; line < nativeui::nativetext::kLines; ++line)
-            reportNativeValue (e, nativeui::kNativeText + line, nativeText.value (line));
+            reportNativeValue (e, nativeui::nativeTextHandle (line), nativeText.value (line));
         if (nativeNoteMask.layout() != 0 || nativeNoteMaskDue.exchange (false, std::memory_order_acq_rel))
         {
             for (int i = 0; i < nativeui::kNoteMaskHandles; ++i)
@@ -3787,7 +3787,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             const int offset = index - PluginInstance::nativeUiBase();
             if (nativeui::isNativeTextOffset (offset))
             {
-                const int line = offset - nativeui::kNativeText;
+                const int line = nativeui::nativeTextLine (offset);
                 if (opcode == effGetParamName)
                     std::snprintf (buf, kCap, "Mod Text %d", line + 1);
                 else if (opcode == effGetParamDisplay)

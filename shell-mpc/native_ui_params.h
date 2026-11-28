@@ -11,6 +11,7 @@
 #include "native_master_controls.h"
 #include "native_mod_controls.h"
 #include "native_osc_controls.h"
+#include "native_text.h"
 
 namespace synthyboy_mpc::nativeui
 {
@@ -138,14 +139,20 @@ constexpr int kLfoPick = kFxBandLanes + fxbands::kHandles;
 constexpr int kLfoPickHandles = 44;
 // Appended 2026-11-28 (ng/modosc): read-only dynamic text lines of the Mod page (native_text.h) and the twelve notes of the transpose snap (cells bound by osc_ui.h publishNativeNoteMask).
 constexpr int kNativeText = kLfoPick + kLfoPickHandles;
-constexpr int kNativeTextLines = 5;
+constexpr int kNativeTextLines = nativetext::kLegacyLines;
 constexpr int kNoteMask = kNativeText + kNativeTextLines;
 constexpr int kNoteMaskHandles = 13;   // 12 notes (bit 0 = C .. bit 11 = B) and the gate (1 while the mask is on the page)
 constexpr bool isLfoPickOffset (int offset) noexcept { return offset >= kLfoPick && offset < kNativeText; }
 constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kNativeText; }
-constexpr bool isNativeTextOffset (int offset) noexcept { return offset >= kNativeText && offset < kNoteMask; }
-constexpr int kCount = kNoteMask + kNoteMaskHandles;
-constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kCount; }
+
+// Appended 2026-11-28 (ng/drawlfomod): the further text lines (nativetext::kLegacyLines ..): the texts the pages used to draw themselves; the handle of line `line` is nativeTextHandle (line).
+constexpr int kDrawText = kNoteMask + kNoteMaskHandles;
+constexpr int kCount = kDrawText + nativetext::kDrawLines;
+constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
+constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kCount; }
+constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
+constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
+constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kDrawText; }
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }
