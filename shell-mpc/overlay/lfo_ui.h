@@ -82,7 +82,7 @@ public:
     // ---- the ids of the controls (the page-local id of a row of the native bridge)
     enum Id : int
     {
-        kClose = 1, kInstance, kSelector, kSyncMode, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice; kSelector: Play full-screen cells
+        kInstance = 2, kSyncMode = 4, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
         kTgBack = 300, kTgAdd, kTgPage, kTgRow = 310,    // the cells of the targets page (310 + 4 * row + 0 depth, 1 polarity, 2 on / off, 3 remove)
@@ -153,7 +153,7 @@ public:
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
         highlight_ = highlight;
-        adoptSelection (inst);   // the page of a tab: the LFO of its hardware sub-tab; the Play page's expansion: the Play selection (Play LFO + mpcTabView.rnd, chunk saved)
+        adoptSelection (inst);   // the page of a tab: the LFO of its hardware sub-tab; the compact view of the Play page: the Play selection (Play LFO + mpcTabView.rnd, chunk saved)
         const bool open = stack.depth() > 0 && stack.element() == kElementLfo;
         if (open && stack.top() == kPageMods)
         {
@@ -182,7 +182,7 @@ public:
         if (! page_)   // the page of a tab has no selector: the hardware sub-tab names the LFO
         {
             uibind::fillSelector (uibind::SelKind::Lfo, scan_, inst, selector_);
-            uibind::cellsFromSelector (uibind::SelKind::Lfo, selector_, playCells_);   // the Play page's choice: the SAME cells as its full-screen selector
+            uibind::cellsFromSelector (uibind::SelKind::Lfo, selector_, playCells_);   // the Play page's choice: the cells of its selector
             playDots_ = 0;
             for (int k = 0; k < playCells_.n && k < 32; ++k)
                 if (isSourceAssigned (playCells_.id[k]))
@@ -202,7 +202,7 @@ public:
                 flushShape (inst, nowMs);
         }
         if (open)
-            inst.setUiFullOpen (! page_ || stack.depth() > 1);
+            inst.setUiFullOpen (stack.depth() > 1);
         else if (stack.isMain())
             inst.setUiFullOpen (false);
         publishQGroup (inst);
@@ -288,8 +288,6 @@ public:
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
-    /** The selector of the full screen (tests). */
-    const binding::SelectorSet& selector() const noexcept { return selector_; }
     /** The modulation source id (choice of modNN.source) of the LFO shown. */
     int source() const noexcept { return rnd_ != 0 ? 14 + rnd_ : uibind::lfoSource (lfoNum_); }
     /** The rectangle the picture of the LFO goes into now (empty when the current page shows none). */
@@ -326,11 +324,7 @@ public:
         else if (pageTop_ == kPageMods || (pageTop_ == kPageList && underList_ == kPageMods))
             modsView_.draw (sb);
         else
-        {
-            if (! page_)
-                drawActiveBlock (sb);
             ui::lfodisplay::draw (sb, fullG_.display, fullDisplayData(), ! displayHot_, displayHot_ ? ui::lfodisplay::Part::Ground : ui::lfodisplay::Part::All);
-        }
     }
     /** The scroll thumb of a long list (a live indicator: its place follows the scrolling); the rows, the header, the backdrop and the box are native cells. */
     void drawPopup (gpu::SceneBuilder& sb) const
@@ -1081,7 +1075,7 @@ private:
     static const char* instanceName (int i) noexcept { return instanceNames()[std::clamp (i, 0, kInstances - 1)]; }
     /** The instance as one number 0 .. 13: LFO 1 .. 10, then RND 1 .. 4. */
     int slot() const noexcept { return rnd_ != 0 ? kLfos + rnd_ - 1 : lfoNum_ - 1; }
-    /** The shown LFO: on the page of a tab the one of its sub-tab; on the Play page's expansion the shared view state (Play LFO and mpcTabView.rnd): a change reconfigures the page. */
+    /** The shown LFO: on the page of a tab the one of its sub-tab; on the compact view of the Play page the shared view state (Play LFO and mpcTabView.rnd): a change reconfigures the page. */
     void adoptSelection (IInstanceView& v)
     {
         int num, r;
@@ -1103,12 +1097,11 @@ private:
             configure (v);
         }
     }
-    int pageSlot_ = -1;   // the page of a tab: the LFO of its sub-tab (0 .. 13: LFO 1 .. 10, RND 1 .. 4); -1 in the Play page's expansion
+    int pageSlot_ = -1;   // the page of a tab: the LFO of its sub-tab (0 .. 13: LFO 1 .. 10, RND 1 .. 4); -1 in the compact view of the Play page
     uibind::SelectorCells playCells_;
     unsigned playDots_ = 0;
 public:
     const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
-    const binding::SelectorSet& tabSelector() const noexcept { return selector_; }
     /** The LFO tab was left (page_view_base.h): a selected LFO or random LFO that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
     void leftTab (IInstanceView& v)
     {
@@ -2955,7 +2948,7 @@ private:
     }
 
     // ======================================================================================================================================================================
-    // the touch of the parts the plugin owns: the canvas of the editor, the name keyboard, the list menu, the blocks of the full screen
+    // the touch of the parts the plugin owns: the canvas of the editor, the name keyboard, the list menu
     Gesture gestureOfPage() const noexcept
     {
         if (stackDepth_ == 0)
@@ -2980,7 +2973,6 @@ private:
                     menu_.dragThumb (y);
                 break;
             }
-            case Gesture::Ground: if (stackDepth_ > 0 && pageTop_ == 0 && ! page_) selectGroupAtBlocks (x, y); break;
             default: break;
         }
     }
@@ -3011,21 +3003,6 @@ private:
             default: break;
         }
     }
-    /** A touch in a block of the bottom band of the full screen (outside the native cells) makes that block's group the active one. */
-    void selectGroupAtBlocks (int x, int y)
-    {
-        buildGroups();
-        for (int g = 0; g < nGroups_; ++g)
-        {
-            const int b = groups_[g].block;
-            if (b >= 0 && b < fullG_.nBlocks && fullG_.blocks[b].contains (x, y))
-            {
-                setActiveGroup (g);
-                return;
-            }
-        }
-    }
-
     void handle (const ui::Change& c, UiStack& stack, IInstanceView& v, double nowMs)
     {
         if (! c)
@@ -3293,19 +3270,7 @@ private:
     }
 
     // ======================================================================================================================================================================
-    // what is left to draw: the frame of the active block of the Play expansion and the scroll thumb of a list (live Q / scroll indicators)
-    void drawActiveBlock (gpu::SceneBuilder& sb) const
-    {
-        buildGroups();
-        const int act = activeGroup();
-        const int activeBlock = act >= 0 && act < nGroups_ ? groups_[act].block : -1;
-        if (activeBlock < 0 || activeBlock >= fullG_.nBlocks)
-            return;
-        ui::Pen p (sb, true);
-        ui::Cell cell (sb, fullG_.tab);
-        const ui::theme::Look& T = ui::theme::L();
-        p.rrect (fullG_.blocks[activeBlock], T.rBlock, p.c (ui::colour::rgba (T.keylineHi, 255)), T.frame);
-    }
+    // what is left to draw: the scroll thumb of a list (a live scroll indicator)
     void drawMenuThumb (gpu::SceneBuilder& sb) const
     {
         const ui::theme::Look& T = ui::theme::L();

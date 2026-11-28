@@ -1,12 +1,12 @@
-// SynthyBoy - MPC overlay: the envelope UI of the Env tab and of the Play page's expansion: the parameter binding rows of the six envelopes (binding::Row, one table per envelope), the Q-Link banks (binding::QTable), the geometry of
+// SynthyBoy - MPC overlay: the envelope UI of the Env tab and of the compact view of the Play page: the parameter binding rows of the six envelopes (binding::Row, one table per envelope), the Q-Link banks (binding::QTable), the geometry of
 // the native cells of the host skin, the native bridge, the envelope graph (a display with its handles) and the detail pages (the targets of the envelope, the modulations of one control: ModRowsPage data). The page holds no
 // control (owner decision 2026-11-27: the C++ layer has no UI elements); one object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls update () / touch () / tick () / draw*,
 // with the instance as IInstanceView.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementEnv, the pages above it are ours): main = the compact view in the middle third of the Play page (the graph; the four ADSR dials, the selector and the
-// full screen button are native cells of the Play skin); full = the full screen (the graph; every control is a native cell); detail pages above it: the targets of the envelope (the modulation matrix seen from the source), the list that
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementEnv, the pages above it are ours): main = the compact view in the middle third of the Play page (the graph; the four ADSR dials and the selector
+// are native cells of the Play skin); full = the page of an Env tab (the graph; every control is a native cell); detail pages above it: the targets of the envelope (the modulation matrix seen from the source), the list that
 // picks a new target (groups, then the parameters of a group; the native picker cells: native_list_cells.h), the modulations of one control (a long press on a dial).
 // What it does with a touch: the graph gives a Change { id, kind, value } (a handle moved); a native cell of the skin writes its value through the native bridge (consumeNativeEditor) into the row it stands for (row.key, the
 // engine table); the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back, so host automation, presets and the host's own widgets show on the next frame.
@@ -56,7 +56,7 @@ public:
     // ---- the id spaces (a Change comes out with the id the owner gave)
     enum Id : int
     {
-        kClose = 1, kInstances, kGraph, kTargets, kCompactInstances,
+        kGraph = 3, kTargets = 4,
         kDial = 100,                        // 100 + dial index: the dials (the compact view and the full screen share the ids)
         kBeats = 130, kLegato,
         kDialBeats = 140,                   // 140 + dial index: the rows of the time dials in beats
@@ -100,11 +100,11 @@ public:
     static constexpr double kModsRefreshMs = 100.0;
 
     // ---- the geometry of the native cells
-    static constexpr int kTopH = 72, kBottomH = 176, kBlockGap = 8, kCaptionW = 56, kPageCaptionW = 96, kSelectorCellW = 88, kBlockTitleH = 38, kBlockPad = 6, kKnobH = 84;
-    /** The cells of the full screen / page: the nine dials, BEATS, RETRIG, the selector (Play expansion only), the TARGETS cell, CLOSE (Play expansion only), the graph, the blocks. */
+    static constexpr int kTopH = 72, kBottomH = 176, kBlockGap = 8, kBlockTitleH = 38, kBlockPad = 6, kKnobH = 84;
+    /** The cells of the page of an Env tab: the nine dials, BEATS, RETRIG, the TARGETS cell, the graph, the blocks. */
     struct FullGeometry
     {
-        ui::Rect knob[kNumDials], beats, legato, selector, targets, graph, tags, caption, block[kGroups];
+        ui::Rect knob[kNumDials], beats, legato, targets, graph, block[kGroups];
     };
     /** The compact view of the Play page: the graph and the four ADSR dial cells. */
     struct CompactView
@@ -153,8 +153,8 @@ public:
         if (sel >= 1 && sel <= kEnvs)
             uibind::chooseEnv (inst, sel);
     }
-    /** The envelope this UI shows: on the page of a tab (page_view.h) the one the hardware sub-tab names (Env 1 .. Env 6: the view's own instance number, no selector on the screen, nothing shared with the Play page); on the Play
-        page's expansion the shared Play selection (Play Env, chunk saved). */
+    /** The envelope this UI shows: on the page of a tab (page_view.h) the one the hardware sub-tab names (Env 1 .. Env 6: the view's own instance number, no selector on the screen, nothing shared with the Play page); on the compact
+        view of the Play page the shared Play selection (Play Env, chunk saved). */
     int shownEnv (const IInstanceView& inst) const noexcept { return pageEnv_ > 0 ? pageEnv_ : uibind::selectedEnv (inst); }
 
     void setCanvas (int w, int h)
@@ -162,7 +162,8 @@ public:
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
         layoutCompact();
-        layoutFull();
+        if (page_)
+            layoutFull();
         targets_.place (tab);
         mods_.place (tab);
         targets_.back.setId (kTargetsBack);
@@ -189,7 +190,7 @@ public:
             selectorGeneration_ = generation;
             modsDirty_ = true;
         }
-        const int sel = shownEnv (inst);   // the page of a tab: its sub-tab's envelope; the Play page's expansion: the Play selection (Play Env, chunk saved)
+        const int sel = shownEnv (inst);   // the page of a tab: its sub-tab's envelope; the compact view of the Play page: the Play selection (Play Env, chunk saved)
         if (sel != sel_ || ! configured_)
             configure (sel);
         selectedSource_ = uibind::envSource (sel_);
@@ -222,13 +223,13 @@ public:
         pullSelector (inst);
         pullGraph (inst, live);
         if (open)
-            inst.setUiFullOpen (! page_ || stack.depth() > 1);
+            inst.setUiFullOpen (stack.depth() > 1);
         else if (stack.isMain())
             inst.setUiFullOpen (false);
         publishQGroup (inst);
     }
 
-    /** The page of the Env tab (page_view.h): the full screen of the selected envelope (`Play Env`, shared with the Play page), nothing to close; the selector ("used + one free") chooses another one. */
+    /** The page of the Env tab (page_view.h): the full screen of the envelope the hardware sub-tab names, nothing to close. */
     void update (IInstanceView& inst, UiStack& stack, double nowMs, const page::Input& in)
     {
         if (! page_)
@@ -492,7 +493,6 @@ public:
     // ---- access
     CompactView& compact() noexcept { return compactView_; }
     const CompactView& compact() const noexcept { return compactView_; }
-    const FullGeometry& geometry() const noexcept { return geo_; }
     ui::EnvGraph& graph() noexcept { return stackDepth_ == 0 ? compactGraph_ : fullGraph_; }
     void syncNativeTargets (IInstanceView& inst, UiStack& stack)
     {
@@ -542,10 +542,7 @@ public:
     }
     /** The number of the targets of the shown envelope. */
     int numTargets() const noexcept { return numTargets_; }
-    /** The selector of the full screen (the used candidates, the selected one, one free). */
-    const binding::SelectorSet& selector() const noexcept { return selector_; }
     const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
-    const binding::SelectorSet& tabSelector() const noexcept { return selector_; }
     /** The Env tab was left (page_view_base.h): a selected envelope that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
     void leftTab (IInstanceView& v)
     {
@@ -614,20 +611,13 @@ private:
         const ui::Rect tab { 0, kTabY, w_, kTabH };
         const int m = 8, W = tab.w - 2 * m;
         FullGeometry g;
-        // ---- the top bar: close, the selector, the targets cell
+        // ---- the top bar: the targets cell
         const ui::Rect top { tab.x + m, tab.y + m, W, kTopH - m };
         ui::Rect r[3];
-        const int fixed[3] = { page_ ? 0 : 96, 0, 200 }, weight[3] = { 0, 1, 0 };
+        const int fixed[3] = { 0, 0, 200 }, weight[3] = { 0, 1, 0 };
         pagegeo::layoutRow (top, fixed, weight, 3, pagegeo::kGap, r);
         const int cy = top.y + (top.h - 56) / 2;
-        laidCells_ = selector_.numCells();
-        const int captionW = page_ ? kPageCaptionW : kCaptionW;
-        g.caption = ui::Rect { r[1].x, cy, captionW, 56 };
-        const int selW = page_ ? 0 : std::min (std::max (0, r[1].w - kCaptionW), std::max (1, laidCells_) * kSelectorCellW);
-        g.selector = { r[1].x + (page_ ? captionW : kCaptionW), cy, selW, 56 };
-        g.targets = { r[2].x, cy, page_ ? 160 : r[2].w, 56 };
-        const int selRight = g.selector.right();
-        g.tags = { selRight + 16, cy, std::max (0, g.targets.x - 12 - (selRight + 16)), 56 };
+        g.targets = { r[2].x, cy, 160, 56 };
         // ---- the bottom band: three blocks (a Q group each), in proportion to the members
         const int bandY = tab.bottom() - m - kBottomH;
         const int unit = (W - 2 * kBlockGap) / 11;
@@ -821,8 +811,6 @@ private:
         if (page_)
             return;   // the page of a tab has no selector: the hardware sub-tab names the envelope
         uibind::fillSelector (uibind::SelKind::Env, scan_, v, selector_);
-        if (selector_.numCells() != laidCells_)
-            layoutFull();
         uibind::cellsFromSelector (uibind::SelKind::Env, selector_, playCells_);   // the Play page's selector: the same list
     }
 
@@ -1196,7 +1184,7 @@ private:
                     if (modsContextValid (v))
                         openSourceList();
                     return;
-                case kClose: case kTargetsBack: case kListBackdrop: pickingSource_ = false; stack.back(); return;
+                case kTargetsBack: case kListBackdrop: pickingSource_ = false; stack.back(); return;
                 case kTargets: stack.openDetail (kPageTargets); return;
                 case kTargetsAdd: stack.openDetail (kPageList); return;
                 case kListHeader: listGroup_ = -1; fillList(); return;
@@ -1433,9 +1421,9 @@ private:
     uibind::UsedScan scan_;              // the last scan of the matrix and the parameters (selector candidates)
     const IInstanceView* selectorInstance_ = nullptr;
     uint64_t selectorGeneration_ = 0;
-    int pageEnv_ = 0;                    // the page of a tab: the envelope of the sub-tab (1 .. 6); 0 in the Play page's expansion
+    int pageEnv_ = 0;                    // the page of a tab: the envelope of the sub-tab (1 .. 6); 0 in the compact view of the Play page
     bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, beats_ = false, nativeGround_ = false;
-    int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0, laidCells_ = 0, activeGroup_ = 0, compactBlock_ = -1;
+    int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0, activeGroup_ = 0, compactBlock_ = -1;
     int param_[kRowsPerEnv] = {};        // the engine parameter index of every row of the selected envelope (-1: none)
     uint8_t targetMask_ = 0;
     char targetLines_[3][40] = {};

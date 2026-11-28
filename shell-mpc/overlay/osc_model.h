@@ -299,7 +299,7 @@ struct FullState
     Instance inst = Instance::A;
     Kind kind = Kind::Wavetable;
     bool noiseSample = false;
-    bool pageTab = false;          // the screen is a PAGE of a tab (the tab names the oscillator): no CLOSE
+    bool pageTab = false;          // the screen is a PAGE of a tab (the tab names the oscillator)
     bool nativeSelector = false, nativeRouting = false, nativePower = false;
 };
 
@@ -316,7 +316,7 @@ constexpr Rect tuneAreaAt (int x, int y) noexcept { return { x + 994, y + 202, 2
 
 struct FullLayout
 {
-    Rect selectorArea, routingArea, display, power, close, mix, top, panel, more, subBlend;
+    Rect selectorArea, routingArea, display, power, mix, top, panel, more, subBlend;
     // the top row (the first Q group): the cells of the members that exist for the instance
     Rect tSelector, tSource, tSourceStepper, tSourceDropdown, tKind, tSound, tPos, tOct, tStartPhase, tRandomPhase, tWaveMap;
     PanelCells cells;
@@ -325,7 +325,6 @@ struct FullLayout
 };
 
 inline bool hasNativeTune (const FullState& s) noexcept { return s.nativeRouting && s.inst != Instance::Sub && s.inst != Instance::Noise; }
-inline bool nativeStrip (const FullState& s) noexcept { return s.nativeSelector && ! s.pageTab; }
 
 /** The preset of the bottom band of the screen of an instance. */
 inline const PanelPreset& fullPreset (Instance inst, Kind kind, bool noiseSample) noexcept
@@ -371,7 +370,6 @@ inline FullLayout layoutFull (const Rect& rect, const FullState& s, const bool* 
     L.selectorArea = { r[0].x, topR.y + (topH - 56) / 2, r[0].w, 56 };
     if (s.nativeSelector)
         L.selectorArea = nativeStrip (s) ? Rect { rect.x, rect.bottom() - 48, W, 48 } : Rect {};   // a page of a tab has no strip: the hardware sub-tab names the oscillator
-    L.close = L.selectorArea;
     const bool column = s.nativeSelector && tune;
     L.top = column ? Rect { rect.x, rect.y, W, 194 } : r[2];
     // ---- the top row

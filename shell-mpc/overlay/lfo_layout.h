@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the GEOMETRY of the LFO pages (owner decision 2026-11-27: the C++ layer has no UI elements). The controls of the compact view of the Play page, of the full screen and of the LFO tab are native
+// SynthyBoy - MPC overlay: the GEOMETRY of the LFO pages (owner decision 2026-11-27: the C++ layer has no UI elements). The controls of the compact view of the Play page and of the LFO tab are native
 // cells of the host skin; the plugin only has to know the rectangles the skin puts them in (so that it leaves them open in its ground, does not swallow a touch on one and selects the Q group of the one that was
 // touched) and the rectangles of its own displays. Pure functions of the sizes: no state.
 // Copyright (C) 2026 Safian Szabolcs
@@ -24,7 +24,7 @@ struct Compact
 };
 inline Compact compact (const ui::Rect& third, bool random) noexcept
 {
-    // Play phase 2 (docs/review/PLAY-PHASE2-PLAN-2026-11-27.md): the selector and the full screen button stand in the header band of the third, the display has no band, the controls are 60 px rows with 8 px gaps
+    // Play phase 2 (docs/review/PLAY-PHASE2-PLAN-2026-11-27.md): the selector stands in the header band of the third, the display has no band, the controls are 60 px rows with 8 px gaps
     namespace pr = ui::playrows;
     Compact c;
     c.third = third;
@@ -96,7 +96,7 @@ inline Full full (const ui::Rect& tab, bool random, bool keyActive, bool editSho
     const int pickerX = tab.x + m;
     f.namedPicker = { pickerX, topY, std::max (0, (tab.right() - m - targetsW - 8) - pickerX), 56 };
     f.display = { tab.x + m, midY, W - 2 * m, std::max (0, bandY - m - midY) };
-    f.edit = ! random && editShown ? ui::playrows::fullRect (f.display) : ui::Rect {};
+    f.edit = ! random && editShown ? ui::Rect { f.display.right() - 4 - 64, f.display.y + 4 + (64 - 56) / 2, 64, 56 } : ui::Rect {};
     // the blocks of the bottom band
     const int n = random ? 1 : 3;   // the key follow has no block of its own: its two numbers stand in the RATE block
     f.nBlocks = n;

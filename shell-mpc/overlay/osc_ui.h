@@ -147,13 +147,13 @@ class OscUi
 {
 public:
     // ---- the pages (UiStack ids)
-    static constexpr int kElementOsc = 1;                                     // the full screen of the oscillator
+    static constexpr int kElementOsc = 1;                                     // the page of an Osc tab
     enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageMods = 14, kPageList = 15 };   // 16 .. 22: the detail pages of osc_spec_page.h (oscspec::PageId)
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
     {
-        kClose = 1, kPower, kRoute, kInstances,
+        kPower = 2, kRoute, kInstances,
         kBasic = 100,                       // the first Q group's parts: selector, source stepper, dropdown, OCT (Sub), FILTER, SOUND of the noise, PAN, LEVEL (compact view) = 100 .. 107
         kTuneOct = 110, kTuneFin = 112, kTuneCrs = 113, kTuneMore = 115, kWavePhase, kWaveRandom, kWaveMap,   // OCT (A, B, C), FIN, the PITCH of the noise, the MORE button of the full screen
         kSpecLoad = 790, kSpec = 800,       // the LOAD button of an empty sample type; 800 + i: the controls of a detail page of osc_spec_page.h
@@ -284,7 +284,7 @@ public:
         publishQGroup (inst);
     }
 
-    /** On standalone tabs OscPageUi supplies the active source independently of Play and uses the close position for its name.
+    /** On standalone tabs OscPageUi supplies the active source independently of Play.
         `sel`: 1 Sub, 2 A, 3 B, 4 C, 5 Noise. 0 selects the Play layout. */
     void setPage (int sel) noexcept { pageSel_ = sel >= 1 && sel <= playosc::kInstances ? sel : 0; configured_ = false; }
     bool isPage() const noexcept { return pageSel_ > 0; }
@@ -1442,7 +1442,6 @@ private:
         using oscmodel::PanelSlot;
         const bool sub = sel_ == playosc::kSub, noise = sel_ == playosc::kNoise, abc = ! sub && ! noise;
         bindingFull_ = true;
-        bind (main_, kClose, T::Inert, "", "CLOSE");
         bind (main_, kPower, T::Toggle, "on");
         if (abc)
             bind (main_, kTuneMore, T::Inert, "", "MORE");
@@ -1686,7 +1685,6 @@ private:
         const bool waveTools = full_.hasNativeInstanceSelector() && tune && full_.layout().preset != nullptr && typeRaw_ == 0 && abc;
         switch (it.id)
         {
-            case kClose: c.rect = L.close; c.shown = ! full_.isPage() && ! nativeSelector_; return;
             case kPower: c.rect = L.power; c.shown = ! full_.hasNativePower(); return;
             case kTuneMore: c.rect = L.more; return;
             case kBasic + 0: c.rect = L.tSelector; c.shown = ! noise; return;
@@ -2352,7 +2350,7 @@ private:
                         fillModsSources();
                     }
                     return;
-                case kClose: case kDetailBack: stack.back(); return;
+                case kDetailBack: stack.back(); return;
                 case kWaveMap: stack.openDetail (oscspec::kWtMap); return;
                 case kTuneMore:
                     if (sel_ != playosc::kSub && sel_ != playosc::kNoise)
@@ -2534,9 +2532,9 @@ private:
     {
         const bool off = ! powerOn();
         full_.setInactive (off);
-        // POWER, the instance selector and CLOSE stay usable; every other cell takes no edit while the oscillator is off
+        // POWER and the instance selector stay usable; every other cell takes no edit while the oscillator is off
         for (Item& it : main_)
-            if (it.hasCell && off && it.id != kInstances && it.id != kClose && it.id != kPower)
+            if (it.hasCell && off && it.id != kInstances && it.id != kPower)
                 it.cell.enabled = false;
     }
     /** The text "content missing: <name>" for the oscillator on screen ("" when it misses nothing); the name is taken from the state's content reference (the pack's title, else the file name; the reference is there although the file is not). */

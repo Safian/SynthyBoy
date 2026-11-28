@@ -288,7 +288,7 @@ public:
             if (! geo_.expand().empty())
                 pzOpen_.place ({ geo_.expand().x - 64, geo_.expand().y, 56, 56 });
             else
-                pzOpen_.place (ui::playrows::fullRect (geo_.displayRect()));
+                pzOpen_.place ({ geo_.displayRect().right() - 4 - 64, geo_.displayRect().y + 4 + (64 - 56) / 2, 64, 56 });
         }
         if (nowMs - modsAtMs_ >= kModsRefreshMs || modsDirty_)
         {
