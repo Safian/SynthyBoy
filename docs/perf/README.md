@@ -13,23 +13,7 @@ Performance results and regression baselines are version-controlled here:
 
 ## 2. Tools & Scripts
 
-Four main tools coordinate performance builds, device execution, analysis, and hardware counter probing:
-
-* **`scripts/build-tier-bench.sh`**: Cross-compilation helper building standalone binaries in Docker (Debian 12 cross compilers).
-  - Target architectures: `arm32` (ARMv7 hard-float with NEON for MPC Key 61), `arm64` (AArch64 for MPC XL), or `all`.
-  - Variants:
-    - Default: Fully static binary (`<out>/tier-bench-<arch>/synthyboy_tier_bench`).
-    - `--dynamic`: Dynamic glibc linkage matching the plugin environment (`<out>/tier-bench-<arch>-dyn/`).
-    - `--sections`: Build with `-DSYNTHYBOY_SECTION_TIMING=ON` (`<out>/tier-bench-<arch>-sections/`).
-  - Also builds `synthyboy_pmu_probe` and `synthyboy_libm_probe` when present.
-
-* **`scripts/perf-device.sh`**: Device runner over SSH/tar (BusyBox target, no scp, `COPYFILE_DISABLE=1`).
-  - Supports `--device k61` (`root@192.168.0.30`, core 3, profile low) and `--device xl` (`root@192.168.0.126`, core 6, profile high,voices=16,control=economy).
-  - Orchestrates phases: `probe`, `install`, `e0`, `e1`, `e2`, `ab`, `pmu`, `modules`, `libm`, `cleanup`.
-
-* **`scripts/perf-tables.py`**: Markdown report formatter converting raw benchmark stdout into documented tables:
-  - `python3 -I scripts/perf-tables.py sections [FILE]`: Exclusive time per DSP section per block.
-  - `python3 -I scripts/perf-tables.py modules [FILE]`: Isolated cost per module sorted by group and cost.
+The hardware counter probe:
 
 * **`synthyboy_pmu_probe`**: Standalone hardware counter probe. Inspects `perf_event_paranoid`, tests `perf_event_open` for architectural counter groups (`compute` and `cache`), and outputs `PMU-PROBE-RESULT usable|multiplexed|unavailable`.
 
@@ -38,22 +22,6 @@ Four main tools coordinate performance builds, device execution, analysis, and h
 ## 3. Device Protocol & Phases (Sections 2.1 .. 2.3)
 
 ### 3.1 Device Preparation & Read-Only Probes (D0, D1)
-
-Build and deployment:
-```sh
-scripts/build-tier-bench.sh --arch arm32 --dynamic --sections --out build-tier-bench/out
-```
-Binaries and content are transferred to the device via tar stream:
-```sh
-H=root@192.168.0.30; O=build-tier-bench/out; S="ssh -o BatchMode=yes -o ConnectTimeout=5 $H"
-$S 'mkdir -p /tmp/sbperf/static /tmp/sbperf/dyn /tmp/sbperf/sections /tmp/sbperf/store/com.safian.synthyboy.factory-samples'
-for v in "" -dyn -sections; do
-  d=$( [ -z "$v" ] && echo static || echo "${v#-}" )
-  COPYFILE_DISABLE=1 tar -C $O/tier-bench-arm32$v -cf - . | $S "tar -C /tmp/sbperf/$d -xf -"
-done
-COPYFILE_DISABLE=1 tar -C content -cf - presets | $S 'tar -C /tmp/sbperf -xf -'
-COPYFILE_DISABLE=1 tar -C content/factory-samples -cf - . | $S 'tar -C /tmp/sbperf/store/com.safian.synthyboy.factory-samples -xf -'
-```
 
 **D0 read-only probe**:
 Gathers kernel model, online/isolated CPUs, frequency governor, thermal status, RT throttle parameters, PMU capabilities, and host `acvs` audio thread metadata:

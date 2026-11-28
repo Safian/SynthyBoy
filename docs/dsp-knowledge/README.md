@@ -31,7 +31,7 @@ display path reads the topic files below that touch its work **before** writing 
 | [measurement.md](measurement.md) | How to measure on the devices (A/B/A, drift, spread) and on the Mac; what a number is worth |
 | [platform-key61.md](platform-key61.md) | MPC Key 61 / XL CPU, memory, cores, what is fast and slow on the Cortex-A17 |
 | [arm-denormals.md](arm-denormals.md) | ARM32 (`FPSCR.FZ`) and AArch64 (`FPCR.FZ`) denormal protection in the MPC shell and verification status |
-| [vector-paths.md](vector-paths.md) | Every NEON path of the engine: its scalar reference, the bit-identity test, status; the compiled-code check for fused multiply-add and estimates (`scripts/check-no-fma.sh`) |
+| [vector-paths.md](vector-paths.md) | Every NEON path of the engine: its scalar reference, the bit-identity test, status; the compiled-code check for fused multiply-add and estimates |
 | [mpc-display.md](mpc-display.md) | The MPC host's display pipeline (DRM planes, commits) and our overlay |
 | [native-text-entry.md](native-text-entry.md) | Factory text keyboard, XL numeric input and verified host string-setter gate |
 | [skin-host-behaviour.md](skin-host-behaviour.md) | How the host treats our skin: list selection and closing, a skin change that froze the host, tab backgrounds (measured) |

@@ -110,7 +110,7 @@ double rmsDb (const std::vector<float>& a)
     return 10.0 * std::log10 (s / static_cast<double> (a.size()) + 1e-30);
 }
 
-/** The loudness figure of the factory preset levels (scripts/loudness.py): the loudest 100 ms of the K-weighted signal (BS.1770 shelf and high pass, bilinear transform for 44.1 kHz), dB.
+/** The loudness figure of the factory preset levels: the loudest 100 ms of the K-weighted signal (BS.1770 shelf and high pass, bilinear transform for 44.1 kHz), dB.
     `x` holds blocks of 128 left then 128 right samples. */
 double loudestDb (const std::vector<float>& x)
 {

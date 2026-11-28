@@ -104,7 +104,7 @@ Run these commands on the current `develop` tree to confirm baseline behavior, r
    ```sh
    ./build-base/tools/preset-render/synthyboy_preset_render --engine own --tier all --float32 --hash --out /tmp/rt-base-renders
    ```
-   - **Record:** All 960 `.hash` files (`160 presets × 3 tiers × single + chord`) for `scripts/compare-renders.sh` after all tasks land.
+   - **Record:** All 960 `.hash` files (`160 presets × 3 tiers × single + chord`) for a comparison of the `.hash` files of the two render folders after all tasks land.
 
 4. **Desktop benchmark baseline:**
    ```sh
@@ -513,7 +513,7 @@ All of the following must hold after Batches 1–7 are built and verified by the
    - Symbol hygiene (`nm -u` / `objdump` on `synthyboy_mpc.so` and `synthyboy_core`): zero `__cxa_guard_acquire` inside `OwnEngine::publishStats()`, `outputPeak()`, and `noteDiagnostics()`; `sizeof(own::WakeSignal) <= 16` on Apple/Windows/Linux.
 
 2. **Bit-identical steady-state sound & unchanged aliasing:**
-   - `synthyboy_preset_render --engine own --tier all --float32 --hash` compared with §2.1 baseline via `scripts/compare-renders.sh`: **0 of 960 renders differ** (bit-identical across all 160 presets × 3 tiers × single + chord).
+   - `synthyboy_preset_render --engine own --tier all --float32 --hash` compared with §2.1 baseline via a comparison of the `.hash` files of the two render folders: **0 of 960 renders differ** (bit-identical across all 160 presets × 3 tiers × single + chord).
    - Every task's `<NAME>-CHECKSUM` matches baseline bit-for-bit.
    - Aliasing level: **unchanged** from baseline (`docs/QUALITY.md:33-47`), as zero DSP math changes.
 
