@@ -31686,9 +31686,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "8 66 756 252",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31718,9 +31716,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "772 66 500 252",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31750,9 +31746,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "8 326 756 294",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31782,9 +31776,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "772 326 500 294",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31818,9 +31810,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "132 98 150 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31854,9 +31844,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "286 98 150 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31890,9 +31878,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "440 98 150 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31926,9 +31912,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "598 128 150 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31958,9 +31942,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "380 256 180 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -31990,9 +31972,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "566 256 186 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32026,9 +32006,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "784 98 116 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32062,9 +32040,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "904 98 116 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32099,7 +32075,6 @@
         "boundsType": "Absolute",
         "bounds": "1024 98 116 152",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879",
          "IndexedEnabling/0/2/Parameter 1580"
         ]
        }
@@ -32136,7 +32111,6 @@
         "boundsType": "Absolute",
         "bounds": "1144 98 116 152",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879",
          "IndexedEnabling/0/2/Parameter 1580"
         ]
        }
@@ -32168,9 +32142,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "1024 256 236 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32204,9 +32176,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 360 176 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32236,9 +32206,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "204 384 176 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32268,9 +32236,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "388 384 176 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32300,9 +32266,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "572 384 180 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32336,9 +32300,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 446 176 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32372,9 +32334,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "204 446 268 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32408,9 +32368,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "480 446 272 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32440,9 +32398,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 556 176 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32484,9 +32440,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "204 532 176 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32520,9 +32474,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "1028 360 116 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32556,9 +32508,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "1148 360 112 152",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32588,9 +32538,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "1028 556 116 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32620,9 +32568,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "1148 556 112 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32657,7 +32603,6 @@
         "boundsType": "Absolute",
         "bounds": "1024 98 236 152",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879",
          "IndexedEnabling/1/2/Parameter 1580"
         ]
        }
@@ -32705,9 +32650,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 158 100 154",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32741,9 +32684,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "388 550 364 44",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32773,9 +32714,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "132 256 140 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32811,7 +32750,6 @@
         "boundsType": "Absolute",
         "bounds": "20 98 100 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879",
          "IndexedEnabling/0/2/Parameter 2976"
         ]
        }
@@ -32849,7 +32787,6 @@
         "boundsType": "Absolute",
         "bounds": "20 98 100 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879",
          "IndexedEnabling/1/2/Parameter 2976"
         ]
        }
@@ -32895,9 +32832,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "284 256 90 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -32927,9 +32862,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "784 360 236 252",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33131,9 +33064,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "8 66 1264 130",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33163,9 +33094,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "8 204 1264 130",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33195,9 +33124,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "8 342 1264 278",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33231,9 +33158,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 102 500 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33267,9 +33192,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "528 102 300 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33303,9 +33226,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "836 102 424 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33339,9 +33260,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 240 300 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33375,9 +33294,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "328 240 400 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33407,9 +33324,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "736 264 256 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33439,9 +33354,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "1000 264 260 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33471,9 +33384,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 404 404 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33515,9 +33426,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "432 380 404 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33559,9 +33468,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "844 380 416 80",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33599,9 +33506,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "20 510 404 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33639,9 +33544,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "432 510 404 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33679,9 +33582,7 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "844 510 416 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Parameter 2879"
-        ]
+        "additionalInvalidatingHandles": []
        }
       },
       {
@@ -33712,7 +33613,7 @@
          },
          {
           "key": "HdrView",
-          "value": "IndexedEnabling/2/3/Parameter 2879"
+          "value": "RangedEnabling/0/18/33/Parameter 2675"
          }
         ]
        },
