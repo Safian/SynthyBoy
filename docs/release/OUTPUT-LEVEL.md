@@ -108,6 +108,6 @@ With the limiter OFF and every 4/6/8-note chord at most −1.0 dBFS: note peak B
 
 - `.hw-local/mpc-perf/level-analysis/REPORT.md`, `TABLE_A.md` (raw analysis, numbers remain valid as ov40 evidence only);
 - `docs/release/LEVELLING-STOCK-2026-11-19.md` (method and per-preset tables of the limiter-on variants);
-- the Gemini `docs/review/AUDIO-PRESET-VOLUME-REVIEW-2026-11-19.md` chapter 0 claims;
+- the chapter 0 claims of the earlier Gemini preset volume review (removed);
 - the level sections of `docs/release/SOUND-FIXES-1.md`;
 - the "Output level" text of `docs/MPC.md` (replaced by a pointer here after the final numbers).
