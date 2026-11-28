@@ -1,4 +1,4 @@
-// SynthyBoy - core: preset container (.sbpreset) and metadata discovery (docs/ARCHITECTURE.md 5.2).
+// SynthyBoy - core: preset container (.sbpreset) and metadata discovery (docs/ARCHITECTURE.md 4.2).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

@@ -11,7 +11,7 @@
 // NO DEPENDENCY on the synthesizer engine of SynthyBoy: this header includes only the C++ standard library. SynthyBoy's own adapter (synthyboy_adapter.h) implements the same interface over
 // its table.
 //
-// The conversions (the same as the table of SynthyBoy, docs/ARCHITECTURE.md 5.1, so that a plugin made with the kit behaves like it):
+// The conversions (the same as the table of SynthyBoy, docs/ARCHITECTURE.md 4.1, so that a plugin made with the kit behaves like it):
 //   linear    plain = min + (max - min) * normalised
 //   exp_skew  normalised = pow ((plain - min) / (max - min), skew)   (skew < 1 gives more room to the low end: a time or a frequency)
 //   stepped   a choice or an integer: plain 0 .. max, normalised = plain / max; `choices` names them (numChoices names, the range is 0 .. numChoices - 1)

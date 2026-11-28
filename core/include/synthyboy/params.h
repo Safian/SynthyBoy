@@ -1,8 +1,8 @@
-// SynthyBoy - core: parameter table (single source for plugin params, state I/O and UI), see docs/ARCHITECTURE.md 5.1.
+// SynthyBoy - core: parameter table (single source for plugin params, state I/O and UI), see docs/ARCHITECTURE.md 4.1.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The table is our own design of a synthesizer feature set (docs/ARCHITECTURE.md 2.2): our keys, names, units and ranges.
+// The table is our own design of a synthesizer feature set: our keys, names, units and ranges.
 // It is constexpr, lives in core/src/param_table.cpp and is described for humans in docs/PARAMETERS.md (generated).
 #pragma once
 

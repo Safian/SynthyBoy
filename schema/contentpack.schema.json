@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SynthyBoy content pack manifest (contentpack.json)",
-  "description": "Describes a ContentPack for SynthyBoy, see docs/ARCHITECTURE.md section 6.",
+  "description": "Describes a ContentPack for SynthyBoy, see docs/ARCHITECTURE.md section 5.",
   "type": "object",
   "required": ["id", "version", "schemaVersion", "license", "attribution", "kind", "requires_plugin", "files"],
   "additionalProperties": false,

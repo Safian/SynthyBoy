@@ -2,7 +2,7 @@
 
 <!-- Hand-maintained (no generator): edit this file directly; the machine readable table is docs/params.json. -->
 
-The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 6 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
+The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 6 stores every parameter by key (docs/ARCHITECTURE.md 4.2).
 
 **2637 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of every build) acts on the parameter; every parameter is stored, saved and read back by the engine whether it acts on it or not.
 
@@ -3235,7 +3235,7 @@ A tier only caps or bypasses (docs/ARCHITECTURE.md 3.6); parameter values are ne
 
 ## Not exposed
 
-* **Sample oscillator**: pending (Phase 4): it needs content packs (docs/ARCHITECTURE.md section 6). The engine has one; the noise oscillator above is its built-in white noise.
+* **Sample oscillator**: pending (Phase 4): it needs content packs (docs/ARCHITECTURE.md section 5). The engine has one; the noise oscillator above is its built-in white noise.
 * **Free-form LFO shapes / wavetable editing**: pending (Phase 5, UI): LFOs use the built-in shape list and oscillators the built-in wavetables; there is no editor and no import yet.
 * **Tuning root (A4 reference), tuning tables**: not exposed: the engine's tuning object is a scale/keyboard-map loader (no reference frequency); this build plays 12-tone equal temperament at A4 = 440 Hz.
 * **Oscillator MIDI tracking (fixed pitch), transpose quantize**: not exposed: not part of the feature list; the engine has them.

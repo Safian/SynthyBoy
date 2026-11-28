@@ -106,7 +106,7 @@ struct ImportedWavetable
     int numFrames = 0;          // <= 257
     std::vector<int16_t> frames; // numFrames * 2048
     std::vector<uint8_t> wavBytes; // the stored file: RIFF/WAVE, 16-bit mono PCM, numFrames * 2048 samples (the format of the content store,
-                                   // docs/ARCHITECTURE.md 5.2: a length that is a multiple of 2048 is that many frames)
+                                   // docs/ARCHITECTURE.md 4.2: a length that is a multiple of 2048 is that many frames)
 };
 
 struct ImportedLfoShape

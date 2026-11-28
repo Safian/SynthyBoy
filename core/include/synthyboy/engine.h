@@ -175,7 +175,7 @@ public:
     virtual bool voiceStats (VoiceStats& /*out*/) const noexcept { return false; }
     /** The FX budget state (see FxBudgetStatus); false for an engine without one. Any thread. */
     virtual bool fxBudgetStatus (FxBudgetStatus& /*out*/) const noexcept { return false; }
-    /** The content the sound needs and does not have (docs/ARCHITECTURE.md section 6, the `missing_content` flag), as of the last block; bits: 0 .. 2 the file (sample, granular, spectral,
+    /** The content the sound needs and does not have (docs/ARCHITECTURE.md section 5, the `missing_content` flag), as of the last block; bits: 0 .. 2 the file (sample, granular, spectral,
         multisample) of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3 (the built-in saw plays), 6 the impulse of Convolve (bypassed), 7 the sample of the noise source. Any thread. */
     virtual unsigned missingContent() const noexcept { return 0; }
 

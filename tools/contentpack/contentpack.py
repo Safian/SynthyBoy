@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SynthyBoy - contentpack: builds, verifies, splits and describes ContentPacks (docs/ARCHITECTURE.md section 6), stdlib only.
+# SynthyBoy - contentpack: builds, verifies, splits and describes ContentPacks (docs/ARCHITECTURE.md section 5), stdlib only.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #

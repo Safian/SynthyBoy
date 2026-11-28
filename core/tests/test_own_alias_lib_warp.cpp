@@ -208,7 +208,7 @@ TEST (own_alias_lib_warp_bit_identity_and_checksums)
 TEST (own_alias_lib_warp_sample_without_content_falls_back_to_builtin_wavetable)
 {
     const int note = 84;
-    // Without content, voice falls back to built-in wavetable (WtOsc) per docs/ARCHITECTURE.md section 6
+    // Without content, voice falls back to built-in wavetable (WtOsc) per docs/ARCHITECTURE.md section 5
     // WtOsc uses aa::kWarpAdaa, so toggling aa::kLibWarp leaves it identical bit for bit
     aa::setOff (0);
     const auto on = renderNote (note, kWarpDistHardClip, 50.0f, Tier::high, /*withSample=*/false);

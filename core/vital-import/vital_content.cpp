@@ -561,7 +561,7 @@ bool UserWavetableStore::addWavetable (const ImportedWavetable& wt, std::string&
 {
     packOut = info_.id.empty() ? "user.imported-vital" : info_.id;
 
-    // the file is a 16-bit mono WAV, the only wavetable format the content store reads (docs/ARCHITECTURE.md 5.2); a table that only
+    // the file is a 16-bit mono WAV, the only wavetable format the content store reads (docs/ARCHITECTURE.md 4.2); a table that only
     // carries its frames gets its file made here, and the hash of the file bytes is its identity either way
     std::vector<uint8_t> wav = wt.wavBytes;
     if (wav.empty())

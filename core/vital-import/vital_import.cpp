@@ -470,7 +470,7 @@ std::vector<int16_t> toInt16 (const std::vector<float>& frames)
     return out;
 }
 
-/** The stored file of a table is a 16-bit mono WAV (the only format the content store reads: docs/ARCHITECTURE.md 5.2); its SHA-256 is
+/** The stored file of a table is a 16-bit mono WAV (the only format the content store reads: docs/ARCHITECTURE.md 4.2); its SHA-256 is
     the identity in the pack and the hash of the reference in the state (IContentStore::readFile checks it against the file bytes). */
 void finishWavetableFile (ImportedWavetable& iw)
 {

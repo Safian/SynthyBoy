@@ -1,6 +1,6 @@
 # Content packs: developer note
 
-A content pack is a folder with a `contentpack.json` manifest and the files it lists (format: `schema/contentpack.schema.json`, tool: `tools/contentpack/contentpack.py`, architecture: `docs/ARCHITECTURE.md` section 6). The plugin lists the packs it finds under `Content/packs/<pack id>/` (the MPC package copies `content/factory-wavetables` and `content/factory-samples` there; `scripts/build-mpc.sh`).
+A content pack is a folder with a `contentpack.json` manifest and the files it lists (format: `schema/contentpack.schema.json`, tool: `tools/contentpack/contentpack.py`, architecture: `docs/ARCHITECTURE.md` section 5). The plugin lists the packs it finds under `Content/packs/<pack id>/` (the MPC package copies `content/factory-wavetables` and `content/factory-samples` there; `scripts/build-mpc.sh`).
 
 ## Licence
 

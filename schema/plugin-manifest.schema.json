@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SynthyBoy plugin manifest (plugin.json)",
-  "description": "Describes the plugin for the host-side PluginManifest, see docs/ARCHITECTURE.md section 7. builds[*] and contentPacks[*] url/sha256/size are filled in by the release job (scripts/fill-manifest.py, docs/RELEASE.md); entries that are not built yet have status 'unbuilt' and empty placeholders. The optional author, description, assets, key_id and signature are the fields the Kick plugin manager reads besides the ones above.",
+  "description": "Describes the plugin manifest (plugin.json). builds[*] and contentPacks[*] url/sha256/size are filled in by the release job (scripts/fill-manifest.py, docs/RELEASE.md); entries that are not built yet have status 'unbuilt' and empty placeholders. The optional author, description, assets, key_id and signature are the fields the Kick plugin manager reads besides the ones above.",
   "type": "object",
   "required": ["schemaVersion", "id", "name", "version", "kind", "license", "clap_id", "builds", "static", "contentPacks"],
   "additionalProperties": false,

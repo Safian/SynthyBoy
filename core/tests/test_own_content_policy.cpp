@@ -1,4 +1,4 @@
-// SynthyBoy - own engine tests: the content policy of docs/ARCHITECTURE.md section 6 (a missing file is tolerated and flagged: the oscillator plays its built-in wavetable, never silence),
+// SynthyBoy - own engine tests: the content policy of docs/ARCHITECTURE.md section 5 (a missing file is tolerated and flagged: the oscillator plays its built-in wavetable, never silence),
 // and the loop of a WAV 'smpl' chunk becoming loop settings at load time (SampleLoopSettings, used by the shells' load paths).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

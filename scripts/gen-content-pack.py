@@ -5,7 +5,7 @@
 #
 #   gen-content-pack.py [--out-root content] [--check] [--list] [--only <category>]...
 #
-# Writes two content packs (docs/ARCHITECTURE.md section 6) below the output root:
+# Writes two content packs (docs/ARCHITECTURE.md section 5) below the output root:
 #   factory-wavetables/   pack com.safian.synthyboy.factory-wavetables, kind "wavetables": <Category>/<slug>.wav (72 tables in the six categories Analog, Digital, Spectral, Vocal, Metallic, Noise; 16 bit
 #                 mono WAV, 2048 samples per frame, up to 64 frames: what core/engine-own/osc/content_set.cpp reads: a file of N * 2048 samples is a table of N frames). Every table is a RECIPE
 #                 (content-src/wavetables/<Category>/<slug>.json, scripts/wavetable_lib.py); the manifest lists "category" and "title" per file. Add-on packs: content-src/addons/<dir>/ -> content-addons/<dir>/.

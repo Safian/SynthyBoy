@@ -1279,7 +1279,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const OscIdx& oi = pi.osc[o];
         const LibKeys& lk = *libk[o];
         const int declaredType = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
-        // docs/ARCHITECTURE.md section 6: the plugin tolerates absence of content (built-in tables) and flags it. A Sample, Granular, Spectral or Multisample oscillator whose file is
+        // docs/ARCHITECTURE.md section 5: the plugin tolerates absence of content (built-in tables) and flags it. A Sample, Granular, Spectral or Multisample oscillator whose file is
         // not there plays its built-in wavetable (oscN.wavetable) instead of silence; missingMask () tells the instance view (bit o: oscillator o has no file). Content present: the type as set.
         const bool fileMissing = declaredType != kOscTypeWavetable && (g.content == nullptr || (declaredType == 4 ? g.content->instrument[o] == nullptr : !g.content->sample[o].valid));
         const int type = fileMissing ? kOscTypeWavetable : declaredType;
