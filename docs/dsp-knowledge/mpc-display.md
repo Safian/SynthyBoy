@@ -470,8 +470,7 @@ implement that capability as false and the string setter as a no-op. A JSON
 keyboard or a plugin-side `effString2Parameter` override therefore does not
 establish a text return path through those elements. The physical XL Numeric
 Keypad is documented for selected numeric fields. Macro naming and LFO shape
-Save As/Rename retain working `ui::TextEntry` pending a real plugin-owned text
-handle. Exact source identity, call addresses, scope limits and acceptance
+Save As/Rename use the native skin keyboard (components/native/keyboard; the C++ `ui::TextEntry` is deleted, 2026-11-28). Exact source identity, call addresses, scope limits and acceptance
 prerequisite: [native-text-entry.md](native-text-entry.md).
 
 

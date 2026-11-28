@@ -129,6 +129,7 @@ namespace nativeui = synthyboy_mpc::nativeui;
 #include "tab_view.h"
 #include "q_router.h"
 #include "macro_names.h"
+#include "native_text_entry.h"
 #include "filter_curve_edits.h"
 #include "q_step_rule.h"
 
@@ -744,6 +745,14 @@ struct PluginInstance
         void setNativeText (int line, const char* text) noexcept override { inst.nativeText.set (line, text); }
         void setNativeMacroText (int line, const char* text) noexcept override { inst.nativeMacroText.set (line, text); }
         void setNativeMacroSubpage (bool open) noexcept override { inst.nativeMacroSubpage.store (open ? 1.0f : 0.0f, std::memory_order_relaxed); }
+        void setNativeTextEntry (int context, const char* title, const char* text) noexcept override
+        {
+            inst.nativeTextEntryContext.store (context, std::memory_order_relaxed);
+            inst.nativeTextEntryLines.set (0, context != 0 ? title : "");
+            inst.nativeTextEntryLines.set (1, context != 0 ? text : "");
+        }
+        int takeNativeTextKey() noexcept override { return inst.nativeTextKeys.take(); }
+        void clearNativeTextKeys() noexcept override { inst.nativeTextKeys.clear(); }
         void setNativeListText (const nativeui::nativetext::ListPage* page) noexcept override
         {
             if (page != nullptr)
@@ -1666,6 +1675,9 @@ struct PluginInstance
     std::atomic<uint64_t> nativeModBoardPreset { 0 };
     nativeui::nativetext::Lines nativeText;           // the text lines of the Mod page (read-only native Labels)
     nativeui::nativetext::MacroLines nativeMacroText;   // the text lines of the Macros tab: the names of the cards, the title, the count and the hint of the targets page
+    std::atomic<int> nativeTextEntryContext { 0 };   // the native text keyboard: 0 closed, else textentry::kCtx* (the overlay thread writes, the display thread reports)
+    nativeui::nativetext::BasicLines<2> nativeTextEntryLines;   // line 0 the title (the display string of the context), line 1 the text with its caret (the display string of the text)
+    synthyboy_mpc::textentry::KeyPort nativeTextKeys;   // the key codes the host wrote (debounced), taken by the overlay page
     std::atomic<float> nativeMacroSubpage { 0.0f };   // exactly 0 on the cards page of the Macros tab, exactly 1 while its targets / list / keyboard page is open (the gate of the native base page)
     nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
     nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
@@ -1893,6 +1905,12 @@ struct PluginInstance
             return nativeMacroText.value (offset - nativeui::kMacroText);
         if (offset == nativeui::kMacroSubpage)
             return nativeMacroSubpage.load (std::memory_order_relaxed);
+        if (offset == nativeui::kTextEditContext)
+            return synthyboy_mpc::textentry::valueOfContext (nativeTextEntryContext.load (std::memory_order_relaxed), nativeui::kTextEditContexts);
+        if (offset == nativeui::kTextEditKey)
+            return 0.0f;
+        if (offset == nativeui::kTextEditText)
+            return nativeTextEntryLines.value (1);
         if (nativeui::isNoteMaskOffset (offset))
         {
             const int field = offset - nativeui::kNoteMask;
@@ -2643,6 +2661,8 @@ struct PluginInstance
         for (int line = 0; line < nativeui::nativetext::kMacroLines; ++line)
             reportNativeValue (e, nativeui::kMacroText + line, nativeMacroText.value (line));
         reportNativeValue (e, nativeui::kMacroSubpage, nativeMacroSubpage.load (std::memory_order_relaxed));
+        reportNativeValue (e, nativeui::kTextEditContext, nativeUiValue (nativeui::kTextEditContext));
+        reportNativeValue (e, nativeui::kTextEditText, nativeUiValue (nativeui::kTextEditText));
         if (nativeNoteMask.layout() != 0 || nativeNoteMaskDue.exchange (false, std::memory_order_acq_rel))
         {
             for (int i = 0; i < nativeui::kNoteMaskHandles; ++i)
@@ -3813,6 +3833,31 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     std::snprintf (buf, kCap, offset == nativeui::kMacroSubpage ? "Macro Subpage" : "Macro Text %d", line + 1);
                 else if (opcode == effGetParamDisplay && offset != nativeui::kMacroSubpage)
                     inst->nativeMacroText.copy (line, buf, kCap);
+                return 1;
+            }
+            if (nativeui::isTextEditOffset (offset))
+            {
+                static constexpr const char* const names[] { "TextEdit Context", "TextEdit Key", "TextEdit Text" };
+                if (opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, names[offset - nativeui::kTextEdit]);
+                else if (opcode == effGetParamDisplay)
+                {
+                    buf[0] = '\0';
+                    if (offset == nativeui::kTextEditContext)
+                        inst->nativeTextEntryLines.copy (0, buf, kCap);
+                    else if (offset == nativeui::kTextEditText)
+                    {
+                        char line[nativeui::nativetext::kLineLen];
+                        inst->nativeTextEntryLines.copy (1, line, sizeof line);
+                        // the end of a text that does not fit the host's buffer (the caret is part of the line)
+                        const std::string full (line);
+                        const size_t room = kCap - 1;
+                        if (full.size() <= room)
+                            synthyboy_mpc::putBounded (buf, kCap, full.c_str());
+                        else
+                            synthyboy_mpc::putBounded (buf, kCap, ("..." + full.substr (full.size() - (room - 3))).c_str());
+                    }
+                }
                 return 1;
             }
             if (nativeui::isNoteMaskOffset (offset))
@@ -5227,7 +5272,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!props || index < 0) return 0;
 
         const int nativeOffset = index - PluginInstance::nativeUiBase();
-        if (nativeui::isNativeTextOffset (nativeOffset) || nativeui::isMacroTextOffset (nativeOffset) || nativeOffset == nativeui::kMacroSubpage)
+        if (nativeui::isNativeTextOffset (nativeOffset) || nativeui::isMacroTextOffset (nativeOffset) || nativeOffset == nativeui::kMacroSubpage || nativeui::isTextEditOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
             return 1;
@@ -6051,6 +6096,13 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
                 if (nativeui::isNativeTextOffset (offset) || nativeui::isMacroTextOffset (offset) || offset == nativeui::kMacroSubpage)
+                    return;
+                if (offset == nativeui::kTextEditKey)   // a key of the native keyboard: the codes of one tap come twice, the port debounces them
+                {
+                    inst->nativeTextKeys.post (synthyboy_mpc::textentry::keyOfValue (parameter, nativeui::kTextEditKeys));
+                    return;
+                }
+                if (nativeui::isTextEditOffset (offset))   // the context and the text are the plugin's to write
                     return;
                 if (nativeui::isNoteMaskOffset (offset))
                 {

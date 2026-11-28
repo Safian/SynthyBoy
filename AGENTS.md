@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Plugin-drawn layer (`shell-mpc/ui/`; it holds only graphs, meters, curve displays, animation, indicators, the binding data rows and Q tables, plus the kept C++ `TextEntry` keyboard: controls are native components, there is no C++ widget library; owner 2026-11-27): instructions for AI coding agents are in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md); human docs in [docs/ui-components/README.md](docs/ui-components/README.md).
+Plugin-drawn layer (`shell-mpc/ui/`; it holds only graphs, meters, curve displays, animation, indicators, the binding data rows and Q tables: controls are native components, there is no C++ widget library; owner 2026-11-27): instructions for AI coding agents are in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md); human docs in [docs/ui-components/README.md](docs/ui-components/README.md).
 
 For native components follow [components/AGENTS.md](components/AGENTS.md). In `skin/TUI.json` each shared MPC component definition exists once and the instances bind to it, so the TUI contains one copy of the control subtree.
 
@@ -73,9 +73,9 @@ A screen never draws a control face with its own code: buttons, dropdowns, selec
 - Lists use the host MenuOverlay as it is: a row tap marks the row, a tap on the list header applies and closes. No select-and-close, no custom badges in rows, names only.
 - Evidence: the Key 61 probes A/B closed the list but lost the selection, because the skin action triggers cannot be ordered (SDK `ui-reference.md`, section on onAction); report in `/private/tmp/claude-501/list-probe/results/`. A plugin-drawn drawer (SDK-PORTING) is the only way to get select-and-close and is not planned.
 
-## Text input is our own C++ keyboard (owner, 2026-11-28)
+## Text input is the native keyboard (owner, 2026-11-28)
 
-Text input (Macro rename, LFO shape name) uses our own plugin-drawn keyboard (`shell-mpc/ui/text_entry.h`). There is no system keyboard: the host TextEditOverlay does not deliver typed text to a third-party plugin (XL disassembly of /usr/bin/MPC 3.10.1.12; unverified on the Key 61). The native Button keyboard (components/native/keyboard, `TextEdit` parameters) was tried and deleted; do not rebuild it.
+Text input (Macro rename, LFO shape name) is a NATIVE keyboard: the component `components/native/keyboard` (recipe from tokens, built from the Button recipe), ONE definition in `skin/TUI.json` instanced on the Macros, LFO, RND and Play tabs. It is NOT drawn by us with the GPU; the C++ `ui::TextEntry` is deleted. The host TextEditOverlay does not deliver typed text to a third-party plugin (XL disassembly of /usr/bin/MPC 3.10.1.12), so each key writes a code into the plugin parameter `TextEdit Key` (ResetOnGestureEnd), the plugin keeps the text (`shell-mpc/native_text_entry.h`: `textentry::Model`, plain data; `KeyPort`: 250 ms per-key debounce, the host delivers one tap as two press events) and a Label shows it from the display string of `TextEdit Text`; `TextEdit Context` opens the keyboard (its display string is the title). Community-proven by the OpenMPC Plugin Manager. Design and the open device checks: `docs/dsp-knowledge/native-text-entry.md`, `TODO.md`.
 
 ## MPC questions: no guessing, ask the expert, teach it once (owner, 2026-11-27)
 
