@@ -151,3 +151,49 @@ It is not needed for the decision: path 5 does not depend on it.
 **Recommendation:** no host-provided text path reaches a third-party plugin; keep text entry
 plugin-side. The host keyboard cannot replace `ui/text_entry.h` on the XL (fact) and no
 source shows it on the Key 61; the only supported route is the Button/Label keyboard of path 5.
+
+## Owner decision 2026-11-28: use the host keyboard; the one indirect route found
+
+Owner decision: text input uses the host's own keyboard. Every route was searched again
+(SDK `ui-reference.md` 4.2/6.12/7, `host-contract.md`, factory `midi-TUI.json`, XL vtable
+evidence, manuals v3.10.1, community NOTES/PORTING, `mpc-perf/host-presets/EREDMENY.md`).
+
+**Direct routes are closed (FACT, see the sections above):** a skin `TextEditOverlay` on a
+plugin handle (XL: setter no-op; Key 61 unmeasured), `effString2Parameter` (never sent),
+`effSetProgramName` (no source shows the host calling it; our dispatcher `synthyboy_mpc.cpp:4172`
+returns 0 and logs nothing), host rename keyboards bound to host-owned names only.
+
+**Indirect route (the only one with measured evidence): the host's Save Plugin Preset dialog
+is the keyboard, the file name is the channel.**
+- FACT (Key 61, 3.10.x, measured 2026-11-14, `.hw-local/mpc-perf/host-presets/EREDMENY.md`
+  "Mentés a host saját funkciójával"): the disk icon (1210,52) on the plugin page opens the
+  host "Save" window with a FILE NAME field and keyboard icon; typing a name and SAVE writes
+  `<name>.xpl` into `MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/`
+  (XML; `<preset>` = our `effGetProgramName`, `<state>` = our `effGetChunk`). The file-name
+  keyboard rejects `_` (only `#` and `-` special characters were active).
+- FACT (XL): a host-saved SynthyBoy preset from the XL exists
+  (`mpc-knowledge/device-observed/xpl/synthyboy-host-saved-Space-Wobble-Bass.xpl`, aarch64
+  path), so the same dialog works there. SDK `docs/presets.md:17` documents the folder.
+- FACT: a skin cannot open that dialog (handlers: `Q-Link`, `Show Overlay`, `Toggle Switch`,
+  `Focus Lost`, `ui-reference.md:512-517`); the user must tap the host's disk icon.
+- HYPOTHESIS (unmeasured): the plugin learns the typed name by watching that folder
+  (poll or inotify on a worker thread; the plugin already runs file code), reading the new
+  `*.xpl` file name, deleting the file, and applying the name to the pending context
+  (Macro N rename, LFO shape save as/rename). The UI shows "tap the disk icon, type the
+  name, SAVE" while the context is open. Also unmeasured: that the host does not call
+  `effSetProgramName` (a log line in the dispatcher would also show it), the folder path on
+  the XL (`/sdcard` vs `/nvme`, resolve by the `[User]` root), overwrite prompts, the
+  allowed character set on the XL, a project/preset side effect of the host save.
+- Trade-offs (FACT from the above): the host writes a 67 KB preset per rename (the plugin
+  deletes it), the dialog is not triggerable and not reachable from the Macros/LFO cards, the
+  name cannot contain `_`, the name is the file name not UTF-8 free text.
+
+**Minimal on-device check (do not run here):** a build with (a) a log line in the
+`effSetProgramName` case and in `effString2Parameter` (27), and (b) a 1 s poll of the
+Plugin Presets folder logging new file names. On the Key 61 and the XL: tap the disk icon,
+clear the name, type `Test-1`, SAVE. Pass: the log shows the new name within 1 s on both
+devices. The same run answers whether opcode 4 is ever sent.
+
+Recommendation: the Save-dialog route is the only route that uses the host keyboard; it is a
+workaround with a poor UX and no documented contract. The documented and community-proven
+route remains the Button/Label keyboard (path 5 above).
