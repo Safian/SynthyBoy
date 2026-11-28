@@ -161,7 +161,7 @@ public:
         kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,   // (the Var ids are free: the warp PHASE knobs are on MORE now)
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
         kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2,
-        kList = 700, kListBackdrop, kListHeader,   // the list popup (source, warp types, the content browser: its header is the way up)
+        kList = 700, kListBackdrop, kListHeader,   // the native list (source, warp types, the content browser: its header is the way up)
         kModsBack = 600, kModsRow = 610,    // 610 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsAddStep = 660, kModsAdd, kModsPage
     };
@@ -2080,7 +2080,7 @@ private:
         return pageTop_ == kPageMods && modsTargetParam_ >= 0 && modsPreset_ == inst.stateGeneration()
             && modsSource_ == sel_ && (isPage() || inst.playSelection (0) == sel_) && modsModulePowered (inst);
     }
-    /** While no modulation exists on the control, or while a source is being picked, the page is the list of the sources (case (c): ui::ListPopup). */
+    /** While no modulation exists on the control, or while a source is being picked, the page is the list of the sources (case (c): the native picker rows). */
     bool modsBoard() const noexcept { return modsPicking_ || mods_.numRows() == 0; }
     bool modsNativeHit (int x, int y, int* row = nullptr) const noexcept { return nativeModulations_.active() && ! modsBoard() && mods_.nativeHit (x, y, row); }
 
@@ -2841,7 +2841,7 @@ private:
             }
         }
     }
-    /** The wavetable browser in the list popup (over the full screen: from the compact view the full screen opens first): the categories, the tables of one, the current one marked. */
+    /** The wavetable browser in the native list rows (over the full screen: from the compact view the full screen opens first): the categories, the tables of one, the current one marked. */
     void openWavetableBrowser (UiStack& stack, IInstanceView& v)
     {
         const Item* it = item (kBasic + 1);
@@ -2906,7 +2906,7 @@ private:
         // A::Refused: the row says why, nothing changes
     }
 
-    /** The content browser in the list popup (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
+    /** The content browser in the native list rows (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
     void openBrowser (UiStack& stack, IInstanceView& v)
     {
         std::vector<IInstanceView::ContentRoot> roots;

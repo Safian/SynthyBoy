@@ -2228,7 +2228,7 @@ private:
             alignPhase (v, false);
         syncEditor (v);
     }
-    // ---- the lists of the editor: SHAPES (the shapes, saving), MORE (the actions); the lists are the one ListPopup of the page
+    // ---- the lists of the editor: SHAPES (the shapes, saving), MORE (the actions); the lists are native: the host rows of the lfodetail menu (menu_), the names published as text of the native rows
     enum class Ed : uint8_t { None, ShapesRoot, ShapesFactory, ShapesMine, Confirm, ActionsRoot, ActionsGroup, CopyLfo };
     enum class Verb : uint8_t { Load, Overwrite, Rename, Delete };
     enum class Kb : uint8_t { SaveAs, Rename };
