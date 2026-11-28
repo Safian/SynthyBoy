@@ -107407,6 +107407,135 @@
      }
     },
     {
+     "key": "playOscHeaderSelectorW360",
+     "value": {
+      "version": 2,
+      "actions": [
+       {
+        "version": 1,
+        "onAction": "Mouse Down",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "oscNativeSourceChoices"
+       },
+       {
+        "version": 1,
+        "onAction": "Enter Pressed",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "oscNativeSourceChoices"
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "19ffffff",
+          "outlineColour": "ff19c6e0",
+          "backgroundInset": 2.0,
+          "outlineThickness": 1.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 8 360 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Selector face",
+         "type": "Image",
+         "data": {
+          "version": 2,
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "selector_dropdown_360x40_legacy_40.png"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 8 360 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Title",
+         "type": "Label",
+         "data": {
+          "version": 1,
+          "textStyle": {
+           "version": 1,
+           "font": {
+            "version": 1,
+            "name": "Titillium Web",
+            "style": "SemiBold",
+            "height": 33.5
+           },
+           "colour": "ffeef1ff",
+           "justification": "horizontallyCentred verticallyCentred",
+           "case": "Original"
+          },
+          "type": "Value",
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "12 8 316 40"
+        }
+       }
+      ]
+     }
+    },
+    {
      "key": "playOscHeaderSelectorRouted",
      "value": {
       "version": 2,
@@ -107530,6 +107659,135 @@
          "whenVisible": "Always",
          "boundsType": "Absolute",
          "bounds": "12 8 180 40"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "key": "playOscHeaderSelectorRoutedW288",
+     "value": {
+      "version": 2,
+      "actions": [
+       {
+        "version": 1,
+        "onAction": "Mouse Down",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "oscNativeSourceChoices"
+       },
+       {
+        "version": 1,
+        "onAction": "Enter Pressed",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "oscNativeSourceChoices"
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "19ffffff",
+          "outlineColour": "ff19c6e0",
+          "backgroundInset": 2.0,
+          "outlineThickness": 1.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 8 288 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Selector face",
+         "type": "Image",
+         "data": {
+          "version": 2,
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "selector_dropdown_288x40_legacy_40.png"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 8 288 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Title",
+         "type": "Label",
+         "data": {
+          "version": 1,
+          "textStyle": {
+           "version": 1,
+           "font": {
+            "version": 1,
+            "name": "Titillium Web",
+            "style": "SemiBold",
+            "height": 33.5
+           },
+           "colour": "ffeef1ff",
+           "justification": "horizontallyCentred verticallyCentred",
+           "case": "Original"
+          },
+          "type": "Value",
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "12 8 244 40"
         }
        }
       ]
@@ -107665,6 +107923,135 @@
      }
     },
     {
+     "key": "playEnvHeaderSelectorW388",
+     "value": {
+      "version": 2,
+      "actions": [
+       {
+        "version": 1,
+        "onAction": "Mouse Down",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "fx editor choice menu"
+       },
+       {
+        "version": 1,
+        "onAction": "Enter Pressed",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "fx editor choice menu"
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "19ffffff",
+          "outlineColour": "ff19c6e0",
+          "backgroundInset": 2.0,
+          "outlineThickness": 1.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 8 388 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Selector face",
+         "type": "Image",
+         "data": {
+          "version": 2,
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "selector_dropdown_388x40_legacy_40.png"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 8 388 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Title",
+         "type": "Label",
+         "data": {
+          "version": 1,
+          "textStyle": {
+           "version": 1,
+           "font": {
+            "version": 1,
+            "name": "Titillium Web",
+            "style": "SemiBold",
+            "height": 33.5
+           },
+           "colour": "ffeef1ff",
+           "justification": "horizontallyCentred verticallyCentred",
+           "case": "Original"
+          },
+          "type": "Value",
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "12 8 344 40"
+        }
+       }
+      ]
+     }
+    },
+    {
      "key": "playLfoHeaderSelector",
      "value": {
       "version": 2,
@@ -107788,6 +108175,135 @@
          "whenVisible": "Always",
          "boundsType": "Absolute",
          "bounds": "12 8 288 40"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "key": "playLfoHeaderSelectorW396",
+     "value": {
+      "version": 2,
+      "actions": [
+       {
+        "version": 1,
+        "onAction": "Mouse Down",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "fx editor choice menu"
+       },
+       {
+        "version": 1,
+        "onAction": "Enter Pressed",
+        "handler": "Show Overlay",
+        "handleName": "Data",
+        "additionalData": "fx editor choice menu"
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "19ffffff",
+          "outlineColour": "ff19c6e0",
+          "backgroundInset": 2.0,
+          "outlineThickness": 1.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 8 396 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Selector face",
+         "type": "Image",
+         "data": {
+          "version": 2,
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "selector_dropdown_396x40_legacy_40.png"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 8 396 40"
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Title",
+         "type": "Label",
+         "data": {
+          "version": 1,
+          "textStyle": {
+           "version": 1,
+           "font": {
+            "version": 1,
+            "name": "Titillium Web",
+            "style": "SemiBold",
+            "height": 33.5
+           },
+           "colour": "ffeef1ff",
+           "justification": "horizontallyCentred verticallyCentred",
+           "case": "Original"
+          },
+          "type": "Value",
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 1,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "12 8 352 40"
         }
        }
       ]
@@ -122489,7 +123005,7 @@
        "componentData": {
         "version": 1,
         "name": "Play Osc Select",
-        "type": "playOscHeaderSelector",
+        "type": "playOscHeaderSelectorW360",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -122510,7 +123026,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "70 10 296 56",
+        "bounds": "62 10 360 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/0/18/33/Parameter 2675",
          "IndexedEnabling/0/5/Parameter 2676"
@@ -122522,7 +123038,7 @@
        "componentData": {
         "version": 1,
         "name": "Play Osc Select Routed",
-        "type": "playOscHeaderSelectorRouted",
+        "type": "playOscHeaderSelectorRoutedW288",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -122543,7 +123059,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "70 10 224 56",
+        "bounds": "62 10 288 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/0/18/33/Parameter 2675",
          "RangedEnabling/1/4/5/Parameter 2676"
@@ -122555,7 +123071,7 @@
        "componentData": {
         "version": 1,
         "name": "Play Env Select",
-        "type": "playEnvHeaderSelector",
+        "type": "playEnvHeaderSelectorW388",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -122576,7 +123092,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "454 10 324 56",
+        "bounds": "446 10 388 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/0/18/33/Parameter 2675"
         ]
@@ -122587,7 +123103,7 @@
        "componentData": {
         "version": 1,
         "name": "Play LFO Select",
-        "type": "playLfoHeaderSelector",
+        "type": "playLfoHeaderSelectorW396",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -122608,7 +123124,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "872 10 332 56",
+        "bounds": "864 10 396 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/0/18/33/Parameter 2675",
          "IndexedEnabling/0/7/Parameter 3294"
@@ -122919,7 +123435,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "14 10 56 56",
+        "bounds": "6 10 56 56",
         "additionalInvalidatingHandles": [
          "IndexedEnabling/1/9/Parameter 3302",
          "IndexedEnabling/0/5/Parameter 2676",
@@ -123142,7 +123658,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "14 10 56 56",
+        "bounds": "6 10 56 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/2/3/9/Parameter 3302",
          "IndexedEnabling/1/5/Parameter 2676",
@@ -123226,7 +123742,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "294 10 72 56",
+        "bounds": "350 10 72 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/2/3/9/Parameter 3302",
          "IndexedEnabling/1/5/Parameter 2676",
@@ -123444,7 +123960,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "14 10 56 56",
+        "bounds": "6 10 56 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/4/5/9/Parameter 3302",
          "IndexedEnabling/2/5/Parameter 2676",
@@ -123528,7 +124044,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "294 10 72 56",
+        "bounds": "350 10 72 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/4/5/9/Parameter 3302",
          "IndexedEnabling/2/5/Parameter 2676",
@@ -123746,7 +124262,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "14 10 56 56",
+        "bounds": "6 10 56 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/6/7/9/Parameter 3302",
          "IndexedEnabling/3/5/Parameter 2676",
@@ -123830,7 +124346,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "294 10 72 56",
+        "bounds": "350 10 72 56",
         "additionalInvalidatingHandles": [
          "RangedEnabling/6/7/9/Parameter 3302",
          "IndexedEnabling/3/5/Parameter 2676",
@@ -124048,7 +124564,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "14 10 56 56",
+        "bounds": "6 10 56 56",
         "additionalInvalidatingHandles": [
          "IndexedEnabling/8/9/Parameter 3302",
          "IndexedEnabling/4/5/Parameter 2676",
@@ -124132,7 +124648,7 @@
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "294 10 72 56",
+        "bounds": "350 10 72 56",
         "additionalInvalidatingHandles": [
          "IndexedEnabling/8/9/Parameter 3302",
          "IndexedEnabling/4/5/Parameter 2676",

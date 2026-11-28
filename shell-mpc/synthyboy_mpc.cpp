@@ -2931,6 +2931,21 @@ struct PluginInstance
             playGroupDue[group].store (true, std::memory_order_release);
         }
     }
+    /** The Play oscillator selector (re)initialisation rule (owner, 2026-11-28): show the FIRST oscillator that is ON, in the selector's order (Sub, Osc A, B, C, Noise), never an offline one. Called when the instance starts,
+        after a preset load and after a state restore, NOT while the player works (switching the shown oscillator off does not move the selector). When none is on the selector stays as it is. */
+    void playSelectFirstActiveOsc() noexcept
+    {
+        namespace pl = synthyboy_mpc::play;
+        for (int instance = 1; instance <= synthyboy_mpc::playosc::kInstances; ++instance)
+        {
+            const int power = pl::oscPowerIndex (instance);
+            if (power >= 0 && paramMirror[power].load (std::memory_order_relaxed) >= 0.5f)
+            {
+                playSetSelector (0, instance);
+                return;
+            }
+        }
+    }
     /** The display thread, every tick: the proxies follow their real parameters (a preset, the parameter's own tab, automation, a selector change) and the host is told. A selector change
         re-reports ALL proxies of its group (and the selector) once; a proxy the host wrote makes the real parameter reported too. A value is reported only when it differs from what the host last
         heard (so the host's own writes and its echoes are not reported back: no feedback). */
@@ -3358,6 +3373,7 @@ struct PluginInstance
                 paramUndo[i].store (std::nanf (""), std::memory_order_relaxed);
             }
         }
+        playSelectFirstActiveOsc();
         preparePlayPresentation();
         synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kDefaultParams);
     }
@@ -3690,6 +3706,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy_mpc::noteDiagnostics().setTierTrimDb (trimDb);
         }
 
+        inst->playSelectFirstActiveOsc();
         inst->preparePlayPresentation();
         inst->currentProgram.store (prog, std::memory_order_relaxed);
         inst->setNoProgram (false, std::string());
@@ -5135,6 +5152,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     if (synthyboy_mpc::play::playFromChunk (chunk, static_cast<size_t>(size), sel))
                         for (int g = 0; g < 3; ++g)
                             inst->playSetSelector (g, sel[g]);
+                                    inst->playSelectFirstActiveOsc();   // a restored project shows its first active oscillator too
                 }
                 {
                     // the view state of the merged tabs: a project reload restores it exactly; a chunk without it (an older one) gives the defaults. A program change (effSetProgram) leaves it: the selector shows the selected item even when the new preset does not use it
