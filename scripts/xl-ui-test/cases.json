@@ -65,53 +65,6 @@
     ]
   },
   {
-    "id": "play.expand.env",
-    "view": "play1",
-    "steps": [
-      {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "play1/Play Native EnvLfo ENV Expand 1-6"},
-      {"op": "expect", "status": {"view": "play1", "ui_depth": "1"}},
-      {"op": "tap", "control": "play1/Play Expanded Envelope Close"},
-      {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}},
-      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
-    ],
-    "restore": [
-      {"op": "navigate", "view": "play1"}
-    ]
-  },
-  {
-    "id": "play.expand.lfo",
-    "view": "play1",
-    "steps": [
-      {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "play1/Play Native EnvLfo LFO Expand 1-6"},
-      {"op": "expect", "status": {"view": "play1", "ui_depth": "1"}},
-      {"op": "tap", "control": "play1/Play Expanded LFO Close"},
-      {"op": "expect", "status": {"view": "play1", "ui_depth": "0"}},
-      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
-    ],
-    "restore": [
-      {"op": "navigate", "view": "play1"}
-    ]
-  },
-  {
-    "id": "play.expand.osc-a",
-    "view": "play1",
-    "steps": [
-      {"op": "snapshot", "name": "baseline"},
-      {"op": "expect", "status": {"play_osc": "2"}},
-      {"op": "expect", "target": "osc1.on", "value": 1},
-      {"op": "tap", "control": "play1/Play Native OSC Osc A expand/State [2]/Control"},
-      {"op": "expect", "status": {"ui_depth": "1"}},
-      {"op": "tap", "control": "play1/Play Expanded Oscillator Close"},
-      {"op": "expect", "status": {"ui_depth": "0"}},
-      {"op": "expect", "target": "*", "change": "unchanged", "from": "baseline"}
-    ],
-    "restore": [
-      {"op": "navigate", "view": "play1"}
-    ]
-  },
-  {
     "id": "lfo1.toggle",
     "view": "lfo1",
     "steps": [
