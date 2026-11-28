@@ -8,6 +8,9 @@ Facts about how the MPC host treats our skin, each with its evidence. Raw files:
 - FACT (Key 61 probes A and B): a `Mouse Down -> Focus Lost` action on every row's Choose component (A) or on the overlay component's own actions (B) closes the list on one row tap, but the selection is NOT applied (the selector and the panel keep the old value). Evidence: `list-probe-results/A-*`, `B-*`. Select-and-close is therefore not possible with the stock MenuOverlay.
 - Decision: lists keep the factory behaviour (row marks, header applies). Names only, no custom row badges.
 
+## Lists of dynamic names (file browsers, source of a new modulation), decision 2026-11-28
+- The stock MenuOverlay reads static `replacementStrings` (docs/dsp-knowledge/mpc-display.md, Native LFO Shape Editor), so a list of file or table names cannot use it. The oscillator browsers and the source list of a new modulation therefore use the cells of the modulation picker (stock Buttons and Value Labels, seven rows a page, BACK / UP or GROUPS / PREVIOUS / NEXT); the names are the display text of the row parameters (the host re-reads the text when the cell code changes). Not yet measured on a device.
+
 ## TextEditOverlay
 - FACT (XL, disassembly of /usr/bin/MPC 3.10.1.12): the string setter is never called for plugin parameters; SDK `ui-reference.md` 6.12 says TextEditOverlay is meaningful only for text-valued handles. Key 61 not inspected. Details: `native-text-entry.md`, `text-entry-research.md` in the raw folder.
 - Plan: a native Button keyboard writing key codes into plugin parameters (see `docs/review/TEXT-ENTRY-NATIVE-KEYBOARD-2026-11-27.md`).
