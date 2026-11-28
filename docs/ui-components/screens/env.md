@@ -16,4 +16,4 @@ ADSR, SHAPE, TIME (three groups; Q 13 .. 16 stay empty): `EnvUi::publishQGroup`.
 
 ## C++ owners
 
-`shell-mpc/overlay/env_ui.h` (rows, Q banks, geometry, native bridge, detail pages), `mod_rows_page.h` and `native_mod_targets_ui.h` (targets), `shell-mpc/native_env_controls.h`.
+`shell-mpc/overlay/env_ui.h` (`EnvUi`: Q banks, geometry, native bridge, detail pages; it also serves the compact envelope view of the Play page, see [play.md](play.md)), `shell-mpc/overlay/mod_rows_page.h` and `shell-mpc/overlay/native_mod_targets_ui.h` (targets), `shell-mpc/native_mod_targets.h` (the targets handles), `shell-mpc/native_env_controls.h` (the cell handles; the `Selection` slot is unused by the skin but kept so the later handle numbers do not shift: `env_ui.h` and `scripts/xl-ui-test` still use it as a boundary/offset).
