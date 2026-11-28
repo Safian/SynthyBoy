@@ -210,6 +210,7 @@
                     "name": "Type",
                     "def": "oscHeaderType",
                     "overlay": "oscNativeSetting_menu_TYPEChoices",
+                    "hw_focus": "Yes",
                     "gate": [
                       "RangedEnabling/4/8/9/Parameter 2978"
                     ]
@@ -228,6 +229,7 @@
                   {
                     "name": "Table",
                     "def": "oscHeaderTable",
+                    "hw_focus": "Children",
                     "hit": {
                       "id": 2,
                       "group": 4
@@ -240,6 +242,7 @@
                     "name": "Source",
                     "def": "oscHeaderSource",
                     "toggle": true,
+                    "hw_focus": "Yes",
                     "gate": [
                       "RangedEnabling/5/8/9/Parameter 2978"
                     ]
@@ -256,6 +259,7 @@
                   {
                     "name": "Browse",
                     "def": "oscHeaderBrowse",
+                    "hw_focus": "Children",
                     "gate": [
                       "RangedEnabling/4/8/9/Parameter 2978"
                     ]
@@ -278,6 +282,7 @@
                     "overlay": "oscNativeRoutingChoices",
                     "focus": true,
                     "wrapper": "NativeActive",
+                    "hw_focus": "Children",
                     "page": true,
                     "show": "Hide"
                   }
@@ -288,6 +293,7 @@
         },
         "skin": {
           "def": "oscHeaderAbc",
+          "title_kind": "Value",
           "page_gate": [
             "NonZero/Parameter 2878",
             "HdrOscGate"
@@ -367,7 +373,8 @@
                   {
                     "name": "Waveform",
                     "def": "oscHeaderWaveform",
-                    "overlay": "oscNativeSetting_menu_WAVEFORMChoices"
+                    "overlay": "oscNativeSetting_menu_WAVEFORMChoices",
+                    "hw_focus": "Yes"
                   }
                 ]
               }
@@ -383,7 +390,8 @@
                   {
                     "name": "Octave",
                     "def": "oscHeaderOct",
-                    "overlay": "fx editor number menu"
+                    "overlay": "fx editor number menu",
+                    "hw_focus": "Yes"
                   }
                 ]
               }
@@ -403,6 +411,7 @@
                     "overlay": "oscNativeRoutingChoices",
                     "focus": true,
                     "wrapper": "NativeActive",
+                    "hw_focus": "Children",
                     "page": true,
                     "show": "Hide"
                   }
@@ -447,7 +456,8 @@
                   {
                     "name": "Kind",
                     "def": "oscHeaderKind",
-                    "overlay": "oscNativeSetting_menu_KINDChoices"
+                    "overlay": "oscNativeSetting_menu_KINDChoices",
+                    "hw_focus": "Yes"
                   }
                 ]
               }
@@ -463,7 +473,8 @@
                   {
                     "name": "Sound",
                     "def": "oscHeaderSound",
-                    "overlay": "oscNativeSetting_menu_SOUNDChoices"
+                    "overlay": "oscNativeSetting_menu_SOUNDChoices",
+                    "hw_focus": "Yes"
                   }
                 ]
               }
@@ -483,6 +494,7 @@
                     "overlay": "oscNativeRoutingChoices",
                     "focus": true,
                     "wrapper": "NativeActive",
+                    "hw_focus": "Children",
                     "page": true,
                     "show": "Hide"
                   }
@@ -528,7 +540,8 @@
                   {
                     "name": "Kind",
                     "def": "oscHeaderKindWide",
-                    "overlay": "oscNativeSetting_menu_KINDChoices"
+                    "overlay": "oscNativeSetting_menu_KINDChoices",
+                    "hw_focus": "Yes"
                   }
                 ]
               }
@@ -548,6 +561,7 @@
                     "overlay": "oscNativeRoutingChoices",
                     "focus": true,
                     "wrapper": "NativeActive",
+                    "hw_focus": "Children",
                     "page": true,
                     "show": "Hide"
                   }

@@ -242,6 +242,30 @@ class HeaderSkinSpecTests(unittest.TestCase):
                         with Image.open(path) as image:
                             self.assertEqual(image.convert("RGBA").tobytes(), face.tobytes(), name)
 
+    def test_header_forms_ignore_presses_and_osc_focus_chain(self):
+        for built_forms in self.family_built.values():
+            for form, built in built_forms.items():
+                form_def = dict(built["definitions"])[built["form"]]
+                self.assertIs(form_def["ignoreMousePresses"], True, form)
+        osc_doc = json.loads((ROOT / "skin/defs_osc.json").read_text(encoding="utf-8"))
+        osc_defs = {e["key"]: e["value"] for e in osc_doc["componentDefinitions"]["localComponentDefinitions"]}
+        layer = osc_defs["oscNativeSettingsLayer"]["componentsData"]
+        hdr_instances = [c for c in layer if c["componentData"]["type"].startswith("oscHeader")]
+        self.assertEqual([c["componentData"]["name"] for c in hdr_instances],
+                         ["Osc ABC Header", "Sub Header", "Noise Header", "Noise Sample Header"])
+        for c in hdr_instances:
+            self.assertEqual(c["bounds"]["acceptsHWFocus"], "Children", c["componentData"]["name"])
+        expected_cell_focus = {
+            "oscHeaderAbc": {"Type": "Yes", "Table": "Children", "Source": "Yes", "Browse": "Children", "Route": "Children"},
+            "oscHeaderSub": {"Waveform": "Yes", "Octave": "Yes", "Route": "Children"},
+            "oscHeaderNoise": {"Kind": "Yes", "Sound": "Yes", "Route": "Children"},
+            "oscHeaderNoiseSample": {"Kind": "Yes", "Route": "Children"},
+        }
+        for form_key, expected in expected_cell_focus.items():
+            actual = {c["componentData"]["name"]: c["bounds"]["acceptsHWFocus"]
+                      for c in osc_defs[form_key]["componentsData"] if c["componentData"]["name"] in expected}
+            self.assertEqual(actual, expected, form_key)
+
     def test_a_spec_without_skin_block_or_unknown_slot_kind_is_refused(self):
         with self.assertRaises(KeyError):
             header.header_definitions(EXAMPLES[0])

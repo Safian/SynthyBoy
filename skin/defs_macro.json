@@ -918,7 +918,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {

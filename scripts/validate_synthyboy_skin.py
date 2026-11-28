@@ -49,6 +49,13 @@ SCREEN_FAMILIES = {
     ("lfoScreen", "lfoScreenTop", "lfoScreenTop2", "lfoScreenTop3"): [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)],
     ("filterScreen", "filterScreenTop"): ["Filter 1", "Filter 2"],
 }
+# Generated header form containers: narrowed here because 104 legacy/leaf definitions outside header forms
+# (leaf Button/Knob cells, macroCard, oscNativeTune, etc.) still use ignoreMousePresses: false with actions: [].
+HEADER_FORMS = (
+    "oscHeaderAbc", "oscHeaderSub", "oscHeaderNoise", "oscHeaderNoiseSample",
+    "envHeader", "lfoHeader", "curveHeader", "modHeader",
+    "tuningHeader", "voiceHeader", "masterHeader", "macroHeader",
+)
 
 
 def walk(value):
@@ -345,6 +352,27 @@ def tui_semantics(page, schema, skins, findings):
             used = [e["componentData"]["type"] for e in entries if e.get("componentData", {}).get("type") in family_keys]
             if used != list(family_keys):
                 findings.error(json_path(["pageData", "tabs", tab_name]), f"tab '{tab_name}' must hold the instances {list(family_keys)} in this order, found {used}: the repeating screens share their definitions")
+    def_by_key = {d["key"]: d["value"] for d in definitions}
+
+    def has_interactive_descendant(def_val, seen):
+        for child in def_val.get("componentsData", []):
+            cd = child.get("componentData", {})
+            child_type = cd.get("type")
+            if child_type in ("Button", "Knob") and child.get("bounds", {}).get("acceptsHWFocus") == "Yes":
+                return True
+            if child_type in def_by_key and child_type not in seen:
+                target = def_by_key[child_type]
+                if target.get("actions") or has_interactive_descendant(target, seen | {child_type}):
+                    return True
+        return False
+
+    for index, definition in enumerate(definitions):
+        key, value = definition["key"], definition["value"]
+        if key not in HEADER_FORMS:
+            continue
+        if value.get("ignoreMousePresses") is False and not value.get("actions") and has_interactive_descendant(value, {key}):
+            findings.error(json_path([*defs_path, index, "value", "ignoreMousePresses"]),
+                           f"header form '{key}' has ignoreMousePresses false with empty actions and interactive children; container swallows touches")
     for k, item in enumerate(page["replacementStrings"]):
         check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
     if len(page["tabs"]) > PROVEN_MAX_TABS:
