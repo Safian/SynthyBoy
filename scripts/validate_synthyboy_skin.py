@@ -26,7 +26,7 @@ SDK_MAX_TABS = 32  # SDK ui-reference.md 3.5; the proven skin (git 1fd0d592) run
 PROVEN_MAX_TABS = 37
 # Largest values the proven skin uses; the SDK gives no upper limit, so anything above is a warning.
 PROVEN_BUTTON_MAX = {"buttonId": 98, "numButtonsInGroup": 99}
-PROVEN_LOCAL_IDS = {"synthyboyWarpPage"}
+PROVEN_LOCAL_IDS = set()
 IMAGE_KEYS = {"image", "onImage", "offImage", "filmStrip", "thumbImage", "revealedImage", "inactiveImage", "peakImage", "rmsImage"}
 # One identifying control per physical tab. The shared OSC surface serves five tabs.
 SURFACES = {
@@ -381,18 +381,21 @@ def tui_semantics(page, schema, skins, findings):
 
 
 def choice_list_table():
-    """The slot table of the one-tap choice lists (shell-mpc/native_choice_list.h): (first slot parameter, [Data handle of slot 0, 1, ...])."""
+    """The slot table of the one-tap choice lists (shell-mpc/native_choice_list.h): (first slot parameter, first block count, tail slot parameter, [Data handle of slot 0, 1, ...])."""
     text = (ROOT / "shell-mpc/native_choice_list.h").read_text(encoding="utf-8")
     first = int(re.search(r"kFirstSlotParameter\s*=\s*(\d+)", text)[1])
+    first_block = int(re.search(r"kFirstBlockSlots\s*=\s*(\d+)", text)[1])
+    tail = int(re.search(r"kTailSlotParameter\s*=\s*(\d+)", text)[1])
     table = [int(n) for n in re.findall(r"\d+", re.search(r"kSlotHandles\[\]\s*=\s*\{(.*?)\};", text, re.S)[1])]
-    return first, table
+    return first, first_block, tail, table
 
 
 def check_choice_lists(page, definitions, findings):
     """The one-tap choice lists (owner 2026-11-28): the host MenuOverlay draws no item names for a VST2 (Key 61 probe 2026-11-28, docs/dsp-knowledge/skin-host-behaviour.md
     "Host list: who draws the names"), so (1) a MenuOverlay a control opens must carry its own rows (a Button per option, named by a Label or an Image), and (2) every opener of a plugin list
-    maps ListOpen (or <name>List next to <name>) to ResetOnGestureEnd/Parameter <first + slot> where slot is the index of its Data handle in shell-mpc/native_choice_list.h."""
-    first, table = choice_list_table()
+    maps ListOpen (or <name>List next to <name>) to ResetOnGestureEnd/Parameter <slot_param> where slot is the index of its Data handle in shell-mpc/native_choice_list.h."""
+    first, first_block, tail, table = choice_list_table()
+    param_to_slot = {(first + s if s < first_block else tail + s - first_block): s for s in range(len(table))}
     if len(set(table)) != len(table):
         findings.error("$", "shell-mpc/native_choice_list.h: a Data handle is listed in two slots")
     def_by_key = {d["key"]: d["value"] for d in definitions}
@@ -417,8 +420,8 @@ def check_choice_lists(page, definitions, findings):
                 slot = re.fullmatch(r"ResetOnGestureEnd/Parameter (\d+)", value)
                 where = json_path([*base, "componentsData", j, "handle remapping"])
                 name = entry.get("componentData", {}).get("name")
-                if slot and first <= int(slot[1]) < first + len(table):
-                    s = int(slot[1]) - first
+                if slot and int(slot[1]) in param_to_slot:
+                    s = param_to_slot[int(slot[1])]
                     used.add(s)
                     if mapping.get(data) != f"Parameter {table[s]}":
                         findings.error(where, f"{owner} / {name}: {key} opens slot {s} (Parameter {table[s]}) but {data} is {mapping.get(data)!r}")
