@@ -66,7 +66,7 @@ The presets: `master.polyphony` 4, 4 and 3, `osc1.type 3` (Spectral), `osc1.unis
 
 All on the Key 61 (`root@192.168.0.30`; the coordinator's scripts take the device lock), because the cost that matters is the cold-cache block, which no desktop run reproduces (`docs/MPC.md:354`). Nothing here needs a code change.
 
-**M0, baseline of the base commit.** Build the arm32 `synthyboy_tier_bench` of `f1fddd71` with `scripts/build-tier-bench.sh --arch arm32`, then
+**M0, baseline of the base commit.** Build the arm32 `synthyboy_tier_bench` of `f1fddd71` as a static arm32 build, then
 `bash /Users/szabi/Documents/Projects/Safian/.hw-local/mpc-perf/noteon-burst/run-noteon-burst.sh before-f1fddd71 <path of the arm32 synthyboy_tier_bench>`
 (`.hw-local/mpc-perf/noteon-burst/run-noteon-burst.sh:1-12`: 16 rows, core 3, config low, 4 s x 3 passes, chord every 1 s, 8 and 16 notes, Kill and Steal). Record: the 16 "worst blocks" of `before-f1fddd71.md` (develop now has the Kill fix `211020a7`, so the 16-note rows are expected lower than the `414b46af` table). Run it once; it is the "before" of the acceptance.
 

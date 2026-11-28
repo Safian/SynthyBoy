@@ -1,4 +1,4 @@
-# Keys that the parameter audit (scripts/run-param-audit.sh) finds DEAD or MOD-DEAD for a reason that is not a defect. One entry per line: REGEX <TAB> CATEGORY <TAB> REASON.
+# Keys that the parameter audit finds DEAD or MOD-DEAD for a reason that is not a defect. One entry per line: REGEX <TAB> CATEGORY <TAB> REASON.
 # The regex is searched in the key. A line whose regex starts with "mod:" is for the modulation sweep (the regex follows the prefix). A line with "find:" is for a finding
 # (the regex is searched in "<key> <finding word>"). Categories: UI-ONLY, CONTENT, HOST, NOOP-ENGINE (an engine specific no-op, documented), HARNESS (needs a state the harness cannot put in place).
 # Every entry must say WHY; the report lists them. Unexplained DEAD keys fail the run.

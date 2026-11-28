@@ -81,7 +81,7 @@ The bit identity against the engine BEFORE the change (alpha 0) is a two-build c
 2. Build the targets: `bash .hw-local/tools/buildslot.sh cmake --build build-vcg -j4 --target synthyboy_test_own_voice_count_gain synthyboy_test_rt synthyboy_test_own_voice_opt synthyboy_test_output_stage_presets synthyboy_preset_render synthyboy_level_probe`
 3. Tests: `build-vcg/core/tests/synthyboy_test_own_voice_count_gain`, `build-vcg/core/tests/synthyboy_test_rt`, `build-vcg/core/tests/synthyboy_test_own_voice_opt`.
 4. Reference renders from the commit before the implementation (a second build dir `build-vcg-base` at that commit, same configure, target `synthyboy_preset_render`): `build-vcg-base/tools/preset-render/synthyboy_preset_render --presets content/presets --engine own --tier all --content-dir build-vcg-base/tools/preset-render/content-store --wav R0 --chord-wav R0c --float32 --hash`
-5. The new build at alpha 0: the same command with `build-vcg/...` and `--voice-gain-alpha 0` into `R1`, `R1c`; `bash scripts/compare-renders.sh R0 R1` and `bash scripts/compare-renders.sh R0c R1c`: exit 0 (every file identical).
+5. The new build at alpha 0: the same command with `build-vcg/...` and `--voice-gain-alpha 0` into `R1`, `R1c`; a comparison of the `.hash` files of the two render folders and a comparison of the `.hash` files of the two render folders: exit 0 (every file identical).
 6. The levelling again (section 4) and `synthyboy_test_output_stage_presets` with the new held-back list; the preset gate (`synthyboy_preset_render --engine own --summary-only`).
 7. On the devices: the CPU of the heaviest presets (the extra cost is one ramp and multiply per sample per used target and two log / exp per control period) and a listening check of section 7.
 

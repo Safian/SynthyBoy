@@ -346,4 +346,3 @@ A sound designer's actionable target specification addressing the identified gap
   - Introduce secondary warps via `osc1.warp2.type` and `osc1.warp2.amount`.
 
 ---
-*Report generated automatically by `scripts/survey-presets.py`.*

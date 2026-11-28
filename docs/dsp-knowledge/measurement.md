@@ -18,7 +18,7 @@
   (wide out-of-order) can matter on the A17, and the reverse (diode pair loop 2026-11-21: Mac
   2.29 -> 2.27 %, device pending). Use the Mac only to check that nothing got grossly slower.
 - **Bench setup on the Key 61:** `synthyboy_tier_bench` armv7 static, core 3 (kernel-isolated),
-  config `low`, governor performance at 1608 MHz. Scripts: `scripts/perf-device.sh`,
+  config `low`, governor performance at 1608 MHz. 
   `run-noteon-burst.sh`; docs: `docs/perf/README.md`.
 
 ## Decisions
@@ -68,7 +68,7 @@ Measured on an x86-64 Linux VM (not a device; the Cortex-A17 / A76 numbers are n
 | 1 voice parameter (`filter1.cutoff`) | 5.8 us (5.0-6.0) | 4.5 us (3.8-4.5) |
 | 1 matrix slot parameter (`mod01.amount`) | 4.3 us (4.3-5.4) | 4.3 us (4.3-5.5) |
 
-The gain is 3 us for an effect parameter and 1.3 us for a voice parameter; a slot parameter still compiles the matrix (no change by design). What remains of the 1.8 us for an effect parameter is the 2,637 comparisons, the FX budget evaluation and the effect and master updates, which run on every changed block. Across-process A/B/A runs of the old and the new binary on a 40 us block were dominated by VM noise (steady blocks differed by 10 us) and decide nothing. Bit identity against the old binary: 62 presets x tiers low / medium / high with 1-3 random parameters changed per block and a content reset every 97 blocks, identical hashes; `scripts/compare-renders.sh` on the 34 renders of the Bass presets at tier low: identical.
+The gain is 3 us for an effect parameter and 1.3 us for a voice parameter; a slot parameter still compiles the matrix (no change by design). What remains of the 1.8 us for an effect parameter is the 2,637 comparisons, the FX budget evaluation and the effect and master updates, which run on every changed block. Across-process A/B/A runs of the old and the new binary on a 40 us block were dominated by VM noise (steady blocks differed by 10 us) and decide nothing. Bit identity against the old binary: 62 presets x tiers low / medium / high with 1-3 random parameters changed per block and a content reset every 97 blocks, identical hashes; a comparison of the `.hash` files of the two render folders on the 34 renders of the Bass presets at tier low: identical.
 
 ## The idle engine, the idle global LFOs and silent racks (x86-64 Linux VM, 2026-11-26)
 

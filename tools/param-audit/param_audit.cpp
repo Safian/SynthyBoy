@@ -10,7 +10,7 @@
 // both neighbours and the edges of a continuous one; --quick: nine) and measure RMS, peak, spectral centroid, 24 bands, balance, f0, envelope, zero crossings, click and level modulation.
 // A key is ALIVE if the sound changes with it (renders are deterministic: bit identical audio for every value = DEAD). Keys flagged modulatable are swept again through a routed source
 // (macro 1 through the modulation matrix). Per value: finite, peak bounded, no click, the value outside the range renders as the edge, the default renders the same twice.
-// Output: one JSON line per key (keys.jsonl) in --out. scripts/param_audit_report.py merges the shards into report.md / CSV / JSON and compares them with the committed baseline.
+// Output: one JSON line per key (keys.jsonl) in --out.
 // Exit code 0; the verdict of the run is made by the script.
 #include <algorithm>
 #include <chrono>

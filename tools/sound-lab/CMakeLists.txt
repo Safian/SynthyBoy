@@ -1,4 +1,4 @@
-# SynthyBoy - sound-lab: scripted offline renders of one preset under a device profile (for the sound design measurements of scripts/sound-lab.py).
+# SynthyBoy - sound-lab: scripted offline renders of one preset under a device profile.
 # Added by the top level CMakeLists.txt when SYNTHYBOY_BUILD_TESTS is ON.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later

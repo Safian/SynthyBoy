@@ -8,7 +8,7 @@ This document details the browser category organization for SynthyBoy factory pr
 
 - **Category Name Characters**: Stock Akai MPC instruments avoid slashes (`/`) and punctuation in category names, using letters, spaces, digits, and `+` (e.g. `Synth Bass`, `Plucks+Synths`, `Pitched Perc+Bells`). Categories here follow this rule exactly (e.g. `Bass Sub+808`, `Lead Sync+FM`, `Bells+Mallets`, `Strings+Brass`).
 - **File Naming & Numbering**: `scripts/gen-xpl-presets.py` names files as `NNN-<Category>-<Preset Name>.xpl`. Files are numbered sequentially (`000` .. `183`) such that presets within each group stay strictly contiguous in the group list order, and presets within each group sort alphabetically.
-- **Integrity & Extension**: `scripts/assign-preset-categories.py --check` enforces that all presets exist, all groups meet the 4-preset minimum, and all names are FAT/stock-compliant. `--suggest` provides deterministic recommendations for future sound set additions.
+- **Integrity & Extension**: All presets must exist, every group must meet the 4-preset minimum, and all names must be FAT/stock-compliant.
 
 ## Group Summary
 

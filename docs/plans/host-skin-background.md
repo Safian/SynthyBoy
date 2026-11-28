@@ -113,7 +113,7 @@ Files to add/change (no code written here):
 
 Preview without the device (nothing of this is the host):
 - `python3 scripts/render-mpc-skin-preview.py --skins "<package>/Plugin Skins" --params docs/params.json --tab "Macros" --out /tmp/preview.png` (draws `Image` entries and the markers, not `backgroundData`, and ignores the gate: it shows frame-0 state; `render-mpc-skin-preview.py:8-12,110,131`). It shows the background UNDER the native widgets, which is what the host shows when the gate is open and the widgets are visible: a good overlap check.
-- `python3 scripts/render-ui-gallery.py --build --only Macros --out <dir> --knobs 16` (builds `ui_gallery_host`; `render-ui-gallery.py:411-419`; renders 1280 x 800, so the tab is rows 110..737) for the page picture against which the background is compared; a pixel compare of (background + transparent-plane live picture) against the full opaque page picture is the identity test (`scripts/gallery-compare.py` exists).
+- `python3 scripts/render-ui-gallery.py --build --only Macros --out <dir> --knobs 16` (builds `ui_gallery_host`; `render-ui-gallery.py:411-419`; renders 1280 x 800, so the tab is rows 110..737) for the page picture against which the background is compared; a pixel compare of (background + transparent-plane live picture) against the full opaque page picture is the identity test.
 - SDK `tools/validate.py <package folder>` (the image-present check, `validate.py:470-492`) after building the package with `scripts/build-mpc.sh --skin-layout scripts/overlay-skin/mpc-ui-pages-overlay.json ...` (build slot rules apply: `bash /Users/szabi/Documents/Projects/Safian/.hw-local/tools/buildslot.sh`).
 
 ## 7. Device check on the XL afterwards (and the Key 61)

@@ -8,7 +8,7 @@
 //   --output-stage    every render goes through the output stage of the shells (core/include/synthyboy/output_stage.h: kMakeupGainDb, the look-ahead limiter on), so the WAVs and the
 //                     figures are what a shell hands to its host (delayed by the look-ahead). Default: the raw engine output, what the loudness scripts measure.
 //   --scalar-content  the own engine runs the reference code of the Sample / Granular / Spectral / Multisample oscillators (setOwnSavingsOff, kOwnSavingContentKernels): render once with and once
-//                     without it to compare the two (scripts/content-kernel-compare.py)
+//                     without it to compare the two
 //   --float32         the WAVs are 32 bit float instead of 24 bit PCM (a 24 bit file cannot show a difference below half a step, 6e-8 of full scale): use it wherever two builds are compared
 //   --hash            also write <preset>.hash next to every WAV: the 64 bit hash of the float bits and the frame count (also for a render that is not finite); `diff -r` of two folders then compares every bit
 //

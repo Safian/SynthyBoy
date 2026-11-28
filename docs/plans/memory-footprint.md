@@ -136,7 +136,7 @@ Therefore, **Task T1 (the first task of the plan)** builds `core/tests/test_own_
      --float32 --hash --wav /tmp/sb-mem-base/single --chord-wav /tmp/sb-mem-base/chord \
      --content-dir build/core/tests/output-stage-content-store
    ```
-   Record all 960 `.hash` files (`160 presets × 3 tiers × single/chord`); after the plan lands, `scripts/compare-renders.sh /tmp/sb-mem-base /tmp/sb-mem-after` must report `0` differences.
+   Record all 960 `.hash` files (`160 presets × 3 tiers × single/chord`); after the plan lands, a comparison of the `.hash` files of the two render folders must report `0` differences.
 
 3. **CPU & cache-miss baseline on Key 61 (interleaved A/B + optional PMU per Audit 3 Rank 9 / `CPU-REVIEW-MEMORY.md:344`):**
    ```sh
@@ -494,12 +494,12 @@ Batch 5 (serial):                                                               
 | **Built-in wavetable bank (shared once/process)** | `33,099,744 B` (`33.10 MB` / `31.57 MiB`) | Exact `33,099,744 B` documented & asserted | `synthyboy_test_own_osc_types` |
 | **Key 61 `engine_prepare` (`voices + fx`)** | `169.2 ms` (`95.6 + 73.6`, `docs/MPC.md:327`) | **`<= 45 ms`** (`HYPOTHESIS`: computed `~18–35 ms`) | MPC startup log + `prepareDetailMs(0/1)` |
 | **Key 61 CPU per block (`tier_bench --config low`)** | Round 13 baseline (`docs/MPC.md:350`: mean median `23.45%`, mean p99 `48.96%`, SCHED_FIFO p99 `39.30%`) | **No regression** (`<= +0.5%` noise band on every preset; `HYPOTHESIS`: −0.5 to −3.0% on morph/heavy presets from shared `MorphScratch` + compact `Voice`) | Interleaved A/B `synthyboy_tier_bench` on Key 61 core 3 |
-| **Audio bit-identity & aliasing** | 960 baseline `.hash` renders (`docs/MPC.md:342`); alias bounds (`docs/QUALITY.md:33-47`) | **0 of 960 renders differ** (`scripts/compare-renders.sh`); aliasing **unchanged** (`0 dB` delta) | `synthyboy_preset_render --float32 --hash` + `scripts/compare-renders.sh` |
+| **Audio bit-identity & aliasing** | 960 baseline `.hash` renders (`docs/MPC.md:342`); alias bounds (`docs/QUALITY.md:33-47`) | **0 of 960 renders differ**; aliasing **unchanged** (`0 dB` delta) | `synthyboy_preset_render --float32 --hash` + a comparison of the `.hash` files of the two render folders |
 | **RT safety & concurrency** | 0 allocs in `process()`; TSan & ASan/UBSan clean | **0 allocs** in `process()` (including live tier/FX/osc-type growth); **0 TSan/ASan/UBSan findings**; `shell-mpc/accept.sh` `ACCEPT OK` | `synthyboy_test_rt`, `synthyboy_test_threads`, ASan/UBSan/TSan CI |
 
 ### 5.2 Device Checks (MPC Key 61 — armv7 only during dev per `AGENTS.md:8`)
 
-1. Build arm32 package (`scripts/build-mpc.sh --arch arm32`) and static arm32 `synthyboy_tier_bench` (`scripts/build-tier-bench.sh --arch arm32`).
+1. Build arm32 package (`scripts/build-mpc.sh --arch arm32`) and static arm32 `synthyboy_tier_bench`.
 2. **Startup time & single-instance RSS:** Load SynthyBoy on Track 1 of `Sbtest` on Key 61; read startup status lines (`prepare_voices`, `prepare_fx`, `open_ms_total`) and `/proc/<mpc-pid>/status` `VmRSS` before vs after loading the plugin (`VmRSS` delta must drop from `~85–115 MB` to `<= 25 MB` with `lazyTables = true`).
 3. **Multi-instance check (2–4 tracks):** Load 4 SynthyBoy instances on 4 tracks (1 Wavetable, 1 Granular, 1 Spectral, 1 Multisample + `reverb.force_enable = 1` on one track); confirm `VmRSS` increase across instances 2–4 is `<= 15 MB/instance` (no OOM, no audio crackle).
 4. **Live transitions without drop-outs:** While holding a 4-note chord on Key 61 with `SYNTHYBOY_MPC_CALLBACK_STATS`:

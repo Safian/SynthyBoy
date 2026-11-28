@@ -10,7 +10,7 @@
 //   fxoff=NAME[+NAME...]   bypasses these effects too (chorus compressor delay distortion eq filter flanger phaser reverb hyperdim utility bode convolve splitter_lh splitter_lmh splitter_ms)
 //   fxon=NAME[+NAME...]    lets these effects run whatever the profile says
 //   stage=on               the output stage of the shells after the engine (core/include/synthyboy/output_stage.h: kMakeupGainDb, look-ahead limiter on): the file is what a shell hands
-//                          to its host, delayed by the look-ahead; without it (default) the raw engine output that scripts/measure-loudness.py measures
+//                          to its host, delayed by the look-ahead; without it (default) the raw engine output
 // ("high;fxoff=reverb" is the full quality profile with the reverb bypassed: what the tier makeup of the effects is measured against). Items, times in seconds:
 //   on T KEY VEL           note on (velocity 0..1)        off T KEY              note off
 //   press T KEY VALUE      poly pressure of a note (0..1; NoteExpression Pressure)
@@ -207,8 +207,8 @@ bool doJob (const std::vector<std::string>& w)
     std::stable_sort (events.begin(), events.end(), [] (const Timed& a, const Timed& b) { return a.frame < b.frame; });
 
     // The files a preset names (content.wavetables / samples / impulses / instruments: pack id + file + SHA-256) are read from $SYNTHYBOY_CONTENT_DIR/<pack id>/<file>, the layout of
-    // DirectoryContentStore; without the variable there is no store and a sample oscillator is silent, Convolve absent, a Preset table the saw (scripts/sound-lab.py builds such a folder
-    // of links to content/factory-* itself). The store is declared before the engine: the engine keeps a pointer to it.
+    // DirectoryContentStore; without the variable there is no store and a sample oscillator is silent, Convolve absent, a Preset table the saw.
+    // The store is declared before the engine: the engine keeps a pointer to it.
     std::unique_ptr<DirectoryContentStore> contentStore;
     if (const char* dir = std::getenv ("SYNTHYBOY_CONTENT_DIR"); dir != nullptr && dir[0] != '\0')
         contentStore = std::make_unique<DirectoryContentStore> (dir);

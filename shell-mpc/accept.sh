@@ -47,7 +47,7 @@ EXP=$(nm -gU "$LIB" | awk '{print $NF}' | sort | tr '\n' ' ')
 grep -q "EngineKind::own" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not create the own engine"; exit 1; }
 # plugin folder / content path logic
 c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp && $B/paths_test > $B/paths.log 2>&1 || { cat $B/paths.log 2>/dev/null | tail -12; echo "ACCEPT FAIL: paths_test (shell-mpc/plugin_paths.h)"; exit 1; }
-for f in scripts/build-mpc.sh scripts/build-armv7-mpc.sh scripts/mpc-container-build.sh; do [ -f $f ] && bash -n $f || { echo "ACCEPT FAIL: $f missing or not valid bash"; exit 1; }; done
+for f in scripts/build-mpc.sh scripts/mpc-container-build.sh; do [ -f $f ] && bash -n $f || { echo "ACCEPT FAIL: $f missing or not valid bash"; exit 1; }; done
 # factory presets as programs: the list header, then the library inside a plugin folder (Content/presets) and outside one
 INC="-I core/include -I core/filters-serum/include -I core/shapes/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 -Wall -Wextra $INC -o $B/programs_test shell-mpc/tests/programs_test.cpp $B/core/libsynthyboy_core.a $B/core/shapes/libsynthyboy_shapes.a > $B/programs-build.log 2>&1 || { grep -E "error" -A4 $B/programs-build.log | head -30; echo "ACCEPT FAIL: programs_test build (shell-mpc/program_list.h)"; exit 1; }

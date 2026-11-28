@@ -74,7 +74,6 @@ Mindegyik méretnél a leghosszabb előjeles tizedes érték esetén is kényelm
   - `build_name_value_definition(...)`: Akai MPC skin JSON definíciót állít elő (balra név keret nélkül, jobbra érték keretben; automatikus 48/40/32 px preset).
   - `render_name_value_preview(...)`: Valós vizuális renderelés a komponensből a választott magassággal.
   - `create_name_value_entry(...)`: Fülre illeszthető paraméter-példányosító.
-- **Komponensképek:** [`scripts/render_native_catalog_cards.py`](../../scripts/render_native_catalog_cards.py) (a Sub OCT mező képét már nem készíti)
   - Kimenet: [`docs/ui-components/../../components/native/name_value/img/catalog-name-value-40.png`](../../components/native/name_value/img/catalog-name-value-40.png)
 - **Célzott tesztcsomag:** [`scripts/tests/test_native_name_value.py`](../../scripts/tests/test_native_name_value.py)
   - 11 egységteszt ellenőrzi a JSON struktúrát mindhárom méretben, a transzparens gyökérhátteret, a név/szám pozíciókat, a feliratkötéseket, az érintési (szélesség >= 56 px) és enkóder tulajdonságokat, a pixelszintű dobozkontrollt, valamint a sárga Q-Link chipek teljes hiányát.
