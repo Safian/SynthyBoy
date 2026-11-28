@@ -8,7 +8,7 @@
 
 ## One component, three forms
 
-The five tabs run the same component. The plugin binds the oscillator by the view index (1 Sub, 2 A, 3 B, 4 C, 5 Noise) and publishes which settings layout is live; the layouts are in `oscNativeSettingsLayer` and are gated by the settings-view handle (`kOscSettingsView`, `IndexedEnabling/<k>/9/`) and by the on/off of the source (`kOscPower`; each control has an `Off` twin).
+The five tabs run the same component. The plugin binds the oscillator by the view index (1 Sub, 2 A, 3 B, 4 C, 5 Noise) and publishes which settings layout is live; the layouts are in `oscNativeSettingsLayer` and are gated by the settings-view handle (`kOscSettingsView`, `IndexedEnabling/<k>/9/`) and by the on/off of the source (`kOscPower`). A source that is off shows its controls under ONE translucent veil (`oscNativeOffVeil`, one instance per source, gated on the power handle; it also takes the touches), not a disabled twin of every control.
 
 | Part | Osc A / B / C (wavetable-type) | Sub | Noise |
 |---|---|---|---|
