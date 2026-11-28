@@ -64,10 +64,10 @@ public:
     static constexpr int kElementPage = kElementFilter;
     enum Page { kPageMods = 22, kPageTargets = 23, kPageDest = 24, kPagePz = 25 };
 
-    // ---- control IDs (kView: Index = the state + 1, the candidate id of the selector)
+    // ---- control IDs (the values 40, 42, 47 and 48 are retired; the others keep their numbers)
     enum Id : int
     {
-        kClose = 40, kPower, kView, kBoth, kModel, kStyle, kClean, kExpand, kScalarView,
+        kPower = 41, kBoth = 43, kModel, kStyle, kClean,
         kCutoff = 100, kResonance, kDrive, kMix,
         kRouting = 110, kBlend,
         kKeytrack = 120, kEnv1, kVar, kCombOffset,

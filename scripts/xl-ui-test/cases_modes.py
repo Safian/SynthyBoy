@@ -54,21 +54,6 @@ def cases():
                 tap("mod/Mod Native Detail Delete/Delete unarmed"), vst(layout.MOD_DETAIL_CONFIRM, 1),
                 tap("mod/Mod Native Detail Back"), top("mod", 0)])
 
-    def select_filter(number):
-        return [point(37, 154), {"op": "expect", "status": {"view": "none"}},
-                point(700, 134 if number == 1 else 199), point(106, 49)]
-
-    for number in (1, 2):
-        for caption, cx, frame in (("note", 862, 3), ("velo", 1044, 4)):
-            # Choose the filter and independent NOTE/VELO curve on the 60/40 split.
-            expand = f"filter1/Filter Native Split Right {caption.title()}/Filter Native Split Expand Curve"
-            close = "filter1/Filter Native Curve Surface/Filter Native Collapse Curve"
-            yield case(f"filter.f{number}.{caption}.expand-collapse", "filter1",
-                       [*select_filter(number), vst(layout.FILTER_STATE_OFFSET, number / 4),
-                        point(cx, 154), tap(expand), vst(layout.FILTER_STATE_OFFSET, frame / 4),
-                        tap(close), vst(layout.FILTER_STATE_OFFSET, number / 4)],
-                       [*select_filter(1), point(862, 154)])
-
     # Test the first two chain cards against their individual selection readbacks.
     # The first 16 chain-select handles publish one bit per card independently of effect power.
     def fx_slot(index):
