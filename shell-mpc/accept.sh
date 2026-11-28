@@ -315,7 +315,6 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filt
 $B/device_profile_host > $B/device-profile-host.log 2>&1 || { grep -E "^FAIL" $B/device-profile-host.log; echo "ACCEPT FAIL: device_profile_host (quality profile per device: texts, table, overrides)"; exit 1; }
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I core/shapes/include -o $B/device_profile_host_asan shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host asan build"; exit 1; }
 $B/device_profile_host_asan > $B/device-profile-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/device-profile-host-asan.log | head; echo "ACCEPT FAIL: device_profile_host under AddressSanitizer / UBSan"; exit 1; }
-# the editors of the FX pages (ui/fx_slot_editor.h, fx_layout.h: the tables of the 16 effects, the splitters), plainly and under AddressSanitizer + UBSan
 # the data of the FX tables is consistent (ui/fx_layout.h against the engine's parameter table), plainly and under AddressSanitizer + UBSan
 # the tool of the Sounds-browser files loads a program or a chunk into the built plugin (the dumper of the Sounds-browser set): it must compile and the program of the first factory preset must load
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I core/shapes/include -I $MPC_SDK/framework -I shell-mpc -o $B/chunk_load_host shell-mpc/tests/chunk_load_host.cpp -ldl || { echo "ACCEPT FAIL: chunk_load_host build"; exit 1; }
