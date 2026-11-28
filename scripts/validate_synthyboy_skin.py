@@ -259,8 +259,19 @@ def schema_errors(schema_path, document, findings):
 
 
 COVER_OVERLAP_PX = 4.0
-# Confirmed false-positive passive covers: (cover_source, cover_name) -> reason.
-COVER_ALLOWLIST = {}
+# Confirmed false-positive passive covers (and deferred REAL covers needing bounds/Button->actions changes,
+# tracked in docs/review/LABEL-OVERLAP-AUDIT-2026-11-28.md): (cover_source, cover_name) -> reason.
+COVER_ALLOWLIST = {
+    ("TUI.json:tab:Osc A", "Overlay Marker osca right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:27); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Osc B", "Overlay Marker oscb right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:28); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Osc C", "Overlay Marker oscc right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:29); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Sub", "Overlay Marker oscsub right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:30); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Noise", "Overlay Marker oscnoise right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:31); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("defs_fx.json:fxNativeGalleryCard", "name"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): opaque card button fx_chain_gallery_card.png; needs Button->Image+actions refactor.",
+    ("defs_lfo.json:lfoDetailRow", "name"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): opaque button native_action_e4feb6764923e3caf30d.png; needs Button->Image+actions refactor.",
+    ("defs_lfo.json:lfoEditAction", "name"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): opaque button native_action_36f4ad4ed373ad966055.png; needs Button->Image+actions refactor.",
+    ("defs_lfo.json:lfoScreenTop2", "Native LFO Point Mod Summary"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): overlaps LFO 1 Native Detail SOURCE (636 24 220 56) while both are active (Parameter 3277==1); needs bounds shift (x>=864).",
+}
 
 
 def _parse_rect(text):
@@ -559,7 +570,7 @@ def tui_semantics(page, schema, skins, findings, sources=None):
         check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
     if len(page["tabs"]) > PROVEN_MAX_TABS:
         findings.warn("$.pageData.tabs", f"{len(page['tabs'])} tabs: the SDK note allows {SDK_MAX_TABS}, the proven skin runs {PROVEN_MAX_TABS} on both devices")
-    check_label_covers(page, findings, sources=sources, as_error=False)
+    check_label_covers(page, findings, sources=sources, as_error=True)
 
 
 def check_skin_schema(skins, label="skin"):
