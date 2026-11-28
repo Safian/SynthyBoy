@@ -16478,7 +16478,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -16687,7 +16687,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -16740,7 +16740,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {
@@ -17100,7 +17100,7 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": false,
+     "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
       {

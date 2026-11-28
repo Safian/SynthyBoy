@@ -337,6 +337,9 @@ def tui_semantics(page, schema, skins, findings):
         for family_key in family_keys:
             if family_key not in local:
                 findings.error(json_path(defs_path), f"screen definition '{family_key}' is missing")
+            elif next(d["value"] for d in definitions if d["key"] == family_key).get("ignoreMousePresses") is not True:
+                # Key 61 and XL bisect 2026-11-28: a screen container that takes mouse presses swallows the touch before its children get it (no control on the screen reacts)
+                findings.error(json_path(defs_path), f"screen definition '{family_key}' must set ignoreMousePresses true: the container would take the touch from every control inside it")
         for tab_name in tab_names:
             entries = (tab_by_name.get(tab_name) or {}).get("componentDefinition", {}).get("componentsData", [])
             used = [e["componentData"]["type"] for e in entries if e.get("componentData", {}).get("type") in family_keys]
