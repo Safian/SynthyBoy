@@ -21,6 +21,10 @@ HTML = ROOT / "docs/ui-components/kepes-katalogus.html"
 EXAMPLES = header.header_examples(json.loads((DIRECTORY / "catalog.json").read_text(encoding="utf-8"))["header"])
 
 
+def view(example):
+    return header.flat(example)      # the flat view of a zones spec: title, title_slot, power, centre, right
+
+
 class HeaderCatalogTests(unittest.TestCase):
     def test_tokens(self):
         self.assertEqual((style.size("header.height"), style.size("header.padding"), style.size("header.gap")), (56, 8, 8))
@@ -58,7 +62,7 @@ class HeaderCatalogTests(unittest.TestCase):
                 self.assertEqual(min(p.y for p in real), m["padding"])                       # top edge 8 px from the header edge
                 self.assertEqual(m["height"] - max(p.y + p.face.height for p in real), m["padding"])   # bottom edge 8 px
             self.assertEqual(min(p.x for p in placed), m["padding"], example["id"])           # left edge 8 px
-            if example.get("right") or any(i.get("fill") for i in example.get("centre", [])):
+            if view(example).get("right") or any(i.get("fill") for i in view(example).get("centre", [])):
                 self.assertEqual(width - max(p.x + p.face.width for p in placed), m["padding"], example["id"])   # right edge 8 px
             if example["width"] == "panel":
                 self.assertEqual(width, 400)
@@ -87,18 +91,18 @@ class HeaderCatalogTests(unittest.TestCase):
             _, placed = header.layout(example)
             left = [p for p in placed if p.zone == "left"]
             self.assertEqual(left[0].x, m["side"], example["id"])           # title first
-            if example.get("title"):
+            if view(example).get("title"):
                 self.assertEqual(left[0].kind, "title")
-                text = label.render_label(example["title"], "font.page_title", "text.value", unit="em")
+                text = label.render_label(view(example)["title"], "font.page_title", "text.value", unit="em")
                 self.assertEqual(left[0].face.width, text.width)               # the width comes from the Label component
-            if example.get("power"):
+            if view(example).get("power"):
                 power = next(p for p in left if p.kind == "power")
                 self.assertEqual(power.face.size, (m["content"], m["content"]))
-                if example.get("title"):
+                if view(example).get("title"):
                     self.assertEqual(power.x, left[0].x + left[0].face.width + m["gap"], example["id"])   # fixed gap after the title
                 else:
                     self.assertEqual(power.x, m["side"], example["id"])    # a header without a title starts with POWER
-            elif example.get("title"):
+            elif view(example).get("title"):
                 self.assertEqual([p.kind for p in left], ["title"], example["id"])   # a modulator or Master: no POWER slot
 
     def test_right_zone_and_states(self):
@@ -116,7 +120,7 @@ class HeaderCatalogTests(unittest.TestCase):
     def test_page_headers_fill_their_flexible_control_up_to_the_right_group(self):
         m = header.metrics()
         for example in EXAMPLES:
-            fills = [i for i in example.get("centre", []) if i.get("fill")]
+            fills = [i for i in view(example).get("centre", []) if i.get("fill")]
             self.assertLessEqual(len(fills), 1, example["id"])
             width, placed = header.layout(example)
             centre = [p for p in placed if p.zone == "centre"]
@@ -133,7 +137,7 @@ class HeaderCatalogTests(unittest.TestCase):
             _, placed = header.layout(example)
             for item in placed:
                 if item.kind == "power":
-                    self.assertEqual(item.face.tobytes(), samples["power"](example["power"]).tobytes(), example["id"])
+                    self.assertEqual(item.face.tobytes(), samples["power"](view(example)["power"]).tobytes(), example["id"])
                 elif item.kind == "more":
                     self.assertEqual(item.face.tobytes(), button.render_sample({"text": "MORE", "height": header.metrics()["content"], "state": "enabled"}).tobytes())
             for item in placed:                # no flat (21,26,45) fill inside any button face
@@ -155,6 +159,61 @@ class HeaderCatalogTests(unittest.TestCase):
         for example in EXAMPLES:
             self.assertIn(f"components/native/header/img/{example['file']}", html)
         self.assertIn("400 px", html)
+
+
+SKIN_SPEC = json.loads((DIRECTORY / "skin-osc.json").read_text(encoding="utf-8"))
+
+
+class HeaderSkinSpecTests(unittest.TestCase):
+    """header_definitions(spec): the skin definitions of a spec list; the committed skin is exactly what the tool writes."""
+
+    @classmethod
+    def setUpClass(cls):
+        by_id = {e["id"]: e for e in EXAMPLES}
+        cls.built = {form: header.header_definitions(by_id[form]) for form in SKIN_SPEC["forms"]}
+
+    def test_no_power_state_twins(self):
+        keys = [k for built in self.built.values() for k, _ in built["definitions"]]
+        self.assertFalse([k for k in keys if k.endswith("Off")])
+        self.assertEqual(len(set(keys)), 16)      # 4 forms + 9 cells + the 3 route definitions (the NativeActive pattern)
+
+    def test_form_holds_both_power_states_behind_the_hdr_on_off_names(self):
+        for form, built in self.built.items():
+            definition = dict(built["definitions"])[built["form"]]
+            gates = [g for c in definition["componentsData"] for g in c["bounds"].get("additionalInvalidatingHandles", [])]
+            self.assertIn("HdrOn", gates, form)
+            self.assertIn("HdrOff", gates, form)
+            names = [c["componentData"]["name"] for c in definition["componentsData"]]
+            self.assertEqual(names[:2], ["Title", "Power"], form)
+
+    def test_shared_definitions_are_built_identically_by_every_form(self):
+        seen = {}
+        for built in self.built.values():
+            for key, definition in built["definitions"]:
+                self.assertEqual(seen.setdefault(key, definition), definition, key)
+
+    def test_the_committed_skin_is_what_the_tool_writes(self):
+        doc = json.loads((ROOT / SKIN_SPEC["file"]).read_text(encoding="utf-8"))
+        committed = {e["key"]: e["value"] for e in doc["componentDefinitions"]["localComponentDefinitions"]}
+        for built in self.built.values():
+            for key, definition in built["definitions"]:
+                self.assertEqual(committed[key], definition, key)
+        owned = [k for k in committed if k.startswith(SKIN_SPEC["prefix"]) or k.startswith(("NativeActive " + SKIN_SPEC["prefix"], "NativeInactive " + SKIN_SPEC["prefix"]))]
+        self.assertEqual(sorted(owned), sorted({k for b in self.built.values() for k, _ in b["definitions"]}))
+
+    def test_faces_are_the_committed_pictures(self):
+        for built in self.built.values():
+            for name, face in built["images"].items():
+                with Image.open(ROOT / "skin" / name) as image:
+                    self.assertEqual(image.convert("RGBA").tobytes(), face.tobytes(), name)
+
+    def test_a_spec_without_skin_block_or_unknown_slot_kind_is_refused(self):
+        with self.assertRaises(KeyError):
+            header.header_definitions(EXAMPLES[0])
+        bad = json.loads(json.dumps(EXAMPLES[0]))
+        bad["zones"]["right"] = [{"kind": "stepper"}]
+        with self.assertRaises(ValueError):
+            header.header_examples({"examples": [bad]})
 
 
 if __name__ == "__main__":

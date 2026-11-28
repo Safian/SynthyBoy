@@ -25588,85 +25588,12 @@
           "value": "Parameter 2965"
          },
          {
-          "key": "HdrRoute",
-          "value": "Parameter 2999"
+          "key": "HdrOn",
+          "value": "IndexedEnabling/1/2/Parameter 2965"
          },
          {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/1/5/Parameter 2876"
-         },
-         {
-          "key": "HdrType",
-          "value": "Parameter 3004"
-         },
-         {
-          "key": "HdrTypeCaption",
-          "value": "WithName[TYPE]/Parameter 3004"
-         },
-         {
-          "key": "HdrSource",
-          "value": "Parameter 3005"
-         },
-         {
-          "key": "HdrSourceCaption",
-          "value": "WithName[SOURCE]/Parameter 3005"
-         },
-         {
-          "key": "HdrBrowse",
-          "value": "Parameter 3006"
-         },
-         {
-          "key": "HdrBrowseCaption",
-          "value": "WithName[BROWSE]/Parameter 3006"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/5/Parameter 2876",
-         "IndexedEnabling/1/2/Parameter 2965"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc A Header Off",
-        "type": "oscHeaderAbcOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[OSC A]/Parameter 2965"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2965"
+          "key": "HdrOff",
+          "value": "IndexedEnabling/0/2/Parameter 2965"
          },
          {
           "key": "HdrRoute",
@@ -25689,24 +25616,12 @@
           "value": "Parameter 3004"
          },
          {
-          "key": "HdrTypeCaption",
-          "value": "WithName[TYPE]/Parameter 3004"
-         },
-         {
           "key": "HdrSource",
           "value": "Parameter 3005"
          },
          {
-          "key": "HdrSourceCaption",
-          "value": "WithName[SOURCE]/Parameter 3005"
-         },
-         {
           "key": "HdrBrowse",
           "value": "Parameter 3006"
-         },
-         {
-          "key": "HdrBrowseCaption",
-          "value": "WithName[BROWSE]/Parameter 3006"
          }
         ]
        },
@@ -25718,8 +25633,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/5/Parameter 2876",
-         "IndexedEnabling/0/2/Parameter 2965"
+         "IndexedEnabling/1/5/Parameter 2876"
         ]
        }
       },
@@ -25750,85 +25664,12 @@
           "value": "Parameter 2966"
          },
          {
-          "key": "HdrRoute",
-          "value": "Parameter 3000"
+          "key": "HdrOn",
+          "value": "IndexedEnabling/1/2/Parameter 2966"
          },
          {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/2/5/Parameter 2876"
-         },
-         {
-          "key": "HdrType",
-          "value": "Parameter 3022"
-         },
-         {
-          "key": "HdrTypeCaption",
-          "value": "WithName[TYPE]/Parameter 3022"
-         },
-         {
-          "key": "HdrSource",
-          "value": "Parameter 3023"
-         },
-         {
-          "key": "HdrSourceCaption",
-          "value": "WithName[SOURCE]/Parameter 3023"
-         },
-         {
-          "key": "HdrBrowse",
-          "value": "Parameter 3024"
-         },
-         {
-          "key": "HdrBrowseCaption",
-          "value": "WithName[BROWSE]/Parameter 3024"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/5/Parameter 2876",
-         "IndexedEnabling/1/2/Parameter 2966"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc B Header Off",
-        "type": "oscHeaderAbcOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[OSC B]/Parameter 2966"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2966"
+          "key": "HdrOff",
+          "value": "IndexedEnabling/0/2/Parameter 2966"
          },
          {
           "key": "HdrRoute",
@@ -25851,24 +25692,12 @@
           "value": "Parameter 3022"
          },
          {
-          "key": "HdrTypeCaption",
-          "value": "WithName[TYPE]/Parameter 3022"
-         },
-         {
           "key": "HdrSource",
           "value": "Parameter 3023"
          },
          {
-          "key": "HdrSourceCaption",
-          "value": "WithName[SOURCE]/Parameter 3023"
-         },
-         {
           "key": "HdrBrowse",
           "value": "Parameter 3024"
-         },
-         {
-          "key": "HdrBrowseCaption",
-          "value": "WithName[BROWSE]/Parameter 3024"
          }
         ]
        },
@@ -25880,8 +25709,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/5/Parameter 2876",
-         "IndexedEnabling/0/2/Parameter 2966"
+         "IndexedEnabling/2/5/Parameter 2876"
         ]
        }
       },
@@ -25912,85 +25740,12 @@
           "value": "Parameter 2967"
          },
          {
-          "key": "HdrRoute",
-          "value": "Parameter 3001"
+          "key": "HdrOn",
+          "value": "IndexedEnabling/1/2/Parameter 2967"
          },
          {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/3/5/Parameter 2876"
-         },
-         {
-          "key": "HdrType",
-          "value": "Parameter 3040"
-         },
-         {
-          "key": "HdrTypeCaption",
-          "value": "WithName[TYPE]/Parameter 3040"
-         },
-         {
-          "key": "HdrSource",
-          "value": "Parameter 3041"
-         },
-         {
-          "key": "HdrSourceCaption",
-          "value": "WithName[SOURCE]/Parameter 3041"
-         },
-         {
-          "key": "HdrBrowse",
-          "value": "Parameter 3042"
-         },
-         {
-          "key": "HdrBrowseCaption",
-          "value": "WithName[BROWSE]/Parameter 3042"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/5/Parameter 2876",
-         "IndexedEnabling/1/2/Parameter 2967"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc C Header Off",
-        "type": "oscHeaderAbcOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[OSC C]/Parameter 2967"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2967"
+          "key": "HdrOff",
+          "value": "IndexedEnabling/0/2/Parameter 2967"
          },
          {
           "key": "HdrRoute",
@@ -26013,24 +25768,12 @@
           "value": "Parameter 3040"
          },
          {
-          "key": "HdrTypeCaption",
-          "value": "WithName[TYPE]/Parameter 3040"
-         },
-         {
           "key": "HdrSource",
           "value": "Parameter 3041"
          },
          {
-          "key": "HdrSourceCaption",
-          "value": "WithName[SOURCE]/Parameter 3041"
-         },
-         {
           "key": "HdrBrowse",
           "value": "Parameter 3042"
-         },
-         {
-          "key": "HdrBrowseCaption",
-          "value": "WithName[BROWSE]/Parameter 3042"
          }
         ]
        },
@@ -26042,8 +25785,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/5/Parameter 2876",
-         "IndexedEnabling/0/2/Parameter 2967"
+         "IndexedEnabling/3/5/Parameter 2876"
         ]
        }
       },
@@ -26074,77 +25816,12 @@
           "value": "Parameter 2964"
          },
          {
-          "key": "HdrRoute",
-          "value": "Parameter 2998"
+          "key": "HdrOn",
+          "value": "IndexedEnabling/1/2/Parameter 2964"
          },
          {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/0/5/Parameter 2876"
-         },
-         {
-          "key": "HdrWave",
-          "value": "Parameter 2979"
-         },
-         {
-          "key": "HdrWaveCaption",
-          "value": "WithName[WAVEFORM]/Parameter 2979"
-         },
-         {
-          "key": "HdrOct",
-          "value": "Parameter 2980"
-         },
-         {
-          "key": "HdrOctCaption",
-          "value": "WithName[OCT]/Parameter 2980"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/9/Parameter 2978",
-         "IndexedEnabling/1/2/Parameter 2964"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Sub Header Off",
-        "type": "oscHeaderSubOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[SUB]/Parameter 2964"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2964"
+          "key": "HdrOff",
+          "value": "IndexedEnabling/0/2/Parameter 2964"
          },
          {
           "key": "HdrRoute",
@@ -26167,16 +25844,8 @@
           "value": "Parameter 2979"
          },
          {
-          "key": "HdrWaveCaption",
-          "value": "WithName[WAVEFORM]/Parameter 2979"
-         },
-         {
           "key": "HdrOct",
           "value": "Parameter 2980"
-         },
-         {
-          "key": "HdrOctCaption",
-          "value": "WithName[OCT]/Parameter 2980"
          }
         ]
        },
@@ -26188,8 +25857,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/9/Parameter 2978",
-         "IndexedEnabling/0/2/Parameter 2964"
+         "IndexedEnabling/1/9/Parameter 2978"
         ]
        }
       },
@@ -26220,6 +25888,14 @@
           "value": "Parameter 2968"
          },
          {
+          "key": "HdrOn",
+          "value": "IndexedEnabling/1/2/Parameter 2968"
+         },
+         {
+          "key": "HdrOff",
+          "value": "IndexedEnabling/0/2/Parameter 2968"
+         },
+         {
           "key": "HdrRoute",
           "value": "Parameter 3002"
          },
@@ -26240,16 +25916,8 @@
           "value": "Parameter 2986"
          },
          {
-          "key": "HdrKindCaption",
-          "value": "WithName[KIND]/Parameter 2986"
-         },
-         {
           "key": "HdrSound",
           "value": "Parameter 2987"
-         },
-         {
-          "key": "HdrSoundCaption",
-          "value": "WithName[SOUND]/Parameter 2987"
          }
         ]
        },
@@ -26261,8 +25929,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/9/Parameter 2978",
-         "IndexedEnabling/1/2/Parameter 2968"
+         "IndexedEnabling/2/9/Parameter 2978"
         ]
        }
       },
@@ -26293,77 +25960,12 @@
           "value": "Parameter 2968"
          },
          {
-          "key": "HdrRoute",
-          "value": "Parameter 3002"
+          "key": "HdrOn",
+          "value": "IndexedEnabling/1/2/Parameter 2968"
          },
          {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/4/5/Parameter 2876"
-         },
-         {
-          "key": "HdrKind",
-          "value": "Parameter 2986"
-         },
-         {
-          "key": "HdrKindCaption",
-          "value": "WithName[KIND]/Parameter 2986"
-         },
-         {
-          "key": "HdrSound",
-          "value": "Parameter 2987"
-         },
-         {
-          "key": "HdrSoundCaption",
-          "value": "WithName[SOUND]/Parameter 2987"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/9/Parameter 2978",
-         "IndexedEnabling/1/2/Parameter 2968"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Noise Header Off",
-        "type": "oscHeaderNoiseOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[NOISE]/Parameter 2968"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2968"
+          "key": "HdrOff",
+          "value": "IndexedEnabling/0/2/Parameter 2968"
          },
          {
           "key": "HdrRoute",
@@ -26384,18 +25986,6 @@
          {
           "key": "HdrKind",
           "value": "Parameter 2986"
-         },
-         {
-          "key": "HdrKindCaption",
-          "value": "WithName[KIND]/Parameter 2986"
-         },
-         {
-          "key": "HdrSound",
-          "value": "Parameter 2987"
-         },
-         {
-          "key": "HdrSoundCaption",
-          "value": "WithName[SOUND]/Parameter 2987"
          }
         ]
        },
@@ -26407,81 +25997,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/9/Parameter 2978",
-         "IndexedEnabling/0/2/Parameter 2968"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Noise Sample Header Off",
-        "type": "oscHeaderNoiseSampleOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[NOISE]/Parameter 2968"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2968"
-         },
-         {
-          "key": "HdrRoute",
-          "value": "Parameter 3002"
-         },
-         {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/4/5/Parameter 2876"
-         },
-         {
-          "key": "HdrKind",
-          "value": "Parameter 2986"
-         },
-         {
-          "key": "HdrKindCaption",
-          "value": "WithName[KIND]/Parameter 2986"
-         },
-         {
-          "key": "HdrSound",
-          "value": "Parameter 2987"
-         },
-         {
-          "key": "HdrSoundCaption",
-          "value": "WithName[SOUND]/Parameter 2987"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/9/Parameter 2978",
-         "IndexedEnabling/0/2/Parameter 2968"
+         "IndexedEnabling/3/9/Parameter 2978"
         ]
        }
       }
@@ -31891,93 +31407,6 @@
     }
    },
    {
-    "key": "oscHeaderTypeOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_220x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 220 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 176 40"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscHeaderTable",
     "value": {
      "version": 2,
@@ -32094,122 +31523,6 @@
     }
    },
    {
-    "key": "oscHeaderTableOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_664x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 664 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 620 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Open",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit_disabled.png",
-         "offImage": "native_button_hit_disabled.png",
-         "buttonId": 2,
-         "numButtonsInGroup": 4,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 664 40"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscHeaderSource",
     "value": {
      "version": 2,
@@ -32312,93 +31625,6 @@
     }
    },
    {
-    "key": "oscHeaderSourceOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_664x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 664 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 620 40"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscHeaderBrowse",
     "value": {
      "version": 2,
@@ -32442,59 +31668,6 @@
        "bounds": {
         "version": 1,
         "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 83 40"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderBrowseOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "BROWSE",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_browse_83x40_off.png",
-         "offImage": "hdr_browse_83x40_off.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Hide",
         "whenVisible": "Always",
         "boundsType": "Absolute",
@@ -32799,6 +31972,541 @@
     }
    },
    {
+    "key": "oscHeaderAbc",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 40.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Name",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTitle"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 8 67 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Power",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "hdr_power_on_40x40.png",
+         "offImage": "hdr_power_off_40x40.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrPower"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "83 8 40 40",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 2878",
+         "HdrOscGate"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Type",
+        "type": "oscHeaderType",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrType"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "131 8 220 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn",
+         "RangedEnabling/4/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Type off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_220x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "131 8 220 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "RangedEnabling/4/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Type off Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrType"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "143 8 176 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "RangedEnabling/4/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Table",
+        "type": "oscHeaderTable",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrSource"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "359 8 664 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn",
+         "IndexedEnabling/4/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Table off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_664x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "359 8 664 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "IndexedEnabling/4/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Table off Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrSource"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "371 8 620 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "IndexedEnabling/4/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Source",
+        "type": "oscHeaderSource",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrSource"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "359 8 664 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn",
+         "RangedEnabling/5/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Source off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_664x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "359 8 664 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "RangedEnabling/5/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Source off Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrSource"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "371 8 620 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "RangedEnabling/5/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Browse",
+        "type": "oscHeaderBrowse",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrBrowse"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1031 8 83 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn",
+         "RangedEnabling/4/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Browse off BROWSE",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_browse_83x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1031 8 83 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff",
+         "RangedEnabling/4/8/9/Parameter 2978"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route",
+        "type": "NativeActive oscHeaderRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrRoute"
+         },
+         {
+          "key": "NativeActiveGate1",
+          "value": "HdrGate1"
+         },
+         {
+          "key": "NativeActiveGate2",
+          "value": "HdrGate2"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1122 8 150 40",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 2878",
+         "HdrOscGate"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
     "key": "oscHeaderWaveform",
     "value": {
      "version": 2,
@@ -32877,93 +32585,6 @@
            "height": 33.5
           },
           "colour": "ffeef1ff",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 839 40"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderWaveformOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_883x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 883 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
           "justification": "horizontallyCentred verticallyCentred",
           "case": "Original"
          },
@@ -33117,7 +32738,7 @@
     }
    },
    {
-    "key": "oscHeaderOctOff",
+    "key": "oscHeaderSub",
     "value": {
      "version": 2,
      "actions": [],
@@ -33134,14 +32755,232 @@
        "image": ""
       }
      },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
      "componentsData": [
       {
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Face",
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 40.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Name",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTitle"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 8 47 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Power",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "hdr_power_on_40x40.png",
+         "offImage": "hdr_power_off_40x40.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrPower"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "63 8 40 40",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 2878",
+         "HdrOscGate"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Waveform",
+        "type": "oscHeaderWaveform",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrWave"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "111 8 883 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Waveform off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_883x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "111 8 883 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Waveform off Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrWave"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "123 8 839 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Octave",
+        "type": "oscHeaderOct",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrOct"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1002 8 112 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Octave off Face",
         "type": "Image",
         "data": {
          "version": 2,
@@ -33155,19 +32994,22 @@
         "map": []
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "0 0 112 40"
+        "bounds": "1002 8 112 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
        }
       },
       {
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "value",
+        "name": "Octave off value",
         "type": "Label",
         "data": {
          "version": 1,
@@ -33189,15 +33031,64 @@
        },
        "handle remapping": {
         "version": 1,
-        "map": []
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrOct"
+         }
+        ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "44 0 68 40"
+        "bounds": "1046 8 68 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route",
+        "type": "NativeActive oscHeaderRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrRoute"
+         },
+         {
+          "key": "NativeActiveGate1",
+          "value": "HdrGate1"
+         },
+         {
+          "key": "NativeActiveGate2",
+          "value": "HdrGate2"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1122 8 150 40",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 2878",
+         "HdrOscGate"
+        ]
        }
       }
      ]
@@ -33282,93 +33173,6 @@
            "height": 33.5
           },
           "colour": "ffeef1ff",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 176 40"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderKindOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_220x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 220 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
           "justification": "horizontallyCentred verticallyCentred",
           "case": "Original"
          },
@@ -33495,1282 +33299,6 @@
     }
    },
    {
-    "key": "oscHeaderSoundOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_752x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 752 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 708 40"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderKindWide",
-    "value": {
-     "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_KINDChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_KINDChoices"
-      }
-     ],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_980x40.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 980 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffeef1ff",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 936 40"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderKindWideOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "hdr_dd_980x40_off.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 980 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 33.5
-          },
-          "colour": "ffb9bdc9",
-          "justification": "horizontallyCentred verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "12 0 936 40"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderAbc",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Name",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrTitle"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 67 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Power",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_power_on_40x40.png",
-         "offImage": "hdr_power_off_40x40.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrPower"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "83 8 40 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Type",
-        "type": "oscHeaderType",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrType"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrTypeCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "131 8 220 40",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/4/8/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Table",
-        "type": "oscHeaderTable",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrSource"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrSourceCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "359 8 664 40",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Source",
-        "type": "oscHeaderSource",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrSource"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrSourceCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "359 8 664 40",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/5/8/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Browse",
-        "type": "oscHeaderBrowse",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrBrowse"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrBrowseCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1031 8 83 40",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/4/8/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Route",
-        "type": "NativeActive oscHeaderRoute",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrRoute"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "HdrGate1"
-         },
-         {
-          "key": "NativeActiveGate2",
-          "value": "HdrGate2"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1122 8 150 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderAbcOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Name",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrTitle"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 67 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Power",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_power_on_40x40.png",
-         "offImage": "hdr_power_off_40x40.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrPower"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "83 8 40 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Type",
-        "type": "oscHeaderTypeOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrType"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrTypeCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "131 8 220 40",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/4/8/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Table",
-        "type": "oscHeaderTableOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrSource"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrSourceCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "359 8 664 40",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Source",
-        "type": "oscHeaderSourceOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrSource"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrSourceCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "359 8 664 40",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/5/8/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Browse",
-        "type": "oscHeaderBrowseOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrBrowse"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrBrowseCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1031 8 83 40",
-        "additionalInvalidatingHandles": [
-         "RangedEnabling/4/8/9/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Route",
-        "type": "NativeActive oscHeaderRoute",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrRoute"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "HdrGate1"
-         },
-         {
-          "key": "NativeActiveGate2",
-          "value": "HdrGate2"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1122 8 150 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderSub",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Name",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrTitle"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 47 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Power",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_power_on_40x40.png",
-         "offImage": "hdr_power_off_40x40.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrPower"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "63 8 40 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Waveform",
-        "type": "oscHeaderWaveform",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrWave"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrWaveCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "111 8 883 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Octave",
-        "type": "oscHeaderOct",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrOct"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrOctCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1002 8 112 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Route",
-        "type": "NativeActive oscHeaderRoute",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrRoute"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "HdrGate1"
-         },
-         {
-          "key": "NativeActiveGate2",
-          "value": "HdrGate2"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1122 8 150 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderSubOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 40.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Name",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrTitle"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 47 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Power",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_power_on_40x40.png",
-         "offImage": "hdr_power_off_40x40.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrPower"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "63 8 40 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Waveform",
-        "type": "oscHeaderWaveformOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrWave"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrWaveCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "111 8 883 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Octave",
-        "type": "oscHeaderOctOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrOct"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrOctCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1002 8 112 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Route",
-        "type": "NativeActive oscHeaderRoute",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrRoute"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "HdrGate1"
-         },
-         {
-          "key": "NativeActiveGate2",
-          "value": "HdrGate2"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1122 8 150 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscHeaderNoise",
     "value": {
      "version": 2,
@@ -34888,20 +33416,93 @@
          {
           "key": "Data",
           "value": "HdrKind"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrKindCaption"
          }
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "134 8 220 40"
+        "bounds": "134 8 220 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Kind off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_220x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "134 8 220 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Kind off Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrKind"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "146 8 176 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
        }
       },
       {
@@ -34921,20 +33522,93 @@
          {
           "key": "Data",
           "value": "HdrSound"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrSoundCaption"
          }
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "362 8 752 40"
+        "bounds": "362 8 752 40",
+        "additionalInvalidatingHandles": [
+         "HdrOn"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Sound off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_752x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "362 8 752 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Sound off Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 33.5
+          },
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrSound"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "374 8 708 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
        }
       },
       {
@@ -34982,10 +33656,25 @@
     }
    },
    {
-    "key": "oscHeaderNoiseOff",
+    "key": "oscHeaderKindWide",
     "value": {
      "version": 2,
-     "actions": [],
+     "actions": [
+      {
+       "version": 1,
+       "onAction": "Mouse Down",
+       "handler": "Show Overlay",
+       "handleName": "Data",
+       "additionalData": "oscNativeSetting_menu_KINDChoices"
+      },
+      {
+       "version": 1,
+       "onAction": "Enter Pressed",
+       "handler": "Show Overlay",
+       "handleName": "Data",
+       "additionalData": "oscNativeSetting_menu_KINDChoices"
+      }
+     ],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -35006,6 +33695,32 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_980x40.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 980 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Title",
         "type": "Label",
         "data": {
@@ -35016,24 +33731,19 @@
            "version": 1,
            "name": "Titillium Web",
            "style": "SemiBold",
-           "height": 40.0
+           "height": 33.5
           },
           "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
+          "justification": "horizontallyCentred verticallyCentred",
           "case": "Original"
          },
-         "type": "Name",
+         "type": "Value",
          "handleName": "Data"
         }
        },
        "handle remapping": {
         "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrTitle"
-         }
-        ]
+        "map": []
        },
        "bounds": {
         "version": 1,
@@ -35041,152 +33751,7 @@
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 8 70 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Power",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_power_on_40x40.png",
-         "offImage": "hdr_power_off_40x40.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrPower"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "86 8 40 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Kind",
-        "type": "oscHeaderKindOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrKind"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrKindCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "134 8 220 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Sound",
-        "type": "oscHeaderSoundOff",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrSound"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrSoundCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "362 8 752 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Route",
-        "type": "NativeActive oscHeaderRoute",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrRoute"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "HdrGate1"
-         },
-         {
-          "key": "NativeActiveGate2",
-          "value": "HdrGate2"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "1122 8 150 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
+        "bounds": "12 0 936 40"
        }
       }
      ]
@@ -35310,92 +33875,55 @@
          {
           "key": "Data",
           "value": "HdrKind"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrKindCaption"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "134 8 980 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Route",
-        "type": "NativeActive oscHeaderRoute",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrRoute"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "HdrGate1"
-         },
-         {
-          "key": "NativeActiveGate2",
-          "value": "HdrGate2"
          }
         ]
        },
        "bounds": {
         "version": 2,
         "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
+        "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1122 8 150 40",
+        "bounds": "134 8 980 40",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
+         "HdrOn"
         ]
        }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscHeaderNoiseSampleOff",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
       },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
       {
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Title",
+        "name": "Kind off Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "hdr_dd_980x40_off.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "134 8 980 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Kind off Title",
         "type": "Label",
         "data": {
          "version": 1,
@@ -35405,80 +33933,13 @@
            "version": 1,
            "name": "Titillium Web",
            "style": "SemiBold",
-           "height": 40.0
+           "height": 33.5
           },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
+          "colour": "ffb9bdc9",
+          "justification": "horizontallyCentred verticallyCentred",
           "case": "Original"
          },
-         "type": "Name",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrTitle"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 8 70 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Power",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "hdr_power_on_40x40.png",
-         "offImage": "hdr_power_off_40x40.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "HdrPower"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "86 8 40 40",
-        "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2878",
-         "HdrOscGate"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Kind",
-        "type": "oscHeaderKindWideOff",
-        "data": {
-         "version": 1,
+         "type": "Value",
          "handleName": "Data"
         }
        },
@@ -35488,20 +33949,19 @@
          {
           "key": "Data",
           "value": "HdrKind"
-         },
-         {
-          "key": "Caption",
-          "value": "HdrKindCaption"
          }
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "134 8 980 40"
+        "bounds": "146 8 936 40",
+        "additionalInvalidatingHandles": [
+         "HdrOff"
+        ]
        }
       },
       {
