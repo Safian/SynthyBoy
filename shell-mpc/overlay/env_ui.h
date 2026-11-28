@@ -700,17 +700,18 @@ private:
         const int m = 6, W = third.w - 2 * m;
         const ui::Rect gr = ui::playrows::displayRect (third);
         compactGraph_.place (gr);
-        compactGraph_.plotArea = ui::playrows::plotRect (gr);   // the curve and the handles lie below the header band; the full screen cell stands in the band, the same place as the oscillator's and the LFO's
+        compactGraph_.plotArea = ui::playrows::compactPlotRect (gr);   // Play phase 2: the display has no band; the full screen cell stands in the header band of the third (the same place as the oscillator's and the LFO's)
         compactGraph_.setId (kGraph);
         compactView_.graph = gr;
         compactView_.plot = compactGraph_.plotArea;
-        compactView_.full.r = ui::playrows::fullRect (gr);
-        const int by = ui::playrows::controlsLine (third), kh = std::max (kKnobH, (third.bottom() - m - by - ui::kQLane) / 2);
-        const int cw = (W - pagegeo::kGap) / 2;
+        compactView_.full.r = ui::playrows::headerExpandRect (third);
+        const int gap = ui::playrows::kControlGap;
+        const int by = ui::playrows::controlsLine (third), kh = std::max (kKnobH, (third.bottom() - m - by - gap) / 2);
+        const int cw = (W - gap) / 2;
         compactView_.knob[0] = { third.x + m, by, cw, kh };
-        compactView_.knob[1] = { third.x + m + cw + pagegeo::kGap, by, W - cw - pagegeo::kGap, kh };
-        compactView_.knob[2] = { third.x + m, by + kh + ui::kQLane, cw, kh };
-        compactView_.knob[3] = { third.x + m + cw + pagegeo::kGap, by + kh + ui::kQLane, W - cw - pagegeo::kGap, kh };
+        compactView_.knob[1] = { third.x + m + cw + gap, by, W - cw - gap, kh };
+        compactView_.knob[2] = { third.x + m, by + kh + gap, cw, kh };
+        compactView_.knob[3] = { third.x + m + cw + gap, by + kh + gap, W - cw - gap, kh };
     }
     void layoutFull()
     {

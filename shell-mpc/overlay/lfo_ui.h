@@ -716,11 +716,11 @@ public:
         return data;
     }
 
-    /** The data of the compact view (the Play third): the same picture with the plot area below the header band. The full page and the shape editor draw data_ as it is (no area). */
+    /** The data of the compact view (the Play third): the same picture with the plot area of the display (the buttons stand in the header band above it). The full page and the shape editor draw data_ as it is (no area). */
     ui::lfodisplay::Data compactData() const noexcept
     {
         ui::lfodisplay::Data d = data_;
-        d.area = ui::playrows::plotRect (compG_.display);
+        d.area = ui::playrows::compactPlotRect (compG_.display);
         d.aperture = compG_.full;
         return d;
     }

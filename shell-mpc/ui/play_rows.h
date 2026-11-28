@@ -15,7 +15,8 @@ namespace synthyboy_mpc { namespace ui { namespace playrows {
 constexpr int kMargin = 6;                 // the margin of a third at its sides, top and bottom
 constexpr int kSelectorH = 56;             // the selector row: the shared selector (a Stepper with its list) in every third; in the oscillator third it is the header row (power, selector, full screen, route)
 constexpr int kSelectorGap = 8;            // between the selector row and the display
-constexpr int kControlsH = 232;            // from the controls line to the bottom margin: LFO: SHAPE 56 + lane 16 + RATE 72 + lane 16 + the knob row 72 (its minimum); the oscillator: the type cells 56 + lane + the row (stepper, PAN, LEVEL); the envelope: two knob rows + lane
+constexpr int kControlGap = 8;             // the gap between two rows and two columns of the controls of a third (Play phase 2: one 8 px grid)
+constexpr int kControlsH = 196;            // from the controls line to the bottom margin: two rows of 94 px (dial rows, 56 px dial) and the 8 px gap, or the LFO's four 60 px rows with three 8 px gaps (the lane of the Q chips lies above the line)
 constexpr int kDisplayGap = kQLane + 4;    // between the bottom of the display and the controls line: the lane of the Q index chips of the first members and a gap
 
 /** The display rectangle of a third: the same top (below the selector row) and the same height in all three thirds of the same height. */
@@ -53,6 +54,33 @@ inline Rect plotRect (const Rect& display) noexcept
 {
     const int y = display.y + kBandH + kPlotPadTop;
     return { display.x + kPlotPadX, y, std::max (0, display.w - 2 * kPlotPadX), std::max (0, display.bottom() - kPlotPadBottom - y) };
+}
+
+// ---- Play phase 2 (docs/review/PLAY-PHASE2-PLAN-2026-11-27.md): the HEADER BAND of a third holds the buttons and the selector of the panel; the display below it has no band of its own
+constexpr int kHeaderPad = 8, kHeaderGap = 8;               // header.padding / header.gap: the 40 px visual faces sit inside 56 px touch slots (8 + 40 + 8)
+constexpr int kHeaderButtonSlot = 56, kHeaderRouteSlot = 72; // the touch slots of the power / full screen buttons and of the route cell
+constexpr int kCompactRowH = 60, kCompactTwoRowH = 94;      // a titled dropdown / 56 px dial row and a two row dial cell (the 8 px gap lies between the two rows of the block)
+
+/** The header band of a third: the selector row at its top. */
+inline Rect headerBandRect (const Rect& third) noexcept { return { third.x + kMargin, third.y + kMargin, std::max (0, third.w - 2 * kMargin), kSelectorH }; }
+/** The power button slot (oscillator only): the left end of the header band. */
+inline Rect headerPowerRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.x, h.y, kHeaderButtonSlot, kSelectorH }; }
+/** The full screen (expand) button slot: the right end of the header band, the same place in the three thirds. */
+inline Rect headerExpandRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.right() - kHeaderButtonSlot, h.y, kHeaderButtonSlot, kSelectorH }; }
+/** The route cell (oscillator, not Sub): left of the full screen button. */
+inline Rect headerRouteRect (const Rect& third) noexcept { const Rect h = headerBandRect (third); return { h.right() - kHeaderButtonSlot - kHeaderRouteSlot, h.y, kHeaderRouteSlot, kSelectorH }; }
+/** The selector (dropdown) slot between the power button (or the left pad) and the route cell (or the full screen button). */
+inline Rect headerSelectorRect (const Rect& third, bool hasPower, bool hasRoute) noexcept
+{
+    const Rect h = headerBandRect (third);
+    const int x0 = hasPower ? h.x + kHeaderButtonSlot : h.x + kHeaderPad;
+    const int x1 = hasRoute ? h.right() - kHeaderButtonSlot - kHeaderRouteSlot : h.right() - kHeaderButtonSlot;
+    return { x0, h.y, std::max (0, x1 - x0), kSelectorH };
+}
+/** The plot area of a display without a band (the Play compact views since phase 2: the buttons stand in the header band above the display). */
+inline Rect compactPlotRect (const Rect& display) noexcept
+{
+    return { display.x + kPlotPadX, display.y + kPlotPadTop, std::max (0, display.w - 2 * kPlotPadX), std::max (0, display.h - kPlotPadTop - kPlotPadBottom) };
 }
 
 /** The line the controls under the display start at (the top of the first Q member of the block): the same in the three thirds. */

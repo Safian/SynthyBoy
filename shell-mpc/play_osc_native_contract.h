@@ -11,9 +11,9 @@ namespace synthyboy_mpc::nativeui::playoscui
 {
 struct ContractRect { int x, y, w, h; };
 
-inline constexpr std::array<ContractRect, kFields> kSubContractRects {{ { 18, 82, 64, 56 }, { 354, 82, 64, 56 }, { 0, 0, 0, 0 }, { 14, 404, 292, 72 }, { 310, 412, 112, 56 }, { 14, 510, 202, 108 }, { 220, 510, 202, 108 } }};
-inline constexpr std::array<ContractRect, kFields> kAbcContractRects {{ { 18, 82, 64, 56 }, { 354, 82, 64, 56 }, { 282, 78, 64, 64 }, { 14, 404, 202, 72 }, { 220, 404, 202, 72 }, { 14, 510, 202, 108 }, { 220, 510, 202, 108 } }};
-inline constexpr std::array<ContractRect, kFields> kNoiseContractRects {{ { 18, 82, 64, 56 }, { 354, 82, 64, 56 }, { 282, 78, 64, 64 }, { 14, 404, 202, 72 }, { 220, 404, 202, 72 }, { 14, 510, 202, 108 }, { 220, 510, 202, 108 } }};
+inline constexpr std::array<ContractRect, kFields> kSubContractRects {{ { 14, 10, 56, 56 }, { 366, 10, 56, 56 }, { 0, 0, 0, 0 }, { 14, 439, 284, 60 }, { 306, 451, 116, 56 }, { 14, 524, 200, 94 }, { 222, 524, 200, 94 } }};
+inline constexpr std::array<ContractRect, kFields> kAbcContractRects {{ { 14, 10, 56, 56 }, { 366, 10, 56, 56 }, { 294, 10, 72, 56 }, { 14, 439, 200, 60 }, { 222, 439, 200, 60 }, { 14, 524, 200, 94 }, { 222, 524, 200, 94 } }};
+inline constexpr std::array<ContractRect, kFields> kNoiseContractRects {{ { 14, 10, 56, 56 }, { 366, 10, 56, 56 }, { 294, 10, 72, 56 }, { 14, 439, 200, 60 }, { 222, 439, 200, 60 }, { 14, 524, 200, 94 }, { 222, 524, 200, 94 } }};
 
 constexpr ContractRect contractRect (int layout, int field) noexcept
 {

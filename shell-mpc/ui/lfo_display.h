@@ -78,8 +78,8 @@ inline bool hasLeadStrip (const Data& d) noexcept
 {
     return d.kind == Data::Kind::Shape && ! d.editing && (d.delayShare > 0.0f || d.riseShare > 0.0f);
 }
-/** The compact view (the third of the Play page, playrows.h) is the one whose owner gave the plot area (Data::area, not empty). It has a header band at its top that holds the full screen button and the label,
-    and the plot area below the band (playrows::plotRect: the same for the oscillator wave, the envelope graph and the LFO curve). */
+/** The compact view (the third of the Play page, playrows.h) is the one whose owner gave the plot area (Data::area, not empty). The buttons stand in the header band of the third above the display (playrows::headerExpandRect), the plot area
+    fills the display (playrows::compactPlotRect: the same for the oscillator wave, the envelope graph and the LFO curve). */
 inline bool isCompact (const Rect&, const Data& d) noexcept { return ! d.editing && ! d.area.empty(); }
 /** The room the page title takes at the top of a non-compact display (it has an inner margin to the border and lies above the strip and the curve). */
 inline int titleRoom (const Data& d) noexcept { return d.label[0] != '\0' && ! d.editing ? 22 : 0; }
@@ -300,8 +300,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     {
         if (isCompact (r, d) && ! d.pageTitle)
         {
-            Pen pen (sb, true);   // the label lies in the header band, left of the full screen button (the text is fitted to that room)
-            pen.textLeft (playrows::labelRect (r, false, false), d.label, T.fLabel, a (T.textDim, 220), T.fMin);
+            // Play phase 2: the compact view has no header band in its display; the name of the shape / style stands in the SHAPE / STYLE dropdown below it, so the label is not drawn over the plot
         }
         else
             sb.text (static_cast<float> (r.x + 14), static_cast<float> (r.y + 28), theme::kPageTitleSize, d.label, a (T.text, 255));   // the page title (the host layer draws "LFO n" / "RND n" in the same place, 99_backgrounds.py)

@@ -255,31 +255,43 @@ inline DetailLayout layoutDetail (const PanelPreset& p, const Rect& rect, bool w
 struct CompactLayout
 {
     Rect third, display, power, full, route, instances, basic, first, second, pan, level;
-    Rect plot() const noexcept { return ui::playrows::plotRect (display); }
+    Rect plot() const noexcept { return ui::playrows::compactPlotRect (display); }   // Play phase 2: no band, the buttons stand in the header band above the display
 };
 inline CompactLayout layoutCompact (const Rect& third, Instance inst) noexcept
 {
     namespace pr = ui::playrows;
     CompactLayout c;
     c.third = third;
-    const int m = pr::kMargin, W = third.w - 2 * m, rowH = pr::kSelectorH;
+    const int m = pr::kMargin, W = third.w - 2 * m, g = pr::kControlGap;
+    const bool sub = inst == Instance::Sub;
     c.display = pr::displayRect (third);
-    c.power = pr::powerRect (c.display);
-    c.full = pr::fullRect (c.display);
-    c.route = inst == Instance::Sub ? Rect {} : pr::routeRect (c.display);
-    c.instances = { third.x + m, third.y + m, W, rowH };
+    c.power = pr::headerPowerRect (third);
+    c.full = pr::headerExpandRect (third);
+    c.route = sub ? Rect {} : pr::headerRouteRect (third);
+    c.instances = pr::headerSelectorRect (third, true, ! sub);
     const int by = pr::controlsLine (third);
     c.basic = { third.x + m, by, W, std::max (0, third.bottom() - m - by) };
-    // the stacked arrangement: two rows, the lane of the Q marks between them; PAN and LEVEL on the second
-    const int h = c.basic.h, bRowH = std::max (0, (h - kQLane) / 2), row2Y = c.basic.y + bRowH + kQLane, cw = (c.basic.w - kGap) / 2;
-    const int h1 = std::min (bRowH, 72), y1 = c.basic.y + (bRowH - h1) / 2;
-    c.first = { c.basic.x, y1, cw, h1 };
-    c.second = { c.basic.x + cw + kGap, y1, c.basic.w - cw - kGap, h1 };
+    // the stacked arrangement: a 60 px row of titled dropdowns (the Sub: WAVE and the 56 px OCT box) over a row of two 56 px dials (PAN, LEVEL), 8 px gaps
+    const int bRowH = std::max (0, (c.basic.h - g) / 2), row2Y = c.basic.y + bRowH + g, cw = (c.basic.w - g) / 2;
+    const int h1 = std::min (bRowH, pr::kCompactRowH), y1 = c.basic.y + (bRowH - h1) / 2;
+    if (sub)
+    {
+        // WAVE: a titled dropdown (20 px title, 40 px box); OCT: a 40 px box in a 56 px touch slot whose box lines up with the WAVE box (title 20 - pad 8 = 12 px below the top of the row)
+        const int octW = 116, octH = 56, titleH = 20, boxH = 40, waveW = c.basic.w - octW - g;   // 284 + 8 + 116 = 408
+        c.first = { c.basic.x, y1, waveW, h1 };
+        c.second = { c.basic.x + waveW + g, y1 + titleH - (octH - boxH) / 2, octW, octH };
+    }
+    else
+    {
+        c.first = { c.basic.x, y1, cw, h1 };
+        c.second = { c.basic.x + cw + g, y1, c.basic.w - cw - g, h1 };
+    }
     c.pan = { c.basic.x, row2Y, cw, bRowH };
-    c.level = { c.basic.x + cw + kGap, row2Y, c.basic.w - cw - kGap, bRowH };
+    c.level = { c.basic.x + cw + g, row2Y, c.basic.w - cw - g, bRowH };
     return c;
 }
-inline Rect compactLabelRect (const CompactLayout& c, Instance inst) noexcept { return ui::playrows::labelRect (c.display, true, inst != Instance::Sub); }
+/** The line of text over the picture of the compact view (the warning of a missing content): the top strip of the display, over the plot (the band of the buttons is the header band above the display since phase 2). */
+inline Rect compactLabelRect (const CompactLayout& c, Instance) noexcept { return { c.display.x + 14, c.display.y + 4, std::max (0, c.display.w - 28), 32 }; }
 
 // =============================================================================================================================================================
 // the full screen

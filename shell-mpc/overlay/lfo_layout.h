@@ -15,6 +15,8 @@
 namespace synthyboy_mpc { namespace overlay { namespace lfolayout {
 
 constexpr int kRowH = 56, kRateH = 72, kGap = 4, kLedRowH = 56, kMargin = 6;
+constexpr int kQuadRandomH = 280;   // Play phase 2: the Q lane (16) and four 60 px rows with three 8 px gaps (RND: STYLE, RATE, SYNC, STEREO)
+constexpr int kModeW = 208, kModeH = 56;   // the HZ | BPM | KEY radio grid: three 64 px faces and two 8 px gaps, in a 56 px touch row
 
 /** The compact view (the right third of the Play page): the rectangle `third`. */
 struct Compact
@@ -23,50 +25,51 @@ struct Compact
 };
 inline Compact compact (const ui::Rect& third, bool random) noexcept
 {
+    // Play phase 2 (docs/review/PLAY-PHASE2-PLAN-2026-11-27.md): the selector and the full screen button stand in the header band of the third, the display has no band, the controls are 60 px rows with 8 px gaps
+    namespace pr = ui::playrows;
     Compact c;
     c.third = third;
-    const int m = kMargin, W = third.w - 2 * m;
-    c.instance = { third.x + m, third.y + m, W, kRowH };
-    const int dy = third.y + m + kRowH + 8;
-    int qy = third.bottom() - m - 304;   // kQuadRandomH
+    const int m = kMargin, W = third.w - 2 * m, rowH = pr::kCompactRowH, g = pr::kControlGap;
+    c.instance = pr::headerSelectorRect (third, false, false);
+    c.full = pr::headerExpandRect (third);
+    const int dy = third.y + m + pr::kSelectorH + pr::kSelectorGap;
+    int qy = third.bottom() - m - kQuadRandomH;
     if (random)
-        c.display = { third.x + m, dy, W, std::max (0, qy - 8 - dy) };
+        c.display = { third.x + m, dy, W, std::max (0, qy - 4 - dy) };
     else
     {
-        c.display = ui::playrows::displayRect (third);
+        c.display = pr::displayRect (third);
         qy = c.display.bottom() + 4;
     }
-    c.full = ui::playrows::fullRect (c.display);
     int y = qy + ui::kQLane;
     auto rateCell = [&] (const ui::Rect& r)
     {
         c.rate = r;
-        constexpr int modeW = 3 * 70;
-        const int h = std::min (r.h, kLedRowH);
-        c.modeCells = { r.right() - modeW, r.y + (r.h - h) / 2, modeW, h };
-        c.rateKnob = { r.x, r.y, std::max (0, r.w - modeW - kGap), r.h };
-        const int dh = std::min (c.rateKnob.h, 64);
+        const int h = std::min (r.h, kModeH);
+        c.modeCells = { r.right() - kModeW, r.y + (r.h - h) / 2, kModeW, h };
+        c.rateKnob = { r.x, r.y, std::max (0, r.w - kModeW - g), r.h };
+        const int dh = std::min (c.rateKnob.h, rowH);
         c.division = { c.rateKnob.x, c.rateKnob.y + (c.rateKnob.h - dh) / 2, c.rateKnob.w, dh };
     };
     if (random)
     {
-        c.style = { third.x + m, y, W, kRowH };
-        y += kRowH + ui::kQLane;
-        rateCell ({ third.x + m, y, W, kRateH });
-        y += kRateH + ui::kQLane;
-        c.sync = { third.x + m, y, W, kRowH };
-        y += kRowH + ui::kQLane;
-        c.stereo = { third.x + m, y, W, kRowH };
+        c.style = { third.x + m, y, W, rowH };
+        y += rowH + g;
+        rateCell ({ third.x + m, y, W, rowH });
+        y += rowH + g;
+        c.sync = { third.x + m, y, W, rowH };
+        y += rowH + g;
+        c.stereo = { third.x + m, y, W, rowH };
         return c;
     }
-    c.shape = { third.x + m, y, W, kRowH };
-    y += kRowH + ui::kQLane;
-    rateCell ({ third.x + m, y, W, kRateH });
-    y += kRateH + ui::kQLane;
+    c.shape = { third.x + m, y, W, rowH };
+    y += rowH + g;
+    rateCell ({ third.x + m, y, W, rowH });
+    y += rowH + g;
     const int h = std::max (0, third.bottom() - m - y);
-    const int cw = (W - kGap) / 2;
+    const int cw = (W - g) / 2;
     c.rise = { third.x + m, y, cw, h };
-    c.smoothTime = { third.x + m + cw + kGap, y, W - cw - kGap, h };
+    c.smoothTime = { third.x + m + cw + g, y, W - cw - g, h };
     return c;
 }
 
