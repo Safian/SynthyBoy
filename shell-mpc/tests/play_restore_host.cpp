@@ -1,4 +1,4 @@
-// SynthyBoy - shell-mpc acceptance: saving and reloading a project with the Play page (docs/MPC.md "Project save and reload"). A plugin built with SYNTHYBOY_MPC_OVERLAY.
+// SynthyBoy - shell-mpc acceptance: saving and reloading a project with the Play page (docs/MPC.md "Project save and reload").
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

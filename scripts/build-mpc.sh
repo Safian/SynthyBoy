@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# The plugin is ALWAYS built with the overlay (SYNTHYBOY_MPC_OVERLAY=ON and, for ARM, the GPU helper next to it): the overlay-only skin has no host widgets, the native pages are the base
+# The plugin is ALWAYS built with the overlay (on ARM with the GPU helper next to it): the overlay-only skin has no host widgets, the native pages are the base
 # and the helper only adds the live curves. There is no switch to turn it off.
 #
 # Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--cmake-arg ARG]... [--bench] [--release] [--skin-only] [--no-validate] [--xpl-presets xl|k61|both|off]
@@ -78,10 +78,6 @@ while [[ $# -gt 0 ]]; do
                     esac
                     case "$2" in
                         *[[:space:]]*) echo "$me: --cmake-arg: no spaces inside an argument: $2" >&2; exit 2 ;;
-                    esac
-                    case "$2" in
-                        -DSYNTHYBOY_MPC_OVERLAY|-DSYNTHYBOY_MPC_OVERLAY=*|-USYNTHYBOY_MPC_OVERLAY)
-                            echo "$me: --cmake-arg: the plugin is always built with the overlay (SYNTHYBOY_MPC_OVERLAY=ON), $2 is refused" >&2; exit 2 ;;
                     esac
                     cmake_args+=("$2") ;;
             esac
@@ -195,7 +191,7 @@ if [[ "$skin_only" != 1 ]]; then
         cp "$build_dir/$a/${module%.so}.stripped.so" "$plugin_folder/VST/$binary_base-$a.so"
     done
 
-    # The GPU helper of the overlay (always built, SYNTHYBOY_MPC_OVERLAY=ON, on ARM; scripts/mpc-container-build.sh): VST/synthyboy-overlay-gpu-<arch>, next to the plugin binary
+    # The GPU helper of the overlay (always built on ARM; scripts/mpc-container-build.sh): VST/synthyboy-overlay-gpu-<arch>, next to the plugin binary
     # (the plugin looks for it there).
     for a in "${archs[@]}"; do
         helper="$build_dir/$a/$helper_path.stripped"

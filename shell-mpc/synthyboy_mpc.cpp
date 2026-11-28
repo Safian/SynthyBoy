@@ -115,7 +115,7 @@
 // instance exists (attach / detach) and answers its two questions (a parameter value, the live cutoff and resonance of filter 1). Needs a skin made with the overlay layout.
 namespace nativeui = synthyboy_mpc::nativeui;
 #if !SYNTHYBOY_MPC_LFO_LIVE
-#error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
+#error "the overlay needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
 #endif
 #include "kit/q_targets.h"
 #include "kit/synthyboy_adapter.h"

@@ -108,7 +108,7 @@ check_elf() {
 read -r -a extra_args <<< "${CMAKE_EXTRA_ARGS:-}"
 cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
     -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
-    -DSYNTHYBOY_MPC_UI_GEN="$UI_GEN" -DSYNTHYBOY_PACKAGED_NATIVE_SKIN="${NATIVE_SKIN:-OFF}" -DSYNTHYBOY_MPC_OVERLAY=ON \
+    -DSYNTHYBOY_MPC_UI_GEN="$UI_GEN" -DSYNTHYBOY_PACKAGED_NATIVE_SKIN="${NATIVE_SKIN:-OFF}" \
     -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
 cmake --build /build --target "$PLUGIN_TARGET" --parallel "$JOBS"
 so="/build/$PLUGIN_MODULE"
@@ -125,7 +125,7 @@ left="$("$TRIPLE-nm" -D --defined-only "$stripped" | awk '{print $NF}' | tr '\n'
 check_elf "$stripped" module
 ls -l "$so" "$stripped"
 
-# ---- the GPU helper of the overlay (only when the module's CMake tree has the target: SYNTHYBOY_MPC_OVERLAY ON, SYNTHYBOY_MPC_OVERLAY_GPU AUTO / ON for ARM) ------------------------
+# ---- the GPU helper of the overlay (only when the module's CMake tree has the target: SYNTHYBOY_MPC_OVERLAY_GPU AUTO / ON for ARM) ------------------------
 # A plain executable linked against libc only (the firmware's EGL / GBM / GLES libraries are opened at run time), the same ELF checks as the benchmarks; the stripped copy is packaged
 # next to the plugin (scripts/build-mpc.sh). A build without the target (another plugin) does not even look at it.
 helper="/build/$PLUGIN_HELPER"

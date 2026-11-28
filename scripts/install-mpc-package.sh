@@ -55,9 +55,9 @@ if [[ -e "$package/VST" && ! -s "$package/VST/synthyboy-$arch.so" ]]; then
     exit 2
 fi
 # The pages are drawn by the native editor through the overlay GPU helper (no host fallback widgets, owner decision 2026-11-21):
-# a package without it would leave the pages empty and would delete the helper that is installed. Build with -DSYNTHYBOY_MPC_OVERLAY=ON.
+# a package without it would leave the pages empty and would delete the helper that is installed.
 if [[ -e "$package/VST" && ! -x "$package/VST/synthyboy-overlay-gpu-$arch" ]]; then
-    echo "Missing VST/synthyboy-overlay-gpu-$arch in $package (build with --cmake-arg -DSYNTHYBOY_MPC_OVERLAY=ON); the pages would stay empty." >&2
+    echo "Missing VST/synthyboy-overlay-gpu-$arch in $package; the pages would stay empty." >&2
     exit 2
 fi
 

@@ -56,7 +56,6 @@ target_compile_definitions(synthyboy_mpc PRIVATE
 # The overlay's LFO pages read them, so the MPC package needs the plugin built with this ON (the default of this shell).
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
 option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)
-option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
 if(SYNTHYBOY_MPC_LFO_LIVE)
     find_package(Threads REQUIRED)
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE=1)
@@ -75,10 +74,10 @@ if(SYNTHYBOY_MPC_SPECTRUM)
 endif()
 
 # Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"): the module shell-mpc/overlay/ draws the response of Filter 1 on an overlay plane above the MPC's
-# own UI, from a thread of its own, and shows it while the "Filter 1" tab of the overlay skin (skin/TUI.json) is on screen. EXPERIMENTAL and OFF by default: it uses
-# a display plane the MPC firmware does not offer to plugins (Key 61 only so far). OFF builds the plugin byte for byte as it was without this code.
+# own UI, from a thread of its own, and shows it while the "Filter 1" tab of the overlay skin (skin/TUI.json) is on screen. It uses
+# a display plane the MPC firmware does not offer to plugins. It is always built in (no option).
 # No display constant of any model is compiled in: the CRTC, the planes, the panel, the refresh and the rotation are found at run time (shell-mpc/overlay/discovery.h).
-# The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
+# The plugin has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
 # reports it to the host, so the overlay needs SYNTHYBOY_MPC_LFO_LIVE.
 # The developer log (shell-mpc/kit/log.h, macro MPCKIT_DEV_LOG) and the files the plugin and its GPU helper write into /tmp for the developer (shell-mpc/write_files.h, macro SYNTHYBOY_MPC_WRITE_FILES).
 # ON (default, today's behaviour: the device measurements need the status file): the log exists (every category off until /tmp/synthyboy-log.conf switches it on) and the files are written as before.
@@ -91,33 +90,26 @@ else()
     target_compile_definitions(synthyboy_mpc PRIVATE MPCKIT_DEV_LOG=0 SYNTHYBOY_MPC_WRITE_FILES=0)
 endif()
 
-if(SYNTHYBOY_MPC_OVERLAY)
-    if(NOT SYNTHYBOY_MPC_LFO_LIVE)
-        message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the parameter 'Overlay Instance' to the host)")
-    endif()
-    find_package(Threads REQUIRED)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OVERLAY=1)
-    target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
+# The overlay is always part of the plugin; it needs the live LFO display (the display thread reports the parameter 'Overlay Instance' to the host).
+if(NOT SYNTHYBOY_MPC_LFO_LIVE)
+    message(FATAL_ERROR "the MPC shell needs SYNTHYBOY_MPC_LFO_LIVE=ON (the overlay display thread reports the parameter 'Overlay Instance' to the host)")
 endif()
+find_package(Threads REQUIRED)
+target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
 
 # GPU drawing of the overlay in a helper process (docs/MPC.md "GPU drawing in a helper process"): the plugin starts the executable synthyboy-overlay-gpu (shell-mpc/overlay/gpu-helper/)
 # when a view first needs to be shown, hands it the display descriptor and the scenes, and falls back to the CPU drawing whenever the helper is missing, fails or is switched off
-# (/tmp/synthyboy-overlay-nogpu). AUTO (default) = ON for a cross build for ARM with SYNTHYBOY_MPC_OVERLAY ON, else OFF; ON / OFF force it (ON without the overlay is an error).
+# (/tmp/synthyboy-overlay-nogpu). AUTO (default) = ON for a cross build for ARM, else OFF; ON / OFF force it.
 # The helper is linked against libc and libdl only (it opens the firmware's EGL / GBM / GLES libraries at run time), so the build needs nothing but the cross compiler.
-# With SYNTHYBOY_MPC_OVERLAY OFF nothing of this exists: the plugin is byte for byte the one without the module.
 set(SYNTHYBOY_MPC_OVERLAY_GPU "AUTO" CACHE STRING "MPC shell overlay: GPU drawing in a helper process (AUTO, ON, OFF)")
 set_property(CACHE SYNTHYBOY_MPC_OVERLAY_GPU PROPERTY STRINGS AUTO ON OFF)
 set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE OFF)
-if(SYNTHYBOY_MPC_OVERLAY)
-    if(SYNTHYBOY_MPC_OVERLAY_GPU STREQUAL "AUTO")
-        if(CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)")
-            set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE ON)
-        endif()
-    elseif(SYNTHYBOY_MPC_OVERLAY_GPU)
+if(SYNTHYBOY_MPC_OVERLAY_GPU STREQUAL "AUTO")
+    if(CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)")
         set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE ON)
     endif()
-elseif(NOT SYNTHYBOY_MPC_OVERLAY_GPU STREQUAL "AUTO" AND SYNTHYBOY_MPC_OVERLAY_GPU)
-    message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY_GPU=ON needs SYNTHYBOY_MPC_OVERLAY=ON")
+elseif(SYNTHYBOY_MPC_OVERLAY_GPU)
+    set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE ON)
 endif()
 if(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE)
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -321,9 +313,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(close_hang_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
     target_compile_features(close_hang_host PRIVATE cxx_std_17)
     target_compile_options(close_hang_host PRIVATE -Wall -Wextra)
-    if(SYNTHYBOY_MPC_OVERLAY)
-        add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc>)
-    endif()
+    add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc>)
 
     add_executable(controller_review_host EXCLUDE_FROM_ALL overlay/tests/controller_review_host.cpp)
     target_include_directories(controller_review_host PRIVATE

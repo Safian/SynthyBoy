@@ -1,7 +1,6 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Focused native stereo meter acceptance through the actual VST dispatcher.
-#define SYNTHYBOY_MPC_OVERLAY 1
 #define SYNTHYBOY_MPC_LFO_LIVE 1
 #define SYNTHYBOY_MPC_SPECTRUM 1
 #define SYNTHYBOY_MPC_PAD_PRESSURE 1
