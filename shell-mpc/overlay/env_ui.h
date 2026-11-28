@@ -220,7 +220,6 @@ public:
             modsAtMs_ = nowMs;
             modsDirty_ = false;
         }
-        pullSelector (inst);
         pullGraph (inst, live);
         if (open)
             inst.setUiFullOpen (stack.depth() > 1);
@@ -542,7 +541,6 @@ public:
     }
     /** The number of the targets of the shown envelope. */
     int numTargets() const noexcept { return numTargets_; }
-    const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
     /** The Env tab was left (page_view_base.h): a selected envelope that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
     void leftTab (IInstanceView& v)
     {
@@ -805,15 +803,6 @@ private:
 
     // ======================================================================================================================================================================
     // reading
-    /** The selector: ENV 1 .. 6, the used ones, the selected one and one free (`+`); the scan is the one of the last refreshMods (never per frame). */
-    void pullSelector (IInstanceView& v)
-    {
-        if (page_)
-            return;   // the page of a tab has no selector: the hardware sub-tab names the envelope
-        uibind::fillSelector (uibind::SelKind::Env, scan_, v, selector_);
-        uibind::cellsFromSelector (uibind::SelKind::Env, selector_, playCells_);   // the Play page's selector: the same list
-    }
-
     /** The shape of envelope `n` (1 .. 6) from the parameters: normalised times, the sustain level, the curves; false when the table has none of it. */
     bool shapeOf (const IInstanceView& v, int n, bool beats, ui::envgraph::Shape& s, ui::envgraph::Shape* def) const
     {
@@ -933,7 +922,6 @@ private:
     // ---- what the envelope drives and which envelopes have targets
     void refreshMods (IInstanceView& v)
     {
-        scan_ = uibind::scanUsed (v);   // which envelopes the selector shows
         // what the envelope drives: the slots of the matrix with this source
         int slots[uibind::kMaxTargetSlots];
         numTargets_ = uibind::slotsOfSource (v, selectedSource_, slots, uibind::kMaxTargetSlots);
@@ -1407,8 +1395,6 @@ private:
     NativeListCells listCells_;
     const char* listHeader_ = nullptr;
     bool listHeaderBack_ = false;
-    binding::SelectorSet selector_;      // ENV 1 .. 6 as "used + one free"; filled every update
-    uibind::SelectorCells playCells_;    // the cells of the selector as positions (pullSelector)
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     ui::Component* gesture_ = nullptr;
     std::array<nativeui::FxCell, nativeui::env::kFields> nativeCells_ {};
@@ -1418,7 +1404,6 @@ private:
     int nativeDownX_ = 0, nativeDownY_ = 0;
     double nativeDownMs_ = 0.0;
     bool page_ = false;                  // the page of the Env tab
-    uibind::UsedScan scan_;              // the last scan of the matrix and the parameters (selector candidates)
     const IInstanceView* selectorInstance_ = nullptr;
     uint64_t selectorGeneration_ = 0;
     int pageEnv_ = 0;                    // the page of a tab: the envelope of the sub-tab (1 .. 6); 0 in the compact view of the Play page

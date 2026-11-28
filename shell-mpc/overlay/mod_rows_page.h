@@ -108,7 +108,6 @@ public:
     int numRows() const noexcept { return nRows_; }
     int activeRow() const noexcept { return activeRow_; }
     int pageIndex() const noexcept { return page.state.index; }
-    int pageCount() const noexcept { return page.state.count; }
     int total() const noexcept { return total_; }
     const char* title() const noexcept { return title_; }
     uint32_t colour() const noexcept { return colour_; }
