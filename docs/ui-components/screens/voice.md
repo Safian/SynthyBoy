@@ -12,11 +12,15 @@ The header row is the Header component (`Voice Header`, form `voiceHeader`; [../
 
 ## Definitions
 
-`skin/defs_voice.json` (21).
+`skin/defs_voice.json` (20; `voiceNativeBlockKeyline` merged into `masterNativeBlockKeyline` in `defs_master.json`, commit `65eb91ab`).
 
 ## Data
 
 Blocks of `shell-mpc/native_ui_params.h`: `kVoiceSequence` (`kVoiceSequenceCount` handles; the sequence selection the bridge reports, `native_voice_controls.h`). The step rows and the random and scaling controls bind engine parameters directly.
+
+## Tab exit and page loading
+
+On leaving the tab (`VoiceUi::leftTab`, `shell-mpc/overlay/voice_ui.h:230`), `inst.setNativeVoiceState({})` disarms writes while `nativeVoice.displayCell()` (`native_voice_controls.h:41-59`) keeps the read-only selection and row cache readable for host paint. On the display thread, `nativeVoicePoll` (`synthyboy_mpc.cpp:2740-2763`) forces reports on row text formatting changes so labels update cleanly.
 
 ## Q groups
 
@@ -24,4 +28,4 @@ STEP [STEP, ROW, LENGTH, VALUE], RANDOM [PAN, DETUNE, CUTOFF, ENV], SCALING [10x
 
 ## C++ owners
 
-`shell-mpc/overlay/voice_ui.h`; `shell-mpc/ui/voice_native_layout.h`, `voice_grid.h`; `shell-mpc/native_voice_controls.h`.
+`shell-mpc/overlay/voice_ui.h`; `shell-mpc/ui/voice_native_layout.h`, `voice_grid.h`; `shell-mpc/native_voice_controls.h`. Retired unreferenced symbols (`8525ae50`): dead `VoiceUi` accessors, name helpers, and constants.

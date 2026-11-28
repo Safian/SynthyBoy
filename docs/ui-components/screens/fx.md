@@ -14,10 +14,14 @@
 
 Blocks of `shell-mpc/native_ui_params.h`: `kFxValueBase`, `kFxKindBase`, `kFxLayout`, `kFxDomainBase`, `kFxBipolar`, `kFxHeader` (`fxheader`, `native_fx_header.h`), `kFxChain` (`native_fx_chain.h`), `kFxBandBase`, `kFxBandMode`, `kFxBandLanes` (`fxbands`, `native_fx_bands.h`), `kFxEditorPower`.
 
+## Tab exit and page loading
+
+On leaving the tab (`FxUi::leftTab`, `shell-mpc/overlay/fx_ui.h:148-155`), the gallery title text is cleared and all four banks are torn down (`setNativeFxCells(0, nullptr)`, `setNativeFxHeader({})`, `setNativeFxChain({})`, `setNativeFxBands({})`). There is no read-only display cache on exit yet. On the display thread, `nativeUiPoll` publishes parameter and chain values.
+
 ## Q groups
 
 The rows of four values of the open effect that are on the editor page (first and second row, or three rows without a display).
 
 ## C++ owners
 
-`shell-mpc/overlay/fx_ui.h`, `fx_editor_model.h`; `shell-mpc/native_fx_cells.h`, `native_fx_header.h`, `native_fx_chain.h`, `native_fx_bands.h`; `shell-mpc/ui/fx_layout.h`, `fx_display.h`, `fx_gallery_picture.h`.
+`shell-mpc/overlay/fx_ui.h`, `fx_editor_model.h`; `shell-mpc/native_fx_cells.h`, `native_fx_header.h`, `native_fx_chain.h`, `native_fx_bands.h`; `shell-mpc/ui/fx_layout.h`, `fx_display.h`, `fx_gallery_picture.h`. Retired unreferenced C++ symbols: `kElementFx`, `listOpen`, `Layout::defaultRows`, and `Kind::List` (`c188ec59`).

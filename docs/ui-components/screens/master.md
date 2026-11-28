@@ -18,10 +18,14 @@ Three blocks: SCALE (`masterNativeBlock_scale`: type, key, mode selectors and th
 
 Blocks of `shell-mpc/native_ui_params.h`: `kMasterOutput` (`master::kOutputFields`), `kMasterScaleInput` (`Parameter 3657`), and legacy `kMasterView` (`master::View`: Hidden, Main, Tuning; `native_master_controls.h`). Both `Master` and `Tuning` tabs bind their root controls directly to always-valid engine, shell, meter, and scale-input handles without a cross-tab `kMasterView` (`Parameter 2879`) gate (`Tuning Header` `HdrView` binds to the root frame gate `RangedEnabling/0/18/33/Parameter 2675`). On the plugin side, `MasterUi` still calls `setNativeMasterView` / `leaveNativeMasterView` so `synthyboy_mpc.cpp` (`nativeMasterView`) gates `Limiter`/`ClearClip`/`scaleInput` writes and `PeakL..VoiceCount` output updates only when the corresponding tab is active.
 
+## Tab exit and page loading
+
+Both `Master` and `Tuning` tabs bind their root controls directly to always-valid engine, shell, meter, and scale-input parameters without a cross-tab `kMasterView` gate (`Parameter 2879` dropped in commit `96a2d791`), preventing blank intermediate frames on entry. On `leftTab` (`shell-mpc/overlay/master_ui.h:187-191`), `leaveNativeMasterView` preserves `nativeMasterSkinPanel` in `synthyboy_mpc.cpp:589-609` (retaining the read-only panel state for host paint) while setting `nativeMasterView = Hidden` to disarm writes.
+
 ## Q groups
 
 Master side: OUTPUT, PITCH, VOICES, GLIDE (VOICE OPTS and LINK are touch only). Tuning side: SCALE, TUNING, MPE, MPE Y. Hidden controls are no members.
 
 ## C++ owners
 
-`shell-mpc/overlay/master_ui.h` (rows, nine Q groups, rules, native bridge, meters); `shell-mpc/ui/master_native_layout.h`, `shell-mpc/native_master_controls.h`.
+`shell-mpc/overlay/master_ui.h` (rows, nine Q groups, rules, native bridge, meters); `shell-mpc/ui/master_native_layout.h`, `shell-mpc/native_master_controls.h`. Retired unreferenced C++ symbols (`8525ae50`): dead `MasterUi` accessors, name helpers, constants, and `binding::indexOfId`.
