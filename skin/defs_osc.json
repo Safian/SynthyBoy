@@ -19003,12 +19003,40 @@
           "value": "Parameter {Increment:Base=3335,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3335,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3367,Step=4}"
          },
          {
           "key": "Kind",
           "value": "Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3399,Step=4}"
          }
         ]
        },
@@ -19020,7 +19048,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3399,Step=4}"
         ]
        }
       },
@@ -19043,12 +19071,68 @@
           "value": "Parameter {Increment:Base=3336,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3336,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3368,Step=4}"
          },
          {
           "key": "Kind",
           "value": "Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "KindMenu",
+          "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind7",
+          "value": "IndexedEnabling/7/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind8",
+          "value": "IndexedEnabling/8/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind9",
+          "value": "IndexedEnabling/9/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind11",
+          "value": "IndexedEnabling/11/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind14",
+          "value": "IndexedEnabling/14/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind15",
+          "value": "IndexedEnabling/15/17/Parameter {Increment:Base=3400,Step=4}"
          }
         ]
        },
@@ -19060,7 +19144,7 @@
         "boundsType": "Absolute",
         "bounds": "0 116 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3400,Step=4}"
         ]
        }
       },
@@ -19083,12 +19167,56 @@
           "value": "Parameter {Increment:Base=3337,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3337,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3369,Step=4}"
          },
          {
           "key": "Kind",
           "value": "Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "KindMenu",
+          "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind12",
+          "value": "IndexedEnabling/12/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind13",
+          "value": "IndexedEnabling/13/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind16",
+          "value": "IndexedEnabling/16/17/Parameter {Increment:Base=3401,Step=4}"
          }
         ]
        },
@@ -19100,7 +19228,7 @@
         "boundsType": "Absolute",
         "bounds": "0 232 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3401,Step=4}"
         ]
        }
       },
@@ -19123,12 +19251,48 @@
           "value": "Parameter {Increment:Base=3338,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3338,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3370,Step=4}"
          },
          {
           "key": "Kind",
           "value": "Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "KindMenu",
+          "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind10",
+          "value": "IndexedEnabling/10/17/Parameter {Increment:Base=3402,Step=4}"
          }
         ]
        },
@@ -19140,7 +19304,7 @@
         "boundsType": "Absolute",
         "bounds": "0 348 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3402,Step=4}"
         ]
        }
       }
