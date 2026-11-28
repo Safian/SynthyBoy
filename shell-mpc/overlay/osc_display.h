@@ -264,7 +264,7 @@ public:
 
     /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is, drawn by ui/display.h. `live`: the running parts only. `plotArea`: the rectangle the picture is drawn in (the compact view's, below its header band); empty = the display rectangle. */
     void draw (gpu::SceneBuilder& sb, const ui::Rect& r, bool live, const ui::Rect& plotArea = {},
-               const std::array<ui::Rect, 3>* nativeHeader = nullptr) const
+               const std::array<ui::Rect, 2>* nativeHeader = nullptr) const
     {
         using K = synthyboy::OscCycle::Kind;
         ui::display::Data d;

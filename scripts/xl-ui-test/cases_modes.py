@@ -51,7 +51,7 @@ def cases():
     # A detail's Delete button first arms its confirmation. Back must leave the route intact.
     yield case("mod.delete-cancel", "mod",
                [*mode("ALL"), point(1180, 240), top("mod", 20),
-                tap("mod/Mod Native Detail Delete/Delete unarmed"), vst(layout.MOD_DETAIL_RESERVED + 5, 1),
+                tap("mod/Mod Native Detail Delete/Delete unarmed"), vst(layout.MOD_DETAIL_CONFIRM, 1),
                 tap("mod/Mod Native Detail Back"), top("mod", 0)])
 
     def select_filter(number):

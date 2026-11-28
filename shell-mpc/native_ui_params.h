@@ -18,10 +18,7 @@ namespace synthyboy_mpc::nativeui
 constexpr int kMixerStrips = 10;
 constexpr int kMixerPeakBase = 0;
 constexpr int kMixerHoldBase = kMixerPeakBase + kMixerStrips;
-// kEnvSelectorBase: six reserved handles (the Env selector strip of the Play expansion is gone; no longer published, the indexes after them must not move)
-constexpr int kEnvSelectorBase = kMixerHoldBase + kMixerStrips;
-constexpr int kEnvSelectorCells = 6;
-constexpr int kFxValueBase = kEnvSelectorBase + kEnvSelectorCells;
+constexpr int kFxValueBase = kMixerHoldBase + kMixerStrips;   // the handles below this one are the meters (peak and hold of the ten strips)
 constexpr int kFxCells = 16;
 constexpr int kFxKindBase = kFxValueBase + kFxCells;
 constexpr int kFxLayout = kFxKindBase + kFxCells;
@@ -78,14 +75,13 @@ constexpr int kFxChainHandles = 54;
 constexpr int kLfoDetail = kFxChain + kFxChainHandles;
 constexpr int kLfoDetailHandles = 17;
 constexpr int kPlayEnvLfo = kLfoDetail + kLfoDetailHandles;
-constexpr int kPlayEnvLfoHandles = 10;
+constexpr int kPlayEnvLfoHandles = 8;
 constexpr int kPlayOsc = kPlayEnvLfo + kPlayEnvLfoHandles;
-constexpr int kPlayOscHandles = 36;
+constexpr int kPlayOscHandles = 31;
 constexpr int kPlayLfoStandardSync = kPlayOsc + kPlayOscHandles;
 constexpr int kOscDetail = kPlayLfoStandardSync + 1;
 constexpr int kOscDetailHandles = 110;
-constexpr int kMasterPanel = kOscDetail + kOscDetailHandles;   // reserved: no longer published or handled (the indexes after it must not move)
-constexpr int kFxBandBase = kMasterPanel + 1;
+constexpr int kFxBandBase = kOscDetail + kOscDetailHandles;
 constexpr int kFxBandMode = kFxBandBase + fxheader::kItems;
 constexpr int kPzAction = kFxBandMode + 1;
 constexpr int kPzSource = kPzAction + 2;
@@ -94,10 +90,7 @@ constexpr int kOscRootLoad = kPzAvailability + 1;
 constexpr int kOscRootLoadView = kOscRootLoad + 3;
 constexpr int kModTargets = kOscRootLoadView + 1;
 constexpr int kModTargetsHandles = 35;
-// Reserved since 2026-11-28 (the Play expansion is gone): no longer published, read or handled; the indexes after them must not move.
-constexpr int kPlayExpanded = kModTargets + kModTargetsHandles;
-constexpr int kPlayExpandedHandles = 4;
-constexpr int kMacroTarget = kPlayExpanded + kPlayExpandedHandles;
+constexpr int kMacroTarget = kModTargets + kModTargetsHandles;
 constexpr int kMacroTargetCount = 8;
 namespace mixer
 {
@@ -109,12 +102,9 @@ constexpr int kHandles = kMute + kMuteCount;
 constexpr int kLastVisualState = 4;
 }
 constexpr int kMixerControl = kMacroTarget + kMacroTargetCount;
-// Preserve Mod worker's fixed slot range: 5 ModDetailControl handles + 1 reserved confirm guard.
-constexpr int kModDetailReserved = kMixerControl + mixer::kHandles;
-constexpr int kModDetailReservedCount = 6;
-constexpr int kModDetailControl = kModDetailReserved;
-// Read-only Mixer UI presentation handles appended after Mod's reserved range.
-constexpr int kMixerSoloVisual = kModDetailReserved + kModDetailReservedCount;
+constexpr int kModDetailControl = kMixerControl + mixer::kHandles;
+// Read-only Mixer UI presentation handles appended after the Mod detail controls.
+constexpr int kMixerSoloVisual = kModDetailControl + moddetail::kHandles;
 constexpr int kMixerMuteVisual = kMixerSoloVisual + kMixerStrips;
 constexpr int kModBoardControl = kMixerMuteVisual + kMixerStrips;
 constexpr int kMixerStereoBase = kModBoardControl + modboard::kHandles;
@@ -175,11 +165,9 @@ constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDe
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }
 constexpr bool isPzToolbarOffset (int offset) noexcept { return offset >= kPzAction && offset <= kPzAvailability; }
 constexpr bool isOscRootLoadOffset (int offset) noexcept { return offset >= kOscRootLoad && offset <= kOscRootLoadView; }
-constexpr bool isModTargetsOffset (int offset) noexcept { return offset >= kModTargets && offset < kPlayExpanded; }
-constexpr bool isPlayExpandedOffset (int offset) noexcept { return offset >= kPlayExpanded && offset < kMacroTarget; }
+constexpr bool isModTargetsOffset (int offset) noexcept { return offset >= kModTargets && offset < kMacroTarget; }
 constexpr bool isMacroTargetOffset (int offset) noexcept { return offset >= kMacroTarget && offset < kMixerControl; }
-constexpr bool isMixerControlOffset (int offset) noexcept { return offset >= kMixerControl && offset < kModDetailReserved; }
-constexpr bool isModDetailReservedOffset (int offset) noexcept { return offset >= kModDetailReserved && offset < kMixerSoloVisual; }
+constexpr bool isMixerControlOffset (int offset) noexcept { return offset >= kMixerControl && offset < kModDetailControl; }
 constexpr bool isMixerSoloVisualOffset (int offset) noexcept { return offset >= kMixerSoloVisual && offset < kMixerMuteVisual; }
 constexpr bool isMixerMuteVisualOffset (int offset) noexcept { return offset >= kMixerMuteVisual && offset < kModBoardControl; }
 constexpr bool isModDetailControlOffset (int offset) noexcept { return offset >= kModDetailControl && offset < kMixerSoloVisual; }

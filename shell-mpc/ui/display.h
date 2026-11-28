@@ -55,7 +55,7 @@ struct Data
     // The plot area (the compact view of the Play page: playrows::plotRect, below the header band that holds the buttons): when it is not empty the picture (grid, curves, fills, the live read-outs) is drawn inside it, edge to edge,
     // and nothing of it lies in the band; empty = the whole display rectangle with its inner margin (the full screens and the pages).
     Rect area;
-    const std::array<Rect, 3>* nativeHeader = nullptr;
+    const std::array<Rect, 2>* nativeHeader = nullptr;
 };
 
 /** The four gradient stops of a line of the instance colour: a light start, the colour, a step towards the end colour of the look, the end. */

@@ -870,8 +870,6 @@ private:
     bool applyNative (IInstanceView& inst, UiStack& stack, int field, float value)
     {
         namespace n = nativeui::lfo;
-        if (field == n::kSelection)
-            return false;   // reserved: the page has no selector (the hardware sub-tab names the LFO)
         if (field == n::kAction)
         {
             const int action = static_cast<int> (std::lround (value * n::kActionLast));

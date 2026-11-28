@@ -38,7 +38,7 @@ public:
         }
         bool changed = false;
         constexpr int inputOrder[] { n::Sync, n::StandardSync, n::Shape, n::Rate, n::Division, n::Style, n::Stereo };
-        static_assert (std::size (inputOrder) + 3 == n::Count);   // + Choose and the two reserved slots
+        static_assert (std::size (inputOrder) + 1 == n::Count);   // + Choose
         for (int field : inputOrder)
         {
             float value;

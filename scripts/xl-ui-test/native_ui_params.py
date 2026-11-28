@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HOST_EXTRAS = 82   # the host parameters between docs/params.json and the first native handle (skin/TUI.json); not in the header
 
 _NAMES = {
-    "FILTER_STATE_OFFSET": "kFilterBase", "FX_CHAIN": "kFxChain", "MOD_DETAIL_RESERVED": "kModDetailReserved",
+    "FILTER_STATE_OFFSET": "kFilterBase", "FX_CHAIN": "kFxChain", "MOD_DETAIL_CONFIRM": "kModDetailControl + moddetail::Confirm",
     "MOD_NAVIGATION": "kModNavigation", "ENV_SELECTION": "kEnvFields + env::Selection", "LFO_OFFSET": "kLfoBase", "MOD_ROWS": "kModRows",
 }
 

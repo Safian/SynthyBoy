@@ -10,10 +10,9 @@
 
 namespace synthyboy_mpc::nativeui::playoscui
 {
-enum Field { Power, Reserved, Route, First, Second, Pan, Level, kFields };
+enum Field { Power, Route, First, Second, Pan, Level, kFields };
 enum Layout { Hidden, Sub, AbcWave, AbcContent, Noise, kLastLayout = Noise };
 constexpr int kSources = osc::kLastSource, kHandles = 1 + kSources * kFields;
-constexpr int kRoutingDetails = osc::kLastRoute + 1;
 constexpr int kLastView = 8;
 constexpr int kNoPopup = -1, kOtherPopup = -2;
 

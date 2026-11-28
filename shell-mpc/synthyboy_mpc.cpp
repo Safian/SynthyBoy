@@ -1568,7 +1568,7 @@ struct PluginInstance
     static bool isQParam (VstInt32 index) noexcept { return index >= qBase() && index < qBase() + synthyboy_mpc::QRouter::kCount; }
     static VstInt32 nativeUiBase() noexcept { return qBase() + synthyboy_mpc::QRouter::kCount; }
     static bool isNativeUiParam (VstInt32 index) noexcept { return index >= nativeUiBase() && index < nativeUiBase() + nativeui::kCount; }
-    std::atomic<float> nativeUiValues[nativeui::kEnvSelectorBase] {};
+    std::atomic<float> nativeUiValues[nativeui::kFxValueBase] {};   // the meters
     std::atomic<float> nativeStereoMeters[nativeui::kMixerStereoFields * nativeui::kMixerStrips] {};
     std::atomic<bool> nativeMetersDue { false }, nativeModBoardDue { false };
     bool mixerVisualsReported = false;
@@ -1674,7 +1674,7 @@ struct PluginInstance
     {
         namespace n = nativeui::lfo;
         static constexpr const char* keys[n::kCount] {
-            nullptr, "lfo1.shape", "rlfo1.style", "lfo1.smooth", "lfo1.smooth_time", nullptr, nullptr,
+            "lfo1.shape", "rlfo1.style", "lfo1.smooth", "lfo1.smooth_time", nullptr, nullptr,
             "lfo1.rate", "lfo1.division", "lfo1.fade_in", "lfo1.sync", "lfo1.sync_type", "rlfo1.sync_type",
             "lfo1.phase", "lfo1.delay", "lfo1.host", "lfo1.direction", "lfo1.swing", "lfo1.stereo",
             "lfo1.mono", "rlfo1.stereo", "lfo1.keytrack_transpose", "lfo1.keytrack_tune"
@@ -1757,8 +1757,6 @@ struct PluginInstance
         namespace n = nativeui::playenvlfo;
         if (field == n::Choose)
             return nativePlayEnvLfo.selection();
-        if (field == n::ReservedEnv || field == n::ReservedLfo)
-            return 0.0f;
         const int target = nativePlayEnvLfo.at (field).cell().target;
         if (field == n::StandardSync && target >= 0)
         {
@@ -1774,7 +1772,7 @@ struct PluginInstance
             return 0.0f;
         const float plain = paramMirror[cell.target].load (std::memory_order_relaxed);
         if (field == nativeui::playoscui::Route)
-            return plain / nativeui::playoscui::kRoutingDetails;
+            return plain / nativeui::osc::kLastRoute;
         return synthyboy_mpc::overlay::OscUi::nativeSettingsValue (cell, plain);
     }
 
@@ -1960,8 +1958,6 @@ struct PluginInstance
         }
         if (nativeui::isMacroTargetOffset (offset))
             return 0.0f;
-        if (nativeui::isPlayExpandedOffset (offset))
-            return 0.0f;   // reserved (the Play expansion is gone)
         if (nativeui::isModTargetsOffset (offset))
         {
             const int field = offset - nativeui::kModTargets;
@@ -2116,8 +2112,8 @@ struct PluginInstance
                 return nativeFxValue (menu.cell());
             return nativeFxValue (nativeFxEndpoint (offset).cell());
         }
-        if (offset >= nativeui::kEnvSelectorBase)
-            return 0.0f;   // the Env selector cells (reserved since the Play expansion is gone; their indexes stay)
+        if (offset >= nativeui::kFxValueBase)
+            return 0.0f;   // not a meter (no value is kept for it)
         return nativeUiValues[offset].load (std::memory_order_relaxed);
     }
 
@@ -2539,7 +2535,7 @@ struct PluginInstance
         if (nativeMetersDue.load (std::memory_order_acquire) && nativeMetersDue.exchange (false, std::memory_order_acq_rel))
         {
             // Leaving the mixer also writes a final zero, after its input gate is disabled.
-            for (int offset = nativeui::kMixerPeakBase; offset < nativeui::kEnvSelectorBase; ++offset)
+            for (int offset = nativeui::kMixerPeakBase; offset < nativeui::kFxValueBase; ++offset)
                 reportNativeValue (e, offset, nativeUiValues[offset].load (std::memory_order_relaxed));
             for (int i = 0; i < nativeui::kMixerStereoFields * nativeui::kMixerStrips; ++i)
                 reportNativeValue (e, nativeui::kMixerStereoBase + i, nativeStereoMeters[i].load (std::memory_order_relaxed));
@@ -4015,11 +4011,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     buf[0] = '\0';
                 return 1;
             }
-            if (nativeui::isPlayExpandedOffset (offset))
-            {
-                synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? "Reserved" : "");   // the Play expansion is gone; the indexes stay
-                return 1;
-            }
             if (nativeui::isModTargetsOffset (offset))
             {
                 namespace n = nativeui::targets;
@@ -4206,7 +4197,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 const int source = (handle - 1) / n::kFields + 1;
                 const int field = (handle - 1) % n::kFields;
                 const bool sub = source == 1, noise = source == n::kSources;
-                constexpr const char* names[] { "Power", "Expand", "Destination", "", "", "Pan", "Level" };
+                constexpr const char* names[] { "Power", "Destination", "", "", "Pan", "Level" };
                 if (opcode == effGetParamName)
                 {
                     const char* name = field == n::First ? (sub ? "Waveform" : noise ? "Sound" : "Type")
@@ -4251,7 +4242,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                         std::snprintf (buf, kCap, "%s %d", source > n::kStandardLfos ? "RND" : "LFO",
                                        source > n::kStandardLfos ? source - n::kStandardLfos : source);
                 }
-                else if ((field > n::ReservedLfo && field < n::Choose) || field == n::StandardSync)
+                else if ((field >= 0 && field < n::Choose) || field == n::StandardSync)
                 {
                     const int target = inst->nativePlayEnvLfo.at (field).cell().target;
                     if (target >= 0)
@@ -4753,10 +4744,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 if (offset < nativeui::kMixerHoldBase)
                     std::snprintf (buf, kCap, "Mixer Peak %d", offset - nativeui::kMixerPeakBase + 1);
-                else if (offset < nativeui::kEnvSelectorBase)
+                else if (offset < nativeui::kFxValueBase)
                     std::snprintf (buf, kCap, "Mixer Hold %d", offset - nativeui::kMixerHoldBase + 1);
                 else
-                    std::snprintf (buf, kCap, "Env Selector Cell %d", offset - nativeui::kEnvSelectorBase + 1);
+                    buf[0] = '\0';
             }
             else if (opcode == effGetParamDisplay)
                 std::snprintf (buf, kCap, "%.3f", static_cast<double> (inst->nativeUiValue (offset)));
@@ -5312,7 +5303,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / static_cast<float> (maxInt);
             return 1;
         }
-        if (nativeui::isPlayExpandedOffset (nativeOffset) || nativeui::isMacroTargetOffset (nativeOffset)
+        if (nativeui::isMacroTargetOffset (nativeOffset)
             || nativeui::isModDetailControlOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
@@ -5466,7 +5457,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->minInteger = field == n::Second && sub ? -4 : 0;
             props->maxInteger = field == n::First ? (sub ? 5 : noise ? 8 : 4)
                               : field == n::Second ? (sub ? 4 : 3)
-                              : field == n::Route ? n::kRoutingDetails : 1;
+                              : field == n::Route ? nativeui::osc::kLastRoute : 1;
             if (field == n::Power)
                 props->flags |= kVstParameterIsSwitch;
             return 1;
@@ -5481,7 +5472,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 return 0;
             }
             const int target = inst->nativePlayEnvLfo.at (field).cell().target;
-            if (field > n::ReservedLfo && field < n::Choose && target >= 0)
+            if (field >= 0 && field < n::Choose && target >= 0)
                 fillParameterProperties (synthyboy::paramTable()[target], props);
             else
             {
@@ -6134,11 +6125,9 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     inst->refreshNativeMixerVisuals();
                     return;
                 }
-                if (nativeui::isModDetailReservedOffset (offset)
-                    || offset == nativeui::kMasterPanel
-                    || nativeui::isMixerSoloVisualOffset (offset)
+                if (nativeui::isMixerSoloVisualOffset (offset)
                     || nativeui::isMixerMuteVisualOffset (offset))
-                    return;   // read-only presentation / reserved slots (Master Panel: index 3460 stays reserved, nothing is published)
+                    return;   // read-only presentation
                 if (nativeui::isMacroTargetOffset (offset))
                 {
                     const auto link = inst->nativeMacroTargets.at (offset - nativeui::kMacroTarget);
@@ -6146,10 +6135,6 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                                             == inst->stateGeneration.load (std::memory_order_acquire))
                         inst->nativeMacroTargets.post (link, parameter);
                     return;
-                }
-                if (nativeui::isPlayExpandedOffset (offset))
-                {
-                    return;   // reserved handles: the Play expansion is gone
                 }
                 if (nativeui::isModTargetsOffset (offset))
                 {

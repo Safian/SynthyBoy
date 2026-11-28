@@ -105,7 +105,7 @@ public:
         if (! r.empty() && display_.valid())
         {
             const bool nativeRootPower = osc_.topPage() == 0 && osc_.full().hasNativePower();
-            const std::array<ui::Rect, 3> header { powerArea(), ui::Rect {}, osc_.full().isNativeRoutingActive() ? routingArea() : ui::Rect {} };
+            const std::array<ui::Rect, 2> header { powerArea(), osc_.full().isNativeRoutingActive() ? routingArea() : ui::Rect {} };
             display_.draw (sb, r, false, osc_.plotArea(), nativeRootPower ? &header : nullptr);
             display_.draw (sb, r, true, osc_.plotArea());
             if (marks_.any())

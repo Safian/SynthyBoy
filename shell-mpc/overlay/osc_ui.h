@@ -441,11 +441,11 @@ public:
     // ---- access for the tests
     /** The oscillator is ON (the power parameter of the instance on screen). */
     bool powerOn() const noexcept { const Item* it = item (kPower); return it != nullptr && it->cell.on; }
-    /** The cells of the power, the full screen and the route button of the display band of the compact view (empty while the host does not show them). */
-    std::array<ui::Rect, 3> compactNativeHeader() const noexcept
+    /** The cells of the power and the route button of the display band of the compact view (empty while the host does not show them). */
+    std::array<ui::Rect, 2> compactNativeHeader() const noexcept
     {
         namespace n = nativeui::playoscui;
-        return { compactNativeCells_[n::Power], ui::Rect {}, compactNativeCells_[n::Route] };
+        return { compactNativeCells_[n::Power], compactNativeCells_[n::Route] };
     }
     /** The label rectangle of the display band of the compact view. */
     ui::Rect compactLabelRect() const noexcept { return oscmodel::compactLabelRect (cl_, instance()); }
@@ -612,7 +612,7 @@ public:
     std::array<const Item*, nativeui::playoscui::kFields> compactNativeItems() const noexcept
     {
         const bool sub = sel_ == playosc::kSub, noise = sel_ == playosc::kNoise;
-        return { item (kPower), nullptr /* reserved: the expand button is gone */, sub ? nullptr : item (kRoute),
+        return { item (kPower), sub ? nullptr : item (kRoute),
                  item (kBasic + (noise ? 5 : 0)), item (kBasic + (sub ? 3 : noise ? 4 : 1)),
                  item (kBasic + 6), item (kBasic + 7) };
     }
@@ -687,9 +687,7 @@ public:
                 continue;
             if (field == n::Route)
             {
-                const int route = static_cast<int> (std::lround (value * n::kRoutingDetails));
-                if (route == n::kRoutingDetails)
-                    continue;   // the old "route details" step: the popup is gone (kept so the host range does not move)
+                const int route = static_cast<int> (std::lround (value * nativeui::osc::kLastRoute));
                 if (inst.param (target->param) != static_cast<float> (route))
                     writePlain (inst, target->param, static_cast<float> (route));
             }
