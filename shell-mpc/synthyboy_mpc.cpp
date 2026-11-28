@@ -558,10 +558,10 @@ struct PluginInstance
             return inst.nativeOsc.take (state, field, choice);
         }
         bool nativeOscSettingsSupported() const noexcept override { return true; }
-        void setNativeOscSettings (int view, const nativeui::FxCell* fields) noexcept override
+        void setNativeOscSettings (int source, int view, const nativeui::FxCell* fields) noexcept override
         {
             std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
-            inst.nativeOscSettings.publish (view, fields);
+            inst.nativeOscSettings.publish (source, view, fields);
         }
         bool takeNativeOscSetting (int field, const nativeui::FxCell& expected, float& value) noexcept override
         {
@@ -613,11 +613,18 @@ struct PluginInstance
             std::lock_guard<std::mutex> guard (inst.oscPresentationMutex);
             if (view.preset != stateGeneration())
                 return;
+            const bool sourceChanged = inst.nativeOscSettings.source() != view.source;
             inst.nativeOsc.publish (view, false);
-            inst.nativeOscSettings.publish (settingsView, settingsFields, false);
+            inst.nativeOscSettings.publish (view.source, settingsView, settingsFields, false);
             if (settingsView >= nativeui::osc::SettingsWavetable)
                 inst.publishOscAbcState (warpMask, sourceLabel);
             inst.nativeOscDetail.publish (detail, false);
+            if (sourceChanged)
+            {
+                inst.preparedOscTabDue.store (true, std::memory_order_release);
+                inst.preparedOscSettingsDue.store (true, std::memory_order_release);
+                inst.preparedOscDetailDue.store (true, std::memory_order_release);
+            }
         }
         void setNativeMasterView (nativeui::master::View view) noexcept override
         {
@@ -1779,8 +1786,7 @@ struct PluginInstance
 
     static int nativeOscSettingField (int offset) noexcept
     {
-        if (offset >= nativeui::kOscAbcSettings
-            && offset < nativeui::kOscAbcSettings + nativeui::osc::kAbcSources * nativeui::osc::kAbcSettings)
+        if (nativeui::isOscAbcSettingOffset (offset))
             return nativeui::osc::kSettings + offset - nativeui::kOscAbcSettings;
         return offset >= nativeui::kOscSettings && offset < nativeui::kOscRoutingBySource ? offset - nativeui::kOscSettings : -1;
     }
@@ -2089,6 +2095,8 @@ struct PluginInstance
         }
         if (const int field = nativeOscSettingField (offset); field >= 0)
             return nativeOscSettingValue (nativeOscSettings.at (field).cell());
+        if (offset >= nativeui::kOscAbcTitle && offset < nativeui::kFxHeader)
+            return offset == nativeui::kOscAbcTitle ? nativeOsc.snapshot().abcTitleValue() : 0.0f;
         if (offset == nativeui::kOscWarpLayout)
             return nativeOscSettings.layout() >= nativeui::osc::SettingsWavetable
                 ? static_cast<float> (nativeOscWarpMask.load (std::memory_order_relaxed)) / nativeui::osc::kLastWarpMask : 0.0f;
@@ -2345,7 +2353,7 @@ struct PluginInstance
         if (nativeOsc.snapshot().source() != 0 && ! nativeOsc.suspended() && nativeOsc.preset() == oscPreset)
             return;
         nativeOsc.publish (oscView, false);
-        nativeOscSettings.publish (oscRoot.settingsView, oscRoot.settingsFields.data(), false);
+        nativeOscSettings.publish (synthyboy_mpc::playosc::kA, oscRoot.settingsView, oscRoot.settingsFields.data(), false);
         if (oscRoot.settingsView >= nativeui::osc::SettingsWavetable)
             publishOscAbcState (oscRoot.warpMask, oscRoot.sourceLabel.c_str());
         nativeOscDetail.publish (oscRoot.detail, false);
@@ -2458,9 +2466,11 @@ struct PluginInstance
         const bool moved = state.bindingRevision() != nativeOscAnnounced;
         for (int source = 1; source <= n::kLastSource; ++source)
         {
-            reportNativeValue (e, nativeui::kOscPower + source - 1, state.powerValue (source), moved && source == state.source());
-            reportNativeValue (e, nativeui::kOscRoutingBySource + source - 1, state.routingValue (source), moved && state.displaysSource (source));
+            const bool activeSource = state.displaysSource (source);
+            reportNativeValue (e, nativeui::kOscPower + source - 1, state.powerValue (source), moved && activeSource);
+            reportNativeValue (e, nativeui::kOscRoutingBySource + source - 1, state.routingValue (source), moved && activeSource);
         }
+        reportNativeValue (e, nativeui::kOscAbcTitle, state.abcTitleValue(), moved && n::isAbcSource (state.source()));
         if (state.source() != 0)
         {
             if (state.visibility() == n::kRootOn)
@@ -4246,6 +4256,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 synthyboy_mpc::putBounded (buf, kCap, opcode == effGetParamName ? name : "");
                 return 1;
             }
+            if (offset >= nativeui::kOscAbcTitle && offset < nativeui::kFxHeader)
+            {
+                if (offset == nativeui::kOscAbcTitle && opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, "Osc ABC Title");
+                else if (offset == nativeui::kOscAbcTitle && opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeOsc.snapshot().abcTitle());
+                else
+                    buf[0] = '\0';
+                return 1;
+            }
             if (const int field = PluginInstance::nativeOscSettingField (offset); field >= 0)
             {
                 namespace n = nativeui::osc;
@@ -4256,10 +4276,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     if (field < n::kSettings)
                         std::snprintf (buf, kCap, "Osc Setting %d", field + 1);
                     else
-                    {
-                        const int slot = field - n::kSettings;
-                        std::snprintf (buf, kCap, "%s Setting %d", n::kSourceNames[1 + slot / n::kAbcSettings], 1 + slot % n::kAbcSettings);
-                    }
+                        std::snprintf (buf, kCap, "Osc ABC Setting %d", 1 + (field - n::kSettings));
                 }
                 else if (cell.target >= 0 && cell.kind != n::SettingsAction)
                 {
@@ -5500,6 +5517,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             namespace n = nativeui::osc;
             const int offset = index - PluginInstance::nativeUiBase();
+            if (offset >= nativeui::kOscAbcTitle && offset < nativeui::kFxHeader)
+            {
+                std::memset (props, 0, sizeof (*props));
+                return 1;
+            }
             const int field = PluginInstance::nativeOscSettingField (offset);
             if (offset == nativeui::kOscSettingsView || offset == nativeui::kOscWarpLayout || field >= 0)
             {
@@ -6324,7 +6346,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                         inst->nativeOscSettings.post (snapshot, parameter);
                     return;
                 }
-                if (offset == nativeui::kOscSettingsView || offset == nativeui::kOscWarpLayout)
+                if ((offset >= nativeui::kOscAbcTitle && offset < nativeui::kFxHeader)
+                    || offset == nativeui::kOscSettingsView || offset == nativeui::kOscWarpLayout)
                     return;
                 if (offset >= nativeui::kPlayOsc && offset < nativeui::kPlayLfoStandardSync)
                 {

@@ -436,7 +436,7 @@ private:
                 fields[slot] = OscUi::nativeSettingsBinding (*item);
         if (view >= n::SettingsWavetable)
             inst.setNativeOscAbcState (osc_.nativeWarpMask(), osc_.nativeSourceLabel());
-        inst.setNativeOscSettings (view, fields.data());
+        inst.setNativeOscSettings (osc_.selection(), view, fields.data());
         osc_.setNativeSettingsPaint (items);
         nativeSettingsPublished_ = true;
         if (! consume)
@@ -459,7 +459,7 @@ private:
     {
         if (! nativeSettingsPublished_)
             return;
-        inst.setNativeOscSettings (nativeui::osc::SettingsHidden, nullptr);
+        inst.setNativeOscSettings (0, nativeui::osc::SettingsHidden, nullptr);
         inst.setNativeOscAbcState (0, "");
         osc_.setNativeSettingsPaint ({});
         nativeSettingsPublished_ = false;

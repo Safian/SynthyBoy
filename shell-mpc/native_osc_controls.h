@@ -22,12 +22,14 @@ enum SettingsKind { SettingsDial = 1, SettingsToggle, SettingsMenu, SettingsNumb
                     SettingsSource, SettingsAction, SettingsOctave, SettingsType, SettingsVoices };
 enum AbcSetting { AbcType, AbcSource, AbcBrowse, AbcOctave, AbcFine, AbcUnisonDetail, AbcUnisonCount, AbcDetune,
                   AbcWarp1Type, AbcWarp1Amount, AbcWarp2Type, AbcWarp2Amount, AbcPosition,
-                  AbcDensity, AbcLength, AbcOffset, AbcDirection, AbcPitch, kAbcSettings };
+                  AbcDensity, AbcLength, AbcOffset, AbcDirection, AbcPitch,
+                  AbcTuneSem, AbcTuneFin, AbcTuneCrs, AbcTuneTrack, kAbcSettings };
 enum SourceAction { SourceIdle, SourcePrevious, SourceBrowse, SourceNext, kLastSourceAction = SourceNext };
-constexpr int kAbcSources = 3, kLastWarpMask = 3;
-constexpr int kSettingsAll = kSettings + kAbcSources * kAbcSettings;
+constexpr int kAbcSources = 3, kAbcLegacySlots = 54, kAbcTitle = kAbcSettings, kLastWarpMask = 3;
+constexpr int kSettingsAll = kSettings + kAbcSettings;
 constexpr bool settingsAction (int kind) noexcept { return kind == SettingsSource || kind == SettingsAction; }
-constexpr int abcSettingIndex (int source, int field) noexcept { return kSettings + (source - 2) * kAbcSettings + field; }
+constexpr int abcSettingIndex (int field) noexcept { return kSettings + field; }
+constexpr bool isAbcSource (int source) noexcept { return source >= 2 && source <= 4; }
 constexpr int kTypeChoices[] { 0, 4, 1, 2, 3 };    // order of the five TYPE pictograms
 constexpr const char* kNames[kCount] = { "Osc Source", "Osc Routing", "Osc Native View" };
 constexpr const char* kSourceNames[kLastSource] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
@@ -62,10 +64,20 @@ public:
         int source() const noexcept { return static_cast<int> (bits & 7); }
         int destination() const noexcept { return static_cast<int> ((bits >> 3) & 7); }
         int visibility() const noexcept { return source() == 0 ? kHidden : (bits & 64) != 0 ? kRootOn : kRootOff; }
-        bool displaysSource (int which) const noexcept { return source() != 0 && source() == which; }
+        bool displaysSource (int which) const noexcept
+        {
+            if (which == 2) return isAbcSource (source());
+            if (which == 3 || which == 4) return false;
+            return source() != 0 && source() == which;
+        }
         float routingValue (int which) const noexcept { return displaysSource (which) ? value (kRouting) : 0.0f; }
         bool powered() const noexcept { return (bits & 128) != 0; }
-        float powerValue (int which) const noexcept { return source() == which && powered() ? 1.0f : 0.0f; }
+        float powerValue (int which) const noexcept { return displaysSource (which) && powered() ? 1.0f : 0.0f; }
+        const char* abcTitle() const noexcept
+        {
+            return source() == 2 ? "OSC A" : source() == 3 ? "OSC B" : source() == 4 ? "OSC C" : "";
+        }
+        float abcTitleValue() const noexcept { return isAbcSource (source()) ? static_cast<float> (source() - 1) / 3.0f : 0.0f; }
         uint32_t bindingRevision() const noexcept { return static_cast<uint32_t> ((bits >> 8) & 0xffffffu); }
         uint64_t revision() const noexcept { return bits >> 32; }
         float value (int field) const noexcept
@@ -126,8 +138,8 @@ public:
             || (field != kSource && field != kRouting) || ! std::isfinite (value) || value < 0.0f || value > 1.0f)
             return;
         const auto current = snapshot();
-        if (current.source() == 0 || (source != 0 && source != current.source())
-            || (field == kRouting && current.visibility() != kRootOn))
+        const bool sourceMatch = source == 0 || current.displaysSource (source);
+        if (current.source() == 0 || ! sourceMatch || (field == kRouting && current.visibility() != kRootOn))
             return;
         const int choice = static_cast<int> (std::lround (value * (field == kSource ? kLastSource - 1 : kLastRoute)));
         if (choice == (field == kSource ? current.source() - 1 : current.destination()))
@@ -142,7 +154,7 @@ public:
             return;
         const auto current = snapshot();
         const bool on = value >= 0.5f;
-        if (current.source() == source && on != current.powered())
+        if (current.displaysSource (source) && on != current.powered())
             enqueue (current, kPower, on ? 1 : 0);
     }
 

@@ -58,13 +58,16 @@ constexpr int kOscSettings = kOscSettingsView + 1;
 constexpr int kOscRoutingBySource = kOscSettings + osc::kSettings;
 constexpr int kOscWarpLayout = kOscRoutingBySource + osc::kLastSource;
 constexpr int kOscAbcSettings = kOscWarpLayout + 1;
+constexpr int kOscAbcTitle = kOscAbcSettings + osc::kAbcTitle;
+static_assert (osc::kAbcTitle + 1 <= osc::kAbcLegacySlots);
+constexpr bool isOscAbcSettingOffset (int offset) noexcept { return offset >= kOscAbcSettings && offset < kOscAbcTitle; }
 namespace fxheader
 {
 enum Field { Power, Rack, Page, Remove, kFields };
 constexpr int kItems = 32;
 constexpr int kHandles = 2 + kItems * kFields;
 }
-constexpr int kFxHeader = kOscAbcSettings + osc::kAbcSources * osc::kAbcSettings;
+constexpr int kFxHeader = kOscAbcSettings + osc::kAbcLegacySlots;
 constexpr int kLfoEditor = kFxHeader + fxheader::kHandles;
 namespace lfoeditor
 {

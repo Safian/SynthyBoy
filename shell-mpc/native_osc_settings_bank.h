@@ -18,15 +18,24 @@ public:
         renewInputRevisions();
     }
 
-    void publish (int view, const FxCell* fields, bool interactive = true) noexcept
+    void publish (int source, int view, const FxCell* fields, bool interactive = true) noexcept
     {
         if (! interactive)
             suspended_.store (true, std::memory_order_release);
-        if (suspended_.load (std::memory_order_relaxed))
+        const bool wasSuspended = suspended_.load (std::memory_order_relaxed);
+        const bool sourceChanged = source_ != source;
+        if (sourceChanged)
+        {
+            source_ = source;
+            invalidate();
+        }
+        else if (wasSuspended || ! interactive)
             renewInputRevisions();
         NativeCellBank<kSettingsAll>::publish (view, fields);
         suspended_.store (! interactive, std::memory_order_release);
     }
+
+    int source() const noexcept { return source_; }
 
     void post (Snapshot current, float value) noexcept
     {
@@ -46,5 +55,6 @@ public:
 
 private:
     std::atomic<bool> suspended_ { true };
+    int source_ = 0;
 };
 } // namespace synthyboy_mpc::nativeui::osc
