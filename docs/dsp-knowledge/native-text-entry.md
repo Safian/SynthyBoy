@@ -99,3 +99,55 @@ in the inspected SDK. It did not run another ELF check or a device round trip.
 Its conclusion remains scoped to the inspected path: a documented alternative
 callback or a demonstrated full string returning to the owning plugin instance
 would change the result. The physical numeric keypad is documented separately.
+
+## Expert review 2026-11-28: every host text path to a third-party VST2 (sources only, no device)
+
+Question: can the host's own keyboard (Key 61, XL) deliver text to SynthyBoy, so
+`ui/text_entry.h` can go? SDK commit `febd2ca5` (active `ext/mpc-sdk`); manual v3.10.1.
+Verdict per path (FACT = documented or seen in source; HYPOTHESIS = unproven):
+
+1. **Skin `TextEditOverlay` on a plugin parameter: NOT USABLE on XL, UNKNOWN on Key 61.**
+   FACT: SDK `docs/ui-reference.md:1201-1206` (6.12, "less tested"): meaningful only for
+   text-valued handles, "which third-party VST parameters are not"; parameters are floats
+   0..1 (`docs/host-contract.md:55`). FACT: XL 3.10.1.12 gate above (setter slot is a no-op).
+   HYPOTHESIS: Key 61 3.10.1.x has the same code; no binary inspected, no on-device run.
+2. **`effString2Parameter`: NOT USABLE.** FACT: `docs/host-contract.md:59` "it does not call
+   the text-to-value opcode either"; SDK `framework/mpc_plugin.h:679` parses it as
+   choice/number only. The host never sends it, so a text parameter display cannot take input.
+3. **Program/preset name: NOT USABLE as a channel.** FACT: the host only reads program names
+   (`effGetProgramNameIndexed`/`effGetProgramName`, `host-contract.md:33`, `tools/host-sim/README.md:88`);
+   `framework/mpc_plugin.h:662` ignores `effSetProgramName`; the community wrapper
+   (`docs-community/open-mpc/wrapper/vst2_wrap.c:927-930`) does not handle opcode 4 either,
+   and its NOTES never record a host call to it (absence of evidence only). The manual's
+   "Save Plugin Preset" is the disk icon on the Plugin Track page (v3.10.1 XL manual p278,
+   txt line 7702): the host writes an `.xpl` with its own `<preset>` name and the plugin's
+   state chunk (`ext/mpc-sdk/docs/presets.md:17-37`); the plugin only sees `effGetChunk`,
+   never the name. FACT: a skin can trigger only four handlers: `Q-Link`, `Show Overlay`,
+   `Toggle Switch`, `Focus Lost` (`ui-reference.md:512-517`); none opens the save dialog.
+   HYPOTHESIS (unproven either way): the host might call `effSetProgramName` on a rename;
+   nothing documents such a rename UI for plugin programs.
+4. **Host-internal rename keyboards (track/program/macro/MIDI-CC names): NOT USABLE.** FACT:
+   the manual lists many (p279 MIDI CC rename, p343 macro rename), all host-owned names.
+   The XL factory MIDI page uses a host-side name element (`ParameterMapNameSetter`,
+   `vtables.txt`) that has a working string setter; there is no skin handle that binds it to
+   a plugin (`ui-reference.md` section 7.1 lists no text handle).
+5. **Plugin-drawn keyboard from skin Buttons: USABLE, proven in the community.** FACT
+   (community, Live III OS 3.9.1, 2026-10-30): the OpenMPC Plugin Manager types text with a
+   keyboard drawn from skin Buttons and display-string Labels (`docs-community/open-mpc/docs/NOTES.md:136`
+   "dynamic text works through parameter display strings"; `NOTES.md:2054`, `PORTING.md:119`).
+   FACT, important for our plan: there each tap arrived as TWO `set key=1` events 30-140 ms
+   apart with no `=0` between; the fix is a per-key debounce (250 ms) in the plugin. Our
+   REPORT (`textentry-research`) assumed a clean `k, 0` pair from `ResetOnGestureEnd`; that
+   is unproven and the community evidence argues for a plugin-side debounce plus a
+   no-edge-reliance design. Same-key repeats within the debounce window are then lost
+   (accept, or alternate two key parameters).
+
+**Minimal measurement that would settle the only open point (Key 61, point 1):** a throw-away
+SDK plugin with one float parameter, skin Button with `Show Overlay` / additionalData
+`text edit overlay` bound to it (factory syntax, `midi-TUI.json:193-209`); open it, type, Enter;
+count `setParameter` and opcode 27 calls in a log. Expected from the XL result: zero calls.
+It is not needed for the decision: path 5 does not depend on it.
+
+**Recommendation:** no host-provided text path reaches a third-party plugin; keep text entry
+plugin-side. The host keyboard cannot replace `ui/text_entry.h` on the XL (fact) and no
+source shows it on the Key 61; the only supported route is the Button/Label keyboard of path 5.
