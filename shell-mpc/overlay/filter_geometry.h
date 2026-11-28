@@ -48,7 +48,6 @@ public:
     /** The cell of a filter control (nativeui::FilterPower .. FilterStyle). */
     ui::Rect cell (int slot) const noexcept { return slot >= 0 && slot < kSlots ? cell_[slot] : ui::Rect {}; }
     ui::Rect displayRect() const noexcept { return graph_; }
-    ui::Rect close() const noexcept { return close_; }
     ui::Rect expand() const noexcept { return expand_; }
     ui::Rect both() const noexcept { return both_; }
     ui::Rect view() const noexcept { return view_; }
@@ -77,7 +76,7 @@ private:
     void clearCells()
     {
         cell_.fill ({});
-        close_ = both_ = view_ = outReadout_ = expand_ = graph_ = main_ = track_ = out_ = formantBlock_ = {};
+        both_ = view_ = outReadout_ = expand_ = graph_ = main_ = track_ = out_ = formantBlock_ = {};
     }
 
     void layout()
@@ -90,7 +89,6 @@ private:
         ui::Rect r[7];
         const int fixed[7] = { pageMode_ ? 0 : 84, isExpCurve ? 0 : 56, 4 * kViewCellW, toggleWidthFor ("F1+F2"), 0, 0, toggleWidthFor ("CLEAN") }, weight[7] = { 0, 0, 0, 0, 5, 4, 0 };
         pagegeo::layoutRow (top, fixed, weight, 7, pagegeo::kGap, r);
-        close_ = r[0];
         view_ = r[2];
         both_ = r[3];
         cell_[FilterModel] = r[4];
@@ -174,7 +172,7 @@ private:
 
     ui::Rect rect_;
     std::array<ui::Rect, nativeui::FilterPoint> cell_ {};
-    ui::Rect close_, both_, view_, outReadout_, expand_, graph_, main_, track_, out_, formantBlock_;
+    ui::Rect both_, view_, outReadout_, expand_, graph_, main_, track_, out_, formantBlock_;
     bool curveView_ = false, subTabPage_ = false, pageMode_ = false, formant_ = false, comb_ = false;
 };
 
