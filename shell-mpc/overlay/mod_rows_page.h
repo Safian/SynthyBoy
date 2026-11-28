@@ -1,7 +1,7 @@
 // SynthyBoy - MPC overlay: the ONE data model of the two detail pages "targets of a source" and "modulations of a control" (Env, LFO, Filter NOTE / VELO, Mod, Osc, ...): the rows (name, source, depth, polarity, on / off),
 // the page index, the title and the rectangles of the native cells (the geometry of the cells in skin/TUI.json)
 // the host skin draws (BACK, ADD, the page stepper and, per row, the depth, the polarity, the on / off and the remove cell). A model, not a control (owner decision 2026-11-27: the C++ layer has no UI elements): it
-// takes no touch and draws no control; the overlay paints only what the host skin does not (the title, the count, the names, the empty hint) and cuts the native cells out of the ground. The native bridge
+// takes no touch and draws no control; the overlay paints only the Q frame of the active row; the title, the count and the empty hint are native Labels (texts ()). The native bridge
 // (native_mod_targets_ui.h) publishes the rows and reads the gestures of the skin through the same ids the page gave (`setRowIds`).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -199,28 +199,9 @@ public:
         return ui::Rect::unite (ui::Rect::unite (r.depth.rect(), r.polarity.rect()), r.bypass.rect());
     }
 
-    /** The overlay's part of the page: the cut-outs of the native cells, the title and the count, the names (the host draws the target names itself in the native mode), the empty hint, the Q frame of the active row. */
+    /** The overlay's part of the page: only the Q frame of the active row (a live indicator the host cannot show); the title, the count, the names, the empty hint and the keyline are native Labels of the host skin (publishNativeTexts). */
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (nativeControls_)
-        {
-            ui::clearNativeCell (sb, back.rect());
-            ui::clearNativeCell (sb, add.rect());
-            if (page.state.count > 1)
-                ui::clearNativeCell (sb, page.rect());
-            for (int i = 0; i < nRows_; ++i)
-            {
-                const Row& r = rows[i];
-                const ui::Rect named = kind_ == Kind::Targets ? nameRect (i) : ui::Rect {};
-                for (const ui::Rect& area : { named, r.depth.rect(), r.polarity.rect(), r.bypass.rect(), r.remove.rect() })
-                    ui::clearNativeCell (sb, area);
-            }
-        }
-        {
-            ui::Pen p (sb, true, false);
-            ui::Cell cell (sb, rect_);
-            drawLabels (p);
-        }
         if (! ui::QGroup::wideDevice() && activeRow_ >= 0 && nativeControls_)
         {
             const ui::Rect frame = activeRowFrame();
@@ -228,6 +209,16 @@ public:
             ui::Cell cell (sb, ui::Rect::unite (frame, ui::Pen::qMarkerRect (frame)));
             pen.qFocus (frame);
         }
+    }
+    /** The texts of the page for the native Labels: the title, the count of the targets (or the value of the control a modulations page is about) and the empty hint ("" while the page has rows). */
+    void texts (char* title, size_t titleCap, char* count, size_t countCap, char* empty, size_t emptyCap) const
+    {
+        std::snprintf (title, titleCap, "%s", title_);
+        if (kind_ == Kind::Targets)
+            std::snprintf (count, countCap, total_ == 1 ? "%d TARGET" : "%d TARGETS", total_);
+        else
+            std::snprintf (count, countCap, "%s", target_);
+        std::snprintf (empty, emptyCap, "%s", nRows_ > 0 ? "" : kind_ == Kind::Targets ? "THIS SOURCE MODULATES NOTHING YET: PRESS ADD TARGET" : "NOTHING MODULATES THIS VALUE YET: PRESS ADD AND CHOOSE A SOURCE");
     }
 
 private:
@@ -252,41 +243,6 @@ private:
             x += byW + kGap;
             r.remove.rect_ = { x, lane.y, remW, lane.h };
         }
-    }
-
-    void drawLabels (ui::Pen& p) const
-    {
-        const ui::theme::Look& T = ui::theme::L();
-        p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (T.keyline, 255));
-        const float ts = T.fValue + 2.0f;
-        const int titleX = rect_.x + 140;
-        const int tw = std::max (0, std::min (static_cast<int> (std::ceil (ui::Pen::textWidth (title_, ts))) + 4, rect_.w - 150));
-        p.textLeft ({ titleX, rect_.y + kToolbarY, tw, kCtlH }, title_, ts, p.c (kind_ == Kind::Targets ? colour_ : T.text, 255), T.fMin);
-        if (kind_ == Kind::Targets)
-        {
-            char c[32];
-            std::snprintf (c, sizeof c, total_ == 1 ? "%d TARGET" : "%d TARGETS", total_);
-            p.textLeft ({ titleX + tw + 16, rect_.y + kToolbarY, 160, kCtlH }, c, T.fValue, p.c (T.textDim, 255), T.fMin);
-        }
-        else if (target_[0] != '\0')
-        {
-            const int right = page.state.count > 1 ? page.rect().x : add.rect().x;
-            p.textLeft ({ titleX + tw + 16, rect_.y + kToolbarY, std::max (0, right - titleX - tw - 16), kCtlH }, target_, T.fValue, p.c (T.textDim, 255), T.fMin);
-        }
-        for (int i = 0; i < nRows_; ++i)
-        {
-            if (kind_ == Kind::Targets)
-            {
-                if (! nativeControls_)
-                    p.textLeft (nameRect (i), rows[i].name, T.fValue, p.c (T.text, 255), T.fMin);
-            }
-            else
-                p.textLeft ({ rect_.x + 8, rowY (i) + kRowH - kCtlH, kNameW - 8, kCtlH }, rows[i].name, T.fValue, p.c (ui::theme::sourceColour (rows[i].macro ? "MAC" : rows[i].name), 255), T.fMin);
-        }
-        if (nRows_ == 0)
-            p.textLeft ({ rect_.x + 8, rect_.y + kBarH + 20, rect_.w - 16, 40 },
-                        kind_ == Kind::Targets ? "THIS SOURCE MODULATES NOTHING YET: PRESS ADD TARGET" : "NOTHING MODULATES THIS VALUE YET: PRESS ADD AND CHOOSE A SOURCE",
-                        T.fLabel, p.c (T.textDim, 255), T.fMin);
     }
 
     Kind kind_ = Kind::Targets;

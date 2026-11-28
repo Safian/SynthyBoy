@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../native_mod_targets.h"
+#include "../native_text.h"
 #include "instance_view.h"
 #include "mod_rows_page.h"
 #include "synthyboy/modulation.h"
@@ -23,6 +24,8 @@ public:
         if (! active_)
             return;
         active_ = false;
+        for (int line : { nativeui::nativetext::TargetsTitle, nativeui::nativetext::TargetsCount, nativeui::nativetext::TargetsEmpty })
+            inst.setNativeText (line, "");
         screen.setNativeControls (false);
         inst.hideNativeModTargets (this);
     }
@@ -78,6 +81,13 @@ public:
             return state;
         };
         const auto state = bind();
+        {
+            char title[nativeui::nativetext::kLineLen], count[nativeui::nativetext::kLineLen], empty[nativeui::nativetext::kLineLen];
+            screen.texts (title, sizeof title, count, sizeof count, empty, sizeof empty);
+            inst.setNativeText (nativeui::nativetext::TargetsTitle, title);
+            inst.setNativeText (nativeui::nativetext::TargetsCount, count);
+            inst.setNativeText (nativeui::nativetext::TargetsEmpty, empty);
+        }
 
         const auto take = [&] (int field, float& value)
         {

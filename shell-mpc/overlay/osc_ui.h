@@ -161,7 +161,7 @@ public:
         kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,   // (the Var ids are free: the warp PHASE knobs are on MORE now)
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
         kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2,
-        kList = 700, kListBackdrop, kListHeader,   // the list popup (source, warp types, the content browser: its header is the way up)
+        kList = 700, kListBackdrop, kListHeader,   // the native list (source, warp types, the content browser: its header is the way up)
         kModsBack = 600, kModsRow = 610,    // 610 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsAddStep = 660, kModsAdd, kModsPage
     };
@@ -269,6 +269,7 @@ public:
             updateNoiseType (sample, inst);
         }
         updateMissing (inst);
+        publishTexts (inst);
         updateWavetable (inst);
         pull (inst, main_);
         pull (inst, page_);
@@ -368,7 +369,7 @@ public:
         ui::display::drawModule (sb, m);
     }
     /** What goes on top of the picture in the display rectangle: the line of the content that is missing. */
-    void drawOnDisplay (gpu::SceneBuilder& sb) const { drawMissing (sb); }
+    void drawOnDisplay (gpu::SceneBuilder&) const {}
     const oscspec::OscSpecPage& specPage() const noexcept { return spec_; }
     oscspec::OscSpecPage& specPage() noexcept { return spec_; }
     /** One of the lists (the content browser, the wavetable browser, the source of a new modulation) is on the screen: the modulations page of a control that has no modulation yet is the list of the sources. */
@@ -1043,19 +1044,6 @@ public:
             ? nativeDetailState_.fields[field].kind - n::kFirstMenuKind : -1;
     }
 
-    void clearNativeDetailPixels (gpu::SceneBuilder& sb) const
-    {
-        namespace n = nativeui::oscdetail;
-        for (int field = 0; field < n::kBindings; ++field)
-            if ((field < n::kCells || field >= n::kMore) && nativeDetailState_.fields[field].target >= 0)
-            {
-                const auto r = nativeDetailRect (field);
-                const gpu::ScopedClip clip (sb, r.x, r.y, r.right(), r.bottom());
-                if (clip)
-                    sb.clear (0u);
-            }
-    }
-
     void focusNativeDetail (int field, IInstanceView& v)
     {
         namespace n = nativeui::oscdetail;
@@ -1296,32 +1284,26 @@ private:
             detailActive_ = group;
         publishQGroup (v);
     }
-    void drawNativeDetail (gpu::SceneBuilder& sb) const
+    void drawNativeDetail (gpu::SceneBuilder& sb) const { drawNativeDetailQFrame (sb); }   // the title, the block titles, the header line and the graph frame are native cells of the skin (publishTexts)
+
+    /** The texts of the detail pages and the "content missing" line for the native Labels (an empty text hides a Label); published at every update, a line changes its value only when its text does. */
+    void publishTexts (IInstanceView& v) const
     {
+        namespace t = nativeui::nativetext;
         namespace n = nativeui::oscdetail;
-        const auto& look = ui::theme::L();
-        ui::Pen pen (sb, true);
-        {
-            const ui::Rect header { 4, kTabY, kCanvasW - 8, 64 };
-            ui::Cell cell (sb, header);
-            pen.rect (header.x, header.bottom() - 1, header.right(), header.bottom(), pen.c (look.keyline, 255));
-            pen.textLeft ({ 140, kTabY + 4, kCanvasW - 150, 56 }, nativeDetailTitle_, look.fTitle, pen.c (look.text, 255), look.fMin);
-        }
-        if (nativeDetail_ >= n::Graph)
-        {
-            const auto graph = nativeDetailGraphRect();
-            ui::Cell cell (sb, graph);
-            pen.block (graph);
-        }
+        const bool detailUp = nativeDetail_ >= n::Plain;
+        v.setNativeText (t::OscDetailTitle, detailUp ? nativeDetailTitle_ : "");
         for (int b = 0; b < static_cast<int> (nativeDetailBlocks_.size()); ++b)
-            if (const char* title = nativeDetailBlocks_[b])
-            {
-                const auto r = nativeDetailRect (n::slot ((b % 2) * 4, b / 2));
-                const ui::Rect area { r.x + 32, r.y - 16, r.w - 36, 16 };
-                ui::Cell cell (sb, area);
-                pen.textLeft (area, title, look.fLabel, pen.c (look.textDim, 255), look.fMin);
-            }
-        drawNativeDetailQFrame (sb);
+        {
+            const char* title = detailUp && nativeDetailBlocks_[b] != nullptr ? nativeDetailBlocks_[b] : "";
+            const bool graph = nativeDetail_ >= n::Graph;
+            v.setNativeText (t::OscDetailBlock0 + b, graph ? "" : title);
+            v.setNativeText (t::OscDetailGraphBlock0 + b, graph ? title : "");
+        }
+        v.setNativeText (t::OscDetailGraph, detailUp && nativeDetail_ >= n::Graph ? "1" : "");
+        const std::string missing = missingText_;
+        v.setNativeText (t::OscMissingCompact, stackDepth_ == 0 ? missing.c_str() : "");
+        v.setNativeText (t::OscMissingPage, stackDepth_ == 1 ? missing.c_str() : "");   // the root page only (the detail pages have other display rectangles)
     }
 
     void drawNativeDetailQFrame (gpu::SceneBuilder& sb) const
@@ -2080,7 +2062,7 @@ private:
         return pageTop_ == kPageMods && modsTargetParam_ >= 0 && modsPreset_ == inst.stateGeneration()
             && modsSource_ == sel_ && (isPage() || inst.playSelection (0) == sel_) && modsModulePowered (inst);
     }
-    /** While no modulation exists on the control, or while a source is being picked, the page is the list of the sources (case (c): the native picker cells). */
+    /** While no modulation exists on the control, or while a source is being picked, the page is the list of the sources (case (c): the native picker rows). */
     bool modsBoard() const noexcept { return modsPicking_ || mods_.numRows() == 0; }
     bool modsNativeHit (int x, int y, int* row = nullptr) const noexcept { return nativeModulations_.active() && ! modsBoard() && mods_.nativeHit (x, y, row); }
 
@@ -2655,24 +2637,6 @@ private:
     }
 public:
 private:
-    /** The line over the display (in the header band of the compact view, else at the top of the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
-    void drawMissing (gpu::SceneBuilder& sb) const
-    {
-        const ui::Rect r = displayRect();
-        if (missingText_.empty() || r.empty())
-            return;
-        const ui::theme::Look& T = ui::theme::L();
-        // the compact view: the band of the display between the power button and the route / full screen button; the other states: between the corners of the display
-        const ui::Rect box = stackDepth_ == 0 ? compactLabelRect() : ui::Rect { r.x + 4 + 64 + 8, r.y + 8, std::max (0, r.w - 2 * (4 + 64 + 8)), 48 };
-        const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
-        if (size <= 0.0f)
-            return;
-        char fitted[96];   // the size of the pen's own buffer: middleFit cuts a name that would not go into it
-        ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
-        ui::Cell cell (sb, box);
-        ui::Pen pen (sb, true);
-        pen.textCentered (box, fitted, size, pen.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
-    }
     std::string missingText_;
 
     bool nativeRootLoad() const noexcept
@@ -2841,7 +2805,7 @@ private:
             }
         }
     }
-    /** The wavetable browser in the list popup (over the full screen: from the compact view the full screen opens first): the categories, the tables of one, the current one marked. */
+    /** The wavetable browser in the native list rows (over the full screen: from the compact view the full screen opens first): the categories, the tables of one, the current one marked. */
     void openWavetableBrowser (UiStack& stack, IInstanceView& v)
     {
         const Item* it = item (kBasic + 1);
@@ -2906,7 +2870,7 @@ private:
         // A::Refused: the row says why, nothing changes
     }
 
-    /** The content browser in the list popup (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
+    /** The content browser in the native list rows (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
     void openBrowser (UiStack& stack, IInstanceView& v)
     {
         std::vector<IInstanceView::ContentRoot> roots;

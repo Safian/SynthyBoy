@@ -54,7 +54,7 @@ public:
         kSourceFilterStep = 25, kDestFilterStep = 26,
         kAdd = 30, kBoard = 35,
         kDetailBack = 40, kDetailDelete = 41,
-        kListPopup = 60, kListBackdrop = 61, kListHeader = 62,
+        kListRow = 60, kListBackdrop = 61, kListHeader = 62,
         // the rows of the matrix: kRowBase + window row * 10 + offset; the row of the details page: kDetailRowBase + offset
         kRowBase = 100,
         kOffsetNumber = 0, kOffsetSource = 1, kOffsetDest = 2, kOffsetAmount = 3, kOffsetBi = 4, kOffsetBypass = 5, kOffsetDetail = 6,
@@ -83,8 +83,6 @@ public:
         return nativeGround_ && nativeControls_ && (pageTop_ == 0 || pageTop_ == kPageDetail || pageTop_ == kPageTargets || pageTop_ == kPageList) && w_ == kCanvasW && h_ == kCanvasH
             && &ui::theme::L() == &ui::theme::kLook1;
     }
-    // draw() owns the ground because slot-detail widgets need individual apertures.
-    void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
 
     nativeui::mod::View nativeView() const noexcept
@@ -221,39 +219,11 @@ public:
         publishQGroup (inst);
     }
 
-    /** The whole picture: the ground with the cut-outs of the native cells (the cells themselves are the host's), the marker covers. */
+    /** The whole picture: the marker covers and the Q frame of the targets page; everything else (the ground, the texts, the cells) is the host skin's. */
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (hostBackground())
-        {
-            drawNativeMarkerCovers (sb, "mod");
-            return;
-        }
-
-        const ui::Rect tab { 0, kTabY, w_, kTabH };
-        auto ground = [&] (ui::Rect r)
-        {
-            ui::Cell cell (sb, r, 0);
-            gpu::ScopedClip clip (sb, r.x, r.y, r.right(), r.bottom());
-            if (!clip) return;
-            sb.gradientRect (tab.x, tab.y, tab.right(), tab.bottom(),
-                             ui::theme::rgba (ui::theme::L().bg0), ui::theme::rgba (ui::theme::L().bg1));
-        };
-        if (nativeControls_ && pageTop_ == 0)
-        {
-            const auto nav = matrix_.nativeNavigationApertures();
-            const auto values = matrix_.nativeApertures();
-            std::array<ui::Rect, nav.size() + values.size()> controls;
-            std::copy (nav.begin(), nav.end(), controls.begin());
-            std::copy (values.begin(), values.end(), controls.begin() + nav.size());
-            ui::outsideNativeCells (tab, controls, ground);
-        }
-        else if (nativeView() != nativeui::mod::Hidden && pageTop_ == kPageDetail)
-            ui::outsideNativeCells (tab, detail_.nativeApertures(), ground);
-        else
-            page::ground (sb);
         if (targetsShown())
-            targets_.draw (sb);   // the cut-outs of the native cells and the texts of the targets page
+            targets_.draw (sb);
         drawNativeMarkerCovers (sb, "mod");
     }
 
@@ -743,7 +713,7 @@ private:
                 float value = 0.0f;
                 if (! inst.takeNativeModBoard (field, fields[field], value) || value < 0.5f) continue;
                 if (field < nb::ListBack)
-                    handle (ui::Change::indexed (kListPopup, nativeListFirst_ + field - nb::ListRow, value), stack, inst);
+                    handle (ui::Change::indexed (kListRow, nativeListFirst_ + field - nb::ListRow, value), stack, inst);
                 else if (field == nb::ListBack)
                     handle (ui::Change::request (kListBackdrop), stack, inst);
                 else if (field == nb::ListGroups)
@@ -1070,7 +1040,7 @@ private:
             fillList (listCurrent (inst));
             return;
         }
-        if (c.id == kListPopup && c.kind == K::Index)
+        if (c.id == kListRow && c.kind == K::Index)
         {
             const int sel = c.index >= 0 && c.index < static_cast<int> (listChoices_.size()) ? listChoices_[static_cast<size_t> (c.index)] : 0;
             if (sel < 0)   // a group: its entries

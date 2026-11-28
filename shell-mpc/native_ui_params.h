@@ -11,6 +11,7 @@
 #include "native_master_controls.h"
 #include "native_mod_controls.h"
 #include "native_osc_controls.h"
+#include "native_text.h"
 
 namespace synthyboy_mpc::nativeui
 {
@@ -138,20 +139,24 @@ constexpr int kLfoPick = kFxBandLanes + fxbands::kHandles;
 constexpr int kLfoPickHandles = 44;
 // Appended 2026-11-28 (ng/modosc): read-only dynamic text lines of the Mod page (native_text.h) and the twelve notes of the transpose snap (cells bound by osc_ui.h publishNativeNoteMask).
 constexpr int kNativeText = kLfoPick + kLfoPickHandles;
-constexpr int kNativeTextLines = 5;
+constexpr int kNativeTextLines = nativetext::kLegacyLines;
 constexpr int kNoteMask = kNativeText + kNativeTextLines;
 constexpr int kNoteMaskHandles = 13;   // 12 notes (bit 0 = C .. bit 11 = B) and the gate (1 while the mask is on the page)
 constexpr bool isLfoPickOffset (int offset) noexcept { return offset >= kLfoPick && offset < kNativeText; }
 constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kNativeText; }
-// Appended 2026-11-28 (ng/drawenvfx): more read-only text lines (native_text.h, the lines after the Mod page's five): the target tags of the Env page, the filter page title and block names, the NOTE / VELO used-by list, the FX gallery headline.
-constexpr int kNativeText2 = kNoteMask + kNoteMaskHandles;
-constexpr int kNativeText2Lines = 29;
-constexpr int kCount = kNativeText2 + kNativeText2Lines;
-/** The handle of text line `line` (0 .. kNativeTextLines + kNativeText2Lines - 1; the first five belong to the Mod page, the rest follow the note mask). */
-constexpr int nativeTextOffset (int line) noexcept { return line < kNativeTextLines ? kNativeText + line : kNativeText2 + (line - kNativeTextLines); }
-constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || (offset >= kNativeText2 && offset < kCount); }
-/** The text line of handle `offset` (isNativeTextOffset (offset) must hold). */
-constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : kNativeTextLines + (offset - kNativeText2); }
+// Appended 2026-11-28 (ng/drawvmm): read-only text lines of the Macros tab (nativetext::MacroLine: the names of the eight cards, the title, the count and the empty hint of the targets page) and the gate of its sub pages
+// (exactly 0 on the macro cards page, exactly 1 while the targets, the add-target list or the rename keyboard is open: the native cards and texts of the base page are gated by it).
+constexpr int kMacroText = kNoteMask + kNoteMaskHandles;
+constexpr int kMacroTextLines = 11;
+constexpr int kMacroSubpage = kMacroText + kMacroTextLines;
+constexpr bool isMacroTextOffset (int offset) noexcept { return offset >= kMacroText && offset < kMacroSubpage; }
+// Appended 2026-11-28 (ng/drawlfomod): the further text lines (nativetext::kLegacyLines ..): the texts the pages used to draw themselves; the handle of line `line` is nativeTextHandle (line).
+constexpr int kDrawText = kMacroSubpage + 1;
+constexpr int kCount = kDrawText + nativetext::kDrawLines;
+constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
+constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kCount; }
+constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
+constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
 constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }

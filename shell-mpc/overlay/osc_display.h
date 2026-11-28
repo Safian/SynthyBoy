@@ -250,6 +250,17 @@ public:
         return h;
     }
     float framePosition() const noexcept { return shownFrame_; }
+    /** The word the display shows where it has no picture (NOISE, NO SAMPLE, OFF; "" otherwise): published as the text line nativeui::nativetext::OscMessage for the native Label. */
+    const char* message() const noexcept
+    {
+        using K = synthyboy::OscCycle::Kind;
+        const K kind = kind_ == K::off ? ghost_ : kind_;
+        const bool picture = kind == K::wavetable || kind == K::sample || kind == K::multisample || kind == K::granular || kind == K::spectral
+            || (sel_ == playosc::kNoise && (kind == K::noise || kind == K::off));
+        if (picture)
+            return "";
+        return kind == K::noise ? "NOISE" : (kind == K::noSample ? "NO SAMPLE" : (kind == K::off ? "OFF" : ""));
+    }
 
     /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is, drawn by ui/display.h. `live`: the running parts only. `plotArea`: the rectangle the picture is drawn in (the compact view's, below its header band); empty = the display rectangle. */
     void draw (gpu::SceneBuilder& sb, const ui::Rect& r, bool live, const ui::Rect& plotArea = {},
@@ -319,7 +330,7 @@ public:
         else
         {
             d.kind = ui::display::Data::Kind::Message;
-            d.message = kind == K::noise ? "NOISE" : (kind == K::noSample ? "NO SAMPLE" : (kind == K::off ? "OFF" : ""));
+            d.message = "";   // the word (NOISE / NO SAMPLE / OFF) is a native Label of the skin (message ())
         }
         // while the data changes every picture (a knob dragged along the wavetable) it is drawn with the picture, not into a layer: the ground stays a cell where it is, the data comes with the live parts (after every
         // cell of the page), so the groups of the cell plan are the same hot and settled

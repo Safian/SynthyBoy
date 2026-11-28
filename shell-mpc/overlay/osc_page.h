@@ -106,6 +106,7 @@ public:
         osc_.syncNativeModulations (inst, stack, inPlay_ ? nativeui::targets::PlayOsc : nativeui::targets::Osc);
         marks_ = OscMarks::of (inst, sel_, osc_.topPage());
         display_.update (inst, sel_, in.targets, in.live, nowMs, counters_);
+        inst.setNativeText (nativeui::nativetext::OscMessage, display_.message());
     }
 
     /** The picture: the page, the oscillator's display in its rectangle (the data under the live read-outs), the popups over it. */
@@ -113,8 +114,6 @@ public:
     {
         if (hostBackground())
             drawHostCovers (sb);
-        else
-            drawGroundWithAperture (sb);
         osc_.drawPage (sb);
         const ui::Rect r = osc_.displayRect();
         if (! r.empty() && display_.valid())
@@ -126,27 +125,6 @@ public:
             if (marks_.any())
                 marks_.draw (sb, r);
         }
-        osc_.drawOnDisplay (sb);
-        osc_.clearNativeDetailPixels (sb);
-        if (osc_.topPage() == 0 && osc_.full().hasNativePower())
-            ui::clearNativeCell (sb, powerArea());
-        if (! inPlay_ && osc_.topPage() == 0 && osc_.full().isNativeRoutingActive())
-            ui::clearNativeCell (sb, routingArea());
-        if (inPlay_ && osc_.topPage() == 0)
-            ui::clearNativeCell (sb, expandedCloseRect());
-    }
-
-    /** The ground of the page (the gradient of the look) inside `area`, a cached cell. */
-    static void drawGroundCell (gpu::SceneBuilder& sb, ui::Rect tab, ui::Rect area, bool off)
-    {
-        if (area.empty())
-            return;
-        ui::Cell cell (sb, area, 0);
-        ui::Pen pen (sb, true, off);
-        const auto& look = ui::theme::L();
-        pen.paintY2 (static_cast<float> (tab.y), static_cast<float> (tab.bottom()), look.bg0, look.bg1, 255);
-        pen.rect (area, pen.c (look.bg1, 255));
-        pen.paintOff();
     }
 
     void drawHostCovers (gpu::SceneBuilder& sb) const
@@ -157,29 +135,6 @@ public:
                 drawNativeMarkerCovers (sb, view.name);   // the markers and the sentinel (tab y 8)
                 return;
             }
-    }
-
-    void drawGroundWithAperture (gpu::SceneBuilder& sb) const
-    {
-        constexpr ui::Rect tab { 0, page::kTabY, page::kW, page::kTabH };
-        const bool off = osc_.full().inactive();
-        const bool root = osc_.topPage() == 0;
-        const auto& settings = osc_.nativeSettingsCells();
-        std::array<ui::Rect, OscFullView::kNativePanelCells + 6> cells {};
-        if (root)
-        {
-            cells[0] = nativeSelector_ ? selectorArea() : ui::Rect {};
-            cells[1] = osc_.full().hasNativePower() ? powerArea() : ui::Rect {};
-            cells[2] = nativeRouting_ ? routingArea() : ui::Rect {};
-            cells[3] = isNativeTuneActive() ? tuneArea() : ui::Rect {};
-            cells[4] = nativeRouting_ ? osc_.full().panArea() : ui::Rect {};
-            cells[5] = nativeRouting_ ? osc_.full().levelArea() : ui::Rect {};
-            std::copy (settings.begin(), settings.end(), cells.begin() + 6);
-        }
-        if (root && nativeRouting_ && &ui::theme::L() == &ui::theme::kLook1)
-            ui::drawNativeCanvas (sb, tab, cells);
-        else
-            ui::outsideNativeCells (tab, cells, [&] (ui::Rect area) { drawGroundCell (sb, tab, area, off); });
     }
 
     bool covers (int x, int y) const noexcept

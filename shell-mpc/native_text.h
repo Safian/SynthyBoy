@@ -23,7 +23,14 @@ namespace synthyboy_mpc::nativeui::nativetext
 enum Line
 {
     ModTitle, ModCount, ModDetail, ModEmpty1, ModEmpty2,
-    EnvTag0, EnvTag1, EnvTag2, EnvTagMore,                                                // the target tags of the Env page (the first three targets and "+n")
+    kLegacyLines,   // the lines above sit at nativeui::kNativeText; the ones below at nativeui::kDrawText (appended 2026-11-28: the texts the pages of the overlay used to draw)
+    TargetsTitle = kLegacyLines, TargetsCount, TargetsEmpty,                                  // the TARGETS / MODULATIONS pages (mod_rows_page.h): title, count (or the value of the control), the empty hint
+    EdSelected, EdHint, EdGrid, EdTrigger, EdInfo, EdStatus, EdMarkerHint, PointModSummary,   // the LFO shape editor and its point modulation page
+    OscDetailTitle, OscDetailBlock0, OscDetailBlock1, OscDetailBlock2, OscDetailBlock3, OscDetailBlock4, OscDetailBlock5, OscDetailBlock6, OscDetailBlock7,   // the title and the block titles of the oscillator detail pages
+    OscMissingCompact, OscMissingPage, OscMessage,
+    OscDetailGraph, OscDetailGraphBlock0, OscDetailGraphBlock1, OscDetailGraphBlock2, OscDetailGraphBlock3, OscDetailGraphBlock4, OscDetailGraphBlock5, OscDetailGraphBlock6, OscDetailGraphBlock7,   // a detail page with a graph: "1" and the block titles at the lower rows                                                         // the "content missing" line of the oscillator display (Play compact view, oscillator page)
+    // appended 2026-11-28 (ng/drawenvfx): the target tags of the Env page, the filter page title and block names, the NOTE / VELO used-by list, the FX gallery headline
+    EnvTag0, EnvTag1, EnvTag2, EnvTagMore,                                                // the first three targets and "+n"
     FilterTitle, FilterTitleOff,                                                          // the page title of Filter 1 / 2 (on / off: the colour differs)
     FilterBlock0, FilterBlock1, FilterBlock2, FilterBlock3,                               // the block names, dim
     FilterBlockActive0, FilterBlockActive1, FilterBlockActive2, FilterBlockActive3,       // the block names of the active Q group
@@ -34,16 +41,19 @@ enum Line
     FxGalleryHead,                                                                        // the headline (or the note) of the effect gallery
     kLines
 };
-static_assert (kLines == kNativeTextLines + kNativeText2Lines, "the handles of the text lines (native_ui_params.h)");
-constexpr int kLineLen = 48;
+constexpr int kDrawLines = kLines - kLegacyLines;
+/** The text lines of the Macros tab (ng/drawvmm): the names of the eight cards, then the title, the count and the empty hint of the targets page of a macro. */
+enum MacroLine { MacroName0, MacroName7 = MacroName0 + 7, MacroTargetsTitle, MacroTargetsCount, MacroTargetsEmpty, kMacroLines };
+constexpr int kLineLen = 80;
 
-class Lines
+template <int N>
+class BasicLines
 {
 public:
     /** Set a line; the revision (and with it the value the host sees) changes only when the text does. */
     void set (int line, const char* text) noexcept
     {
-        if (line < 0 || line >= kLines)
+        if (line < 0 || line >= N)
             return;
         if (text == nullptr)
             text = "";
@@ -61,7 +71,7 @@ public:
         if (out == nullptr || cap == 0)
             return;
         out[0] = '\0';
-        if (line < 0 || line >= kLines)
+        if (line < 0 || line >= N)
             return;
         std::lock_guard<std::mutex> guard (mutex_);
         std::strncpy (out, text_[line], cap - 1);
@@ -70,7 +80,7 @@ public:
     /** 0 while the line is empty (the skin uses that as a gate: a native cell that belongs to the line shows only while it has text); otherwise a value in (0, 1] that differs from the one before at every new text. */
     float value (int line) const noexcept
     {
-        if (line < 0 || line >= kLines)
+        if (line < 0 || line >= N)
             return 0.0f;
         std::lock_guard<std::mutex> guard (mutex_);
         return text_[line][0] == '\0' ? 0.0f : static_cast<float> ((revision_[line] - 1) % 250 + 1) / 251.0f;
@@ -78,9 +88,12 @@ public:
 
 private:
     mutable std::mutex mutex_;
-    char text_[kLines][kLineLen] {};
-    uint32_t revision_[kLines] {};
+    char text_[N][kLineLen] {};
+    uint32_t revision_[N] {};
 };
+
+using Lines = BasicLines<kLines>;
+using MacroLines = BasicLines<kMacroLines>;
 
 constexpr int kRowLen = 64;
 
