@@ -18449,23 +18449,20 @@
        "componentData": {
         "version": 1,
         "name": "off veil",
-        "type": "oscNativeOffVeil",
+        "type": "Image",
         "data": {
-         "version": 1,
-         "handleName": "Data"
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "osc_off_veil.png"
         }
        },
        "handle remapping": {
         "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2964"
-         }
-        ]
+        "map": []
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
@@ -18482,23 +18479,20 @@
        "componentData": {
         "version": 1,
         "name": "off veil",
-        "type": "oscNativeOffVeil",
+        "type": "Image",
         "data": {
-         "version": 1,
-         "handleName": "Data"
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "osc_off_veil.png"
         }
        },
        "handle remapping": {
         "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2965"
-         }
-        ]
+        "map": []
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
@@ -18515,23 +18509,20 @@
        "componentData": {
         "version": 1,
         "name": "off veil",
-        "type": "oscNativeOffVeil",
+        "type": "Image",
         "data": {
-         "version": 1,
-         "handleName": "Data"
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "osc_off_veil.png"
         }
        },
        "handle remapping": {
         "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2968"
-         }
-        ]
+        "map": []
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
@@ -18548,23 +18539,20 @@
        "componentData": {
         "version": 1,
         "name": "off veil",
-        "type": "oscNativeOffVeil",
+        "type": "Image",
         "data": {
-         "version": 1,
-         "handleName": "Data"
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "osc_off_veil.png"
         }
        },
        "handle remapping": {
         "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2968"
-         }
-        ]
+        "map": []
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
@@ -24770,29 +24758,6 @@
        }
       }
      ]
-    }
-   },
-   {
-    "key": "oscNativeOffVeil",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": true,
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "b8090d19",
-       "image": ""
-      }
-     },
-     "componentsData": []
     }
    },
    {
