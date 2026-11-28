@@ -32,6 +32,16 @@ inline constexpr int kBankGap = 12;
 inline constexpr Rect kTitleRect { 14, 4, 260, 56 };
 inline constexpr Rect kSpectrumRect { 8, 72, 1264, 290 };
 
+// The add-target list of the Macros tab: the shared native picker of the Mod tab (mod_picker.* tokens, tab coordinates).
+inline constexpr int kPickerRows = 7;
+inline constexpr int kPickerRowStep = 60;
+inline constexpr Rect kPickerRow { 40, 96, 1200, 56 };
+inline constexpr Rect kPickerTitle { 280, 12, 720, 56 };
+inline constexpr Rect kPickerBack { 40, 12, 120, 56 };
+inline constexpr Rect kPickerGroups { 170, 12, 100, 56 };
+inline constexpr Rect kPickerPrev { 40, 548, 150, 56 };
+inline constexpr Rect kPickerNext { 1090, 548, 150, 56 };
+
 inline constexpr std::array<Point, 8> kCardPositions {{
     { 8, 382 },
     { 166, 382 },
