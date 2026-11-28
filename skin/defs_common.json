@@ -1746,7 +1746,7 @@
         "boundsType": "Absolute",
         "bounds": "8 0 324 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/3/Present"
+         "PresentGate"
         ]
        }
       },
@@ -1800,7 +1800,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Polarity"
+          "value": "PolarityGes"
          }
         ]
        },
@@ -1834,7 +1834,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Active"
+          "value": "ActiveGes"
          }
         ]
        },
@@ -1868,7 +1868,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Remove"
+          "value": "RemoveGes"
          }
         ]
        },
@@ -2154,6 +2154,22 @@
          {
           "key": "Remove",
           "value": "Parameter 3491"
+         },
+         {
+          "key": "PresentGate",
+          "value": "IndexedEnabling/2/3/Parameter 3514"
+         },
+         {
+          "key": "PolarityGes",
+          "value": "FromGesture/Parameter 3489"
+         },
+         {
+          "key": "ActiveGes",
+          "value": "FromGesture/Parameter 3490"
+         },
+         {
+          "key": "RemoveGes",
+          "value": "FromGesture/Parameter 3491"
          }
         ]
        },
@@ -2206,6 +2222,22 @@
          {
           "key": "Remove",
           "value": "Parameter 3495"
+         },
+         {
+          "key": "PresentGate",
+          "value": "IndexedEnabling/2/3/Parameter 3515"
+         },
+         {
+          "key": "PolarityGes",
+          "value": "FromGesture/Parameter 3493"
+         },
+         {
+          "key": "ActiveGes",
+          "value": "FromGesture/Parameter 3494"
+         },
+         {
+          "key": "RemoveGes",
+          "value": "FromGesture/Parameter 3495"
          }
         ]
        },
@@ -2258,6 +2290,22 @@
          {
           "key": "Remove",
           "value": "Parameter 3499"
+         },
+         {
+          "key": "PresentGate",
+          "value": "IndexedEnabling/2/3/Parameter 3516"
+         },
+         {
+          "key": "PolarityGes",
+          "value": "FromGesture/Parameter 3497"
+         },
+         {
+          "key": "ActiveGes",
+          "value": "FromGesture/Parameter 3498"
+         },
+         {
+          "key": "RemoveGes",
+          "value": "FromGesture/Parameter 3499"
          }
         ]
        },
@@ -2310,6 +2358,22 @@
          {
           "key": "Remove",
           "value": "Parameter 3503"
+         },
+         {
+          "key": "PresentGate",
+          "value": "IndexedEnabling/2/3/Parameter 3517"
+         },
+         {
+          "key": "PolarityGes",
+          "value": "FromGesture/Parameter 3501"
+         },
+         {
+          "key": "ActiveGes",
+          "value": "FromGesture/Parameter 3502"
+         },
+         {
+          "key": "RemoveGes",
+          "value": "FromGesture/Parameter 3503"
          }
         ]
        },
@@ -2362,6 +2426,22 @@
          {
           "key": "Remove",
           "value": "Parameter 3507"
+         },
+         {
+          "key": "PresentGate",
+          "value": "IndexedEnabling/2/3/Parameter 3518"
+         },
+         {
+          "key": "PolarityGes",
+          "value": "FromGesture/Parameter 3505"
+         },
+         {
+          "key": "ActiveGes",
+          "value": "FromGesture/Parameter 3506"
+         },
+         {
+          "key": "RemoveGes",
+          "value": "FromGesture/Parameter 3507"
          }
         ]
        },
@@ -2414,6 +2494,22 @@
          {
           "key": "Remove",
           "value": "Parameter 3511"
+         },
+         {
+          "key": "PresentGate",
+          "value": "IndexedEnabling/2/3/Parameter 3519"
+         },
+         {
+          "key": "PolarityGes",
+          "value": "FromGesture/Parameter 3509"
+         },
+         {
+          "key": "ActiveGes",
+          "value": "FromGesture/Parameter 3510"
+         },
+         {
+          "key": "RemoveGes",
+          "value": "FromGesture/Parameter 3511"
          }
         ]
        },
