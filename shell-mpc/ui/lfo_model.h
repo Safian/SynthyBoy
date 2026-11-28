@@ -85,10 +85,6 @@ struct PointSet
     int first() const noexcept { for (int i = 0; i < kMaxPoints; ++i) if (on[i]) return i; return -1; }
     int last() const noexcept { for (int i = kMaxPoints - 1; i >= 0; --i) if (on[i]) return i; return -1; }
     void selectAll (int n) noexcept { for (int i = 0; i < kMaxPoints; ++i) on[i] = i < n; }
-    /** A point was inserted at `at` (the points from `at` on moved up by one). */
-    void onInsert (int at) noexcept { if (at < 0 || at >= kMaxPoints) return; for (int i = kMaxPoints - 1; i > at; --i) on[i] = on[i - 1]; on[at] = false; }
-    /** The point `at` was removed (the points after it moved down by one). */
-    void onRemove (int at) noexcept { for (int i = std::max (0, at); i + 1 < kMaxPoints; ++i) on[i] = on[i + 1]; on[kMaxPoints - 1] = false; }
     bool operator== (const PointSet& o) const noexcept { for (int i = 0; i < kMaxPoints; ++i) if (on[i] != o.on[i]) return false; return true; }
 };
 
@@ -111,7 +107,6 @@ struct ShapeModel
     bool linkLoopEnds = false;  // loop boundary may keep its two Y values linked
 
     void initLinear() noexcept { n = 2; p[0] = { 0.0f, 0.0f, 0.0f }; p[1] = { 1.0f, 1.0f, 0.0f }; loop = -1; smooth = false; }
-
 
     /** The built-in shape as points: the sine and the triangle exactly, the stepped ones exactly (vertical steps), the curved ones (exp, half sine) sampled by 16 segments. The shape of a `Custom` LFO
         that has no points yet starts as a triangle. */

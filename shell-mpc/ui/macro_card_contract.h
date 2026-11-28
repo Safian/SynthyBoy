@@ -13,27 +13,18 @@ struct Point { int x, y; };
 
 inline constexpr int kCardW = 152;
 inline constexpr int kCardH = 238;
-inline constexpr int kChipsPadX = 4;
-inline constexpr int kChipsPadBottom = 4;
-inline constexpr int kChipsH = 56;
 
-inline constexpr Rect kDialRect { 0, 0, 152, 118 };
-inline constexpr Rect kKnobRect { 31, 4, 90, 90 };
 inline constexpr Rect kNativeKnobRect { 29, 2, 94, 92 };
 inline constexpr Rect kNameBoxRect { 8, 136, 136, 24 };
 inline constexpr Rect kNameHitRect { 4, 120, 144, 56 };
-inline constexpr Rect kValueRect { 8, 96, 136, 22 };
 inline constexpr Rect kTargetRect { 4, 178, 144, 56 };
 
 inline constexpr int kBarH = 64;
 inline constexpr int kMargin = 8;
 inline constexpr int kGap = 6;
-inline constexpr int kBankGap = 12;
 inline constexpr Rect kTitleRect { 14, 4, 260, 56 };
 inline constexpr Rect kSpectrumRect { 8, 72, 1264, 290 };
 
-// The add-target list of the Macros tab: the shared native picker of the Mod tab (mod_picker.* tokens, tab coordinates).
-inline constexpr int kPickerRows = 7;
 inline constexpr int kPickerRowStep = 60;
 inline constexpr Rect kPickerRow { 40, 96, 1200, 56 };
 inline constexpr Rect kPickerTitle { 280, 12, 720, 56 };

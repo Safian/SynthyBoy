@@ -196,13 +196,6 @@ protected:
 
 private:
     static size_t seqLen (unsigned char c) noexcept { return c < 0x80 ? 1 : (c >= 0xf0 ? 4 : (c >= 0xe0 ? 3 : (c >= 0xc0 ? 2 : 1))); }
-    static int countChars (const std::string& s) noexcept
-    {
-        int n = 0;
-        for (const char c : s)
-            n += (static_cast<unsigned char> (c) & 0xc0u) != 0x80u;
-        return n;
-    }
     void eraseLast()
     {
         if (text_.empty())

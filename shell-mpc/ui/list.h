@@ -71,7 +71,6 @@ public:
     /** Brings the current item into the window (the owner calls it when it opens the list). */
     void showCurrent() noexcept { first_ = std::clamp (state.current - visibleRows() / 2, 0, std::max (0, state.count - visibleRows())); }
     Rect rowRect (int row) const noexcept { const Rect b = box(); return { b.x + kPad, b.y + kPad + headerH() + (row - firstRow()) * kRowH, b.w - 2 * kPad - (scrolls() || reserveZone_ ? kZoneW : 0), kRowH }; }
-    void reserveScrollZone (bool reserve) noexcept { reserveZone_ = reserve; }
     bool scrolls() const noexcept { return state.count > visibleRows(); }
     /** The scroll zone (a touch there drags the thumb or pages) and the thumb. */
     Rect zoneRect() const noexcept { const Rect b = box(); return { b.right() - kPad - kZoneW, b.y + kPad + headerH(), kZoneW, b.h - 2 * kPad - headerH() }; }
@@ -88,13 +87,6 @@ public:
         Cell cell (sb, parent_);
         pen.rect (parent_, colour::rgba (theme::L().bg1, 190));
         drawList (pen, true);
-    }
-    void drawNativeChrome (gpu::SceneBuilder& sb) const
-    {
-        Pen pen (sb, enabled_);
-        Cell cell (sb, parent_);
-        pen.rect (parent_, colour::rgba (theme::L().bg1, 190));
-        drawList (pen, false);
     }
     Change touchDown (int x, int y, double nowMs) override
     {

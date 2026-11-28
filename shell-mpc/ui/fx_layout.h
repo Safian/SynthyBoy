@@ -47,12 +47,6 @@ struct Live
         return v >= 0 && v < 32 && ((set >> v) & 1u) != 0;
     }
     bool holds (float plainValue) const noexcept { return in (modes, plainValue); }
-    /** Is the control live: `valueOf (key)` the plain value of an engine key of the same effect. */
-    template <class ValueOf>
-    bool liveIn (ValueOf&& valueOf) const
-    {
-        return always() || (in (modes, static_cast<float> (valueOf (key))) && (key2 == nullptr || in (modes2, static_cast<float> (valueOf (key2)))));
-    }
 };
 
 /** One control of a cell: its engine key, when it is live, and a label where the one of the engine would not read well (nullptr: derived from the engine's name). */

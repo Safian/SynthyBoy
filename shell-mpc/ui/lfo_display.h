@@ -65,15 +65,6 @@ struct Data
 
 inline uint32_t a (uint32_t rgb, int alpha) noexcept { return (rgb << 8) | static_cast<uint32_t> (std::min (255, std::max (0, alpha))); }
 
-/** The width of the lead-in strip for a display rectangle. */
-inline int leadWidth (const Rect& r, const Data& d) noexcept
-{
-    const float s = d.delayShare + d.riseShare;
-    if (d.kind != Data::Kind::Shape || d.editing || s <= 0.0f)
-        return 0;
-    const int w = r.w - 16;
-    return std::clamp (static_cast<int> (std::lround (static_cast<float> (w) * s / (1.0f + s))), 20, static_cast<int> (static_cast<float> (w) * 0.3f));
-}
 inline bool hasLeadStrip (const Data& d) noexcept
 {
     return d.kind == Data::Kind::Shape && ! d.editing && (d.delayShare > 0.0f || d.riseShare > 0.0f);

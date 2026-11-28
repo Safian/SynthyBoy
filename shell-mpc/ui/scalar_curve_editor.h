@@ -177,7 +177,6 @@ public:
     }
     /** The table the engine reads (for the tests): bake () has run after every change. */
     const float* table() const noexcept { return table_.data(); }
-    size_t tableSize() const noexcept { return table_.size(); }
     bool operator== (const ScalarCurve& o) const noexcept { return snapshot() == o.snapshot(); }
 
     /** Bakes the points with the engine's code (the same calls as OwnContent::compileCurve). */
@@ -687,7 +686,6 @@ public:
     void setSource (scurve::Source s) { canvas.state.source = s; usedList.colour = canvas.lineColour(); sync(); }
     scurve::Source source() const noexcept { return canvas.state.source; }
     void setLegato (bool on) { legato.state.on = on; }
-    bool legatoOn() const noexcept { return legato.state.on; }
     void setGlide (const char* text) { setText (glideText, sizeof glideText, text); }
     void setUsedBy (const UsedBy& u) { used = u; }
     /** The curve of the content (not while a finger is down on the canvas). */
@@ -701,9 +699,7 @@ public:
     }
     Rect block (int i) const noexcept { return i >= 0 && i < kMaxGroups ? blocks_[i] : Rect {}; }
     void setOwnQFrames (bool own) noexcept { ownQFrames_ = own; }
-    Rect usedRect() const noexcept { return usedRect_; }
     Rect glideRect() const noexcept { return glideRect_; }
-    Rect usedRowRect (int row) const noexcept { return { usedRect_.x + 8, usedRect_.y + kTitleH - 12 + row * kRowH, std::max (0, usedRect_.w - 16), kRowH }; }
     /** Puts the model into the fields (the selected point, the grid, the buttons): after every change of the model and of the content. */
     void sync()
     {

@@ -21,16 +21,11 @@ public:
     static constexpr int kSlots = 4;
     static constexpr int kMaxCheck = 64;
 
-    static constexpr bool hasQFrame() noexcept { return QVisualPolicy::kHasQFrame; }
-    static constexpr int uiGeneration() noexcept { return QVisualPolicy::generation; }
-
     /** The sixteen-knob device maps all four banks at once. The four-knob device has one active bank. */
     static void setWideDevice (bool wide) noexcept { wideFlag().store (wide, std::memory_order_relaxed); }
     static bool wideDevice() noexcept { return wideFlag().load (std::memory_order_relaxed); }
     /** Which block of four knobs the group has while it is not the active one (QRouter::blockOfGroup): 0 the active group, 1 .. 3 the next groups of the page, -1 no knobs (the default). The page sets it for every group it publishes. */
     void setBlock (int block) noexcept { block_ = block; wideOffset_ = 0; }
-    /** The XL has a continuous row of knobs. A short group can end partway through a block. */
-    void setWideFirstSlot (int slot) noexcept { block_ = slot / kSlots; wideOffset_ = slot % kSlots; }
     /** The frame and marker follow the inactive look of a switched-off oscillator. */
     void setInactive (bool i) noexcept { inactive_ = i; }
     bool inactive() const noexcept { return inactive_; }
@@ -70,10 +65,7 @@ public:
                 slot_[i]->setQ (mark, i + 1);
     }
     void setFrameRect (const Rect& r) noexcept { frameRect_ = r; }
-    /** The active members keep their Q colour when a collective frame would cover unrelated controls. */
-    void setFrameless (bool f) noexcept { frameless_ = f; }
     bool frameless() const noexcept { return frameless_; }
-    Rect frameRect() const noexcept { return frameRect_; }
 
     /** The union of the members' rectangles. */
     Rect rect() const noexcept
@@ -110,12 +102,6 @@ public:
         (void) around;
 #endif
     }
-    /** Historical numbered-chip footprint for layout regression checks. */
-    static Rect chipRect (const Rect& member, int index) noexcept { return { member.x + 4, std::max (0, member.y - 15), index > 9 ? 26 : 18, 17 }; }
-    // Idle and wide groups have no numbered decorations.
-    void drawWide (gpu::SceneBuilder&) const {}
-    void drawIdle (gpu::SceneBuilder&) const {}
-    void drawMapped (gpu::SceneBuilder&) const {}
     static void drawMappedMembers (gpu::SceneBuilder&, int, const ControlModel* const*, int) {}
     static void drawMappedMembers (gpu::SceneBuilder&, int, const Component* const*, int) {}
 

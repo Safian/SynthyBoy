@@ -47,8 +47,6 @@ struct Change
     /** Depth: the modulation depth (-1 .. +1, `value`) of the source `index` (its id) of a knob / number field changed (a drag that started on the tab). ModsRequest: a long press asks for the
         list of the modulations of the control. */
     static Change depth (int id, int source, double d) noexcept { Change c; c.kind = ChangeKind::Depth; c.id = id; c.index = source; c.value = d; return c; }
-    /** AddRequest: the owner is asked to add the modulation source `source` (the "add source" row of the modulations page). */
-    static Change addRequest (int id, int source) noexcept { Change c; c.kind = ChangeKind::AddRequest; c.id = id; c.index = source; return c; }
     static Change modsRequest (int id) noexcept { Change c; c.kind = ChangeKind::ModsRequest; c.id = id; return c; }
     static Change none() noexcept { return {}; }
     static Change normalised (int id, double v) noexcept { Change c; c.kind = ChangeKind::Value; c.id = id; c.value = v; return c; }
@@ -113,13 +111,6 @@ struct ModInput
 };
 /** The tab at the top left: Absent (no modulation entries), Grey (entries, but not the selected source), Coloured (the selected source is in the entries), Hollow (and it is bypassed). */
 enum class TabState : uint8_t { Absent, Grey, Coloured, Hollow };
-inline TabState tabState (const ModInput& m) noexcept
-{
-    if (m.numMods <= 0)
-        return TabState::Absent;
-    const ModEntry* e = m.selected();
-    return ! e ? TabState::Grey : (e->bypassed ? TabState::Hollow : TabState::Coloured);
-}
 /** The ends (0 .. 1) of the depth arc around the value position v: unidirectional v .. v + depth, bidirectional v - |depth| .. v + |depth|, clamped to the range; from <= to. false when
     the selected source is not in the entries or is bypassed (no arc). */
 inline bool depthArc (const ModInput& m, double v, double& from, double& to) noexcept
@@ -170,10 +161,6 @@ public:
     void setId (int id) noexcept { id_ = id; }
     int param() const noexcept { return param_; }
     void setParam (int p) noexcept { param_ = p; }
-    const char* paramKey() const noexcept { return paramKey_; }
-    void setParamKey (const char* k) noexcept { paramKey_ = k ? k : ""; }
-    ParamHandle paramHandle() const noexcept { return { id_, param_, paramKey_ }; }
-    void setParamHandle (const ParamHandle& h) noexcept { id_ = h.id; param_ = h.param; paramKey_ = h.key ? h.key : ""; }
 
     // ---- native cell layout
     Rect rect() const noexcept { return rect_; }
