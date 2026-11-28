@@ -1,93 +1,17 @@
 # Releasing SynthyBoy
 
-How a release is cut, what is in it, what the Kick plugin manager reads from it, and how to test the same flow locally without GitHub.
-Design background: [ARCHITECTURE.md](ARCHITECTURE.md) sections 6 (content packs) and 7 (manifest).
+How a release is cut and what is in it. SynthyBoy ships for standalone Akai MPC hardware only (see [AGENTS.md](../AGENTS.md)).
 
 ## What a release contains
 
 | Asset | Made by | Content |
 |-------|---------|---------|
-| `com.safian.synthyboy-<version>-<platform>.zip` for `linux-armv7`, `linux-aarch64`, `linux-x86_64`, `macos-universal`, `windows-x64` | `scripts/package-release.py` | `synthyboy.clap` (the native module: the file Kick loads. It contains the bitmap GUI, `plugin.json` "gui", and a private statically linked JUCE 8; no JUCE of its own is visible to the host), `juce/SynthyBoy.clap` and `juce/SynthyBoy.vst3` for DAWs (all platforms except linux-armv7, which has the native shell only), `LICENSE`, `NOTICE`, `THIRD_PARTY.md`, `README.txt` |
-| Two MPC archives (armv7 and aarch64) | Open MPC release tool / scripts/package-mpc-release.py, see [Release package for the MPC](#release-package-for-the-mpc) | Each archive carries the matching plugin and display helper, skins and content. |
+| Two MPC archives (armv7 and aarch64) | Open MPC release tool / `scripts/package-mpc-release.py`, see [Release package for the MPC](#release-package-for-the-mpc) | Each archive carries the matching plugin and display helper, the skin and the factory presets |
 | `<packid>-<packversion>.zip` for every entry of `contentPacks` | `tools/contentpack/contentpack.py build-all` | `contentpack.json` + the files, all SHA-256 verified |
-| `plugin.json.release` | `scripts/fill-manifest.py` | the copy of `plugin.json` with status `released`, urls, SHA-256, sizes, `entry_point`, `assets[]` |
-| `SHA256SUMS` | `scripts/fill-manifest.py --sums` | `<sha256>  <file>` for every asset and the manifest |
-
-The zips are reproducible (sorted entries, fixed timestamps). `package-release.py` refuses a native binary of the wrong architecture for the platform name
-(ELF class / machine / ARM hard-float ABI, universal Mach-O with arm64 and x86_64, PE x86-64).
-
-## The bitmap GUI in the native module
-
-`synthyboy.clap` of every platform renders the editor itself and offers it through the CLAP extension `com.safian.bitmap-gui/1` ([BITMAP-GUI-EXTENSION.md](BITMAP-GUI-EXTENSION.md)):
-a host that cannot run the plug-in's toolkit (the Kick app on the MPC, a framebuffer) copies pixels and forwards input. `plugin.json` says so in its `gui` section
-(`kind: bitmap`, the extension ids, the preferred / minimum / maximum size, the builds that contain it); `scripts/check-manifest.py` compares it with
-`shell-clap/bitmap_gui_ext.h`, `shell-juce/ui/Editor.h` and `shell-clap/bitmap/BitmapSession.h`, so the manifest cannot promise what the module does not do, and
-`fill-manifest.py` lists only the builds of the release in it. What the build checks for a module:
-
-* **Exports**: `scripts/check-clap-exports.sh synthyboy.clap` (ctest `synthyboy_clap_exports`, the release workflow, the ARMv7 script): only `clap_entry` and
-  `synthyboy_clap_get_entry` are visible (version script on Linux, exported symbols list on macOS, `__declspec(dllexport)` on Windows). The JUCE inside is private.
-* **Dependencies (Linux)**: the module needs only libc, libm, libstdc++ and libgcc_s (and the dynamic loader). FreeType is linked statically, the glyphs are the embedded Roboto
-  (no fontconfig), ALSA / JACK are compiled out, libX11 is not linked (JUCE loads it on demand and the GUI never opens a display). `scripts/build-armv7-clap.sh` fails the build otherwise.
-* **Option**: `SYNTHYBOY_BITMAP_GUI` (CMake) is ON with the JUCE plug-in and in the ARMv7 script, OFF otherwise (`--no-ui` of the script builds the JUCE free module without it). The static
-  library `synthyboy_static` (iOS) never contains it: `scripts/check-no-vital.sh` stays clean.
 
 ## Product versioning
 
 The product version is set in CMakeLists.txt through the project VERSION and SYNTHYBOY_BUILD_NUMBER, and in plugin.json through version and build. All other versions derive from these entries. The VST2 integer version follows the formula major multiplied by 1000 plus minor multiplied by 100 plus patch multiplied by 10 plus the build number, meaning version 0.1.0 build 1 evaluates to 101. Format versions for state and presets remain completely separate, so earlier projects and presets continue to load because the plugin only validates the state document format version. The packs carry their own version field, and for the first release all of them are 0.1.0.
-
-## Cutting a release
-
-1. Set the version in `CMakeLists.txt` (`project(SynthyBoy VERSION x.y.z)` and `set(SYNTHYBOY_BUILD_NUMBER n)`) and in `plugin.json` (`version` and `build`); `scripts/check-manifest.py` fails if they differ.
-   If a content pack changed, raise its version in its `contentpack.json` and in `plugin.json` (same check) and regenerate its file list
-   (`python3 tools/contentpack/contentpack.py manifest --dir content/presets`).
-2. Merge to the release commit, wait for the `build` workflow to be green on it. The release workflow refuses a tagged commit without a successful `build.yml` run.
-3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The tag must be `v<version of plugin.json>`. (Or run the `release` workflow by hand from the Actions tab: it uses the
-   tag name `v<version>`; GitHub creates the tag only when the draft is published.) The workflow never runs on a normal push or pull request.
-4. `.github/workflows/release.yml`: `verify` (tag, `check-manifest.py`, green build) -> `build` (five platform jobs in parallel; linux-armv7 is the Docker build of
-   `scripts/build-armv7-clap.sh`, Debian 12, JUCE sources and helper tool fetched / built in the container) and `packs` -> `draft`: downloads the zips, runs `fill-manifest.py --repo ... --tag ...` and `check-manifest.py --released --assets`,
-   creates the **draft** release with all assets.
-5. Open the draft, check the assets (`SHA256SUMS`, `plugin.json.release`), then publish it by hand. Nothing in the workflow publishes.
-6. Kick side: give the plugin manager the `plugin.json.release` of the release (Kick signs it with the project key, see below).
-
-A failed run leaves no release. A draft for a tag that already has a release is refused by `gh release create`; delete the old draft first.
-
-## What the Kick side reads
-
-Kick's `PluginManifest` (`Kick/clap_host/src/PluginManifest.cpp`) parses `plugin.json.release`:
-`id`, `name`, `version`, `author`, `license`, `homepage`, `description`, `kind`, `min_host_version`, `builds{platform: url, sha256, size, entry_point}`,
-`assets[]` (`id`, `name`, `version`, `url`, `sha256`, `size`, `required`, `type`, `license`), `permissions`, `key_id`, `signature`.
-It picks the build of the host platform (`macos-universal` serves arm64 and x86_64) and uses `entry_point` (the `.clap` inside the zip) to find the module; entries
-without a SHA-256 are rejected, which is why a partial (local) manifest lists only the platforms that were built. `assets[]` are the content packs
-(`required: false` packs are optional downloads); the plugin itself never downloads anything.
-
-Open point on the Kick side (not verifiable from this repo): the `PluginInstaller` in the Kick checkout this was written against (`fo-repo-mozgas-51f099`)
-installs from an unpacked directory that holds `manifest.json` and the `.clap`; fetching `url`, checking size / SHA-256 and unpacking the zip is not in that
-code. Until the downloader exists, test by hand: unzip the platform zip, save `plugin.json.release` next to `synthyboy.clap` as `manifest.json`.
-
-**Which fields Kick signs:** `canonicalSigningPayload()` is the manifest re-serialised from the fields above without `signature`, so `key_id`, `builds` (url, sha256, size,
-entry_point) and `assets[]` are covered. The fields Kick does not parse (`schemaVersion`, `clap_id`, `static`, `contentPacks`, `path`, `status`) are not signed
-and not used by Kick; they are for this repo's checks and the static (iOS / Android) loader. The repo never contains a signature or a key: the checked-in file
-has neither `key_id` nor `signature`, and `signature`, if present, must be 128 hex characters.
-
-## Testing the flow locally (no GitHub)
-
-```
-scripts/make-local-release.sh                 # linux-armv7 (Docker) + the host platform + the packs -> dist/
-scripts/make-local-release.sh --with-juce     # also the JUCE CLAP / VST3 of the host platform in its zip
-scripts/make-local-release.sh --no-armv7      # without Docker
-scripts/make-local-release.sh --file-urls     # absolute file:// urls instead of urls relative to dist/plugin.json.release
-```
-
-The macOS Audio Unit (`SynthyBoy.component`, `SynthyBoy_AU` target) is built by `scripts/build.sh` next to the VST3 and CLAP, but is not yet part of the release zips (`--with-juce` packs CLAP and VST3 only); it needs the same signing and notarisation as the other bundles. The MPC VST2 build is independent of it.
-
-Result in `dist/` (git-ignored): the zips, `plugin.json.release` (urls relative to it, so the folder can be copied to a USB stick or served with
-`python3 -m http.server`), `SHA256SUMS`. The script clears old zips in the output folder first, and finishes with `check-manifest.py --local`.
-Docker not usable: the script prints the exact commands for a Debian 12 / Ubuntu Linux host (`scripts/build-armv7-clap.sh --print-manual`) and warns loudly
-that linux-armv7 was not built; `--require-armv7` makes that an error, `--armv7-clap FILE` takes a binary built elsewhere. Building the ARMv7 module on a
-newer distribution is not advised: its glibc is what the device needs (Debian 12: 2.36, the Kick app's toolchain). An image that already has the toolchain
-can be given with `ARMV7_IMAGE` (e.g. `kick-armv7-builder:latest`); missing packages are installed in the throw-away container.
-
-Nothing in these scripts talks to a device.
 
 ## Content packs
 
@@ -194,10 +118,5 @@ scripts/build-mpc.sh --xpl-presets xl --dump-tool build-native/shell-mpc/dump_mp
 > [!NOTE]
 > **Checked on the Key 61:** a set written with the XL path (`/nvme/VST2 Plugins/.../synthyboy-arm64.so`) shows its list and loads its presets on the Key 61, so the `file=` path of `<PLUGIN>` need not match the device; one shared set serves both (`XPL_PATH_MODE=shared`, the default). `scripts/mpc-fix-xpl-paths.py` stays as a tool. Not verified: the shared set on the MPC XL itself after a package install.
 
-
-## Pins and secrets
-
-All actions in `release.yml` are pinned by commit SHA (checkout, upload-artifact), everything else is the preinstalled `gh` CLI with the job's `GITHUB_TOKEN`
-(`contents: write` only in the last job). The manifest and the scripts hold no secret.
 
 [mpc-tasks]: ../TODO.md
