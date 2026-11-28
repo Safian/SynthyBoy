@@ -115224,9 +115224,10 @@
          "name": "Keyboard Panel Box",
          "type": "Image",
          "data": {
-          "version": 1,
-          "image": "native_kbd_bg_4054647d803b45aa6657.png",
-          "imageType": "Regular"
+          "version": 2,
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "native_kbd_bg_4054647d803b45aa6657.png"
          }
         },
         "handle remapping": {
@@ -115320,9 +115321,10 @@
          "name": "Keyboard Text Field Frame",
          "type": "Image",
          "data": {
-          "version": 1,
-          "image": "native_kbd_bg_52f05d8358c5d6fe39be.png",
-          "imageType": "Regular"
+          "version": 2,
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "native_kbd_bg_52f05d8358c5d6fe39be.png"
          }
         },
         "handle remapping": {
