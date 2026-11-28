@@ -69,9 +69,9 @@ A screen never draws a control face with its own code: buttons, dropdowns, selec
 - Lists use the host MenuOverlay as it is: a row tap marks the row, a tap on the list header applies and closes. No select-and-close, no custom badges in rows, names only.
 - Evidence: the Key 61 probes A/B closed the list but lost the selection, because the skin action triggers cannot be ordered (SDK `ui-reference.md`, section on onAction); report in `/private/tmp/claude-501/list-probe/results/`. A plugin-drawn drawer (SDK-PORTING) is the only way to get select-and-close and is not planned.
 
-## Text input is a native keyboard (owner, 2026-11-27)
+## Text input is our own C++ keyboard (owner, 2026-11-28)
 
-Text input (Macro rename, LFO shape name) must be a NATIVE keyboard: no C++ overlay control. The host TextEditOverlay does not deliver typed text to a third-party plugin on the XL (our disassembly of /usr/bin/MPC 3.10.1.12: the string setter is never called for plugin parameters; unverified on the Key 61). The solution is a keyboard built from native Button components, each key writing a code into a plugin parameter (`TextEdit Context`, `TextEdit Key`, `TextEdit Text`), the text shown by a Label from the display string of the text parameter; the plan, risks and the Key 61 probe are in /private/tmp/claude-501/textentry-research/REPORT.md (copied to docs/review/TEXT-ENTRY-NATIVE-KEYBOARD-2026-11-27.md). Until the probe proves it, the C++ popup keyboard (`shell-mpc/ui/text_entry.h`) stays in the code and is removed with the native keyboard.
+Text input (Macro rename, LFO shape name) uses our own plugin-drawn keyboard (`shell-mpc/ui/text_entry.h`). There is no system keyboard: the host TextEditOverlay does not deliver typed text to a third-party plugin (XL disassembly of /usr/bin/MPC 3.10.1.12; unverified on the Key 61). The native Button keyboard (components/native/keyboard, `TextEdit` parameters) was tried and deleted; do not rebuild it.
 
 ## MPC questions: no guessing, ask the expert, teach it once (owner, 2026-11-27)
 
