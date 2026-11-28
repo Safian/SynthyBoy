@@ -39,7 +39,8 @@ inline constexpr int kSlotHandles[] = {
     3790, 3791, 3792, 3793, 3794, 3795, 3796, 3797, 3798, 3799, 3800, 3801,
     3012, 3014, 3442,
     3004, 2979, 2986, 2987,
-    2820, 2821, 2827, 2830, 2831, 2835
+    2820, 2821, 2827, 2830, 2831, 2835,
+    3658, 3659, 3660
 };
 constexpr int kSlots = static_cast<int> (sizeof (kSlotHandles) / sizeof (kSlotHandles[0]));
 

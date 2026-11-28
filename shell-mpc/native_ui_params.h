@@ -122,6 +122,7 @@ constexpr int kMasterScaleInput = kMixerStereoBase + kMixerStereoFields * kMixer
 // marks that route while the host's current-choice indicator follows the edited filter.
 constexpr int kFilterChainMenu = kMasterScaleInput + 1;
 constexpr int kFilterChainRoutes = 3, kFilterChainLastChoice = kFilterChainRoutes - 1;   // the routing only (Parallel, F1 to F2, F2 to F1)
+inline constexpr const char* kFilterChainNames[kFilterChainRoutes] = { "Parallel", "F1 to F2", "F2 to F1" };
 constexpr int kFxEditorPower = kFilterChainMenu + kFilterChainRoutes;
 constexpr int kLfoTargetsAction = kFxEditorPower + 1;
 // The band lanes of an FX splitter (components/native/band_lane): lane after lane, kLaneHandles each (shell-mpc/native_fx_bands.h).

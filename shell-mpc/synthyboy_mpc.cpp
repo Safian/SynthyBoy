@@ -4141,7 +4141,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, "Filter chain");
                 else if (opcode == effGetParamDisplay)
-                    synthyboy_mpc::putBounded (buf, kCap, std::array<const char*, nativeui::kFilterChainRoutes> { "Parallel", "F1 to F2", "F2 to F1" }[static_cast<size_t> (inst->filterRoutingChoice())]);
+                    synthyboy_mpc::putBounded (buf, kCap, nativeui::kFilterChainNames[static_cast<size_t> (inst->filterRoutingChoice())]);
                 return 1;
             }
             if (nativeui::isModDetailControlOffset (offset))
@@ -6861,6 +6861,16 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
     if (! isNativeUiParam (hostIndex))
         return false;
     const int offset = hostIndex - nativeUiBase();
+
+    // ---- Filter chain routing (Parallel, F1 to F2, F2 to F1)
+    if (nativeui::isFilterChainMenu (offset))
+    {
+        if (nativeFilter.layout() == 0)
+            return false;
+        choiceNames (nativeui::kFilterChainNames, nativeui::kFilterChainRoutes, filterRoutingChoice());
+        title ("FILTER CHAIN");
+        return true;
+    }
 
     // ---- the standalone LFO / RND page choice fields (WAVEFORM, STYLE, DIVISION, MODE, DIRECTION)
     if (offset >= nativeui::kLfoBase && offset < nativeui::kFilterBase)
