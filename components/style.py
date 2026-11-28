@@ -36,12 +36,12 @@ def color(name):
     return value.lower()
 
 
-CONTROL_LOOKS = ("legacy", "flat")
+CONTROL_LOOKS = ("shaded", "flat")
 
 
 def control_look():
     """The look of the skin's controls (buttons, dropdowns, segmented faces): the token `control.look`
-    ("legacy": the old gradient/bubble design, the owner's decision of 2026-11-27), or "flat" for the A/B
+    ("shaded": the old gradient/bubble design, the owner's decision of 2026-11-27), or "flat" for the A/B
     comparison via the environment variable SYNTHYBOY_CONTROL_LOOK=flat."""
     import os
     look = os.environ.get("SYNTHYBOY_CONTROL_LOOK") or size("control.look")

@@ -119,9 +119,9 @@ class TestNativeMacroCard(unittest.TestCase):
         self.assertEqual(card.size, (152, 238))
         arr = np.array(card)
 
-        # 1. No red pixels (GenericLegacy legacy red knob is forbidden; our active arc is cyan #4c8dff)
+        # 1. No red pixels (generic red knob is forbidden; our active arc is cyan #4c8dff)
         red_mask = (arr[:, :, 0] > 200) & (arr[:, :, 1] < 60) & (arr[:, :, 2] < 60)
-        self.assertEqual(np.sum(red_mask), 0, "No red GenericLegacy pixels permitted in MacroCard")
+        self.assertEqual(np.sum(red_mask), 0, "No red generic-knob pixels permitted in MacroCard")
 
         # 2. No yellow Q-Link badge pixels (Yellow: R > 200, G > 180, B < 80)
         yellow_mask = (arr[:, :, 0] > 200) & (arr[:, :, 1] > 180) & (arr[:, :, 2] < 80)

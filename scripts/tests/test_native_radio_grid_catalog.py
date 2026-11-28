@@ -64,11 +64,11 @@ class RadioGridTests(unittest.TestCase):
             cells = [cell(image, sample, i).tobytes() for i in range(len(sample["items"]))]
             self.assertEqual(cells.count(cells[sample["selected"]]), 1, sample["id"])
 
-    def test_unselected_buttons_are_the_button_legacy_face(self):
+    def test_unselected_buttons_are_the_button_shaded_face(self):
         from components.native.button.button import action_art
         sample = BY_ID["row-1x4"]
         width, height = radio_grid.layout(sample)["button"]
-        face = action_art(text="HZ", width=width, height=height, look="legacy")
+        face = action_art(text="HZ", width=width, height=height, look="shaded")
         self.assertEqual(cell(stored(sample["file"]), sample, 0).tobytes(), face.tobytes())
 
     def test_disabled_differs_and_has_no_accent(self):

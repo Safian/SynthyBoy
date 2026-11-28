@@ -260,7 +260,7 @@ if present:
 PYTHON
 skin_checks=()
 if [[ "$native_skin" == ON ]]; then
-    skin_checks+=(--check-legacy-display-bindings)
+    skin_checks+=(--check-display-bindings)
 fi
 python3 "$repo_root/scripts/validate_synthyboy_skin.py" ${skin_checks[@]+"${skin_checks[@]}"} "$plugin_folder"
 

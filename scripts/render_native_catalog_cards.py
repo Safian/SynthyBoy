@@ -4,7 +4,7 @@
 """Standalone preview generator for catalog cards of native SynthyBoy MPC components.
 
 Generates catalog-specific preview images (prefixed catalog-) inside components/native/<component>/img/:
-- Button / IconButton: size samples in the legacy and ghost looks (button/img, icon_button/img)
+- Button / IconButton: size samples in the shaded and ghost looks (button/img, icon_button/img)
 - Selector: Filter MODEL and Voice step selector at their runtime sizes
 - MacroCard: direct single MacroCard component sample (298x172)
 """
@@ -112,7 +112,7 @@ def render_header_cards():
 
 
 def render_button_cards():
-    """Button and IconButton samples from their catalogue entries (the Button recipe, look legacy / ghost)."""
+    """Button and IconButton samples from their catalogue entries (the Button recipe, look shaded / ghost)."""
     from components.native.button import button
     from components.native.icon_button import icon_button
     for name, module, key, samples in (("button", button, "button", button.button_samples),

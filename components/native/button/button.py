@@ -37,7 +37,7 @@ def gradient_face(size, *, inset, radius, frame, fill, line, span):
 
     fill and line are (top, bottom) RGB pairs: the fill is constant down to span["start"] (a fraction of the box
     height), darkens linearly to span["end"] and is constant below; the keyline follows the same ramp when its two
-    colours differ. Used by the dropdown (selector.render_dropdown_face) and the button look "legacy" (action_art),
+    colours differ. Used by the dropdown (selector.render_dropdown_face) and the button look "shaded" (action_art),
     so both share control.gradient. `size`, `inset`, `radius` and `frame` are in the caller's (supersampled) pixels.
     """
     mask = Image.new("L", size)
@@ -76,7 +76,7 @@ def semibold(size):
     return ImageFont.truetype(str(FONT_FILE), size)
 
 
-LOOKS = ("flat", "legacy", "active", "ghost")
+LOOKS = ("flat", "shaded", "active", "ghost")
 
 
 def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), height=None, look=None):
@@ -84,10 +84,10 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
 
     height: None keeps the 48 px face every skin button uses; 32 / 40 / 48 / 56 take their `button.size.<px>`
             tokens (font, radius, text padding) and scale the icon about the box centre.
-    look:   None     the skin default: `control.look` (legacy; SYNTHYBOY_CONTROL_LOOK=flat gives the flat face back);
+    look:   None     the skin default: `control.look` (shaded; SYNTHYBOY_CONTROL_LOOK=flat gives the flat face back);
             "flat"   the flat face (button.surface / button.border);
-            "legacy" the old Play-panel face: the control.gradient fill and keyline (button.gradient.* colours);
-            "active" the legacy gradient shape filled with the accent (accent.cyan to radio.active.bottom, keyline
+            "shaded" the old Play-panel face: the control.gradient fill and keyline (button.gradient.* colours);
+            "active" the shaded gradient shape filled with the accent (accent.cyan to radio.active.bottom, keyline
                      radio.active.border); the caller passes colour=radio.active.text (RadioGrid's selected button);
             "ghost"  no face at all (no fill, no keyline): the icon or text only, on a transparent picture.
     """
@@ -108,8 +108,8 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
     if width < minimum or (icon and width != box_height):
         raise ValueError("Button width does not fit its content")
     size = (width * scale, box_height * scale)
-    if look in ("legacy", "active"):
-        if look == "legacy":
+    if look in ("shaded", "active"):
+        if look == "shaded":
             fill = (_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom"))
             line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
         else:   # the selected face of a group: the accent fill (the radio.active tokens) on the same gradient shape
@@ -306,12 +306,12 @@ __all__ = [
 def text_face(label, size, *, geometry, surface, border, text, gradient=False, accent=None):
     """Token-configured native action face for compact fixed-layout toolbars.
 
-    gradient: the face follows the skin's control look (`control.look`): "legacy" draws the shared button gradient
+    gradient: the face follows the skin's control look (`control.look`): "shaded" draws the shared button gradient
     (button.gradient.*) instead of the flat surface/border tokens; `accent` (a colour token) then overrides the
     gradient keyline, e.g. the active route button. Disabled faces pass gradient=False and stay flat grey."""
     metrics = _style_size(geometry)
     width, height = size
-    if gradient and _control_look() == "legacy":
+    if gradient and _control_look() == "shaded":
         scale = _style_size("sampling.standard")
         line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
         if accent is not None:
@@ -340,10 +340,10 @@ def write_switch_asset(path, active):
     width, height = geometry["size"]
     image = Image.new("RGBA", (width, height))
     pen = ImageDraw.Draw(image)
-    legacy = _control_look() == "legacy"
+    shaded = _control_look() == "shaded"
     pen.rounded_rectangle((0, 0, width - 1, height - 1), radius=geometry["radius"],
-                           fill=_style_color("accent.cyan" if active else ("button.gradient.top" if legacy else "button.surface")),
-                           outline=_style_color("button.gradient.border" if legacy else "button.switch.border"),
+                           fill=_style_color("accent.cyan" if active else ("button.gradient.top" if shaded else "button.surface")),
+                           outline=_style_color("button.gradient.border" if shaded else "button.switch.border"),
                            width=geometry["stroke"])
     x = geometry["thumb_on_x" if active else "thumb_off_x"]
     y, size = geometry["thumb_y"], geometry["thumb_size"]
@@ -356,10 +356,10 @@ SAMPLE_STATES = ("enabled", "disabled")
 
 
 def render_sample(sample):
-    """One catalogue picture: the text button in the legacy look at its height token; disabled = dim_artwork of it."""
+    """One catalogue picture: the text button in the shaded look at its height token; disabled = dim_artwork of it."""
     from components.style import dim_artwork
     height = sample["height"] if isinstance(sample["height"], int) else _style_size(sample["height"])
-    face = action_art(text=sample["text"], height=height, look="legacy")
+    face = action_art(text=sample["text"], height=height, look="shaded")
     return dim_artwork(face) if sample["state"] == "disabled" else face
 
 

@@ -141,7 +141,7 @@ def render_button_face(
         border = _style_rgb("button.border")
         fg = _style_rgb("text.icon")
 
-    if _control_look() == "legacy":
+    if _control_look() == "shaded":
         # The shared button gradient (button.gradient.*); the state keyline colour stays, the pressed fill is its own.
         scale = _style_size("sampling.standard")
         fill = (bg, bg) if state == STATE_PRESSED else (_style_rgb("button.gradient.top"), _style_rgb("button.gradient.bottom"))

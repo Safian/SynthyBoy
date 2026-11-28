@@ -125,7 +125,7 @@ def fx_card_definition(skins_dir, prefix, power_size, select_size, down, labels,
         for handle, offsets, height in labels:
             left, top, reserved, label_height = offsets
             label = native_label("Value", (left, down + top, select_size[0] - reserved, label_height), height,
-                                 _argb("text.icon") if enabled else _argb("fx.legacy.959595"))
+                                 _argb("text.icon") if enabled else _argb("fx.grey.959595"))
             label["handle remapping"]["map"] = [{"key": "Data", "value": handle}]
             label["bounds"]["version"] = 2
             label["bounds"]["additionalInvalidatingHandles"] = list(gates)
@@ -269,7 +269,7 @@ def render_band_lane(path, skins_dir=None):
                 select = Image.open(out / ("band_lane_unselected.png" if on else "band_lane_bypassed.png"))
                 canvas.alpha_composite(select, (x, top + _size("band_lane.card_power")[1]))
                 draw.text((x + select.width / 2, top + _size("band_lane.card_power")[1] + select.height / 2), label, font=semibold(12),
-                          fill=_color("text.icon" if on else "fx.legacy.959595"), anchor="mm")
+                          fill=_color("text.icon" if on else "fx.grey.959595"), anchor="mm")
             add = _size("band_lane.add")
             canvas.alpha_composite(Image.open(out / "band_lane_add.png"), (pad + add[0], top + add[1]))
         Path(path).parent.mkdir(parents=True, exist_ok=True)

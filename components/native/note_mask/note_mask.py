@@ -3,7 +3,7 @@
 """NOTE MASK: the twelve notes of an octave as toggle buttons laid out like a piano (a set of notes, any number of them on).
 
 The seven white notes (C D E F G A B) stand in the lower row under their place; the five black ones (C# D# F# G# A#) in the upper row, centred on the border between the two white notes around them. Every cell is the Button
-recipe (`button.action_art(text=..., look=...)`): a note that is not in the set = the legacy gradient face (`control.gradient`, `button.gradient.*`), a note that is in the set = look "active" (accent fill, `radio.active.*`).
+recipe (`button.action_art(text=..., look=...)`): a note that is not in the set = the shaded gradient face (`control.gradient`, `button.gradient.*`), a note that is in the set = look "active" (accent fill, `radio.active.*`).
 A cell is `note_mask.row_h` (56) px high; the mask is two rows and `note_mask.gap` (= `header.gap`, 8) px high: 2 x 56 + 8 = 120. A face is `note_mask.inset` px narrower than its hit rectangle on each side, so neighbours do not touch.
 Bits: note 0 = C .. note 11 = B. Disabled: `style.dim_artwork`. In the skin the mask is a local definition of twelve Buttons bound to the handles `Note0` .. `Note11` (`build_definition`); the owner of the page writes the mask
 parameter from the gestures (shell-mpc/overlay/osc_ui.h publishNativeNoteMask). Docs: docs/ui-components/note_mask.md.
@@ -60,7 +60,7 @@ def cell_art(note, lit, rect, enabled=True):
     if lit:
         face = action_art(text=NOTES[note], width=face_w, height=h, look="active", colour=_style_color("radio.active.text"))
     else:
-        face = action_art(text=NOTES[note], width=face_w, height=h, look="legacy")
+        face = action_art(text=NOTES[note], width=face_w, height=h, look="shaded")
     image = in_slot(face, (w, h))
     return image if enabled else dim_artwork(image)
 

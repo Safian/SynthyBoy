@@ -1037,10 +1037,10 @@ def _text(draw, xy, text, size, colour, anchor):
 
 
 def sm_face(letter, state, width):
-    """S or M: the Button recipe (legacy look, 32 px); active states take the solo_mute colours (solo cyan, mute red) in text and keyline."""
+    """S or M: the Button recipe (shaded look, 32 px); active states take the solo_mute colours (solo cyan, mute red) in text and keyline."""
     height = _size("mixer_strip.design.row")
     colour = {"solo": "accent.cyan", "mute": "accent.red"}.get(state, "text.icon")
-    face = action_art(text=letter, width=width, height=height, colour=_color(colour), look="legacy")
+    face = action_art(text=letter, width=width, height=height, colour=_color(colour), look="shaded")
     if state in ("solo", "mute"):
         scale = _size("knob.supersample")
         big = face.resize((width * scale, height * scale), Image.Resampling.LANCZOS)

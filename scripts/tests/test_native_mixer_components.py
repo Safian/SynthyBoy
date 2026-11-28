@@ -210,7 +210,7 @@ class TestNativeMixerComponents(unittest.TestCase):
             self.assertIn(expected, defs, f"Shared definition {expected} must be registered")
 
         # Point A: Shared Header/SoloMutePair and MeterBlock MUST actually be instanced in all 3 strip variants!
-        # No dead definitions and no legacy direct Button/Meter children.
+        # No dead definitions and no direct Button/Meter children.
         for strip_key, hdr_type, mb_type in (
             ("mixerStripSource", TYPE_HEADER_SOURCE, TYPE_METER_BLOCK_SOURCE),
             ("mixerStripBus", TYPE_HEADER_BUS, TYPE_METER_BLOCK_BUS),
@@ -220,8 +220,8 @@ class TestNativeMixerComponents(unittest.TestCase):
             child_types = [c["componentData"]["type"] for c in children]
             self.assertIn(hdr_type, child_types, f"{strip_key} must instance {hdr_type}")
             self.assertIn(mb_type, child_types, f"{strip_key} must instance {mb_type}")
-            self.assertNotIn("Button", child_types, f"{strip_key} must not contain legacy direct Button")
-            self.assertNotIn("Meter", child_types, f"{strip_key} must not contain legacy plain Meter")
+            self.assertNotIn("Button", child_types, f"{strip_key} must not contain direct Button")
+            self.assertNotIn("Meter", child_types, f"{strip_key} must not contain plain Meter")
 
         # SoloMutePair definitions must expose read-only five-frame state faces and independent Button hitboxes
         for sm_key, visual_handle in (
