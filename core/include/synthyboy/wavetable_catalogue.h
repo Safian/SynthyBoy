@@ -104,6 +104,9 @@ WavetableCatalogue buildWavetableCatalogue (const ICatalogueFs& fs, const Catalo
 
 /** The file of the same category `dir` (-1 / +1) away from entry `entry` of category `category`, skipping refused files and built-in tables: false at the ends (no wrap) or when `entry` is not a file. */
 bool neighbourFile (const WavetableCatalogue& catalogue, int category, int entry, int dir, int& outEntry) noexcept;
+/** The entry `dir` (-1 / +1) away from entry `entry` of category `category` in catalogue order ACROSS the categories (the last table of a category is followed by the first of the next one): built-in tables
+    and files without a refusal count, refused files and empty categories are skipped. False at the global first / last entry (no wrap) or for an invalid start. */
+bool neighbourEntry (const WavetableCatalogue& catalogue, int category, int entry, int dir, int& outCategory, int& outEntry) noexcept;
 /** The position of entry `entry` among the loadable files of its category (`index` of `count`, both from 0 / 1): for the stepper. False when it is not a loadable file. */
 bool filePosition (const WavetableCatalogue& catalogue, int category, int entry, int& index, int& count) noexcept;
 

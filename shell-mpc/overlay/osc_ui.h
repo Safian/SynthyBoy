@@ -185,7 +185,7 @@ public:
         Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
         SnapBit,     // the toggle for bit 12 of the same parameter (snap the played note, not the transpose)
         Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser
-        Table,       // the table of a wavetable oscillator: a built-in table (the choice parameter) or a table FILE (content); the name opens the wavetable browser, the arrows step the 15 choices or the files of the category
+        Table,       // the table of a wavetable oscillator: a built-in table (the choice parameter) or a table FILE (content); the name opens the wavetable browser, the arrows step the whole catalogue as one sequence (across the categories)
         Inert        // no value: a button
     };
 
@@ -2679,8 +2679,9 @@ private:
             }
         return false;
     }
-    /** The table stepper: the name of the built-in table, or the title of the file when the oscillator plays one (the parameter is "Preset table" and the content has the file). With a file the stepper has three
-        positions (previous, this, next: the arrows are the files of the category, dimmed at its ends once the catalogue says where the file is), else the 15 choices of the parameter. */
+    /** The table stepper: the name of the built-in table, or the title of the file when the oscillator plays one (the parameter is "Preset table" and the content has the file). The stepper has three positions
+        (previous, this, next: the arrows step the whole catalogue across the categories, dimmed only at its global first / last entry once the catalogue says where the table is); a table the catalogue cannot
+        place steps the 15 choices of the parameter. */
     void showTable (oscmodel::Cell& st, const Item& it, float plain, const IInstanceView& v) const
     {
         const synthyboy::ParamInfo& pi = info (it.param);
@@ -2688,24 +2689,29 @@ private:
         std::string pack, file, title;
         const bool have = contentTable (v, pack, file, title);
         showStepper (st, it.param, plain);
-        if (choice != synthyboy::kWavetablePresetTable || ! have)
-            return;
-        oscmodel::setText (st, title.c_str());
+        const bool fileTable = choice == synthyboy::kWavetablePresetTable && have;
+        if (choice == synthyboy::kWavetablePresetTable && ! have)
+            return;   // "Preset table" without a file: the catalogue has no place for it, the choices step
+        if (fileTable)
+            oscmodel::setText (st, title.c_str());
         if (! stepValid_)
         {
             st.count = 3; st.index = 1; st.wrap = false;   // the catalogue is read at the first step: both arrows are lit until then
             return;
         }
-        int entry = -1, index = 0, count = 0;
-        const int category = stepCat_.findFile (pack, file, entry);   // where the file the content names stands in the catalogue we have
-        if (category >= 0 && synthyboy::filePosition (stepCat_, category, entry, index, count))
+        int entry = -1;
+        const int category = fileTable ? stepCat_.findFile (pack, file, entry) : stepCat_.findBuiltin (choice, entry);   // where the table stands in the catalogue we have
+        if (category >= 0)
         {
-            // the position among the files of the category as three places: first (no previous), in the middle, last (no next); a category of one file has no arrow
+            // the position in the whole catalogue as three places: the global first (no previous), in the middle, the global last (no next); a catalogue of one table has no arrow
+            int c = -1, e = -1;
+            const bool prev = synthyboy::neighbourEntry (stepCat_, category, entry, -1, c, e);
+            const bool next = synthyboy::neighbourEntry (stepCat_, category, entry, 1, c, e);
             st.wrap = false;
-            st.count = count > 1 ? 3 : 1;
-            st.index = count > 1 ? (index <= 0 ? 0 : (index >= count - 1 ? 2 : 1)) : 0;
+            st.count = prev || next ? 3 : 1;
+            st.index = prev || next ? (! prev ? 0 : (! next ? 2 : 1)) : 0;
         }
-        // a file that is in no category: the arrows step the 15 choices as for a built-in table (showStepper's state)
+        // a table that is in no category: the arrows step the 15 choices (showStepper's state)
     }
     /** The catalogue and the place of the file `pack` / `file` in it, read once per file (a file that is loaded now, or the one a step asked for): the directory listing happens at the first step, not at every frame. */
     void ensureStepInfo (IInstanceView& v, const std::string& pack, const std::string& file)
@@ -2728,23 +2734,41 @@ private:
         wtLastFile_ = e.ref.file;
         v.requestWavetable (playosc::oscNumber (sel_), e.ref);
     }
-    /** One step to the previous / next file of the category of the file `pack` / `file`: 0 asked for it, 1 the end of the category (nothing happens: no wrap), 2 the file is in no category. */
-    int stepFileBy (IInstanceView& v, const std::string& pack, const std::string& file, int dir)
+    /** Where the table the oscillator plays now stands in the step catalogue (stepCat_): the file `pack` / `file` when `fileTable`, else the built-in table `choice`. While a table we asked for is still loading
+        our position is the one we asked for (the latest request wins). False when the catalogue cannot place the table. */
+    bool stepStart (IInstanceView& v, bool fileTable, int choice, const std::string& pack, const std::string& file, int& category, int& entry)
     {
-        ensureStepInfo (v, pack, file);
-        if (stepCategory_ < 0)
-            return 2;
-        int next = -1;
-        if (! synthyboy::neighbourFile (stepCat_, stepCategory_, stepEntry_, dir, next))
-            return 1;
-        const synthyboy::WavetableEntry& e = stepCat_.categories[static_cast<size_t> (stepCategory_)].entries[static_cast<size_t> (next)];
-        requestFile (v, e);
-        stepEntry_ = next;   // the next step starts from here, before the content shows the new file (the latest request wins in the plugin)
-        stepPack_ = e.ref.pack;
-        stepFile_ = e.ref.file;
-        return 0;
+        if (fileTable)
+        {
+            ensureStepInfo (v, pack, file);
+            category = stepCategory_;
+            entry = stepEntry_;
+            return category >= 0;
+        }
+        if (! stepValid_)
+            ensureStepInfo (v, std::string(), std::string());   // a built-in table: the catalogue is read at the first step, no file is placed yet
+        else if (v.contentLoad (nullptr) == 1 && stepCategory_ >= 0)
+        {
+            category = stepCategory_;   // a file we asked for is still loading: the parameter is the old table, our position is the new one
+            entry = stepEntry_;
+            return true;
+        }
+        category = stepCat_.findBuiltin (choice, entry);
+        return category >= 0;
     }
-    /** A step of the table: `delta` positions (the arrows: -1 / +1, the wheel: more). A file table steps the files of its category (the end: nothing), a built-in table the choices (the "Preset table" entry is skipped while the
+    /** One step to the previous / next entry of the step catalogue from `category` / `entry`, across the categories (the last table of a category is followed by the first of the next one): false at the global
+        first / last entry (nothing happens: no wrap). */
+    bool stepFileBy (int& category, int& entry, int dir) const
+    {
+        int c = -1, e = -1;
+        if (! synthyboy::neighbourEntry (stepCat_, category, entry, dir, c, e))
+            return false;
+        category = c;
+        entry = e;
+        return true;
+    }
+    /** A step of the table: `delta` positions (the arrows: -1 / +1, the wheel: more). A file table and a built-in table both step the whole catalogue as one sequence across the categories (only its global ends
+        stop: no wrap); a resulting built-in table writes the choice parameter, a resulting file is asked for. A table the catalogue cannot place steps the choices (the "Preset table" entry is skipped while the
         oscillator has no file: it would play the saw). `target`: the choice the stepper asked for. */
     void stepTable (IInstanceView& v, const Item& it, int delta, int target)
     {
@@ -2753,23 +2777,38 @@ private:
         const int cur = std::clamp (static_cast<int> (std::lround (v.param (it.param) - pi.min)), 0, last);
         std::string pack, file, title;
         const bool have = contentTable (v, pack, file, title);
-        if (cur == synthyboy::kWavetablePresetTable && have)
+        const bool fileTable = cur == synthyboy::kWavetablePresetTable && have;
+        const int dir = delta > 0 ? 1 : -1;
+        int category = -1, entry = -1;
+        if ((fileTable || cur != synthyboy::kWavetablePresetTable) && stepStart (v, fileTable, cur, pack, file, category, entry))
         {
-            const int dir = delta > 0 ? 1 : -1;
-            int result = 0;
-            for (int n = 0; n < std::min (std::abs (delta), 16); ++n)
+            int moved = 0;
+            while (moved < std::min (std::abs (delta), 16) && stepFileBy (category, entry, dir))
+                ++moved;
+            if (moved == 0)
+                return;   // the global first / last entry of the catalogue: nothing more happens
+            const synthyboy::WavetableEntry& e = stepCat_.categories[static_cast<size_t> (category)].entries[static_cast<size_t> (entry)];
+            if (e.isFile())
             {
-                result = stepFileBy (v, n == 0 ? pack : stepPack_, n == 0 ? file : stepFile_, dir);
-                if (result != 0)
-                    break;
+                requestFile (v, e);
+                stepPack_ = e.ref.pack;   // the next step starts from here, before the content shows the new file (the latest request wins in the plugin)
+                stepFile_ = e.ref.file;
             }
-            if (result != 2)
-                return;   // asked for the neighbour, or the end of the category: nothing more happens
-            target = std::clamp (cur + dir, 0, last);   // a file that is in no category: the built-in neighbour
+            else
+            {
+                writePlain (v, it.param, pi.min + std::clamp (e.builtinChoice, 0, last));   // the old table plays until the new one is built
+                stepPack_.clear();   // no file is our position: a file shown later is placed again
+                stepFile_.clear();
+            }
+            stepCategory_ = category;
+            stepEntry_ = entry;
+            return;
         }
-        const int dir = target > cur ? 1 : -1;
+        if (fileTable)
+            target = std::clamp (cur + dir, 0, last);   // a file that is in no category: the built-in neighbour
+        const int toward = target > cur ? 1 : -1;
         if (target == synthyboy::kWavetablePresetTable && ! have)
-            target += dir;   // no file table: "Preset table" would play the saw
+            target += toward;   // no file table: "Preset table" would play the saw
         writePlain (v, it.param, pi.min + std::clamp (target, 0, last));
     }
     /** The arrows of the table cell (and the Q-Link): one position to the previous / next table or file; nothing at the ends of a list without wrap. */
