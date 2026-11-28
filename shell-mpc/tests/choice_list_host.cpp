@@ -35,13 +35,31 @@ int main()
 {
     // ---- the table and the handle block
     {
-        check (cl::kSlots == 116, "116 slots (113 + 3 warp openers)");
+        check (cl::kSlots == 162, "162 slots (113 + 3 warp + 4 osc + 6 lfo + 3 filter + 1 fx add + 32 fx rack)");
         check (cl::slotOfHandle (21) == 0 && cl::slotOfHandle (3801) == 112 && cl::slotOfHandle (3012) == 113
                && cl::slotOfHandle (3014) == 114 && cl::slotOfHandle (3442) == 115 && cl::slotOfHandle (22) == -1,
                "slotOfHandle finds existing and appended warp slots, -1 for no opener");
+        check (cl::slotOfHandle (3004) == 116 && cl::slotOfHandle (2979) == 117 && cl::slotOfHandle (2986) == 118 && cl::slotOfHandle (2987) == 119,
+               "slotOfHandle resolves Osc TYPE, WAVEFORM, KIND, SOUND");
+        check (cl::slotOfHandle (2820) == 120 && cl::slotOfHandle (2821) == 121 && cl::slotOfHandle (2827) == 122
+               && cl::slotOfHandle (2830) == 123 && cl::slotOfHandle (2831) == 124 && cl::slotOfHandle (2835) == 125,
+               "slotOfHandle resolves LFO WAVEFORM, STYLE, DIVISION, MODE, DIRECTION");
+        check (cl::slotOfHandle (3658) == 126 && cl::slotOfHandle (3659) == 127 && cl::slotOfHandle (3660) == 128,
+               "slotOfHandle resolves Filter CHAIN handles");
+        check (cl::slotOfHandle (3273) == 129, "slotOfHandle resolves FX ADD handle");
+        bool fxRackOk = true;
+        for (int i = 0; i < 32; ++i)
+        {
+            const int handle = 3061 + 4 * i;
+            fxRackOk = fxRackOk && cl::slotOfHandle (handle) == 130 + i && cl::slotParameter (130 + i) == 4044 + i;
+        }
+        check (fxRackOk, "slotOfHandle and slotParameter resolve all 32 FX Rack handles");
         check (cl::slotParameter (0) == 3904 && cl::slotParameter (112) == 4016
-               && cl::slotParameter (113) == 4027 && cl::slotParameter (114) == 4028 && cl::slotParameter (115) == 4029,
-               "slotParameter keeps 3904..4016 and appends tail 4027..4029 after liststate");
+               && cl::slotParameter (113) == 4027 && cl::slotParameter (115) == 4029
+               && cl::slotParameter (116) == 4030 && cl::slotParameter (120) == 4034
+               && cl::slotParameter (126) == 4040 && cl::slotParameter (129) == 4043
+               && cl::slotParameter (161) == 4075,
+               "slotParameter keeps 3904..4016 and appends tail 4027..4075 after liststate");
         check (nu::kChoiceListOpen == 3903 - 2719 && nu::kChoiceList == 3904 - 2719
                && nu::kListState == 4017 - 2719 && nu::kChoiceListTail == 4027 - 2719
                && nu::kCount == nu::kChoiceListTail + nu::kChoiceListTailSlots,
@@ -51,8 +69,8 @@ int main()
                && nu::isChoiceListOffset (nu::kChoiceListTail) && nu::isChoiceListOffset (nu::kCount - 1) && ! nu::isChoiceListOffset (nu::kCount),
                "the predicates of both choice-list blocks");
         check (nu::choiceListSlotOfOffset (nu::kChoiceList) == 0 && nu::choiceListSlotOfOffset (nu::kListState - 1) == 112
-               && nu::choiceListSlotOfOffset (nu::kChoiceListTail) == 113 && nu::choiceListSlotOfOffset (nu::kCount - 1) == 115,
-               "choiceListSlotOfOffset maps both blocks to 0..115");
+               && nu::choiceListSlotOfOffset (nu::kChoiceListTail) == 113 && nu::choiceListSlotOfOffset (nu::kCount - 1) == 161,
+               "choiceListSlotOfOffset maps both blocks to 0..161");
         check (nu::isListStateOffset (nu::kListState) && nu::isListStateOffset (nu::kChoiceListTail - 1)
                && ! nu::isListStateOffset (nu::kListState - 1) && ! nu::isListStateOffset (nu::kChoiceListTail)
                && nu::liststate::kHandles == 10, "the predicates of the list-state block");
@@ -219,6 +237,78 @@ int main()
                "spectral-less Level 1 page 2 ends at AM + RM (no Spectral / Mask + Vocode)");
         check (session->open (warpSlot, 85) && ! session->deeperLevel() && session->first() == 0,
                "reopen at unavailable spectral warp on spectral-less oscillator falls back to Level 1 page 1");
+    }
+    // ---- migrated flat choice lists (Osc TYPE/WAVEFORM/KIND/SOUND, LFO, Filter CHAIN, FX RACK/ADD)
+    {
+        auto session = std::make_unique<cl::Session>();
+        float val = -1.0f;
+
+        // Osc TYPE (slot 116 -> 3004): matches kTypeChoices { 0, 4, 1, 2, 3 }
+        static constexpr const char* kOscTypes[5] = { "Wavetable", "Sample", "Granular", "Spectral", "Multisample" };
+        session->items.clear();
+        session->items.setTitle ("TYPE");
+        for (int i = 0; i < 5; ++i)
+            session->items.add (kOscTypes[nu::osc::kTypeChoices[i]], static_cast<float> (i) / 4.0f);
+        check (session->open (cl::slotOfHandle (3004), 1) && std::strcmp (session->rowName (1), "Multisample") == 0,
+               "Osc TYPE lists Multisample at index 1 in pictogram order");
+        check (session->choose (1, val) && std::fabs (val - 0.25f) < 1.0e-6f && ! session->isOpen(),
+               "choosing Osc TYPE Multisample yields 0.25 and closes");
+
+        // Sub WAVEFORM (2979), Noise KIND (2986), Noise SOUND (2987)
+        session->items.clear();
+        session->items.setTitle ("SOUND");
+        static constexpr const char* kNoiseSounds[9] = {
+            "White Noise", "Pink Noise", "Brown Noise", "Geiger", "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere"
+        };
+        for (int i = 0; i < 9; ++i)
+            session->items.add (kNoiseSounds[i], static_cast<float> (i) / 8.0f);
+        check (session->open (cl::slotOfHandle (2987), 8) && session->first() == 7 && std::strcmp (session->rowName (1), "Atmosphere") == 0,
+               "Noise SOUND opens on page 2 for Atmosphere");
+        check (session->choose (1, val) && std::fabs (val - 1.0f) < 1.0e-6f && ! session->isOpen(),
+               "choosing Noise SOUND Atmosphere yields 1.0 and closes");
+
+        // LFO WAVEFORM (2820): 13th entry reads "Drawn" (matching effGetParamDisplay)
+        session->items.clear();
+        session->items.setTitle ("WAVEFORM");
+        for (int i = 0; i <= nu::lfo::kShapeLast; ++i)
+            session->items.add (i == nu::lfo::kShapeLast ? "Drawn" : "Wave", static_cast<float> (i) / nu::lfo::kShapeLast);
+        check (session->open (cl::slotOfHandle (2820), 12) && session->first() == 7 && std::strcmp (session->rowName (5), "Drawn") == 0,
+               "LFO WAVEFORM opens on page 2 with Drawn");
+        check (session->choose (5, val) && std::fabs (val - 1.0f) < 1.0e-6f && ! session->isOpen(),
+               "choosing LFO Drawn yields 1.0 and closes");
+
+        // Filter CHAIN (3658/3659/3660): matches kFilterChainNames
+        session->items.clear();
+        session->items.setTitle ("FILTER CHAIN");
+        for (int i = 0; i < nu::kFilterChainRoutes; ++i)
+            session->items.add (nu::kFilterChainNames[i], static_cast<float> (i) / nu::kFilterChainLastChoice);
+        check (session->open (cl::slotOfHandle (3659), 1) && std::strcmp (session->rowName (1), "F1 to F2") == 0,
+               "Filter CHAIN opens with F1 to F2");
+        check (session->choose (1, val) && std::fabs (val - 0.5f) < 1.0e-6f && ! session->isOpen(),
+               "choosing Filter CHAIN F1 to F2 yields 0.5 and closes");
+
+        // FX Rack (3061..3185) and FX Add (3273)
+        session->items.clear();
+        session->items.setTitle ("RACK");
+        static constexpr const char* kRacks[10] = { "MAIN", "BUS 1", "BUS 2", "L/H LOW", "L/H HIGH", "L/M/H LOW", "L/M/H MID", "L/M/H HIGH", "M/S MID", "M/S SIDE" };
+        for (int r = 0; r < 10; ++r)
+            session->items.add (kRacks[r], static_cast<float> (r) / 9.0f);
+        check (session->open (cl::slotOfHandle (3061), 9) && session->first() == 7 && std::strcmp (session->rowName (2), "M/S SIDE") == 0,
+               "FX Rack opens on page 2 for M/S SIDE");
+        check (session->choose (2, val) && std::fabs (val - 1.0f) < 1.0e-6f && ! session->isOpen(),
+               "choosing FX Rack M/S SIDE yields 1.0 and closes");
+
+        session->items.clear();
+        session->items.setTitle ("ADD EFFECT");
+        // Offered bitmask with Chorus (1) and Splitter M/S (16) enabled
+        const uint32_t offered = (1u << 0) | (1u << 15);
+        for (int k = 1; k <= 16; ++k)
+            if ((offered & (1u << (k - 1))) != 0)
+                session->items.add (k == 1 ? "Chorus" : "Splitter M/S", static_cast<float> (k) / 16.0f);
+        check (session->open (cl::slotOfHandle (3273), 0) && session->rowsOnPage() == 2 && std::strcmp (session->rowName (1), "Splitter M/S") == 0,
+               "FX Add lists only offered effects");
+        check (session->choose (1, val) && std::fabs (val - 1.0f) < 1.0e-6f && ! session->isOpen(),
+               "choosing FX Add Splitter M/S yields 16/16 and closes");
     }
     if (fails == 0)
         std::printf ("choice_list_host: all checks passed\n");

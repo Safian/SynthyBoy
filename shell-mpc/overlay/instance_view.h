@@ -117,10 +117,8 @@ public:
     virtual void setNativeFxCells (int /*layout*/, const nativeui::FxCell* /*cells*/) noexcept {}
     virtual bool takeNativeFxCell (int /*slot*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
     virtual void setNativeFxHeader (const nativeui::fxheader::State&) noexcept {}
-    virtual void setNativeFxRackPopup (bool /*active*/) noexcept {}
     virtual bool takeNativeFxHeader (int /*field*/, const nativeui::fxheader::State&, float& /*value*/) noexcept { return false; }
     virtual void setNativeFxChain (const nativeui::fxchain::State&) noexcept {}
-    virtual void setNativeFxAddPopup (bool /*active*/) noexcept {}
     virtual bool takeNativeFxChain (int /*field*/, const nativeui::fxchain::State&, float& /*value*/) noexcept { return false; }
     virtual void setNativeFxBands (const nativeui::fxbands::State&) noexcept {}
     virtual bool takeNativeFxBands (int /*handle*/, const nativeui::fxbands::State&, float& /*value*/) noexcept { return false; }

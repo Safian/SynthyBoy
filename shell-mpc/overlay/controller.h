@@ -116,9 +116,6 @@ inline constexpr MarkerSpec kNativeParameterModalMarkers[] = {
     { { 28, 120, 6, 6 }, 0x24c7ff },
     { { 40, 120, 6, 6 }, 0x90ed43 },
 };
-inline constexpr MarkerSpec kNativeFxRackPopupMarker { { 52, 120, 6, 6 }, 0xf1ae47 };
-inline constexpr MarkerSpec kNativeFxAddPopupMarker { { 64, 120, 6, 6 }, 0xef72bf };
-inline constexpr MarkerSpec kNativeFxActionMarkers[] { kNativeFxRackPopupMarker, kNativeFxAddPopupMarker };
 inline constexpr MarkerSpec kNativePlayActionMarkers[] {
     { { 52, 120, 6, 6 }, 0xe5a44f },   // routing
     { { 64, 120, 6, 6 }, 0xde78c9 },   // type, waveform or noise sound
@@ -494,10 +491,8 @@ private:
             if (rotationKnown())
             {
                 const int currentKind = current_ >= 0 ? pages_.page (current_).kind : -1;
-                const bool fxActions = currentKind == layout::kKindFx || currentKind == layout::kKindMixer;
-                const auto* actions = fxActions ? kNativeFxActionMarkers
-                                    : currentKind == layout::kKindPlay ? kNativePlayActionMarkers : nullptr;
-                const int nActions = fxActions ? static_cast<int> (std::size (kNativeFxActionMarkers)) : currentKind == layout::kKindPlay ? static_cast<int> (std::size (kNativePlayActionMarkers)) : 0;
+                const auto* actions = currentKind == layout::kKindPlay ? kNativePlayActionMarkers : nullptr;
+                const int nActions = currentKind == layout::kKindPlay ? static_cast<int> (std::size (kNativePlayActionMarkers)) : 0;
                 d = nativeEditor != nullptr ? detector_->check (rotation_, kNativeParameterModalMarkers, 3, actions, nActions)
                                             : detector_->check (rotation_);
             }

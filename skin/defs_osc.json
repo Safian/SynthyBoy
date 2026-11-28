@@ -1828,519 +1828,6 @@
     }
    },
    {
-    "key": "oscNativeSetting_menu_WAVEFORMChoices",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "hideQLinkBounds": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_WAVEFORMChoices background",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "osc_routing_overlay_bg.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_WAVEFORMChoices close",
-        "type": "MenuOverlay",
-        "data": {
-         "version": 1,
-         "actions": [
-          {
-           "version": 1,
-           "onAction": "Focus Lost",
-           "handler": "Focus Lost",
-           "handleName": "Focus Lost",
-           "additionalData": ""
-          }
-         ],
-         "withNumbers": false,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Sine",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Sine"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 110 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Sine",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 0,
-         "numButtonsInGroup": 6,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 110 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Rounded Rect",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Rounded Rect"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 190 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Rounded Rect",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 6,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 190 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Triangle",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Triangle"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 270 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Triangle",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 2,
-         "numButtonsInGroup": 6,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 270 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Saw",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Saw"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 350 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Saw",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 3,
-         "numButtonsInGroup": 6,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 350 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Square",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Square"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 430 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Square",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 4,
-         "numButtonsInGroup": 6,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 430 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Pulse",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Pulse"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 510 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Pulse",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 5,
-         "numButtonsInGroup": 6,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 510 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Modal Markers",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "native_modal_markers.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "16 120 30 6"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscNativeSetting_dial_bi_216x128",
     "value": {
      "version": 2,
@@ -2748,965 +2235,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "0 36 218 56"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscNativeSetting_menu_KINDChoices",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "hideQLinkBounds": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_KINDChoices background",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "osc_routing_overlay_bg.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_KINDChoices close",
-        "type": "MenuOverlay",
-        "data": {
-         "version": 1,
-         "actions": [
-          {
-           "version": 1,
-           "onAction": "Focus Lost",
-           "handler": "Focus Lost",
-           "handleName": "Focus Lost",
-           "additionalData": ""
-          }
-         ],
-         "withNumbers": false,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Noise",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Noise"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 110 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Noise",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 0,
-         "numButtonsInGroup": 2,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 110 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Sample",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Sample"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 190 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Sample",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 2,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 190 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Modal Markers",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "native_modal_markers.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "16 120 30 6"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscNativeSetting_menu_SOUNDChoices",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "hideQLinkBounds": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_SOUNDChoices background",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "osc_routing_overlay_bg.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_SOUNDChoices close",
-        "type": "MenuOverlay",
-        "data": {
-         "version": 1,
-         "actions": [
-          {
-           "version": 1,
-           "onAction": "Focus Lost",
-           "handler": "Focus Lost",
-           "handleName": "Focus Lost",
-           "additionalData": ""
-          }
-         ],
-         "withNumbers": false,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "White Noise",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "White Noise"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 110 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose White Noise",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 0,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 110 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Pink Noise",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Pink Noise"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 186 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Pink Noise",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 186 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Brown Noise",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Brown Noise"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 262 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Brown Noise",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 2,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 262 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Geiger",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Geiger"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 338 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Geiger",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 3,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 338 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Tape Hiss",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Tape Hiss"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 414 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Tape Hiss",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 4,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 414 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Vinyl Clicks",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Vinyl Clicks"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 490 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Vinyl Clicks",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 5,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 490 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Digital Hash",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Digital Hash"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 566 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Digital Hash",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 6,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 566 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Velvet Noise",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Velvet Noise"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 642 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Velvet Noise",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 7,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 642 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Atmosphere",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Atmosphere"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 718 342 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Atmosphere",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 8,
-         "numButtonsInGroup": 9,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 718 426 76"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Modal Markers",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "native_modal_markers.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "16 120 30 6"
        }
       }
      ]
@@ -4918,452 +3446,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "0 36 107 56"
-       }
-      }
-     ]
-    }
-   },
-   {
-    "key": "oscNativeSetting_menu_TYPEChoices",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "hideQLinkBounds": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_TYPEChoices background",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "osc_routing_overlay_bg.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeSetting_menu_TYPEChoices close",
-        "type": "MenuOverlay",
-        "data": {
-         "version": 1,
-         "actions": [
-          {
-           "version": 1,
-           "onAction": "Focus Lost",
-           "handler": "Focus Lost",
-           "handleName": "Focus Lost",
-           "additionalData": ""
-          }
-         ],
-         "withNumbers": false,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Wavetable",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Wavetable"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 110 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Wavetable",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 0,
-         "numButtonsInGroup": 5,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 110 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Multisample",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Multisample"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 190 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Multisample",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 5,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 190 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Sample",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Sample"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 270 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Sample",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 2,
-         "numButtonsInGroup": 5,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 270 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Granular",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Granular"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 350 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Granular",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 3,
-         "numButtonsInGroup": 5,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 350 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Spectral",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Text",
-         "handleName": "Data",
-         "text": "Spectral"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "42 430 342 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Choose Spectral",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit.png",
-         "offImage": "native_button_hit.png",
-         "buttonId": 4,
-         "numButtonsInGroup": 5,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 430 426 80"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Modal Markers",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "native_modal_markers.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "16 120 30 6"
        }
       }
      ]
@@ -10632,6 +8714,10 @@
           "value": "Parameter 3004"
          },
          {
+          "key": "HdrTypeList",
+          "value": "ResetOnGestureEnd/Parameter 4030"
+         },
+         {
           "key": "HdrSource",
           "value": "Parameter 3005"
          },
@@ -10712,6 +8798,10 @@
           "value": "Parameter 2979"
          },
          {
+          "key": "HdrWaveList",
+          "value": "ResetOnGestureEnd/Parameter 4031"
+         },
+         {
           "key": "HdrOct",
           "value": "Parameter 2980"
          }
@@ -10788,8 +8878,16 @@
           "value": "Parameter 2986"
          },
          {
+          "key": "HdrKindList",
+          "value": "ResetOnGestureEnd/Parameter 4032"
+         },
+         {
           "key": "HdrSound",
           "value": "Parameter 2987"
+         },
+         {
+          "key": "HdrSoundList",
+          "value": "ResetOnGestureEnd/Parameter 4033"
          }
         ]
        },
@@ -10862,6 +8960,10 @@
          {
           "key": "HdrKind",
           "value": "Parameter 2986"
+         },
+         {
+          "key": "HdrKindList",
+          "value": "ResetOnGestureEnd/Parameter 4032"
          }
         ]
        },
@@ -14690,22 +12792,7 @@
     "key": "oscHeaderType",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_TYPEChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_TYPEChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -14783,6 +12870,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "12 0 176 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 220 40"
        }
       }
      ]
@@ -15485,6 +13601,10 @@
          {
           "key": "Data",
           "value": "HdrType"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrTypeList"
          }
         ]
        },
@@ -15910,22 +14030,7 @@
     "key": "oscHeaderWaveform",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_WAVEFORMChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_WAVEFORMChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -16003,6 +14108,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "12 0 839 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 883 40"
        }
       }
      ]
@@ -16255,6 +14389,10 @@
          {
           "key": "Data",
           "value": "HdrWave"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrWaveList"
          }
         ]
        },
@@ -16502,22 +14640,7 @@
     "key": "oscHeaderKind",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_KINDChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_KINDChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -16596,6 +14719,35 @@
         "boundsType": "Absolute",
         "bounds": "12 0 176 40"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 220 40"
+       }
       }
      ]
     }
@@ -16604,22 +14756,7 @@
     "key": "oscHeaderSound",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_SOUNDChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_SOUNDChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -16697,6 +14834,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "12 0 708 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 752 40"
        }
       }
      ]
@@ -16820,6 +14986,10 @@
          {
           "key": "Data",
           "value": "HdrKind"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrKindList"
          }
         ]
        },
@@ -16926,6 +15096,10 @@
          {
           "key": "Data",
           "value": "HdrSound"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrSoundList"
          }
         ]
        },
@@ -17067,22 +15241,7 @@
     "key": "oscHeaderKindWide",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_KINDChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeSetting_menu_KINDChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -17160,6 +15319,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "12 0 936 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 980 40"
        }
       }
      ]
@@ -17283,6 +15471,10 @@
          {
           "key": "Data",
           "value": "HdrKind"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrKindList"
          }
         ]
        },

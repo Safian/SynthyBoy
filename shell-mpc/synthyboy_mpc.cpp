@@ -487,7 +487,6 @@ struct PluginInstance
         {
             inst.nativeFxHeader.publish (state, inst.stateGeneration.load (std::memory_order_acquire));
         }
-        void setNativeFxRackPopup (bool active) noexcept override { inst.nativeFxHeader.setRackPopup (active); }
         bool takeNativeFxHeader (int field, const nativeui::fxheader::State& state, float& value) noexcept override
         {
             return inst.nativeFxHeader.take (field, state, value);
@@ -496,7 +495,6 @@ struct PluginInstance
         {
             inst.nativeFxChain.publish (state, inst.stateGeneration.load (std::memory_order_acquire));
         }
-        void setNativeFxAddPopup (bool active) noexcept override { inst.nativeFxChain.setMenuOpen (active); }
         bool takeNativeFxChain (int field, const nativeui::fxchain::State& state, float& value) noexcept override
         {
             return inst.nativeFxChain.take (field, state, value);
@@ -4141,7 +4139,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, "Filter chain");
                 else if (opcode == effGetParamDisplay)
-                    synthyboy_mpc::putBounded (buf, kCap, std::array<const char*, nativeui::kFilterChainRoutes> { "Parallel", "F1 to F2", "F2 to F1" }[static_cast<size_t> (inst->filterRoutingChoice())]);
+                    synthyboy_mpc::putBounded (buf, kCap, nativeui::kFilterChainNames[static_cast<size_t> (inst->filterRoutingChoice())]);
                 return 1;
             }
             if (nativeui::isModDetailControlOffset (offset))
@@ -6862,6 +6860,77 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
         return false;
     const int offset = hostIndex - nativeUiBase();
 
+    // ---- FX header Rack selector (MAIN, BUS 1, BUS 2, and splitter bands for instance 0 non-splitters)
+    if (offset >= nativeui::kFxHeader + 2 && offset < nativeui::kLfoEditor)
+    {
+        namespace h = nativeui::fxheader;
+        const int handle = offset - nativeui::kFxHeader;
+        const int item = (handle - 2) / h::kFields;
+        const int field = (handle - 2) % h::kFields;
+        if (field != h::Rack)
+            return false;
+        const auto state = nativeFxHeader.state();
+        if (state.layout == h::Hidden || item != state.item || ! state.on())
+            return false;
+        const int n = state.rackCount();
+        for (int r = 0; r < n; ++r)
+            items.add (synthyboy_mpc::ui::fxl::rackName (r), static_cast<float> (r) / (n - 1));
+        current = std::clamp (state.rack, 0, n - 1);
+        title ("RACK");
+        return items.count > 0;
+    }
+
+    // ---- FX chain + ADD effect menu (effects and splitters currently offered by the chain)
+    if (offset == nativeui::kFxChain + nativeui::fxchain::Menu)
+    {
+        namespace c = nativeui::fxchain;
+        namespace fx = synthyboy_mpc::ui::fxl;
+        if (nativeFxChain.at (c::Menu).cell().target < 0)
+            return false;
+        const uint32_t offered = nativeFxChain.offered();
+        for (int k = 1; k <= c::kTypes; ++k)
+            if ((offered & (1u << (k - 1))) != 0)
+                items.add (fx::layoutOf (k).name, static_cast<float> (k) / c::kTypes);
+        current = 0;
+        title ("ADD EFFECT");
+        return items.count > 0;
+    }
+
+    // ---- Filter chain routing (Parallel, F1 to F2, F2 to F1)
+    if (nativeui::isFilterChainMenu (offset))
+    {
+        if (nativeFilter.layout() == 0)
+            return false;
+        choiceNames (nativeui::kFilterChainNames, nativeui::kFilterChainRoutes, filterRoutingChoice());
+        title ("FILTER CHAIN");
+        return true;
+    }
+
+    // ---- the standalone LFO / RND page choice fields (WAVEFORM, STYLE, DIVISION, MODE, DIRECTION)
+    if (offset >= nativeui::kLfoBase && offset < nativeui::kFilterBase)
+    {
+        namespace n = nativeui::lfo;
+        const int field = offset - nativeui::kLfoBase;
+        const uint64_t active = nativeLfo.publication();
+        if (active == 0 || (active & n::bit (field)) == 0)
+            return false;
+        const auto* info = PluginInstance::nativeLfoInfo (field);
+        if (info == nullptr || info->choices == nullptr || info->numChoices < 2)
+            return false;
+        for (int i = 0; i < info->numChoices && info->min + static_cast<float> (i) <= info->max; ++i)
+        {
+            const char* row = (field == n::kShape && i == n::kShapeLast) ? "Drawn" : info->choices[i];
+            items.add (row, synthyboy::toNormalised (*info, info->min + static_cast<float> (i)));
+        }
+        const float plain = synthyboy::fromNormalised (*info, nativeLfo.value (field));
+        current = std::clamp (static_cast<int> (std::lround (plain - info->min)), 0, std::max (0, items.count - 1));
+        title (field == n::kShape ? "WAVEFORM"
+             : field == n::kStyle ? "STYLE"
+             : field == n::kDivision ? "DIVISION"
+             : field == n::kDirection ? "DIRECTION" : "MODE");
+        return items.count > 0;
+    }
+
     // ---- an FX domain (on the Filter page the same handles carry the filter MODEL and STYLE): the cell bound to it now; names as the domain branch of effGetParamDisplay
     if (offset >= nativeui::kFxDomainBase && offset < nativeui::kFxDomainBase + nativeui::kFxDomains)
     {
@@ -6985,15 +7054,49 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
         return true;
     }
 
-    // ---- the standalone Osc A/B/C main-page settings (e.g. AbcWarp1Type / AbcWarp2Type): open the bound engine parameter's list while powered
+    // ---- the standalone Osc main-page header and settings (TYPE / WAVEFORM / KIND / SOUND / WARP): open the bound engine parameter's list while powered
     if (const int field = nativeOscSettingField (offset); field >= 0)
     {
         const auto cell = nativeOscSettings.at (field).cell();
-        if (cell.target < 0 || ! nativeOsc.snapshot().powered()
-            || nativeOscSettings.layout() < nativeui::osc::SettingsWavetable)
+        if (cell.target < 0 || ! nativeOsc.snapshot().powered())
             return false;
-        if (isWarpTypeParam (cell.target))
-            return buildWarpItems (cell.target, items, current);
+        const int layout = nativeOscSettings.layout();
+        if (layout >= nativeui::osc::SettingsWavetable)
+        {
+            if (isWarpTypeParam (cell.target))
+                return buildWarpItems (cell.target, items, current);
+            if (field == nativeui::osc::kSettings + nativeui::osc::AbcType && cell.kind == nativeui::osc::SettingsType)
+            {
+                const auto& info = synthyboy::paramTable()[cell.target];
+                constexpr int kTypes = static_cast<int> (std::size (nativeui::osc::kTypeChoices));
+                if (info.choices == nullptr || info.numChoices != kTypes)
+                    return false;
+                const int raw = static_cast<int> (std::lround (paramMirror[cell.target].load (std::memory_order_relaxed)));
+                for (int i = 0; i < kTypes; ++i)
+                {
+                    const int choice = nativeui::osc::kTypeChoices[i];
+                    items.add (synthyboy_mpc::ui::shownChoice (info.key, choice, info.choices[choice]), static_cast<float> (i) / (kTypes - 1));
+                    if (choice == raw)
+                        current = i;
+                }
+                title ("TYPE");
+                return true;
+            }
+            return false;
+        }
+        if ((layout == nativeui::osc::SettingsSub && field == 0)
+            || ((layout == nativeui::osc::SettingsNoise || layout == nativeui::osc::SettingsNoiseSample) && field == nativeui::osc::kSubSettings)
+            || (layout == nativeui::osc::SettingsNoise && field == nativeui::osc::kSubSettings + 1))
+        {
+            const auto& info = synthyboy::paramTable()[cell.target];
+            if (info.choices == nullptr || info.numChoices < 2)
+                return false;
+            for (int i = 0; i < static_cast<int> (info.numChoices) && info.min + static_cast<float> (i) <= info.max; ++i)
+                items.add (synthyboy_mpc::ui::shownChoice (info.key, i, info.choices[i]), synthyboy::toNormalised (info, info.min + static_cast<float> (i)));
+            current = std::clamp (static_cast<int> (std::lround (paramMirror[cell.target].load (std::memory_order_relaxed) - info.min)), 0, std::max (0, items.count - 1));
+            title (field == 0 ? "WAVEFORM" : field == nativeui::osc::kSubSettings ? "KIND" : "SOUND");
+            return items.count > 0;
+        }
         return false;
     }
 
