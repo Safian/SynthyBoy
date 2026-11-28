@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // What it shows (UiStack, ui_stack.h; the element id of this UI is kElementFilter, the pages above it are ours): the page is always open; detail pages above it: the modulations of one control (a long press on a dial), the
-// targets of NOTE / VELO and the list that picks a new target (ListPopup: the host list), the PZ curve editor. LEVEL, PAN, DEST, BUS 1 and BUS 2 are read-only here (the Mixer is their home); BLEND and ROUTING are editable.
+// targets of NOTE / VELO and the list that picks a new target (the native picker cells, native_list_cells.h), the PZ curve editor. LEVEL, PAN, DEST, BUS 1 and BUS 2 are read-only here (the Mixer is their home); BLEND and ROUTING are editable.
 // The display shows the response the filter really has: shell-mpc/overlay/curve_source.h runs the engine's own filter on an impulse (once per change, with the live, modulated cutoff and resonance of the voice that is
 // heard); F1 + F2 shows both and the resultant by the routing. What it does with a touch: the display gives a Change { id, kind, value } (the finger on the handle); a native cell of the skin writes its value through the native
 // bridge (updateNativeControls) into the row it stands for (row.key, the engine table); the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back, so
@@ -29,7 +29,6 @@
 #include "../ui/binding.h"
 #include "../ui/choice_names.h"
 #include "../ui/filter_display.h"
-#include "../ui/list.h"
 #include "../ui/play_rows.h"
 #include "../ui/pz_curve_editor.h"
 #include "../ui/scalar_curve_editor.h"
@@ -37,6 +36,7 @@
 #include "curve_source.h"
 #include "filter_geometry.h"
 #include "mod_rows_page.h"
+#include "native_list_cells.h"
 #include "native_marker_covers.h"
 #include "page_view.h"
 #include "q_publish.h"
@@ -182,11 +182,6 @@ public:
         const ui::Rect tab { 0, kTabY, w, kTabH };
         geo_.place (tab);
         syncLayoutMode();
-        destList_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        destList_.setPopup (tab);
-        destList_.setId (kDestList);
-        destList_.setBackdropId (kDestBackdrop);
-        destList_.setHeaderId (kDestHeader);
         mods_.place (tab);
         targets_.place (tab);
         pzEditor_.place (tab);
@@ -312,7 +307,9 @@ public:
         nativeModulations_.update (inst, mods_, ! pickingSource_ && modsContextValid (inst),
             nativeui::targets::Filter, static_cast<int> (destination), modRows_,
             [&] (ui::Change change) { handle (change, mutableStack, inst); }, nativeui::targets::Modulations);
+        publishNativeList (inst, mutableStack);
         syncPages (stack);
+        publishNativeTexts (inst);
         if (pageBeforeMods == kPageMods && pageTop_ == 0)
             updateNativeControls (inst, mutableStack);
         const bool pzNative = nativePzToolbar();
@@ -339,6 +336,8 @@ public:
     {
         nativeTargets_.hide (inst, targets_);
         nativeModulations_.hide (inst, mods_);
+        listCells_.hide (inst);
+        clearNativeTexts (inst);
         pzOwner_ = nullptr;
         hideNativeControls (inst);
         inst.setNativePzToolbar (0, nativeui::pz::None);
@@ -347,9 +346,14 @@ public:
     // The Filter already owns its ground inside draw().
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
 
-    /** The Filter foreground, including its opaque ground or full-screen detail. */
+    /** The Filter foreground: the response display or the curve editor (their graphs), the Q focus, and the opaque ground under a page of the stack. Every text, list and control of the page is native. */
     void draw (gpu::SceneBuilder& sb) const
     {
+        if (listShown())
+        {
+            coverRootMarkers (sb);   // the native list cells fill the tab
+            return;
+        }
         if (hostBackground())
             coverRootMarkers (sb);
         else if (nativePowerVisible() || nativeControlsActive())
@@ -369,23 +373,23 @@ public:
         if (pageTop_ == kPageMods)
         {
             mods_.draw (sb);
-            if (pickingSource_)
-                destList_.draw (sb);
             return;
         }
         if (pageTop_ == kPagePz)
         {
             pzEditor_.draw (sb);
             if (nativePzToolbar())
+            {
                 for (const auto area : pzEditor_.toolbarRects())
                     ui::clearNativeCell (sb, area);
+                for (const auto area : pzEditor_.labelRects())
+                    ui::clearNativeCell (sb, area);
+            }
             return;
         }
-        if (pageTop_ == kPageTargets || pageTop_ == kPageDest)
+        if (pageTop_ == kPageTargets)
         {
             targets_.draw (sb);
-            if (pageTop_ == kPageDest)
-                destList_.draw (sb);
             return;
         }
         drawFilterPage (sb);
@@ -404,14 +408,14 @@ public:
             const ui::ScalarCurveEditor& ed = curveUi().screen;
             ed.draw (sb);
             if (pageTop_ == 0)
-                drawCurvePageTitle (sb);   // above the opaque graph frame of the editor
-            if (pageTop_ == 0)
                 ed.drawLive (sb);   // the live marker of the last note: the animated layer, nothing cached repaints with it
         }
     }
 
     bool covers (int x, int y) const noexcept
     {
+        if (listShown())
+            return false;   // the native list cells fill the tab
         if ((pageTop_ == kPageTargets && targets_.nativeHit (x, y))
             || (pageTop_ == kPageMods && mods_.nativeHit (x, y)))
             return false;
@@ -604,7 +608,6 @@ public:
     const FilterGeometry& geometry() const noexcept { return geo_; }
     ModRowsPage& modsPage() noexcept { return mods_; }
     ModRowsPage& targetsPage() noexcept { return targets_; }
-    ui::ListPopup& destList() noexcept { return destList_; }
     ui::FilterDisplay& display() noexcept { return display_; }
     const CurveSource* curve (int filter) const noexcept { return filter == 2 ? curve2_.get() : curve1_.get(); }
     int paramOf (int id, int filter) const noexcept { return paramForId (id, filter); }
@@ -976,6 +979,7 @@ private:
             c.screen.setCompact (false);
             c.screen.setOwnQFrames (true);
             c.screen.place (geo_.bodyRect());
+            c.screen.setTitleAperture (geo_.subTabPage() && geo_.rect().w > 0 ? ui::Rect { geo_.rect().x + 22, geo_.rect().y + 19, 400, 41 } : ui::Rect {});
         }
         view_ = fv;
     }
@@ -1038,9 +1042,7 @@ private:
     /** The part a touch at (x, y) starts on: a list above the tab, the PZ editor, in the NOTE / VELO states the editor under the top bar, else the response display (every other control is a native cell). */
     ui::Component* topComponent (int x, int y) noexcept
     {
-        if (pageTop_ == kPageMods) return pickingSource_ ? &destList_ : nullptr;
-        if (pageTop_ == kPageTargets) return nullptr;
-        if (pageTop_ == kPageDest) return &destList_;
+        if (pageTop_ == kPageMods || pageTop_ == kPageTargets || pageTop_ == kPageDest) return nullptr;
         if (pageTop_ == kPagePz) return &pzEditor_;
         if (curveView() && curveUi().screen.rect().contains (x, y))
             return &curveUi().screen;
@@ -1511,20 +1513,37 @@ private:
         {
             for (const std::string& g : d.groups)
                 destNames_.push_back (g.c_str());
-            destList_.state.header = nullptr;
-            destList_.state.headerBack = false;
+            destHeader_ = nullptr;
+            destHeaderBack_ = false;
         }
         else
         {
             for (int c : d.choices[static_cast<size_t> (destGroup_)])
                 destNames_.push_back (uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (c))).name);
-            destList_.state.header = d.groups[static_cast<size_t> (destGroup_)].c_str();
-            destList_.state.headerBack = true;
+            destHeader_ = d.groups[static_cast<size_t> (destGroup_)].c_str();
+            destHeaderBack_ = true;
         }
-        destList_.state.items = destNames_.data();
-        destList_.state.count = static_cast<int> (destNames_.size());
-        destList_.state.current = -1;
-        destList_.showCurrent();
+        listCells_.restart();
+    }
+    /** The add-target / add-source list is on the screen as the native picker cells (nativeui::modboard; the skin instance `Osc Native List`). */
+    bool listShown() const noexcept { return pageTop_ == kPageDest || (pageTop_ == kPageMods && pickingSource_); }
+    void publishNativeList (IInstanceView& inst, UiStack& stack)
+    {
+        if (! listShown())
+        {
+            listCells_.hide (inst);
+            return;
+        }
+        NativeListCells::Data data;
+        data.header = destHeader_;
+        data.fallbackTitle = pickingSource_ ? "ADD SOURCE" : "SELECT TARGET";
+        data.items = destNames_.data();
+        data.count = static_cast<int> (destNames_.size());
+        data.headerBack = destHeaderBack_;
+        listCells_.publish (inst, data,
+            [&] (int index) { handle (ui::Change::indexed (kDestList, index, 1.0), stack, inst); },
+            [&] { handle (ui::Change::request (kDestBackdrop), stack, inst); },
+            [&] { if (! pickingSource_) handle (ui::Change::request (kDestHeader), stack, inst); });
     }
 
     void addTarget (IInstanceView& v, int destChoice)
@@ -1559,13 +1578,9 @@ private:
         for (const std::string& s : sourceText_)
             destNames_.push_back (s.c_str());
         sourceCount_ = n;
-        destList_.state.header = "ADD SOURCE";
-        destList_.state.headerBack = false;
-        destList_.state.items = destNames_.data();
-        destList_.state.count = n;
-        destList_.state.current = -1;
-        destList_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        destList_.showCurrent();
+        destHeader_ = "ADD SOURCE";
+        destHeaderBack_ = false;
+        listCells_.restart();
         pickingSource_ = true;
     }
 
@@ -1783,17 +1798,12 @@ private:
         display_.setInactive (! powerOn_);
     }
 
-    /** The picture of the filter page: the response display, the titles of the blocks, the frame of the active Q bank. */
+    /** The picture of the filter page: the response display and the frame of the active Q bank (the titles are native Labels). */
     void drawFilterPage (gpu::SceneBuilder& sb) const
     {
         if (curveView())
-            return;   // the NOTE / VELO page title is drawn after the curve editor frame (drawCurvePageTitle)
+            return;   // the NOTE / VELO page is the curve editor
         display_.draw (sb);
-        {
-            ui::Pen p (sb, true, ! powerOn_);
-            ui::Cell cell (sb, geo_.rect());
-            drawLabels (p);
-        }
         const bool formantBank = geo_.formantMode();
         const int maxG = formantBank ? kGroups : 3;
         if (ui::QGroup::wideDevice() || activeGroup_ < 0 || activeGroup_ >= maxG || activeGroup_ == 2)   // the OUT group is frameless: its members stand in two places
@@ -1805,37 +1815,49 @@ private:
         ui::Cell cell (sb, ui::Rect::unite (b, ui::Pen::qMarkerRect (b)));
         pen.qFocus (b);
     }
-    void drawLabels (ui::Pen& p) const
+    /** The texts of the page the host skin shows with native Labels (nativeui::nativetext, native Labels of the Filter tabs): the page title and the names of the blocks of the filter page, the used-by list of the NOTE / VELO page. A
+        line that does not apply is empty. */
+    void publishNativeTexts (IInstanceView& inst) const noexcept
     {
-        const ui::theme::Look& T = ui::theme::L();
-        const ui::Rect g = geo_.displayRect();
-        if (! g.empty())
-        {
-            const char* hdr = ! powerOn_
-                ? (view_ == kViewF2 ? "FILTER 2 - OFF (BYPASSED)" : "FILTER 1 - OFF (BYPASSED)")
-                : (geo_.formantMode() ? (view_ == kViewF2 ? "FILTER 2 - FORMANT XY" : "FILTER 1 - FORMANT XY")
-                                      : (view_ == kViewF2 ? "FILTER 2 - RESPONSE" : "FILTER 1 - RESPONSE"));
-            p.textLeft ({ g.x + 74, g.y + 4, std::max (0, g.w - 204), 56 },
-                        hdr, ui::theme::kPageTitleSize, p.c (powerOn_ ? T.text : T.textFaint, 255), T.fMin);   // the page title: the size of every page (static-native-captions.json filter1 / filter2 draws the same rect on the host layer)
-        }
-        // "SET ON MIXER" above the OUT readouts is a host-layer caption (static-native-captions.json filter1 / filter2): one copy, no overlay twin.
+        namespace t = nativeui::nativetext;
+        const bool filterPage = pageTop_ == 0 && ! curveView() && ! listShown() && nativeControlsActive();
+        const bool curvePage = pageTop_ == 0 && curveView() && ! listShown();
+        char hdr[48] = {};
+        if (filterPage && ! geo_.displayRect().empty())
+            std::snprintf (hdr, sizeof hdr, "FILTER %d - %s", view_ == kViewF2 ? 2 : 1, ! powerOn_ ? "OFF (BYPASSED)" : geo_.formantMode() ? "FORMANT XY" : "RESPONSE");
+        inst.setNativeText (t::FilterTitle, powerOn_ ? hdr : "");
+        inst.setNativeText (t::FilterTitleOff, powerOn_ ? "" : hdr);
         for (int i = 0; i < kGroups; ++i)
         {
-            const ui::Rect b = geo_.block (i);
-            if ((i != 3 || geo_.formantMode()) && ! b.empty())
-                p.textLeft ({ b.x + FilterGeometry::kBlockPad + 4, b.y + 3, std::max (0, b.w - 2 * FilterGeometry::kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (activeGroup_ == i ? T.q : T.textDim, 255), T.fMin);
+            const bool shown = filterPage && (i != 3 || geo_.formantMode()) && ! geo_.block (i).empty();
+            const bool active = activeGroup_ == i && powerOn_;
+            inst.setNativeText (t::FilterBlock0 + i, shown && ! active ? groupName (i) : "");
+            inst.setNativeText (t::FilterBlockActive0 + i, shown && active ? groupName (i) : "");
         }
+        const ui::ScalarCurveEditor::UsedBy empty;
+        const ui::ScalarCurveEditor::UsedBy& used = curvePage ? curveUi().screen.used : empty;
+        const int rows = std::min (used.count, ui::ScalarCurveEditor::kShownRows);
+        for (int r = 0; r < ui::ScalarCurveEditor::kShownRows; ++r)
+        {
+            char amount[24] = {};
+            if (r < rows)
+                std::snprintf (amount, sizeof amount, "%s%+d%%%s", used.rows[r].aux ? "AUX " : "", used.rows[r].percent, used.rows[r].bipolar ? " BI" : "");
+            inst.setNativeText (t::CurveUsed0 + r, r < rows && ! used.rows[r].bypass ? used.rows[r].dest : "");
+            inst.setNativeText (t::CurveUsedFaint0 + r, r < rows && used.rows[r].bypass ? used.rows[r].dest : "");
+            inst.setNativeText (t::CurveUsedAmount0 + r, amount);
+        }
+        char more[24] = {};
+        if (used.total > rows)
+            std::snprintf (more, sizeof more, "+ %d more", used.total - rows);
+        inst.setNativeText (t::CurveUsedMore, more);
+        inst.setNativeText (t::CurveUsedEmpty, curvePage && used.total <= 0 ? "NOT ROUTED: tap TARGETS to add" : "");
     }
-    /** The page title of the NOTE / VELO sub-tab (static-native-captions.json filternote / filtervelo draws the same rect on the host layer). It is drawn AFTER the curve editor: its graph frame is opaque and covers the top
-        strip of the page, so a title drawn with the page never showed on the overlay plane. */
-    void drawCurvePageTitle (gpu::SceneBuilder& sb) const
+    void clearNativeTexts (IInstanceView& inst) const noexcept
     {
-        if (! curveView() || ! geo_.subTabPage() || geo_.rect().w <= 0)
-            return;
-        ui::Pen p (sb, true, false);
-        p.textLeft ({ geo_.rect().x + 22, geo_.rect().y + 4, 400, 56 }, view_ == kViewNote ? "FILTER NOTE" : "FILTER VELO", ui::theme::kPageTitleSize, p.c (ui::theme::L().text, 255), ui::theme::L().fMin);
+        namespace t = nativeui::nativetext;
+        for (int line = t::FilterTitle; line <= t::CurveUsedEmpty; ++line)
+            inst.setNativeText (line, "");
     }
-
 
     /** The groups of the page in reading order: the filter screen has MAIN, TRACK, OUT (and FORMANT with the Formant model); the modulation list one per row. The active group is on Q 1 .. 4, the
         next three (wrapping) on 5 .. 16. */
@@ -1926,7 +1948,9 @@ private:
     FilterGeometry geo_;
     ui::FilterDisplay display_;
     ScalarCurveUi curve_[2];   // [0] velocity (VELO), [1] note (NOTE)
-    ui::ListPopup destList_;
+    NativeListCells listCells_;
+    const char* destHeader_ = nullptr;
+    bool destHeaderBack_ = false;
     ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
     ModRowsPage targets_ { ModRowsPage::Kind::Targets };
     NativeModTargets nativeTargets_;

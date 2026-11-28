@@ -557,48 +557,10 @@ struct ScalarUsedBy
     ScalarUsedRow rows[kMaxRows];
 };
 
-/** The USED BY list of the editor: the slots that use the source (destination, depth, polarity, AUX), up to four rows and "+ n more", or "NOT ROUTED". A display, no touch; drawn in the colour the graph's line has. */
-class ScalarUsedByList : public Component
+/** The rows of the USED BY list: the geometry only (the text of a row is a native Label of the skin, the lines nativeui::nativetext::CurveUsed*; the owner publishes ScalarUsedBy). */
+struct ScalarUsedByList
 {
-public:
     static constexpr int kRowH = 36, kShownRows = 4;
-    const ScalarUsedBy* used = nullptr;
-    uint32_t colour = 0;   // the dot of a row that is not bypassed (the line colour of the graph)
-
-    Size minSize() const override { return { 200, (kShownRows + 1) * kRowH }; }
-    int touchTargets (Rect*, int) const override { return 0; }
-    Change touchDown (int, int, double) override { captured_ = false; return Change::none(); }
-
-protected:
-    void drawBody (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        if (used == nullptr || used->total <= 0)
-        {
-            p.textCentered ({ rect_.x, rect_.y + 12, rect_.w, kRowH * 2 }, "NOT ROUTED: tap TARGETS to add", T.fLabel, p.c (T.textDim, 255), T.fMin);
-            return;
-        }
-        const int rows = std::min (used->count, kShownRows);
-        for (int r = 0; r < rows; ++r)
-        {
-            const ScalarUsedRow& u = used->rows[r];
-            const Rect rr { rect_.x, rect_.y + r * kRowH, rect_.w, kRowH };
-            char right[24];
-            std::snprintf (right, sizeof right, "%s%+d%%%s", u.aux ? "AUX " : "", u.percent, u.bipolar ? " BI" : "");
-            const int rw = std::min (rr.w / 2, static_cast<int> (std::ceil (Pen::textWidth (right, T.fLabel))) + 8);
-            const uint32_t ink = p.c (u.bypass ? T.textFaint : T.text, 255);
-            p.disc (static_cast<float> (rr.x + 5), static_cast<float> (rr.y + rr.h / 2), 3.0f, p.c (u.bypass ? T.textFaint : colour, 255));
-            p.textLeft ({ rr.x + 14, rr.y, rr.w - 14 - rw - 6, rr.h }, u.dest, T.fLabel + 1.0f, ink, T.fMin);
-            p.textRight ({ rr.right() - rw, rr.y, rw, rr.h }, right, T.fLabel, p.c (T.textDim, 255), T.fMin);
-        }
-        if (used->total > rows)
-        {
-            char more[24];
-            std::snprintf (more, sizeof more, "+ %d more", used->total - rows);
-            const Rect rr { rect_.x, rect_.y + rows * kRowH, rect_.w, kRowH };
-            p.textLeft ({ rr.x + 14, rr.y, rr.w - 14, 24 }, more, T.fLabel, p.c (T.textDim, 255), T.fMin);
-        }
-    }
 };
 
 /** The model of a native two-state cell (SNAP, LEGATO): the id, the rectangle, the state; no drawing. */
@@ -641,7 +603,8 @@ public:
 
     using UsedRow = ScalarUsedRow;
     using UsedBy = ScalarUsedBy;
-    ScalarUsedByList usedList;   // the rows of USED BY (a display part of the editor)
+    Rect titleAperture_;         // where the host shows the page title through the frame of the graph
+    Rect usedListRect_;          // where the rows of USED BY stand (the skin's native Labels)
     UsedBy used;
     char glideText[16] = {};       // "120 ms": the glide time of the legato (master.portamento.time), read only
 
@@ -661,7 +624,6 @@ public:
         {
             f->state.min = lfo::kMinGrid; f->state.max = lfo::kMaxGrid; f->state.step = 1.0; f->state.defaultValue = 4.0; f->state.value = 4.0;
         }
-        usedList.used = &used;
         groups[0].set (0, &point); groups[0].set (1, &xField); groups[0].set (2, &yField); groups[0].set (3, &curveField);
         groups[1].set (0, &legato); groups[1].set (1, &gridX); groups[1].set (2, &gridY); groups[1].set (3, &snap);
         setActiveGroup (0);
@@ -683,11 +645,12 @@ public:
     static const char* title (scurve::Source s) noexcept { return s == scurve::Source::Note ? "NOTE" : "VELO"; }
 
     // ---- the state the owner gives
-    void setSource (scurve::Source s) { canvas.state.source = s; usedList.colour = canvas.lineColour(); sync(); }
+    void setSource (scurve::Source s) { canvas.state.source = s; sync(); }
     scurve::Source source() const noexcept { return canvas.state.source; }
     void setLegato (bool on) { legato.state.on = on; }
     void setGlide (const char* text) { setText (glideText, sizeof glideText, text); }
     void setUsedBy (const UsedBy& u) { used = u; }
+    void setTitleAperture (const Rect& r) noexcept { titleAperture_ = r; }
     /** The curve of the content (not while a finger is down on the canvas). */
     void setCurve (const scurve::Pt* pts, int count) { canvas.setCurve (pts, count); sync(); }
     int activeGroup() const noexcept { return active_; }
@@ -801,12 +764,9 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen p (sb, enabled_, inactive_);
-        const std::array<Rect, 1> corner { expandBtn.rect() };
-        paintAroundNativeCells (sb, graphRect_, corner, [&] { drawNativeGraphFrame (p, graphRect_); });
+        const std::array<Rect, 2> cutOuts { expandBtn.rect(), titleAperture_ };   // the native collapse button and the page title (a native Label of the skin shows through)
+        paintAroundNativeCells (sb, graphRect_, cutOuts, [&] { drawNativeGraphFrame (p, graphRect_); });
         canvas.draw (sb);
-        if (! compact_) usedList.draw (sb);
-        Cell cell (sb, rect_);
-        drawExtra (p);
         if (ownQFrames_)
         {
             const int maxG = compact_ ? 1 : kMaxGroups;
@@ -865,8 +825,7 @@ protected:
         usedRect_ = { sx, uy, sw, std::max (0, gr.bottom() - uy) };
         targets.place ({ usedRect_.x + 8, usedRect_.bottom() - 8 - 56, usedRect_.w - 16, 56 });
         const int ly = usedRect_.y + kTitleH - 12;
-        usedList.place ({ usedRect_.x + 8, ly, std::max (0, usedRect_.w - 16), std::max (0, targets.rect().y - 4 - ly) });
-        usedList.colour = canvas.lineColour();
+        usedListRect_ = { usedRect_.x + 8, ly, std::max (0, usedRect_.w - 16), std::max (0, targets.rect().y - 4 - ly) };
         // ---- the bottom band: two blocks, a Q group each
         const int bwid = (rect_.w - 3 * m) / 2;
         blocks_[0] = { rect_.x + m, bandY, bwid, kBandH };
@@ -891,7 +850,7 @@ protected:
         targets.place ({ rect_.right() - targetsW, rect_.y, targetsW, 48 });
         glideRect_ = {};
         usedRect_ = {};
-        usedList.place ({});
+        usedListRect_ = {};
 
         const int optRowH = 56, editH = 88;
         const int optY = rect_.bottom() - optRowH;
@@ -918,21 +877,6 @@ protected:
         init.place ({});
         undoButton.place ({});
         del.place ({});
-    }
-    void drawExtra (Pen& p) const
-    {
-        const theme::Look& T = theme::L();
-        if (compact_)
-        {
-            p.textLeft ({ blocks_[0].x + 10, blocks_[0].y + 3, std::max (0, blocks_[0].w - 20), 16 }, groupName (0), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-            const char* hdr = canvas.state.source == scurve::Source::Note ? "NOTE · KEY CURVE" : "VELO · VELOCITY CURVE";
-            p.textLeft ({ graphRect_.x + 12, graphRect_.y + 4, std::max (0, graphRect_.w - 84), 56 }, hdr, T.fLabel, p.c (T.textDim, 255), T.fMin);
-            return;
-        }
-        for (int i = 0; i < kMaxGroups; ++i)
-            p.textLeft ({ blocks_[i].x + 10, blocks_[i].y + 3, std::max (0, blocks_[i].w - 20), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        // the title of the USED BY block (the rows are the display part `usedList`)
-        p.textLeft ({ usedRect_.x + 10, usedRect_.y + 6, usedRect_.w - 20, 18 }, "USED BY", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
     }
     Rect blocks_[kMaxGroups], usedRect_, glideRect_, graphRect_;
     int active_ = -1;

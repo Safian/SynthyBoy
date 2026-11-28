@@ -703,11 +703,10 @@ private:
             ground (422.0f, dialTop, x1, dialBottom);
             ground (x0, dialBottom, x1, static_cast<float> (play::kTabY + play::kTabH));
         };
-        if (env_ != nullptr && ! env_->isMain())   // the full screen of the envelope covers the whole plugin area of the page: its page, its dots, its popups
+        if (env_ != nullptr && ! env_->isMain())   // the full screen of the envelope covers the whole plugin area of the page: its page and its dots
         {
             env_->drawPage (sb);
             env_->drawLive (sb);
-            env_->drawPopup (sb);
             return;
         }
         if (lfo_ != nullptr && ! lfo_->isMain())   // the full screen of the LFO likewise: its page (the editor, the targets), its cursors, its popups
@@ -777,7 +776,7 @@ private:
                 if (live)
                     env_->drawLive (sb);
                 else
-                    env_->drawCompact (sb, true);
+                    env_->drawCompact (sb);
                 continue;
             }
             if (p == 2 && usePageLfo_)   // and the LFO (lfo_ui.h): the display with the cursors of the voices, the Q group RATE

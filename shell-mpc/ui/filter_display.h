@@ -98,7 +98,8 @@ public:
     /** The plot area inside the block: a margin at the left for the dB scale and at the bottom for the frequencies (the formant pad uses the whole inside). */
     void placeGraph (Rect graph, Rect power, Rect expand)
     {
-        headerCorners_ = { power, expand };
+        // the cut-outs of the frame: the power switch, the expand button and the page title (a native Label of the skin shows through)
+        headerCorners_ = { power, expand, Rect { graph.x + 74, graph.y + 3, std::max (0, graph.w - 204), 57 } };
         place (graph);
     }
 
@@ -536,7 +537,7 @@ protected:
 private:
     int idCutoff_ = 0, idReso_ = 0;
     int idFormantX_ = 0, idFormantY_ = 0;
-    std::array<Rect, 2> headerCorners_ {};
+    std::array<Rect, 3> headerCorners_ {};
     // gesture data (not the value): the finger is down, the handle it holds (1, 2, 0 = formant), the position of the last report, the second change of a touch
     bool dragging_ = false;
     int grabbed_ = 0;

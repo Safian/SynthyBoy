@@ -3,7 +3,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// A page that needs a list of choices which ARE a parameter (a stepped parameter with names) does not need this: the binder (binder.h) opens a ListPopup from the parameter's choices. This is for
+// A page that needs a list of choices which ARE a parameter (a stepped parameter with names) does not need this: the binder (binder.h) opens the host list from the parameter's choices. This is for
 // the other lists: the names come from the plugin, the selection is a number the plugin keeps (and saves in the chunk), the load happens off the overlay thread (the plugin's display thread).
 // SynthyBoy's own sample / instrument browser (shell-mpc/overlay/content_browser.h, IInstanceView::contentRoots / requestContent) is the specific version of this; the migration plan keeps it there.
 //
@@ -23,7 +23,7 @@ public:
     /** The title above the list ("PRESETS"). */
     virtual const char* title() const noexcept = 0;
     virtual int count() const noexcept = 0;
-    /** The name of entry `index` (at most 12 characters are shown: ListPopup). */
+    /** The name of entry `index` (at most 12 characters are shown). */
     virtual const char* name (int index) const noexcept = 0;
     /** The selected entry, -1 when none. */
     virtual int selected() const noexcept = 0;

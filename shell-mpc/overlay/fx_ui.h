@@ -148,6 +148,7 @@ public:
     bool nativeControls() const noexcept { return nativeControls_; }
     void leftTab (IInstanceView& inst) noexcept
     {
+        inst.setNativeText (nativeui::nativetext::FxGalleryHead, "");
         inst.setNativeFxCells (0, nullptr);
         inst.setNativeFxHeader ({});
         inst.setNativeFxChain ({});
@@ -205,7 +206,13 @@ public:
         inst.setNativeFxBands (nativeBands());
         inst.setNativeFxHeader (nativeHeader());
         syncNativeCells (inst);
+        publishNativeTexts (inst);
         publishQGroup (inst);
+    }
+    /** The headline (or the note when no type is offered) of the effect gallery: a text line of the host skin (nativeui::nativetext::FxGalleryHead, a native Label of the FX tab). */
+    void publishNativeTexts (IInstanceView& inst) const noexcept
+    {
+        inst.setNativeText (nativeui::nativetext::FxGalleryHead, galleryShown() ? (galleryN_ == 0 ? galleryNote_ : galleryHeadline_) : "");
     }
 
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
@@ -659,15 +666,12 @@ private:
     {
         return i >= 0 && i < galleryN_ ? ui::fxgallery::cardRectOfType (galleryRect(), galleryKinds_[i]) : ui::Rect {};
     }
-    /** The headline (or the note when no type is offered) and the pictures of the cards of the gallery: the part of it the host cannot draw. */
+    /** The pictures of the cards of the gallery (graphs of what an effect does: the part of it the host cannot draw; the headline is a native Label). */
     void drawGallery (gpu::SceneBuilder& sb) const
     {
         const ui::Rect area = galleryRect();
         ui::Pen p (sb, true);
         ui::Cell cell (sb, area);
-        const ui::theme::Look& T = ui::theme::L();
-        p.textLeft ({ area.x + ui::fxgallery::kPad, area.y + 4, std::max (0, area.w - 2 * ui::fxgallery::kPad), ui::fxgallery::kHeadH - 8 }, galleryN_ == 0 ? galleryNote_ : galleryHeadline_,
-                    T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
         for (int i = 0; i < galleryN_; ++i)
         {
             const ui::Rect plot = ui::fxgallery::pictureRect (galleryCardRect (i));

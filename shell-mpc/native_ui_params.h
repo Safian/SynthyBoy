@@ -143,9 +143,16 @@ constexpr int kNoteMask = kNativeText + kNativeTextLines;
 constexpr int kNoteMaskHandles = 13;   // 12 notes (bit 0 = C .. bit 11 = B) and the gate (1 while the mask is on the page)
 constexpr bool isLfoPickOffset (int offset) noexcept { return offset >= kLfoPick && offset < kNativeText; }
 constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kNativeText; }
-constexpr bool isNativeTextOffset (int offset) noexcept { return offset >= kNativeText && offset < kNoteMask; }
-constexpr int kCount = kNoteMask + kNoteMaskHandles;
-constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kCount; }
+// Appended 2026-11-28 (ng/drawenvfx): more read-only text lines (native_text.h, the lines after the Mod page's five): the target tags of the Env page, the filter page title and block names, the NOTE / VELO used-by list, the FX gallery headline.
+constexpr int kNativeText2 = kNoteMask + kNoteMaskHandles;
+constexpr int kNativeText2Lines = 29;
+constexpr int kCount = kNativeText2 + kNativeText2Lines;
+/** The handle of text line `line` (0 .. kNativeTextLines + kNativeText2Lines - 1; the first five belong to the Mod page, the rest follow the note mask). */
+constexpr int nativeTextOffset (int line) noexcept { return line < kNativeTextLines ? kNativeText + line : kNativeText2 + (line - kNativeTextLines); }
+constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || (offset >= kNativeText2 && offset < kCount); }
+/** The text line of handle `offset` (isNativeTextOffset (offset) must hold). */
+constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : kNativeTextLines + (offset - kNativeText2); }
+constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }
 constexpr bool isFilterChainMenu (int offset) noexcept { return offset >= kFilterChainMenu && offset < kFxEditorPower; }
 constexpr bool isOscDetailOffset (int offset) noexcept { return offset >= kOscDetail && offset < kOscDetail + kOscDetailHandles; }
 constexpr bool isFxBandOffset (int offset) noexcept { return offset >= kFxBandBase && offset <= kFxBandMode; }

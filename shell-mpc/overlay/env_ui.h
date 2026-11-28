@@ -7,7 +7,7 @@
 //
 // What it shows (UiStack, ui_stack.h; the element id of this UI is kElementEnv, the pages above it are ours): main = the compact view in the middle third of the Play page (the graph; the four ADSR dials, the selector and the
 // full screen button are native cells of the Play skin); full = the full screen (the graph; every control is a native cell); detail pages above it: the targets of the envelope (the modulation matrix seen from the source), the list that
-// picks a new target (groups, then the parameters of a group; the host list is the only list: ListPopup), the modulations of one control (a long press on a dial).
+// picks a new target (groups, then the parameters of a group; the native picker cells: native_list_cells.h), the modulations of one control (a long press on a dial).
 // What it does with a touch: the graph gives a Change { id, kind, value } (a handle moved); a native cell of the skin writes its value through the native bridge (consumeNativeEditor) into the row it stands for (row.key, the
 // engine table); the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back, so host automation, presets and the host's own widgets show on the next frame.
 // Units: the time dials and the graph follow `envN.units`: milliseconds (envN.attack ..) or beats (envN.attack_beats ..); the sustain and the three curves have one parameter each.
@@ -26,12 +26,12 @@
 #include "../q_router.h"
 #include "../ui/binding.h"
 #include "../ui/env_graph.h"
-#include "../ui/list.h"
 #include "../ui/native_apertures.h"
 #include "../ui/play_rows.h"
 #include "instance_view.h"
 #include "mod_rows_page.h"
 #include "modulation_window.h"
+#include "native_list_cells.h"
 #include "native_marker_covers.h"
 #include "native_mod_targets_ui.h"
 #include "page_layout.h"
@@ -133,7 +133,7 @@ public:
     }
 
     void drawPageGround (gpu::SceneBuilder&) const noexcept {}
-    bool isNativeControl (int x, int y) const noexcept { return nativeCellAt (x, y); }
+    bool isNativeControl (int x, int y) const noexcept { return listShown() || nativeCellAt (x, y); }
 
     // ---- standalone native instance choice and navigation helpers
     static const char* const* instanceNames() noexcept
@@ -172,11 +172,6 @@ public:
         const ui::Rect tab { 0, kTabY, w, kTabH };
         layoutCompact();
         layoutFull();
-        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup (tab);
-        list_.setId (kList);
-        list_.setBackdropId (kListBackdrop);
-        list_.setHeaderId (kListHeader);
         targets_.place (tab);
         mods_.place (tab);
         targets_.back.setId (kTargetsBack);
@@ -251,7 +246,6 @@ public:
             layoutFull();
         }
         pageEnv_ = std::clamp (in.instance, 1, kEnvs);
-        std::snprintf (captionText_, sizeof captionText_, "ENV %d", pageEnv_);
         if (selectorInstance_ != &inst || selectorGeneration_ != inst.stateGeneration())
         {
             inst.setNativeEnvEditor (false, nullptr);
@@ -280,7 +274,6 @@ public:
     {
         drawPage (sb);
         drawLive (sb);
-        drawPopup (sb);
     }
 
     bool isMain() const noexcept { return stackDepth_ == 0; }
@@ -293,67 +286,43 @@ public:
     const char* qGroupName() const noexcept { return qName_; }
 
     // ---- the drawing (a picture is one scene of cached cells, then the live parts, then the popups)
-    /** The opaque ground and the compact view (main state). */
-    void drawCompact (gpu::SceneBuilder& sb, bool nativeBackground = false) const
+    /** The compact view (main state): the graph and the Q focus of the bank (the host draws everything else of the Play page). */
+    void drawCompact (gpu::SceneBuilder& sb) const
     {
-        const ui::theme::Look& L = ui::theme::L();
-        auto ground = [&] (int x0, int y0, int x1, int y1)
-        {
-            if (nativeBackground)
-                return;   // Native Play background also owns the gaps between controls.
-            if (x1 <= x0 || y1 <= y0)
-                return;
-            ui::Cell cell (sb, { x0, y0, x1 - x0, y1 - y0 }, 0);
-            sb.gradientRect (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
-        };
-        ground (kGroundX0, kTabY, kGroundX1, kTabY + 10);
         const ui::Rect atk = compactView_.knob[0];
         const ui::Rect dec = compactView_.knob[1];
         const ui::Rect sus = compactView_.knob[2];
         const ui::Rect rel = compactView_.knob[3];
-        ground (kGroundX0, kTabY + 66, kGroundX1, atk.y);
-        ground (kGroundX0, atk.y, atk.x, atk.bottom());
-        ground (atk.right(), atk.y, dec.x, atk.bottom());
-        ground (dec.right(), atk.y, kGroundX1, atk.bottom());
-        ground (kGroundX0, atk.bottom(), kGroundX1, sus.y);
-        ground (kGroundX0, sus.y, sus.x, sus.bottom());
-        ground (sus.right(), sus.y, rel.x, sus.bottom());
-        ground (rel.right(), sus.y, kGroundX1, sus.bottom());
-        ground (kGroundX0, sus.bottom(), kGroundX1, kTabY + kTabH);
         compactGraph_.draw (sb);
         if (highlight_ == 2 && ! ui::QGroup::wideDevice())
             drawBank (sb, ui::Rect::unite (ui::Rect::unite (atk, dec), ui::Rect::unite (sus, rel)));
     }
-    /** The opaque ground of the whole tab and the page of the stack (the full screen, the targets, the modulations of a control). */
+    /** The graph of the full screen, and the page of the stack above it (the targets, the modulations of a control; the cells of both and the lists are native). */
     void drawPage (gpu::SceneBuilder& sb) const
     {
+        if (listShown())
+        {
+            if (page_)
+                drawNativeMarkerCovers (sb, "env1");   // the native list cells fill the tab
+            return;
+        }
         if (hostBackground())
         {
             drawNativeMarkerCovers (sb, "env1");
-            drawFull (sb, false);
+            fullGraph_.draw (sb);
             return;
         }
         if (pageTop_ == 0)
         {
-            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());
-            drawFull (sb, true);
+            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());   // Play expansion: covers the compact cells of the Play page under the native cells
+            fullGraph_.draw (sb);
             return;
         }
         page::ground (sb);
-        if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
+        if (pageTop_ == kPageTargets)
             targets_.draw (sb);
         else if (pageTop_ == kPageMods)
             mods_.draw (sb);
-        else
-        {
-            ui::drawNativeCanvas (sb, ui::Rect { 0, kTabY, w_, kTabH }, nativeApertures());
-            drawFull (sb, true);
-        }
-    }
-    void drawPopup (gpu::SceneBuilder& sb) const
-    {
-        if (stackDepth_ > 0 && pageTop_ == kPageList)
-            list_.draw (sb);
     }
     /** The running dots (the graph that is on screen). */
     void drawLive (gpu::SceneBuilder& sb) const
@@ -373,12 +342,13 @@ public:
         else
             drawPage (sb);
         drawLive (sb);
-        drawPopup (sb);
         return page::sceneHash (scratch) ^ static_cast<uint32_t> (stackDepth_ * 7 + pageTop_);
     }
     /** The touch hit this UI's drawing (the main state: the middle third; any other state: the whole tab). */
     bool covers (int x, int y) const noexcept
     {
+        if (listShown())
+            return false;   // the native list cells fill the tab
         if ((pageTop_ == kPageTargets && targets_.nativeHit (x, y))
             || (pageTop_ == kPageMods && mods_.nativeHit (x, y)))
             return false;
@@ -585,6 +555,7 @@ public:
             return;
         nativePlayEditor_ = false;
         layoutFull();
+        publishNativeTags (inst, false);
         inst.setNativeEnvEditor (false, nullptr);
         const int frames[nativeui::kEnvSelectorCells] = {};
         inst.setNativeEnvSelector (frames);
@@ -601,6 +572,7 @@ public:
         nativeModulations_.update (inst, mods_, ! pickingSource_ && modsContextValid (inst),
             fromPlay ? PlayEnv : Env, static_cast<int> (destination), modRows_,
             [&] (ui::Change change) { handle (change, stack, inst); }, Modulations);
+        publishNativeList (inst, stack);
         if (stack.changes() != before)
         {
             stackDepth_ = stack.depth();
@@ -613,12 +585,13 @@ public:
     {
         nativeTargets_.hide (inst, targets_);
         nativeModulations_.hide (inst, mods_);
+        listCells_.hide (inst);
+        publishNativeTags (inst, false);
         targets_.setNativeControls (false);
         mods_.setNativeControls (false);
     }
     ModRowsPage& targetsPage() noexcept { return targets_; }
     ModRowsPage& modsPage() noexcept { return mods_; }
-    ui::ListPopup& list() noexcept { return list_; }
     /** The engine parameter behind a slot of the shown envelope (the milliseconds / beats version chosen by the units; -1: none). */
     int paramOfSlot (int slot) const noexcept
     {
@@ -812,59 +785,6 @@ private:
         pen.qFocus (frame);
     }
 
-    // ---- the picture of the full screen
-    void drawFull (gpu::SceneBuilder& sb, bool fixedLabels) const
-    {
-        fullGraph_.draw (sb);
-        ui::Pen p (sb, true, false);
-        ui::Cell cell (sb, ui::Rect { 0, kTabY, w_, kTabH });
-        if (fixedLabels)
-            drawFixedLabels (p);
-        drawLiveLabels (p);
-    }
-    void drawFixedLabels (ui::Pen& p) const
-    {
-        const ui::theme::Look& T = ui::theme::L();
-        p.textLeft (geo_.caption, page_ && captionText_[0] != '\0' ? captionText_ : "ENV", page_ ? ui::theme::kPageTitleSize : T.fLabel + 2.0f, p.c (page_ ? T.text : T.textDim, 255), T.fMin);   // the page title in page mode
-        for (int i = 0; i < kGroups; ++i)
-            p.textLeft ({ geo_.block[i].x + kBlockPad + 4, geo_.block[i].y + 3, std::max (0, geo_.block[i].w - 16), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-    }
-    void drawLiveLabels (ui::Pen& p) const
-    {
-        const ui::theme::Look& T = ui::theme::L();
-        // what the envelope modulates: tags in the top bar (text, no outline: they are not touch targets; the TARGETS cell opens the list), as many as fit, then "+n"
-        const ui::Rect t = geo_.tags;
-        if (t.w < 60 || numTargets_ <= 0)
-            return;
-        const float sz = T.fLabel;
-        int x = t.x, drawn = 0;
-        for (int i = 0; i < std::min (numTargetLines_, numTargets_); ++i)
-        {
-            char rest[12];
-            std::snprintf (rest, sizeof rest, "+%d", numTargets_ - (i + 1));
-            const int reserve = numTargets_ > i + 1 ? static_cast<int> (std::ceil (ui::Pen::textWidth (rest, sz))) + 16 : 0;
-            int w = static_cast<int> (std::ceil (ui::Pen::textWidth (targetLines_[i], sz))) + 22;
-            if (x + w + reserve > t.right())
-            {
-                if (i > 0)
-                    break;
-                w = t.right() - x - reserve;   // the first one is cut with an ellipsis rather than left out
-            }
-            if (w < 60)
-                break;
-            p.disc (static_cast<float> (x + 5), static_cast<float> (t.y + t.h / 2), 3.0f, p.c (T.flow[0], 255));
-            p.textLeft ({ x + 14, t.y, w - 14, t.h }, targetLines_[i], sz, p.c (T.text, 255), T.fMin);
-            x += w + 6;
-            ++drawn;
-        }
-        if (drawn < numTargets_)
-        {
-            char rest[12];
-            std::snprintf (rest, sizeof rest, "+%d", numTargets_ - drawn);
-            p.textLeft ({ x, t.y, std::max (0, t.right() - x), t.h }, rest, sz, p.c (T.textDim, 255), T.fMin);
-        }
-    }
-
     // ---- the native bridge
     int nativeFieldAt (int x, int y) const noexcept
     {
@@ -910,6 +830,21 @@ private:
         }
         inst.setNativeEnvTargetCount (numTargets_);
         inst.setNativeEnvEditor (visible, nativeCells_.data());
+        publishNativeTags (inst, visible);
+    }
+    /** What the envelope modulates, as the text lines of the tags in the top bar (nativeui::nativetext::EnvTag0 .., native Labels of the Env tabs and of the Play expansion): the first targets that fit (the page three, the Play
+        expansion one) and "+n" for the rest. */
+    void publishNativeTags (IInstanceView& inst, bool visible) const noexcept
+    {
+        namespace t = nativeui::nativetext;
+        const int slots = nativePlayEditor_ ? 1 : 3;
+        const int shown = visible ? std::min ({ numTargetLines_, numTargets_, slots }) : 0;
+        for (int i = 0; i < 3; ++i)
+            inst.setNativeText (t::EnvTag0 + i, i < shown ? targetLines_[i] : "");
+        char rest[12] = {};
+        if (visible && numTargets_ > shown)
+            std::snprintf (rest, sizeof rest, "+%d", numTargets_ - shown);
+        inst.setNativeText (t::EnvTagMore, rest);
     }
 
     bool consumeNativeEditor (IInstanceView& inst, UiStack& stack)
@@ -1254,20 +1189,37 @@ private:
         {
             for (const std::string& g : d.groups)
                 listNames_.push_back (g.c_str());
-            list_.state.header = nullptr;
-            list_.state.headerBack = false;
+            listHeader_ = nullptr;
+            listHeaderBack_ = false;
         }
         else
         {
             for (int c : d.choices[static_cast<size_t> (listGroup_)])
                 listNames_.push_back (uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (c))).name);
-            list_.state.header = d.groups[static_cast<size_t> (listGroup_)].c_str();
-            list_.state.headerBack = true;
+            listHeader_ = d.groups[static_cast<size_t> (listGroup_)].c_str();
+            listHeaderBack_ = true;
         }
-        list_.state.items = listNames_.data();
-        list_.state.count = static_cast<int> (listNames_.size());
-        list_.state.current = -1;
-        list_.showCurrent();
+        listCells_.restart();
+    }
+    /** The add-target / add-source list is on the screen as the native picker cells (nativeui::modboard; the skin instance `Osc Native List`). */
+    bool listShown() const noexcept { return pageTop_ == kPageList || (pageTop_ == kPageMods && pickingSource_); }
+    void publishNativeList (IInstanceView& inst, UiStack& stack)
+    {
+        if (! native() || ! listShown())
+        {
+            listCells_.hide (inst);
+            return;
+        }
+        NativeListCells::Data data;
+        data.header = listHeader_;
+        data.fallbackTitle = pickingSource_ ? "ADD SOURCE" : "SELECT TARGET";
+        data.items = listNames_.data();
+        data.count = static_cast<int> (listNames_.size());
+        data.headerBack = listHeaderBack_;
+        listCells_.publish (inst, data,
+            [&] (int index) { handle (ui::Change::indexed (kList, index, 1.0), stack, inst); },
+            [&] { if (pickingSource_) pickingSource_ = false; else handle (ui::Change::request (kListBackdrop), stack, inst); },
+            [&] { if (! pickingSource_) handle (ui::Change::request (kListHeader), stack, inst); });
     }
 
     // ---- the modulations page of one control (a long press on a dial or a switch)
@@ -1338,13 +1290,9 @@ private:
         for (const std::string& s : listText_)
             listNames_.push_back (s.c_str());
         sourceCount_ = n;
-        list_.state.header = "ADD SOURCE";
-        list_.state.headerBack = false;
-        list_.state.items = listNames_.data();
-        list_.state.count = n;
-        list_.state.current = -1;
-        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.showCurrent();
+        listHeader_ = "ADD SOURCE";
+        listHeaderBack_ = false;
+        listCells_.restart();
         pickingSource_ = true;
     }
     int sourceIds_[8] = {}, sourceCount_ = 0;
@@ -1355,8 +1303,8 @@ private:
     {
         if (stackDepth_ == 0)
             return &compactGraph_;
-        if (pageTop_ == kPageList || (pageTop_ == kPageMods && pickingSource_))
-            return &list_;
+        if (listShown())
+            return nullptr;
         if (pageTop_ == 0)
             return &fullGraph_;
         return nullptr;
@@ -1602,7 +1550,9 @@ private:
     ModRowsPage targets_ { ModRowsPage::Kind::Targets };
     NativeModTargets nativeTargets_;
     ModRowsPage mods_ { ModRowsPage::Kind::Modulations };
-    ui::ListPopup list_;
+    NativeListCells listCells_;
+    const char* listHeader_ = nullptr;
+    bool listHeaderBack_ = false;
     binding::SelectorSet selector_;      // ENV 1 .. 6 as "used + one free"; filled every update
     uibind::SelectorCells playCells_;    // the cells of the selector as positions (pullSelector)
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
@@ -1626,7 +1576,6 @@ private:
     uint8_t targetMask_ = 0;
     char targetLines_[3][40] = {};
     int numTargetLines_ = 0;
-    char captionText_[8] = {};
     struct GraphView { int selected = ui::envgraph::None; bool locked = true; double zoom = 0.0; };   // what the graph shows besides the envelope: the handle whose value is written, LOCKED, the zoom of the unlocked ruler
     GraphView graphView_[2];             // the compact graph, the full screen graph
     double modsAtMs_ = -1000.0;

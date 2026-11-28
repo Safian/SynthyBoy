@@ -23,7 +23,7 @@ This change log covers the MPC release (README.md#synthyboy).
 - **Level makeup for bypassed effects**: Added level compensation for device profiles (e.g. Key 61) when bypassing effects, ensuring consistent loudness compared to the full engine profile (XL) (docs/release/TIER-LEVEL-COMPENSATION.md).
 - **Oscillator performance**: Faster content oscillator implementation reduces overall CPU load (docs/release/CPU-REVIEW-CONTENT.md).
 - **Spectral voice start**: Refined voice start logic in Spectral mode; first 12 ms differ slightly from the previous version (docs/release/AUDIBLE-CHANGES-ROUND-13.md).
-- **List pop-up improvements**: UI list pop-ups now dynamically adjust to fit their content rows (docs/ui-components/list-popup.md).
+- **List pop-up improvements**: UI list pop-ups now dynamically adjust to fit their content rows.
 - **Point modulation**: Modulation points are now stored within saved LFO shapes (docs/ui-design/lfo-editor-capabilities.md).
 - **Modulation page Q knobs**: Added Q knobs for better control on the point modulation page (docs/MPC.md#q-proxies-and-the-display-pages).
 - **Filter CPU optimization**: Pair kernels implemented for filter stages, optimizing performance (docs/MPC.md#sound-differences-at-tier-low).

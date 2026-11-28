@@ -2080,7 +2080,7 @@ private:
         return pageTop_ == kPageMods && modsTargetParam_ >= 0 && modsPreset_ == inst.stateGeneration()
             && modsSource_ == sel_ && (isPage() || inst.playSelection (0) == sel_) && modsModulePowered (inst);
     }
-    /** While no modulation exists on the control, or while a source is being picked, the page is the list of the sources (case (c): ui::ListPopup). */
+    /** While no modulation exists on the control, or while a source is being picked, the page is the list of the sources (case (c): the native picker cells). */
     bool modsBoard() const noexcept { return modsPicking_ || mods_.numRows() == 0; }
     bool modsNativeHit (int x, int y, int* row = nullptr) const noexcept { return nativeModulations_.active() && ! modsBoard() && mods_.nativeHit (x, y, row); }
 
