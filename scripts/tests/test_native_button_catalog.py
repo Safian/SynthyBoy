@@ -95,15 +95,14 @@ class IconButtonTests(unittest.TestCase):
     def test_states_listed_in_the_catalogue_data(self):
         states = {(s["icon"], s["state"], s["look"]) for s in ICONS}
         for wanted in (("power", "on", "filled"), ("power", "off", "filled"), ("power", "disabled", "filled"),
-                       ("power", "on", "ghost"), ("power", "off", "ghost"), ("expand", "off", "filled")):
+                       ("power", "on", "ghost"), ("power", "off", "ghost")):
             self.assertIn(wanted, states)
         self.assertEqual({style.size(s["height"]) for s in ICONS if s["look"] == "ghost"}, {40, 48})
         for wanted in (("close", "off", "filled"), ("close", "disabled", "filled"), ("close", "off", "ghost")):
             self.assertIn(wanted, states)
 
-    def test_close_is_an_x_with_the_expand_stroke_at_40_percent_of_the_height(self):
+    def test_close_is_an_x_at_40_percent_of_the_height(self):
         art = style.size("button.art")
-        self.assertEqual(art["close"]["stroke"], art["expand"]["stroke"])
         self.assertAlmostEqual(2 * art["close"]["half"] / art["height"], 0.4, places=2)
         face = button.action_art(icon="close", look="ghost", height=48)
         ink = [(x, y) for y in range(48) for x in range(48) if face.getpixel((x, y))[3] > 128]

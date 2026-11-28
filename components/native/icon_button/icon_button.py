@@ -3,13 +3,13 @@
 """ICON BUTTON: the Button recipe with an icon where the text is, square (width = height), catalogue pictures.
 
 The face is `button.action_art(icon=..., height=..., look=...)`: look "filled" is the Button's shaded face, "ghost"
-has no fill and no keyline (icon only, transparent). Icons: the recipes POWER, EXPAND and CLOSE (an X). States: power on
+has no fill and no keyline (icon only, transparent). Icons: the recipes POWER and CLOSE (an X). States: power on
 (accent.green) / off (text.icon), disabled (the disabled look of style.dim_artwork). Docs: docs/ui-components/icon_button.md.
 """
 from components.native.button.button import action_art
 from components.style import color as _style_color, dim_artwork, size as _style_size
 
-ICONS = ("power", "expand", "close")
+ICONS = ("power", "close")
 STATES = ("on", "off", "disabled")
 LOOKS = ("filled", "ghost")
 SAMPLE_KEYS = {"id", "file", "alt", "caption", "icon", "height", "state", "look"}

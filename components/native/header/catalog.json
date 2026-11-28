@@ -53,22 +53,16 @@
             "text": "TARGETS"
           }
         ],
-        "right": [
-          "expand"
-        ],
-        "caption": "2 · LFO 9 (modulátor, nincs POWER): cím a bal szélen, WAVEFORM-legördülő (csak érték), TARGETS gomb; jobbra EXPAND",
-        "alt": "LFO 9 fejléc: LFO 9, WAVEFORM, TARGETS, EXPAND"
+        "caption": "2 · LFO 9 (modulátor, nincs POWER): cím a bal szélen, WAVEFORM-legördülő (csak érték), TARGETS gomb",
+        "alt": "LFO 9 fejléc: LFO 9, WAVEFORM, TARGETS"
       },
       {
         "id": "env-1",
         "file": "header-env-1.png",
         "width": "page",
         "title": "ENV 1",
-        "right": [
-          "expand"
-        ],
-        "caption": "3 · Env 1 (modulátor): csak cím; jobbra EXPAND",
-        "alt": "Env 1 fejléc: ENV 1, EXPAND"
+        "caption": "3 · Env 1 (modulátor): csak cím",
+        "alt": "Env 1 fejléc: ENV 1"
       },
       {
         "id": "filter-1",
@@ -99,25 +93,6 @@
         "alt": "Master fejléc: MASTER"
       },
       {
-        "id": "play-panel",
-        "file": "header-play-panel.png",
-        "width": "panel",
-        "power": "on",
-        "right": [
-          "expand"
-        ],
-        "caption": "6 · Play-panel fejléc a panel szélességén ({size:header.panel.width} px): POWER, a választó legördülő (kitölti a helyet, ő a panel címe), EXPAND",
-        "alt": "Play panel fejléc: POWER, Env 1 választó, EXPAND",
-        "centre": [
-          {
-            "kind": "dropdown",
-            "value": "Env 1",
-            "width": "header.dropdown.min_width",
-            "fill": true
-          }
-        ]
-      },
-      {
         "id": "osc-a-off",
         "file": "header-osc-a-off.png",
         "width": "page",
@@ -143,31 +118,8 @@
         "right": [
           "more"
         ],
-        "caption": "7 · Osc A kikapcsolt POWER-rel: a középső vezérlők tiltott kinézetűek",
+        "caption": "6 · Osc A kikapcsolt POWER-rel: a középső vezérlők tiltott kinézetűek",
         "alt": "Osc A fejléc kikapcsolt POWER-rel"
-      },
-      {
-        "id": "lfo-9-full",
-        "file": "header-lfo-9-full.png",
-        "width": "page",
-        "title": "LFO 9",
-        "centre": [
-          {
-            "kind": "dropdown",
-            "value": "Sine",
-            "width": "header.dropdown.min_width",
-            "fill": true
-          },
-          {
-            "kind": "button",
-            "text": "TARGETS"
-          }
-        ],
-        "right": [
-          "close"
-        ],
-        "caption": "8 · LFO 9 teljes képernyős állapotban: az EXPAND helyén CLOSE",
-        "alt": "LFO 9 fejléc teljes képernyőn, CLOSE gombbal"
       }
     ]
   }

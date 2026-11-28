@@ -80,7 +80,7 @@ LOOKS = ("flat", "shaded", "active", "ghost")
 
 
 def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.icon"), height=None, look=None):
-    """A native action button face: a text label or an icon (power, expand, close) on its box.
+    """A native action button face: a text label or an icon (power, close) on its box.
 
     height: None keeps the 48 px face every skin button uses; 32 / 40 / 48 / 56 take their `button.size.<px>`
             tokens (font, radius, text padding) and scale the icon about the box centre.
@@ -151,13 +151,8 @@ def action_art(*, icon=None, text=None, width=None, colour=_style_color("text.ic
                for a in range(*geometry['arc'])]
         stroke(arc, geometry['stroke'])
         stroke(geometry['stem'], geometry['stroke'])
-    elif icon == "expand":
-        geometry = art['expand']
-        arm = geometry['arm']
-        for x, y, dx, dy in geometry['corners']:
-            stroke([(x, y + dy * arm), (x, y), (x + dx * arm, y)], geometry['stroke'])
     elif icon == "close":
-        # An X: two diagonals, each `half` (40% of the 48 px button height, in all) around the centre; stroke as EXPAND.
+        # An X: two diagonals, each `half` (40% of the 48 px button height, in all) around the centre.
         geometry = art['close']
         cx, cy = geometry['center']
         half = geometry['half']

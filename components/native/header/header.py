@@ -3,7 +3,7 @@
 """HEADER: the full-width top row of a page or a Play panel (design proposal v0, catalogue only).
 
 Three zones in one row: LEFT = POWER (only for modules that can be switched off) and the page title, CENTRE =
-page-specific controls, RIGHT = the common buttons (EXPAND / CLOSE, MORE). Every face is rendered by an existing
+page-specific controls, RIGHT = the common buttons (MORE). Every face is rendered by an existing
 recipe at the shared content height (header.height - 2 x header.padding: 40 px with padding 8, 48 with padding 4); this module only places them. All sizes come from components/sizes.json
 (header.*), the examples from components/native/header/catalog.json. Docs: docs/ui-components/header.md.
 """
@@ -22,7 +22,7 @@ except ImportError:
 
 ZONES = ("left", "centre", "right")
 CENTRE_KINDS = ("dropdown", "button")
-RIGHT_KINDS = ("expand", "close", "more")
+RIGHT_KINDS = ("more",)
 POWER_STATES = ("on", "off")
 WIDTHS = ("page", "panel")
 
@@ -73,10 +73,6 @@ def power_face(state, height):
 
 
 def right_face(kind, height):
-    if kind == "expand":
-        return _icon_button.render_sample({"icon": "expand", "height": height, "state": "off", "look": "filled"})
-    if kind == "close":
-        return _icon_button.render_sample({"icon": "close", "height": height, "state": "off", "look": "filled"})
     if kind == "more":
         return _button.render_sample({"text": "MORE", "height": height, "state": "enabled"})
     raise ValueError(f"right button must be one of {RIGHT_KINDS}: {kind!r}")

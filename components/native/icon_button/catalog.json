@@ -87,61 +87,11 @@
         "look": "filled"
       },
       {
-        "id": "expand-off-filled-32",
-        "file": "icon-button-expand-off-filled-32.png",
-        "alt": "IconButton EXPAND, 32 px",
-        "caption": "EXPAND · 32 px",
-        "icon": "expand",
-        "height": "height.small",
-        "state": "off",
-        "look": "filled"
-      },
-      {
-        "id": "expand-off-filled-40",
-        "file": "icon-button-expand-off-filled-40.png",
-        "alt": "IconButton EXPAND, 40 px",
-        "caption": "EXPAND · 40 px",
-        "icon": "expand",
-        "height": "height.intermediate",
-        "state": "off",
-        "look": "filled"
-      },
-      {
-        "id": "expand-off-filled-48",
-        "file": "icon-button-expand-off-filled-48.png",
-        "alt": "IconButton EXPAND, 48 px",
-        "caption": "EXPAND · 48 px",
-        "icon": "expand",
-        "height": "height.medium",
-        "state": "off",
-        "look": "filled"
-      },
-      {
-        "id": "expand-off-filled-56",
-        "file": "icon-button-expand-off-filled-56.png",
-        "alt": "IconButton EXPAND, 56 px",
-        "caption": "EXPAND · 56 px",
-        "icon": "expand",
-        "height": "height.high",
-        "state": "off",
-        "look": "filled"
-      },
-      {
         "id": "power-disabled-filled-48",
         "file": "icon-button-power-disabled-filled-48.png",
         "alt": "IconButton POWER disabled, 48 px",
         "caption": "POWER disabled · 48 px",
         "icon": "power",
-        "height": "height.medium",
-        "state": "disabled",
-        "look": "filled"
-      },
-      {
-        "id": "expand-disabled-filled-48",
-        "file": "icon-button-expand-disabled-filled-48.png",
-        "alt": "IconButton EXPAND disabled, 48 px",
-        "caption": "EXPAND disabled · 48 px",
-        "icon": "expand",
         "height": "height.medium",
         "state": "disabled",
         "look": "filled"

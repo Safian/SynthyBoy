@@ -32,7 +32,7 @@ class HeaderCatalogTests(unittest.TestCase):
 
     def test_eight_examples_with_one_picture_each(self):
         self.assertEqual([e["id"] for e in EXAMPLES],
-                         ["osc-a", "lfo-9", "env-1", "filter-1", "master", "play-panel", "osc-a-off", "lfo-9-full"])
+                         ["osc-a", "lfo-9", "env-1", "filter-1", "master", "osc-a-off"])
         for example in EXAMPLES:
             with Image.open(DIRECTORY / "img" / example["file"]) as image:
                 self.assertEqual(image.size, (header.header_width(example["width"]), 56), example["id"])
@@ -85,7 +85,7 @@ class HeaderCatalogTests(unittest.TestCase):
         for example in EXAMPLES:
             _, placed = header.layout(example)
             left = [p for p in placed if p.zone == "left"]
-            self.assertEqual(left[0].x, m["side"], example["id"])           # title (or the Play panel's selector) first
+            self.assertEqual(left[0].x, m["side"], example["id"])           # title first
             if example.get("title"):
                 self.assertEqual(left[0].kind, "title")
                 text = label.render_label(example["title"], "font.page_title", "text.value", unit="em")
@@ -96,16 +96,14 @@ class HeaderCatalogTests(unittest.TestCase):
                 if example.get("title"):
                     self.assertEqual(power.x, left[0].x + left[0].face.width + m["gap"], example["id"])   # fixed gap after the title
                 else:
-                    self.assertEqual(power.x, m["side"], example["id"])    # the Play panel starts with POWER
+                    self.assertEqual(power.x, m["side"], example["id"])    # a header without a title starts with POWER
             elif example.get("title"):
                 self.assertEqual([p.kind for p in left], ["title"], example["id"])   # a modulator or Master: no POWER slot
-        play = next(e for e in EXAMPLES if e["id"] == "play-panel")
-        self.assertEqual([p.kind for p in header.layout(play)[1] if p.zone == "left"], ["power"])
 
     def test_right_zone_and_states(self):
         by_id = {e["id"]: header.layout(e)[1] for e in EXAMPLES}
-        self.assertEqual([p.kind for p in by_id["lfo-9"] if p.zone == "right"], ["expand"])
-        self.assertEqual([p.kind for p in by_id["lfo-9-full"] if p.zone == "right"], ["close"])
+        self.assertEqual([p.kind for p in by_id["lfo-9"] if p.zone == "right"], [])
+        self.assertEqual([p.kind for p in by_id["osc-a"] if p.zone == "right"], ["more"])
         self.assertEqual([p.kind for p in by_id["master"]], ["title"])
         on = {p.kind: p.face.tobytes() for p in by_id["osc-a"]}
         off = {p.kind: p.face.tobytes() for p in by_id["osc-a-off"]}
@@ -113,19 +111,6 @@ class HeaderCatalogTests(unittest.TestCase):
         self.assertNotEqual(on["dropdown"], off["dropdown"])
         self.assertEqual(on["title"], off["title"])
         self.assertEqual(on["more"], off["more"])
-
-    def test_play_panel_dropdown_fills_between_power_and_expand_with_gaps(self):
-        m = header.metrics()
-        play = next(e for e in EXAMPLES if e["id"] == "play-panel")
-        width, placed = header.layout(play)
-        self.assertEqual(width, style.size("header.panel.width"))
-        by_kind = {p.kind: p for p in placed}
-        power, drop, expand = by_kind["power"], by_kind["dropdown"], by_kind["expand"]
-        self.assertEqual(power.x, m["side"])
-        self.assertEqual(drop.x, power.x + power.face.width + m["gap"])                 # 8 px after POWER
-        self.assertEqual(drop.x + drop.face.width + m["gap"], expand.x)                 # 8 px before EXPAND
-        self.assertEqual(expand.x + expand.face.width + m["side"], width)
-        self.assertGreaterEqual(drop.face.width, style.size("header.dropdown.min_width"))
 
     def test_page_headers_fill_their_flexible_control_up_to_the_right_group(self):
         m = header.metrics()
@@ -142,21 +127,16 @@ class HeaderCatalogTests(unittest.TestCase):
 
     def test_buttons_are_the_button_and_icon_button_recipes_never_flat(self):
         flat = style.rgb("button.surface")
-        samples = {"power": lambda state: icon_button.render_sample({"icon": "power", "height": header.metrics()["content"], "state": state, "look": "filled"}),
-                   "expand": lambda state: icon_button.render_sample({"icon": "expand", "height": header.metrics()["content"], "state": "off", "look": "filled"})}
+        samples = {"power": lambda state: icon_button.render_sample({"icon": "power", "height": header.metrics()["content"], "state": state, "look": "filled"})}
         for example in EXAMPLES:
             _, placed = header.layout(example)
             for item in placed:
                 if item.kind == "power":
                     self.assertEqual(item.face.tobytes(), samples["power"](example["power"]).tobytes(), example["id"])
-                elif item.kind == "expand":
-                    self.assertEqual(item.face.tobytes(), samples["expand"]("off").tobytes(), example["id"])
-                elif item.kind == "close":
-                    self.assertEqual(item.face.tobytes(), icon_button.render_sample({"icon": "close", "height": header.metrics()["content"], "state": "off", "look": "filled"}).tobytes())
                 elif item.kind == "more":
                     self.assertEqual(item.face.tobytes(), button.render_sample({"text": "MORE", "height": header.metrics()["content"], "state": "enabled"}).tobytes())
             for item in placed:                # no flat (21,26,45) fill inside any button face
-                if item.kind in ("power", "expand", "close", "more", "button"):
+                if item.kind in ("power", "more", "button"):
                     flat_pixels = sum(1 for p in item.face.getdata() if p[3] == 255 and p[:3] == flat)
                     self.assertLessEqual(flat_pixels, 2, (example["id"], item.kind))   # a flat fill would be hundreds of pixels (an edge blend can hit it once)
             with Image.open(DIRECTORY / "img" / example["file"]) as image:
