@@ -563,5 +563,158 @@
       "size": "font.page_title",
       "colour": "text.value"
     }
+  ],
+  "mod_header_normal": [
+    {
+      "text": "SOURCE",
+      "rect": [
+        70,
+        66,
+        160,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label"
+    },
+    {
+      "text": "TARGET",
+      "rect": [
+        272,
+        66,
+        160,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label"
+    },
+    {
+      "text": "AMOUNT",
+      "rect": [
+        522,
+        66,
+        160,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label"
+    },
+    {
+      "text": "POLARITY",
+      "rect": [
+        1032,
+        66,
+        72,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label",
+      "justify": "horizontallyCentred"
+    },
+    {
+      "text": "STATE",
+      "rect": [
+        1110,
+        66,
+        72,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label",
+      "justify": "horizontallyCentred"
+    }
+  ],
+  "mod_header_scroll": [
+    {
+      "text": "SOURCE",
+      "rect": [
+        70,
+        66,
+        160,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label"
+    },
+    {
+      "text": "TARGET",
+      "rect": [
+        272,
+        66,
+        160,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label"
+    },
+    {
+      "text": "AMOUNT",
+      "rect": [
+        522,
+        66,
+        160,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label"
+    },
+    {
+      "text": "POLARITY",
+      "rect": [
+        988,
+        66,
+        72,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label",
+      "justify": "horizontallyCentred"
+    },
+    {
+      "text": "STATE",
+      "rect": [
+        1066,
+        66,
+        72,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.label",
+      "justify": "horizontallyCentred"
+    }
+  ],
+  "mod_detail_blocks": [
+    {
+      "text": "AUXILIARY SOURCE",
+      "rect": [
+        18,
+        142,
+        433,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.caption"
+    },
+    {
+      "text": "SHAPE",
+      "rect": [
+        475,
+        142,
+        308,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.caption"
+    },
+    {
+      "text": "TIME",
+      "rect": [
+        807,
+        142,
+        459,
+        22
+      ],
+      "size": "font.section",
+      "colour": "text.caption"
+    }
   ]
 }

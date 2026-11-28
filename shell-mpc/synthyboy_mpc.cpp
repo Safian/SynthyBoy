@@ -810,6 +810,32 @@ struct PluginInstance
             return inst.nativeModBoardPreset.load (std::memory_order_acquire) == stateGeneration()
                 && inst.nativeModBoard.take (field, expected, value);
         }
+        void setNativeText (int line, const char* text) noexcept override { inst.nativeText.set (line, text); }
+        void setNativeListText (const nativeui::nativetext::ListPage* page) noexcept override
+        {
+            if (page != nullptr)
+                inst.nativeListText.set (*page);
+            else
+                inst.nativeListText.clear();
+            inst.nativeModBoardDue.store (true, std::memory_order_release);
+        }
+        void setNativeNoteMask (bool shown, const nativeui::FxCell* fields) noexcept override
+        {
+            const auto preset = stateGeneration();
+            const bool newPreset = inst.nativeNoteMaskPreset.load (std::memory_order_relaxed) != preset;
+            if (! shown && inst.nativeNoteMask.layout() == 0 && ! newPreset)
+                return;
+            if (newPreset)
+                inst.nativeNoteMask.invalidate();
+            inst.nativeNoteMask.publish (shown ? 1 : 0, fields);
+            inst.nativeNoteMaskPreset.store (preset, std::memory_order_release);
+            inst.nativeNoteMaskDue.store (true, std::memory_order_release);
+        }
+        bool takeNativeNoteMask (int field, const nativeui::FxCell& expected, float& value) noexcept override
+        {
+            return inst.nativeNoteMaskPreset.load (std::memory_order_acquire) == stateGeneration()
+                && inst.nativeNoteMask.take (field, expected, value);
+        }
         bool nativeVoiceSequenceControls() const noexcept override { return true; }
         void setNativeVoiceState (const nativeui::voice::ViewState& state) noexcept override { inst.nativeVoice.publish (state); }
         bool takeNativeVoice (const nativeui::voice::ViewState& state, int field, float& value) noexcept override
@@ -1816,6 +1842,11 @@ struct PluginInstance
     nativeui::NativeCellBank<nativeui::moddetail::kHandles> nativeModDetailNavigation;
     nativeui::NativeCellBank<nativeui::modboard::kHandles> nativeModBoard;
     std::atomic<uint64_t> nativeModBoardPreset { 0 };
+    nativeui::nativetext::Lines nativeText;           // the text lines of the Mod page (read-only native Labels)
+    nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
+    nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
+    std::atomic<uint64_t> nativeNoteMaskPreset { 0 };
+    std::atomic<bool> nativeNoteMaskDue { false };
     std::atomic<int> nativeModSourceGroup { 0 }, nativeModDestinationGroup { 0 };
     std::array<int, nativeui::mod::kNavigation> nativeModReportedChoices {};   // display thread only
     std::shared_ptr<const synthyboy_mpc::overlay::OscContentSnapshot> nativeModReportedContent;   // display thread only
@@ -2025,8 +2056,25 @@ struct PluginInstance
         return index < 0 ? 0 : std::clamp (static_cast<int> (paramMirror[index].load (std::memory_order_relaxed) + 0.5f), 0, nativeui::kFilterChainLastChoice);
     }
 
+    /** The note `bit` of the mask of the transpose snap (0 / 1), read from the engine parameter the cells are bound to. */
+    float nativeNoteMaskValue (int bit) const noexcept
+    {
+        const int target = nativeNoteMask.at (bit).cell().target;
+        if (target < 0 || target >= static_cast<int> (synthyboy::paramCount()))
+            return 0.0f;
+        const int mask = static_cast<int> (std::lround (synthyboy::fromNormalised (synthyboy::paramTable()[target], qReadNorm (target)))) & 4095;
+        return ((mask >> bit) & 1) != 0 ? 1.0f : 0.0f;
+    }
+
     float nativeUiValue (int offset) const noexcept
     {
+        if (nativeui::isNativeTextOffset (offset))
+            return nativeText.value (offset - nativeui::kNativeText);
+        if (nativeui::isNoteMaskOffset (offset))
+        {
+            const int field = offset - nativeui::kNoteMask;
+            return field == nativeui::kNoteMaskHandles - 1 ? (nativeNoteMask.layout() != 0 ? 1.0f : 0.0f) : nativeNoteMaskValue (field);
+        }
         if (offset == nativeui::kLfoTargetsAction)
             return 0.0f;
         if (offset == nativeui::kFxEditorPower)
@@ -2052,6 +2100,8 @@ struct PluginInstance
                 return nativeModBoard.layout() == 1 ? 1.0f : 0.0f;
             if (field == nativeui::modboard::ListGate)
                 return nativeModBoard.layout() == 2 ? 1.0f : 0.0f;
+            if (field == nativeui::modboard::ListTitle)
+                return nativeModBoard.layout() == 2 && nativeListText.up() ? 1.0f : 0.0f;   // 1: the header of the list is a way UP (a browser), 0: the groups of the sources
             if (field >= nativeui::modboard::ListRowGate)
                 return nativeModBoard.layout() == 2 && nativeModBoard.at (field).cell().target >= 0 ? 1.0f : 0.0f;
             return 0.0f;
@@ -2730,6 +2780,17 @@ struct PluginInstance
                 reportNativeValue (e, nativeui::kModBoardControl + i, val,
                                    nativeModBoard.needsReport (link));
                 nativeModBoard.report (link);
+            }
+        }
+        for (int line = 0; line < nativeui::nativetext::kLines; ++line)
+            reportNativeValue (e, nativeui::kNativeText + line, nativeText.value (line));
+        if (nativeNoteMask.layout() != 0 || nativeNoteMaskDue.exchange (false, std::memory_order_acq_rel))
+        {
+            for (int i = 0; i < nativeui::kNoteMaskHandles; ++i)
+            {
+                const auto link = nativeNoteMask.at (i);
+                reportNativeValue (e, nativeui::kNoteMask + i, nativeUiValue (nativeui::kNoteMask + i), nativeNoteMask.needsReport (link));
+                nativeNoteMask.report (link);
             }
         }
         nativeVoicePoll (e);
@@ -4227,6 +4288,25 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             // may supply an uninitialised buffer while enumerating a saved track.
             buf[0] = '\0';
             const int offset = index - PluginInstance::nativeUiBase();
+            if (nativeui::isNativeTextOffset (offset))
+            {
+                const int line = offset - nativeui::kNativeText;
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, kCap, "Mod Text %d", line + 1);
+                else if (opcode == effGetParamDisplay)
+                    inst->nativeText.copy (line, buf, kCap);
+                return 1;
+            }
+            if (nativeui::isNoteMaskOffset (offset))
+            {
+                const int field = offset - nativeui::kNoteMask;
+                static constexpr const char* const notes[] { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, kCap, field < 12 ? "Snap Note %s" : "Snap Notes", field < 12 ? notes[field] : "");
+                else if (opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "On" : "Off");
+                return 1;
+            }
             if (offset == nativeui::kLfoTargetsAction)
             {
                 if (opcode == effGetParamName)
@@ -4308,6 +4388,12 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     namespace nb = nativeui::modboard;
                     const auto cell = inst->nativeModBoard.at (field).cell();
                     const char* text = "";
+                    if (field == nb::ListTitle || (field >= nb::ListRow && field < nb::ListBack))
+                    {
+                        // a list of the oscillator pages (the file browsers, the source of a new modulation) carries its own names
+                        if (inst->nativeListText.copy (field == nb::ListTitle ? -1 : field - nb::ListRow, buf, kCap))
+                            return 1;
+                    }
                     if (field == nb::ListTitle) text = "SELECT MODULATION";
                     else if (field >= nb::ListRow && field < nb::ListBack && cell.target >= 0)
                     {
@@ -5635,6 +5721,18 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
 #if SYNTHYBOY_MPC_OVERLAY
         const int nativeOffset = index - PluginInstance::nativeUiBase();
+        if (nativeui::isNativeTextOffset (nativeOffset))
+        {
+            std::memset (props, 0, sizeof (*props));
+            return 1;
+        }
+        if (nativeui::isNoteMaskOffset (nativeOffset))
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax | kVstParameterIsSwitch;
+            props->maxInteger = props->stepInteger = 1;
+            return 1;
+        }
         if (nativeOffset == nativeui::kFxEditorPower || nativeOffset == nativeui::kLfoTargetsAction)
         {
             std::memset (props, 0, sizeof (*props));
@@ -6549,6 +6647,15 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
             if (! restoring)
             {
                 const int offset = index - PluginInstance::nativeUiBase();
+                if (nativeui::isNativeTextOffset (offset))
+                    return;
+                if (nativeui::isNoteMaskOffset (offset))
+                {
+                    const int field = offset - nativeui::kNoteMask;
+                    if (field < nativeui::kNoteMaskHandles - 1)   // the gate is read-only
+                        inst->nativeNoteMask.post (inst->nativeNoteMask.at (field), parameter);
+                    return;
+                }
                 if (offset == nativeui::kLfoTargetsAction)
                 {
                     namespace n = nativeui::lfo;

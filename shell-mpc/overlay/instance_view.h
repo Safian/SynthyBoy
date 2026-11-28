@@ -28,6 +28,7 @@
 #include "../native_lfo_editor.h"
 #include "../native_master_controls.h"
 #include "../native_osc_controls.h"
+#include "../native_text.h"
 #include "../native_play_osc.h"
 #include "../native_voice_controls.h"
 
@@ -161,6 +162,13 @@ public:
     virtual bool takeNativeModDetailNavigation (int /*field*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
     virtual void setNativeModBoard (int /*gate*/, const nativeui::FxCell* /*fields*/) noexcept {}
     virtual bool takeNativeModBoard (int /*field*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
+    /** The text lines of the Mod page (nativeui::nativetext::Line) the host skin shows with native Labels. */
+    virtual void setNativeText (int /*line*/, const char* /*text*/) noexcept {}
+    /** The names of the rows of the list the modulation picker's native cells show (the file browsers and the source of a new modulation of the oscillator pages); nullptr: the picker's own names. */
+    virtual void setNativeListText (const nativeui::nativetext::ListPage* /*page*/) noexcept {}
+    /** The twelve notes of the transpose snap as native toggle cells: `fields` the 13 cells of nativeui::kNoteMask (the gate last), `shown` false hides them. */
+    virtual void setNativeNoteMask (bool /*shown*/, const nativeui::FxCell* /*fields*/) noexcept {}
+    virtual bool takeNativeNoteMask (int /*field*/, const nativeui::FxCell& /*expected*/, float& /*value*/) noexcept { return false; }
     /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the plugin-drawn pages show a thin amber bar at the top of the tab. */
     virtual bool tablesLoading() const noexcept { return false; }
     /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */

@@ -25,7 +25,7 @@ def caption_entries(view, *, prefix="Native Caption", gates=()):
     rows = json.loads(CAPTIONS.read_text()).get(view, [])
     for index, row in enumerate(rows):
         entry = _label_component(f"{prefix} {index}", "Text", "Data", tuple(row["rect"]),
-                                 host_font_height(row["size"]), style.argb(row["colour"]), "left verticallyCentred")
+                                 host_font_height(row["size"]), style.argb(row["colour"]), row.get("justify", "left") + " verticallyCentred")
         entry["componentData"]["data"]["text"] = row["text"]
         # Key 61 requires a valid model even for constant, read-only text.
         entry["handle remapping"]["map"] = [{"key": "Data", "value": "Parameter 0"}]

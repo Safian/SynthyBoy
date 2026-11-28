@@ -106,6 +106,8 @@ public:
         inst.setNativeModNavigation (0, 0, 0, nullptr);
         inst.setNativeModDetailNavigation (nullptr);
         inst.setNativeModBoard (0, nullptr);
+        for (int line = 0; line < nativeui::nativetext::kLines; ++line)
+            inst.setNativeText (line, "");
     }
 
     bool isNativeControl (int x, int y) const noexcept
@@ -214,6 +216,7 @@ public:
         publishNativeNavigation (inst, stack, true);
         publishNativeMatrix (inst, true);
         publishNativeBoard (inst, stack, true);
+        publishNativeText (inst);
         const bool full = nativeView() == nativeui::mod::Hidden && (! nativeControls_ || (pageTop_ != 0 && pageTop_ != kPageTargets && pageTop_ != kPageList));
         inst.setUiFullOpen (full);
         publishQGroup (inst);
@@ -702,6 +705,30 @@ private:
         for (int field = 0; field < n::kFields; ++field)
             if (field != sync && (field != n::kDetail + n::Delay || ! delayChanged))
                 apply (field);
+    }
+
+    /** The texts the host skin shows with native Labels (nativeui::nativetext, 71_mod_texts.py): the page title and the slot count of the matrix, the empty-filter lines, the title of the page of one slot. A line that does not apply is empty. */
+    void publishNativeText (IInstanceView& inst) const
+    {
+        namespace t = nativeui::nativetext;
+        char buf[t::kLineLen] = {};
+        const bool matrixPage = nativeControls_ && pageTop_ == 0;
+        inst.setNativeText (t::ModTitle, matrixPage ? "MOD MATRIX" : "");
+        if (matrixPage)
+            std::snprintf (buf, sizeof buf, "%d / %d SLOTS", matrix_.activeSlots(), synthyboy::kNumModSlots);
+        inst.setNativeText (t::ModCount, matrixPage ? buf : "");
+        const bool emptyFilter = matrixPage && ! matrix_.boardShown() && matrix_.visibleSlotCount() == 0;
+        inst.setNativeText (t::ModEmpty1, emptyFilter ? "NO SLOT FOR THIS FILTER" : "");
+        inst.setNativeText (t::ModEmpty2, emptyFilter ? "TAP + ADD TO MAKE ONE" : "");
+        buf[0] = '\0';
+        if (nativeControls_ && pageTop_ == kPageDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
+            const char* src = sp.source >= 0 ? sourceName (static_cast<int> (std::lround (inst.param (sp.source)))) : "";
+            const char* dst = sp.destination >= 0 ? destName (static_cast<int> (std::lround (inst.param (sp.destination)))) : "";
+            std::snprintf (buf, sizeof buf, "SLOT %02d   %s  ->  %s", openSlot_ + 1, src[0] != '\0' ? src : "---", dst[0] != '\0' ? dst : "---");
+        }
+        inst.setNativeText (t::ModDetail, buf);
     }
 
     void publishNativeBoard (IInstanceView& inst, UiStack& stack, bool consume)

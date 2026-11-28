@@ -131,6 +131,10 @@ def apply(tui, qlinks, ctx):
                 children.extend(caption_entries("master_header", prefix="Native Caption master header"))
                 # The block titles of both sides are part of their native panels (native_master).
                 gates = (f"IndexedEnabling/1/3/Parameter {master_view}",)
+            if view == "mod":
+                import native_ui_params
+                # the title belongs to the matrix page (matrix, board, empty filter): the title line is 0 on the slot page, the targets page and the list (71_mod_texts.py)
+                gates = (f"NonZero/Parameter {native_ui_params.native_base_index(ctx.param_count) + native_ui_params.NATIVE_TEXT_MOD_TITLE}",)
             children.extend(caption_entries(view, prefix="Native Caption " + view, gates=gates))
         children.append(sentinel)
         bg = root["backgroundData"]
