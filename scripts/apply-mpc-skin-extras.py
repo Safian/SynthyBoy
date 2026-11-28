@@ -65,6 +65,7 @@ def dump_json(value, indent=0, indent_step=4):
 class Context:
     def __init__(self, tui, params, skins_dir, meta=None):
         self._tui = tui
+        self.doc = params                    # the whole params.json (modSources, modDestinations, ...)
         self.params = params["params"]
         self._index = {p["key"]: i for i, p in enumerate(self.params)}
         self._keys = [p["key"] for p in params["params"]]

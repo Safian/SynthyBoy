@@ -133,12 +133,16 @@ enum Field { Tile = 0, Range = 1, Info = 2, Count = 3, Open = 4, Add = 5, AddAva
 constexpr int kHandles = kLanes * kLaneHandles;
 }
 constexpr int kFxBandLanes = kLfoTargetsAction + 1;
+// The host choices of the LFO (native_lfo_pick.h): the SOURCE of a point modulation, ADD SOURCE and ADD TARGET (GROUP and one TARGET list per group); appended after the band lanes.
+constexpr int kLfoPick = kFxBandLanes + fxbands::kHandles;
+constexpr int kLfoPickHandles = 44;
+constexpr bool isLfoPickOffset (int offset) noexcept { return offset >= kLfoPick && offset < kNativeText; }
+constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kNativeText; }
 // Appended 2026-11-28 (ng/modosc): read-only dynamic text lines of the Mod page (native_text.h) and the twelve notes of the transpose snap (cells bound by osc_ui.h publishNativeNoteMask).
-constexpr int kNativeText = kFxBandLanes + fxbands::kHandles;
+constexpr int kNativeText = kLfoPick + kLfoPickHandles;
 constexpr int kNativeTextLines = 5;
 constexpr int kNoteMask = kNativeText + kNativeTextLines;
 constexpr int kNoteMaskHandles = 13;   // 12 notes (bit 0 = C .. bit 11 = B) and the gate (1 while the mask is on the page)
-constexpr bool isFxBandsOffset (int offset) noexcept { return offset >= kFxBandLanes && offset < kNativeText; }
 constexpr bool isNativeTextOffset (int offset) noexcept { return offset >= kNativeText && offset < kNoteMask; }
 constexpr int kCount = kNoteMask + kNoteMaskHandles;
 constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kCount; }

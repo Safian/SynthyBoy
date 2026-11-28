@@ -202,8 +202,8 @@ int main (int argc, char** argv)
            && nativeBase + nativeui::kPzAction == 3492 && nativeBase + nativeui::kPzAvailability == 3495
            && nativeBase + nativeui::kMasterScaleInput == 3676 && nativeBase + nativeui::kFilterChainMenu == 3677
            && nativeBase + nativeui::kFxEditorPower == 3680 && nativeBase + nativeui::kLfoTargetsAction == 3681
-           && a->numParams == nativeBase + nativeui::kCount && a->numParams == 3781,
-           "the legacy prefix ends before the first Mixer peak handle 2719 (no peek handles), OSC detail begins at 3348 and the native block ends at 3682");
+           && nativeBase + nativeui::kLfoPick == 3781 && a->numParams == nativeBase + nativeui::kCount && a->numParams == 3825,
+           "the legacy prefix ends before the first Mixer peak handle 2719 (no peek handles), OSC detail begins at 3348 and the native block (the 44 LFO choice handles from 3781) ends at 3825");
     {
         constexpr int view = 3311, subPower = 3312, subOctave = 3316, aType = 3322,
                       lastRoute = 3342, noiseSound = 3343, lastLevel = 3346;

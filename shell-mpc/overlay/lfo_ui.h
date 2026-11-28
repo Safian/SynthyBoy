@@ -33,6 +33,7 @@
 
 #include "../native_lfo_detail.h"
 #include "../native_lfo_editor.h"
+#include "../native_lfo_pick.h"
 #include "../native_play_env_lfo.h"
 #include "../ui/binding.h"
 #include "../ui/lfo_names.h"
@@ -684,6 +685,7 @@ public:
             stackDepth_ = stack.depth();
             syncPages (stack, inst);
         }
+        updateNativePick (inst, stack);
         if (pageTop_ == kPageTargets || pageTop_ == kPageMods || stack.changes() != before)
             publishQGroup (inst);
     }
@@ -691,6 +693,7 @@ public:
     {
         targetsNative_.hide (inst, targetsView_);
         modsNative_.hide (inst, modsView_);
+        hideNativePick (inst);
     }
     LfoShapeLibrary& library() noexcept { return lib_; }
     ui::TextEntry& keyboard() noexcept { return entry_; }
@@ -895,11 +898,13 @@ private:
         const auto changes = stack.changes();
         updateNativeEditor (inst, stack, nowMs);
         updateNativeDetail (inst, stack, nowMs);
+        updateNativePick (inst, stack);
         if (stack.changes() != changes)
         {
             pull();
             publishNativeEditor (inst, nativeEditorView (inst, stack));
             publishNativeDetail (inst, nativeDetailView (inst, stack));
+            updateNativePick (inst, stack);
         }
         if (! nativePage_)
         {
@@ -1161,13 +1166,12 @@ private:
         modsDirty_ = true;
     }
 
-    // ---- the list menu: the destination to add, the source to add, the shapes and the actions of the editor. The rows are native cells of the host (nativeui::lfodetail menu); the plugin holds the names and the window.
-    enum class ListKind : uint8_t { None, Dest, Editor, ModSource, PointSource };
-    using DestIndex = uibind::DestIndex;
+    // ---- the list menu of the shape editor (SHAPES, MORE): the rows are native cells of the host (nativeui::lfodetail menu); the plugin holds the names and the window. The sources and the targets that are added
+    // here are NOT in it: ADD SOURCE, ADD TARGET and the SOURCE of a point modulation are host choices (nativeui::lfopick) that open the MenuOverlay of the host.
+    enum class ListKind : uint8_t { None, Editor };
     ListKind listKind_ = ListKind::None;
-    int listGroup_ = -1, underList_ = 0;
+    int underList_ = 0;
     std::vector<std::string> listText_;
-    std::vector<int> listChoice_;   // the choice (destination / source) behind row i of a destination or source list
     void placePageList() { menu_.parent = { 0, kTabY, w_, kTabH }; menu_.first = 0; }
     bool isSourceAssigned (int id) const noexcept
     {
@@ -1177,77 +1181,19 @@ private:
             return scan_.used[uibind::rndSource (id - uibind::kRndBase)];
         return false;
     }
-    /** The names of the list of the kind that is open (the editor lists have their own fill). */
+    /** The names of the editor list that is open. */
     void fillList (const IInstanceView* v)
     {
         (void) v;
         if (listKind_ == ListKind::Editor)
-        {
             fillEditorList();
-            return;
-        }
-        listText_.clear();
-        listChoice_.clear();
-        menu_.header = nullptr;
-        menu_.headerBack = false;
-        if (listKind_ == ListKind::Dest)
-        {
-            const DestIndex& d = DestIndex::get();
-            if (listGroup_ < 0)
-            {
-                for (size_t g = 0; g < d.groups.size(); ++g)
-                {
-                    listText_.push_back (d.groups[g]);
-                    listChoice_.push_back (static_cast<int> (g));
-                }
-                menu_.header = "ADD A TARGET";
-            }
-            else
-            {
-                for (int c : d.choices[static_cast<size_t> (listGroup_)])
-                {
-                    listText_.push_back (uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (c))).name);
-                    listChoice_.push_back (c);
-                }
-                menu_.header = d.groups[static_cast<size_t> (listGroup_)].c_str();
-                menu_.headerBack = true;
-            }
-        }
-        else if (listKind_ == ListKind::ModSource || listKind_ == ListKind::PointSource)
-        {
-            for (size_t i = 0; i < synthyboy::modSourceCount(); ++i)
-            {
-                const int choice = static_cast<int> (i) + 1;
-                listText_.push_back (uibind::sourceName (choice));
-                listChoice_.push_back (choice);
-            }
-            menu_.header = listKind_ == ListKind::ModSource ? "ADD A MODULATION SOURCE" : "MODULATE THE VALUE WITH";
-            menu_.headerBack = false;
-        }
-        menu_.items.clear();
-        for (const std::string& s : listText_)
-            menu_.items.push_back (s.c_str());
-        menu_.first = 0;
-        ++nativeMenuRevision_;
     }
     int listNativeRows() const noexcept { return menu_.nativeRows (nativeui::lfodetail::kRows); }
-    void openList (UiStack& stack, IInstanceView& v, ListKind kind)
-    {
-        listKind_ = kind;
-        listGroup_ = -1;
-        placePageList();
-        stack.openDetail (kPageList);
-        fillList (&v);
-    }
-    /** The header of the list was tapped: one level up (the destination groups, the editor lists), or the list closes. */
+    /** The header of the list was tapped: one level up (the editor lists), or the list closes. */
     void listUp (UiStack& stack, IInstanceView& v)
     {
-        if (listKind_ == ListKind::Dest && listGroup_ >= 0)
-        {
-            listGroup_ = -1;
-            fillList (&v);
-        }
-        else if (listKind_ == ListKind::Editor)
+        (void) v;
+        if (listKind_ == ListKind::Editor)
             editorListUp();
         else
             stack.back();
@@ -1257,33 +1203,6 @@ private:
     {
         if (listKind_ == ListKind::Editor)
             editorListChosen (index, stack, v);
-        else if (listKind_ == ListKind::Dest)
-        {
-            if (listGroup_ < 0)
-            {
-                listGroup_ = index;
-                fillList (&v);
-            }
-            else
-            {
-                const std::vector<int>& ch = DestIndex::get().choices[static_cast<size_t> (listGroup_)];
-                if (index >= 0 && index < static_cast<int> (ch.size()))
-                    addTarget (v, ch[static_cast<size_t> (index)]);
-                stack.back();
-            }
-        }
-        else if (listKind_ == ListKind::ModSource)
-        {
-            if (index >= 0 && index < static_cast<int> (listChoice_.size()))
-                addModulation (v, listChoice_[static_cast<size_t> (index)]);
-            stack.back();
-        }
-        else if (listKind_ == ListKind::PointSource)
-        {
-            if (index >= 0 && index < static_cast<int> (listChoice_.size()))
-                setPointSource (listChoice_[static_cast<size_t> (index)], v);
-            stack.back();
-        }
     }
 
     static const char* const* instanceNames() noexcept
@@ -1431,16 +1350,7 @@ private:
             return;
         }
         if (c.id == idAdd && c.kind == K::Request)
-        {
-            if (modulations)
-            {
-                if (modsContextValid (v))
-                    openList (stack, v, ListKind::ModSource);
-            }
-            else
-                openList (stack, v, ListKind::Dest);
-            return;
-        }
+            return;   // ADD SOURCE and ADD TARGET are host choices (nativeui::lfopick): the cell of the shared page is covered by them and adds nothing itself
         if (c.id == idPage && c.kind == K::Index)
         {
             if (modulations && modsContextValid (v))
@@ -2846,14 +2756,6 @@ private:
         loadPointMod (v, false);
         editor_.sync();
     }
-public:
-    /** The hook of the native SOURCE choice of the point modulation page (none in the skin yet): opens the list of the sources over the page. */
-    void openPointSourceList (UiStack& stack, IInstanceView& v)
-    {
-        if (pageTop_ == kPagePointMod && editor_.canvas.selection().first() >= 0)
-            openList (stack, v, ListKind::PointSource);
-    }
-private:
 
     bool nativeDetailHit (int x, int y) const noexcept
     {
@@ -2965,6 +2867,102 @@ private:
         publishNativeDetail (v, state);
     }
 
+
+    // ---- the host choices of the LFO (nativeui::lfopick): the SOURCE of a point modulation, ADD SOURCE of the MODULATIONS page, ADD TARGET (GROUP, then the TARGET of that group) of the TARGETS page. The host opens its own
+    // MenuOverlay for each (row tap marks, the tap on the header applies); the plugin only publishes the current index and takes the one the host applied. A choice that adds resets to its placeholder row.
+    static nativeui::lfoeditor::Range pickRange (int field) noexcept { return nativeui::lfopick::rangeOf (uibind::lfoPickLast (field)); }
+
+    nativeui::lfopick::State nativePickView (IInstanceView& v, const UiStack& stack) const
+    {
+        namespace n = nativeui::lfopick;
+        n::State state;
+        if (! v.nativeLfoPick())
+            return state;
+        const auto bit = [] (int field) { return uint64_t (1) << field; };
+        const auto detail = nativeDetailView (v, stack);
+        if (detail.context.view == nativeui::lfodetail::PointMod)
+        {
+            state.context.view = n::PointSource;
+            state.context.editor = detail.context.editor;
+            state.context.target = pmTarget_;
+            if (detail.allows (nativeui::lfodetail::Target))   // points are selected
+                state.fields |= bit (n::Source);
+            state.values[n::Source] = pickRange (n::Source).encode (detail.context.pointSource);
+        }
+        else if (modsNative_.active())
+        {
+            state.context.view = n::AddSource;
+            state.context.subject = modsTargetParam_;
+            state.fields |= bit (n::AddSourceChoice);
+        }
+        else if (targetsNative_.active())
+        {
+            state.context.view = n::AddTarget;
+            state.context.subject = source();
+            const int groups = std::min (n::kMaxGroups, static_cast<int> (uibind::DestIndex::get().groups.size()));
+            state.fields |= bit (n::Group);
+            state.values[n::Group] = pickRange (n::Group).encode (std::clamp (pickGroup_, 0, groups));
+            if (pickGroup_ > 0 && pickGroup_ <= groups)
+                state.fields |= bit (n::FirstTarget + pickGroup_ - 1);
+        }
+        else
+            return {};
+        state.context.owner = page_ ? 1 : 2;
+        state.context.slot = slot();
+        state.context.preset = v.stateGeneration();
+        return state;
+    }
+
+    void publishNativePick (IInstanceView& v, const nativeui::lfopick::State& state)
+    {
+        if (state.context.view == nativeui::lfopick::Hidden && ! pickShown_)
+            return;
+        v.setNativeLfoPick (state);
+        pickShown_ = state.context.view != nativeui::lfopick::Hidden;
+    }
+
+    void hideNativePick (IInstanceView& v)
+    {
+        pickGroup_ = 0;
+        publishNativePick (v, {});
+    }
+
+    void updateNativePick (IInstanceView& v, const UiStack& stack)
+    {
+        namespace n = nativeui::lfopick;
+        auto state = nativePickView (v, stack);
+        for (int field = 0; field < n::kCount && state.context.view != n::Hidden; ++field)
+        {
+            float value;
+            if (! v.takeNativeLfoPick (state, field, value))
+                continue;
+            const int index = static_cast<int> (pickRange (field).decode (value));
+            if (field == n::Source)
+            {
+                if (index > 0)
+                    setPointSource (index, v);
+            }
+            else if (field == n::AddSourceChoice)
+            {
+                if (index > 0)
+                    addModulation (v, index);
+            }
+            else if (field == n::Group)
+                pickGroup_ = index;
+            else if (index > 0)
+            {
+                const auto& choices = uibind::DestIndex::get().choices;
+                const auto group = static_cast<size_t> (field - n::FirstTarget);
+                if (group < choices.size() && index <= static_cast<int> (choices[group].size()))
+                    addTarget (v, choices[group][static_cast<size_t> (index) - 1]);
+                pickGroup_ = 0;
+            }
+            state = nativePickView (v, stack);
+        }
+        if (state.context.view != n::AddTarget)
+            pickGroup_ = 0;
+        publishNativePick (v, state);
+    }
 
     /** The two knobs of the page, as 0 .. 1: MODULATE (TIME, LEVEL, CURVE: 0, 0.5, 1) and AMOUNT (-100 .. +100 percent; 0.5 while nothing modulates the chosen value: the knob is off then). */
     float pointModVirtualValue (int id) const noexcept
@@ -3513,6 +3511,8 @@ private:
     uint64_t nativeEditorShape_ = 0;
     nativeui::lfoeditor::State nativeEditorState_ {};
     nativeui::lfodetail::View nativeDetailView_ = nativeui::lfodetail::Hidden;
+    int pickGroup_ = 0;      // the group chosen by ADD TARGET (0 none, 1 ..): the view state of the choice
+    bool pickShown_ = false;
     uint16_t nativeDetailFields_ = 0;
     uint64_t nativeMenuRevision_ = 0;
     // the editor: the lists (SHAPES, MORE), the name keyboard, the modulation page

@@ -15,6 +15,7 @@
 
 #include "../kit/param_source.h"
 #include "../kit/synthyboy_params.h"
+#include "../native_lfo_pick.h"
 #include "../ui/binding.h"
 #include "../ui/model.h"
 #include "instance_view.h"
@@ -562,5 +563,18 @@ struct DestIndex
         return false;
     }
 };
+
+/** The last index of a host choice of the LFO (nativeui::lfopick): the sources (SOURCE of a point modulation, ADD SOURCE), the groups of the matrix (GROUP) and the destinations of one group (TARGET of group g). */
+inline int lfoPickLast (int field) noexcept
+{
+    namespace n = nativeui::lfopick;
+    if (field == n::Source || field == n::AddSourceChoice)
+        return static_cast<int> (synthyboy::modSourceCount());
+    const DestIndex& d = DestIndex::get();
+    if (field == n::Group)
+        return std::min (n::kMaxGroups, static_cast<int> (d.groups.size()));
+    const auto group = static_cast<size_t> (field - n::FirstTarget);
+    return field >= n::FirstTarget && group < d.choices.size() ? static_cast<int> (d.choices[group].size()) : 0;
+}
 
 }}} // namespace synthyboy_mpc::overlay::uibind
