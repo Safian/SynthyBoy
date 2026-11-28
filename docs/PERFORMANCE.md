@@ -20,7 +20,7 @@ for two patches. Nothing is asserted.
   the unison cap (4) and the bypassed reverb and flanger make it cheaper than the same patch on the others: that is the point of the tiers.
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 build/bench/synthyboy_bench --engine own   --seconds 10          # both patches (--patch default | heavy | both)
 ```

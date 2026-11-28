@@ -4,7 +4,7 @@
 #
 # Debian/Ubuntu: sudo apt-get install g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf qemu-user ninja-build
 # cmake -S . -B build-armv7 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/armv7-linux-gnueabihf.cmake \
-#       -DSYNTHYBOY_BUILD_PLUGIN=OFF -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-arm;-L;/usr/arm-linux-gnueabihf"
+#       -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-arm;-L;/usr/arm-linux-gnueabihf"
 # (the exact CPU of the target is not decided yet, see docs/ARCHITECTURE.md 3.1: generic armv7-a + NEON here)
 
 set(CMAKE_SYSTEM_NAME Linux)

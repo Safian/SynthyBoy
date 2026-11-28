@@ -31,7 +31,7 @@
 ## 2. Gate Outputs (Literal)
 
 ### Build Gate
-`cmake -S . -B build -DSYNTHYBOY_BUILD_PLUGIN=OFF && cmake --build build -j8`
+`cmake -S . -B build && cmake --build build -j8`
 ```
 -- CLAP version: 1.2.7
 -- SYNTHYBOY_WITH_VITAL=ON: Vital-derived engine is built (core/engine-vital)

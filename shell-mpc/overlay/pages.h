@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the factory of the views: which view (and which element behind a page view, page_view.h) a view kind of the layout (overlay_layout.json) shows, and the readout targets they need.
-// SynthyBoyPageFactory is SynthyBoy's mpckit::IPageFactory (kit/page_set.h): the controller asks it for the view behind every PageDef of the page set (migration step 10 of docs/ui-components/TEMPLATE.md).
+// SynthyBoyPageFactory is SynthyBoy's mpckit::IPageFactory (kit/page_set.h): the controller asks it for the view behind every PageDef of the page set.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

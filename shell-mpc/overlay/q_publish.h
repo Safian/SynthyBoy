@@ -17,8 +17,7 @@ inline const bool kQDeviceRule = (QRouter::wideProbe() = &ui::QGroup::wideDevice
 
 
 
-/** The sixteen slots of a page and what was published of them. `Inst` is any instance interface with setQGroup (const int*, int): IInstanceView of SynthyBoy, mpckit::IInstance of the kit (migration
-    step 1 of docs/ui-components/TEMPLATE.md; the callers are unchanged: the type is deduced). */
+/** The sixteen slots of a page and what was published of them. `Inst` is any instance interface with setQGroup (const int*, int): IInstanceView of SynthyBoy, mpckit::IInstance of the kit (migration the callers are unchanged: the type is deduced). */
 struct QSlots
 {
     int target[QRouter::kCount];

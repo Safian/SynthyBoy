@@ -1,7 +1,7 @@
-// SynthyBoy - MPC overlay tests: the KIT PARITY test (migration steps 2 and 3 of docs/ui-components/TEMPLATE.md). The pages of SynthyBoy now reach the parameters through the kit's parameter source
+// SynthyBoy - MPC overlay tests: the KIT PARITY test. The pages of SynthyBoy now reach the parameters through the kit's parameter source
 // (mpckit::synthyboy_adapter::Params) and the kit's text function (mpckit::formatValue); this test compares them with the old direct calls of the engine (a verbatim copy of the old ui_bind.h formatValue is kept
 // here as the reference) for EVERY parameter of the table at a spread of values: the lookups, the conversions, the page text, the host text, the stepped rule, and the write of uibind::writePlain / writeNorm.
-// It also holds the parity of the overlay runtime's tables (migration step 8): the page set of SynthyBoy against overlay_layout.h, the default instance colours, validatePages on SynthyBoy's layout and on broken ones,
+// It also holds the parity of the overlay runtime's tables: the page set of SynthyBoy against overlay_layout.h, the default instance colours, validatePages on SynthyBoy's layout and on broken ones,
 // and the file names of the default branding against the old literal paths.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -35,7 +35,7 @@ void check (bool ok, const std::string& what)
     }
 }
 
-/** The old text function of ui_bind.h, before migration step 3 (the reference). */
+/** The old text function of ui_bind.h, (the reference). */
 namespace directcalls
 {
 inline double noNegativeZero (double v, int decimals) noexcept

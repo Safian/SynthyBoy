@@ -1733,7 +1733,7 @@ struct PluginInstance
     }
 
     // ---- the Q proxies (q_router.h, docs/MPC.md "Q proxies"): "Q 1" .. "Q 4" after the last Play proxy; what the four knobs of the plugin's own full-screen pages are mapped to ----
-    /** The sixteen proxies: the kit's bank over SynthyBoy's parameter table (kit/q_targets.h; migration step 11 of docs/ui-components/TEMPLATE.md). It reads the values through the overlay view (the parameter mirror). */
+    /** The sixteen proxies: the kit's bank over SynthyBoy's parameter table (kit/q_targets.h). It reads the values through the overlay view (the parameter mirror). */
     mpckit::QProxyBank qBank { mpckit::synthyboy_adapter::Params::get() };
     // Keep the revision and in-flight restore count in one atomic snapshot.
     // A completed restore cannot rearm Q while another restore is still loading.
@@ -3498,7 +3498,7 @@ struct PluginInstance
     }
 #endif
 
-    /** The display thread's whole life (called by startLive's thread). The thread is the kit's (kit/display_thread.h, migration step 11 of docs/ui-components/TEMPLATE.md): SynthyBoy REGISTERS its features below, in the
+    /** The display thread's whole life (called by startLive's thread). The thread is the kit's (kit/display_thread.h): SynthyBoy REGISTERS its features below, in the
         order they run each tick, and the class does the rest - every feature inside a PollGuard (poll_guard.h: an exception is caught, counted, written to the status file and, five times in a row, switches that feature
         off - it never leaves the thread: std::terminate would end the MPC application), the grid of ticks (a short period while a cursor or a spectrum column moves, a long one otherwise) and the scheduling of the
         thread (normal policy, nice 0, all CPUs: not lower than normal, this thread holds host locks while it is inside audioMasterAutomate, and a starved holder would make the host's own threads wait for it). */

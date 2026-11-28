@@ -25,8 +25,7 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace uibind {
 
-/** The parameters of SynthyBoy through the kit's parameter source (kit/param_source.h IParamSource): the lookups, the conversions and the text of a value are the kit's, so a page written on them runs on any plugin
-    (migration step 3 of docs/ui-components/TEMPLATE.md; `kit_parity_host` compares them with the old direct calls for every parameter). */
+/** The parameters of SynthyBoy through the kit's parameter source (kit/param_source.h IParamSource): the lookups, the conversions and the text of a value are the kit's, so a page written on them runs on any plugin. */
 inline const mpckit::IParamSource& params() noexcept { return mpckit::synthyboy_adapter::Params::get(); }
 
 inline int indexOfKey (const std::string& key) noexcept { return params().indexOfKey (key.c_str()); }   // (an empty key: -1)

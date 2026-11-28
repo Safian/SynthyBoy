@@ -240,7 +240,7 @@ library `synthyboy_static`, which stays free of JUCE and of the UI: the iOS rule
 Owner decision (2026-11-12, `14-morning-questions.md` 110): SynthyBoy on iOS has the same UI as everywhere, drawn by the plug-in through the bitmap GUI extension, with the own engine (no Vital-derived
 code, 2.2). The Kick app on iOS is a JUCE 7.0.12 application and links SynthyBoy statically, so JUCE 7 (Kick) and JUCE 8.0.17 (SynthyBoy's UI) are in one binary. That is not a matter of symbol
 visibility: a static link sees hidden symbols, and the Objective-C runtime registers classes by name. The target `synthyboy_static_ui` (CMake: `-DCMAKE_SYSTEM_NAME=iOS -DSYNTHYBOY_STATIC_UI=ON
--DSYNTHYBOY_BUILD_PLUGIN=OFF`, `shell-clap/CMakeLists.txt`, `cmake/StaticUi.cmake`) therefore keeps the two apart in three layers:
+`, `shell-clap/CMakeLists.txt`, `cmake/StaticUi.cmake`) therefore keeps the two apart in three layers:
 
 1. **A C++ namespace of its own for JUCE 8.** JUCE 8 has no namespace switch (`JUCE_NAMESPACE` is a deprecated macro that does nothing), so the build renames it: every translation unit of the build is
    compiled with `-Djuce=synthyboy_juce8` (`SYNTHYBOY_JUCE_NAMESPACE`, `cmake/JuceNamespace.cmake`). Every `juce::X` of the modules, of the third party code inside them (zlib, libpng, libjpeg, HarfBuzz, SheenBidi, the codecs) that

@@ -6,11 +6,9 @@
 #
 # Environment (all set by build-mpc.sh): ARCH (arm32 | arm64), JOBS, MPC_SDK_DIR, WITH_BENCH (0 | 1), HOST_UID, HOST_GID, CMAKE_EXTRA_ARGS (optional:
 # space separated extra arguments of the module's cmake configure, from --cmake-arg).
-# Another plugin (build-mpc.sh --plugin DIR; migration step 12 of docs/ui-components/TEMPLATE.md) sets PLUGIN_TARGET, PLUGIN_CMAKE_SOURCE (the CMake source folder below /src), PLUGIN_CMAKE_ARGS, PLUGIN_MODULE (the module
-# below /build) and PLUGIN_HELPER (the GPU helper below /build, without its ".stripped"); without them everything is SynthyBoy's, as it always was.
 # Mounts: /src (read-only source tree), /build (CMake tree of this architecture), /build-bench (bench tree), /out (output directory), /mpc-sdk.
 #
-# Results: /build/shell-mpc/synthyboy_mpc.so (unstripped, kept for profiling), /build/shell-mpc/synthyboy_mpc.stripped.so (the one that is packaged; another plugin: PLUGIN_MODULE) and,
+# Results: /build/shell-mpc/synthyboy_mpc.so (unstripped, kept for profiling), /build/shell-mpc/synthyboy_mpc.stripped.so (the one that is packaged) and,
 # with WITH_BENCH=1, /out/bench-<ARCH>/synthyboy_bench and synthyboy_noteon_bench.
 #
 # The checks are the same for both architectures (see check_elf): ELF class and machine, DT_NEEDED limited to libc / libm / libdl / libpthread / the dynamic
@@ -108,17 +106,10 @@ check_elf() {
 
 # ---- the plugin module ----------------------------------------------------------------------------------------------------------------------------
 read -r -a extra_args <<< "${CMAKE_EXTRA_ARGS:-}"
-if [ -n "${PLUGIN_CMAKE_SOURCE:-}" ]; then
-    # another plugin made with the kit: its own CMake project, no SynthyBoy option
-    read -r -a plugin_args <<< "${PLUGIN_CMAKE_ARGS:-}"
-    cmake -S "/src/$PLUGIN_CMAKE_SOURCE" -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-        -DMPC_SDK_DIR="$MPC_SDK_DIR" ${plugin_args[@]+"${plugin_args[@]}"} ${extra_args[@]+"${extra_args[@]}"}
-else
-    cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-        -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
-        -DSYNTHYBOY_MPC_UI_GEN="$UI_GEN" -DSYNTHYBOY_PACKAGED_NATIVE_SKIN="${NATIVE_SKIN:-OFF}" -DSYNTHYBOY_MPC_OVERLAY=ON -USYNTHYBOY_MPC_LFO_LIVE_NOTIFY \
-        -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
-fi
+cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+    -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
+    -DSYNTHYBOY_MPC_UI_GEN="$UI_GEN" -DSYNTHYBOY_PACKAGED_NATIVE_SKIN="${NATIVE_SKIN:-OFF}" -DSYNTHYBOY_MPC_OVERLAY=ON -USYNTHYBOY_MPC_LFO_LIVE_NOTIFY \
+    -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
 cmake --build /build --target "$PLUGIN_TARGET" --parallel "$JOBS"
 so="/build/$PLUGIN_MODULE"
 check_elf "$so" module
@@ -155,7 +146,7 @@ fi
 # ---- the benchmarks (same toolchain, tests switched on in a tree of their own so that the module above is built exactly as the package needs it) ----
 if [ "$WITH_BENCH" = 1 ]; then
     cmake -S /src -B /build-bench -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-        -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF \
+        -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF \
         -DMPC_SDK_DIR="$MPC_SDK_DIR" \
         -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
     cmake --build /build-bench --target synthyboy_bench synthyboy_noteon_bench --parallel "$JOBS"

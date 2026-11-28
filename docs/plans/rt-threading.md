@@ -80,7 +80,7 @@ Run these commands on the current `develop` tree to confirm baseline behavior, r
 
 1. **Release build & existing RT/helper/event tests:**
    ```sh
-   cmake -S . -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON
+   cmake -S . -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_TESTS=ON
    cmake --build build-base --target synthyboy_test_rt synthyboy_test_threads synthyboy_test_own_helper_thread synthyboy_test_own_engine synthyboy_test_own_content_policy synthyboy_test_own_osc_types synthyboy_bench synthyboy_tier_bench synthyboy_preset_render
    ./build-base/core/tests/synthyboy_test_rt
    ./build-base/core/tests/synthyboy_test_own_helper_thread
@@ -92,7 +92,7 @@ Run these commands on the current `develop` tree to confirm baseline behavior, r
 
 2. **ThreadSanitizer baseline (matching `.github/workflows/build.yml:209-239`):**
    ```sh
-   cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON \
+   cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_TESTS=ON \
      -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer"
    cmake --build build-tsan --target synthyboy_test_threads synthyboy_test_own_helper_thread synthyboy_test_own_engine
    TSAN_OPTIONS=halt_on_error=1 ./build-tsan/core/tests/synthyboy_test_threads

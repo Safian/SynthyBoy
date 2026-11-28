@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the Q slots of the rows of the modulation lists (ModulationsPage, ModTargetsPage): the three knobs of a row (modRowTargets) and the blocks the rows have (setRowBlocks). SynthyBoy specific: it names the
-// parameters of a modulation slot (synthyboy/modulation.h); the generic part of the Q publishing is q_publish.h (migration step 1b of docs/ui-components/TEMPLATE.md).
+// parameters of a modulation slot (synthyboy/modulation.h); the generic part of the Q publishing is q_publish.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // IInstance is the generic half of SynthyBoy's IInstanceView (shell-mpc/overlay/curve_source.h): the methods every page needs whatever the plugin is. SynthyBoy's IInstanceView will DERIVE from it
-// (migration plan, TEMPLATE.md) and keep only the engine specific methods (live values, content, spectrum, Play selectors, pad pressure, ...), so a page written against IInstance& runs unchanged on
+// and keep only the engine specific methods (live values, content, spectrum, Play selectors, pad pressure, ...), so a page written against IInstance& runs unchanged on
 // both. The signatures are exactly the ones of IInstanceView.
 //
 // THREADS. Every method is called from the OVERLAY thread (the page code) while the instance is registered with the overlay; it must be lock free and must not allocate (only qStatus () and the

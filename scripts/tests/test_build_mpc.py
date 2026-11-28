@@ -209,24 +209,6 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("/opt/drm-uapi", text)
         self.assertIn('printf \'#include <drm/drm.h>', text)
 
-    # ---- another plugin (--plugin DIR, migration step 12 of docs/ui-components/TEMPLATE.md) ---------------------------------------------------
-
-    def test_plugin_usage_errors(self):
-        for args in (["--plugin"], ["--plugin", str(self.tmp / "no-such-plugin")], ["--plugin", "scripts"]):
-            r = self.run_script(BUILD_MPC, "--out", str(self.out), *args)
-            self.assertEqual(r.returncode, 2, (args, r.stderr))
-        self.assertEqual(self.runs(), [])
-        bad = self.tmp / "badplugin"
-        bad.mkdir()
-        (bad / "mpc-plugin.conf").write_text("TARGET=x\nUNKNOWN=1\n")
-        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--plugin", str(bad))
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("unknown key UNKNOWN", r.stderr)
-        (bad / "mpc-plugin.conf").write_text("TARGET=x\n")
-        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--plugin", str(bad))
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("missing", r.stderr)
-
     def test_scripts_are_valid_bash(self):
         for script in (BUILD_MPC, BUILD_ARMV7, CONTAINER):
             self.assertEqual(subprocess.run(["bash", "-n", str(script)]).returncode, 0, script)

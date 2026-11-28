@@ -1,5 +1,5 @@
 // MpcKit - SynthyBoy's implementation of the kit interfaces: a thin layer that FORWARDS to the code SynthyBoy already has (its parameter table, IInstanceView, the generated overlay layout). It
-// exists so that the generic pages and runtime pieces of the kit can run on SynthyBoy while the existing files are migrated one by one (docs/ui-components/TEMPLATE.md "Migration plan"); every
+// exists so that the generic pages and runtime pieces of the kit can run on SynthyBoy while the existing files are migrated one by one; every
 // value it returns is the value the old direct call returned. NOT part of the kit proper: a plugin without SynthyBoy's engine never includes this file.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

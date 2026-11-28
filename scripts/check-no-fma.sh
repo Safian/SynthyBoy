@@ -109,7 +109,7 @@ for a in "${archs[@]}"; do
         dir="$build_root/$a"
         if [[ "$build" == 1 ]]; then
             if [[ ! -f "$dir/CMakeCache.txt" ]]; then
-                cmake -S "$repo_root" -B "$dir" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(toolchain_of "$a")" -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF \
+                cmake -S "$repo_root" -B "$dir" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(toolchain_of "$a")" \
                     -DSYNTHYBOY_BUILD_TESTS=OFF >/dev/null || { echo "$me: cmake configure of $a failed" >&2; exit 2; }
             fi
             # shellcheck disable=SC2086

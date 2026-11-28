@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the casts of the generic view types. overlay/view.h speaks the kit's language (ViewInput carries an mpckit::IInstance and an opaque live block); every instance SynthyBoy puts on the
-// overlay is an IInstanceView and its live block is synthyboy::LiveValues, so the views and pages of SynthyBoy take them back with these (migration step 5 of docs/ui-components/TEMPLATE.md).
+// overlay is an IInstanceView and its live block is synthyboy::LiveValues, so the views and pages of SynthyBoy take them back with these.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

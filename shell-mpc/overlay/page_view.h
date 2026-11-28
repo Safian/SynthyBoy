@@ -25,7 +25,7 @@ struct Input : mpckit::PageInput
 
 /** The hooks of the page view for the pages of SynthyBoy: the macro names of the instance on screen are loaded from its content at every update and made the active ones (NamesScope) for everything the view does; the
     loading bar follows IInstanceView::tablesLoading (); `Instance` is the type the pages take (every instance of SynthyBoy is an IInstanceView), `Input` the input with the live values. A page of a plugin made with the kit
-    uses NoHooks (page_view_base.h) instead (migration step 6 of docs/ui-components/TEMPLATE.md). */
+    uses NoHooks (page_view_base.h) instead. */
 class MacroNameHooks
 {
 public:

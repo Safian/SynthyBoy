@@ -185,7 +185,7 @@ scripts/build-mpc.sh --xpl-presets xl --dump-tool build-native/shell-mpc/dump_mp
 1. Build the native MPC shell and the chunk dumper helper:
    ```bash
    cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release \
-       -DSYNTHYBOY_BUILD_PLUGIN=OFF \
+       \
        -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK"
    cmake --build build-native --target dump_mpc_chunks synthyboy_mpc
    ```

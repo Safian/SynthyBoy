@@ -58,7 +58,7 @@ The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md); end-user
 | Topic | Start here | Evidence and history |
 |---|---|---|
 | Using the MPC instrument | [Installation](docs/user-guide/INSTALL.md), [playing guide](docs/user-guide/SynthyBoy-MPC-User-Guide.md), [magyar kézikönyv](docs/user-guide/hu/SynthyBoy-MPC-felhasznaloi-kezikonyv.md) | [MPC hardware observations](docs/MPC.md) identify the model, build and limits of individual checks. |
-| Controls and screen changes | [MPC screen map](docs/ui-map/README.md), [UI component library](docs/ui-components/README.md) | The screen map links before/after captures. [UI design](docs/ui-design/README.md) records earlier proposals, coverage decisions and implementation reports. |
+| Controls and screen changes | [MPC screen map](docs/ui-map/README.md), [native component catalogue](docs/ui-components/README.md) | The screen map links before/after captures. [UI design](docs/ui-design/README.md) records earlier proposals, coverage decisions and implementation reports. |
 | Engine, presets and content | [Engine](core/engine-own/README.md), [parameter reference](docs/PARAMETERS.md), [content packs](docs/CONTENT-PACKS.md) | [Engine specification and test vectors](docs/engine-spec/README.md), [quality gates](docs/QUALITY.md), [factory sound catalogue](docs/user-guide/factory-sounds.md) |
 | Performance and device limits | [Measurement protocol](docs/perf/README.md), [DSP findings by topic](docs/dsp-knowledge/README.md) | Each finding identifies its evidence. Raw hardware captures are local to the owner under the shared `.hw-local/mpc-perf/`. |
 | Building and distributing | [Release procedure](docs/RELEASE.md), [MPC build guide](docs/MPC.md) | [Development history](docs/release/HISTORY-by-week.md) and linked reports record the versions they describe. |
@@ -77,9 +77,9 @@ The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md); end-user
 | `bench/`, `tools/paramdump/`, `tools/preset-render/` | `synthyboy_bench`: real-time factor and block times of a default and a heavy patch per tier; `synthyboy_paramdump`: the parameter table as JSON (`docs/params.json`); `synthyboy_preset_render`: renders the factory presets at every tier, checks them and prints the level spread and the velocity curve (`--wav DIR` writes the renders for listening) |
 | `scripts/` | `build.sh`, `check-manifest.py`, release: `package-release.py`, `fill-manifest.py`, `build-armv7-clap.sh`, `make-local-release.sh` ([docs/RELEASE.md](docs/RELEASE.md)), `check-no-vital.sh` (no Vital-derived code in the core library, none in the source of the own engine), `gen-params-doc.py` / `check-params-doc.sh` (docs/PARAMETERS.md and params.json) |
 | `docs/ARCHITECTURE.md`, `PARAMETERS.md`, `QUALITY.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, the parameter reference (generated), audio quality gates and their measurements, history of the removed Vital take-over, benchmark numbers |
-| `docs/ui-components/` | developer documentation of the MPC UI component library (`shell-mpc/ui/`): one page per component, how a page is built, reuse in another plugin; entry page [docs/ui-components/README.md](docs/ui-components/README.md), instructions for AI agents [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md) |
+| `docs/ui-components/` | the native component catalogue and the notes of the display layer (`shell-mpc/ui/`); entry page [docs/ui-components/README.md](docs/ui-components/README.md), instructions for AI agents [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md) |
 
-CMake options: `SYNTHYBOY_BUILD_PLUGIN` (ON; OFF builds only the core, no JUCE download), `SYNTHYBOY_BUILD_TESTS` (ON),
+CMake options: `SYNTHYBOY_BUILD_TESTS` (ON),
 `SYNTHYBOY_DEFAULT_TIER` (`high` | `medium` | `low`: the quality tier of the plugin).
 
 ## Engine
@@ -143,9 +143,9 @@ python3 -I scripts/check-manifest.py                             # plugin.json v
 Core only (no JUCE), e.g. with sanitizers or cross compiled for ARMv7 (needs `g++-arm-linux-gnueabihf` and `qemu-user`):
 
 ```sh
-cmake -S . -B build-asan -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-cmake -S . -B build-armv7 -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/armv7-linux-gnueabihf.cmake \
+cmake -S . -B build-armv7 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/armv7-linux-gnueabihf.cmake \
   -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-arm;-L;/usr/arm-linux-gnueabihf"
 ```
 

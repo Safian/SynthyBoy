@@ -77,7 +77,7 @@ The bit identity against the engine BEFORE the change (alpha 0) is a two-build c
 
 ## 9. What the runner executes (once, after the implementation is merged)
 
-1. Configure (own engine; one build dir): `cmake -S . -B build-vcg -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON`
+1. Configure (own engine; one build dir): `cmake -S . -B build-vcg -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_TESTS=ON`
 2. Build the targets: `bash .hw-local/tools/buildslot.sh cmake --build build-vcg -j4 --target synthyboy_test_own_voice_count_gain synthyboy_test_rt synthyboy_test_own_voice_opt synthyboy_test_output_stage_presets synthyboy_preset_render synthyboy_level_probe`
 3. Tests: `build-vcg/core/tests/synthyboy_test_own_voice_count_gain`, `build-vcg/core/tests/synthyboy_test_rt`, `build-vcg/core/tests/synthyboy_test_own_voice_opt`.
 4. Reference renders from the commit before the implementation (a second build dir `build-vcg-base` at that commit, same configure, target `synthyboy_preset_render`): `build-vcg-base/tools/preset-render/synthyboy_preset_render --presets content/presets --engine own --tier all --content-dir build-vcg-base/tools/preset-render/content-store --wav R0 --chord-wav R0c --float32 --hash`

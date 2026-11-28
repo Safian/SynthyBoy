@@ -90,7 +90,7 @@ mismatches at `osc3.warp.type` and the source scan names the four `osc3.warp.*` 
 
 ## Test suite timing
 
-Measured on 2026-11-26, x86-64 Linux VM (4 vCPU Xeon 2.1 GHz, GCC 13.3, Release, `-DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF`, 172 tests), other
+Measured on 2026-11-26, x86-64 Linux VM (4 vCPU Xeon 2.1 GHz, GCC 13.3, Release, ``, 172 tests), other
 sessions share the machine, so every number has a few tens of percent of noise. Three runs:
 
 - **before -j2**: `ctest -j2` on the tree before the quick / full split: 1171 s real (sum of the test times 2172 s). That run includes `param_audit_scan` (545 s, fails here)
@@ -210,7 +210,7 @@ per chunk hoist R1) of at most 0.85; its comment gives a model of 0.65 ARM / 0.7
 
 ## Build time (report, 2026-11-26, same VM, 4 jobs)
 
-- **Full build** of everything `-DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF` (560 steps, Ninja `-j4`): 142 s. The compile steps add up to 552 s of CPU, the
+- **Full build** of everything `-DSYNTHYBOY_BUILD_TESTS=ON` (560 steps, Ninja `-j4`): 142 s. The compile steps add up to 552 s of CPU, the
   link steps to 11 s; linking is not the problem. A change of `core/tests/test_runner.h` (every test includes it) rebuilds 383 steps: 87 s.
 - **ccache**: `SYNTHYBOY_USE_CCACHE` (top level `CMakeLists.txt`; default ON only when ccache is found, a missing ccache is no error, a launcher the caller set is kept) makes it the compiler
   launcher. Measured with ccache 4.9.1: first build in an empty cache 136 s (33 % of the 402 compiles were hits already inside that build: the same source with the same flags is compiled
@@ -229,7 +229,7 @@ The development loop runs the quick set; the full set is one `ctest` away and ru
 
 ```sh
 # once: a development build (core and tests only; ccache is used when it is installed, SYNTHYBOY_USE_CCACHE=OFF turns it off)
-cmake --preset dev && cmake --build --preset dev          # build-dev/ ; or: cmake -S . -B build -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF
+cmake --preset dev && cmake --build --preset dev          # build-dev/ ; or: cmake -S . -B build -G Ninja
 
 # quick set: everything without the label slow, the heavy cases of seven binaries reduced (85 s wall at -j2 on the x86 VM; 153 tests)
 ctest --preset quick                                       # or: ctest --test-dir build -j2 -LE slow --output-on-failure
@@ -277,7 +277,7 @@ ctest --preset full                                        # or: ctest --test-di
 - **ASan / UBSan, separately** (the CI job `core-sanitizers` does the same; the instrumented binaries are 5 to 20 times slower and set `sbtest::instrumented ()`, which reduces the work of the
   thread and engine tests by itself):
   ```sh
-  cmake -S . -B build-asan -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
   cmake --build build-asan && ctest --test-dir build-asan -j2 -LE slow --output-on-failure
   ```

@@ -99,7 +99,7 @@ fi
 build() {
     if [ ! -f "$build_dir/CMakeCache.txt" ]; then
         echo "configuring $build_dir (core only: no plug-in, no bitmap GUI)"
-        cmake -S "$root" -B "$build_dir" -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF >"$build_dir.configure.log" 2>&1 \
+        cmake -S "$root" -B "$build_dir" >"$build_dir.configure.log" 2>&1 \
             || { echo "configure failed, see $build_dir.configure.log" >&2; exit 3; }
     fi
     local targets=(synthyboy_param_audit)

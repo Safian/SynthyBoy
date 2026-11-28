@@ -1,6 +1,5 @@
 // SynthyBoy - MPC overlay: IInstanceView, one plugin instance as the overlay and the overlay pages of SynthyBoy see it. The generic half is mpckit::IInstance (kit/instance.h); this class adds what is SynthyBoy's: the
-// live values of the engine, the content of the state, the spectrum ring, the Play selectors, the content browser, the pad pressure layer, the macro names. Split from curve_source.h (migration step 7 of
-// docs/ui-components/TEMPLATE.md): the filter curve (CurveSource) stays there.
+// live values of the engine, the content of the state, the spectrum ring, the Play selectors, the content browser, the pad pressure layer, the macro names. Split from curve_source.h: the filter curve (CurveSource) stays there.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
