@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: a page of the OSC tab, the element PageView (page_view.h) shows for the views Osc A, Osc B, Osc C, Sub and Noise (overlay_layout.json, kind "oscui"; the view's index is the
-// oscillator selector's number: 1 Sub, 2 A, 3 B, 4 C, 5 Noise). It is the full screen of the oscillator UI (osc_ui.h: the same class the Play page opens with its full screen button, in its page mode) with
+// oscillator selector's number: 1 Sub, 2 A, 3 B, 4 C, 5 Noise). It is the page mode of the oscillator UI (osc_ui.h: the same class the Play page draws its compact view with) with
 // the display of the oscillator (osc_display.h: the same class the Play view draws its picture with): the Basic group, the type bar, the tuning column, the knob panel with its Q groups, the detail
 // pages (unison, grain window, envelope, modulations), the route popup, the lists and the content browser, and the live read-outs. The tab names the default source; the native selector changes only the open page.
 // Copyright (C) 2026 Safian Szabolcs

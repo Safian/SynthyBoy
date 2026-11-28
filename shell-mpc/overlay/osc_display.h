@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the DISPLAY of the oscillator UI, shared by the Play page (the compact view and the full screen of the oscillator third) and the pages of the OSC tab (osc_page.h): the data of
+// SynthyBoy - MPC overlay: the DISPLAY of the oscillator UI, shared by the Play page (the compact view of the oscillator third) and the pages of the OSC tab (osc_page.h): the data of
 // the picture of the instance a selector names (Sub, A, B, C, Noise) and its drawing in a rectangle (ui/display.h). The data: the cycle of a wavetable with the frames behind it and a faint spectrum, the
 // min / max overview of a sample, multisample or granular oscillator, the colour of the noise, the waveform of the sub oscillator; and the live read-outs of the engine (the read heads and grains,
 // the phases of the sub, the read head of a sample noise). One implementation: nothing of it is kept twice.

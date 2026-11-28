@@ -5,7 +5,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h): main = the compact view in the oscillator third of the Play page; full = the full screen of the instance over the whole plugin area of the Play page; detail pages above it (unison settings, grain
+// What it shows (UiStack, ui_stack.h): main = the compact view in the oscillator third of the Play page; full = the page of an Osc tab; detail pages above it (unison settings, grain
 // window, multisample envelope, the modulations of a control) and the route popup. The picture of the oscillator cycle goes into the display rectangle (displayRect (); the Play view draws it).
 // What it does with a touch: the host's native cell writes the value (native bridge: applyNativeSetting / applyNativeDetail, the id of the cell says which parameter and how the value converts); the write goes through
 // IInstanceView::writeParam (normalised; the plugin tells the host). Every update () reads every parameter back into the cells, so host automation, presets and the host's own widgets show on the next frame.

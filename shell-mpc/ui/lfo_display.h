@@ -69,7 +69,7 @@ inline bool hasLeadStrip (const Data& d) noexcept
 {
     return d.kind == Data::Kind::Shape && ! d.editing && (d.delayShare > 0.0f || d.riseShare > 0.0f);
 }
-/** The compact view (the third of the Play page, playrows.h) is the one whose owner gave the plot area (Data::area, not empty). The buttons stand in the header band of the third above the display (playrows::headerExpandRect), the plot area
+/** The compact view (the third of the Play page, playrows.h) is the one whose owner gave the plot area (Data::area, not empty). The buttons stand in the header band of the third above the display (playrows::headerBandRect), the plot area
     fills the display (playrows::compactPlotRect: the same for the oscillator wave, the envelope graph and the LFO curve). */
 inline bool isCompact (const Rect&, const Data& d) noexcept { return ! d.editing && ! d.area.empty(); }
 /** The room the page title takes at the top of a non-compact display (it has an inner margin to the border and lies above the strip and the curve). */
@@ -202,7 +202,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.rrect (sx0, sTop, sx1, sBot, T.rChip, a (T.keyline, 100), T.hair);
             sb.line (sx0, sBot - 2.0f, dEnd, sBot - 2.0f, T.hair + 0.3f, fc);
             sb.line (dEnd, sBot - 2.0f, sx1, sTop + 2.0f, T.hair + 0.5f, fc);
-            // the caption near the right end of the strip, clear of the full screen button of the compact view: the name of the LFO that the owner writes into the top left of the block must stay clear of it
+            // the caption near the right end of the strip, clear of the header band of the compact view: the name of the LFO that the owner writes into the top left of the block must stay clear of it
             const char* cap = d.delayShare > 0.0f ? "DELAY / RISE" : "RISE";
             const float capW = static_cast<float> (std::strlen (cap)) * (T.fSmall - 1.0f) * 0.62f;
             sb.text (std::max (sx0 + 6.0f, sx1 - 80.0f - capW), sTop + 13.0f, T.fSmall - 1.0f, cap, a (T.textDim, 180));

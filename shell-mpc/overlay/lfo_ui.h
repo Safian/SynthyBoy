@@ -8,8 +8,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementLfo, the pages above it are ours): main = the compact view in the right third of the Play page; full = the full screen over the whole plugin area
-// of the Play page or the page of the LFO tab; detail pages above it: the shape editor, the modulation of the selected points (PointModModel) and the name keyboard of a saved shape (the native keyboard of the skin, components/native/keyboard; the page only holds
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementLfo, the pages above it are ours): main = the compact view in the right third of the Play page; full = the page of an LFO tab; detail pages above it: the shape editor, the modulation of the selected points (PointModModel) and the name keyboard of a saved shape (the native keyboard of the skin, components/native/keyboard; the page only holds
 // the text model) above that, the targets of the LFO (the modulation matrix seen from the source), the list menu (the destination to add, the source to add, the SHAPES and MORE lists of the editor) and the modulations of a
 // control. The editor's file work (the saved shapes in SynthyBoy/LFO Shapes/ on the card, lfo_shape_files.h) happens in the touch handler on the overlay thread, never in draw.
 // What it does with an edit of the host: the native cell reports { field, value }; the row of the field says which parameter and how the value converts; the write goes through IInstanceView::writeParam (normalised; the

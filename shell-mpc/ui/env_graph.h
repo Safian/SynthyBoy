@@ -124,7 +124,7 @@ public:
     };
     State state;
     /** The drawing area of the curve when the owner gives it (the compact view of the Play page: playrows::plotRect, below the header band that holds the buttons); an empty rectangle (the default) = the margins of `plot()` inside the
-        rectangle. Everything of the graph (grid, ruler, curve, fill, handles, the value bubble) lies in this area or in the margin under it; nothing is drawn above its top (the full screen page leaves it empty and is unchanged). */
+        rectangle. Everything of the graph (grid, ruler, curve, fill, handles, the value bubble) lies in this area or in the margin under it; nothing is drawn above its top (the page of an Env tab leaves it empty). */
     Rect plotArea;
     /** What the last Change was. `handle` = the handle; t = the new normalised time (Delay .. Release, Decay), level = the new sustain level (Decay), curve = the new curve parameter (CurveA .. CurveR). */
     struct Edit { int handle = envgraph::None; double t = 0.0, level = 0.0, curve = 0.0; bool reset = false; int touched = envgraph::None; };   // handle kSelect / kLock / kZoom: view state, no parameter (a Request change): another handle was touched (`touched`) / the lock was toggled (`level` = locked next, `t` = the window now) / the zoom was dragged (`level` = the zoom)
@@ -388,7 +388,7 @@ protected:
         if (plotArea.empty())
             p.block (rect_);
         else
-            drawNativeGraphFrame (p, rect_);  // Play places its native expand button in the graph header.
+            drawNativeGraphFrame (p, rect_);  // the native cells of the page lie over the frame.
         const Rect pl = plot();
         if (pl.w < 40 || pl.h < 30)
             return;

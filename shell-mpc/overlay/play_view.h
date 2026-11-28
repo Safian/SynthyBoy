@@ -193,11 +193,7 @@ public:
                 osc_->setCanvas (play::kRegionW, play::kRegionH);
                 scratch_ = std::make_unique<gpu::SceneData>();
             }
-            // the stack of the instance is shared by the elements: a page that belongs to another element is not the oscillator's (it sees an empty stack: its compact view)
-            const auto pullOsc = [&] {
-                osc_->update (*io, highlight_, in.ui->isMain() || in.ui->element() == OscUi::kElementOsc ? *in.ui : idleStack_,
-                              in.nowMs, sel_[1], sel_[2]);
-            };
+            const auto pullOsc = [&] { osc_->update (*io, highlight_, *in.ui, in.nowMs, sel_[1], sel_[2]); };
             pullOsc();
             const bool nativeOsc = io->nativePlayOscControls();
             if (nativeOsc)
@@ -211,26 +207,12 @@ public:
             }
             if (! env_)
                 env_ = std::make_unique<EnvUi>();
-            const auto syncOpenElement = [&] {
-                const int element = in.ui->isMain() ? 0 : in.ui->element();
-                if (element != openElement_)
-                {
-                    openElement_ = element;
-                    // The router retains the last page's Q group until the new view publishes.
-                    osc_->forgetQGroup();
-                    env_->forgetQGroup();
-                    if (lfo_)
-                        lfo_->forgetQGroup();
-                }
-            };
-            syncOpenElement();
             env_->update (*io, highlight_, *in.ui, in.nowMs, live);
             if (! lfo_)
                 lfo_ = std::make_unique<LfoUi>();
             lfo_->update (*io, highlight_, *in.ui, in.nowMs, live);
             if (nativeEnvLfo_.take (*io, *in.ui, *env_, *lfo_))
             {
-                syncOpenElement();
                 env_->update (*io, highlight_, *in.ui, in.nowMs, live);
                 lfo_->update (*io, highlight_, *in.ui, in.nowMs, live);
             }
@@ -353,7 +335,6 @@ public:
         if (osc_ != nullptr) osc_->forgetQGroup();
         if (env_ != nullptr) env_->forgetQGroup();
         if (lfo_ != nullptr) lfo_->forgetQGroup();
-        openElement_ = 0;
     }
 
     uint32_t oscUiHash()
@@ -612,8 +593,6 @@ private:
     std::unique_ptr<EnvUi> env_;
     std::unique_ptr<LfoUi> lfo_;
     bool usePageLfo_ = false;
-    UiStack idleStack_;      // an empty stack: what the oscillator UI reads while another element's page is open
-    int openElement_ = 0;    // the element whose full screen is open (0: none)
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
     int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)

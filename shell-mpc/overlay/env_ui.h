@@ -594,7 +594,7 @@ private:
         const int m = 6, W = third.w - 2 * m;
         const ui::Rect gr = ui::playrows::displayRect (third);
         compactGraph_.place (gr);
-        compactGraph_.plotArea = ui::playrows::compactPlotRect (gr);   // Play phase 2: the display has no band; the full screen cell stands in the header band of the third (the same place as the oscillator's and the LFO's)
+        compactGraph_.plotArea = ui::playrows::compactPlotRect (gr);   // Play phase 2: the display has no band; the header cells stand in the header band of the third
         compactGraph_.setId (kGraph);
         compactView_.graph = gr;
         compactView_.plot = compactGraph_.plotArea;
