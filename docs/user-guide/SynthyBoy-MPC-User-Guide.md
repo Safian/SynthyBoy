@@ -105,7 +105,7 @@ The manuals do not say where SynthyBoy appears in the plugin window (the develop
 "External Plugins"); see chapter 11.
 
 **First start.** Put the plugin on a track and open Track Edit Mode (the **Edit Instrument** button in Sounds Mode does
-this); press the key **Play** (the first function key). You should see the three panels of chapter 5.1. If you see only a
+this); press the key **Play** (the first function key). You should see the three thirds of chapter 5.1. If you see only a
 dark empty area, see chapter 9.
 
 A project that already had SynthyBoy on a track with an older version keeps that track's old Q-Link
@@ -143,9 +143,8 @@ you use (and the one you are editing) plus a **+** that offers the next free one
 switch to the other filter without leaving the page. There are six envelopes and ten LFOs plus four random LFOs;
 the Play page shows the same envelope and LFO as these tabs.
 
-**Opening and closing inside a page.** Several pages have a full-screen button, a "MORE" button, a gear, or a
-list: they open a page over the current one. A **BACK** or **CLOSE** button returns. Leaving the Play tab closes everything that was opened
-over its pages.
+**Opening and closing inside a page.** Several pages have a "MORE" button, a gear, or a
+list: they open a page over the current one. A **BACK** or **CLOSE** button returns.
 
 Only the plugin of the track whose page is on the screen is drawn; with several SynthyBoy instances the
 picture follows the track you are looking at (up to 16 instances; chapter 8).
@@ -236,40 +235,31 @@ screen is quoted in capitals as it appears.
 
 ### 5.1 Play
 
-[Korábbi állapotkép: Play](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/play.png)
+![The Play page](../screens/play.jpg)
 
-The Play tab is ONE page: three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO** panel (right). The first four Q-Links (knobs) belong to the oscillator panel (type, table or OCT, PAN, LEVEL), the next four to the envelope (ATTACK, DECAY, SUSTAIN, RELEASE) and the next four to the LFO (SHAPE, RATE, RISE, SMOOTH). On the MPC XL all twelve are on the knobs at once and every control carries the number of its knob. On the Key 61 the yellow frame marks the four knobs at the moment; touch a control of another panel to bring its group to the four knobs (the others follow), and use the Q-Link bank buttons for the rest. At the top of each panel is a selector: the current entry in the middle, its neighbours at the sides (tap one to step to it, or drag across), and a tap on the name opens the list. A switched-off oscillator is drawn grey (the power button is red).
-This is the place to play and tweak: the big controls of the three most used parts are in one view.
+The Play tab is ONE page of three thirds side by side: **Oscillator** (left), **Envelope** (middle) and **LFO** (right). Each third has a header dropdown, a live display under it, and its dials and choices below. The first four Q-Links (knobs) belong to the oscillator third, the next four to the envelope and the next four to the LFO. On the MPC XL all twelve are on the knobs at once and every control carries the number of its knob. On the Key 61 the yellow frame marks the four knobs at the moment; touch a control of another third to bring its group to the four knobs (the others follow), and use the Q-Link bank buttons for the rest. This is the place to play and tweak: the controls of the three most used parts are in one view. The full editors are the tabs Osc A, Osc B, Osc C, Sub, Noise (5.3 to 5.5), Env 1 to Env 6 (5.8) and LFO 1 to LFO 10 (5.9).
 
-The Play page layout:
-- **No tab rows:** Navigation is handled by a single selector in each third of the screen.
-- **Arrows step, tap opens list:** Use the arrows to step, or tap the name to open the full list of options for Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10, and R1–R4.
-- **Unified display height:** All three displays share the same height and top alignment. Each display has a header band with its title and buttons (power, route, full-screen); the plot area sits below the band.
+- **Header dropdown:** each third has one dropdown at the top; its title is the module shown. Tap it to choose the module. The list holds Sub, Osc A, Osc B, Osc C and Noise in the oscillator third, Env 1 to Env 6 in the envelope third, and LFO 1 to LFO 10 and RND 1 to RND 4 in the LFO third. The choice is saved with the project.
+- **Unified display height:** the three displays share the same height and top alignment; the plot area sits below the header.
 
-The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the XL):
-
-[Korábbi állapotkép: Play LFO](https://github.com/Safian/SynthyBoy/blob/b91c23c3/docs/user-guide/img/play-lfo.png)
-
-**Oscillator panel.**
+**Oscillator third.**
 
 | Control | What it does |
 |---|---|
-| Source selector (Sub, Osc A, Osc B, Osc C, Noise) | Choose which sound source the panel shows and edits (saved with the project). Arrows step, tap opens the list of five. |
-| Power button and name | Switch the shown source on and off; sits at the left of the display header band. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
-| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator; sits in the display header band to the left of the full-screen button. Sub has no route button here; its routing is on its own page (5.4). |
-| Display + full-screen button | The display has a header band with the power button, source name, route button, and full-screen button (four corner brackets); one cycle of the oscillator is plotted below the band. The full-screen button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
-| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral), stacked under the display. Q 1. |
-| Source stepper and the list button | Wavetable name (the title of the file for a table from a file), or the loaded file. Both open the wavetable browser (or the content browser); from the compact view the full screen opens first. Q 2. |
+| Header dropdown (Sub, Osc A, Osc B, Osc C, Noise) | Chooses which sound source the third shows and edits. |
+| Power button | Switches the shown source on and off; sits at the left of the display header. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
+| ROUTE choice (F1 / F2 / F12 / M / DIR / BAL / OFF) | Sets the output target of that oscillator (Osc N Destination); sits in the display header. Sub has no ROUTE choice here; its routing is on its own page (5.4). |
+| Display | One cycle of the oscillator is plotted below the header. |
+| WAVE / TYPE / SOURCE choices | The oscillator type (wavetable, multisample, sample, granular, spectral) and the wavetable or the loaded file, under the display. Q 1 and Q 2. |
+| OCT | The octave of the shown source (Sub and the oscillators). |
 | PAN | -100 .. +100 percent (C, L n, R n). Q 3. |
 | LEVEL | 0 .. 100 percent. Q 4. |
 
-Sub and Noise have different controls (waveform, octave; noise colour, filter): see 5.4 and 5.5.
+Sub and Noise have different choices (waveform, octave; noise colour, filter): see 5.4 and 5.5.
 
-**Envelope panel.** The selector at the top chooses **Env 1 .. Env 6** (arrows step, tap opens the list). The display has a header band with the envelope name and the full-screen button at the right; the envelope graph is plotted below the band. Under the display are the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 5 - 8 on the XL). The graph here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
+**Envelope third.** The header dropdown chooses **Env 1 .. Env 6**. The envelope graph is plotted below the header. Under the display are the dials ATTACK, DECAY, SUSTAIN and RELEASE (Q 5 - 8 on the XL). The graph is always fitted to the third. Details in 5.8.
 
-**LFO panel.** The selector at the top chooses **LFO 1 .. LFO 10** or **RND 1 .. RND 4** (arrows step, tap opens the list). The display has a header band with the name and the full-screen button at the right; the LFO curve is plotted below the band. Under the display are the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three dots, the lit one is the mode), RISE and SMOOTH (Q 9 - 12 on the XL). SMOOTH has a LED in front of its name: it is the switch of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
-
-**Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
+**LFO third.** The header dropdown chooses **LFO 1 .. LFO 10** or **RND 1 .. RND 4**. The LFO curve is plotted below the header. Under the display are the SHAPE choice, the RATE dial or, with a tempo sync, the DIVISION choice, the **HZ / BPM / KEY** buttons (the lit one is the mode), RISE and SMOOTH (Q 9 - 12 on the XL); the random LFOs have STYLE, SYNC and STEREO choices. SMOOTH has a LED in front of its name: it is the switch of the smoothing and the dial sets its time (the dial is dim while the LED is off). Details in 5.9.
 
 ### 5.2 Macros
 
