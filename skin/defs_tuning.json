@@ -7,22 +7,7 @@
     "key": "masterNative_selector_500x80",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -138,6 +123,35 @@
         "boundsType": "Absolute",
         "bounds": "0 0 500 24"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 28 500 48"
+       }
       }
      ]
     }
@@ -146,22 +160,7 @@
     "key": "masterNative_selector_300x80",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -277,6 +276,35 @@
         "boundsType": "Absolute",
         "bounds": "0 0 300 24"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 28 300 48"
+       }
       }
      ]
     }
@@ -285,22 +313,7 @@
     "key": "masterNative_selector_424x80",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -415,6 +428,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "0 0 424 24"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 28 424 48"
        }
       }
      ]
@@ -590,22 +632,7 @@
     "key": "masterNative_selector_400x80",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -720,6 +747,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "0 0 400 24"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 28 400 48"
        }
       }
      ]
@@ -1280,22 +1336,7 @@
     "key": "masterNative_selector_416x80",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -1410,6 +1451,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "0 0 416 24"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 28 416 48"
        }
       }
      ]

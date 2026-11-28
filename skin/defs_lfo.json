@@ -9969,22 +9969,7 @@
     "key": "lfoEditChoice21",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -10100,6 +10085,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "14 7 254 18"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 3 300 56"
        }
       }
      ]
@@ -10260,22 +10274,7 @@
     "key": "lfoNativeChoice_220x56",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -10391,6 +10390,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "14 4 174 18"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 220 56"
        }
       }
      ]
@@ -13822,6 +13850,10 @@
          {
           "key": "Data",
           "value": "Parameter 3210"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3967"
          }
         ]
        },
@@ -13886,6 +13918,10 @@
          {
           "key": "Data",
           "value": "Parameter 3279"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3968"
          }
         ]
        },
@@ -14447,6 +14483,10 @@
          {
           "key": "Data",
           "value": "Parameter 3763"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3978"
          }
         ]
        },
@@ -14503,22 +14543,7 @@
     "key": "lfoNativeChoice_220x56_source",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -14634,6 +14659,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "14 4 174 18"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 220 56"
        }
       }
      ]
@@ -14768,22 +14822,7 @@
     "key": "lfoNativePickAddSource",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -14900,6 +14939,35 @@
         "boundsType": "Absolute",
         "bounds": "14 4 154 18"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 200 56"
+       }
       }
      ]
     }
@@ -14908,22 +14976,7 @@
     "key": "lfoNativePickGroup",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -15040,6 +15093,35 @@
         "boundsType": "Absolute",
         "bounds": "14 4 154 18"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 200 56"
+       }
       }
      ]
     }
@@ -15048,22 +15130,7 @@
     "key": "lfoNativePickTarget",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -15180,6 +15247,35 @@
         "boundsType": "Absolute",
         "bounds": "14 4 374 18"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 420 56"
+       }
       }
      ]
     }
@@ -15222,6 +15318,10 @@
          {
           "key": "Data",
           "value": "Parameter 3764"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3979"
          }
         ]
        },
@@ -15254,6 +15354,10 @@
          {
           "key": "Data",
           "value": "Parameter 3765"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3980"
          }
         ]
        },
@@ -15286,6 +15390,10 @@
          {
           "key": "Data",
           "value": "Parameter 3766"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3981"
          }
         ]
        },
@@ -15319,6 +15427,10 @@
          {
           "key": "Data",
           "value": "Parameter 3767"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3982"
          }
         ]
        },
@@ -15352,6 +15464,10 @@
          {
           "key": "Data",
           "value": "Parameter 3768"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3983"
          }
         ]
        },
@@ -15385,6 +15501,10 @@
          {
           "key": "Data",
           "value": "Parameter 3769"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3984"
          }
         ]
        },
@@ -15418,6 +15538,10 @@
          {
           "key": "Data",
           "value": "Parameter 3770"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3985"
          }
         ]
        },
@@ -15451,6 +15575,10 @@
          {
           "key": "Data",
           "value": "Parameter 3771"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3986"
          }
         ]
        },
@@ -15484,6 +15612,10 @@
          {
           "key": "Data",
           "value": "Parameter 3772"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3987"
          }
         ]
        },
@@ -15517,6 +15649,10 @@
          {
           "key": "Data",
           "value": "Parameter 3773"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3988"
          }
         ]
        },
@@ -15550,6 +15686,10 @@
          {
           "key": "Data",
           "value": "Parameter 3774"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3989"
          }
         ]
        },
@@ -15583,6 +15723,10 @@
          {
           "key": "Data",
           "value": "Parameter 3775"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3990"
          }
         ]
        },
@@ -15616,6 +15760,10 @@
          {
           "key": "Data",
           "value": "Parameter 3776"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3991"
          }
         ]
        },
@@ -15649,6 +15797,10 @@
          {
           "key": "Data",
           "value": "Parameter 3777"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3992"
          }
         ]
        },
@@ -15682,6 +15834,10 @@
          {
           "key": "Data",
           "value": "Parameter 3778"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3993"
          }
         ]
        },
@@ -15715,6 +15871,10 @@
          {
           "key": "Data",
           "value": "Parameter 3779"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3994"
          }
         ]
        },
@@ -15748,6 +15908,10 @@
          {
           "key": "Data",
           "value": "Parameter 3780"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3995"
          }
         ]
        },
@@ -15781,6 +15945,10 @@
          {
           "key": "Data",
           "value": "Parameter 3781"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3996"
          }
         ]
        },
@@ -15814,6 +15982,10 @@
          {
           "key": "Data",
           "value": "Parameter 3782"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3997"
          }
         ]
        },
@@ -15847,6 +16019,10 @@
          {
           "key": "Data",
           "value": "Parameter 3783"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3998"
          }
         ]
        },
@@ -15880,6 +16056,10 @@
          {
           "key": "Data",
           "value": "Parameter 3784"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3999"
          }
         ]
        },
@@ -15913,6 +16093,10 @@
          {
           "key": "Data",
           "value": "Parameter 3785"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4000"
          }
         ]
        },
@@ -15946,6 +16130,10 @@
          {
           "key": "Data",
           "value": "Parameter 3786"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4001"
          }
         ]
        },
@@ -15979,6 +16167,10 @@
          {
           "key": "Data",
           "value": "Parameter 3787"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4002"
          }
         ]
        },
@@ -16012,6 +16204,10 @@
          {
           "key": "Data",
           "value": "Parameter 3788"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4003"
          }
         ]
        },
@@ -16045,6 +16241,10 @@
          {
           "key": "Data",
           "value": "Parameter 3789"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4004"
          }
         ]
        },
@@ -16078,6 +16278,10 @@
          {
           "key": "Data",
           "value": "Parameter 3790"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4005"
          }
         ]
        },
@@ -16111,6 +16315,10 @@
          {
           "key": "Data",
           "value": "Parameter 3791"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4006"
          }
         ]
        },
@@ -16144,6 +16352,10 @@
          {
           "key": "Data",
           "value": "Parameter 3792"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4007"
          }
         ]
        },
@@ -16177,6 +16389,10 @@
          {
           "key": "Data",
           "value": "Parameter 3793"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4008"
          }
         ]
        },
@@ -16210,6 +16426,10 @@
          {
           "key": "Data",
           "value": "Parameter 3794"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4009"
          }
         ]
        },
@@ -16243,6 +16463,10 @@
          {
           "key": "Data",
           "value": "Parameter 3795"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4010"
          }
         ]
        },
@@ -16276,6 +16500,10 @@
          {
           "key": "Data",
           "value": "Parameter 3796"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4011"
          }
         ]
        },
@@ -16309,6 +16537,10 @@
          {
           "key": "Data",
           "value": "Parameter 3797"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4012"
          }
         ]
        },
@@ -16342,6 +16574,10 @@
          {
           "key": "Data",
           "value": "Parameter 3798"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4013"
          }
         ]
        },
@@ -16375,6 +16611,10 @@
          {
           "key": "Data",
           "value": "Parameter 3799"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4014"
          }
         ]
        },
@@ -16408,6 +16648,10 @@
          {
           "key": "Data",
           "value": "Parameter 3800"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4015"
          }
         ]
        },
@@ -16441,6 +16685,10 @@
          {
           "key": "Data",
           "value": "Parameter 3801"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4016"
          }
         ]
        },
@@ -17159,6 +17407,150 @@
         "bounds": "0 0 1280 628",
         "additionalInvalidatingHandles": [
          "RangedEnabling/9/10/11/Parameter 3897"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
         ]
        }
       }

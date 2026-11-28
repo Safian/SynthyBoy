@@ -93,6 +93,13 @@ public:
     virtual void setUiFullOpen (bool /*open*/) noexcept {}
     /** Asks the instance to report its display parameter "Overlay Instance" to the host again soon. It must only set a flag (the instance's display thread makes the call). */
     virtual void requestOverlayReport() noexcept {}
+    /** True while the plugin shows a list modal of its own in the host's skin (SynthyBoy: a native choice list, native_choice_list.h). The host plane draws that list, so while it is true the overlay
+        draws nothing over it (the overlay plane lies above the host's) and its views take no touch or wheel. It reads an atomic: any thread, no lock. */
+    virtual bool nativeChoiceListOpen() const noexcept { return false; }
+    /** The overlay's page check identified `view` (the index of the overlay view, >= 0) as the page of this instance on screen, or -2: another instance's page came on screen. A failed check (-1: the
+        page is covered, the host's dialog, a blink) is never told, because a list modal of the plugin's own may cover the page markers. The plugin closes a list modal opened on another page. It must
+        only store the number (the overlay thread calls it under the controller's lock). */
+    virtual void nativeScreenShown (int /*view*/) noexcept {}
 
     // ---- optional parts
     /** The plugin's LIVE block: a plain struct the plugin's engine writes and its own views read (SynthyBoy: synthyboy::LiveValues, the readout of the voices; a plugin without one keeps false). Copies it into

@@ -258,117 +258,6 @@
     }
    },
    {
-    "key": "oscNativeRoutingChoices",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "hideQLinkBounds": true,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeRoutingChoices background",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "osc_routing_overlay_bg.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "oscNativeRoutingChoices close",
-        "type": "MenuOverlay",
-        "data": {
-         "version": 1,
-         "actions": [
-          {
-           "version": 1,
-           "onAction": "Focus Lost",
-           "handler": "Focus Lost",
-           "handleName": "Focus Lost",
-           "additionalData": ""
-          }
-         ],
-         "withNumbers": false,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Modal Markers",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "native_modal_markers.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "16 120 30 6"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscNativePanLayer",
     "value": {
      "version": 2,
@@ -18195,6 +18084,10 @@
           "value": "Parameter 2999"
          },
          {
+          "key": "HdrRouteList",
+          "value": "ResetOnGestureEnd/Parameter 3965"
+         },
+         {
           "key": "HdrGate1",
           "value": "IndexedEnabling/1/3/Parameter 2878"
          },
@@ -18271,6 +18164,10 @@
           "value": "Parameter 2998"
          },
          {
+          "key": "HdrRouteList",
+          "value": "ResetOnGestureEnd/Parameter 3964"
+         },
+         {
           "key": "HdrGate1",
           "value": "IndexedEnabling/1/3/Parameter 2878"
          },
@@ -18343,6 +18240,10 @@
           "value": "Parameter 3002"
          },
          {
+          "key": "HdrRouteList",
+          "value": "ResetOnGestureEnd/Parameter 3966"
+         },
+         {
           "key": "HdrGate1",
           "value": "IndexedEnabling/1/3/Parameter 2878"
          },
@@ -18413,6 +18314,10 @@
          {
           "key": "HdrRoute",
           "value": "Parameter 3002"
+         },
+         {
+          "key": "HdrRouteList",
+          "value": "ResetOnGestureEnd/Parameter 3966"
          },
          {
           "key": "HdrGate1",
@@ -18727,22 +18632,7 @@
     "key": "oscNativeSetting_menuDetailValue",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -18794,6 +18684,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "14 21 79 29"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1"
        }
       }
      ]
@@ -22095,6 +22014,150 @@
         "boundsType": "Absolute",
         "bounds": "672 504 122 16"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Choice List",
+        "type": "nativeListModal",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3588"
+         },
+         {
+          "key": "Row0",
+          "value": "Parameter 3577"
+         },
+         {
+          "key": "Cap0",
+          "value": "WithName[]/Parameter 3577"
+         },
+         {
+          "key": "Row1",
+          "value": "Parameter 3578"
+         },
+         {
+          "key": "Cap1",
+          "value": "WithName[]/Parameter 3578"
+         },
+         {
+          "key": "Row2",
+          "value": "Parameter 3579"
+         },
+         {
+          "key": "Cap2",
+          "value": "WithName[]/Parameter 3579"
+         },
+         {
+          "key": "Row3",
+          "value": "Parameter 3580"
+         },
+         {
+          "key": "Cap3",
+          "value": "WithName[]/Parameter 3580"
+         },
+         {
+          "key": "Row4",
+          "value": "Parameter 3581"
+         },
+         {
+          "key": "Cap4",
+          "value": "WithName[]/Parameter 3581"
+         },
+         {
+          "key": "Row5",
+          "value": "Parameter 3582"
+         },
+         {
+          "key": "Cap5",
+          "value": "WithName[]/Parameter 3582"
+         },
+         {
+          "key": "Row6",
+          "value": "Parameter 3583"
+         },
+         {
+          "key": "Cap6",
+          "value": "WithName[]/Parameter 3583"
+         },
+         {
+          "key": "Gate0",
+          "value": "IndexedEnabling/1/2/Parameter 3590"
+         },
+         {
+          "key": "Gate1",
+          "value": "IndexedEnabling/1/2/Parameter 3591"
+         },
+         {
+          "key": "Gate2",
+          "value": "IndexedEnabling/1/2/Parameter 3592"
+         },
+         {
+          "key": "Gate3",
+          "value": "IndexedEnabling/1/2/Parameter 3593"
+         },
+         {
+          "key": "Gate4",
+          "value": "IndexedEnabling/1/2/Parameter 3594"
+         },
+         {
+          "key": "Gate5",
+          "value": "IndexedEnabling/1/2/Parameter 3595"
+         },
+         {
+          "key": "Gate6",
+          "value": "IndexedEnabling/1/2/Parameter 3596"
+         },
+         {
+          "key": "Back",
+          "value": "FromGesture/Parameter 3584"
+         },
+         {
+          "key": "Prev",
+          "value": "FromGesture/Parameter 3585"
+         },
+         {
+          "key": "Next",
+          "value": "FromGesture/Parameter 3586"
+         },
+         {
+          "key": "Groups",
+          "value": "FromGesture/Parameter 3587"
+         },
+         {
+          "key": "Title",
+          "value": "Parameter 3589"
+         },
+         {
+          "key": "TitleGroups",
+          "value": "IndexedEnabling/0/2/Parameter 3589"
+         },
+         {
+          "key": "TitleUp",
+          "value": "IndexedEnabling/1/2/Parameter 3589"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 628",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3903"
+        ]
+       }
       }
      ]
     }
@@ -22476,22 +22539,7 @@
     "key": "oscHeaderRoute",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeRoutingChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "oscNativeRoutingChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -22596,6 +22644,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "12 0 106 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 150 40"
        }
       }
      ]
@@ -23282,6 +23359,10 @@
          {
           "key": "NativeActiveGate2",
           "value": "HdrGate2"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrRouteList"
          }
         ]
        },
@@ -23870,6 +23951,10 @@
          {
           "key": "NativeActiveGate2",
           "value": "HdrGate2"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrRouteList"
          }
         ]
        },
@@ -24431,6 +24516,10 @@
          {
           "key": "NativeActiveGate2",
           "value": "HdrGate2"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrRouteList"
          }
         ]
        },
@@ -24784,6 +24873,10 @@
          {
           "key": "NativeActiveGate2",
           "value": "HdrGate2"
+         },
+         {
+          "key": "ListOpen",
+          "value": "HdrRouteList"
          }
         ]
        },
@@ -25293,6 +25386,10 @@
          {
           "key": "Data",
           "value": "Parameter 3434"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3969"
          }
         ]
        },
@@ -25329,6 +25426,10 @@
          {
           "key": "Data",
           "value": "Parameter 3435"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3970"
          }
         ]
        },
@@ -25365,6 +25466,10 @@
          {
           "key": "Data",
           "value": "Parameter 3436"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3971"
          }
         ]
        },
@@ -25401,6 +25506,10 @@
          {
           "key": "Data",
           "value": "Parameter 3438"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3973"
          }
         ]
        },
@@ -25437,6 +25546,10 @@
          {
           "key": "Data",
           "value": "Parameter 3441"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3976"
          }
         ]
        },
@@ -25761,6 +25874,10 @@
          {
           "key": "Data",
           "value": "Parameter 3439"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3974"
          }
         ]
        },
@@ -25797,6 +25914,10 @@
          {
           "key": "Data",
           "value": "Parameter 3440"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3975"
          }
         ]
        },
@@ -25833,6 +25954,10 @@
          {
           "key": "Data",
           "value": "Parameter 3443"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3977"
          }
         ]
        },
@@ -26121,6 +26246,10 @@
          {
           "key": "Data",
           "value": "Parameter 3437"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3972"
          }
         ]
        },

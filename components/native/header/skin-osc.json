@@ -21,6 +21,7 @@
       "remap": {
         "HdrTitle": "Parameter 3026",
         "HdrRoute": "Parameter 2999",
+        "HdrRouteList": "ResetOnGestureEnd/Parameter 3965",
         "HdrGate1": "IndexedEnabling/1/3/Parameter 2878",
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "RangedEnabling/1/3/5/Parameter 2876",
@@ -41,6 +42,7 @@
       ],
       "remap": {
         "HdrRoute": "Parameter 2998",
+        "HdrRouteList": "ResetOnGestureEnd/Parameter 3964",
         "HdrGate1": "IndexedEnabling/1/3/Parameter 2878",
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "IndexedEnabling/0/5/Parameter 2876",
@@ -60,6 +62,7 @@
       ],
       "remap": {
         "HdrRoute": "Parameter 3002",
+        "HdrRouteList": "ResetOnGestureEnd/Parameter 3966",
         "HdrGate1": "IndexedEnabling/1/3/Parameter 2878",
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "IndexedEnabling/4/5/Parameter 2876",
@@ -79,6 +82,7 @@
       ],
       "remap": {
         "HdrRoute": "Parameter 3002",
+        "HdrRouteList": "ResetOnGestureEnd/Parameter 3966",
         "HdrGate1": "IndexedEnabling/1/3/Parameter 2878",
         "HdrGate2": "IndexedEnabling/2/3/Parameter 2878",
         "HdrOscGate": "IndexedEnabling/4/5/Parameter 2876",

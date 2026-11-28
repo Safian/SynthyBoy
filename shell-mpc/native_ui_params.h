@@ -12,6 +12,7 @@
 #include "native_mod_controls.h"
 #include "native_osc_controls.h"
 #include "native_text.h"
+#include "native_choice_list.h"
 
 namespace synthyboy_mpc::nativeui
 {
@@ -160,7 +161,15 @@ constexpr int textGateLine (int gate) noexcept { return gate == 0 ? nativetext::
 constexpr int kPlayList = kTextGate + kTextGates;
 constexpr int kPlayListLastCode = 14;   // == playlist::kLastCode (native_play_list.h; checked in synthyboy_mpc.cpp)
 static_assert (kPlayList == 3902 - 2719, "Play List is Parameter 3902 in skin/defs_play.json: the handle block before it changed");
-constexpr int kCount = kPlayList + 1;
+// Appended 2026-11-28 (choice lists): "Choice List Open" (read-only gate of the list modal: exactly 1 while a choice list is open, else 0) and the openers "Choice List 0" .. (one per slot of
+// choicelist::kSlotHandles; a skin Button writes 1 through ResetOnGestureEnd, never stored, getParameter is always 0). native_choice_list.h holds the table and the plain-data model.
+constexpr int kChoiceListOpen = kPlayList + 1;
+constexpr int kChoiceList = kChoiceListOpen + 1;
+constexpr int kChoiceListSlots = choicelist::kSlots;
+static_assert (kChoiceListOpen == choicelist::kOpenParameter - 2719, "Choice List Open is Parameter 3903 in the skin (IndexedEnabling of nativeListModal)");
+static_assert (kChoiceList == choicelist::kFirstSlotParameter - 2719, "Choice List 0 is Parameter 3904 in the skin (the ListOpen handle of every opener)");
+constexpr int kCount = kChoiceList + kChoiceListSlots;
+constexpr bool isChoiceListOffset (int offset) noexcept { return offset >= kChoiceList && offset < kChoiceList + kChoiceListSlots; }
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
 constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kTextEdit; }
 constexpr bool isTextEditOffset (int offset) noexcept { return offset >= kTextEdit && offset < kTextGate; }

@@ -351,22 +351,7 @@
     "key": "fxNativeCellChoice",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -481,6 +466,35 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "8 0 294 28"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 28 294 44"
        }
       }
      ]
@@ -7892,6 +7906,10 @@
          {
           "key": "Data",
           "value": "Parameter 2774"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3924"
          }
         ]
        },
@@ -7925,6 +7943,10 @@
          {
           "key": "Data",
           "value": "Parameter 2773"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3923"
          }
         ]
        },
@@ -8288,6 +8310,10 @@
          {
           "key": "Data",
           "value": "Parameter 2784"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3934"
          }
         ]
        },
@@ -8420,6 +8446,10 @@
          {
           "key": "Data",
           "value": "Parameter 2776"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3926"
          }
         ]
        },
@@ -8618,6 +8648,10 @@
          {
           "key": "Data",
           "value": "Parameter 2773"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3923"
          }
         ]
        },
@@ -8651,6 +8685,10 @@
          {
           "key": "Data",
           "value": "Parameter 2776"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3926"
          }
         ]
        },
@@ -8717,6 +8755,10 @@
          {
           "key": "Data",
           "value": "Parameter 2773"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3923"
          }
         ]
        },
@@ -8882,6 +8924,10 @@
          {
           "key": "Data",
           "value": "Parameter 2792"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3940"
          }
         ]
        },
@@ -9443,6 +9489,10 @@
          {
           "key": "Data",
           "value": "Parameter 2774"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3924"
          }
         ]
        },
@@ -9476,6 +9526,10 @@
          {
           "key": "Data",
           "value": "Parameter 2773"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3923"
          }
         ]
        },
@@ -10334,6 +10388,10 @@
          {
           "key": "Data",
           "value": "Parameter 2786"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3936"
          }
         ]
        },
@@ -10664,6 +10722,10 @@
          {
           "key": "Data",
           "value": "Parameter 2787"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3937"
          }
         ]
        },
@@ -10829,6 +10891,10 @@
          {
           "key": "Data",
           "value": "Parameter 2779"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3929"
          }
         ]
        },
@@ -10961,6 +11027,10 @@
          {
           "key": "Data",
           "value": "Parameter 2780"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3930"
          }
         ]
        },
@@ -11126,6 +11196,10 @@
          {
           "key": "Data",
           "value": "Parameter 2779"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3929"
          }
         ]
        },
@@ -11258,6 +11332,10 @@
          {
           "key": "Data",
           "value": "Parameter 2780"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3930"
          }
         ]
        },
@@ -11324,6 +11402,10 @@
          {
           "key": "Data",
           "value": "Parameter 2772"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3922"
          }
         ]
        },
@@ -11357,6 +11439,10 @@
          {
           "key": "Data",
           "value": "Parameter 2778"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3928"
          }
         ]
        },
@@ -11390,6 +11476,10 @@
          {
           "key": "Data",
           "value": "Parameter 2781"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3931"
          }
         ]
        },
@@ -11522,6 +11612,10 @@
          {
           "key": "Data",
           "value": "Parameter 2773"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3923"
          }
         ]
        },
@@ -11555,6 +11649,10 @@
          {
           "key": "Data",
           "value": "Parameter 2782"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3932"
          }
         ]
        },
@@ -11588,6 +11686,10 @@
          {
           "key": "Data",
           "value": "Parameter 2793"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3941"
          }
         ]
        },
@@ -11621,6 +11723,10 @@
          {
           "key": "Data",
           "value": "Parameter 2794"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3942"
          }
         ]
        },
@@ -11654,6 +11760,10 @@
          {
           "key": "Data",
           "value": "Parameter 2795"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3943"
          }
         ]
        },
@@ -11687,6 +11797,10 @@
          {
           "key": "Data",
           "value": "Parameter 2796"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3944"
          }
         ]
        },
@@ -11720,6 +11834,10 @@
          {
           "key": "Data",
           "value": "Parameter 2797"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3945"
          }
         ]
        },
@@ -11753,6 +11871,10 @@
          {
           "key": "Data",
           "value": "Parameter 2798"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3946"
          }
         ]
        },
@@ -11786,6 +11908,10 @@
          {
           "key": "Data",
           "value": "Parameter 2799"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3947"
          }
         ]
        },
@@ -11819,6 +11945,10 @@
          {
           "key": "Data",
           "value": "Parameter 2800"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3948"
          }
         ]
        },
@@ -11852,6 +11982,10 @@
          {
           "key": "Data",
           "value": "Parameter 2801"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3949"
          }
         ]
        },
@@ -11885,6 +12019,10 @@
          {
           "key": "Data",
           "value": "Parameter 2802"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3950"
          }
         ]
        },
@@ -11918,6 +12056,10 @@
          {
           "key": "Data",
           "value": "Parameter 2803"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3951"
          }
         ]
        },
@@ -11951,6 +12093,10 @@
          {
           "key": "Data",
           "value": "Parameter 2804"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3952"
          }
         ]
        },
@@ -11984,6 +12130,10 @@
          {
           "key": "Data",
           "value": "Parameter 2805"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3953"
          }
         ]
        },
@@ -12017,6 +12167,10 @@
          {
           "key": "Data",
           "value": "Parameter 2806"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3954"
          }
         ]
        },
@@ -12116,6 +12270,10 @@
          {
           "key": "Data",
           "value": "Parameter 2809"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3955"
          }
         ]
        },
@@ -12314,6 +12472,10 @@
          {
           "key": "Data",
           "value": "Parameter 2815"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3956"
          }
         ]
        },
@@ -12347,6 +12509,10 @@
          {
           "key": "Data",
           "value": "Parameter 2816"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3957"
          }
         ]
        },
@@ -12380,6 +12546,10 @@
          {
           "key": "Data",
           "value": "Parameter 2817"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3958"
          }
         ]
        },
@@ -12413,6 +12583,10 @@
          {
           "key": "Data",
           "value": "Parameter 2818"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3959"
          }
         ]
        },
@@ -12446,6 +12620,10 @@
          {
           "key": "Data",
           "value": "Parameter 2819"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3960"
          }
         ]
        },
@@ -12545,6 +12723,10 @@
          {
           "key": "Data",
           "value": "Parameter 2776"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3926"
          }
         ]
        },
@@ -12578,6 +12760,10 @@
          {
           "key": "Data",
           "value": "Parameter 2783"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3933"
          }
         ]
        },
@@ -12677,6 +12863,10 @@
          {
           "key": "Data",
           "value": "Parameter 2775"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3925"
          }
         ]
        },
@@ -12710,6 +12900,10 @@
          {
           "key": "Data",
           "value": "Parameter 2777"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3927"
          }
         ]
        },
@@ -12743,6 +12937,10 @@
          {
           "key": "Data",
           "value": "Parameter 2789"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3939"
          }
         ]
        },
@@ -12842,6 +13040,10 @@
          {
           "key": "Data",
           "value": "Parameter 2785"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3935"
          }
         ]
        },
@@ -13502,6 +13704,10 @@
          {
           "key": "Data",
           "value": "Parameter 2788"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 3938"
          }
         ]
        },
