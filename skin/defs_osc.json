@@ -25288,6 +25288,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -25301,7 +25305,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/17/Kind"
+         "Kind1"
         ]
        }
       },
@@ -25320,6 +25324,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -25333,7 +25341,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/17/Kind"
+         "Kind2"
         ]
        }
       },
@@ -25352,6 +25360,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -25365,7 +25377,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/17/Kind"
+         "Kind3"
         ]
        }
       },
@@ -25384,6 +25396,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -25397,7 +25413,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/17/Kind"
+         "Kind4"
         ]
        }
       },
@@ -25416,6 +25432,14 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
+          "key": "Step",
+          "value": "Step"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -25429,7 +25453,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/5/17/Kind"
+         "Kind5"
         ]
        }
       },
@@ -25448,12 +25472,12 @@
         "version": 1,
         "map": [
          {
-          "key": "Caption",
-          "value": "Data"
+          "key": "Data",
+          "value": "DataAct"
          },
          {
-          "key": "Data",
-          "value": "FromGesture/Data"
+          "key": "Caption",
+          "value": "Data"
          }
         ]
        },
@@ -25465,7 +25489,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/6/17/Kind"
+         "Kind6"
         ]
        }
       },
@@ -25484,6 +25508,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -25497,7 +25525,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "RangedEnabling/7/16/17/Kind"
+         "KindMenu"
         ]
        }
       },
@@ -25533,7 +25561,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/7/17/Kind"
+         "Kind7"
         ]
        }
       },
@@ -25569,7 +25597,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/8/17/Kind"
+         "Kind8"
         ]
        }
       },
@@ -25605,7 +25633,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/9/17/Kind"
+         "Kind9"
         ]
        }
       },
@@ -25641,7 +25669,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/11/17/Kind"
+         "Kind11"
         ]
        }
       },
@@ -25677,7 +25705,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/14/17/Kind"
+         "Kind14"
         ]
        }
       },
@@ -25713,7 +25741,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/15/17/Kind"
+         "Kind15"
         ]
        }
       }
