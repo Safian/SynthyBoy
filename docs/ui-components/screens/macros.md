@@ -1,0 +1,24 @@
+# Macros screen
+
+**Tab:** Macros (`macros`, function key Play, second sub-tab): one tab body. **Picture:** `../../screens/macros.jpg`.
+
+## What it shows
+
+- The studio spectrum frame across the upper area (`macroSpectrumFrame`, 8 72 1264 290; the spectrum is drawn by the plugin, `spectrum_curve.h`) and the eight macro cards in one bottom row (`macroCard`, 152 x 238: dial, value, target chips) with the card name and its underline (`macroNameLine`) under each.
+- The targets page of a macro (title, count, empty hint, and the modulation editor `nativeModulationEditor` with its keyline), the add-target picker (seven list rows `modNative_list_1200x56`, BACK, GROUPS, PREVIOUS, NEXT, title) and the native keyboard (`native keyboard overlay`) for renaming a macro. The sub pages are gated by the macro sub-page handle.
+
+## Definitions
+
+`skin/defs_macro.json` (8: `macroCard`, `macroSubLevel`, `macroSpectrumFrame`, `macroNameLine`, `macroLineGrid`, `macroLineGridTop`, `macroLineDecade`, `macroLineRule`); the picker rows, the modulation editor and the keyline in `defs_common.json` and `defs_mod.json`.
+
+## Data
+
+Blocks of `shell-mpc/native_ui_params.h`: `kMacroText` (card names, title, count, empty hint; `nativetext::MacroLine`), `kMacroSubpage` (exactly 0 on the cards page, 1 while the targets, add-target list or keyboard is open), `kMacroTarget` (eight targets), `kModTargets`, `kTextEdit` (keyboard context, key, text; `native_text_entry.h`), `kTextGate`. The macro parameters are `macro.1` .. `macro.8`.
+
+## Q groups
+
+MACROS 1-4 and MACROS 5-8 (the shown bank is the active one); the targets list: one group per row.
+
+## C++ owners
+
+`shell-mpc/overlay/macro_ui.h`, `macro_names.h`, `spectrum_curve.h`, `mod_rows_page.h`, `native_mod_targets_ui.h`; `shell-mpc/ui/macro_card_contract.h`, `shell-mpc/native_text.h`, `native_text_entry.h`, `native_mod_targets.h`.
