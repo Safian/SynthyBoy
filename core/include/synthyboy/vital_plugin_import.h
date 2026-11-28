@@ -4,7 +4,7 @@
 //
 // One call per file the user picked: `.vital` (a patch: parameters + content), `.vitalbank` (every preset written to the user preset directory),
 // `.vitaltable` (a table stored in the user library), `.vitallfo` (an LFO shape for a slot). The tables and samples of a preset go to the
-// `user.imported-vital` pack of the content store, so the references of the loaded patch resolve at once. JUCE free; message thread.
+// `user.imported-vital` pack of the content store, so the references of the loaded patch resolve at once. Message thread.
 #pragma once
 
 #include <string>

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// docs/ui-design/19-serum-preset-format.md (the container), 13-new-keys.md 4.26 (the mapping, assumptions A325 ..). JUCE-free, engine-free, no I/O,
+// docs/ui-design/19-serum-preset-format.md (the container), 13-new-keys.md 4.26 (the mapping, assumptions A325 ..). Engine-free, no I/O,
 // no threads, no globals: the importer works on bytes handed over by the host; the files a preset only references (tables, samples, noise, impulses,
 // multisamples) are asked from a SerumContentResolver the host implements. The result is plain data. Same discipline as vital_import.h: every leaf
 // of the file ends up in the report as imported / approximated / dropped / ignored, nothing is silently lost.

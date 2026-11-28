@@ -1,5 +1,5 @@
 // SynthyBoy - core: the WAV wavetable file rules (docs/MPC.md "Wavetable browser"). One parser for every wavetable file the engine, the catalogue and the shells read: a
-// user file in a folder of the player, a file of a content pack, a table the editor saved. JUCE free, no I/O (the caller hands over the bytes), defensive: every size is checked
+// user file in a folder of the player, a file of a content pack, a table the editor saved. No I/O (the caller hands over the bytes), defensive: every size is checked
 // against what is left of the buffer before it is used, the number of chunks is bounded, nothing throws.
 //
 // What is accepted (and what happens to it):

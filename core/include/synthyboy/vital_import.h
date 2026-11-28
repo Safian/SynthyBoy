@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// docs/ui-design/11-vital-preset-import.md (sections 1.1 - 1.4, Annex A.2). JUCE-free, Vital-free, no I/O, no threads, no globals.
+// docs/ui-design/11-vital-preset-import.md (sections 1.1 - 1.4, Annex A.2). No I/O, no threads, no globals.
 // The importer works on bytes handed over by the host; the result is plain data.
 #pragma once
 

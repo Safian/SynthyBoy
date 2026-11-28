@@ -295,7 +295,7 @@ int dumpParams()
     return 0;
 }
 
-/** What the own engine acts on, key by key (docs/ui-design/OWN-ENGINE-GAP.md): "live" = IEngine::supportsParam, "dimmed" = the rule of the UI (shell-juce/ui/model/ControlModel.cpp,
+/** What the own engine acts on, key by key (docs/ui-design/OWN-ENGINE-GAP.md): "live" = IEngine::supportsParam, "dimmed" = the rule of the UI (capability bits,
     capStateForKey): a key whose required capability bits the engine does not report is drawn dimmed. A key that is neither live nor dimmed is editable, stored and has no effect. */
 int dumpOwnEngineGap()
 {

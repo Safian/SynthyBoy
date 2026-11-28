@@ -1,4 +1,4 @@
-// SynthyBoy - the output stage of every shell: the MPC VST2 shell (shell-mpc/output_stage.h adds its plugin setting LIMIT around it), the desktop shells (JUCE VST3 / AU, CLAP) and the offline
+// SynthyBoy - the output stage of the MPC VST2 shell (shell-mpc/output_stage.h adds its plugin setting LIMIT around it) and of the offline
 // renders that play what a shell plays (tools/preset-render --output-stage, tools/sound-lab "stage=on"). One header, no allocation, no lock, no libm call per sample: safe on the audio thread.
 //
 // The signal path (docs/MPC.md "Output level" has the reasoning and the measurements):

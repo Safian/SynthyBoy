@@ -8,9 +8,8 @@
 namespace synthyboy
 {
 /**
- * Same value as juce::String::hashCode() for ASCII keys (h = 31 * h + c, 32-bit wraparound), which is what the
- * CLAP wrapper of clap-juce-extensions uses as CLAP parameter id. ParamInfo::id == hashKey (ParamInfo::key) keeps
- * the ids of the spike stable.
+ * The hash of a key for ASCII keys (h = 31 * h + c, 32-bit wraparound). ParamInfo::id == hashKey (ParamInfo::key): the id of a
+ * parameter is stable and never changes while its key stays.
  */
 constexpr uint32_t hashKey (const char* key) noexcept
 {

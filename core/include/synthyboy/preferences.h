@@ -1,4 +1,4 @@
-// SynthyBoy - core: the global preferences (Serum 2 manual p.313 - 315, GROUPA2 WP-02) and the MIDI CC map files. No JUCE, no engine, no parameter keys.
+// SynthyBoy - core: the global preferences (Serum 2 manual p.313 - 315, GROUPA2 WP-02) and the MIDI CC map files. No engine, no parameter keys.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

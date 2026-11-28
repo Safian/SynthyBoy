@@ -4,7 +4,7 @@
 //
 // {"format":"synthyboy-formula","version":1,"name":"..","expression":".."}
 // {"format":"synthyboy-fx-rack","version":1,"name":"..","values":{"reverb.on":1,"fx.order.1":3,...}}
-// The LFO shape item is the `.lfoshape.json` of user_content.h. JUCE free.
+// The LFO shape item is the `.lfoshape.json` of user_content.h.
 #pragma once
 
 #include <string>

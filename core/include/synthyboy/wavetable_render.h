@@ -4,7 +4,7 @@
 //
 // docs/ui-design/11-vital-preset-import.md 1.3.1 and Annex A.5 (approved: docs/ui-design/12-decisions.md Q31). Written from the
 // procedure of that design only; nothing is taken from the imported Vital sources. Where the design does not define a behaviour the
-// code carries a "// SPEC-GAP:" comment (list: grep SPEC-GAP core/). JUCE-free, Vital-free, no I/O, no globals.
+// code carries a "// SPEC-GAP:" comment (list: grep SPEC-GAP core/). No I/O, no globals.
 #pragma once
 
 #include <cstdint>

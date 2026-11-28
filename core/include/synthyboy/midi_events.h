@@ -1,4 +1,4 @@
-// SynthyBoy - core: translation of a short MIDI channel message into an Event (shared by the CLAP and the JUCE shell).
+// SynthyBoy - core: translation of a short MIDI channel message into an Event (used by the MPC shell).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

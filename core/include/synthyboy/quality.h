@@ -158,7 +158,7 @@ constexpr Quality qualityForTier (Tier tier) noexcept
     return Quality {};
 }
 
-/** The tier the JUCE shell runs with (CMake: -DSYNTHYBOY_DEFAULT_TIER=low|medium|high, high on desktop). */
+/** The tier the shell runs with (CMake: -DSYNTHYBOY_DEFAULT_TIER=low|medium|high). */
 #ifndef SYNTHYBOY_DEFAULT_TIER
  #define SYNTHYBOY_DEFAULT_TIER high
 #endif

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// JUCE-free and shared by both shells: the JUCE shell calls these through ContentIO, the native CLAP shell through the synthyboy.content extension.
+// Pure helpers the shell calls.
 // Nothing here touches a store or the state: the callers write the result back (the content pipeline of WP-01).
 #pragma once
 
@@ -36,7 +36,7 @@ bool sampleRegionToWavetable (const float* mono, size_t frames, double sampleRat
 
 // ---- WP-15: renders ------------------------------------------------------------------------------------------------------------------------
 
-/** How the helpers reach the engine: the shell gives a function that runs an OfflineRequest (UiHost::renderOffline, the CLAP shell's engine). */
+/** How the helpers reach the engine: the shell gives a function that runs an OfflineRequest (UiHost::renderOffline). */
 using OfflineRunner = std::function<bool (const OfflineRequest&, OfflineAudio&)>;
 
 /** Resample (manual p.324): `bars` bars at `bpm` of one note of the patch (key, velocity), captured stereo. */

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// JUCE free. The shells (JUCE and native CLAP) own one UserContentStore on `<userDir>/content/` and hand it to the engine with
+// The shell owns one UserContentStore on `<userDir>/content/` and hand it to the engine with
 // IEngine::setContentStore (): the references of the state (`content.wavetables / samples / impulses`, pack + file + sha256) resolve to the files
 // the user imported or saved. Writing is a message thread operation, reading is what the engine does when a content section is set.
 //

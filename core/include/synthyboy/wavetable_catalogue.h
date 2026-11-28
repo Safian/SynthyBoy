@@ -5,7 +5,7 @@
 //   (c) the files the player copied to `<root>/SynthyBoy/Wavetables/`: one folder level is a category, a file directly in the folder is in the category "User".
 // Nothing is indexed, nothing is stored: the catalogue is built when the browser opens, from directory listings (names and sizes only, a file's content is never read while listing; the
 // manifests of the packs are the only files read) and is bounded (the limits below). A new file shows the next time the browser opens. The file system is behind ICatalogueFs, so
-// a test gives a fake one. Pure logic, JUCE free; not for the audio thread.
+// a test gives a fake one. Pure logic; not for the audio thread.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

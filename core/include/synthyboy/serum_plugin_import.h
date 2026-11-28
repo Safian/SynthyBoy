@@ -5,7 +5,7 @@
 // One call per file the user picked. `.SerumPreset` is a patch (parameters + content), `.SerumFX` / `.SerumFXRack` are effect chains (the parameters they write
 // are listed in `touched`: the caller applies them to the current patch), `.XferShape` is an LFO shape / curve, `.flac` / `.wav` from an Impulses folder is an
 // impulse, the other Serum families are reported as not modelled. The tables, samples and impulses go to the user content store, so the references of the loaded
-// patch resolve at once. JUCE free; message thread.
+// patch resolve at once. Message thread.
 #pragma once
 
 #include <string>

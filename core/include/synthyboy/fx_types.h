@@ -6,7 +6,7 @@
 // slots fxi01 .. fxi16; a slot has a type (the choice fxiNN.type), on / rack / order and kFxInstanceParams normalised parameters
 // fxiNN.p01 .. p24. What parameter k means is defined here: the k-th key of the type's own key list (table order, without `.on` and
 // `.rack`). Range, curve, unit, default, labels and choice names are the ones of that source key (one source of truth: no second table of
-// ranges). The UI, Kick and the engine all use this table.
+// ranges). The UI and the engine both use this table.
 #pragma once
 
 #include <cstddef>

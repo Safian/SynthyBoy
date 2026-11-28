@@ -187,7 +187,7 @@ public:
 
     /** True when a parameter changed that the engine can only apply in prepare() (quality.oversample_4x resizes the buffers
         of the effects and the voices, which must not happen on the audio thread). Any thread, lock free. The shell then prepares the engine
-        again on a thread that may allocate (JUCE: the message thread with the processing suspended; CLAP: request_restart). */
+        again on a thread that may allocate (the MPC shell: its display thread, with the processing suspended). */
     virtual bool needsPrepare() const noexcept { return false; }
 
     /** True if any output sample exceeded +-1.8 since the previous call (clearing the flag); false on engines without a safety limit. */

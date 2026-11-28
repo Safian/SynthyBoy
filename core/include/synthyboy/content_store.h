@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The state (`content_state.h`) only REFERENCES wavetables, samples and impulse responses (pack, file, sha256). A ContentStore turns a
-// reference into bytes. It is supplied by the host layer (shell / Kick) with IEngine::setContentStore () and used on the message thread
+// reference into bytes. It is supplied by the shell with IEngine::setContentStore () and used on the message thread
 // only, never from process (). Implementations here: MemoryContentStore (tests, embedded content) and DirectoryContentStore (content
 // packs installed as directories: <root>/<pack>/<file>).
 #pragma once

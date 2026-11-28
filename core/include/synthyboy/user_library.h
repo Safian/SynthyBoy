@@ -4,7 +4,7 @@
 //
 // LFO shapes (S11 shape presets, favourites), formula presets and own formulas (S14), FX rack presets (S10), voice control presets (WP-07):
 // every category is a directory `<userDir>/library/<category>/<name>.json` with the text the caller made, plus a `favourites.txt` (one name per
-// line). The library stores and lists text; the formats belong to their users. JUCE free; message thread.
+// line). The library stores and lists text; the formats belong to their users. Message thread.
 #pragma once
 
 #include <string>

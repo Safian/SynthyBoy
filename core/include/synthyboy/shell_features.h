@@ -1,6 +1,6 @@
 // SynthyBoy - core: shell-side features that are not parameters (docs/ui-design/15-shell-features.md): MIDI learn (G07), module / parameter
-// locks (G08) and the user default patch "Save as Default" (G02). No JUCE, no engine, no new parameter keys: the shells (shell-juce, shell-clap)
-// own one MidiCcMap and one lock list each, store them in the additive `shell` section of the host state and call the helpers below.
+// locks (G08) and the user default patch "Save as Default" (G02). No engine, no new parameter keys: the shell
+// owns one MidiCcMap and one lock list, store them in the additive `shell` section of the host state and call the helpers below.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
