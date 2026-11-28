@@ -155,9 +155,9 @@ def _key_button(name, rect, on_img, off_img, key_code, num_buttons=NUM_KEY_BUTTO
 
 def build_keyboard_overlay_definition(
     skins_dir=None,
-    context_param="Parameter 3916",
-    key_param="ResetOnGestureEnd/Parameter 3917",
-    text_param="Parameter 3918",
+    context_param="Parameter 3897",
+    key_param="ResetOnGestureEnd/Parameter 3898",
+    text_param="Parameter 3899",
 ):
     """Construct the native MPC keyboard component definition.
 
