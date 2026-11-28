@@ -4,322 +4,10 @@
   "importFiles": [],
   "localComponentDefinitions": [
    {
-    "key": "filterNativeChainChoices",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1e1d1e",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "overlay",
-        "type": "MenuOverlay",
-        "data": {
-         "version": 1,
-         "version": 1,
-         "actions": [
-          {
-           "version": 1,
-           "onAction": "Focus Lost",
-           "handler": "Focus Lost",
-           "handleName": "Focus Lost",
-           "additionalData": ""
-          }
-         ],
-         "withNumbers": false,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 800"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Modal Markers",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "native_modal_markers.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "16 120 30 6"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Apply hint",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "filter_chain_apply.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "436 27 550 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Parallel",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "filter_chain_0_on.png",
-         "offImage": "filter_chain_0_off.png",
-         "buttonId": 0,
-         "numButtonsInGroup": 3,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "520 105 360 58"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Parallel current",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "FilmStrip",
-         "image": "filter_chain_mark_0.png",
-         "numFrames": 3,
-         "colour": "0",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 117"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "840 124 20 20"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "F1 to F2",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "filter_chain_1_on.png",
-         "offImage": "filter_chain_1_off.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 3,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "520 170 360 58"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "F1 to F2 current",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "FilmStrip",
-         "image": "filter_chain_mark_1.png",
-         "numFrames": 3,
-         "colour": "0",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 117"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "840 189 20 20"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "F2 to F1",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "filter_chain_2_on.png",
-         "offImage": "filter_chain_2_off.png",
-         "buttonId": 2,
-         "numButtonsInGroup": 3,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "520 235 360 58"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "F2 to F1 current",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "FilmStrip",
-         "image": "filter_chain_mark_2.png",
-         "numFrames": 3,
-         "colour": "0",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 117"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "840 254 20 20"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "filterNativeChain",
     "value": {
      "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "filterNativeChainChoices"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "filterNativeChainChoices"
-      }
-     ],
+     "actions": [],
      "backgroundData": {
       "version": 1,
       "focussed": {
@@ -419,6 +107,35 @@
         "boundsType": "Absolute",
         "bounds": "30 1 26 5"
        }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "list open",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 2,
+         "handleName": "ListOpen",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1"
+       }
       }
      ]
     }
@@ -482,7 +199,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Back]/FromGesture/Data"
+          "value": "Back"
          }
         ]
        },
@@ -516,7 +233,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Reset]/FromGesture/Data"
+          "value": "Reset"
          }
         ]
        },
@@ -550,7 +267,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Delete Point]/FromGesture/Data"
+          "value": "Delete"
          }
         ]
        },
@@ -587,7 +304,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[Apply]/FromGesture/Data"
+          "value": "Apply"
          }
         ]
        },
@@ -3136,6 +2853,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 1376"
+         },
+         {
           "key": "Readout0",
           "value": "Parameter 1376"
          },
@@ -3188,6 +2909,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 1377"
+         },
          {
           "key": "Readout0",
           "value": "Parameter 1377"
@@ -3242,6 +2967,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 1376"
+         },
+         {
           "key": "Readout0",
           "value": "Parameter 1376"
          },
@@ -3294,6 +3023,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 1377"
+         },
          {
           "key": "Readout0",
           "value": "Parameter 1377"
@@ -6476,6 +6209,48 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Native Targets Empty",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3838"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 112 1264 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Modulation Editor",
         "type": "nativeModulationEditor",
         "data": {
@@ -6592,48 +6367,6 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Native Targets Empty",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3838"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 112 1264 40"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
         "name": "Native Targets Keyline",
         "type": "masterNativeBlockKeyline",
         "data": {
@@ -6706,6 +6439,22 @@
          {
           "key": "Data",
           "value": "Parameter 3477"
+         },
+         {
+          "key": "Back",
+          "value": "WithName[Back]/FromGesture/Parameter 3477"
+         },
+         {
+          "key": "Reset",
+          "value": "WithName[Reset]/FromGesture/Parameter 3477"
+         },
+         {
+          "key": "Delete",
+          "value": "WithName[Delete Point]/FromGesture/Parameter 3477"
+         },
+         {
+          "key": "Apply",
+          "value": "WithName[Apply]/FromGesture/Parameter 3477"
          }
         ]
        },
@@ -6738,6 +6487,22 @@
          {
           "key": "Data",
           "value": "Parameter 3478"
+         },
+         {
+          "key": "Back",
+          "value": "WithName[Back]/FromGesture/Parameter 3478"
+         },
+         {
+          "key": "Reset",
+          "value": "WithName[Reset]/FromGesture/Parameter 3478"
+         },
+         {
+          "key": "Delete",
+          "value": "WithName[Delete Point]/FromGesture/Parameter 3478"
+         },
+         {
+          "key": "Apply",
+          "value": "WithName[Apply]/FromGesture/Parameter 3478"
          }
         ]
        },
@@ -6782,6 +6547,10 @@
          {
           "key": "Power2",
           "value": "Parameter 102"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4040"
          }
         ]
        },
@@ -6827,6 +6596,10 @@
          {
           "key": "Power2",
           "value": "Parameter 102"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4041"
          }
         ]
        },
@@ -6872,6 +6645,10 @@
          {
           "key": "Power2",
           "value": "Parameter 102"
+         },
+         {
+          "key": "ListOpen",
+          "value": "ResetOnGestureEnd/Parameter 4042"
          }
         ]
        },
@@ -7058,12 +6835,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "82 80 1060 56"
+        "bounds": "82 80 1060 56",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7100,12 +6881,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "82 80 1060 56"
+        "bounds": "82 80 1060 56",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7142,12 +6927,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "10 410 396 22"
+        "bounds": "10 410 396 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7184,12 +6973,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "10 410 396 22"
+        "bounds": "10 410 396 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7226,12 +7019,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "418 410 396 22"
+        "bounds": "418 410 396 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7268,12 +7065,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "418 410 396 22"
+        "bounds": "418 410 396 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7310,12 +7111,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "826 410 448 22"
+        "bounds": "826 410 448 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7352,12 +7157,16 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "826 410 448 22"
+        "bounds": "826 410 448 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588"
+        ]
        }
       },
       {
@@ -7394,12 +7203,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "838 76 432 22"
+        "bounds": "838 76 432 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "IndexedEnabling/5/27/Parameter 2860"
+        ]
        }
       },
       {
@@ -7436,12 +7250,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "838 76 432 22"
+        "bounds": "838 76 432 22",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/5/Parameter 2842",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "IndexedEnabling/5/27/Parameter 2860"
+        ]
        }
       },
       {
@@ -7602,7 +7421,7 @@
          },
          {
           "key": "Row0",
-          "value": "Parameter 3577"
+          "value": "FromGesture/Parameter 3577"
          },
          {
           "key": "Cap0",
@@ -7610,7 +7429,7 @@
          },
          {
           "key": "Row1",
-          "value": "Parameter 3578"
+          "value": "FromGesture/Parameter 3578"
          },
          {
           "key": "Cap1",
@@ -7618,7 +7437,7 @@
          },
          {
           "key": "Row2",
-          "value": "Parameter 3579"
+          "value": "FromGesture/Parameter 3579"
          },
          {
           "key": "Cap2",
@@ -7626,7 +7445,7 @@
          },
          {
           "key": "Row3",
-          "value": "Parameter 3580"
+          "value": "FromGesture/Parameter 3580"
          },
          {
           "key": "Cap3",
@@ -7634,7 +7453,7 @@
          },
          {
           "key": "Row4",
-          "value": "Parameter 3581"
+          "value": "FromGesture/Parameter 3581"
          },
          {
           "key": "Cap4",
@@ -7642,7 +7461,7 @@
          },
          {
           "key": "Row5",
-          "value": "Parameter 3582"
+          "value": "FromGesture/Parameter 3582"
          },
          {
           "key": "Cap5",
@@ -7650,7 +7469,7 @@
          },
          {
           "key": "Row6",
-          "value": "Parameter 3583"
+          "value": "FromGesture/Parameter 3583"
          },
          {
           "key": "Cap6",
@@ -7782,7 +7601,7 @@
          },
          {
           "key": "Row0",
-          "value": "Parameter 3577"
+          "value": "FromGesture/Parameter 3577"
          },
          {
           "key": "Cap0",
@@ -7790,7 +7609,7 @@
          },
          {
           "key": "Row1",
-          "value": "Parameter 3578"
+          "value": "FromGesture/Parameter 3578"
          },
          {
           "key": "Cap1",
@@ -7798,7 +7617,7 @@
          },
          {
           "key": "Row2",
-          "value": "Parameter 3579"
+          "value": "FromGesture/Parameter 3579"
          },
          {
           "key": "Cap2",
@@ -7806,7 +7625,7 @@
          },
          {
           "key": "Row3",
-          "value": "Parameter 3580"
+          "value": "FromGesture/Parameter 3580"
          },
          {
           "key": "Cap3",
@@ -7814,7 +7633,7 @@
          },
          {
           "key": "Row4",
-          "value": "Parameter 3581"
+          "value": "FromGesture/Parameter 3581"
          },
          {
           "key": "Cap4",
@@ -7822,7 +7641,7 @@
          },
          {
           "key": "Row5",
-          "value": "Parameter 3582"
+          "value": "FromGesture/Parameter 3582"
          },
          {
           "key": "Cap5",
@@ -7830,7 +7649,7 @@
          },
          {
           "key": "Row6",
-          "value": "Parameter 3583"
+          "value": "FromGesture/Parameter 3583"
          },
          {
           "key": "Cap6",

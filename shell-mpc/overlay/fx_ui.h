@@ -153,11 +153,6 @@ public:
         inst.setNativeFxChain ({});
         inst.setNativeFxBands ({});
     }
-    void setNativeActionPopup (IInstanceView& inst, int action) noexcept
-    {
-        inst.setNativeFxRackPopup (action == 0);
-        inst.setNativeFxAddPopup (action == 1);
-    }
     int topPage() const noexcept { return 0; }
     /** The chain on the page: 0 the Main / Bus chain, 3 .. 9 the chain of that band rack (fxl::bandOfRack). */
     int scope() const noexcept { return scope_; }

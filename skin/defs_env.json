@@ -446,7 +446,7 @@
         "boundsType": "Absolute",
         "bounds": "14 482 107 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -482,7 +482,7 @@
         "boundsType": "Absolute",
         "bounds": "125 482 107 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -518,7 +518,7 @@
         "boundsType": "Absolute",
         "bounds": "236 482 107 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -554,7 +554,7 @@
         "boundsType": "Absolute",
         "bounds": "347 482 107 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -590,7 +590,7 @@
         "boundsType": "Absolute",
         "bounds": "474 482 106 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -626,7 +626,7 @@
         "boundsType": "Absolute",
         "bounds": "584 482 106 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -662,7 +662,7 @@
         "boundsType": "Absolute",
         "bounds": "694 482 106 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -698,7 +698,7 @@
         "boundsType": "Absolute",
         "bounds": "821 482 108 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -734,7 +734,7 @@
         "boundsType": "Absolute",
         "bounds": "933 482 108 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -770,7 +770,7 @@
         "boundsType": "Absolute",
         "bounds": "1045 482 108 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       },
@@ -806,7 +806,7 @@
         "boundsType": "Absolute",
         "bounds": "1157 482 109 132",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 2921"
+         "IndexedEnabling/1/2/Parameter 2921"
         ]
        }
       }
@@ -834,6 +834,48 @@
      "ignoreMousePresses": true,
      "disableCoarseDataWheel": false,
      "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Native Targets Empty",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3838"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 112 1264 40"
+       }
+      },
       {
        "version": 2,
        "componentData": {
@@ -948,48 +990,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "504 32 356 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Targets Empty",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3838"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 112 1264 40"
        }
       },
       {
@@ -1135,12 +1135,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "138 12 270 56"
+        "bounds": "138 12 270 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1206,12 +1209,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "434 12 270 56"
+        "bounds": "434 12 270 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1277,12 +1283,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "730 12 270 56"
+        "bounds": "730 12 270 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1319,12 +1328,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "1016 12 44 56"
+        "bounds": "1016 12 44 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 2921"
+        ]
        }
       },
       {
@@ -1347,7 +1359,7 @@
          },
          {
           "key": "Row0",
-          "value": "Parameter 3577"
+          "value": "FromGesture/Parameter 3577"
          },
          {
           "key": "Cap0",
@@ -1355,7 +1367,7 @@
          },
          {
           "key": "Row1",
-          "value": "Parameter 3578"
+          "value": "FromGesture/Parameter 3578"
          },
          {
           "key": "Cap1",
@@ -1363,7 +1375,7 @@
          },
          {
           "key": "Row2",
-          "value": "Parameter 3579"
+          "value": "FromGesture/Parameter 3579"
          },
          {
           "key": "Cap2",
@@ -1371,7 +1383,7 @@
          },
          {
           "key": "Row3",
-          "value": "Parameter 3580"
+          "value": "FromGesture/Parameter 3580"
          },
          {
           "key": "Cap3",
@@ -1379,7 +1391,7 @@
          },
          {
           "key": "Row4",
-          "value": "Parameter 3581"
+          "value": "FromGesture/Parameter 3581"
          },
          {
           "key": "Cap4",
@@ -1387,7 +1399,7 @@
          },
          {
           "key": "Row5",
-          "value": "Parameter 3582"
+          "value": "FromGesture/Parameter 3582"
          },
          {
           "key": "Cap5",
@@ -1395,7 +1407,7 @@
          },
          {
           "key": "Row6",
-          "value": "Parameter 3583"
+          "value": "FromGesture/Parameter 3583"
          },
          {
           "key": "Cap6",
