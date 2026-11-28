@@ -22,7 +22,7 @@ except ImportError:
 
 ZONES = ("left", "centre", "right")
 CENTRE_KINDS = ("dropdown", "button", "field")
-RIGHT_KINDS = ("more", "dropdown")
+RIGHT_KINDS = ("more", "dropdown", "button")
 SLOT_KINDS = {"left": ("title", "power"), "centre": CENTRE_KINDS, "right": RIGHT_KINDS}
 POWER_STATES = ("on", "off")
 WIDTHS = ("page", "panel")
@@ -85,6 +85,8 @@ def right_face(item, height):
         return _button.render_sample({"text": "MORE", "height": height, "state": "enabled"})
     if kind == "dropdown":
         return render_dropdown_variant(item["width_px"], height, item.get("value", ""))
+    if kind == "button":       # a page button at the right edge (TARGETS of the modulator screens)
+        return _button.render_sample({"text": item["text"], "height": height, "state": "enabled"})
     raise ValueError(f"right button must be one of {RIGHT_KINDS}: {kind!r}")
 
 
@@ -358,7 +360,8 @@ def _cell_children(slot, cell, w, h, on):
     elif kind == "button":
         if on:
             out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": face, "offImage": face, "buttonId": 1, "numButtonsInGroup": 1,
-                                                       "handleName": "Data", "gestureBehaviour": "Instant"}, (0, 0, w, h), focus="Yes", show="Hide"))
+                                                       "handleName": "Data", "gestureBehaviour": "Instant"}, (0, 0, w, h),
+                             focus=cell.get("button_focus", "Yes"), show="Show" if cell.get("button_focus") == "No" else "Hide"))
         else:
             out.append(_image(slot["text"], face, (0, 0, w, h)))
     return out
@@ -388,13 +391,18 @@ def header_definitions(spec):
     title = next(p for p in parts if p["kind"] == "title")
     comps.append(_label("Title", (title["rect"][0], m["padding"], title["rect"][2], m["content"]), 40.0, TEXT, [("Data", "HdrTitle")],
                         kind="Name", justification="left verticallyCentred"))
-    power = next(p for p in parts if p["kind"] == "power")
-    pw, ph = power["rect"][2:]
-    on_name, off_name = f"hdr_power_on_{pw}x{ph}.png", f"hdr_power_off_{pw}x{ph}.png"
-    images[on_name], images[off_name] = power["on"], power["off"]
-    comps.append(_comp("Power", "Button", {"version": 2, "onImage": on_name, "offImage": off_name, "buttonId": 1, "numButtonsInGroup": 1,
-                                           "handleName": "Data", "gestureBehaviour": "Instant"},
-                       power["rect"], [("Data", "HdrPower")], page_gate, "Yes", "Hide"))
+    if skin.get("title_gate"):      # a page title that hides with a page state (the caption it replaces): the instance remaps this name
+        comps[0]["bounds"] = _bounds(comps[0]["bounds"]["bounds"].split(), [skin["title_gate"]], show="Hide")
+    power = next((p for p in parts if p["kind"] == "power"), None)
+    has_power = power is not None     # a modulator header (Env, LFO) has no POWER: no HdrOn / HdrOff gating and no disabled look
+    on_gate = ["HdrOn"] if has_power else []
+    if has_power:
+        pw, ph = power["rect"][2:]
+        on_name, off_name = f"hdr_power_on_{pw}x{ph}.png", f"hdr_power_off_{pw}x{ph}.png"
+        images[on_name], images[off_name] = power["on"], power["off"]
+        comps.append(_comp("Power", "Button", {"version": 2, "onImage": on_name, "offImage": off_name, "buttonId": 1, "numButtonsInGroup": 1,
+                                               "handleName": "Data", "gestureBehaviour": "Instant"},
+                           power["rect"], [("Data", "HdrPower")], page_gate, "Yes", "Hide"))
 
     for zone in ("centre", "right"):
         slots = [s for s in view[zone] if s["kind"] != "more"]
@@ -402,16 +410,18 @@ def header_definitions(spec):
         for slot, part in zip(slots, placed):
             rect = part["rect"]
             w, h = rect[2:]
-            handle = _handle(slot)
             face_on, face_off = _face_names(slot, w, h)
-            images[face_on], images[face_off] = part["on"], part["off"]
+            images[face_on] = part["on"]
+            if has_power:
+                images[face_off] = part["off"]
             for cell in slot["skin"]["cells"]:
+                handle = _handle(dict(slot, role=cell.get("role", slot["role"])))      # a cell may bind its own parameter (LFO WAVEFORM / STYLE)
                 gate = list(cell.get("gate", []))
                 page = page_gate if cell.get("page") else []
                 show = cell.get("show", "Show")
                 key = cell["def"]
                 wrapper = cell.get("wrapper")
-                definitions[key] = _definition(_cell_children(slot, cell, w, h, True), _actions(cell))
+                definitions[key] = _definition(_cell_children(slot, cell, w, h, True), _actions(cell), inert=bool(cell.get("inert")))
                 if wrapper:
                     definitions["NativeInactive " + key] = _definition(_cell_children(slot, cell, w, h, False), inert=True)
                     definitions[wrapper + " " + key] = _definition([
@@ -425,7 +435,9 @@ def header_definitions(spec):
                                        page + gate, "No", show))
                     continue
                 comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)],
-                                   ["HdrOn"] + page + gate, "No", show))
+                                   on_gate + page + gate, cell.get("hw_focus", "No"), show))
+                if not has_power:
+                    continue
                 for child in _cell_children(slot, cell, w, h, False):       # the disabled look: inert pictures straight in the form
                     cx, cy, cw, ch = map(int, child["bounds"]["bounds"].split())
                     b = child["bounds"]

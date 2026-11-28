@@ -241,7 +241,7 @@
     "view": "env1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "env1/Env Native Full Controls/Env Native Targets/Env Native Targets"},
+      {"op": "tap", "control": "env1/Env 1 Header/Targets/TARGETS"},
       {"op": "expect", "status": {"view": "env1", "page_top": "30"}},
       {"op": "tap", "control": "env1/Native Modulation Editor/BACK"},
       {"op": "expect", "status": {"view": "env1", "page_top": "0"}},
@@ -256,7 +256,7 @@
     "view": "lfo1",
     "steps": [
       {"op": "snapshot", "name": "baseline"},
-      {"op": "tap", "control": "lfo1/LFO 1 Native Full Editor/LFO 1 Native Action 1"},
+      {"op": "tap", "control": "lfo1/LFO 1 Header/Targets/TARGETS"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "41"}},
       {"op": "tap", "control": "lfo1/Native Modulation Editor/BACK"},
       {"op": "expect", "status": {"view": "lfo1", "page_top": "0"}},
