@@ -1,4 +1,4 @@
-// Edit this file directly; the single place of the colours and sizes of the overlay display layer.
+// The colours and sizes of the overlay display layer. components/colors.json + sizes.json hold the same tokens for the skin recipes: edit both and run scripts/check-tokens.py (it fails when they differ).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Included by theme.h inside its namespace, after the Look structure.
