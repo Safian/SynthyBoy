@@ -19011,10 +19011,6 @@
           "value": "FromGesture/Parameter {Increment:Base=3367,Step=4}"
          },
          {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3399,Step=4}"
-         },
-         {
           "key": "Kind1",
           "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3399,Step=4}"
          },
@@ -19077,10 +19073,6 @@
          {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3368,Step=4}"
-         },
-         {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3400,Step=4}"
          },
          {
           "key": "KindMenu",
@@ -19175,10 +19167,6 @@
           "value": "FromGesture/Parameter {Increment:Base=3369,Step=4}"
          },
          {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3401,Step=4}"
-         },
-         {
           "key": "KindMenu",
           "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3401,Step=4}"
          },
@@ -19257,10 +19245,6 @@
          {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3370,Step=4}"
-         },
-         {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3402,Step=4}"
          },
          {
           "key": "KindMenu",
@@ -26172,6 +26156,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -26185,7 +26173,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/17/Kind"
+         "Kind1"
         ]
        }
       },
@@ -26204,6 +26192,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -26217,7 +26209,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/17/Kind"
+         "Kind2"
         ]
        }
       },
@@ -26236,6 +26228,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -26249,7 +26245,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/17/Kind"
+         "Kind3"
         ]
        }
       },
@@ -26268,6 +26264,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -26281,7 +26281,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/17/Kind"
+         "Kind4"
         ]
        }
       },
@@ -26300,6 +26300,14 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
+          "key": "Step",
+          "value": "Step"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -26313,7 +26321,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/5/17/Kind"
+         "Kind5"
         ]
        }
       },
@@ -26332,12 +26340,12 @@
         "version": 1,
         "map": [
          {
-          "key": "Caption",
-          "value": "Data"
+          "key": "Data",
+          "value": "DataAct"
          },
          {
-          "key": "Data",
-          "value": "FromGesture/Data"
+          "key": "Caption",
+          "value": "Data"
          }
         ]
        },
@@ -26349,7 +26357,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/6/17/Kind"
+         "Kind6"
         ]
        }
       },
@@ -26368,6 +26376,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -26381,7 +26393,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "RangedEnabling/7/16/17/Kind"
+         "KindMenu"
         ]
        }
       },
@@ -26417,7 +26429,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/10/17/Kind"
+         "Kind10"
         ]
        }
       }
