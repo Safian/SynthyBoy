@@ -41,6 +41,15 @@ SDK_TEMPLATES = {"knobUni", "knobBi", "knob overlay", "menu overlay", "toggle", 
                  "radio3", "radio4", "sliderWithFocus", "sliderWithFocusMenu"}
 
 
+# Repeating screens: one '<family>Screen' definition (skin/defs_<family>.json) used once by every tab of the family.
+SCREEN_FAMILIES = {
+    "oscScreen": ["Osc A", "Osc B", "Osc C", "Sub", "Noise"],
+    "envScreen": [f"Env {i}" for i in range(1, 7)],
+    "lfoScreen": [f"LFO {i}" for i in range(1, 11)] + [f"RND {i}" for i in range(1, 5)],
+    "filterScreen": ["Filter 1", "Filter 2"],
+}
+
+
 def walk(value):
     yield value
     if isinstance(value, dict):
@@ -322,6 +331,15 @@ def tui_semantics(page, schema, skins, findings):
             findings.error(json_path(["pageData", "tabs", i]), f"tab '{tab.get('tabName')}' uses the same function key and sub-tab {position} as tab {seen[position]}")
         seen[position] = i
         check_definition(tab["componentDefinition"], ["pageData", "tabs", i, "componentDefinition"], f"tab '{tab.get('tabName')}'")
+    tab_by_name = {tab.get("tabName"): tab for tab in page["tabs"]}
+    for family_key, tab_names in SCREEN_FAMILIES.items():
+        if family_key not in local:
+            findings.error(json_path(defs_path), f"screen definition '{family_key}' is missing")
+        for tab_name in tab_names:
+            tab = tab_by_name.get(tab_name)
+            instances = [e for e in (tab or {}).get("componentDefinition", {}).get("componentsData", []) if e.get("componentData", {}).get("type") == family_key]
+            if len(instances) != 1:
+                findings.error(json_path(["pageData", "tabs", tab_name]), f"tab '{tab_name}' must hold exactly one '{family_key}' instance (found {len(instances)}): the repeating screens share one definition")
     for k, item in enumerate(page["replacementStrings"]):
         check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
     if len(page["tabs"]) > PROVEN_MAX_TABS:
