@@ -2641,29 +2641,6 @@
     }
    },
    {
-    "key": "voiceNativeBlockKeyline",
-    "value": {
-     "version": 2,
-     "actions": [],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "ff1d2855",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "ff1d2855",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": true,
-     "disableCoarseDataWheel": true,
-     "componentsData": []
-    }
-   },
-   {
     "key": "voiceNativeBlock_sequence",
     "value": {
      "version": 2,
@@ -2689,7 +2666,7 @@
        "componentData": {
         "version": 1,
         "name": "top",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2713,7 +2690,7 @@
        "componentData": {
         "version": 1,
         "name": "bottom",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2737,7 +2714,7 @@
        "componentData": {
         "version": 1,
         "name": "left",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2761,7 +2738,7 @@
        "componentData": {
         "version": 1,
         "name": "right",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2847,7 +2824,7 @@
        "componentData": {
         "version": 1,
         "name": "top",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2871,7 +2848,7 @@
        "componentData": {
         "version": 1,
         "name": "bottom",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2895,7 +2872,7 @@
        "componentData": {
         "version": 1,
         "name": "left",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -2919,7 +2896,7 @@
        "componentData": {
         "version": 1,
         "name": "right",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3005,7 +2982,7 @@
        "componentData": {
         "version": 1,
         "name": "top",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3029,7 +3006,7 @@
        "componentData": {
         "version": 1,
         "name": "bottom",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3053,7 +3030,7 @@
        "componentData": {
         "version": 1,
         "name": "left",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3077,7 +3054,7 @@
        "componentData": {
         "version": 1,
         "name": "right",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3163,7 +3140,7 @@
        "componentData": {
         "version": 1,
         "name": "top",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3187,7 +3164,7 @@
        "componentData": {
         "version": 1,
         "name": "bottom",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3211,7 +3188,7 @@
        "componentData": {
         "version": 1,
         "name": "left",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"
@@ -3235,7 +3212,7 @@
        "componentData": {
         "version": 1,
         "name": "right",
-        "type": "voiceNativeBlockKeyline",
+        "type": "masterNativeBlockKeyline",
         "data": {
          "version": 1,
          "handleName": "Data"

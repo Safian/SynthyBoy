@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: what the demonstration programs of the elements (filter_ui_demo, mod_ui_demo, mixfx_ui_demo, mastervoice_ui_demo) share: a plugin instance made of the default parameters that
+// SynthyBoy - MPC overlay: what the demonstration programs of the elements (filter_ui_demo, mixfx_ui_demo) share: a plugin instance made of the default parameters that
 // accepts writes like the real one, a touch helper, and the function that renders a page through the CPU reference renderer into a PNG. Host tools only (built by shell-mpc/accept.sh).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

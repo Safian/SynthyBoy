@@ -36,7 +36,6 @@ class MasterUi
 {
 public:
     static constexpr int kElementPage = 9;           // the page of the Master tab
-    static constexpr int kElementMaster = kElementPage;
 
     /** The page-local ids of the rows (the cell ids of the native bridge). */
     enum Id : int
@@ -124,16 +123,7 @@ public:
                                                      { kRowTuningA4, kRowTuningScale, kRowMtsEsp, kRowMtsNoteOn },
                                                      { kRowMpeOn, kRowMpeBend, kRowMpeMacro, -1 },
                                                      { kRowMpeYModwheel, kRowMpeBendToX, kRowMpeYBipolar, -1 } } };
-    static const char* groupName (int g) noexcept
-    {
-        static const char* const kNames[kMaxGroups] = { "OUTPUT", "PITCH", "VOICES", "VOICE OPTS", "GLIDE", "SCALE", "TUNING", "MPE", "MPE Y" };
-        return g >= 0 && g < kMaxGroups ? kNames[g] : "";
-    }
-    static const char* blockName (int b) noexcept { return b >= 0 && b < kBlocks ? ui::masterlayout::kBlockTitle[b] : ""; }
     static int sideOfGroup (int g) noexcept { return g < kFirstTuningGroup ? SideMain : SideTuning; }
-
-    /** The row index of page id `id` (-1: none). */
-    static int rowIndexOfId (int id) noexcept { return binding::indexOfId (kRows, kNumRows, id); }
 
     MasterUi()
     {
@@ -142,7 +132,7 @@ public:
         setCanvas (kCanvasW, kCanvasH);
     }
 
-    void setCanvas (int w, int h) { w_ = w; h_ = h; }
+    void setCanvas (int w, int h) { w_ = w; }
 
     /** Reads the instance: the side, the conditions, the meters, the pages of the stack, the Q group. */
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
@@ -431,10 +421,7 @@ public:
         activeGroup_ = side_ == SideMain ? 0 : kFirstTuningGroup;
         qSlots_.forget();
     }
-    int activeQ() const noexcept { return activeGroup_; }
-    int activeGroup() const noexcept { return activeGroup_; }
     void setActiveGroup (int g) noexcept { activeGroup_ = std::clamp (g, 0, kMaxGroups - 1); }
-    int paramOfRow (int rowIndex) const noexcept { return rowIndex >= 0 && rowIndex < kNumRows ? params_[rowIndex] : -1; }
     /** The row index in slot `slot` of group `g` after the members that do not apply are left out and the others closed up (-1: empty). */
     int liveRow (int g, int slot) const noexcept
     {
@@ -463,12 +450,6 @@ public:
     }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
-    float peakL() const noexcept { return peakL_; }
-    float peakR() const noexcept { return peakR_; }
-    float holdL() const noexcept { return holdL_; }
-    float holdR() const noexcept { return holdR_; }
-    int activeVoices() const noexcept { return activeVoices_; }
-    int polyphony() const noexcept { return polyphony_; }
 
 private:
     bool readOn (IInstanceView& inst, int rowIndex) const noexcept
@@ -514,7 +495,7 @@ private:
     int params_[kNumRows] {};
     int side_ = SideMain, activeGroup_ = 0;
     bool bendLinked_ = false, mpeOn_ = true, padOn_ = true;   // what the page has read from the instance (the first picture of a bare page shows every cell)
-    int w_ = kCanvasW, h_ = kCanvasH;
+    int w_ = kCanvasW;
     int pageTop_ = 0;
     const IInstanceView* lastInstance_ = nullptr;
     double lastMs_ = 0.0;

@@ -51,5 +51,4 @@ constexpr int kBlocks = 7;
 /** The titled block panels in reading order: OUTPUT, PITCH, VOICES, GLIDE, SCALE, TUNING, MPE. */
 constexpr Rect kBlock[kBlocks] { Rect { 8, 66, 756, 252 }, Rect { 772, 66, 500, 252 }, Rect { 8, 326, 756, 294 }, Rect { 772, 326, 500, 294 }, Rect { 8, 66, 1264, 130 }, Rect { 8, 204, 1264, 130 }, Rect { 8, 342, 1264, 278 } };
 constexpr bool kBlockOnTuning[kBlocks] { false, false, false, false, true, true, true };
-constexpr const char* kBlockTitle[kBlocks] { "OUTPUT", "PITCH", "VOICES", "GLIDE", "SCALE", "TUNING", "MPE" };
 }

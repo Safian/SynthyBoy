@@ -6,7 +6,7 @@ Two tab bodies of the Master function key (third sub-tab: [voice.md](voice.md)).
 
 **Header:** the Header component's title `MASTER` (`Master Header`, form `masterHeader`; [../header.md](../header.md)).
 
-Four blocks: OUTPUT (`masterNativeBlock_output`, 8 66 756 252: VOLUME, STEREO SPREAD, STEREO ROUTING, voice override selector, NO SMOOTHING, OVERSAMPLE 2X / 4X, output limiter, clip indicator buttons, peak meters `masterNativeOutputMeters`, QUALITY caption), PITCH (`..._pitch`: TUNE, TRANSPOSE, BEND RANGE up / down or the linked single range, LINK), VOICES (`..._voices`: POLYPHONY, LEGATO, POLY LEGATO, PHASE LEGATO, VELOCITY TRACK, SAME NOTE, STEAL PRIORITY, PAD PRESS with PAD amount, voice meter `masterNativeVoiceMeter`), GLIDE (`..._glide`: TIME, SLOPE, ALWAYS, SCALED, curve frame `masterGlideFrame`). Hidden controls: BEND DOWN while LINK is on (the linked range replaces the pair), the PAD amount while PAD PRESS is off. Definitions: `skin/defs_master.json` (32).
+Four blocks: OUTPUT (`masterNativeBlock_output`, 8 66 756 252: VOLUME, STEREO SPREAD, STEREO ROUTING, voice override selector, NO SMOOTHING, OVERSAMPLE 4X, output limiter, clip indicator buttons, peak meters `masterNativeOutputMeters`, QUALITY caption), PITCH (`..._pitch`: TUNE, TRANSPOSE, BEND RANGE up / down or the linked single range, LINK), VOICES (`..._voices`: POLYPHONY, LEGATO, POLY LEGATO, PHASE LEGATO, VELOCITY TRACK, SAME NOTE, STEAL PRIORITY, PAD PRESS with PAD amount, voice meter `masterNativeVoiceMeter`), GLIDE (`..._glide`: TIME, SLOPE, ALWAYS, SCALED, curve frame `masterGlideFrame`). Hidden controls: BEND DOWN while LINK is on (the linked range replaces the pair), the PAD amount while PAD PRESS is off. Definitions: `skin/defs_master.json` (32).
 
 ## Tuning (`tuning`)
 
@@ -16,7 +16,7 @@ Three blocks: SCALE (`masterNativeBlock_scale`: type, key, mode selectors and th
 
 ## Data
 
-Blocks of `shell-mpc/native_ui_params.h`: `kMasterView` (`master::View`: Hidden, Main, Tuning; `native_master_controls.h`), `kMasterOutput` (`master::kOutputFields`), `kMasterScaleInput`, `kNativeText`. The rest are engine parameters bound by the cells.
+Blocks of `shell-mpc/native_ui_params.h`: `kMasterView` (`master::View`: Hidden, Main, Tuning; `native_master_controls.h`), `kMasterOutput` (`master::kOutputFields`), `kMasterScaleInput`. The rest are engine parameters bound by the cells.
 
 ## Q groups
 
@@ -24,4 +24,4 @@ Master side: OUTPUT, PITCH, VOICES, GLIDE (VOICE OPTS and LINK are touch only). 
 
 ## C++ owners
 
-`shell-mpc/overlay/master_ui.h` (rows, nine Q groups, rules, native bridge, meters); `shell-mpc/ui/master_native_layout.h`, `shell-mpc/native_master_controls.h`, `shell-mpc/output_stage.h`, `output_peak.h`.
+`shell-mpc/overlay/master_ui.h` (rows, nine Q groups, rules, native bridge, meters); `shell-mpc/ui/master_native_layout.h`, `shell-mpc/native_master_controls.h`.

@@ -35,7 +35,6 @@ class VoiceUi
 {
 public:
     static constexpr int kElementPage = 10;          // the page of the Voice tab
-    static constexpr int kElementVoice = kElementPage;
     static constexpr int kVirtualStep = 0, kVirtualRow = 1;   // the virtual Q targets of the group STEP
 
     static constexpr int kNumRows = 6, kNumSteps = 8, kMaxGroups = 4;
@@ -53,7 +52,6 @@ public:
     };
 
     static constexpr const char* const kRowNames[kNumRows] = { "PAN", "DETUNE", "CUTOFF", "ENV", "MOD 1", "MOD 2" };
-    static constexpr const char* const kLfoModeNames[2] = { "PERCENT", "RATE" };
 
     // ---- the parameter rows (row index = position in this table). The first four are the header; the 48 grid rows follow STEP-major (index = kGridFirst + 6 * step + row); then the blocks RANDOM, SCALING, TARGETS.
     //                                          id, key, kind, min, max, step, def, format, choices, numChoices, qGroup, qSlot, inverted
@@ -90,15 +88,6 @@ public:
 #undef SB_VOICE_STEP
 #undef SB_VOICE_ROW
     static constexpr int gridRowIndex (int row, int step) noexcept { return kGridFirst + step * kNumRows + row; }
-    static int rowIndexOfId (int id) noexcept
-    {
-        if (id >= kGridBase && id < kGridBase + kNumRows * kNumSteps)
-            return gridRowIndex ((id - kGridBase) / kNumSteps, (id - kGridBase) % kNumSteps);
-        for (int i = 0; i < kNumRowsTotal; ++i)
-            if (kRows[i].id == id)
-                return i;
-        return -1;
-    }
 
     /** The four Q banks as row indices, in reading order: STEP, RANDOM, SCALING (the 10x switch of RANDOM and the SCALING block), TARGETS. NOISE (the 17th value) is touch only. */
     enum RowIndex : int { kRowLength = 0, kRowStepSelect = 1, kRowRowSelect = 2, kRowStepValue = 3, kRowRandPan = kGridFirst + kNumRows * kNumSteps, kRowRandDetune, kRowRandCutoff, kRowRandEnv, kRowRandDetune10x,
@@ -108,11 +97,6 @@ public:
                                                      { kRowRandPan, kRowRandDetune, kRowRandCutoff, kRowRandEnv },
                                                      { kRowRandDetune10x, kRowScaleEnv, kRowScaleLfo, kRowScaleLfoMode },
                                                      { kRowOscA, kRowOscB, kRowOscC, kRowOscSub } } };
-    static const char* groupName (int g) noexcept
-    {
-        static const char* const kNames[kMaxGroups] = { "STEP", "RANDOM", "SCALING", "TARGETS" };
-        return g >= 0 && g < kMaxGroups ? kNames[g] : "";
-    }
 
     // ---- the geometry of the native cells (voice_native_layout.h, tab coordinates; the page is placed at kTabY) --------------------------------------------------------------------------------------------
     static ui::Rect at (const ui::Rect& r) noexcept { return { r.x, kTabY + r.y, r.w, r.h }; }
@@ -325,12 +309,7 @@ public:
     }
 
     // ---- access
-    int activeQ() const noexcept { return activeGroup_; }
-    int activeGroup() const noexcept { return activeGroup_; }
     void setActiveGroup (int g) noexcept { activeGroup_ = std::clamp (g, 0, kMaxGroups - 1); }
-    int activeRow() const noexcept { return activeRow_; }
-    int length() const noexcept { return length_; }
-    int paramOfRow (int rowIndex) const noexcept { return rowIndex >= 0 && rowIndex < kNumRowsTotal ? params_[rowIndex] : -1; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
 

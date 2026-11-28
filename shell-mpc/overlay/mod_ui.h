@@ -45,7 +45,6 @@ class ModUi
 {
 public:
     static constexpr int kElementPage = 7;          // the page of the Mod tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
-    static constexpr int kElementModMatrix = kElementPage;
     enum Page { kPageDetail = 20, kPageList = 21, kPageTargets = 22 };
 
     enum Id : int
@@ -57,7 +56,7 @@ public:
         kListRow = 60, kListBackdrop = 61, kListHeader = 62,
         // the rows of the matrix: kRowBase + window row * 10 + offset; the row of the details page: kDetailRowBase + offset
         kRowBase = 100,
-        kOffsetNumber = 0, kOffsetSource = 1, kOffsetDest = 2, kOffsetAmount = 3, kOffsetBi = 4, kOffsetBypass = 5, kOffsetDetail = 6,
+        kOffsetSource = 1, kOffsetDest = 2, kOffsetAmount = 3, kOffsetBi = 4, kOffsetBypass = 5, kOffsetDetail = 6,
         kDetailRowBase = 300,
         kTargetsBack = 330, kTargetsPage, kTargetsAdd, kTargetsRow = 340,   // the targets page of a source: kTargetsRow + 4 * row + (0 depth, 1 polarity, 2 on / off, 3 remove)
         kDetailAuxSource = 800, kDetailAuxOutput, kDetailAuxInv, kDetailAuxPower, kDetailPower, kDetailStereo, kDetailRise, kDetailFall, kDetailDelay, kDetailDelaySync, kDetailDelayBeats
@@ -76,7 +75,6 @@ public:
     }
 
     void setNativeControls (bool on) { nativeControls_ = on; }
-    bool nativeControls() const noexcept { return nativeControls_; }
     void setHostBackground (bool present) noexcept { nativeGround_ = present; }
     bool hostBackground() const noexcept
     {
@@ -186,11 +184,7 @@ public:
             const int srcVal = static_cast<int> (std::lround (inst.param (sp.source)));
             const int dstVal = static_cast<int> (std::lround (inst.param (sp.destination)));
             const double amount = static_cast<double> (inst.param (sp.amount)) / 100.0;
-            const bool bi = sp.bipolar >= 0 && inst.param (sp.bipolar) > 0.5f, byp = sp.bypass >= 0 && inst.param (sp.bypass) > 0.5f;
-            double liveSource = 0.0;
-            if (live != nullptr && srcVal >= 1 && srcVal <= synthyboy::LiveValues::kMaxSources)
-                liveSource = static_cast<double> (live->source[srcVal - 1]);
-            matrix_.setSlotData (s, sourceName (srcVal), destName (dstVal), amount, bi, byp, uibind::sourceGroup (srcVal), destModuleOf (dstVal), live != nullptr && srcVal > 0, liveSource);
+            matrix_.setSlotData (s, sourceName (srcVal), destName (dstVal), amount, uibind::sourceGroup (srcVal), destModuleOf (dstVal));
         }
         matrix_.refresh();
 
@@ -371,7 +365,6 @@ public:
 
     modmodel::Matrix& matrix() noexcept { return matrix_; }
     modmodel::Detail& detail() noexcept { return detail_; }
-    ModRowsPage& targetsPage() noexcept { return targets_; }
 
     void openSlotDetail (int slot, UiStack& stack)
     {
