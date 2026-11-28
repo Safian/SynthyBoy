@@ -455,7 +455,7 @@ def header_definitions(spec):
         title_label = _label("Title", title_rect, 40.0, TEXT, [("Data", "HdrTitle")], kind="Text", justification="left verticallyCentred", text=view["title"])
     else:
         title_rect = (title["rect"][0], m["padding"], title["rect"][2], m["content"])
-        title_label = _label("Title", title_rect, 40.0, TEXT, [("Data", "HdrTitle")], kind="Name", justification="left verticallyCentred")
+        title_label = _label("Title", title_rect, 40.0, TEXT, [("Data", "HdrTitle")], kind=skin.get("title_kind", "Name"), justification="left verticallyCentred")
     if skin.get("title_gate"):      # the title alone follows its own gate (the instance remaps this name); "title_gate_show" is its showWhenDataModelInvalid (default Hide)
         gate_name = skin["title_gate"] if isinstance(skin["title_gate"], str) else "HdrTitleGate"
         title_label["bounds"] = _bounds(title_rect, [gate_name], show=skin.get("title_gate_show", "Hide"))
@@ -508,7 +508,7 @@ def header_definitions(spec):
                         ignore_presses=True)       # the proven NativeActive wrapper: the wrapper ignores presses, its active child takes them
                     comps.append(_comp(cell["name"], wrapper + " " + key, {"version": 1, "handleName": "Data"}, rect,
                                        [("Data", handle), ("NativeActiveGate1", "HdrGate1"), ("NativeActiveGate2", "HdrGate2")],
-                                       page + gate, "No", show))
+                                       page + gate, cell.get("hw_focus", "No"), show))
                     continue
                 caption = [("Caption", handle + "Caption")] if slot.get("caption") else []
                 comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)] + caption,
@@ -523,6 +523,6 @@ def header_definitions(spec):
                         own = child["componentData"]["data"]["handleName"]
                         child["handle remapping"] = {"version": 1, "map": [{"key": own, "value": handle + ("Caption" if own == "Caption" else "")}]}
                     comps.append(child)
-    definitions[form_key] = _definition(comps)
+    definitions[form_key] = _definition(comps, ignore_presses=True)
     ordered = [(k, v) for k, v in definitions.items() if k != form_key] + [(form_key, definitions[form_key])]
     return {"form": form_key, "definitions": ordered, "images": images}
