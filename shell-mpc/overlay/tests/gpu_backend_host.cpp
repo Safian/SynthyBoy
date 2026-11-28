@@ -10,7 +10,7 @@
 #include <cmath>
 
 #include "fakes.h"
-#include "fixtures/legacy_layout.h"
+#include "fixtures/test_layout.h"
 
 using namespace ovt;
 using namespace synthyboy_mpc::overlay;
@@ -256,10 +256,10 @@ struct CRig
     std::unique_ptr<SynthyBoyController> ctl;
     explicit CRig (ITouchInput* nativeTouch = nullptr)
     {
-        if (! nativeTouch) frame.views = legacy::kViews;   // the tests below are written for the 4 knob filter 1 page (view "filter1"); the real layout opens on the one Play page (play1)
+        if (! nativeTouch) frame.views = testlayout::kViews;   // the tests below are written for the 4 knob filter 1 page (view "filter1"); the real layout opens on the one Play page (play1)
         Timing timing;
         timing.nativeTabTouch = nativeTouch != nullptr;
-        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), timing, 10.0, &backend, nativeTouch, nativeTouch ? nullptr : &legacy::pageSet());
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), timing, 10.0, &backend, nativeTouch, nativeTouch ? nullptr : &testlayout::pageSet());
         inst.set ("filter1.cutoff", 1000.0f);
         inst.set ("filter1.resonance", 30.0f);
         ctl->attach (&inst);

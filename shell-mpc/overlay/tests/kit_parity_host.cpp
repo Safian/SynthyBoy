@@ -36,7 +36,7 @@ void check (bool ok, const std::string& what)
 }
 
 /** The old text function of ui_bind.h, before migration step 3 (the reference). */
-namespace legacy
+namespace directcalls
 {
 inline double noNegativeZero (double v, int decimals) noexcept
 {
@@ -82,7 +82,7 @@ inline void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out,
         default: v = noNegativeZero (v, dec); std::snprintf (out, cap, "%.*f", dec, v); break;
     }
 }
-} // namespace legacy
+} // namespace directcalls
 
 /** An instance that records the last write (what a page's write reaches the plugin as). */
 class Recorder final : public IInstanceView
@@ -142,7 +142,7 @@ int main()
             check (kit.fromNormalised (i, norm) == synthyboy::fromNormalised (p, norm), "fromNormalised " + at);
 
             char want[64] = {}, got[64] = {}, viaKit[64] = {};
-            legacy::formatValue (p, plain, want, sizeof want);
+            directcalls::formatValue (p, plain, want, sizeof want);
             uibind::formatValue (p, plain, got, sizeof got);
             kit.valueText (i, plain, viaKit, sizeof viaKit);
             check (std::strcmp (want, got) == 0 && std::strcmp (want, viaKit) == 0, "page text " + at + ": old '" + want + "', uibind '" + got + "', kit '" + viaKit + "'");

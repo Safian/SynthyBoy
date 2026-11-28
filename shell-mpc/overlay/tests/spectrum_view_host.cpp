@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "fakes.h"
-#include "fixtures/legacy_layout.h"
+#include "fixtures/test_layout.h"
 #include "scene_reference.h"
 
 using namespace ovt;
@@ -35,8 +35,8 @@ struct Tone
 
 int viewIndex (const char* name)
 {
-    for (int i = 0; i < legacy::kNumViews; ++i)
-        if (std::string (legacy::kViews[i].name) == name)
+    for (int i = 0; i < testlayout::kNumViews; ++i)
+        if (std::string (testlayout::kViews[i].name) == name)
             return i;
     return -1;
 }
@@ -61,8 +61,8 @@ void compare (const std::vector<uint32_t>& a, const std::vector<uint32_t>& b, in
 int main()
 {
     const int vi = viewIndex ("spectrum");
-    check (vi >= 0 && legacy::kViews[vi].kind == layout::kKindSpectrum && legacy::kViews[vi].opaque, "the layout has the opaque spectrum view");
-    const layout::View& lv = legacy::kViews[vi];
+    check (vi >= 0 && testlayout::kViews[vi].kind == layout::kKindSpectrum && testlayout::kViews[vi].opaque, "the layout has the opaque spectrum view");
+    const layout::View& lv = testlayout::kViews[vi];
     const int w = lv.region.w, h = lv.region.h;
     check (w == 1208 && h == 136 && lv.region.x == 36 && lv.region.y == layout::kTabOriginY + 480, "its region is the row of the 32 meters of the Macros tab (36, 590, 1208 x 136 in screen coordinates)");
 
@@ -201,11 +201,11 @@ int main()
     {
         TempDir dir;
         FakePlane plane;
-        FakeFrame frame; frame.views = legacy::kViews;
+        FakeFrame frame; frame.views = testlayout::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst2;
         inst2.hasRing = true;
-        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
+        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &testlayout::pageSet());
         ctl.attach (&inst2);
         frame.setView (vi, true, 90);
         double t = 0.0;

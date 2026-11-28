@@ -8,7 +8,7 @@
 
 #include "../geometry.h"
 #include "../overlay_layout.h"
-#include "fixtures/legacy_layout.h"
+#include "fixtures/test_layout.h"
 #include "../renderer.h"
 
 using namespace synthyboy_mpc::overlay;
@@ -95,7 +95,7 @@ static void geometryTests()
         }
     }
     // rectangles: the curve area of the skin
-    const Rect ui { legacy::kViews[0].region.x, legacy::kViews[0].region.y, legacy::kViews[0].region.w, legacy::kViews[0].region.h };
+    const Rect ui { testlayout::kViews[0].region.x, testlayout::kViews[0].region.y, testlayout::kViews[0].region.w, testlayout::kViews[0].region.h };
     const Rect r90 = uiRectToPanel (90, ui, PW, PH), r270 = uiRectToPanel (270, ui, PW, PH);
     check (r90 == Rect { ui.y, PH - (ui.x + ui.w), ui.h, ui.w }, "rot 90: the curve area as a panel rectangle (w and h swapped)");
     check (r270 == Rect { PW - (ui.y + ui.h), ui.x, ui.h, ui.w }, "rot 270: the curve area as a panel rectangle");
@@ -134,7 +134,7 @@ static void geometryTests()
 
 static void rendererTests()
 {
-    const int w = legacy::kViews[0].region.w, h = legacy::kViews[0].region.h;
+    const int w = testlayout::kViews[0].region.w, h = testlayout::kViews[0].region.h;
     const size_t n = (size_t) w * h;
     std::vector<uint32_t> store (n + 64, 0xababababu);   // guard words behind the canvas
     uint32_t* cv = store.data();
@@ -143,8 +143,8 @@ static void rendererTests()
     Rect covers[2];
     for (int i = 0; i < kNumMarkers; ++i)
     {
-        const layout::Marker& mk = legacy::kViews[0].markers[i];
-        covers[i] = { mk.rect.x - legacy::kViews[0].region.x, mk.rect.y - legacy::kViews[0].region.y, mk.rect.w, mk.rect.h };
+        const layout::Marker& mk = testlayout::kViews[0].markers[i];
+        covers[i] = { mk.rect.x - testlayout::kViews[0].region.x, mk.rect.y - testlayout::kViews[0].region.y, mk.rect.w, mk.rect.h };
     }
 
     // a known curve: 0 dB flat to 1 kHz, then falling 1.5 dB per point (a ramp), floor at -36
