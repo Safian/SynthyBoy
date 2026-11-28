@@ -1905,6 +1905,8 @@ struct PluginInstance
             return nativeMacroText.value (offset - nativeui::kMacroText);
         if (offset == nativeui::kMacroSubpage)
             return nativeMacroSubpage.load (std::memory_order_relaxed);
+        if (nativeui::isTextGateOffset (offset))
+            return nativeText.value (nativeui::textGateLine (offset - nativeui::kTextGate)) > 0.0f ? 1.0f : 0.0f;
         if (offset == nativeui::kTextEditContext)
             return synthyboy_mpc::textentry::valueOfContext (nativeTextEntryContext.load (std::memory_order_relaxed), nativeui::kTextEditContexts);
         if (offset == nativeui::kTextEditKey)
@@ -2661,6 +2663,8 @@ struct PluginInstance
         for (int line = 0; line < nativeui::nativetext::kMacroLines; ++line)
             reportNativeValue (e, nativeui::kMacroText + line, nativeMacroText.value (line));
         reportNativeValue (e, nativeui::kMacroSubpage, nativeMacroSubpage.load (std::memory_order_relaxed));
+        for (int gate = 0; gate < nativeui::kTextGates; ++gate)
+            reportNativeValue (e, nativeui::kTextGate + gate, nativeUiValue (nativeui::kTextGate + gate));
         reportNativeValue (e, nativeui::kTextEditContext, nativeUiValue (nativeui::kTextEditContext));
         reportNativeValue (e, nativeui::kTextEditText, nativeUiValue (nativeui::kTextEditText));
         if (nativeNoteMask.layout() != 0 || nativeNoteMaskDue.exchange (false, std::memory_order_acq_rel))
@@ -3833,6 +3837,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     std::snprintf (buf, kCap, offset == nativeui::kMacroSubpage ? "Macro Subpage" : "Macro Text %d", line + 1);
                 else if (opcode == effGetParamDisplay && offset != nativeui::kMacroSubpage)
                     inst->nativeMacroText.copy (line, buf, kCap);
+                return 1;
+            }
+            if (nativeui::isTextGateOffset (offset))
+            {
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, kCap, "Text Present %d", offset - nativeui::kTextGate + 1);
+                else if (opcode == effGetParamDisplay)
+                    buf[0] = '\0';
                 return 1;
             }
             if (nativeui::isTextEditOffset (offset))
@@ -5272,7 +5284,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!props || index < 0) return 0;
 
         const int nativeOffset = index - PluginInstance::nativeUiBase();
-        if (nativeui::isNativeTextOffset (nativeOffset) || nativeui::isMacroTextOffset (nativeOffset) || nativeOffset == nativeui::kMacroSubpage || nativeui::isTextEditOffset (nativeOffset))
+        if (nativeui::isNativeTextOffset (nativeOffset) || nativeui::isMacroTextOffset (nativeOffset) || nativeOffset == nativeui::kMacroSubpage || nativeui::isTextEditOffset (nativeOffset) || nativeui::isTextGateOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
             return 1;
@@ -6102,7 +6114,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     inst->nativeTextKeys.post (synthyboy_mpc::textentry::keyOfValue (parameter, nativeui::kTextEditKeys));
                     return;
                 }
-                if (nativeui::isTextEditOffset (offset))   // the context and the text are the plugin's to write
+                if (nativeui::isTextEditOffset (offset) || nativeui::isTextGateOffset (offset))   // the context, the text and the presence gates are the plugin's to write
                     return;
                 if (nativeui::isNoteMaskOffset (offset))
                 {
