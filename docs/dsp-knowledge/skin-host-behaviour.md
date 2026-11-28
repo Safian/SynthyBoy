@@ -119,3 +119,13 @@ Captures and steps: `.hw-local/mpc-perf/key61-fabric-lists-20261128/README.md` (
 - FACT (Key 61, 2026-11-28, data dial injected through `mpc-tools/hwctl`: turn `B0 64 01` / `B0 64 7F`, press note 111; captures `dial-0..7-*.png` in `.hw-local/mpc-knowledge/device-observed/lists-key61-20261128/`): in the Fabric XL PRESET list the dial moves a highlight row by row (separate from the check mark of the current item, no wrap, the header arrow is not reached); a dial press on a category opens it, on a final item applies it and closes the list; with the list closed and the field focused one dial click steps to the next item and applies it; a dial press on the focused field opens the list inside the category of the current item. Going up a level was only done by touch. These injected codes work on the Key 61 (they were known from the community's Key 37 map).
 - Requirement (owner, 2026-11-28): our own lists are navigated the same way with the data dial and its press. The focus and handle design for that is open (TODO.md).
 
+## Preset lists of the host: one source, the Presets folder (Key 61, 2026-11-28)
+
+Evidence: `.hw-local/mpc-knowledge/device-observed/lists-key61-20261128/README.md`, section "One source for both lists".
+
+- FACT: the stock Fabric XL has ONE flat `Presets` folder of 1274 `.xpl` files named `NNNN-<Category>-<Name>.xpl`; a file without a category part (`0000-Awakening.xpl`) is listed at the root. The host builds both of its grouped views from these names: the Sounds mode grid (category folders, then presets) and the two-level PRESET list of the plugin page. No sub folders, no extra index file.
+- FACT: our package uses the same naming (`NNN-<Category>-<Name>.xpl`, 184 files, 15 categories), and Sounds mode already shows SynthyBoy grouped the same way (16 folder tiles: the categories and "User").
+- FACT: the PRESET field of the plugin page is where we differ: for our VST2 it lists the VST2 programs, flat (the host never asks for program categories).
+- HYPOTHESIS (not measured): if the plugin reported no VST2 program list (`numPrograms` 0 or 1), the host might build the PRESET list from the Presets folder as it does for Fabric XL, which would give the factory two-level list from the same source as Sounds. One probe settles it: an armv7 build that reports `numPrograms` 1, the PRESET field held on the Key 61, one capture. To check with it: preset loading through the `.xpl` chunk, the PRESET field text, previous / next stepping with the data dial, project recall.
+- OBSERVATION (once): loading SynthyBoy from the Sounds INSTRUMENTS grid kept the host's progress dialog up for about 1 min 50 s, while the plugin's own start-up finished in 100 ms.
+
