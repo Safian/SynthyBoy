@@ -40,10 +40,11 @@
     "smooth.caption.height": 24,
     "smooth.caption.font": 11,
     "smooth.value.font": 14,
-    "smooth.play.width": 196,
+    "smooth.play.width": 194,
+    "smooth.play.height": 60,
     "smooth.caption.hitbox.width": 60,
     "smooth.caption.hitbox.height": 56,
-    "smooth.play.value.width": 62,
+    "smooth.play.value.width": 66,
     "smooth.play.value.height": 28,
     "name_value.width": 125,
     "name_value.box.width": 68,
@@ -354,18 +355,18 @@
         "ref": "smooth.play.width"
       },
       {
-        "ref": "smooth.height"
+        "ref": "smooth.play.height"
       }
     ],
     "level.play_smooth_rects.knob": [
       2,
-      6,
-      60,
-      60
+      2,
+      56,
+      56
     ],
     "level.play_smooth_rects.name": [
-      66,
-      8,
+      62,
+      2,
       {
         "ref": "smooth.caption.hitbox.width"
       },
@@ -374,8 +375,8 @@
       }
     ],
     "level.play_smooth_rects.value": [
-      130,
-      22,
+      126,
+      16,
       {
         "ref": "smooth.play.value.width"
       },
@@ -1136,25 +1137,28 @@
     "meter.stereo.clip_gap": 2,
     "meter.stereo.segment_height": 4,
     "meter.stereo.segment_gap": 1,
-    "play.selector.rects": [[14, 10, 408, 56], [446, 10, 388, 56], [864, 10, 396, 56]],
+    "play.selector.rects": [[70, 10, 296, 56], [454, 10, 324, 56], [872, 10, 332, 56]],
+    "play.selector.osc_routed.rect": [70, 10, 224, 56],
     "play.qlink.bounds_yh": [301, 323],
-    "play.rise.seed_rects": {"focus": [0, 0, 196, 72], "knob": [2, 0, 60, 60], "name": [66, 16, 126, 36]},
-    "play.lfo.rise.rect": [864, 546, 196, 72],
-    "play.env.attack.rect": [446, 386, 192, 108],
-    "play.env.decay.rect": [642, 386, 192, 108],
-    "play.env.sustain.rect": [446, 510, 192, 108],
-    "play.env.release.rect": [642, 510, 192, 108],
-    "play.lfo.smooth.rect": [1064, 546, 196, 72],
-    "play.env.dial.geometry": [192, 108, 90, [2, 9, 90, 90], [96, 32, 92, 22], [96, 54, 92, 32]],
-    "play.rise.dial.geometry": [196, 72, 60, [2, 6, 60, 60], [68, 12, 124, 22], [68, 34, 124, 28]],
-    "play.rate.dial.geometry": [182, 72, 60, [2, 6, 60, 60], [68, 12, 110, 22], [68, 34, 110, 28]],
+    "play.rise.seed_rects": {"focus": [0, 0, 194, 60], "knob": [2, 2, 56, 56], "name": [66, 4, 124, 22]},
+    "play.lfo.rise.rect": [864, 558, 194, 60],
+    "play.env.attack.rect": [446, 422, 190, 94],
+    "play.env.decay.rect": [644, 422, 190, 94],
+    "play.env.sustain.rect": [446, 524, 190, 94],
+    "play.env.release.rect": [644, 524, 190, 94],
+    "play.lfo.smooth.rect": [1066, 558, 194, 60],
+    "play.env.dial.geometry": [190, 94, 56, [2, 19, 56, 56], [66, 22, 120, 22], [66, 46, 120, 28]],
+    "play.osc.dial.geometry": [200, 94, 56, [2, 19, 56, 56], [66, 22, 130, 22], [66, 46, 130, 28]],
+    "play.osc.filter.dial.geometry": [200, 60, 56, [2, 2, 56, 56], [66, 4, 130, 22], [66, 28, 130, 28]],
+    "play.rise.dial.geometry": [194, 60, 56, [2, 2, 56, 56], [66, 4, 124, 22], [66, 28, 124, 28]],
+    "play.rate.dial.geometry": [180, 60, 56, [2, 2, 56, 56], [66, 4, 110, 22], [66, 28, 110, 28]],
     "play.font.15": 15.0,
     "play.font.22": 22.0,
     "play.font.14": 14.0,
     "play.font.20": 20.0,
     "play.font.19": 19.0,
-    "play.osc.routing.size": [64, 64],
-    "play.osc.choice.size": [202, 72],
+    "play.osc.routing.size": [72, 56],
+    "play.osc.choice.size": [200, 60],
     "play.wave.source_size": [112, 96],
     "play.wave.icon_size": [28, 24],
     "play.osc.source.stepped_rect": [56, 0, 90, 72],
@@ -1177,7 +1181,10 @@
     "play.font.17": 17.0,
     "play.grid.slot_heights": {"knobUni": 138, "knobBi": 138, "toggle": 138, "faderUni": 100, "faderBi": 100, "radio3": 100, "radio4": 100, "sliderWithFocus": 100, "sliderWithFocusMenu": 56},
     "play.font.24": 24.0,
-    "play.lfo.selector.size": [396, 56],
+    "play.lfo.selector.size": [396, 60],
+    "play.lfo.division.size": [180, 60],
+    "play.header.icon.slot": [56, 56],
+    "play.titled_dropdown.title_height": 20,
     "mod_targets.pagination": {"arrow_inset": 22, "arrow_font": 27},
     "master.peak_channels": [[38, 4, 26, 124], [68, 4, 26, 124]],
     "master.meter.scale": {"font": 15, "caption_x": 19, "captions": [["0", 10], ["-12", 31], ["-24", 56], ["-48", 105]], "channels": [["L", 51], ["R", 81]], "channel_y": 140},

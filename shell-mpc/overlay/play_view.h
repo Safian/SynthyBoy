@@ -695,16 +695,16 @@ private:
             ground (x0, static_cast<float> (play::kTabY), x1, selectorTop);
             if (oscOff)
             {
-                // The host selector starts at x=84 and ends at x=422. Leave
+                // The host selector starts at x=70 (right of the power button) and ends at x=422. Leave
                 // its body visible while hiding the coloured native header gutters.
-                ground (x0, selectorTop, 84.0f, selectorBottom);
+                ground (x0, selectorTop, 70.0f, selectorBottom);
                 ground (422.0f, selectorTop, x1, selectorBottom);
             }
-            const float dialTop = 620.0f;
+            const float dialTop = 634.0f;
             const float dialBottom = 728.0f;
             ground (x0, selectorBottom, x1, dialTop);
             ground (x0, dialTop, 14.0f, dialBottom);
-            ground (216.0f, dialTop, 220.0f, dialBottom);
+            ground (214.0f, dialTop, 222.0f, dialBottom);
             ground (422.0f, dialTop, x1, dialBottom);
             ground (x0, dialBottom, x1, static_cast<float> (play::kTabY + play::kTabH));
         };
