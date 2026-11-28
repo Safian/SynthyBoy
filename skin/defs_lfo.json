@@ -13343,6 +13343,48 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Native Targets Empty",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3838"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 112 1264 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Modulation Editor",
         "type": "nativeModulationEditor",
         "data": {
@@ -13453,48 +13495,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "504 32 356 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Targets Empty",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3838"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 112 1264 40"
        }
       },
       {
@@ -13635,12 +13635,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "8 526 400 22"
+        "bounds": "8 526 400 22",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13677,12 +13683,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "178 526 786 22"
+        "bounds": "178 526 786 22",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13719,12 +13731,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "972 80 300 22"
+        "bounds": "972 80 300 22",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13761,12 +13779,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "972 188 300 22"
+        "bounds": "972 188 300 22",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13803,12 +13827,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "736 86 220 18"
+        "bounds": "736 86 220 18",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13845,12 +13875,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "22 86 696 22"
+        "bounds": "22 86 696 22",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13887,12 +13923,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "18 484 460 24"
+        "bounds": "18 484 460 24",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Parameter 3188",
+         "IndexedEnabling/0/7/Parameter 2825",
+         "IndexedEnabling/0/8/Parameter 3512",
+         "IndexedEnabling/0/4/Parameter 3277"
+        ]
        }
       },
       {
@@ -13929,12 +13971,15 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "640 24 632 56"
+        "bounds": "640 24 632 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/4/Parameter 3277"
+        ]
        }
       }
      ]

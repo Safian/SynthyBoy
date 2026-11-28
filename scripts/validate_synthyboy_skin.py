@@ -68,7 +68,7 @@ def walk(value):
             yield from walk(child)
 
 
-def read_imports(tui_path, loader=lambda text: json.loads(text), fail=None):
+def read_imports(tui_path, loader=lambda text: json.loads(text), fail=None, sources=None):
     """TUI.json with its importFiles merged in: the host's own importFiles split (docs/MPC.md, skin section). Returns the document whose
     componentDefinitions.localComponentDefinitions is the union (TUI.json's own definitions first, then every import file in the listed
     order) and whose importFiles is empty, so every other check sees one merged view. `fail(path, message)` reports a problem; default raises."""
@@ -85,6 +85,10 @@ def read_imports(tui_path, loader=lambda text: json.loads(text), fail=None):
         merged = list(definitions["localComponentDefinitions"])
     except (KeyError, TypeError):  # a shape error: the schema check reports it
         return doc
+    if sources is not None:
+        for item in merged:
+            if isinstance(item, dict) and isinstance(item.get("key"), str):
+                sources[item["key"]] = tui_path.name
     if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
         return doc
     for name in names:
@@ -105,6 +109,10 @@ def read_imports(tui_path, loader=lambda text: json.loads(text), fail=None):
         if not ok:
             fail(name, 'import file must have the wrapped shape {"componentDefinitions": {"version": 2, "importFiles": [], "localComponentDefinitions": [...]}}')
             continue
+        if sources is not None:
+            for item in wrapped["localComponentDefinitions"]:
+                if isinstance(item, dict) and isinstance(item.get("key"), str):
+                    sources[item["key"]] = name
         merged += wrapped["localComponentDefinitions"]
     for stray in sorted(tui_path.parent.glob("defs_*.json")):
         if stray.name not in names:
@@ -236,9 +244,10 @@ def load_skin_json(path, findings):
     return dedupe(json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=_Pairs), [], findings)
 
 
-def load_skin_tui(path, findings):
+def load_skin_tui(path, findings, sources=None):
     """TUI.json plus its import files as one merged document (importFiles emptied); each file is parsed and duplicate-checked like TUI.json."""
-    return read_imports(path, loader=lambda text: dedupe(json.loads(text, object_pairs_hook=_Pairs), [], findings), fail=findings.error)
+    return read_imports(path, loader=lambda text: dedupe(json.loads(text, object_pairs_hook=_Pairs), [], findings),
+                        fail=findings.error, sources=sources)
 
 
 def schema_errors(schema_path, document, findings):
@@ -249,7 +258,332 @@ def schema_errors(schema_path, document, findings):
     return schema
 
 
-def tui_semantics(page, schema, skins, findings):
+COVER_OVERLAP_PX = 4.0
+# Confirmed false-positive passive covers (and deferred REAL covers needing bounds/Button->actions changes,
+# tracked in docs/review/LABEL-OVERLAP-AUDIT-2026-11-28.md): (cover_source, cover_name) -> reason.
+COVER_ALLOWLIST = {
+    ("TUI.json:tab:Osc A", "Overlay Marker osca right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:27); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Osc B", "Overlay Marker oscb right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:28); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Osc C", "Overlay Marker oscc right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:29); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Sub", "Overlay Marker oscsub right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:30); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("TUI.json:tab:Noise", "Overlay Marker oscnoise right"): "FALSE POSITIVE: 6x6 page-detector sentinel (shell-mpc/overlay/overlay_layout.h:31); oscDetailGrid slot 31 (col=7, row=3) is never populated (osc_spec_page.h:53,64).",
+    ("defs_fx.json:fxNativeGalleryCard", "name"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): opaque card button fx_chain_gallery_card.png; needs Button->Image+actions refactor.",
+    ("defs_lfo.json:lfoDetailRow", "name"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): opaque button native_action_e4feb6764923e3caf30d.png; needs Button->Image+actions refactor.",
+    ("defs_lfo.json:lfoEditAction", "name"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): opaque button native_action_36f4ad4ed373ad966055.png; needs Button->Image+actions refactor.",
+    ("defs_lfo.json:lfoScreenTop2", "Native LFO Point Mod Summary"): "DEFERRED REAL (LABEL-OVERLAP-AUDIT-2026-11-28.md): overlaps LFO 1 Native Detail SOURCE (636 24 220 56) while both are active (Parameter 3277==1); needs bounds shift (x>=864).",
+}
+
+
+def _parse_rect(text):
+    return tuple(float(part) for part in text.split())
+
+
+def _resolve_rect(parent_rect, bounds):
+    px, py, pw, ph = parent_rect
+    bx, by, bw, bh = _parse_rect(bounds["bounds"])
+    if bounds.get("boundsType") == "Proportional":
+        return (px + bx * pw, py + by * ph, bw * pw, bh * ph)
+    return (px + bx, py + by, bw, bh)
+
+
+def _fmt_rect(rect):
+    return " ".join(str(int(round(v))) if abs(v - round(v)) < 1e-6 else f"{v:.2f}" for v in rect)
+
+
+def _apply_increment(text, index):
+    def replace(match):
+        attrs = dict(part.split("=", 1) for part in match.group(1).split(","))
+        base = int(attrs["Base"])
+        step = int(attrs.get("Step", 1))
+        offset = int(attrs.get("Offset", 0))
+        return str(max(0, base + index * step + offset))
+    return re.sub(r"\{Increment:([^}]+)\}", replace, text)
+
+
+def _apply_remap(handle, remap_stack):
+    resolved = handle
+    for rmap in reversed(remap_stack):
+        if not rmap:
+            continue
+        matched = False
+        for key, value in rmap:
+            if resolved == key:
+                resolved = value
+                matched = True
+                break
+        if matched:
+            continue
+        for key, value in rmap:
+            if "*" in key:
+                prefix, suffix = key.split("*", 1)
+                if resolved.startswith(prefix) and resolved.endswith(suffix):
+                    middle = resolved[len(prefix):len(resolved) - len(suffix) if suffix else None]
+                    resolved = value.replace("*", middle)
+                    matched = True
+                    break
+        if matched:
+            continue
+        if "/" in resolved:
+            mod, base = resolved.rsplit("/", 1)
+            for key, value in rmap:
+                if base == key:
+                    resolved = f"{mod}/{value}"
+                    break
+    return resolved
+
+
+def find_label_covers(page, sources=None):
+    """Flatten every tab in paint order and return passive Label/Image entries overlapping earlier touchables (> 4 px in both axes) without a unshared gate."""
+    sources = sources or {}
+    definitions = {d["key"]: d["value"] for d in page.get("componentDefinitions", {}).get("localComponentDefinitions", [])}
+    covers = []
+
+    for tab in page.get("tabs", []):
+        tab_name = tab.get("tabName", "")
+        initial = tab.get("initialSize")
+        root_rect = _parse_rect(initial) if isinstance(initial, str) else (0.0, 0.0, 1280.0, 628.0)
+        flat = []
+        counter = [0]
+
+        def walk_entries(entries, parent_rect, gates, remap_stack, source_loc, ancestor_ids, def_stack, repeat_idx=None):
+            for entry in entries:
+                cd = entry.get("componentData", {})
+                ctype = cd.get("type", "")
+                cname = cd.get("name", "")
+                bounds = entry.get("bounds", {})
+                if "bounds" not in bounds:
+                    continue
+                rect = _resolve_rect(parent_rect, bounds)
+                entry_rmap = [(m["key"], m["value"]) for m in entry.get("handle remapping", {}).get("map", [])]
+                if repeat_idx is not None:
+                    entry_rmap = [(k, _apply_increment(v, repeat_idx)) for k, v in entry_rmap]
+                new_remap_stack = remap_stack + [entry_rmap]
+                entry_gates = []
+                for gate in bounds.get("additionalInvalidatingHandles", []):
+                    if repeat_idx is not None:
+                        gate = _apply_increment(gate, repeat_idx)
+                    entry_gates.append(_apply_remap(gate, new_remap_stack))
+                all_gates = gates + entry_gates
+
+                nid = counter[0]
+                counter[0] += 1
+
+                is_def = ctype in definitions
+                if ctype in ("Button", "Knob", "Slider") and bounds.get("acceptsHWFocus") == "Yes":
+                    flat.append((nid, "touchable", cname, ctype, rect, all_gates, source_loc, ancestor_ids))
+                elif is_def and definitions[ctype].get("actions"):
+                    flat.append((nid, "touchable", cname, ctype, rect, all_gates, source_loc, ancestor_ids))
+
+                if ctype in ("Label", "Image"):
+                    flat.append((nid, "passive", cname, ctype, rect, all_gates, source_loc, ancestor_ids))
+
+                if is_def and ctype not in def_stack:
+                    dval = definitions[ctype]
+                    dloc = f"{sources.get(ctype, 'TUI.json')}:{ctype}"
+                    reps = dval.get("repeats")
+                    next_stack = def_stack | {ctype}
+                    if isinstance(reps, int) and reps > 0:
+                        for r in range(reps):
+                            for child in dval.get("componentsData", []):
+                                cb = child.get("bounds", {})
+                                if "bounds" not in cb:
+                                    continue
+                                _, _, cw, _ = _parse_rect(cb["bounds"])
+                                step_x = cw * rect[2] if cb.get("boundsType") == "Proportional" else cw
+                                offset_rect = (rect[0] + r * step_x, rect[1], rect[2], rect[3])
+                                walk_entries([child], offset_rect, all_gates, new_remap_stack, dloc, ancestor_ids | {nid}, next_stack, repeat_idx=r)
+                    else:
+                        walk_entries(dval.get("componentsData", []), rect, all_gates, new_remap_stack, dloc, ancestor_ids | {nid}, next_stack, repeat_idx=None)
+
+        walk_entries(tab.get("componentDefinition", {}).get("componentsData", []), root_rect, [], [], f"TUI.json:tab:{tab_name}", set(), set())
+
+        for idx, touchable in enumerate(flat):
+            if touchable[1] != "touchable":
+                continue
+            t_nid, _, t_name, t_type, t_rect, t_gates, t_loc, _ = touchable
+            tx, ty, tw, th = t_rect
+            t_gate_set = set(t_gates)
+            for passive in flat[idx + 1:]:
+                if passive[1] != "passive":
+                    continue
+                _, _, c_name, c_type, c_rect, c_gates, c_loc, c_anc = passive
+                if t_nid in c_anc:
+                    continue
+                cx, cy, cw, ch = c_rect
+                if min(tx + tw, cx + cw) - max(tx, cx) <= COVER_OVERLAP_PX:
+                    continue
+                if min(ty + th, cy + ch) - max(ty, cy) <= COVER_OVERLAP_PX:
+                    continue
+                if any(gate not in t_gate_set for gate in c_gates):
+                    continue
+                covers.append({
+                    "tab": tab_name,
+                    "touchable_name": t_name,
+                    "touchable_type": t_type,
+                    "touchable_rect": _fmt_rect(t_rect),
+                    "touchable_source": t_loc,
+                    "cover_name": c_name,
+                    "cover_type": c_type,
+                    "cover_rect": _fmt_rect(c_rect),
+                    "cover_source": c_loc,
+                })
+    return covers
+
+
+def check_label_covers(page, findings, sources=None, *, as_error=False):
+    report = findings.error if as_error else findings.warn
+    for item in find_label_covers(page, sources=sources):
+        if (item["cover_source"], item["cover_name"]) in COVER_ALLOWLIST:
+            continue
+        report(
+            f"$.pageData.tabs[{item['tab']!r}]",
+            f"passive {item['cover_type']} '{item['cover_name']}' [{item['cover_rect']}] ({item['cover_source']}) "
+            f"overlaps earlier {item['touchable_type']} '{item['touchable_name']}' [{item['touchable_rect']}] ({item['touchable_source']}) without an unshared gate",
+        )
+
+
+_MODIFIER_PREFIX_RE = re.compile(
+    r"^(?:IndexedEnabling/\d+/\d+/|RangedEnabling/\d+/\d+/\d+/|TabLimited/\d+/\d+/\d+/|"
+    r"[A-Za-z][A-Za-z0-9_]*(?:\[[^\]]*\])?/)"
+)
+# Confirmed harmless B1 modifier-operand pairs: (source_loc, operand) -> reason.
+ALIAS_MODIFIER_ALLOWLIST = {
+    ("defs_osc.json:oscWarpChoices", "Local/7/synthyboyWarpPage"): "Direct SDK Local/<range>/<id> handle (skin/defs_osc.json:5830), not a remapped alias; synthyboyWarpPage is proven on Key 61 (validate_synthyboy_skin.py:29, docs/dsp-knowledge/skin-host-behaviour.md:81).",
+    ("defs_common.json:native keyboard overlay", "Local/3/layer"): "Direct UI-only SDK Local/<range>/<id> handle (skin/defs_common.json:3026, docs/dsp-knowledge/native-text-entry.md:7), not a remapped alias; non-proven Local id warning still applies.",
+}
+# Confirmed harmless B2 non-empty remap instances missing Data: (source_loc, component_type, entry_name) -> reason.
+MISSING_DATA_ALLOWLIST = {}
+
+
+def _split_modifiers(expr):
+    """Strip leading `<Word>/...` modifier prefixes; return (modifiers, innermost_operand)."""
+    cur = expr
+    mods = []
+    while True:
+        if cur.startswith(("Local/", "Fixed/", "Parameter/")):
+            break
+        match = _MODIFIER_PREFIX_RE.match(cur)
+        if not match:
+            break
+        mods.append(match.group(0))
+        cur = cur[len(match.group(0)):]
+    return mods, cur
+
+
+def find_alias_modifier_violations(page, sources=None):
+    """B1: every modifier expression (`FromGesture/`, `IndexedEnabling/`, etc.) must wrap a real `Parameter ...`."""
+    sources = sources or {}
+    defs_path = ["pageData", "componentDefinitions", "localComponentDefinitions"]
+    definitions = page.get("componentDefinitions", {}).get("localComponentDefinitions", [])
+    violations = []
+
+    def check_handle(handle, path, loc, entry_name, entry_type, field):
+        if not isinstance(handle, str) or not handle:
+            return
+        mods, operand = _split_modifiers(handle)
+        if mods and not operand.startswith("Parameter "):
+            violations.append({
+                "location": loc,
+                "json_path": path,
+                "entry_name": entry_name,
+                "entry_type": entry_type,
+                "field": field,
+                "handle": handle,
+                "operand": operand,
+            })
+
+    def scan_container(node, base, loc):
+        for k, action in enumerate(node.get("actions", [])):
+            check_handle(action.get("handleName"), json_path([*base, "actions", k, "handleName"]), loc, "<def>", "", "actions")
+        for j, entry in enumerate(node.get("componentsData", [])):
+            where = [*base, "componentsData", j]
+            cd = entry.get("componentData", {})
+            ename, etype, data = cd.get("name", ""), cd.get("type", ""), cd.get("data", {})
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if key.endswith("Handle") or key == "handleName":
+                        check_handle(value, json_path([*where, "componentData", "data", key]), loc, ename, etype, f"data.{key}")
+                    elif key == "actions" and isinstance(value, list):
+                        for k, action in enumerate(value):
+                            check_handle(action.get("handleName"), json_path([*where, "componentData", "data", "actions", k, "handleName"]), loc, ename, etype, "data.actions")
+            for k, item in enumerate(entry.get("handle remapping", {}).get("map", [])):
+                check_handle(item.get("value"), json_path([*where, "handle remapping", "map", k, "value"]), loc, ename, etype, f"remap[{item.get('key', '')}]")
+            bounds = entry.get("bounds", {})
+            gates = bounds.get("additionalInvalidatingHandles")
+            if isinstance(gates, list):
+                for k, gate in enumerate(gates):
+                    check_handle(gate, json_path([*where, "bounds", "additionalInvalidatingHandles", k]), loc, ename, etype, "gate")
+
+    for i, definition in enumerate(definitions):
+        dkey = definition["key"]
+        loc = f"{sources.get(dkey, 'TUI.json')}:{dkey}"
+        scan_container(definition["value"], [*defs_path, i, "value"], loc)
+    for i, tab in enumerate(page.get("tabs", [])):
+        tname = tab.get("tabName", "")
+        scan_container(tab["componentDefinition"], ["pageData", "tabs", i, "componentDefinition"], f"TUI.json:tab:{tname}")
+    return violations
+
+
+def find_missing_data_remaps(page, sources=None):
+    """B2: custom-component instances with a non-empty remap, no `Data` key, and `showWhenDataModelInvalid: \"Hide\"`."""
+    sources = sources or {}
+    defs_path = ["pageData", "componentDefinitions", "localComponentDefinitions"]
+    definitions = page.get("componentDefinitions", {}).get("localComponentDefinitions", [])
+    local_keys = {d["key"] for d in definitions}
+    violations = []
+
+    def scan_entries(entries, base, loc):
+        for j, entry in enumerate(entries):
+            cd = entry.get("componentData", {})
+            ctype = cd.get("type", "")
+            ename = cd.get("name", "")
+            rmap = entry.get("handle remapping", {}).get("map", [])
+            if ctype not in local_keys or not rmap:
+                continue
+            keys = [m.get("key", "") for m in rmap]
+            if "Data" in keys:
+                continue
+            has_hide = any(isinstance(node, dict) and node.get("showWhenDataModelInvalid") == "Hide" for node in walk(entry))
+            if has_hide:
+                gates = entry.get("bounds", {}).get("additionalInvalidatingHandles", [])
+                violations.append({
+                    "location": loc,
+                    "json_path": json_path([*base, "componentsData", j]),
+                    "entry_name": ename,
+                    "component_type": ctype,
+                    "remap_keys": keys,
+                    "gates": gates if isinstance(gates, list) else [],
+                })
+
+    for i, definition in enumerate(definitions):
+        dkey = definition["key"]
+        loc = f"{sources.get(dkey, 'TUI.json')}:{dkey}"
+        scan_entries(definition["value"].get("componentsData", []), [*defs_path, i, "value"], loc)
+    for i, tab in enumerate(page.get("tabs", [])):
+        tname = tab.get("tabName", "")
+        scan_entries(tab["componentDefinition"].get("componentsData", []), ["pageData", "tabs", i, "componentDefinition"], f"TUI.json:tab:{tname}")
+    return violations
+
+
+def check_alias_rules(page, findings, sources=None, *, as_error=False):
+    report = findings.error if as_error else findings.warn
+    for item in find_alias_modifier_violations(page, sources=sources):
+        if (item["location"], item["operand"]) in ALIAS_MODIFIER_ALLOWLIST:
+            continue
+        report(
+            item["json_path"],
+            f"modifier expression '{item['handle']}' in {item['location']} ({item['entry_name']}, {item['field']}) wraps non-Parameter operand '{item['operand']}'",
+        )
+    for item in find_missing_data_remaps(page, sources=sources):
+        if (item["location"], item["component_type"], item["entry_name"]) in MISSING_DATA_ALLOWLIST:
+            continue
+        report(
+            item["json_path"],
+            f"instance '{item['entry_name']}' of custom component '{item['component_type']}' in {item['location']} has non-empty remap {item['remap_keys']} without 'Data' and showWhenDataModelInvalid 'Hide'",
+        )
+
+
+def tui_semantics(page, schema, skins, findings, sources=None):
     """What a schema cannot say: cross references, files, value relations, unproven forms (warnings)."""
     proven = re.compile(schema["x-proven-handle-pattern"])
     anyform = re.compile(schema["x-unproven-handle-pattern"])
@@ -378,6 +712,8 @@ def tui_semantics(page, schema, skins, findings):
         check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
     if len(page["tabs"]) > PROVEN_MAX_TABS:
         findings.warn("$.pageData.tabs", f"{len(page['tabs'])} tabs: the SDK note allows {SDK_MAX_TABS}, the proven skin runs {PROVEN_MAX_TABS} on both devices")
+    check_label_covers(page, findings, sources=sources, as_error=True)
+    check_alias_rules(page, findings, sources=sources, as_error=True)
 
 
 def choice_list_table():
@@ -443,12 +779,13 @@ def check_choice_lists(page, definitions, findings):
 def check_skin_schema(skins, label="skin"):
     """Schema + semantic checks of TUI.json and Q-Links.json in `skins`. Returns Findings; prints every finding with its JSON path."""
     findings = Findings()
-    tui = load_skin_tui(skins / "TUI.json", findings)
+    sources = {}
+    tui = load_skin_tui(skins / "TUI.json", findings, sources=sources)
     qlinks = load_skin_json(skins / "Q-Links.json", findings)
     tui_schema = schema_errors(TUI_SCHEMA, tui, findings)
     schema_errors(QLINKS_SCHEMA, qlinks, findings)
     try:
-        tui_semantics(tui["pageData"], tui_schema, skins, findings)
+        tui_semantics(tui["pageData"], tui_schema, skins, findings, sources=sources)
     except (KeyError, TypeError, AttributeError):  # a shape error above broke an assumption; it is already listed
         if not findings.errors:
             raise
@@ -575,7 +912,38 @@ def main():
     parser.add_argument("--check-display-bindings", action="store_true")
     parser.add_argument("--schema-only", action="store_true",
                         help="only the JSON Schema and semantic checks of TUI.json / Q-Links.json; package_dir is a package or a folder holding both files")
+    parser.add_argument("--list-covers", action="store_true",
+                        help="list every passive Label/Image overlapping an earlier touchable control without an unshared gate")
+    parser.add_argument("--list-alias-rules", action="store_true",
+                        help="list B1 (modifier over non-Parameter operand) and B2 (non-empty remap missing Data with Hide) violations")
     args = parser.parse_args()
+    if args.list_covers:
+        folder = args.package_dir / "Plugin Skins"
+        skins = folder if folder.is_dir() else args.package_dir
+        findings = Findings()
+        sources = {}
+        tui = load_skin_tui(skins / "TUI.json", findings, sources=sources)
+        if findings.errors:
+            findings.report("skin")
+            return 1
+        for item in find_label_covers(tui["pageData"], sources=sources):
+            print(f"{item['tab']}\t{item['touchable_name']} [{item['touchable_rect']}]\t{item['cover_name']} [{item['cover_rect']}]\t{item['cover_source']}")
+        return 0
+    if args.list_alias_rules:
+        folder = args.package_dir / "Plugin Skins"
+        skins = folder if folder.is_dir() else args.package_dir
+        findings = Findings()
+        sources = {}
+        tui = load_skin_tui(skins / "TUI.json", findings, sources=sources)
+        if findings.errors:
+            findings.report("skin")
+            return 1
+        page = tui["pageData"]
+        for item in find_alias_modifier_violations(page, sources=sources):
+            print(f"B1\t{item['location']}\t{item['entry_name']}\t{item['field']}\t{item['handle']}\t{item['operand']}")
+        for item in find_missing_data_remaps(page, sources=sources):
+            print(f"B2\t{item['location']}\t{item['entry_name']}\t{item['component_type']}\t{','.join(item['remap_keys'])}")
+        return 0
     if args.schema_only:
         folder = args.package_dir / "Plugin Skins"
         findings = check_skin_schema(folder if folder.is_dir() else args.package_dir)

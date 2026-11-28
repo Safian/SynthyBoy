@@ -1762,35 +1762,6 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "button",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "osc_active_on_125_on.png",
-         "offImage": "osc_active_on_125_off.png",
-         "buttonId": 1,
-         "numButtonsInGroup": 1,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 125 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
         "name": "name",
         "type": "Label",
         "data": {
@@ -1822,6 +1793,35 @@
         "whenVisible": "Always",
         "boundsType": "Proportional",
         "bounds": "0 0 1 0.25"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "button",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "osc_active_on_125_on.png",
+         "offImage": "osc_active_on_125_off.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 125 56"
        }
       }
      ]
@@ -9476,12 +9476,36 @@
           "value": "Parameter {Increment:Base=3335,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3335,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3367,Step=4}"
          },
          {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3399,Step=4}"
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3399,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3399,Step=4}"
          }
         ]
        },
@@ -9493,7 +9517,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3399,Step=4}"
         ]
        }
       },
@@ -9516,12 +9540,64 @@
           "value": "Parameter {Increment:Base=3336,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3336,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3368,Step=4}"
          },
          {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3400,Step=4}"
+          "key": "KindMenu",
+          "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind7",
+          "value": "IndexedEnabling/7/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind8",
+          "value": "IndexedEnabling/8/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind9",
+          "value": "IndexedEnabling/9/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind11",
+          "value": "IndexedEnabling/11/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind14",
+          "value": "IndexedEnabling/14/17/Parameter {Increment:Base=3400,Step=4}"
+         },
+         {
+          "key": "Kind15",
+          "value": "IndexedEnabling/15/17/Parameter {Increment:Base=3400,Step=4}"
          }
         ]
        },
@@ -9533,7 +9609,7 @@
         "boundsType": "Absolute",
         "bounds": "0 116 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3400,Step=4}"
         ]
        }
       },
@@ -9556,12 +9632,52 @@
           "value": "Parameter {Increment:Base=3337,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3337,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3369,Step=4}"
          },
          {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3401,Step=4}"
+          "key": "KindMenu",
+          "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind12",
+          "value": "IndexedEnabling/12/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind13",
+          "value": "IndexedEnabling/13/17/Parameter {Increment:Base=3401,Step=4}"
+         },
+         {
+          "key": "Kind16",
+          "value": "IndexedEnabling/16/17/Parameter {Increment:Base=3401,Step=4}"
          }
         ]
        },
@@ -9573,7 +9689,7 @@
         "boundsType": "Absolute",
         "bounds": "0 232 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3401,Step=4}"
         ]
        }
       },
@@ -9596,12 +9712,44 @@
           "value": "Parameter {Increment:Base=3338,Step=4}"
          },
          {
+          "key": "DataAct",
+          "value": "FromGesture/Parameter {Increment:Base=3338,Step=4}"
+         },
+         {
           "key": "Step",
           "value": "FromGesture/Parameter {Increment:Base=3370,Step=4}"
          },
          {
-          "key": "Kind",
-          "value": "Parameter {Increment:Base=3402,Step=4}"
+          "key": "KindMenu",
+          "value": "RangedEnabling/7/16/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind1",
+          "value": "IndexedEnabling/1/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind2",
+          "value": "IndexedEnabling/2/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind3",
+          "value": "IndexedEnabling/3/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind4",
+          "value": "IndexedEnabling/4/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind5",
+          "value": "IndexedEnabling/5/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind6",
+          "value": "IndexedEnabling/6/17/Parameter {Increment:Base=3402,Step=4}"
+         },
+         {
+          "key": "Kind10",
+          "value": "IndexedEnabling/10/17/Parameter {Increment:Base=3402,Step=4}"
          }
         ]
        },
@@ -9613,7 +9761,7 @@
         "boundsType": "Absolute",
         "bounds": "0 348 158 92",
         "additionalInvalidatingHandles": [
-         "NonZero/Kind"
+         "RangedEnabling/1/16/17/Parameter {Increment:Base=3402,Step=4}"
         ]
        }
       }
@@ -11685,6 +11833,48 @@
        "version": 2,
        "componentData": {
         "version": 1,
+        "name": "Native Targets Empty",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3838"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 112 1264 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
         "name": "Native Modulation Editor",
         "type": "nativeModulationEditor",
         "data": {
@@ -11795,48 +11985,6 @@
         "whenVisible": "Always",
         "boundsType": "Absolute",
         "bounds": "504 32 356 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Native Targets Empty",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 20.0
-          },
-          "colour": "ffaab2d8",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3838"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "8 112 1264 40"
        }
       },
       {
@@ -12109,6 +12257,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3823"
+         },
+         {
           "key": "Note0",
           "value": "Parameter 3811"
          },
@@ -12166,7 +12318,7 @@
         "boundsType": "Absolute",
         "bounds": "640 404 474 120",
         "additionalInvalidatingHandles": [
-         "NonZero/Parameter 3823"
+         "IndexedEnabling/1/2/Parameter 3823"
         ]
        }
       },
@@ -12303,12 +12455,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 156 122 16"
+        "bounds": "40 156 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12345,12 +12502,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 156 122 16"
+        "bounds": "672 156 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12387,12 +12549,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 272 122 16"
+        "bounds": "40 272 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12429,12 +12596,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 272 122 16"
+        "bounds": "672 272 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12471,12 +12643,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 388 122 16"
+        "bounds": "40 388 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12513,12 +12690,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 388 122 16"
+        "bounds": "672 388 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12555,12 +12737,17 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "40 504 122 16"
+        "bounds": "40 504 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512"
+        ]
        }
       },
       {
@@ -12597,12 +12784,18 @@
         ]
        },
        "bounds": {
-        "version": 1,
+        "version": 2,
         "acceptsHWFocus": "No",
         "showWhenDataModelInvalid": "Show",
         "whenVisible": "Always",
         "boundsType": "Absolute",
-        "bounds": "672 504 122 16"
+        "bounds": "672 504 122 16",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/3/5/6/Parameter 3334",
+         "IndexedEnabling/0/2/Parameter 3588",
+         "RangedEnabling/0/6/8/Parameter 3512",
+         "IndexedEnabling/0/2/Parameter 3823"
+        ]
        }
       },
       {
@@ -15648,6 +15841,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15661,7 +15858,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/17/Kind"
+         "Kind1"
         ]
        }
       },
@@ -15680,6 +15877,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15693,7 +15894,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/17/Kind"
+         "Kind2"
         ]
        }
       },
@@ -15712,6 +15913,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15725,7 +15930,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/17/Kind"
+         "Kind3"
         ]
        }
       },
@@ -15744,6 +15949,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15757,7 +15966,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/17/Kind"
+         "Kind4"
         ]
        }
       },
@@ -15776,6 +15985,14 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
+          "key": "Step",
+          "value": "Step"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15789,7 +16006,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/5/17/Kind"
+         "Kind5"
         ]
        }
       },
@@ -15808,12 +16025,12 @@
         "version": 1,
         "map": [
          {
-          "key": "Caption",
-          "value": "Data"
+          "key": "Data",
+          "value": "DataAct"
          },
          {
-          "key": "Data",
-          "value": "FromGesture/Data"
+          "key": "Caption",
+          "value": "Data"
          }
         ]
        },
@@ -15825,7 +16042,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/6/17/Kind"
+         "Kind6"
         ]
        }
       }
@@ -15868,6 +16085,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15881,7 +16102,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/17/Kind"
+         "Kind1"
         ]
        }
       },
@@ -15900,6 +16121,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15913,7 +16138,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/17/Kind"
+         "Kind2"
         ]
        }
       },
@@ -15932,6 +16157,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15945,7 +16174,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/17/Kind"
+         "Kind3"
         ]
        }
       },
@@ -15964,6 +16193,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -15977,7 +16210,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/17/Kind"
+         "Kind4"
         ]
        }
       },
@@ -15996,6 +16229,14 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
+          "key": "Step",
+          "value": "Step"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16009,7 +16250,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/5/17/Kind"
+         "Kind5"
         ]
        }
       },
@@ -16028,12 +16269,12 @@
         "version": 1,
         "map": [
          {
-          "key": "Caption",
-          "value": "Data"
+          "key": "Data",
+          "value": "DataAct"
          },
          {
-          "key": "Data",
-          "value": "FromGesture/Data"
+          "key": "Caption",
+          "value": "Data"
          }
         ]
        },
@@ -16045,7 +16286,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/6/17/Kind"
+         "Kind6"
         ]
        }
       },
@@ -16064,6 +16305,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16077,7 +16322,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "RangedEnabling/7/16/17/Kind"
+         "KindMenu"
         ]
        }
       },
@@ -16117,7 +16362,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/7/17/Kind"
+         "Kind7"
         ]
        }
       },
@@ -16157,7 +16402,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/8/17/Kind"
+         "Kind8"
         ]
        }
       },
@@ -16197,7 +16442,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/9/17/Kind"
+         "Kind9"
         ]
        }
       },
@@ -16237,7 +16482,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/11/17/Kind"
+         "Kind11"
         ]
        }
       },
@@ -16277,7 +16522,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/14/17/Kind"
+         "Kind14"
         ]
        }
       },
@@ -16317,7 +16562,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/15/17/Kind"
+         "Kind15"
         ]
        }
       }
@@ -16360,6 +16605,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16373,7 +16622,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/17/Kind"
+         "Kind1"
         ]
        }
       },
@@ -16392,6 +16641,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16405,7 +16658,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/17/Kind"
+         "Kind2"
         ]
        }
       },
@@ -16424,6 +16677,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16437,7 +16694,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/17/Kind"
+         "Kind3"
         ]
        }
       },
@@ -16456,6 +16713,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16469,7 +16730,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/17/Kind"
+         "Kind4"
         ]
        }
       },
@@ -16488,6 +16749,14 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
+          "key": "Step",
+          "value": "Step"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16501,7 +16770,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/5/17/Kind"
+         "Kind5"
         ]
        }
       },
@@ -16520,12 +16789,12 @@
         "version": 1,
         "map": [
          {
-          "key": "Caption",
-          "value": "Data"
+          "key": "Data",
+          "value": "DataAct"
          },
          {
-          "key": "Data",
-          "value": "FromGesture/Data"
+          "key": "Caption",
+          "value": "Data"
          }
         ]
        },
@@ -16537,7 +16806,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/6/17/Kind"
+         "Kind6"
         ]
        }
       },
@@ -16556,6 +16825,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16569,7 +16842,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "RangedEnabling/7/16/17/Kind"
+         "KindMenu"
         ]
        }
       },
@@ -16609,7 +16882,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/12/17/Kind"
+         "Kind12"
         ]
        }
       },
@@ -16649,7 +16922,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/13/17/Kind"
+         "Kind13"
         ]
        }
       },
@@ -16689,7 +16962,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/16/17/Kind"
+         "Kind16"
         ]
        }
       }
@@ -16732,6 +17005,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16745,7 +17022,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/17/Kind"
+         "Kind1"
         ]
        }
       },
@@ -16764,6 +17041,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16777,7 +17058,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/17/Kind"
+         "Kind2"
         ]
        }
       },
@@ -16796,6 +17077,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16809,7 +17094,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/17/Kind"
+         "Kind3"
         ]
        }
       },
@@ -16828,6 +17113,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16841,7 +17130,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/4/17/Kind"
+         "Kind4"
         ]
        }
       },
@@ -16860,6 +17149,14 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
+          "key": "Step",
+          "value": "Step"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16873,7 +17170,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/5/17/Kind"
+         "Kind5"
         ]
        }
       },
@@ -16892,12 +17189,12 @@
         "version": 1,
         "map": [
          {
-          "key": "Caption",
-          "value": "Data"
+          "key": "Data",
+          "value": "DataAct"
          },
          {
-          "key": "Data",
-          "value": "FromGesture/Data"
+          "key": "Caption",
+          "value": "Data"
          }
         ]
        },
@@ -16909,7 +17206,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/6/17/Kind"
+         "Kind6"
         ]
        }
       },
@@ -16928,6 +17225,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Data"
+         },
+         {
           "key": "Caption",
           "value": "Data"
          }
@@ -16941,7 +17242,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "RangedEnabling/7/16/17/Kind"
+         "KindMenu"
         ]
        }
       },
@@ -16981,7 +17282,7 @@
         "boundsType": "Proportional",
         "bounds": "0 0 1 1",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/10/17/Kind"
+         "Kind10"
         ]
        }
       }

@@ -1110,7 +1110,7 @@
         "boundsType": "Absolute",
         "bounds": "906 0 230 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Power",
+         "PowerGate",
          "RangedEnabling/1/13/33/Parameter 3058"
         ]
        }
@@ -1147,7 +1147,7 @@
         "boundsType": "Absolute",
         "bounds": "906 0 230 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Power",
+         "PowerGate",
          "RangedEnabling/14/32/33/Parameter 3058"
         ]
        }
@@ -1185,7 +1185,7 @@
         "boundsType": "Absolute",
         "bounds": "1142 0 130 56",
         "additionalInvalidatingHandles": [
-         "NonZero/Power"
+         "PowerGate"
         ]
        }
       },
@@ -1826,7 +1826,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[LOW]/FromGesture/Band"
+          "value": "BandLow"
          }
         ]
        },
@@ -1863,7 +1863,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[MID]/FromGesture/Band"
+          "value": "BandMid"
          }
         ]
        },
@@ -1900,7 +1900,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[HIGH]/FromGesture/Band"
+          "value": "BandHigh"
          }
         ]
        },
@@ -1934,7 +1934,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[LOW]/FromGesture/Band"
+          "value": "BandLow"
          }
         ]
        },
@@ -1968,7 +1968,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "WithName[HIGH]/FromGesture/Band"
+          "value": "BandHigh"
          }
         ]
        },
@@ -4086,6 +4086,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present0"
+         },
+         {
           "key": "Present",
           "value": "Present0"
          },
@@ -4171,6 +4175,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Present1"
+         },
          {
           "key": "Present",
           "value": "Present1"
@@ -4258,6 +4266,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present2"
+         },
+         {
           "key": "Present",
           "value": "Present2"
          },
@@ -4343,6 +4355,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Present3"
+         },
          {
           "key": "Present",
           "value": "Present3"
@@ -4430,6 +4446,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present4"
+         },
+         {
           "key": "Present",
           "value": "Present4"
          },
@@ -4515,6 +4535,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Present5"
+         },
          {
           "key": "Present",
           "value": "Present5"
@@ -4602,6 +4626,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present6"
+         },
+         {
           "key": "Present",
           "value": "Present6"
          },
@@ -4687,6 +4715,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Present7"
+         },
          {
           "key": "Present",
           "value": "Present7"
@@ -4774,6 +4806,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present8"
+         },
+         {
           "key": "Present",
           "value": "Present8"
          },
@@ -4859,6 +4895,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Present9"
+         },
          {
           "key": "Present",
           "value": "Present9"
@@ -4946,6 +4986,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present10"
+         },
+         {
           "key": "Present",
           "value": "Present10"
          },
@@ -5032,6 +5076,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Present11"
+         },
+         {
           "key": "Present",
           "value": "Present11"
          },
@@ -5117,6 +5165,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Present12"
+         },
          {
           "key": "Present",
           "value": "Present12"
@@ -18389,8 +18441,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3060"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3060"
          },
          {
           "key": "Rack",
@@ -18437,8 +18497,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3064"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3064"
          },
          {
           "key": "Rack",
@@ -18453,8 +18521,16 @@
           "value": "Parameter 3067"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3445"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3445"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3445"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3445"
          },
          {
           "key": "RackList",
@@ -18489,8 +18565,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3068"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3068"
          },
          {
           "key": "Rack",
@@ -18537,8 +18621,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3072"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3072"
          },
          {
           "key": "Rack",
@@ -18585,8 +18677,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3076"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3076"
          },
          {
           "key": "Rack",
@@ -18633,8 +18733,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3080"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3080"
          },
          {
           "key": "Rack",
@@ -18681,8 +18789,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3084"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3084"
          },
          {
           "key": "Rack",
@@ -18729,8 +18845,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3088"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3088"
          },
          {
           "key": "Rack",
@@ -18777,8 +18901,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3092"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3092"
          },
          {
           "key": "Rack",
@@ -18825,8 +18957,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3096"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3096"
          },
          {
           "key": "Rack",
@@ -18873,8 +19013,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3100"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3100"
          },
          {
           "key": "Rack",
@@ -18921,8 +19069,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3104"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3104"
          },
          {
           "key": "Rack",
@@ -18969,8 +19125,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3108"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3108"
          },
          {
           "key": "Rack",
@@ -19017,8 +19181,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3112"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3112"
          },
          {
           "key": "Rack",
@@ -19065,8 +19237,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3116"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3116"
          },
          {
           "key": "Rack",
@@ -19113,8 +19293,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3120"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3120"
          },
          {
           "key": "Rack",
@@ -19161,8 +19349,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3124"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3124"
          },
          {
           "key": "Rack",
@@ -19177,8 +19373,16 @@
           "value": "Parameter 3127"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3460"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3460"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3460"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3460"
          },
          {
           "key": "RackList",
@@ -19213,8 +19417,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3128"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3128"
          },
          {
           "key": "Rack",
@@ -19229,8 +19441,16 @@
           "value": "Parameter 3131"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3461"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3461"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3461"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3461"
          },
          {
           "key": "RackList",
@@ -19265,8 +19485,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3132"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3132"
          },
          {
           "key": "Rack",
@@ -19281,8 +19509,16 @@
           "value": "Parameter 3135"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3462"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3462"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3462"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3462"
          },
          {
           "key": "RackList",
@@ -19317,8 +19553,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3136"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3136"
          },
          {
           "key": "Rack",
@@ -19333,8 +19577,16 @@
           "value": "Parameter 3139"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3463"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3463"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3463"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3463"
          },
          {
           "key": "RackList",
@@ -19369,8 +19621,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3140"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3140"
          },
          {
           "key": "Rack",
@@ -19385,8 +19645,16 @@
           "value": "Parameter 3143"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3464"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3464"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3464"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3464"
          },
          {
           "key": "RackList",
@@ -19421,8 +19689,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3144"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3144"
          },
          {
           "key": "Rack",
@@ -19437,8 +19713,16 @@
           "value": "Parameter 3147"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3465"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3465"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3465"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3465"
          },
          {
           "key": "RackList",
@@ -19473,8 +19757,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3148"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3148"
          },
          {
           "key": "Rack",
@@ -19489,8 +19781,16 @@
           "value": "Parameter 3151"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3466"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3466"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3466"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3466"
          },
          {
           "key": "RackList",
@@ -19525,8 +19825,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3152"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3152"
          },
          {
           "key": "Rack",
@@ -19541,8 +19849,16 @@
           "value": "Parameter 3155"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3467"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3467"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3467"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3467"
          },
          {
           "key": "RackList",
@@ -19577,8 +19893,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3156"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3156"
          },
          {
           "key": "Rack",
@@ -19593,8 +19917,16 @@
           "value": "Parameter 3159"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3468"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3468"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3468"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3468"
          },
          {
           "key": "RackList",
@@ -19629,8 +19961,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3160"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3160"
          },
          {
           "key": "Rack",
@@ -19645,8 +19985,16 @@
           "value": "Parameter 3163"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3469"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3469"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3469"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3469"
          },
          {
           "key": "RackList",
@@ -19681,8 +20029,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3164"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3164"
          },
          {
           "key": "Rack",
@@ -19697,8 +20053,16 @@
           "value": "Parameter 3167"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3470"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3470"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3470"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3470"
          },
          {
           "key": "RackList",
@@ -19733,8 +20097,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3168"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3168"
          },
          {
           "key": "Rack",
@@ -19749,8 +20121,16 @@
           "value": "Parameter 3171"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3471"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3471"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3471"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3471"
          },
          {
           "key": "RackList",
@@ -19785,8 +20165,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3172"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3172"
          },
          {
           "key": "Rack",
@@ -19801,8 +20189,16 @@
           "value": "Parameter 3175"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3472"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3472"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3472"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3472"
          },
          {
           "key": "RackList",
@@ -19837,8 +20233,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3176"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3176"
          },
          {
           "key": "Rack",
@@ -19853,8 +20257,16 @@
           "value": "Parameter 3179"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3473"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3473"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3473"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3473"
          },
          {
           "key": "RackList",
@@ -19889,8 +20301,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3180"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3180"
          },
          {
           "key": "Rack",
@@ -19905,8 +20325,16 @@
           "value": "Parameter 3183"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3474"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3474"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3474"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3474"
          },
          {
           "key": "RackList",
@@ -19941,8 +20369,16 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3058"
+         },
+         {
           "key": "Power",
           "value": "Parameter 3184"
+         },
+         {
+          "key": "PowerGate",
+          "value": "IndexedEnabling/1/2/Parameter 3184"
          },
          {
           "key": "Rack",
@@ -19957,8 +20393,16 @@
           "value": "Parameter 3187"
          },
          {
-          "key": "Band",
-          "value": "Parameter 3475"
+          "key": "BandLow",
+          "value": "WithName[LOW]/FromGesture/Parameter 3475"
+         },
+         {
+          "key": "BandMid",
+          "value": "WithName[MID]/FromGesture/Parameter 3475"
+         },
+         {
+          "key": "BandHigh",
+          "value": "WithName[HIGH]/FromGesture/Parameter 3475"
          },
          {
           "key": "RackList",
@@ -20292,6 +20736,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3663"
+         },
          {
           "key": "State",
           "value": "Parameter 3663"
@@ -20745,6 +21193,10 @@
         "version": 1,
         "map": [
          {
+          "key": "Data",
+          "value": "Parameter 3696"
+         },
+         {
           "key": "State",
           "value": "Parameter 3696"
          },
@@ -21196,6 +21648,10 @@
        "handle remapping": {
         "version": 1,
         "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3729"
+         },
          {
           "key": "State",
           "value": "Parameter 3729"
