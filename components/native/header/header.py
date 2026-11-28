@@ -109,7 +109,10 @@ def centre_face(item, content, *, enabled=True):
     """One page-specific control: dropdown (selector recipe; there is no left/right stepper) or a text button (button recipe)."""
     kind = item.get("kind")
     if kind == "button":
-        face = _button.render_sample({"text": item["text"], "height": content, "state": "enabled"})
+        if item.get("width_px"):    # a fixed-width text button (the Tuning scale input: both state texts share one width)
+            face = _button.action_art(text=item["text"], width=item["width_px"], height=content, look="shaded")
+        else:
+            face = _button.render_sample({"text": item["text"], "height": content, "state": "enabled"})
     elif kind == "dropdown":
         # The old Play-panel look: value only, centred, no label (render_dropdown_variant placement none, align center).
         # As high as the content row (40 px with padding 8; sizes 32 / 40 / 48 exist), centred in the row.
@@ -259,6 +262,16 @@ def catalog_sections(entry):
         for e in header_examples(entry)]}]
 
 
+def _blank(item):
+    """The textless skin face of a centre slot: a dropdown / field value is blank (the host draws it in a Label); a field with a
+    `caption` (a name the host draws, e.g. the Voice step value row) is blank as well; a button keeps its text (it is the face)."""
+    if item["kind"] == "segment":
+        return dict(item, selected=False)
+    if item["kind"] not in ("dropdown", "field"):
+        return item
+    return dict(item, value="", name="") if item.get("caption") else dict(item, value="")
+
+
 def skin_parts(example):
     """The geometry and the textless faces the SKIN needs for one example (the Osc header forms): the same layout as the
     catalogue picture, but every dropdown / field value is blank (the host draws the live value in a Label) and every
@@ -266,7 +279,7 @@ def skin_parts(example):
     (the skin draws it as a Label in the slot `rect`)."""
     view = flat(example)
     zones = {"left": example["zones"].get("left", []),
-             "centre": [dict(i, value="") if i["kind"] in ("dropdown", "field") else dict(i, selected=False) if i["kind"] == "segment" else i for i in view["centre"]],
+             "centre": [_blank(i) for i in view["centre"]],
              "right": [dict(i, value="") if i["kind"] == "dropdown" else i for i in view["right"]]}
     blank = dict(example, zones=zones)
     parts = []
@@ -294,6 +307,7 @@ def skin_parts(example):
 DIM_TEXT = "ffb9bdc9"          # the value text of a disabled (POWER off) control
 TEXT = "ffeef1ff"
 FIELD_TEXT = "ffebeffe"
+LABEL_TEXT = "ff8fa2c0"         # the name of a field (text.label)
 HIT_IMAGE = "native_button_hit.png"
 EMPTY_BACKGROUND = {"version": 1, "focussed": {"version": 1, "colour": "0", "image": ""}, "unfocussed": {"version": 1, "colour": "0", "image": ""}}
 FOCUS_DATA = {"version": 1, "backgroundColour": "19ffffff", "outlineColour": "ff19c6e0", "backgroundInset": 2.0, "outlineThickness": 1.0}
@@ -317,10 +331,12 @@ def _image(name, file, rect):
     return _comp(name, "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": file}, rect)
 
 
-def _label(name, rect, size, colour, remap=(), kind="Value", justification="horizontallyCentred verticallyCentred"):
+def _label(name, rect, size, colour, remap=(), kind="Value", justification="horizontallyCentred verticallyCentred", handle="Data", text=None):
     data = {"version": 1, "textStyle": {"version": 1, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": size},
                                         "colour": colour, "justification": justification, "case": "Original"},
-            "type": kind, "handleName": "Data"}
+            "type": kind, "handleName": handle}
+    if text is not None:
+        data["text"] = text
     return _comp(name, "Label", data, rect, remap)
 
 
@@ -382,10 +398,16 @@ def _cell_children(slot, cell, w, h, on):
         if on:
             out.append(_comp("focus", "Focus", FOCUS_DATA, (w - box, 0, box, h), visible="WhenFocussed"))
         out.append(_image("Face", face, (0, 0, w, h)))
+        if slot.get("caption"):      # the name is drawn by the host (a handle), left of the value box: Name = the parameter name, Value = its text
+            from components.native.name_value.name_value import get_height_preset
+            preset = get_height_preset(h)
+            out.append(_label("name", (preset["pad_x"], 0, w - box - preset["pad_x"], h), float(preset["label_size"]), LABEL_TEXT if on else DIM_TEXT,
+                              kind=slot["caption"], justification="left verticallyCentred", handle="Caption"))
         out.append(_label("value", (w - box, 0, box, h), 16.0, FIELD_TEXT if on else DIM_TEXT))
     elif kind == "button":
         if on:
-            out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": face, "offImage": face, "buttonId": cell.get("id", 1),
+            on_image = f"hdr_{slot['role'].lower()}_on_{w}x{h}.png" if slot.get("on_text") else face   # a toggle button: its own pressed / active text
+            out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": on_image, "offImage": face, "buttonId": cell.get("id", 1),
                                                        "numButtonsInGroup": cell.get("group", 1),
                                                        "handleName": "Data", "gestureBehaviour": "Instant"}, (0, 0, w, h),
                              focus=cell.get("button_focus", "Yes"), show="Show" if cell.get("button_focus") == "No" else "Hide"))
@@ -421,15 +443,23 @@ def header_definitions(spec):
     comps, definitions, images = [], {}, {}
 
     title = next(p for p in parts if p["kind"] == "title")
-    title_label = _label("Title", (title["rect"][0], m["padding"], title["rect"][2], m["content"]), 40.0, TEXT, [("Data", "HdrTitle")],
-                         kind="Name", justification="left verticallyCentred")
+    power = next((p for p in parts if p["kind"] == "power"), None)
+    has_power = power is not None     # a header without POWER (a modulator, the curve screens, Mod, Master, Voice, ...) has no HdrOn / HdrOff gating and no disabled look
+    on_gate = ["HdrOn"] if has_power else []
+    if skin.get("static_title"):      # a fixed title text (Master, Tuning, Voice, Macros): the Label is as wide as the room up to the next control (the host font may measure a little wider than the picture's)
+        if has_power:
+            raise ValueError("static_title is only for a header without POWER")
+        starts = [p["rect"][0] for p in parts if p["kind"] != "title"]
+        end = (min(starts) - m["gap"]) if starts else header_width(view["width"]) - m["side"]
+        title_rect = (title["rect"][0], m["padding"], end - title["rect"][0], m["content"])
+        title_label = _label("Title", title_rect, 40.0, TEXT, [("Data", "HdrTitle")], kind="Text", justification="left verticallyCentred", text=view["title"])
+    else:
+        title_rect = (title["rect"][0], m["padding"], title["rect"][2], m["content"])
+        title_label = _label("Title", title_rect, 40.0, TEXT, [("Data", "HdrTitle")], kind="Name", justification="left verticallyCentred")
     if skin.get("title_gate"):      # the title alone follows its own gate (the instance remaps this name); "title_gate_show" is its showWhenDataModelInvalid (default Hide)
         gate_name = skin["title_gate"] if isinstance(skin["title_gate"], str) else "HdrTitleGate"
-        title_label["bounds"] = _bounds((title["rect"][0], m["padding"], title["rect"][2], m["content"]), [gate_name], show=skin.get("title_gate_show", "Hide"))
+        title_label["bounds"] = _bounds(title_rect, [gate_name], show=skin.get("title_gate_show", "Hide"))
     comps.append(title_label)
-    power = next((p for p in parts if p["kind"] == "power"), None)
-    has_power = power is not None     # a header without POWER (a modulator, the curve screens, Mod) has no HdrOn / HdrOff gating and no disabled look
-    on_gate = ["HdrOn"] if has_power else []
     if has_power:
         pw, ph = power["rect"][2:]
         on_name, off_name = f"hdr_power_on_{pw}x{ph}.png", f"hdr_power_off_{pw}x{ph}.png"
@@ -456,6 +486,10 @@ def header_definitions(spec):
                 images[face_on], images[face_off] = part["on"], part["off"]
             else:
                 images[face_on] = part["on"]
+            if slot.get("on_text"):
+                if has_power:
+                    raise ValueError("a toggle button (on_text) is not supported in a header with POWER")
+                images[f"hdr_{slot['role'].lower()}_on_{w}x{h}.png"] = _button.action_art(text=slot["on_text"], width=w, height=h, look="shaded")
             for cell in slot["skin"]["cells"]:
                 handle = _handle(dict(slot, role=cell["role"])) if cell.get("role") else _handle(slot)    # a cell may bind its own parameter (LFO WAVEFORM / STYLE, Mod source / target group)
                 gate = list(cell.get("gate", []))
@@ -476,7 +510,8 @@ def header_definitions(spec):
                                        [("Data", handle), ("NativeActiveGate1", "HdrGate1"), ("NativeActiveGate2", "HdrGate2")],
                                        page + gate, "No", show))
                     continue
-                comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)],
+                caption = [("Caption", handle + "Caption")] if slot.get("caption") else []
+                comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)] + caption,
                                    on_gate + page + gate, cell.get("hw_focus", "No"), show))
                 for child in (_cell_children(slot, cell, w, h, False) if has_power and slot["kind"] != "segment" else []):       # the disabled look: inert pictures straight in the form
                     cx, cy, cw, ch = map(int, child["bounds"]["bounds"].split())
@@ -485,7 +520,8 @@ def header_definitions(spec):
                                               b["showWhenDataModelInvalid"], b["whenVisible"])
                     child["componentData"]["name"] = cell["name"] + " off " + child["componentData"]["name"]
                     if child["componentData"]["type"] == "Label":
-                        child["handle remapping"] = {"version": 1, "map": [{"key": "Data", "value": handle}]}
+                        own = child["componentData"]["data"]["handleName"]
+                        child["handle remapping"] = {"version": 1, "map": [{"key": own, "value": handle + ("Caption" if own == "Caption" else "")}]}
                     comps.append(child)
     definitions[form_key] = _definition(comps)
     ordered = [(k, v) for k, v in definitions.items() if k != form_key] + [(form_key, definitions[form_key])]

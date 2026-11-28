@@ -135,7 +135,11 @@
           ]
         },
         "caption": "5 · Master: csak cím",
-        "alt": "Master fejléc: MASTER"
+        "alt": "Master fejléc: MASTER",
+        "skin": {
+          "def": "masterHeader",
+          "static_title": true
+        }
       },
       {
         "id": "osc-a-off",
@@ -954,6 +958,153 @@
         },
         "caption": "16 · Filter 1 / 2 (csak példa, a bőrbe NINCS bekötve): cím, POWER, CHAIN, F1 + F2, MODEL (kitölt), STYLE, CLEAN",
         "alt": "Filter fejléc vázlat: FILTER 1, POWER, CHAIN, F1 + F2, MODEL, STYLE, CLEAN"
+      },
+      {
+        "id": "tuning",
+        "file": "header-tuning.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "TUNING & MPE"
+            }
+          ],
+          "centre": [
+            {
+              "kind": "button",
+              "role": "scale",
+              "text": "ACTIVATE SCALE INPUT",
+              "on_text": "KEY MODE · SELECT ROOT · TAP TO PLAY",
+              "width_px": 520,
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Scale Input",
+                    "def": "tuningHeaderScale",
+                    "gate": [
+                      "HdrView"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "No"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "skin": {
+          "def": "tuningHeader",
+          "static_title": true
+        },
+        "caption": "17 · Tuning & MPE: cím, a skálabemenet kapcsológombja (nyugalmi szöveg; megnyomva: KEY MODE · SELECT ROOT · TAP TO PLAY)",
+        "alt": "Tuning fejléc: TUNING & MPE, ACTIVATE SCALE INPUT"
+      },
+      {
+        "id": "voice",
+        "file": "header-voice.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "VOICE CONTROL"
+            }
+          ],
+          "centre": [
+            {
+              "kind": "dropdown",
+              "role": "step",
+              "value": "Step 1",
+              "width_px": 220,
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Step Select",
+                    "def": "voiceHeaderStep",
+                    "overlay": "fx editor choice menu",
+                    "gate": [
+                      "HdrPage"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "field",
+              "role": "length",
+              "name": "LENGTH",
+              "value": "8",
+              "width_px": 200,
+              "box_px": 80,
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Length",
+                    "def": "voiceHeaderLength",
+                    "overlay": "fx editor number menu",
+                    "gate": [
+                      "HdrPage"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              },
+              "caption": "Name"
+            },
+            {
+              "kind": "field",
+              "role": "stepvalue",
+              "name": "PAN",
+              "value": "0",
+              "caption": "Value",
+              "width_px": 228,
+              "box_px": 112,
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Step Value",
+                    "def": "voiceHeaderStepValue",
+                    "overlay": "fx editor number menu",
+                    "gate": [
+                      "HdrPage"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "skin": {
+          "def": "voiceHeader",
+          "static_title": true
+        },
+        "caption": "18 · Voice: cím, STEP-legördülő, LENGTH számmező, a kijelölt sor lépésértéke (a név a gazdagép szövege)",
+        "alt": "Voice fejléc: VOICE CONTROL, STEP, LENGTH, lépésérték"
+      },
+      {
+        "id": "macros",
+        "file": "header-macros.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "MACROS"
+            }
+          ]
+        },
+        "skin": {
+          "def": "macroHeader",
+          "static_title": true
+        },
+        "caption": "19 · Macros: csak cím",
+        "alt": "Macros fejléc: MACROS"
       }
     ]
   }

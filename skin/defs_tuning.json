@@ -2666,6 +2666,158 @@
       }
      ]
     }
+   },
+   {
+    "key": "tuningHeaderScale",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "ACTIVATE SCALE INPUT",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "hdr_scale_on_520x40.png",
+         "offImage": "hdr_scale_520x40.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 520 40"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "tuningHeader",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 40.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Text",
+         "handleName": "Data",
+         "text": "TUNING & MPE"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrTitle"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 8 171 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Scale Input",
+        "type": "tuningHeaderScale",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "HdrScale"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "187 8 520 40",
+        "additionalInvalidatingHandles": [
+         "HdrView"
+        ]
+       }
+      }
+     ]
+    }
    }
   ]
  }
