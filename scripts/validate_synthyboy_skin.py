@@ -442,6 +442,144 @@ def check_label_covers(page, findings, sources=None, *, as_error=False):
         )
 
 
+_MODIFIER_PREFIX_RE = re.compile(
+    r"^(?:IndexedEnabling/\d+/\d+/|RangedEnabling/\d+/\d+/\d+/|TabLimited/\d+/\d+/\d+/|"
+    r"[A-Za-z][A-Za-z0-9_]*(?:\[[^\]]*\])?/)"
+)
+# Confirmed harmless B1 modifier-operand pairs: (source_loc, operand) -> reason.
+ALIAS_MODIFIER_ALLOWLIST = {}
+# Confirmed harmless B2 non-empty remap instances missing Data: (source_loc, component_type, entry_name) -> reason.
+MISSING_DATA_ALLOWLIST = {}
+
+
+def _split_modifiers(expr):
+    """Strip leading `<Word>/...` modifier prefixes; return (modifiers, innermost_operand)."""
+    cur = expr
+    mods = []
+    while True:
+        if cur.startswith(("Local/", "Fixed/", "Parameter/")):
+            break
+        match = _MODIFIER_PREFIX_RE.match(cur)
+        if not match:
+            break
+        mods.append(match.group(0))
+        cur = cur[len(match.group(0)):]
+    return mods, cur
+
+
+def find_alias_modifier_violations(page, sources=None):
+    """B1: every modifier expression (`FromGesture/`, `IndexedEnabling/`, etc.) must wrap a real `Parameter ...`."""
+    sources = sources or {}
+    defs_path = ["pageData", "componentDefinitions", "localComponentDefinitions"]
+    definitions = page.get("componentDefinitions", {}).get("localComponentDefinitions", [])
+    violations = []
+
+    def check_handle(handle, path, loc, entry_name, entry_type, field):
+        if not isinstance(handle, str) or not handle:
+            return
+        mods, operand = _split_modifiers(handle)
+        if mods and not operand.startswith("Parameter "):
+            violations.append({
+                "location": loc,
+                "json_path": path,
+                "entry_name": entry_name,
+                "entry_type": entry_type,
+                "field": field,
+                "handle": handle,
+                "operand": operand,
+            })
+
+    def scan_container(node, base, loc):
+        for k, action in enumerate(node.get("actions", [])):
+            check_handle(action.get("handleName"), json_path([*base, "actions", k, "handleName"]), loc, "<def>", "", "actions")
+        for j, entry in enumerate(node.get("componentsData", [])):
+            where = [*base, "componentsData", j]
+            cd = entry.get("componentData", {})
+            ename, etype, data = cd.get("name", ""), cd.get("type", ""), cd.get("data", {})
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if key.endswith("Handle") or key == "handleName":
+                        check_handle(value, json_path([*where, "componentData", "data", key]), loc, ename, etype, f"data.{key}")
+                    elif key == "actions" and isinstance(value, list):
+                        for k, action in enumerate(value):
+                            check_handle(action.get("handleName"), json_path([*where, "componentData", "data", "actions", k, "handleName"]), loc, ename, etype, "data.actions")
+            for k, item in enumerate(entry.get("handle remapping", {}).get("map", [])):
+                check_handle(item.get("value"), json_path([*where, "handle remapping", "map", k, "value"]), loc, ename, etype, f"remap[{item.get('key', '')}]")
+            bounds = entry.get("bounds", {})
+            gates = bounds.get("additionalInvalidatingHandles")
+            if isinstance(gates, list):
+                for k, gate in enumerate(gates):
+                    check_handle(gate, json_path([*where, "bounds", "additionalInvalidatingHandles", k]), loc, ename, etype, "gate")
+
+    for i, definition in enumerate(definitions):
+        dkey = definition["key"]
+        loc = f"{sources.get(dkey, 'TUI.json')}:{dkey}"
+        scan_container(definition["value"], [*defs_path, i, "value"], loc)
+    for i, tab in enumerate(page.get("tabs", [])):
+        tname = tab.get("tabName", "")
+        scan_container(tab["componentDefinition"], ["pageData", "tabs", i, "componentDefinition"], f"TUI.json:tab:{tname}")
+    return violations
+
+
+def find_missing_data_remaps(page, sources=None):
+    """B2: custom-component instances with a non-empty remap, no `Data` key, and `showWhenDataModelInvalid: \"Hide\"`."""
+    sources = sources or {}
+    defs_path = ["pageData", "componentDefinitions", "localComponentDefinitions"]
+    definitions = page.get("componentDefinitions", {}).get("localComponentDefinitions", [])
+    local_keys = {d["key"] for d in definitions}
+    violations = []
+
+    def scan_entries(entries, base, loc):
+        for j, entry in enumerate(entries):
+            cd = entry.get("componentData", {})
+            ctype = cd.get("type", "")
+            ename = cd.get("name", "")
+            rmap = entry.get("handle remapping", {}).get("map", [])
+            if ctype not in local_keys or not rmap:
+                continue
+            keys = [m.get("key", "") for m in rmap]
+            if "Data" in keys:
+                continue
+            has_hide = any(isinstance(node, dict) and node.get("showWhenDataModelInvalid") == "Hide" for node in walk(entry))
+            if has_hide:
+                gates = entry.get("bounds", {}).get("additionalInvalidatingHandles", [])
+                violations.append({
+                    "location": loc,
+                    "json_path": json_path([*base, "componentsData", j]),
+                    "entry_name": ename,
+                    "component_type": ctype,
+                    "remap_keys": keys,
+                    "gates": gates if isinstance(gates, list) else [],
+                })
+
+    for i, definition in enumerate(definitions):
+        dkey = definition["key"]
+        loc = f"{sources.get(dkey, 'TUI.json')}:{dkey}"
+        scan_entries(definition["value"].get("componentsData", []), [*defs_path, i, "value"], loc)
+    for i, tab in enumerate(page.get("tabs", [])):
+        tname = tab.get("tabName", "")
+        scan_entries(tab["componentDefinition"].get("componentsData", []), ["pageData", "tabs", i, "componentDefinition"], f"TUI.json:tab:{tname}")
+    return violations
+
+
+def check_alias_rules(page, findings, sources=None, *, as_error=False):
+    report = findings.error if as_error else findings.warn
+    for item in find_alias_modifier_violations(page, sources=sources):
+        if (item["location"], item["operand"]) in ALIAS_MODIFIER_ALLOWLIST:
+            continue
+        report(
+            item["json_path"],
+            f"modifier expression '{item['handle']}' in {item['location']} ({item['entry_name']}, {item['field']}) wraps non-Parameter operand '{item['operand']}'",
+        )
+    for item in find_missing_data_remaps(page, sources=sources):
+        if (item["location"], item["component_type"], item["entry_name"]) in MISSING_DATA_ALLOWLIST:
+            continue
+        report(
+            item["json_path"],
+            f"instance '{item['entry_name']}' of custom component '{item['component_type']}' in {item['location']} has non-empty remap {item['remap_keys']} without 'Data' and showWhenDataModelInvalid 'Hide'",
+        )
+
+
 def tui_semantics(page, schema, skins, findings, sources=None):
     """What a schema cannot say: cross references, files, value relations, unproven forms (warnings)."""
     proven = re.compile(schema["x-proven-handle-pattern"])
@@ -571,6 +709,7 @@ def tui_semantics(page, schema, skins, findings, sources=None):
     if len(page["tabs"]) > PROVEN_MAX_TABS:
         findings.warn("$.pageData.tabs", f"{len(page['tabs'])} tabs: the SDK note allows {SDK_MAX_TABS}, the proven skin runs {PROVEN_MAX_TABS} on both devices")
     check_label_covers(page, findings, sources=sources, as_error=True)
+    check_alias_rules(page, findings, sources=sources, as_error=False)
 
 
 def check_skin_schema(skins, label="skin"):
@@ -711,6 +850,8 @@ def main():
                         help="only the JSON Schema and semantic checks of TUI.json / Q-Links.json; package_dir is a package or a folder holding both files")
     parser.add_argument("--list-covers", action="store_true",
                         help="list every passive Label/Image overlapping an earlier touchable control without an unshared gate")
+    parser.add_argument("--list-alias-rules", action="store_true",
+                        help="list B1 (modifier over non-Parameter operand) and B2 (non-empty remap missing Data with Hide) violations")
     args = parser.parse_args()
     if args.list_covers:
         folder = args.package_dir / "Plugin Skins"
@@ -723,6 +864,21 @@ def main():
             return 1
         for item in find_label_covers(tui["pageData"], sources=sources):
             print(f"{item['tab']}\t{item['touchable_name']} [{item['touchable_rect']}]\t{item['cover_name']} [{item['cover_rect']}]\t{item['cover_source']}")
+        return 0
+    if args.list_alias_rules:
+        folder = args.package_dir / "Plugin Skins"
+        skins = folder if folder.is_dir() else args.package_dir
+        findings = Findings()
+        sources = {}
+        tui = load_skin_tui(skins / "TUI.json", findings, sources=sources)
+        if findings.errors:
+            findings.report("skin")
+            return 1
+        page = tui["pageData"]
+        for item in find_alias_modifier_violations(page, sources=sources):
+            print(f"B1\t{item['location']}\t{item['entry_name']}\t{item['field']}\t{item['handle']}\t{item['operand']}")
+        for item in find_missing_data_remaps(page, sources=sources):
+            print(f"B2\t{item['location']}\t{item['entry_name']}\t{item['component_type']}\t{','.join(item['remap_keys'])}")
         return 0
     if args.schema_only:
         folder = args.package_dir / "Plugin Skins"
