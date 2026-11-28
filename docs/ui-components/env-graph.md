@@ -21,7 +21,7 @@ The picture of a DAHDSR envelope (delay, attack, hold, decay, sustain, release a
 | `zoom` | unlocked: the time the plot width stands for (0 = what the envelope needs now; the owner's: set from `kLock` / `kZoom` requests) | 0 |
 
 ## Size
-`minSize()` = 300 x 160. Below 520 x 260 it draws the compact chrome (no LOCK button, always locked). Handles have 56 x 56 px targets (`kHit`). `plot()` is the drawing area. `plotArea` (a `Rect`, default empty): when the owner sets it (the compact view of the Play page: `playrows::plotRect` of the display, below the header band that holds the full-screen button) `plot()` returns it and everything of the graph (grid, ruler labels, curve, fill, handles, the value bubble, the running dots) lies in it or in the margin under it; empty = the margins inside the rectangle, as before (the full screen page).
+`minSize()` = 300 x 160. Below 520 x 260 it draws the compact chrome (no LOCK button, always locked). Handles have 56 x 56 px targets (`kHit`). `plot()` is the drawing area. `plotArea` (a `Rect`, default empty): when the owner sets it (the Play page: `playrows::plotRect` of the display, below the header band) `plot()` returns it and everything of the graph (grid, ruler labels, curve, fill, handles, the value bubble, the running dots) lies in it or in the margin under it; empty = the margins inside the rectangle (the Env tab).
 
 ## Touch and knob behaviour
 | Gesture | Change |

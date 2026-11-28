@@ -1,6 +1,6 @@
 # HEADER (design proposal v0, catalogue only)
 
-The full-width top row of a page or of a Play panel. No screen, skin or overlay uses it yet; the catalogue (`kepes-katalogus.html`) shows eight examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
+The full-width top row of a page or of a Play third. No screen, skin or overlay uses it yet; the catalogue (`kepes-katalogus.html`) shows eight examples. Source: `components/native/header/header.py`, examples: `components/native/header/catalog.json`, test: `scripts/tests/test_native_header_catalog.py`.
 
 ## Geometry (tokens in `components/sizes.json`)
 
@@ -10,7 +10,7 @@ The full-width top row of a page or of a Play panel. No screen, skin or overlay 
 | `header.padding` | 8 | the one margin, the same on all four sides (left, right, top, bottom); the content row is `height - 2 * padding` = 40 px (`height.intermediate`) |
 | `header.gap` | 8 | between components |
 | `header.page.width` | 1280 (`screen.width`) | a page; the display tab area is 1280 x 628 |
-| `header.panel.width` | 400 | a Play panel |
+| `header.panel.width` | 400 | a Play third |
 | `header.dropdown.min_width` | 220 | width of a fixed dropdown, minimum width of the flexible (fill) one |
 
 ## Zones
@@ -21,12 +21,12 @@ Order in a page header: [title] [POWER] [page controls] ... [common buttons].
 - CENTRE: page-specific controls after one gap (40 px: dropdown, text buttons; all as high as the content row): dropdown (selector recipe), text button (button recipe). The centre contents per page in the catalogue are EXAMPLES, not a decision.
 - Flexible control: at most one centre control (the dropdown) is marked `"fill": true` in the catalogue data. It takes all the room between the left and the right group (width = row - side paddings - the other widths - the gaps); `header.dropdown.min_width` is its minimum. Title, POWER and the common buttons keep their size.
 - RIGHT: the common buttons, right-aligned, `header.padding` from the edge: EXPAND (maximise icon; in the full-screen state the same slot shows CLOSE, an X) and MORE.
-- A Play panel has the order [POWER] [selector dropdown, fills the room: it is the panel's title] [EXPAND] at panel width (`header.panel.width`): POWER 8 px from the side, the dropdown 8 px after POWER and 8 px before EXPAND.
+- The header of a Play third is the module selector dropdown at third width (`header.panel.width`); the oscillator's header also holds the POWER button and the ROUTE choice.
 - POWER off: the POWER icon is unlit and the centre controls take the disabled look (`style.dim_artwork`, the artwork of `apply_control_state`). Title and common buttons stay.
 
 ## Recipes used (no new look)
 
-The Button and IconButton recipes (`button.render_sample`, `icon_button.render_sample`; look legacy: gradient fill, no flat button anywhere in the header), `label.render_label` (title), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the old Play-panel look; placement none, align center) `font.page_title` title text. EXPAND and CLOSE (an X) are IconButtons, MORE is a text Button (no more icon).
+The Button and IconButton recipes (`button.render_sample`, `icon_button.render_sample`; look legacy: gradient fill, no flat button anywhere in the header), `label.render_label` (title), `selector.render_dropdown_variant` (dropdown: value only, centred, no label: the Play-third look; placement none, align center) `font.page_title` title text. EXPAND and CLOSE (an X) are IconButtons, MORE is a text Button (no more icon).
 
 ## Add an example
 
