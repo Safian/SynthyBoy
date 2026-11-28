@@ -183,7 +183,6 @@ public:
         line (p0x, p0y, p1x, p1y, width, col);
         line (p1x, p1y, p2x, p2y, width, col);
     }
-    }
     void iconEnvelope (float cx, float cy, uint32_t col)   // an ADSR outline
     {
         const float x[6] = { -13.0f, -8.0f, -3.0f, 3.0f, 8.0f, 13.0f }, y[6] = { 8.0f, -8.0f, -2.0f, -2.0f, 8.0f, 8.0f };
