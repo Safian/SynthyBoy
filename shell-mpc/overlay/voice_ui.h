@@ -301,12 +301,18 @@ public:
     void setHostBackground (bool) noexcept {}
     bool hostBackground() const noexcept { return true; }
 
-    /** The picture: the marker covers of the host skin and the sounding-step dots in the grid (a live display). */
+    /** The cover of the skin's marker squares and instance picture (page_view_base.h drawGround; no drawing of the page: they lie under the transparent plane). */
+    void drawPageGround (gpu::SceneBuilder& sb) const
+    {
+        if (pageTop_ == 0)
+            drawNativeMarkerCovers (sb, "voice");
+    }
+
+    /** The picture: the sounding-step dots in the grid (a live display). */
     void draw (gpu::SceneBuilder& sb) const
     {
         if (pageTop_ != 0)
             return;
-        drawNativeMarkerCovers (sb, "voice");
         const ui::theme::Look& T = ui::theme::L();
         ui::Cell cell (sb, sequenceGrid(), 0);
         ui::Pen p (sb, true);

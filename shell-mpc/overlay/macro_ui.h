@@ -253,42 +253,31 @@ public:
         updateNativeList (inst, stack);
         if (pageTop_ == 0)
             updateSpectrum (inst, nowMs);
+        publishNativeText (inst);
         inst.setUiFullOpen (pageTop_ != 0 || ! nativeControls_);
         publishQGroup (inst);
     }
 
     void setHostBackground (bool on) noexcept { nativeGround_ = on; }
     bool hostBackground() const noexcept { return pageTop_ == 0 && nativeGround_; }
-    // Macros draws its ground here, with apertures where it shares the page with the host.
-    void drawPageGround (gpu::SceneBuilder&) const noexcept {}
-
-    /** The opaque cover patches of the host-background mode (the skin's marker squares and the instance picture lie under our transparent plane): the places are the layout's. */
-    static void drawMarkerCovers (gpu::SceneBuilder& sb)
+    /** The cover of the host's stale pixels (page_view_base.h drawGround; it is no drawing of the page): until the sentinel of the host's background is read the cards page is covered by the canvas colour around the native cells (the cards, the
+        title and the spectrum frame), and the marker squares and the instance picture of the skin always (they lie under the transparent plane). Everything else of the page, the ground of the targets, list and keyboard pages
+        included, is a native element of the skin gated by nativeui::kMacroSubpage. */
+    void drawPageGround (gpu::SceneBuilder& sb) const
     {
+        if (pageTop_ == 0 && ! hostBackground())
+            drawNativeFallback (sb);
         ui::Cell cell (sb, { 0, kTabY, kCanvasW, ui::macrocard::kBarH }, 0);
         drawNativeMarkerCovers (sb, "macros");
     }
 
+    /** The picture: the live line of the spectrum (a display) and, until the native keyboard replaces it (owner decision 2026-11-27), the C++ rename keyboard. */
     void draw (gpu::SceneBuilder& sb) const
     {
-        if (hostBackground())
-            drawMarkerCovers (sb);
-        else if (pageTop_ == 0)
-        {
-            drawNativeFallback (sb);
-            drawMarkerCovers (sb);
-        }
-        else
-            page::ground (sb);
-
         if (pageTop_ == kPageKeyboard)
             entry_.draw (sb);
-        else if (pageTop_ == kPageList)
-            drawList (sb);
-        else if (pageTop_ == kPageTargets)
-            drawTargets (sb);
-        else
-            drawMacros (sb);
+        else if (pageTop_ == 0)
+            drawSpectrumLive (sb, spectrumRect(), spectrumLevels_);
     }
 
     /** True if (x, y) lies in a native cell of the targets page: the touch belongs to the host (`row` gets the row of a row cell, -1 for the toolbar). */
@@ -566,59 +555,18 @@ private:
         }
     }
 
-    /** The list page: the ground, with the cells of the native picker cleared (the skin draws them). */
-    void drawList (gpu::SceneBuilder& sb) const
-    {
-        if (! listNative_)
-            return;
-        namespace nb = nativeui::modboard;
-        const int count = listCount();
-        for (int row = 0; row < nb::kListRows && listFirst_ + row < count; ++row)
-            ui::clearNativeCell (sb, pickerRow (row));
-        for (const ui::Rect& r : { ui::macrocard::kPickerTitle, ui::macrocard::kPickerBack, ui::macrocard::kPickerGroups, ui::macrocard::kPickerPrev, ui::macrocard::kPickerNext })
-            ui::clearNativeCell (sb, pickerRect (r));
-    }
-
-    // ---- the displays the overlay draws itself ------------------------------------------------------------------------------------------------------------------------------------------------------
+    // ---- the display the overlay draws itself (the frame of the spectrum, the title and the names are native cells of the skin)
     void drawNativeFallback (gpu::SceneBuilder& sb) const
     {
-        std::array<ui::Rect, kNumMacros> holes;
+        std::array<ui::Rect, kNumMacros + 2> holes;
         for (int i = 0; i < kNumMacros; ++i)
             holes[static_cast<size_t> (i)] = cardRect (i);
+        holes[kNumMacros] = titleRect();
+        holes[kNumMacros + 1] = spectrumRect();
         ui::drawNativeCanvas (sb, { 0, kTabY, w_, kTabH }, holes);
     }
 
-    /** The spectrum frame: the level axis is linear in dB from -60 (the base line) to -12 dB (the top), faint lines every 12 dB with their numbers, the decades of the frequency axis. */
-    static void drawSpectrumStatic (gpu::SceneBuilder& sb, const ui::Rect& rect)
-    {
-        ui::Pen p (sb, true);
-        ui::Cell cell (sb, rect);
-        const ui::theme::Look& T = ui::theme::L();
-        const ui::Rect in { rect.x + 10, rect.y + 22, std::max (0, rect.w - 20), std::max (0, rect.h - 22 - 20) };
-        if (in.w < 20 || in.h < 20)
-            return;
-        for (int k = 1; k <= 4; ++k)
-        {
-            const float gy = static_cast<float> (in.bottom()) - static_cast<float> (k) * 0.25f * static_cast<float> (in.h - 4);
-            p.line (static_cast<float> (in.x), gy, static_cast<float> (in.right()), gy, 1.0f, p.c (T.grid, k == 4 ? 200 : 110));
-            char db[8];
-            std::snprintf (db, sizeof db, "%d", -60 + 12 * k);
-            p.textLeft ({ in.x + 3, static_cast<int> (gy) + 1, 30, 13 }, db, T.fSmall, p.c (T.textFaint, 255), T.fMin);
-        }
-        p.textRight ({ in.right() - 34, in.y, 32, 13 }, "dB", T.fSmall, p.c (T.textFaint, 255), T.fMin);
-        p.textLeft ({ rect.x + 14, rect.y + 3, 200, 16 }, "SPECTRUM", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        static const struct { double hz; const char* name; } kDecade[3] = { { 100.0, "100" }, { 1000.0, "1k" }, { 10000.0, "10k" } };
-        for (const auto& d : kDecade)
-        {
-            const float x = static_cast<float> (in.x) + static_cast<float> (std::log10 (d.hz / 20.0) / 3.0 * in.w);
-            p.line (x, static_cast<float> (in.y), x, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 255));
-            p.textCentered ({ static_cast<int> (x) - 24, in.bottom() + 2, 48, 16 }, d.name, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
-        }
-        p.textLeft ({ in.x, in.bottom() + 2, 50, 16 }, "20 Hz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
-        p.textRight ({ in.right() - 50, in.bottom() + 2, 50, 16 }, "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
-    }
-
-    /** The live line of the spectrum: 256 levels 0 .. 1 on a log frequency axis (20 Hz .. 20 kHz) with a faint fill; null levels: nothing is drawn. */
+    /** The live line of the spectrum (inside the frame of the skin's native macroSpectrumFrame, the same inset): 256 levels 0 .. 1 on a log frequency axis (20 Hz .. 20 kHz) with a faint fill; null levels: nothing is drawn. */
     static void drawSpectrumLive (gpu::SceneBuilder& sb, const ui::Rect& rect, const float* levels)
     {
         if (levels == nullptr)
@@ -641,65 +589,20 @@ private:
         sb.stroke (0.8f, ui::colour::rgba (T.flow[0], sound ? 255 : 90));   // no sound: only the faint base line
     }
 
-    /** The Macros picture: the spectrum frame, the title (it lies over the skin's marker squares: drawn here, never baked), the names of the cards (what belongs to the INSTANCE) and the live line. */
-    void drawMacros (gpu::SceneBuilder& sb) const
+    /** The texts and the gate the skin shows with native cells: the names of the cards, the title, the count and the hint of the targets page; the gate hides the cards page while a sub page is open. */
+    void publishNativeText (IInstanceView& inst) const
     {
-        const ui::theme::Look& T = ui::theme::L();
-        drawSpectrumStatic (sb, spectrumRect());
-        {
-            ui::Pen p (sb, true);
-            ui::Cell cell (sb, titleRect());
-            p.textLeft (titleRect(), "MACROS", ui::theme::kPageTitleSize, p.c (T.text, 255), T.fMin);
-        }
+        namespace t = nativeui::nativetext;
         for (int m = 0; m < kNumMacros; ++m)
-        {
-            const std::string name = cardName (m);
-            const ui::Rect nb = nameLabelRect (m);
-            ui::Pen p (sb, true);
-            ui::Cell cell (sb, cardRect (m));
-            p.textCentered (nb, name.c_str(), T.fLabel, p.c (T.textDim, 255), T.fMin);
-            const float size = ui::Pen::fitSize (name.c_str(), static_cast<float> (nb.w), static_cast<float> (nb.h), T.fLabel, T.fMin);
-            if (size > 0.0f)   // the name is a button: a line under it says so
-            {
-                char buf[96];
-                const float w = std::min (sdf::fitText (name.c_str(), size, static_cast<float> (nb.w), buf, static_cast<int> (sizeof buf)), static_cast<float> (nb.w));
-                const float x0 = static_cast<float> (nb.x) + (static_cast<float> (nb.w) - w) * 0.5f;
-                const float y = static_cast<float> (nb.bottom()) - 1.0f;
-                p.line (x0, y, x0 + w, y, 1.0f, p.c (T.keylineHi, 255));
-            }
-        }
-        drawSpectrumLive (sb, spectrumRect(), spectrumLevels_);
-    }
-
-    /** The targets page: the rule under the bar, the title in the colour of the source, the count, the hint of an empty list; the native cells are cleared (the skin draws them). */
-    void drawTargets (gpu::SceneBuilder& sb) const
-    {
-        const ui::theme::Look& T = ui::theme::L();
-        constexpr int kBarH = 92, kCtlH = kTgH, kToolbarY = 32;
-        const int ox = 0, oy = kTabY;
-        {
-            ui::Pen p (sb, true);
-            ui::Cell cell (sb, { ox, oy, kCanvasW, kTabH });
-            p.rect (ox + 4, oy + kBarH - 1, kCanvasW - 4, oy + kBarH, p.c (T.keyline, 255));
-            const float ts = T.fValue + 2.0f;
-            const int tw = static_cast<int> (std::ceil (ui::Pen::textWidth (targets_.title, ts))) + 4;
-            p.textLeft ({ ox + 140, oy + kToolbarY, std::max (0, std::min (tw, kCanvasW - 150)), kCtlH }, targets_.title, ts, p.c (ui::theme::sourceColour ("MAC"), 255), T.fMin);
-            char c[32];
-            std::snprintf (c, sizeof c, targets_.total == 1 ? "%d TARGET" : "%d TARGETS", targets_.total);
-            p.textLeft ({ ox + 140 + tw + 16, oy + kToolbarY, 160, kCtlH }, c, T.fValue, p.c (T.textDim, 255), T.fMin);
-            if (targets_.numRows == 0)
-                p.textLeft ({ ox + 8, oy + kBarH + 20, kCanvasW - 16, 40 }, "THIS SOURCE MODULATES NOTHING YET: PRESS ADD TARGET", T.fLabel, p.c (T.textDim, 255), T.fMin);
-        }
-        if (targetsNative_)
-        {
-            ui::clearNativeCell (sb, tgBack());
-            ui::clearNativeCell (sb, tgAdd());
-            if (targets_.pages > 1)
-                ui::clearNativeCell (sb, tgPage());
-            for (int i = 0; i < targets_.numRows; ++i)
-                for (const ui::Rect& r : { tgName (i), tgDepth (i), tgPolarity (i), tgBypass (i), tgRemove (i) })
-                    ui::clearNativeCell (sb, r);
-        }
+            inst.setNativeMacroText (t::MacroName0 + m, cardName (m).c_str());
+        const bool targets = pageTop_ == kPageTargets;
+        char count[32] = {};
+        if (targets)
+            std::snprintf (count, sizeof count, targets_.total == 1 ? "%d TARGET" : "%d TARGETS", targets_.total);
+        inst.setNativeMacroText (t::MacroTargetsTitle, targets ? targets_.title : "");
+        inst.setNativeMacroText (t::MacroTargetsCount, count);
+        inst.setNativeMacroText (t::MacroTargetsEmpty, targets && targets_.numRows == 0 ? "THIS SOURCE MODULATES NOTHING YET: PRESS ADD TARGET" : "");
+        inst.setNativeMacroSubpage (pageTop_ != 0);
     }
 
     void resetSpectrum() noexcept
