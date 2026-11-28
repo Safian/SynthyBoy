@@ -2800,6 +2800,8 @@ private:
     void writeBuiltinTable (IInstanceView& v, int param, double plain)
     {
         v.cancelWavetable (playosc::oscNumber (sel_));
+        if (pendingOsc_ == playosc::oscNumber (sel_))
+            pendingOsc_ = 0;
         writePlain (v, param, plain);
     }
     void requestFile (IInstanceView& v, const synthyboy::WavetableEntry& e)
@@ -2807,6 +2809,7 @@ private:
         wtLastPack_ = e.ref.pack;
         wtLastFile_ = e.ref.file;
         v.requestWavetable (playosc::oscNumber (sel_), e.ref);
+        pendingOsc_ = playosc::oscNumber (sel_);
     }
     /** Where the table the oscillator plays now stands in the step catalogue (stepCat_): the file `pack` / `file` when `fileTable`, else the built-in table `choice`. While a table we asked for is still loading
         our position is the one we asked for (the latest request wins). False when the catalogue cannot place the table. */
@@ -2821,9 +2824,9 @@ private:
         }
         if (! stepValid_)
             ensureStepInfo (v, std::string(), std::string());   // a built-in table: the catalogue is read at the first step, no file is placed yet
-        else if (v.contentLoad (nullptr) == 1 && stepCategory_ >= 0)
+        else if (v.contentLoad (nullptr) == 1 && stepCategory_ >= 0 && pendingOsc_ == playosc::oscNumber (sel_))
         {
-            category = stepCategory_;   // a file we asked for is still loading: the parameter is the old table, our position is the new one
+            category = stepCategory_;   // a file we asked for THIS oscillator is still loading: the parameter is the old table, our position is the new one (contentLoad is instance-wide)
             entry = stepEntry_;
             return true;
         }
@@ -3273,6 +3276,7 @@ private:
     synthyboy::WavetableCatalogue stepCat_;
     std::string stepPack_, stepFile_, wtLastPack_, wtLastFile_;
     int stepCategory_ = -1, stepEntry_ = -1;
+    int pendingOsc_ = 0;   // the oscillator (1 .. 3) of the last wavetable file request (requestFile), 0 once a built-in choice withdrew it: the step cursor follows a loading file only for that oscillator
     bool stepValid_ = false;
     std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     std::vector<Item> main_, page_;
