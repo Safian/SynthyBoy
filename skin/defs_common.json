@@ -2473,7 +2473,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row0"
+          "value": "Cap0"
          }
         ]
        },
@@ -2485,7 +2485,7 @@
         "boundsType": "Absolute",
         "bounds": "40 96 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate0"
+         "Gate0"
         ]
        }
       },
@@ -2509,7 +2509,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row1"
+          "value": "Cap1"
          }
         ]
        },
@@ -2521,7 +2521,7 @@
         "boundsType": "Absolute",
         "bounds": "40 156 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate1"
+         "Gate1"
         ]
        }
       },
@@ -2545,7 +2545,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row2"
+          "value": "Cap2"
          }
         ]
        },
@@ -2557,7 +2557,7 @@
         "boundsType": "Absolute",
         "bounds": "40 216 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate2"
+         "Gate2"
         ]
        }
       },
@@ -2581,7 +2581,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row3"
+          "value": "Cap3"
          }
         ]
        },
@@ -2593,7 +2593,7 @@
         "boundsType": "Absolute",
         "bounds": "40 276 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate3"
+         "Gate3"
         ]
        }
       },
@@ -2617,7 +2617,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row4"
+          "value": "Cap4"
          }
         ]
        },
@@ -2629,7 +2629,7 @@
         "boundsType": "Absolute",
         "bounds": "40 336 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate4"
+         "Gate4"
         ]
        }
       },
@@ -2653,7 +2653,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row5"
+          "value": "Cap5"
          }
         ]
        },
@@ -2665,7 +2665,7 @@
         "boundsType": "Absolute",
         "bounds": "40 396 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate5"
+         "Gate5"
         ]
        }
       },
@@ -2689,7 +2689,7 @@
          },
          {
           "key": "Caption",
-          "value": "WithName[]/Row6"
+          "value": "Cap6"
          }
         ]
        },
@@ -2701,7 +2701,7 @@
         "boundsType": "Absolute",
         "bounds": "40 456 1200 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Gate6"
+         "Gate6"
         ]
        }
       },
@@ -2726,7 +2726,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Back"
+          "value": "Back"
          }
         ]
        },
@@ -2760,7 +2760,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Prev"
+          "value": "Prev"
          }
         ]
        },
@@ -2794,7 +2794,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Next"
+          "value": "Next"
          }
         ]
        },
@@ -2828,7 +2828,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Groups"
+          "value": "Groups"
          }
         ]
        },
@@ -2840,7 +2840,7 @@
         "boundsType": "Absolute",
         "bounds": "170 12 100 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/0/2/Title"
+         "TitleGroups"
         ]
        }
       },
@@ -2865,7 +2865,7 @@
         "map": [
          {
           "key": "Data",
-          "value": "FromGesture/Groups"
+          "value": "Groups"
          }
         ]
        },
@@ -2877,7 +2877,7 @@
         "boundsType": "Absolute",
         "bounds": "170 12 100 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/2/Title"
+         "TitleUp"
         ]
        }
       },
