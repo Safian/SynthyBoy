@@ -1849,145 +1849,6 @@
     }
    },
    {
-    "key": "oscNativeSetting_menu",
-    "value": {
-     "version": 2,
-     "actions": [
-      {
-       "version": 1,
-       "onAction": "Mouse Down",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      },
-      {
-       "version": 1,
-       "onAction": "Enter Pressed",
-       "handler": "Show Overlay",
-       "handleName": "Data",
-       "additionalData": "fx editor choice menu"
-      }
-     ],
-     "backgroundData": {
-      "version": 1,
-      "focussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      },
-      "unfocussed": {
-       "version": 1,
-       "colour": "0",
-       "image": ""
-      }
-     },
-     "ignoreMousePresses": false,
-     "disableCoarseDataWheel": false,
-     "componentsData": [
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Selector face",
-        "type": "Image",
-        "data": {
-         "version": 2,
-         "imageType": "Regular",
-         "colour": "0",
-         "image": "selector_face_125x56.png"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 125 56"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Title",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 19.0
-          },
-          "colour": "ffeef1ff",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Value",
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "14 21 79 29"
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Name",
-        "type": "Label",
-        "data": {
-         "version": 1,
-         "textStyle": {
-          "version": 1,
-          "font": {
-           "version": 1,
-           "name": "Titillium Web",
-           "style": "SemiBold",
-           "height": 13.0
-          },
-          "colour": "ff829bc4",
-          "justification": "left verticallyCentred",
-          "case": "Original"
-         },
-         "type": "Name",
-         "handleName": "Caption"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "14 4 79 18"
-       }
-      }
-     ]
-    }
-   },
-   {
     "key": "oscNativeSetting_toggle",
     "value": {
      "version": 2,
@@ -18103,7 +17964,7 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Osc A",
+        "name": "Osc ABC",
         "type": "oscNativeAbcSettings",
         "data": {
          "version": 1,
@@ -18291,7 +18152,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 628",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/5/Parameter 2876"
+         "RangedEnabling/1/3/5/Parameter 2876"
         ]
        }
       },
@@ -18299,399 +18160,7 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Osc B",
-        "type": "oscNativeAbcSettings",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "OscAbc0",
-          "value": "Parameter 3022"
-         },
-         {
-          "key": "OscAbc1",
-          "value": "Parameter 3023"
-         },
-         {
-          "key": "OscAbc2",
-          "value": "Parameter 3024"
-         },
-         {
-          "key": "OscAbc3",
-          "value": "Parameter 3025"
-         },
-         {
-          "key": "OscAbc4",
-          "value": "Parameter 3026"
-         },
-         {
-          "key": "OscAbc5",
-          "value": "Parameter 3027"
-         },
-         {
-          "key": "OscAbc6",
-          "value": "Parameter 3028"
-         },
-         {
-          "key": "OscAbc7",
-          "value": "Parameter 3029"
-         },
-         {
-          "key": "OscAbc8",
-          "value": "Parameter 3030"
-         },
-         {
-          "key": "OscAbc9",
-          "value": "Parameter 3031"
-         },
-         {
-          "key": "OscAbc10",
-          "value": "Parameter 3032"
-         },
-         {
-          "key": "OscAbc11",
-          "value": "Parameter 3033"
-         },
-         {
-          "key": "OscAbc12",
-          "value": "Parameter 3034"
-         },
-         {
-          "key": "OscAbc13",
-          "value": "Parameter 3035"
-         },
-         {
-          "key": "OscAbc14",
-          "value": "Parameter 3036"
-         },
-         {
-          "key": "OscAbc15",
-          "value": "Parameter 3037"
-         },
-         {
-          "key": "OscAbc16",
-          "value": "Parameter 3038"
-         },
-         {
-          "key": "OscAbc17",
-          "value": "Parameter 3039"
-         },
-         {
-          "key": "OscCaption0 TYPE",
-          "value": "WithName[TYPE]/Parameter 3022"
-         },
-         {
-          "key": "OscCaption1 SOURCE",
-          "value": "WithName[SOURCE]/Parameter 3023"
-         },
-         {
-          "key": "OscCaption2 BROWSE",
-          "value": "WithName[BROWSE]/Parameter 3024"
-         },
-         {
-          "key": "OscCaption5 DETAIL",
-          "value": "WithName[DETAIL]/Parameter 3027"
-         },
-         {
-          "key": "OscCaption6 VOICES",
-          "value": "WithName[VOICES]/Parameter 3028"
-         },
-         {
-          "key": "OscCaption7 DETUNE",
-          "value": "WithName[DETUNE]/Parameter 3029"
-         },
-         {
-          "key": "OscCaption8 WARP 1",
-          "value": "WithName[WARP 1]/Parameter 3030"
-         },
-         {
-          "key": "OscCaption10 WARP 2",
-          "value": "WithName[WARP 2]/Parameter 3032"
-         },
-         {
-          "key": "OscCaption12 FRAME",
-          "value": "WithName[FRAME]/Parameter 3034"
-         },
-         {
-          "key": "OscCaption13 PHASE",
-          "value": "WithName[PHASE]/Parameter 3035"
-         },
-         {
-          "key": "OscCaption14 RAND",
-          "value": "WithName[RAND]/Parameter 3036"
-         },
-         {
-          "key": "OscCaption15 MAP",
-          "value": "WithName[MAP]/Parameter 3037"
-         },
-         {
-          "key": "OscCaption9 WARP 1",
-          "value": "WithName[WARP 1]/Parameter 3031"
-         },
-         {
-          "key": "OscCaption11 WARP 2",
-          "value": "WithName[WARP 2]/Parameter 3033"
-         },
-         {
-          "key": "OscCaption12 SCAN",
-          "value": "WithName[SCAN]/Parameter 3034"
-         },
-         {
-          "key": "OscCaption8 WARP",
-          "value": "WithName[WARP]/Parameter 3030"
-         },
-         {
-          "key": "OscCaption13 DENS",
-          "value": "WithName[DENS]/Parameter 3035"
-         },
-         {
-          "key": "OscCaption14 LENGTH",
-          "value": "WithName[LENGTH]/Parameter 3036"
-         },
-         {
-          "key": "OscCaption15 OFFSET",
-          "value": "WithName[OFFSET]/Parameter 3037"
-         },
-         {
-          "key": "OscCaption16 DIR",
-          "value": "WithName[DIR]/Parameter 3038"
-         },
-         {
-          "key": "OscCaption17 PITCH",
-          "value": "WithName[PITCH]/Parameter 3039"
-         },
-         {
-          "key": "OscCaption12 POSITION",
-          "value": "WithName[POSITION]/Parameter 3034"
-         },
-         {
-          "key": "OscCaption12 TIMBRE",
-          "value": "WithName[TIMBRE]/Parameter 3034"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 628",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/5/Parameter 2876"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc C",
-        "type": "oscNativeAbcSettings",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "OscAbc0",
-          "value": "Parameter 3040"
-         },
-         {
-          "key": "OscAbc1",
-          "value": "Parameter 3041"
-         },
-         {
-          "key": "OscAbc2",
-          "value": "Parameter 3042"
-         },
-         {
-          "key": "OscAbc3",
-          "value": "Parameter 3043"
-         },
-         {
-          "key": "OscAbc4",
-          "value": "Parameter 3044"
-         },
-         {
-          "key": "OscAbc5",
-          "value": "Parameter 3045"
-         },
-         {
-          "key": "OscAbc6",
-          "value": "Parameter 3046"
-         },
-         {
-          "key": "OscAbc7",
-          "value": "Parameter 3047"
-         },
-         {
-          "key": "OscAbc8",
-          "value": "Parameter 3048"
-         },
-         {
-          "key": "OscAbc9",
-          "value": "Parameter 3049"
-         },
-         {
-          "key": "OscAbc10",
-          "value": "Parameter 3050"
-         },
-         {
-          "key": "OscAbc11",
-          "value": "Parameter 3051"
-         },
-         {
-          "key": "OscAbc12",
-          "value": "Parameter 3052"
-         },
-         {
-          "key": "OscAbc13",
-          "value": "Parameter 3053"
-         },
-         {
-          "key": "OscAbc14",
-          "value": "Parameter 3054"
-         },
-         {
-          "key": "OscAbc15",
-          "value": "Parameter 3055"
-         },
-         {
-          "key": "OscAbc16",
-          "value": "Parameter 3056"
-         },
-         {
-          "key": "OscAbc17",
-          "value": "Parameter 3057"
-         },
-         {
-          "key": "OscCaption0 TYPE",
-          "value": "WithName[TYPE]/Parameter 3040"
-         },
-         {
-          "key": "OscCaption1 SOURCE",
-          "value": "WithName[SOURCE]/Parameter 3041"
-         },
-         {
-          "key": "OscCaption2 BROWSE",
-          "value": "WithName[BROWSE]/Parameter 3042"
-         },
-         {
-          "key": "OscCaption5 DETAIL",
-          "value": "WithName[DETAIL]/Parameter 3045"
-         },
-         {
-          "key": "OscCaption6 VOICES",
-          "value": "WithName[VOICES]/Parameter 3046"
-         },
-         {
-          "key": "OscCaption7 DETUNE",
-          "value": "WithName[DETUNE]/Parameter 3047"
-         },
-         {
-          "key": "OscCaption8 WARP 1",
-          "value": "WithName[WARP 1]/Parameter 3048"
-         },
-         {
-          "key": "OscCaption10 WARP 2",
-          "value": "WithName[WARP 2]/Parameter 3050"
-         },
-         {
-          "key": "OscCaption12 FRAME",
-          "value": "WithName[FRAME]/Parameter 3052"
-         },
-         {
-          "key": "OscCaption13 PHASE",
-          "value": "WithName[PHASE]/Parameter 3053"
-         },
-         {
-          "key": "OscCaption14 RAND",
-          "value": "WithName[RAND]/Parameter 3054"
-         },
-         {
-          "key": "OscCaption15 MAP",
-          "value": "WithName[MAP]/Parameter 3055"
-         },
-         {
-          "key": "OscCaption9 WARP 1",
-          "value": "WithName[WARP 1]/Parameter 3049"
-         },
-         {
-          "key": "OscCaption11 WARP 2",
-          "value": "WithName[WARP 2]/Parameter 3051"
-         },
-         {
-          "key": "OscCaption12 SCAN",
-          "value": "WithName[SCAN]/Parameter 3052"
-         },
-         {
-          "key": "OscCaption8 WARP",
-          "value": "WithName[WARP]/Parameter 3048"
-         },
-         {
-          "key": "OscCaption13 DENS",
-          "value": "WithName[DENS]/Parameter 3053"
-         },
-         {
-          "key": "OscCaption14 LENGTH",
-          "value": "WithName[LENGTH]/Parameter 3054"
-         },
-         {
-          "key": "OscCaption15 OFFSET",
-          "value": "WithName[OFFSET]/Parameter 3055"
-         },
-         {
-          "key": "OscCaption16 DIR",
-          "value": "WithName[DIR]/Parameter 3056"
-         },
-         {
-          "key": "OscCaption17 PITCH",
-          "value": "WithName[PITCH]/Parameter 3057"
-         },
-         {
-          "key": "OscCaption12 POSITION",
-          "value": "WithName[POSITION]/Parameter 3052"
-         },
-         {
-          "key": "OscCaption12 TIMBRE",
-          "value": "WithName[TIMBRE]/Parameter 3052"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 628",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/5/Parameter 2876"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc A Header",
+        "name": "Osc ABC Header",
         "type": "oscHeaderAbc",
         "data": {
          "version": 1,
@@ -18707,7 +18176,7 @@
          },
          {
           "key": "HdrTitle",
-          "value": "WithName[OSC A]/Parameter 2965"
+          "value": "Parameter 3026"
          },
          {
           "key": "HdrPower",
@@ -18735,7 +18204,7 @@
          },
          {
           "key": "HdrOscGate",
-          "value": "IndexedEnabling/1/5/Parameter 2876"
+          "value": "RangedEnabling/1/3/5/Parameter 2876"
          },
          {
           "key": "HdrType",
@@ -18759,159 +18228,7 @@
         "boundsType": "Absolute",
         "bounds": "0 0 1280 56",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/5/Parameter 2876"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc B Header",
-        "type": "oscHeaderAbc",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[OSC B]/Parameter 2966"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2966"
-         },
-         {
-          "key": "HdrOn",
-          "value": "IndexedEnabling/1/2/Parameter 2966"
-         },
-         {
-          "key": "HdrOff",
-          "value": "IndexedEnabling/0/2/Parameter 2966"
-         },
-         {
-          "key": "HdrRoute",
-          "value": "Parameter 3000"
-         },
-         {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/2/5/Parameter 2876"
-         },
-         {
-          "key": "HdrType",
-          "value": "Parameter 3022"
-         },
-         {
-          "key": "HdrSource",
-          "value": "Parameter 3023"
-         },
-         {
-          "key": "HdrBrowse",
-          "value": "Parameter 3024"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/5/Parameter 2876"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc C Header",
-        "type": "oscHeaderAbc",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 2978"
-         },
-         {
-          "key": "HdrTitle",
-          "value": "WithName[OSC C]/Parameter 2967"
-         },
-         {
-          "key": "HdrPower",
-          "value": "Parameter 2967"
-         },
-         {
-          "key": "HdrOn",
-          "value": "IndexedEnabling/1/2/Parameter 2967"
-         },
-         {
-          "key": "HdrOff",
-          "value": "IndexedEnabling/0/2/Parameter 2967"
-         },
-         {
-          "key": "HdrRoute",
-          "value": "Parameter 3001"
-         },
-         {
-          "key": "HdrGate1",
-          "value": "IndexedEnabling/1/3/Parameter 2878"
-         },
-         {
-          "key": "HdrGate2",
-          "value": "IndexedEnabling/2/3/Parameter 2878"
-         },
-         {
-          "key": "HdrOscGate",
-          "value": "IndexedEnabling/3/5/Parameter 2876"
-         },
-         {
-          "key": "HdrType",
-          "value": "Parameter 3040"
-         },
-         {
-          "key": "HdrSource",
-          "value": "Parameter 3041"
-         },
-         {
-          "key": "HdrBrowse",
-          "value": "Parameter 3042"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Yes",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 0 1280 56",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/5/Parameter 2876"
+         "RangedEnabling/1/3/5/Parameter 2876"
         ]
        }
       },
@@ -19178,64 +18495,8 @@
         "boundsType": "Absolute",
         "bounds": "0 56 1280 572",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/5/Parameter 2876",
+         "RangedEnabling/1/3/5/Parameter 2876",
          "IndexedEnabling/0/2/Parameter 2965"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "off veil",
-        "type": "oscNativeOffVeil",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 56 1280 572",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/5/Parameter 2876",
-         "IndexedEnabling/0/2/Parameter 2966"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "off veil",
-        "type": "oscNativeOffVeil",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Show",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 56 1280 572",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/5/Parameter 2876",
-         "IndexedEnabling/0/2/Parameter 2967"
         ]
        }
       },
@@ -20394,7 +19655,7 @@
        "version": 2,
        "componentData": {
         "version": 1,
-        "name": "Osc Native Tune A",
+        "name": "Osc Native Tune",
         "type": "NativeActive oscNativeTune",
         "data": {
          "version": 1,
@@ -20418,31 +19679,31 @@
          },
          {
           "key": "Data_Sem",
-          "value": "Parameter 14"
+          "value": "Parameter 3022"
          },
          {
           "key": "Caption_Sem",
-          "value": "WithName[SEM]/Parameter 14"
+          "value": "WithName[SEM]/Parameter 3022"
          },
          {
           "key": "Data_Fin",
-          "value": "Parameter 15"
+          "value": "Parameter 3023"
          },
          {
           "key": "Caption_Fin",
-          "value": "WithName[FIN]/Parameter 15"
+          "value": "WithName[FIN]/Parameter 3023"
          },
          {
           "key": "Data_Crs",
-          "value": "Parameter 1508"
+          "value": "Parameter 3024"
          },
          {
           "key": "Caption_Crs",
-          "value": "WithName[CRS]/Parameter 1508"
+          "value": "WithName[CRS]/Parameter 3024"
          },
          {
           "key": "Data_Track",
-          "value": "Parameter 1509"
+          "value": "Parameter 3025"
          },
          {
           "key": "Data_More",
@@ -20466,169 +19727,7 @@
         "boundsType": "Absolute",
         "bounds": "994 202 278 154",
         "additionalInvalidatingHandles": [
-         "IndexedEnabling/1/5/Parameter 2876",
-         "NonZero/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc Native Tune B",
-        "type": "NativeActive oscNativeTune",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3025"
-         },
-         {
-          "key": "Data_Oct",
-          "value": "Parameter 3025"
-         },
-         {
-          "key": "Caption_Oct",
-          "value": "WithName[OCT]/Parameter 3025"
-         },
-         {
-          "key": "Data_Sem",
-          "value": "Parameter 38"
-         },
-         {
-          "key": "Caption_Sem",
-          "value": "WithName[SEM]/Parameter 38"
-         },
-         {
-          "key": "Data_Fin",
-          "value": "Parameter 39"
-         },
-         {
-          "key": "Caption_Fin",
-          "value": "WithName[FIN]/Parameter 39"
-         },
-         {
-          "key": "Data_Crs",
-          "value": "Parameter 1520"
-         },
-         {
-          "key": "Caption_Crs",
-          "value": "WithName[CRS]/Parameter 1520"
-         },
-         {
-          "key": "Data_Track",
-          "value": "Parameter 1521"
-         },
-         {
-          "key": "Data_More",
-          "value": "FromGesture/Parameter 3431"
-         },
-         {
-          "key": "NativeActiveGate0",
-          "value": "IndexedEnabling/0/2/Parameter 2966"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "IndexedEnabling/1/2/Parameter 2966"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Children",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "994 202 278 154",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/2/5/Parameter 2876",
-         "NonZero/Parameter 2978"
-        ]
-       }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "Osc Native Tune C",
-        "type": "NativeActive oscNativeTune",
-        "data": {
-         "version": 1,
-         "handleName": "Data"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": [
-         {
-          "key": "Data",
-          "value": "Parameter 3043"
-         },
-         {
-          "key": "Data_Oct",
-          "value": "Parameter 3043"
-         },
-         {
-          "key": "Caption_Oct",
-          "value": "WithName[OCT]/Parameter 3043"
-         },
-         {
-          "key": "Data_Sem",
-          "value": "Parameter 62"
-         },
-         {
-          "key": "Caption_Sem",
-          "value": "WithName[SEM]/Parameter 62"
-         },
-         {
-          "key": "Data_Fin",
-          "value": "Parameter 63"
-         },
-         {
-          "key": "Caption_Fin",
-          "value": "WithName[FIN]/Parameter 63"
-         },
-         {
-          "key": "Data_Crs",
-          "value": "Parameter 1532"
-         },
-         {
-          "key": "Caption_Crs",
-          "value": "WithName[CRS]/Parameter 1532"
-         },
-         {
-          "key": "Data_Track",
-          "value": "Parameter 1533"
-         },
-         {
-          "key": "Data_More",
-          "value": "FromGesture/Parameter 3431"
-         },
-         {
-          "key": "NativeActiveGate0",
-          "value": "IndexedEnabling/0/2/Parameter 2967"
-         },
-         {
-          "key": "NativeActiveGate1",
-          "value": "IndexedEnabling/1/2/Parameter 2967"
-         }
-        ]
-       },
-       "bounds": {
-        "version": 2,
-        "acceptsHWFocus": "Children",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "994 202 278 154",
-        "additionalInvalidatingHandles": [
-         "IndexedEnabling/3/5/Parameter 2876",
+         "RangedEnabling/1/3/5/Parameter 2876",
          "NonZero/Parameter 2978"
         ]
        }
@@ -23657,7 +22756,7 @@
           "justification": "left verticallyCentred",
           "case": "Original"
          },
-         "type": "Name",
+         "type": "Value",
          "handleName": "Data"
         }
        },

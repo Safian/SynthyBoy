@@ -155,7 +155,7 @@ public:
     {
         kPower = 2, kRoute, kInstances,
         kBasic = 100,                       // the first Q group's parts: selector, source stepper, dropdown, OCT (Sub), FILTER, SOUND of the noise, PAN, LEVEL (compact view) = 100 .. 107
-        kTuneOct = 110, kTuneFin = 112, kTuneCrs = 113, kTuneMore = 115, kWavePhase, kWaveRandom, kWaveMap,   // OCT (A, B, C), FIN, the PITCH of the noise, the MORE button of the full screen
+        kTuneOct = 110, kTuneSem = 111, kTuneFin = 112, kTuneCrs = 113, kTuneTrack = 114, kTuneMore = 115, kWavePhase, kWaveRandom, kWaveMap,   // OCT, SEM, FIN, CRS, TRACK, MORE of the full screen
         kSpecLoad = 790, kSpec = 800,       // the LOAD button of an empty sample type; 800 + i: the controls of a detail page of osc_spec_page.h
         kPanel = 200,                       // 200 + PanelSlot: the parts of the full screen's bottom band (and the position knob, the Sub's CRS and PHASE, the noise's KIND and STEREO of its top row)
         kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,   // (the Var ids are free: the warp PHASE knobs are on MORE now)
@@ -791,24 +791,28 @@ public:
             if (! it.full || it.id == kPower || it.id == kPanel + static_cast<int> (oscmodel::PanelSlot::SubBlend) || ! it.hasCell || it.alwaysOff)
                 continue;
             const int abcSlot = abc ? abcNativeField (it) : -1;
-            const int slot = abc ? (abcSlot >= 0 ? n::abcSettingIndex (sel_, abcSlot) : -1)
+            const int slot = abc ? (abcSlot >= 0 ? n::abcSettingIndex (abcSlot) : -1)
                                  : (it.param >= 0 && next < limit ? next++ : -1);
-            const bool cardOctave = full_.hasNativeTune() && it.id == kTuneOct;
-            if (slot >= 0 && ! it.cell.rect.empty() && (cardOctave || it.cell.shown))
+            const bool cardTune = full_.hasNativeTune()
+                && (it.id == kTuneOct || it.id == kTuneSem || (abc && (it.id == kTuneFin || it.id == kTuneCrs || it.id == kTuneTrack)));
+            if (slot >= 0 && ! it.cell.rect.empty() && (cardTune || it.cell.shown))
                 fields[slot] = &it;
         }
         return fields;
     }
 
-    /** The cells the host's controls stand in on the full screen (the apertures of the page's ground), in the order of the fields; the oct of the tune card is the card's. */
+    /** The cells the host's controls stand in on the full screen (the apertures of the page's ground), in the order of the fields; the fields of the tune card are the card's. */
     void setNativeSettingsPaint (const std::array<Item*, nativeui::osc::kSettingsAll>& fields)
     {
         nativeSettingsCells_.fill ({});
         nativeSettingsPaint_.fill (-1);
+        const bool abc = sel_ >= 2 && sel_ <= 4;
         for (size_t slot = 0; slot < fields.size(); ++slot)
         {
             const Item* field = fields[slot];
-            nativeSettingsPaint_[slot] = field && ! (full_.hasNativeTune() && field->id == kTuneOct) ? field->id : -1;
+            const bool cardTune = field && full_.hasNativeTune()
+                && (field->id == kTuneOct || field->id == kTuneSem || (abc && (field->id == kTuneFin || field->id == kTuneCrs || field->id == kTuneTrack)));
+            nativeSettingsPaint_[slot] = field && ! cardTune ? field->id : -1;
         }
         size_t next = 0;
         for (size_t slot = 0; slot < fields.size(); ++slot)
@@ -1229,7 +1233,10 @@ public:
             case kBasic + 1: return n::AbcSource;
             case kBasic + 2: return n::AbcBrowse;
             case kTuneOct: return n::AbcOctave;
-            case kTuneFin: return n::AbcFine;
+            case kTuneSem: return n::AbcTuneSem;
+            case kTuneFin: return full_.hasNativeTune() && item.full && item.id == kTuneFin ? n::AbcTuneFin : n::AbcFine;
+            case kTuneCrs: return n::AbcTuneCrs;
+            case kTuneTrack: return n::AbcTuneTrack;
             case kUnisonGear: return n::AbcUnisonDetail;
             case kUnisonCount: return n::AbcUnisonCount;
             case kPanel + static_cast<int> (PanelSlot::Detune): return n::AbcDetune;
@@ -1505,6 +1512,14 @@ private:
             bind (main_, kPanel + static_cast<int> (ps), T::Dial, slotKey (ps),
                   kind == oscmodel::Kind::Wavetable ? "WT POS" : kind == oscmodel::Kind::Multisample ? "TIMBRE" : kind == oscmodel::Kind::Spectral ? "POSITION" : "SCAN");
             bind (main_, kTuneOct, T::NumberOct, "transpose", "OCT");
+            if (full_.hasNativeTune())
+            {
+                bind (main_, kTuneSem, T::Dial, "transpose");
+                if (kind == oscmodel::Kind::Spectral)
+                    bind (main_, kTuneFin, T::Dial, "tune");
+                bind (main_, kTuneCrs, T::Dial, "pitch_coarse");
+                bind (main_, kTuneTrack, T::Toggle, "pitch_track");
+            }
         }
         else if (sub)
         {
@@ -1733,11 +1748,17 @@ private:
             case kWaveRandom: c.rect = L.tRandomPhase; c.shown = waveTools; return;
             case kWaveMap: c.rect = L.tWaveMap; c.shown = waveTools; return;
             case kTuneOct: c.rect = L.tOct; c.shown = ! tune; return;
+            case kTuneSem: case kTuneTrack: c.rect = full_.tuneArea(); c.shown = false; return;
             case kBasic + 3: c.rect = L.tOct; return;
             case kBasic + 5: c.rect = L.tSound; c.shown = ! full_.noiseSample(); return;
             case kBasic + 4: c.rect = full_.slotRect (PanelSlot::Filter); return;
-            case kTuneFin: c.rect = full_.slotRect (noise ? PanelSlot::NoiseFine : PanelSlot::Fin); c.shown = noise || ! tune; return;
-            case kTuneCrs: c.rect = full_.slotRect (PanelSlot::NoisePitch); return;
+            case kTuneFin:
+                c.rect = full_.slotRect (noise ? PanelSlot::NoiseFine : PanelSlot::Fin);
+                if (c.rect.empty() && tune)
+                    c.rect = full_.tuneArea();
+                c.shown = noise || ! tune;
+                return;
+            case kTuneCrs: c.rect = noise ? full_.slotRect (PanelSlot::NoisePitch) : full_.tuneArea(); c.shown = noise; return;
             case kUnisonGear: c.rect = L.cells.unisonGear; return;
             case kUnisonCount: c.rect = L.cells.unisonCount; return;
             case kWarp1Type: c.rect = L.cells.warpType[0]; return;

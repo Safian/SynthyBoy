@@ -140,7 +140,7 @@ public:
     virtual void setNativeOscState (const nativeui::osc::ViewState&) noexcept {}
     virtual bool takeNativeOsc (const nativeui::osc::ViewState&, int /*field*/, int& /*choice*/) noexcept { return false; }
     virtual bool nativeOscSettingsSupported() const noexcept { return false; }
-    virtual void setNativeOscSettings (int /*view*/, const nativeui::FxCell* /*fields*/) noexcept {}
+    virtual void setNativeOscSettings (int /*source*/, int /*view*/, const nativeui::FxCell* /*fields*/) noexcept {}
     virtual bool takeNativeOscSetting (int /*field*/, const nativeui::FxCell&, float& /*value*/) noexcept { return false; }
     virtual void setNativeOscAbcState (int /*warpMask*/, const char* /*sourceLabel*/) {}
     virtual bool nativeOscDetailSupported() const noexcept { return false; }
@@ -150,7 +150,7 @@ public:
     virtual void suspendNativeOsc() noexcept
     {
         setNativeOscState ({});
-        setNativeOscSettings (nativeui::osc::SettingsHidden, nullptr);
+        setNativeOscSettings (0, nativeui::osc::SettingsHidden, nullptr);
         setNativeOscAbcState (0, "");
         setNativeOscDetail ({});
     }
