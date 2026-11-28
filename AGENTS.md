@@ -12,6 +12,8 @@ Develop and release SynthyBoy exclusively for standalone Akai MPC hardware. Foll
 
 `skin/TUI.json` is edited directly and stays formatted one element per line (`python3 scripts/skin-format.py` after every edit; lossless, keeps duplicate keys), so edits of different screens merge without conflicts. Work is split by screen (tab) wherever the change allows it.
 
+Every skin change passes `scripts/validate_synthyboy_skin.py` (it runs the JSON Schemas `schemas/skin-tui.schema.json` and `schemas/skin-qlinks.schema.json` and the semantic checks before every install; `--schema-only` runs just those). A new host finding about the skin format (the host accepts or silently drops a shape) is added as a schema rule in the same commit; see "Skin install checks" and "Skin format schema" in [docs/MPC.md](docs/MPC.md). A warning is not a pass for the Key 61: prove warned forms on the device first.
+
 ## Release packaging and which architecture to build (owner, 2026-11-20)
 
 - A release has TWO zips, built with the Open MPC tool: `armv7` (MPC Key 61 and the other 32-bit devices) and `aarch64` (MPC XL). Both hold the same plugin, with the display layer (overlay) enabled.

@@ -49,6 +49,14 @@ Skin install checks (`scripts/validate_synthyboy_skin.py`, run by `scripts/insta
 - An intended edit needs `SYNTHYBOY_SKIN_ACCEPT_CHANGES=1` for that run.
 - After the owner has proven the skin on the Key 61, run `scripts/skin-baseline-update.py` and commit the new baseline.
 
+Skin format schema (`schemas/skin-tui.schema.json`, `schemas/skin-qlinks.schema.json`, JSON Schema draft-07, checked first by the same script with `jsonschema`; a missing `jsonschema` fails the run):
+- The host drops the WHOLE `TUI.json` (blank page) for a malformed shape and says nothing, so every shape is checked, not only the ones that once failed. The schema follows the shapes of the skin that runs on both devices (git `1fd0d592:skin/TUI.json`) and the SDK `docs/ui-reference.md`; `additionalProperties` is false for every object whose field set the working skin proves.
+- Every finding prints with its JSON path (`ERROR $.pageData.tabs[0]...`); errors exit non-zero. Duplicate keys are errors, except the proven duplicate `version` key in the data of an overlay widget (`MenuOverlay`, `NumericOverlay`; the first one wins when validating).
+- Rules found so far: `additionalInvalidatingHandles` is a flat array of strings (a nested list blanks the Key 61); an `Image` is `version 2` with `imageType`, `colour`, `image` (`version 1` has only `colour` and `image`; `version 1` with `imageType` and no `colour` is rejected); handles follow the grammar in the schema (a `/`-prefix that is not a known modifier fails); `Button` is `version 2` with all keys; `bounds` is four numbers; colours are `AARRGGBB` or `0`.
+- Semantic checks in code (`tui_semantics`): a component `type` is a built-in or a local definition key; definition keys are unique and do not shadow built-ins; image files exist; `Show Overlay` names a local definition; `IndexedEnabling/i/n` has `i < n`, `RangedEnabling/a/b/n` has `a <= b < n`, and `n` equals the range of a `Local/n/...` base; function key plus sub-tab positions are unique.
+- Warnings (accepted but not proven on a device): SDK-documented-only handle modifiers (`ResetOnGestureEnd/`, `Hold/`, `Invert/`, ...), a `Local` id other than `synthyboyWarpPage`, `Button` `buttonId` above 98 or `numButtonsInGroup` above 99, SDK-documented-only component types, more than 37 tabs (the SDK note says 32; the proven skin runs 37).
+- A new host finding (a form the host accepts or drops) is added as a schema rule, or moves from the warning list to the proven forms once the owner has proven it on a device. Check without the other install checks: `scripts/validate_synthyboy_skin.py --schema-only <package or folder with TUI.json and Q-Links.json>`.
+
 The plugin finds its own folder by walking up from the binary's path (obtained via `dladdr` on `VSTPluginMain`) to the first directory that contains a file named `plugin.json`. This logic is in `shell-mpc/plugin_paths.h`.
 
 ## Install on the MPC

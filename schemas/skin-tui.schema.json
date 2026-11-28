@@ -1,0 +1,1346 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "MPC scripted UI: TUI.json (SynthyBoy skin)",
+ "description": "Shapes proven by the skin that runs on both devices (git 1fd0d592:skin/TUI.json) and by the SDK docs/ui-reference.md. Validate a copy with the duplicate 'version' keys of overlay widget data removed (scripts/validate_synthyboy_skin.py does this). Rules marked x-unproven are accepted but warned about. New host findings are added here as rules.",
+ "x-unproven-handle-pattern": "^(?:(?:FromGesture/|NonZero/|IndexedEnabling/\\d+/\\d+/|RangedEnabling/\\d+/\\d+/\\d+/|WithName\\[[^\\]]*\\]/)|(?:Hold/|Invert/|AsDB/|AsDBFromGain/|DisableCoarseIncrement/|FilterEmptyStrings/|ResetOnGestureEnd/|TabLimited/\\d+/\\d+/\\d+/|WithPrefix\\[[^\\]]*\\]/|WithSuffix\\[[^\\]]*\\]/|AffineMap\\[[^\\]]*\\]/|DisplayValue\\[[^\\]]*\\]/))*(?:(?:Parameter \\{Increment:Base=\\d+(?:,Step=-?\\d+)?(?:,Offset=-?\\d+)?\\}|Local/\\d+/[A-Za-z_][A-Za-z0-9_]*|[^/\\[\\]{}]*)|(?:PageIndex \\d+, \\d+(?:, \\d+)?|Parameter/Named/[^/]+))$",
+ "x-proven-handle-pattern": "^(?:FromGesture/|NonZero/|IndexedEnabling/\\d+/\\d+/|RangedEnabling/\\d+/\\d+/\\d+/|WithName\\[[^\\]]*\\]/)*(?:Parameter \\{Increment:Base=\\d+(?:,Step=-?\\d+)?(?:,Offset=-?\\d+)?\\}|Local/\\d+/[A-Za-z_][A-Za-z0-9_]*|[^/\\[\\]{}]*)$",
+ "x-unproven-component-types": [
+  "Separator",
+  "ComboBox",
+  "KnobOverlay",
+  "TextEditOverlay",
+  "Envelope",
+  "EnvelopeOverlay",
+  "XYPad",
+  "Plotter",
+  "HaloDisplay",
+  "Indicator",
+  "Path",
+  "GuiButton",
+  "GuiComboBox",
+  "GuiKnob",
+  "EditNumberSlider",
+  "Decorator"
+ ],
+ "x-proven-component-types": [
+  "Label",
+  "Image",
+  "Button",
+  "Knob",
+  "Meter",
+  "Focus",
+  "MenuOverlay",
+  "NumericOverlay",
+  "Slider"
+ ],
+ "type": "object",
+ "required": [
+  "pageData"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "pageData": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "componentDefinitions": {
+     "type": "object",
+     "properties": {
+      "version": {
+       "const": 2
+      },
+      "importFiles": {
+       "type": "array",
+       "maxItems": 0
+      },
+      "localComponentDefinitions": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "key": {
+          "type": "string",
+          "minLength": 1
+         },
+         "value": {
+          "$ref": "#/definitions/componentDefinition"
+         }
+        },
+        "required": [
+         "key",
+         "value"
+        ],
+        "additionalProperties": false
+       }
+      }
+     },
+     "required": [
+      "version",
+      "importFiles",
+      "localComponentDefinitions"
+     ],
+     "additionalProperties": false
+    },
+    "replacementStrings": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "key": {
+        "type": "string",
+        "pattern": "^Parameter \\d+$"
+       },
+       "value": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+         "type": "string"
+        }
+       }
+      },
+      "required": [
+       "key",
+       "value"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "info": {
+     "$ref": "#/definitions/info"
+    },
+    "tabs": {
+     "type": "array",
+     "minItems": 1,
+     "items": {
+      "$ref": "#/definitions/tab"
+     }
+    }
+   },
+   "required": [
+    "version",
+    "componentDefinitions",
+    "replacementStrings",
+    "info",
+    "tabs"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "definitions": {
+  "handle": {
+   "type": "string",
+   "pattern": "^(?:(?:FromGesture/|NonZero/|IndexedEnabling/\\d+/\\d+/|RangedEnabling/\\d+/\\d+/\\d+/|WithName\\[[^\\]]*\\]/)|(?:Hold/|Invert/|AsDB/|AsDBFromGain/|DisableCoarseIncrement/|FilterEmptyStrings/|ResetOnGestureEnd/|TabLimited/\\d+/\\d+/\\d+/|WithPrefix\\[[^\\]]*\\]/|WithSuffix\\[[^\\]]*\\]/|AffineMap\\[[^\\]]*\\]/|DisplayValue\\[[^\\]]*\\]/))*(?:(?:Parameter \\{Increment:Base=\\d+(?:,Step=-?\\d+)?(?:,Offset=-?\\d+)?\\}|Local/\\d+/[A-Za-z_][A-Za-z0-9_]*|[^/\\[\\]{}]*)|(?:PageIndex \\d+, \\d+(?:, \\d+)?|Parameter/Named/[^/]+))$",
+   "description": "A handle string. Grammar: zero or more modifier prefixes, then a base (Parameter N, Parameter {Increment:...}, Local/range/id, Invalid, or a scoped name resolved through handle remapping). Anything with a '/' that is not a known modifier fails here."
+  },
+  "colour": {
+   "type": "string",
+   "pattern": "^(?:0|[0-9a-fA-F]{8})?$",
+   "description": "AARRGGBB, or '0' / '' for transparent"
+  },
+  "imagePath": {
+   "type": "string",
+   "pattern": "^(?:[^/\\\\]+\\.png)?$",
+   "description": "empty, or a PNG next to the JSON file"
+  },
+  "rect": {
+   "type": "string",
+   "pattern": "^-?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)? -?\\d+(?:\\.\\d+)?$",
+   "description": "'x y w h': four numbers separated by single spaces"
+  },
+  "info": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "type": {
+     "const": "CompleteDescription"
+    }
+   },
+   "required": [
+    "version",
+    "type"
+   ],
+   "additionalProperties": false
+  },
+  "imageData": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "colour": {
+     "$ref": "#/definitions/colour"
+    },
+    "image": {
+     "$ref": "#/definitions/imagePath"
+    }
+   },
+   "required": [
+    "version",
+    "colour",
+    "image"
+   ],
+   "additionalProperties": false
+  },
+  "background": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "focussed": {
+     "$ref": "#/definitions/imageData"
+    },
+    "unfocussed": {
+     "$ref": "#/definitions/imageData"
+    }
+   },
+   "required": [
+    "version",
+    "focussed",
+    "unfocussed"
+   ],
+   "additionalProperties": false
+  },
+  "overlayAction": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "onAction": {
+     "const": "Focus Lost"
+    },
+    "handler": {
+     "const": "Focus Lost"
+    },
+    "handleName": {
+     "const": "Focus Lost"
+    },
+    "additionalData": {
+     "const": ""
+    }
+   },
+   "required": [
+    "version",
+    "onAction",
+    "handler",
+    "handleName",
+    "additionalData"
+   ],
+   "additionalProperties": false
+  },
+  "action": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "onAction": {
+     "enum": [
+      "Mouse Down",
+      "Double Click",
+      "Enter Pressed"
+     ]
+    },
+    "handler": {
+     "enum": [
+      "Show Overlay",
+      "Toggle Switch",
+      "Q-Link"
+     ]
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    },
+    "additionalData": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "version",
+    "onAction",
+    "handler",
+    "handleName",
+    "additionalData"
+   ],
+   "additionalProperties": false
+  },
+  "textStyle": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "font": {
+     "type": "object",
+     "properties": {
+      "version": {
+       "const": 1
+      },
+      "name": {
+       "enum": [
+        "Titillium Web",
+        "Roboto",
+        "Nexa"
+       ]
+      },
+      "style": {
+       "enum": [
+        "Regular",
+        "SemiBold",
+        "Bold",
+        "Light",
+        "Medium"
+       ]
+      },
+      "height": {
+       "type": "number"
+      }
+     },
+     "required": [
+      "version",
+      "name",
+      "style",
+      "height"
+     ],
+     "additionalProperties": false
+    },
+    "colour": {
+     "$ref": "#/definitions/colour"
+    },
+    "justification": {
+     "type": "string",
+     "pattern": "^(?:left|right|horizontallyCentred|top|bottom|verticallyCentred|horizontallyJustified|leftJustified)(?: (?:left|right|horizontallyCentred|top|bottom|verticallyCentred|horizontallyJustified|leftJustified))*$"
+    },
+    "case": {
+     "enum": [
+      "Original",
+      "Upper Case",
+      "Lower Case"
+     ]
+    }
+   },
+   "required": [
+    "version",
+    "font",
+    "colour",
+    "justification",
+    "case"
+   ],
+   "additionalProperties": false
+  },
+  "dataLabel": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "textStyle": {
+     "$ref": "#/definitions/textStyle"
+    },
+    "type": {
+     "enum": [
+      "Name",
+      "Value",
+      "Text"
+     ]
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    },
+    "text": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "version",
+    "textStyle",
+    "type",
+    "handleName"
+   ],
+   "additionalProperties": false,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Text"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "required": [
+       "text"
+      ]
+     },
+     "else": {
+      "not": {
+       "required": [
+        "text"
+       ]
+      }
+     }
+    }
+   ]
+  },
+  "dataImage": {
+   "type": "object",
+   "required": [
+    "version"
+   ],
+   "properties": {
+    "version": {
+     "enum": [
+      1,
+      2
+     ]
+    }
+   },
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "version": {
+        "const": 1
+       }
+      }
+     },
+     "then": {
+      "type": "object",
+      "properties": {
+       "version": {
+        "const": 1
+       },
+       "colour": {
+        "$ref": "#/definitions/colour"
+       },
+       "image": {
+        "$ref": "#/definitions/imagePath"
+       }
+      },
+      "required": [
+       "version",
+       "colour",
+       "image"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "version": {
+        "const": 2
+       }
+      }
+     },
+     "then": {
+      "type": "object",
+      "required": [
+       "version",
+       "imageType",
+       "colour",
+       "image"
+      ],
+      "properties": {
+       "version": {
+        "const": 2
+       },
+       "imageType": {
+        "enum": [
+         "Regular",
+         "FilmStrip"
+        ]
+       },
+       "colour": {
+        "$ref": "#/definitions/colour"
+       },
+       "image": {
+        "$ref": "#/definitions/imagePath"
+       },
+       "numFrames": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "handleName": {
+        "$ref": "#/definitions/handle"
+       },
+       "animated": {
+        "type": "boolean"
+       }
+      },
+      "additionalProperties": false,
+      "allOf": [
+       {
+        "if": {
+         "properties": {
+          "imageType": {
+           "const": "FilmStrip"
+          }
+         }
+        },
+        "then": {
+         "required": [
+          "numFrames",
+          "handleName"
+         ]
+        },
+        "else": {
+         "not": {
+          "anyOf": [
+           {
+            "required": [
+             "numFrames"
+            ]
+           },
+           {
+            "required": [
+             "handleName"
+            ]
+           },
+           {
+            "required": [
+             "animated"
+            ]
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "dataButton": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 2
+    },
+    "onImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "offImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "buttonId": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "numButtonsInGroup": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    },
+    "gestureBehaviour": {
+     "enum": [
+      "Instant",
+      "Hold"
+     ]
+    }
+   },
+   "required": [
+    "version",
+    "onImage",
+    "offImage",
+    "buttonId",
+    "numButtonsInGroup",
+    "handleName",
+    "gestureBehaviour"
+   ],
+   "additionalProperties": false
+  },
+  "dataKnob": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 3
+    },
+    "knobType": {
+     "const": "FilmStrip"
+    },
+    "filmStrip": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "numFrames": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "invert": {
+     "type": "boolean"
+    },
+    "dragOrientation": {
+     "enum": [
+      "Vertical",
+      "None",
+      "Horizontal",
+      "AbsoluteRotaryKnob"
+     ]
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    },
+    "ignoreMousePresses": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "version",
+    "knobType",
+    "filmStrip",
+    "numFrames",
+    "invert",
+    "dragOrientation",
+    "handleName"
+   ],
+   "additionalProperties": false
+  },
+  "dataMeter": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 3
+    },
+    "direction": {
+     "enum": [
+      "Up",
+      "Down",
+      "Left",
+      "Right",
+      "UpDown",
+      "LeftRight"
+     ]
+    },
+    "invert": {
+     "type": "boolean"
+    },
+    "inactiveImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "peakImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "rmsImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "peakHandle": {
+     "$ref": "#/definitions/handle"
+    },
+    "rmsHandle": {
+     "$ref": "#/definitions/handle"
+    },
+    "peakHoldHandle": {
+     "$ref": "#/definitions/handle"
+    },
+    "peakHoldSize": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "peakHoldColour": {
+     "$ref": "#/definitions/colour"
+    }
+   },
+   "required": [
+    "version",
+    "direction",
+    "invert",
+    "inactiveImage",
+    "peakImage",
+    "rmsImage",
+    "peakHandle",
+    "rmsHandle",
+    "peakHoldHandle",
+    "peakHoldSize",
+    "peakHoldColour"
+   ],
+   "additionalProperties": false
+  },
+  "dataFocus": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "backgroundColour": {
+     "$ref": "#/definitions/colour"
+    },
+    "outlineColour": {
+     "$ref": "#/definitions/colour"
+    },
+    "backgroundInset": {
+     "type": "number"
+    },
+    "outlineThickness": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "version",
+    "backgroundColour",
+    "outlineColour",
+    "backgroundInset",
+    "outlineThickness"
+   ],
+   "additionalProperties": false
+  },
+  "dataMenuOverlay": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "actions": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/overlayAction"
+     }
+    },
+    "withNumbers": {
+     "type": "boolean"
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    }
+   },
+   "required": [
+    "version",
+    "actions",
+    "withNumbers",
+    "handleName"
+   ],
+   "additionalProperties": false
+  },
+  "dataNumericOverlay": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "actions": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/overlayAction"
+     }
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    }
+   },
+   "required": [
+    "version",
+    "actions",
+    "handleName"
+   ],
+   "additionalProperties": false
+  },
+  "dataSlider": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "enum": [
+      3,
+      4
+     ]
+    },
+    "sliderType": {
+     "const": "TrackAndThumb"
+    },
+    "direction": {
+     "enum": [
+      "Horizontal",
+      "Vertical"
+     ]
+    },
+    "thumbImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "thumbTrackVisible": {
+     "type": "boolean"
+    },
+    "revealedImage": {
+     "$ref": "#/definitions/imagePath"
+    },
+    "revealType": {
+     "enum": [
+      "Normal",
+      "Inverted",
+      "Bipolar"
+     ]
+    },
+    "backgroundColour": {
+     "$ref": "#/definitions/colour"
+    },
+    "outlineColour": {
+     "$ref": "#/definitions/colour"
+    },
+    "valueColour": {
+     "$ref": "#/definitions/colour"
+    },
+    "isBipolar": {
+     "type": "boolean"
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    }
+   },
+   "required": [
+    "version",
+    "sliderType",
+    "direction",
+    "thumbImage",
+    "thumbTrackVisible",
+    "revealedImage",
+    "handleName"
+   ],
+   "additionalProperties": false
+  },
+  "dataCustom": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "handleName": {
+     "$ref": "#/definitions/handle"
+    }
+   },
+   "required": [
+    "version",
+    "handleName"
+   ],
+   "additionalProperties": false
+  },
+  "componentData": {
+   "type": "object",
+   "required": [
+    "version",
+    "name",
+    "type",
+    "data"
+   ],
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "name": {
+     "type": "string"
+    },
+    "type": {
+     "type": "string",
+     "minLength": 1
+    },
+    "data": {
+     "type": "object"
+    }
+   },
+   "additionalProperties": false,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Label"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataLabel"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Image"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataImage"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Button"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataButton"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Knob"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataKnob"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Meter"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataMeter"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Focus"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataFocus"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "MenuOverlay"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataMenuOverlay"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "NumericOverlay"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataNumericOverlay"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Slider"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataSlider"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "not": {
+         "enum": [
+          "Label",
+          "Image",
+          "Button",
+          "Knob",
+          "Meter",
+          "Focus",
+          "MenuOverlay",
+          "NumericOverlay",
+          "Slider",
+          "Separator",
+          "ComboBox",
+          "KnobOverlay",
+          "TextEditOverlay",
+          "Envelope",
+          "EnvelopeOverlay",
+          "XYPad",
+          "Plotter",
+          "HaloDisplay",
+          "Indicator",
+          "Path",
+          "GuiButton",
+          "GuiComboBox",
+          "GuiKnob",
+          "EditNumberSlider",
+          "Decorator"
+         ]
+        }
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "$ref": "#/definitions/dataCustom"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "enum": [
+         "Separator",
+         "ComboBox",
+         "KnobOverlay",
+         "TextEditOverlay",
+         "Envelope",
+         "EnvelopeOverlay",
+         "XYPad",
+         "Plotter",
+         "HaloDisplay",
+         "Indicator",
+         "Path",
+         "GuiButton",
+         "GuiComboBox",
+         "GuiKnob",
+         "EditNumberSlider",
+         "Decorator"
+        ]
+       }
+      },
+      "required": [
+       "type"
+      ]
+     },
+     "then": {
+      "properties": {
+       "data": {
+        "type": "object",
+        "required": [
+         "version"
+        ],
+        "properties": {
+         "version": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  "remap": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "map": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "key": {
+        "type": "string",
+        "minLength": 1
+       },
+       "value": {
+        "$ref": "#/definitions/handle"
+       }
+      },
+      "required": [
+       "key",
+       "value"
+      ],
+      "additionalProperties": false
+     }
+    }
+   },
+   "required": [
+    "version",
+    "map"
+   ],
+   "additionalProperties": false
+  },
+  "bounds": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "enum": [
+      1,
+      2
+     ]
+    },
+    "acceptsHWFocus": {
+     "enum": [
+      "Yes",
+      "No",
+      "Children"
+     ]
+    },
+    "showWhenDataModelInvalid": {
+     "enum": [
+      "Show",
+      "Hide",
+      "HideOnInvalidName"
+     ]
+    },
+    "whenVisible": {
+     "enum": [
+      "Always",
+      "WhenFocussed",
+      "WhenNotFocussed"
+     ]
+    },
+    "boundsType": {
+     "enum": [
+      "Absolute",
+      "Proportional"
+     ]
+    },
+    "bounds": {
+     "$ref": "#/definitions/rect"
+    },
+    "additionalInvalidatingHandles": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/handle"
+     },
+     "description": "Array of handle STRINGS only: a nested list makes the Key 61 host drop the whole TUI (blank page, 2026-11-28)."
+    }
+   },
+   "required": [
+    "version",
+    "acceptsHWFocus",
+    "showWhenDataModelInvalid",
+    "whenVisible",
+    "boundsType",
+    "bounds"
+   ],
+   "additionalProperties": false,
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "version": {
+        "const": 2
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "additionalInvalidatingHandles"
+      ]
+     }
+    }
+   ]
+  },
+  "entry": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 2
+    },
+    "componentData": {
+     "$ref": "#/definitions/componentData"
+    },
+    "handle remapping": {
+     "$ref": "#/definitions/remap"
+    },
+    "bounds": {
+     "$ref": "#/definitions/bounds"
+    }
+   },
+   "required": [
+    "version",
+    "componentData",
+    "handle remapping",
+    "bounds"
+   ],
+   "additionalProperties": false
+  },
+  "componentDefinition": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "enum": [
+      2,
+      3
+     ]
+    },
+    "actions": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/action"
+     }
+    },
+    "backgroundData": {
+     "$ref": "#/definitions/background"
+    },
+    "ignoreMousePresses": {
+     "type": "boolean"
+    },
+    "disableCoarseDataWheel": {
+     "type": "boolean"
+    },
+    "hideQLinkBounds": {
+     "type": "boolean"
+    },
+    "repeats": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "componentsData": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/entry"
+     }
+    }
+   },
+   "required": [
+    "version",
+    "actions",
+    "backgroundData",
+    "ignoreMousePresses",
+    "disableCoarseDataWheel",
+    "componentsData"
+   ],
+   "additionalProperties": false,
+   "allOf": [
+    {
+     "if": {
+      "required": [
+       "repeats"
+      ]
+     },
+     "then": {
+      "properties": {
+       "version": {
+        "const": 3
+       }
+      }
+     }
+    }
+   ]
+  },
+  "tab": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "tabName": {
+     "type": "string",
+     "minLength": 1
+    },
+    "fnKeyIndex": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "fnKeySubIndex": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 7
+    },
+    "componentDefinition": {
+     "$ref": "#/definitions/componentDefinition"
+    },
+    "qlinkBoundsData": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/rect"
+     }
+    }
+   },
+   "required": [
+    "version",
+    "tabName",
+    "fnKeyIndex",
+    "fnKeySubIndex",
+    "componentDefinition",
+    "qlinkBoundsData"
+   ],
+   "additionalProperties": false
+  }
+ }
+}

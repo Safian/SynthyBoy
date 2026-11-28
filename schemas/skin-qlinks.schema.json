@@ -1,0 +1,177 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "MPC scripted UI: Q-Links.json (SynthyBoy skin)",
+ "description": "Q-Link maps. Values are 0-based plugin parameter indices or -1; the range against the plugin parameter count and the tab/sub-tab match with TUI.json are checked in scripts/validate_synthyboy_skin.py.",
+ "type": "object",
+ "required": [
+  "version",
+  "info",
+  "Screen Mode Q-Links",
+  "Program Mode Q-Links"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "version": {
+   "const": 4
+  },
+  "info": {
+   "$ref": "#/definitions/info"
+  },
+  "Screen Mode Q-Links": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 4
+    },
+    "map": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "Tab": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "SubTab": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "Bank Direction": {
+        "enum": [
+         "Column",
+         "ColumnBottomUp",
+         "Row",
+         "RowTopDown"
+        ]
+       },
+       "Q-Links": {
+        "$ref": "#/definitions/qlinks"
+       }
+      },
+      "required": [
+       "Tab",
+       "SubTab",
+       "Bank Direction",
+       "Q-Links"
+      ],
+      "additionalProperties": false
+     }
+    }
+   },
+   "required": [
+    "version",
+    "map"
+   ],
+   "additionalProperties": false
+  },
+  "Program Mode Q-Links": {
+   "$ref": "#/definitions/qlinks"
+  }
+ },
+ "definitions": {
+  "info": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "type": {
+     "const": "CompleteDescription"
+    }
+   },
+   "required": [
+    "version",
+    "type"
+   ],
+   "additionalProperties": false
+  },
+  "qlinks": {
+   "type": "object",
+   "properties": {
+    "Q-Link 1": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 2": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 3": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 4": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 5": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 6": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 7": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 8": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 9": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 10": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 11": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 12": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 13": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 14": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 15": {
+     "type": "integer",
+     "minimum": -1
+    },
+    "Q-Link 16": {
+     "type": "integer",
+     "minimum": -1
+    }
+   },
+   "required": [
+    "Q-Link 1",
+    "Q-Link 2",
+    "Q-Link 3",
+    "Q-Link 4",
+    "Q-Link 5",
+    "Q-Link 6",
+    "Q-Link 7",
+    "Q-Link 8",
+    "Q-Link 9",
+    "Q-Link 10",
+    "Q-Link 11",
+    "Q-Link 12",
+    "Q-Link 13",
+    "Q-Link 14",
+    "Q-Link 15",
+    "Q-Link 16"
+   ],
+   "additionalProperties": false
+  }
+ }
+}

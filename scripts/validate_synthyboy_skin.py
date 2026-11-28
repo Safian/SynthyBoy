@@ -13,8 +13,21 @@ from pathlib import Path
 
 from PIL import Image
 
+try:
+    from jsonschema import Draft7Validator
+except ImportError:  # a missing validator must fail the install, never skip the check
+    sys.exit("jsonschema is required (pip install jsonschema); the skin schema check cannot be skipped")
+
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "scripts/skin-baseline/TUI.keys.json"
+TUI_SCHEMA = ROOT / "schemas/skin-tui.schema.json"
+QLINKS_SCHEMA = ROOT / "schemas/skin-qlinks.schema.json"
+SDK_MAX_TABS = 32  # SDK ui-reference.md 3.5; the proven skin (git 1fd0d592) runs 37 tabs on both devices
+PROVEN_MAX_TABS = 37
+# Largest values the proven skin uses; the SDK gives no upper limit, so anything above is a warning.
+PROVEN_BUTTON_MAX = {"buttonId": 98, "numButtonsInGroup": 99}
+PROVEN_LOCAL_IDS = {"synthyboyWarpPage"}
+IMAGE_KEYS = {"image", "onImage", "offImage", "filmStrip", "thumbImage", "revealedImage", "inactiveImage", "peakImage", "rmsImage"}
 # One identifying control per physical tab. The shared OSC surface serves five tabs.
 SURFACES = {
     "Play": "playOscHeaderSelector", "Macros": "macroCard", "Osc A": "oscNativeSurface",
@@ -103,6 +116,184 @@ def check_display_bindings(page, qlinks):
                 raise ValueError(f"unnotified display binding in native Q-Links: {index}")
 
 
+class _Pairs(list):
+    """A JSON object as an ordered (key, value) list, so duplicate keys survive parsing."""
+
+
+class Findings:
+    """Errors and (aggregated) warnings, each with a JSON path."""
+
+    def __init__(self):
+        self.errors = []
+        self.warnings = {}
+
+    def error(self, path, message):
+        self.errors.append((path, message))
+
+    def warn(self, path, message):
+        entry = self.warnings.setdefault(message, [0, path])
+        entry[0] += 1
+
+    def report(self, label, limit=60):
+        for path, message in self.errors[:limit]:
+            print(f"ERROR   {label} {path}: {message}", file=sys.stderr)
+        if len(self.errors) > limit:
+            print(f"ERROR   {label} ... and {len(self.errors) - limit} more errors", file=sys.stderr)
+        for message, (count, first) in self.warnings.items():
+            where = f"{first} (first of {count})" if count > 1 else first
+            print(f"WARNING {label} {where}: {message}", file=sys.stderr)
+
+
+def json_path(parts):
+    out = "$"
+    for part in parts:
+        out += f"[{part}]" if isinstance(part, int) else (f".{part}" if re.fullmatch(r"\w+", part) else f'["{part}"]')
+    return out
+
+
+def dedupe(node, path, findings):
+    """Plain dicts and lists from _Pairs. Only the proven duplicate 'version' key of an overlay widget's data is tolerated (first wins)."""
+    if isinstance(node, _Pairs):
+        out = {}
+        for key, value in node:
+            child = json_path([*path, key])
+            converted = dedupe(value, [*path, key], findings)
+            if key in out:
+                if not (key == "version" and path[-2:] == ["componentData", "data"]):
+                    findings.error(child, f"duplicate key '{key}' (only the 'version' key of a component's data is a proven duplicate)")
+                continue
+            out[key] = converted
+        return out
+    if isinstance(node, list):
+        return [dedupe(item, [*path, i], findings) for i, item in enumerate(node)]
+    return node
+
+
+def load_skin_json(path, findings):
+    return dedupe(json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=_Pairs), [], findings)
+
+
+def schema_errors(schema_path, document, findings):
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    for err in sorted(Draft7Validator(schema).iter_errors(document), key=lambda e: [str(p) for p in e.absolute_path]):
+        text = " ".join(err.message.split())
+        findings.error(json_path(err.absolute_path), (text[:260] + "...") if len(text) > 260 else text)
+    return schema
+
+
+def tui_semantics(page, schema, skins, findings):
+    """What a schema cannot say: cross references, files, value relations, unproven forms (warnings)."""
+    proven = re.compile(schema["x-proven-handle-pattern"])
+    anyform = re.compile(schema["x-unproven-handle-pattern"])
+    proven_types = set(schema["x-proven-component-types"])
+    unproven_types = set(schema["x-unproven-component-types"])
+    defs_path = ["pageData", "componentDefinitions", "localComponentDefinitions"]
+    definitions = page["componentDefinitions"]["localComponentDefinitions"]
+    keys = [d["key"] for d in definitions]
+    for index, key in enumerate(keys):
+        if keys.count(key) > 1:
+            findings.error(json_path([*defs_path, index, "key"]), f"duplicate component definition key '{key}'")
+        if key in proven_types | unproven_types:
+            findings.error(json_path([*defs_path, index, "key"]), f"definition key '{key}' shadows a built-in component type")
+    local = set(keys)
+
+    def check_handle(handle, path, owner):
+        if not isinstance(handle, str):
+            return
+        if not proven.match(handle):
+            if anyform.match(handle):
+                form = re.sub(r"\d+", "N", handle)
+                findings.warn(path, f"handle form not proven on a device (SDK-documented only): '{form}'")
+            return
+        for match in re.finditer(r"Local/(\d+)/(\w+)", handle):
+            if match[2] not in PROVEN_LOCAL_IDS:
+                findings.warn(path, f"Local handle id '{match[2]}' is not the proven one ({', '.join(sorted(PROVEN_LOCAL_IDS))}); a Local state shared by several tabs is only proven for that id")
+        rest = handle
+        while True:
+            step = re.match(r"IndexedEnabling/(\d+)/(\d+)/(.*)$", rest)
+            ranged = re.match(r"RangedEnabling/(\d+)/(\d+)/(\d+)/(.*)$", rest)
+            if step:
+                index, count, rest = int(step[1]), int(step[2]), step[3]
+                if index >= count:
+                    findings.error(path, f"IndexedEnabling index {index} is not below the step count {count}: '{handle}'")
+            elif ranged:
+                low, high, count, rest = int(ranged[1]), int(ranged[2]), int(ranged[3]), ranged[4]
+                if not low <= high < count:
+                    findings.error(path, f"RangedEnabling needs min <= max < steps: '{handle}'")
+            else:
+                break
+            inner = re.fullmatch(r"Local/(\d+)/\w+", rest)
+            if inner and int(inner[1]) != count:
+                findings.error(path, f"step count {count} differs from the range of {rest} (SDK 7.4: numChoices must equal the steps): '{handle}'")
+
+    def check_entries(entries, base, owner):
+        for j, entry in enumerate(entries):
+            where = [*base, "componentsData", j]
+            data_node = entry.get("componentData", {})
+            kind, name, data = data_node.get("type"), data_node.get("name"), data_node.get("data", {})
+            tag = f"{owner} / {name}"
+            if isinstance(kind, str) and kind not in proven_types and kind not in local:
+                if kind in unproven_types:
+                    findings.warn(json_path([*where, "componentData", "type"]), f"component type '{kind}' is SDK-documented but not proven on a device")
+                else:
+                    findings.error(json_path([*where, "componentData", "type"]), f"{tag}: type '{kind}' is neither a built-in nor a local component definition")
+            if not isinstance(data, dict):
+                continue
+            for key, value in data.items():
+                if key.endswith("Handle") or key == "handleName":
+                    check_handle(value, json_path([*where, "componentData", "data", key]), tag)
+                if key in IMAGE_KEYS and isinstance(value, str) and value and not (skins / value).is_file():
+                    findings.error(json_path([*where, "componentData", "data", key]), f"{tag}: image file '{value}' does not exist")
+                if kind == "Button" and key in PROVEN_BUTTON_MAX and isinstance(value, int) and value > PROVEN_BUTTON_MAX[key]:
+                    findings.warn(json_path([*where, "componentData", "data", key]), f"Button {key} above {PROVEN_BUTTON_MAX[key]} (largest proven on a device)")
+                if key == "actions" and isinstance(value, list):
+                    for k, action in enumerate(value):
+                        check_handle(action.get("handleName"), json_path([*where, "componentData", "data", "actions", k, "handleName"]), tag)
+            for k, item in enumerate(entry.get("handle remapping", {}).get("map", [])):
+                check_handle(item.get("value"), json_path([*where, "handle remapping", "map", k, "value"]), tag)
+            bounds = entry.get("bounds", {})
+            for k, handle in enumerate(bounds.get("additionalInvalidatingHandles", []) if isinstance(bounds.get("additionalInvalidatingHandles"), list) else []):
+                check_handle(handle, json_path([*where, "bounds", "additionalInvalidatingHandles", k]), tag)
+
+    def check_definition(node, base, owner):
+        for k, action in enumerate(node.get("actions", [])):
+            check_handle(action.get("handleName"), json_path([*base, "actions", k, "handleName"]), owner)
+            if action.get("handler") == "Show Overlay" and action.get("additionalData") not in local:
+                findings.error(json_path([*base, "actions", k, "additionalData"]), f"{owner}: Show Overlay names '{action.get('additionalData')}', which is not a local component definition")
+        check_entries(node.get("componentsData", []), base, owner)
+
+    for i, definition in enumerate(definitions):
+        check_definition(definition["value"], [*defs_path, i, "value"], f"definition '{definition['key']}'")
+    seen = {}
+    for i, tab in enumerate(page["tabs"]):
+        position = (tab.get("fnKeyIndex"), tab.get("fnKeySubIndex"))
+        if position in seen:
+            findings.error(json_path(["pageData", "tabs", i]), f"tab '{tab.get('tabName')}' uses the same function key and sub-tab {position} as tab {seen[position]}")
+        seen[position] = i
+        check_definition(tab["componentDefinition"], ["pageData", "tabs", i, "componentDefinition"], f"tab '{tab.get('tabName')}'")
+    for k, item in enumerate(page["replacementStrings"]):
+        check_handle(item.get("key"), json_path(["pageData", "replacementStrings", k, "key"]), "replacementStrings")
+    if len(page["tabs"]) > PROVEN_MAX_TABS:
+        findings.warn("$.pageData.tabs", f"{len(page['tabs'])} tabs: the SDK note allows {SDK_MAX_TABS}, the proven skin runs {PROVEN_MAX_TABS} on both devices")
+
+
+def check_skin_schema(skins, label="skin"):
+    """Schema + semantic checks of TUI.json and Q-Links.json in `skins`. Returns Findings; prints every finding with its JSON path."""
+    findings = Findings()
+    tui = load_skin_json(skins / "TUI.json", findings)
+    qlinks = load_skin_json(skins / "Q-Links.json", findings)
+    tui_schema = schema_errors(TUI_SCHEMA, tui, findings)
+    schema_errors(QLINKS_SCHEMA, qlinks, findings)
+    try:
+        tui_semantics(tui["pageData"], tui_schema, skins, findings)
+    except (KeyError, TypeError, AttributeError):  # a shape error above broke an assumption; it is already listed
+        if not findings.errors:
+            raise
+        findings.warn("$", "semantic checks stopped early: fix the schema errors first")
+    findings.report(label)
+    return findings
+
+
 def validate_package(package, *, check_live=False):
     manifest = json.loads((package / "plugin.json").read_bytes())
     if (package.name, manifest["uid"], manifest["manufacturer"], manifest["name"]) != (
@@ -115,6 +306,9 @@ def validate_package(package, *, check_live=False):
         if variant.name.casefold().startswith(("tui - ", "q-links - ")) and variant.suffix.casefold() == ".json":
             raise ValueError(f"hardware-specific file shadows the shared native skin: {variant.name}")
 
+    findings = check_skin_schema(skins)
+    if findings.errors:
+        raise ValueError(f"{len(findings.errors)} schema/semantic errors in TUI.json / Q-Links.json (listed above, with JSON paths)")
     page = json.loads((skins / "TUI.json").read_bytes())["pageData"]
     qlinks = json.loads((skins / "Q-Links.json").read_bytes())
     check_parameter_handles(page)
@@ -208,10 +402,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package_dir", type=Path)
     parser.add_argument("--check-display-bindings", action="store_true")
+    parser.add_argument("--schema-only", action="store_true",
+                        help="only the JSON Schema and semantic checks of TUI.json / Q-Links.json; package_dir is a package or a folder holding both files")
     args = parser.parse_args()
+    if args.schema_only:
+        folder = args.package_dir / "Plugin Skins"
+        findings = check_skin_schema(folder if folder.is_dir() else args.package_dir)
+        print(f"skin schema: {len(findings.errors)} errors, {len(findings.warnings)} kinds of warnings")
+        return 1 if findings.errors else 0
     try:
         validate_package(args.package_dir, check_live=args.check_display_bindings)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, ET.ParseError, SyntaxError) as exc:
+    except (OSError, json.JSONDecodeError, ValueError, KeyError, TypeError, AttributeError, ET.ParseError, SyntaxError) as exc:
         print(f"Invalid SynthyBoy skin: {exc}", file=sys.stderr)
         return 1
     return 0
