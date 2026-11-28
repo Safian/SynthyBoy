@@ -14,7 +14,6 @@ enum Field { Power, Route, First, Second, Pan, Level, kFields };
 enum Layout { Hidden, Sub, AbcWave, AbcContent, Noise, kLastLayout = Noise };
 constexpr int kSources = osc::kLastSource, kHandles = 1 + kSources * kFields;
 constexpr int kLastView = 8;
-constexpr int kNoPopup = -1, kOtherPopup = -2;
 
 struct State
 {
@@ -38,7 +37,6 @@ public:
     void suspend() noexcept
     {
         suspended_.store (true, std::memory_order_release);
-        setPopup (kNoPopup);
     }
 
     void publish (const State& state, bool interactive = true) noexcept
@@ -47,8 +45,6 @@ public:
             suspend();
         if (suspended_.load (std::memory_order_relaxed))
             links_.renewInputRevisions();
-        if (state.source == 0)
-            setPopup (kNoPopup);
         if (! state_.sameBinding (state))
             links_.invalidate();
         links_.publish (state.layout, state.fields.data());
@@ -75,25 +71,11 @@ public:
     Link at (int field) const noexcept { return links_.at (field); }
     void report (Link link) noexcept { links_.report (link); }
 
-    static bool usesPopup (int kind) noexcept
+    /** A field whose value is chosen only in the Play page's own list (the Type, the menus: route, Sub wave, noise sound, and the Sub octave number; native_play_list.h): the plugin applies the row
+        (overlay/play_view.h), the host's handle only shows the value, and a host write to it (a data wheel on the focused field) is refused, as it was while no host popup of the field was open. */
+    static bool listOnly (int kind) noexcept
     {
         return kind == osc::SettingsType || kind == osc::SettingsMenu || kind == osc::SettingsNumber;
-    }
-
-    void setPopup (int field) noexcept
-    {
-        if (popup_ == field)
-            return;
-        popup_ = field;
-        if (field != kNoPopup)
-        {
-            float discarded;
-            for (int i = 0; i < kFields; ++i)
-                links_.take (i, {}, discarded);
-        }
-        const auto link = links_.at (field);
-        popupLink_.store (usesPopup (link.cell().kind) ? link.link : 0, std::memory_order_release);
-        popupField_.store (field, std::memory_order_release);
     }
 
     void post (int fromSource, int field, float value, uint64_t preset, uint64_t selection) noexcept
@@ -105,11 +87,7 @@ public:
             || selection_.load (std::memory_order_acquire) != selection)
             return;
         const auto link = links_.at (field);
-        if (suspended_.load (std::memory_order_acquire))
-            return;
-        const auto popup = popupField_.load (std::memory_order_acquire);
-        if ((popup != kNoPopup && popup != field) || (usesPopup (link.cell().kind)
-            && (popup != field || popupLink_.load (std::memory_order_acquire) != link.link)))
+        if (suspended_.load (std::memory_order_acquire) || listOnly (link.cell().kind))
             return;
         links_.post (link, value);
     }
@@ -156,9 +134,8 @@ private:
     std::atomic<bool> suspended_ { false };
     State state_;
     NativeCellBank<kFields> links_;
-    std::atomic<int> view_ {}, popupField_ { kNoPopup };
-    std::atomic<uint64_t> preset_ {}, selection_ {}, popupLink_ {};
-    int popup_ = kNoPopup;   // overlay thread only
+    std::atomic<int> view_ {};
+    std::atomic<uint64_t> preset_ {}, selection_ {};
     std::array<bool, kFields> acknowledge_ {};
 };
 }

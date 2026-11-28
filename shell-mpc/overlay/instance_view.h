@@ -111,7 +111,6 @@ public:
     virtual bool takeNativeLfoPick (const nativeui::lfopick::State&, int /*field*/, float& /*value*/) noexcept { return false; }
     virtual bool nativePlayEnvLfoControls() const noexcept { return false; }
     virtual uint64_t nativePlayEnvLfoRevision() const noexcept { return 0; }
-    virtual void setNativePlayEnvLfoPopup (int /*field*/) noexcept {}
     virtual void setNativePlayEnvLfo (const nativeui::playenvlfo::State&) noexcept {}
     virtual void suspendNativePlayEnvLfo() noexcept { setNativePlayEnvLfo ({}); }
     virtual bool takeNativePlayEnvLfo (const nativeui::playenvlfo::State&, int /*field*/, float& /*value*/) noexcept { return false; }
@@ -208,7 +207,6 @@ public:
     virtual void setNativePlayOsc (const nativeui::playoscui::State&, const char* /*sourceName*/) noexcept {}
     virtual void suspendNativePlayOsc() noexcept { setNativePlayOsc ({}, ""); }
     virtual bool takeNativePlayOsc (const nativeui::playoscui::State&, int /*field*/, float& /*value*/) noexcept { return false; }
-    virtual void setNativePlayOscPopup (int /*field*/) noexcept {}
     /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
     /** The overlay compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */

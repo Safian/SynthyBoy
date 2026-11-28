@@ -455,11 +455,6 @@ struct PluginInstance
         }
         bool nativePlayEnvLfoControls() const noexcept override { return true; }
         uint64_t nativePlayEnvLfoRevision() const noexcept override { return inst.playEnvLfoRevision.load (std::memory_order_acquire); }
-        void setNativePlayEnvLfoPopup (int field) noexcept override
-        {
-            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
-            inst.nativePlayEnvLfo.setPopup (field);
-        }
         void setNativePlayEnvLfo (const nativeui::playenvlfo::State& state) noexcept override
         {
             std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
@@ -837,11 +832,6 @@ struct PluginInstance
         {
             std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
             return inst.nativePlayOsc.take (state, field, value);
-        }
-        void setNativePlayOscPopup (int field) noexcept override
-        {
-            std::lock_guard<std::mutex> guard (inst.playPresentationMutex);
-            inst.nativePlayOsc.setPopup (field);
         }
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         void setQGroup (const int* targets, int n) noexcept override { inst.qBank.setGroup (targets, n); }
@@ -5373,8 +5363,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             std::memset (props, 0, sizeof (*props));
             return 1;
         }
-        if (nativeOffset == nativeui::kPlayList)   // the code of the Play list a skin radio Button opens (native_play_list.h): a stepped integer 0 .. 6
+        if (nativeOffset == nativeui::kPlayList)   // the code of the Play list a skin radio Button opens (native_play_list.h): a stepped integer 0 .. 14
         {
+            static_assert (nativeui::kPlayListLastCode == synthyboy_mpc::nativeui::playlist::kLastCode, "the Play List handle's range is the list codes");
             std::memset (props, 0, sizeof (*props));
             props->flags = kVstParameterUsesIntegerMinMax;
             props->maxInteger = nativeui::kPlayListLastCode;

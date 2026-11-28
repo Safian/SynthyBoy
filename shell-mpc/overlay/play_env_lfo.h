@@ -68,12 +68,6 @@ public:
         owner_ = state_.context.view != n::Hidden ? &v : nullptr;
     }
 
-    void setPopup (int action) noexcept
-    {
-        if (owner_ != nullptr)
-            owner_->setNativePlayEnvLfoPopup (playenvlfo::popupField (action));
-    }
-
     void leave()
     {
         if (owner_ != nullptr)
