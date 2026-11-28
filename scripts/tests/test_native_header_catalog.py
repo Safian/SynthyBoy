@@ -30,9 +30,10 @@ class HeaderCatalogTests(unittest.TestCase):
             style.size("header.side")                                      # one margin token: header.padding
         self.assertEqual(style.size("header.page.width"), style.size("screen.width"))
 
-    def test_eight_examples_with_one_picture_each(self):
+    def test_every_example_has_one_picture(self):
         self.assertEqual([e["id"] for e in EXAMPLES],
-                         ["osc-a", "lfo-9", "env-1", "filter-1", "master", "osc-a-off"])
+                         ["osc-a", "lfo-9", "env-1", "filter-1", "master", "osc-a-off",
+                          "osc-abc", "osc-abc-off", "osc-sub", "osc-noise", "osc-noise-sample"])
         for example in EXAMPLES:
             with Image.open(DIRECTORY / "img" / example["file"]) as image:
                 self.assertEqual(image.size, (header.header_width(example["width"]), 56), example["id"])

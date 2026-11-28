@@ -21,8 +21,8 @@ except ImportError:
     Image = ImageDraw = None
 
 ZONES = ("left", "centre", "right")
-CENTRE_KINDS = ("dropdown", "button")
-RIGHT_KINDS = ("more",)
+CENTRE_KINDS = ("dropdown", "button", "field")
+RIGHT_KINDS = ("more", "dropdown")
 POWER_STATES = ("on", "off")
 WIDTHS = ("page", "panel")
 
@@ -72,9 +72,18 @@ def power_face(state, height):
     return _icon_button.render_sample({"icon": "power", "height": height, "state": state, "look": "filled"})
 
 
-def right_face(kind, height):
+def _right_item(item):
+    """A right-zone entry is the string "more" or {"kind": "dropdown", "value", "width_px"} (the oscillator's Filter routing)."""
+    return {"kind": item} if isinstance(item, str) else item
+
+
+def right_face(item, height):
+    item = _right_item(item)
+    kind = item["kind"]
     if kind == "more":
         return _button.render_sample({"text": "MORE", "height": height, "state": "enabled"})
+    if kind == "dropdown":
+        return render_dropdown_variant(item["width_px"], height, item.get("value", ""))
     raise ValueError(f"right button must be one of {RIGHT_KINDS}: {kind!r}")
 
 
@@ -88,6 +97,11 @@ def centre_face(item, content, *, enabled=True):
         # As high as the content row (40 px with padding 8; sizes 32 / 40 / 48 exist), centred in the row.
         face = render_dropdown_variant(item.get("width_px") or _style_size(item["width"]), _style_size(item["height"]) if "height" in item else content,
                                        item.get("value", ""))
+    elif kind == "field":
+        # A named number field (the Sub OCT): the name left outside the frame, the value box right (name_value recipe).
+        from components.native.name_value.name_value import render_name_value_preview
+        face = render_name_value_preview(item["name"], item.get("value", ""), item["width_px"], content,
+                                         box_width=item.get("box_px", 68))
     else:
         raise ValueError(f"centre control must be one of {CENTRE_KINDS}: {kind!r}")
     if face.height > content or (kind != "dropdown" and face.height != content):
@@ -117,12 +131,20 @@ def layout(example):
 
     left = []
     if example.get("title"):
-        left.append(("title", title_face(example["title"])))
+        title = title_face(example["title"])
+        slot = example.get("title_slot")   # a family of pages with different titles (OSC A/B/C) reserves the widest title's width, so POWER and the rest never move
+        if slot:
+            if slot < title.width:
+                raise ValueError(f"title_slot {slot} is narrower than the title ({title.width} px)")
+            wide = Image.new("RGBA", (slot, title.height))
+            wide.alpha_composite(title)
+            title = wide
+        left.append(("title", title))
     if example.get("power"):
         left.append(("power", power_face(example["power"], m["content"])))
     end = run("left", left, m["side"])
     enabled = example.get("power") != "off"
-    right = [(kind, _content_face(right_face(kind, m["content"]), m["content"])) for kind in example.get("right", [])]
+    right = [(_right_item(item)["kind"], _content_face(right_face(item, m["content"]), m["content"])) for item in example.get("right", [])]
     right_x = width - m["side"] - sum(f.width for _, f in right) - gap * (len(right) - 1) if right else width - m["side"] + gap
     items = example.get("centre", [])
     centre_x = end + gap if left else m["side"]
@@ -158,7 +180,7 @@ def render_header(example):
 def header_examples(entry):
     """The examples of a catalogue "header" entry, validated: id, file, alt, caption, width, title/power/centre/right."""
     required = {"id", "file", "alt", "caption", "width"}
-    optional = {"title", "power", "centre", "right"}
+    optional = {"title", "title_slot", "power", "centre", "right"}
     if not isinstance(entry, dict) or set(entry) != {"examples"} or not entry["examples"]:
         raise ValueError("header entry needs a nonempty examples list")
     ids = [e.get("id") for e in entry["examples"]]
@@ -174,7 +196,7 @@ def header_examples(entry):
             raise ValueError(f"header example {example['id']!r}: needs a title, a power button or centre controls")
         if sum(1 for item in example.get("centre", []) if item.get("fill")) > 1:
             raise ValueError(f"header example {example['id']!r}: at most one centre control may fill")
-        for kind in example.get("right", []):
+        for kind in (_right_item(item)["kind"] for item in example.get("right", [])):
             if kind not in RIGHT_KINDS:
                 raise ValueError(f"header example {example['id']!r}: right button must be one of {RIGHT_KINDS}")
     return entry["examples"]
@@ -185,3 +207,24 @@ def catalog_sections(entry):
     return [{"heading": "Példák (az oldalspecifikus középső tartalom csak példa)", "images": [
         {"presentation": "sample", "file": e["file"], "alt": e["alt"], "caption": e["caption"]}
         for e in header_examples(entry)]}]
+
+
+def skin_parts(example):
+    """The geometry and the textless faces the SKIN needs for one example (the Osc header forms): the same layout as the
+    catalogue picture, but every dropdown / field value is blank (the host draws the live value in a Label) and every
+    face also comes in its disabled look (power off). Returns [{zone, kind, rect, on, off}]; the title has no face
+    (the skin draws it as a Label in the slot `rect`)."""
+    blank = dict(example,
+                 centre=[dict(i, value="") if i["kind"] in ("dropdown", "field") else i for i in example.get("centre", [])],
+                 right=[dict(_right_item(i), value="") if _right_item(i)["kind"] == "dropdown" else i for i in example.get("right", [])])
+    parts = []
+    for item in layout(blank)[1]:
+        on = item.face
+        if item.kind == "power":
+            off = power_face("off", item.face.height)
+        elif item.kind == "title":
+            on = off = None
+        else:
+            off = dim_artwork(on)
+        parts.append({"zone": item.zone, "kind": item.kind, "rect": item.rect, "on": on, "off": off})
+    return parts
