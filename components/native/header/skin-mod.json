@@ -1,0 +1,48 @@
+{
+  "file": "skin/defs_mod.json",
+  "tab_file": "skin/TUI.json",
+  "prefix": "modHeader",
+  "forms": [
+    "mod"
+  ],
+  "instances": [
+    {
+      "name": "Mod Header",
+      "tab": "Mod",
+      "form": "mod",
+      "title": "MOD MATRIX",
+      "title_handle": "Parameter 2936",
+      "title_gate": "NonZero/Parameter 3806",
+      "data": "Parameter 2936",
+      "gate": [],
+      "remap": {
+        "HdrModeAll": "Parameter 2936",
+        "HdrModeSource": "Parameter 2936",
+        "HdrModeDest": "Parameter 2936",
+        "HdrGroupSource": "Parameter 2937",
+        "HdrGroupTarget": "Parameter 2938",
+        "HdrCount": "Parameter 3807",
+        "HdrAdd": "FromGesture/Parameter 2939"
+      },
+      "replace": [
+        "Mod Native Mode ALL",
+        "Mod Native Mode BY SOURCE",
+        "Mod Native Mode BY DEST",
+        "Mod Native ADD",
+        "Mod Native Source Group",
+        "Mod Native Target Group",
+        "Native Caption mod 0",
+        "Mod Native Text Count"
+      ]
+    }
+  ],
+  "remove": {
+    "children": {},
+    "definitions": [
+      "modNative_mode1_80x56",
+      "modNative_mode2_140x56",
+      "modNative_mode3_120x56",
+      "modNative_group_260x56"
+    ]
+  }
+}

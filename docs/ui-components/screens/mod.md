@@ -4,7 +4,7 @@
 
 ## What it shows
 
-- **Matrix page**: the mode switch ALL / BY SOURCE / BY DEST (`modNative_mode1/2/3`), the source and target group choosers (`modNative_group_260x56`), ADD, the count text and seven rows (`modNativeRowNormal`, or `modNativeRowScroll` with the scrollbar) with their column headers.
+- **Matrix page**: the header (the Header component, instance `Mod Header`, `modHeader*` in `defs_mod.json`: title, the mode switch ALL / BY SOURCE / BY DEST, the source and target group dropdown, the count, ADD; [../header.md](../header.md)) and seven rows (`modNativeRowNormal`, or `modNativeRowScroll` with the scrollbar) with their column headers.
 - **Slot page** (one slot): BACK, DELETE, SOURCE, TARGET, AUX SOURCE lists, AMOUNT bar, POLARITY and ROUTE toggles, SCALE, INVERT, AUX CURVE, SHAPE CURVE, STEREO, RISE, FALL, DELAY / BEATS, SYNC (`modNative_*` dials, toggles, bars).
 - **Source board** (add a modulation): chips for ENV 1 .. 3, LFO 1 .. 4, MACRO 1 .. 4, WHEEL, VELO, AT, KEY, PITCH, FIXED and ALL SOURCES (the rest through the picker), then the picker (seven list rows, BACK, GROUPS, PREVIOUS, NEXT, title).
 - The modulation editor and targets keyline (shared), the texts (count, detail title, empty lines, block labels).

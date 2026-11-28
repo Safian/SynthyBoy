@@ -21,8 +21,8 @@ except ImportError:
     Image = ImageDraw = None
 
 ZONES = ("left", "centre", "right")
-CENTRE_KINDS = ("dropdown", "button", "field")
-RIGHT_KINDS = ("more", "dropdown")
+CENTRE_KINDS = ("dropdown", "button", "field", "segment", "label")
+RIGHT_KINDS = ("more", "dropdown", "button", "label")
 SLOT_KINDS = {"left": ("title", "power"), "centre": CENTRE_KINDS, "right": RIGHT_KINDS}
 POWER_STATES = ("on", "off")
 WIDTHS = ("page", "panel")
@@ -73,6 +73,19 @@ def power_face(state, height):
     return _icon_button.render_sample({"icon": "power", "height": height, "state": state, "look": "filled"})
 
 
+def _label_slot(item, height):
+    """A `label` slot (a live value the host draws, e.g. the Mod slot count): only room in the layout, no picture."""
+    return Image.new("RGBA", (item["width_px"], height))
+
+
+def segment_face(item, height, *, selected=False):
+    """One button of a `segment` group (e.g. the Mod ALL / BY SOURCE / BY DEST switch): the Button recipe; the selected one
+    takes the RadioGrid selected look (action_art look "active")."""
+    if not selected:
+        return _button.render_sample({"text": item["text"], "height": height, "state": "enabled"})
+    return _button.action_art(text=item["text"], height=height, look="active", colour=_style_color("radio.active.text"))
+
+
 def _right_item(item):
     """A right-zone entry is the string "more" or {"kind": "dropdown", "value", "width_px"} (the oscillator's Filter routing)."""
     return {"kind": item} if isinstance(item, str) else item
@@ -85,6 +98,10 @@ def right_face(item, height):
         return _button.render_sample({"text": "MORE", "height": height, "state": "enabled"})
     if kind == "dropdown":
         return render_dropdown_variant(item["width_px"], height, item.get("value", ""))
+    if kind == "button":
+        return _button.render_sample({"text": item["text"], "height": height, "state": "enabled"})
+    if kind == "label":
+        return _label_slot(item, height)
     raise ValueError(f"right button must be one of {RIGHT_KINDS}: {kind!r}")
 
 
@@ -98,6 +115,10 @@ def centre_face(item, content, *, enabled=True):
         # As high as the content row (40 px with padding 8; sizes 32 / 40 / 48 exist), centred in the row.
         face = render_dropdown_variant(item.get("width_px") or _style_size(item["width"]), _style_size(item["height"]) if "height" in item else content,
                                        item.get("value", ""))
+    elif kind == "segment":
+        face = segment_face(item, content, selected=bool(item.get("selected")))      # "selected": true draws the catalogue picture of the current value
+    elif kind == "label":
+        face = _label_slot(item, content)
     elif kind == "field":
         # A named number field (the Sub OCT): the name left outside the frame, the value box right (name_value recipe).
         from components.native.name_value.name_value import render_name_value_preview
@@ -245,19 +266,24 @@ def skin_parts(example):
     (the skin draws it as a Label in the slot `rect`)."""
     view = flat(example)
     zones = {"left": example["zones"].get("left", []),
-             "centre": [dict(i, value="") if i["kind"] in ("dropdown", "field") else i for i in view["centre"]],
+             "centre": [dict(i, value="") if i["kind"] in ("dropdown", "field") else dict(i, selected=False) if i["kind"] == "segment" else i for i in view["centre"]],
              "right": [dict(i, value="") if i["kind"] == "dropdown" else i for i in view["right"]]}
     blank = dict(example, zones=zones)
     parts = []
+    specs = {z: list(zones[z]) for z in ZONES}
     for item in layout(blank)[1]:
         on = item.face
+        slot = specs[item.zone].pop(0)
+        extra = {}
         if item.kind == "power":
             off = power_face("off", item.face.height)
-        elif item.kind == "title":
+        elif item.kind in ("title", "label"):
             on = off = None
         else:
             off = dim_artwork(on)
-        parts.append({"zone": item.zone, "kind": item.kind, "rect": item.rect, "on": on, "off": off})
+            if item.kind == "segment":
+                extra["selected"] = segment_face(slot, item.face.height, selected=True)
+        parts.append({"zone": item.zone, "kind": item.kind, "rect": item.rect, "on": on, "off": off, **extra})
     return parts
 
 
@@ -322,6 +348,8 @@ def _handle(slot):
 
 
 def _face_names(slot, w, h):
+    if slot["kind"] == "segment":      # (selected look, plain look)
+        return f"hdr_{slot['role'].lower()}_{w}x{h}_sel.png", f"hdr_{slot['role'].lower()}_{w}x{h}.png"
     prefix = "hdr_dd" if slot["kind"] == "dropdown" else "hdr_" + slot["role"].lower()
     return f"{prefix}_{w}x{h}.png", f"{prefix}_{w}x{h}_off.png"
 
@@ -357,10 +385,16 @@ def _cell_children(slot, cell, w, h, on):
         out.append(_label("value", (w - box, 0, box, h), 16.0, FIELD_TEXT if on else DIM_TEXT))
     elif kind == "button":
         if on:
-            out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": face, "offImage": face, "buttonId": 1, "numButtonsInGroup": 1,
+            out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": face, "offImage": face, "buttonId": cell.get("id", 1),
+                                                       "numButtonsInGroup": cell.get("group", 1),
                                                        "handleName": "Data", "gestureBehaviour": "Instant"}, (0, 0, w, h), focus="Yes", show="Hide"))
         else:
             out.append(_image(slot["text"], face, (0, 0, w, h)))
+    elif kind == "segment":
+        # one button of a switch group: the selected look while its value is current (on image), the plain look otherwise (off image)
+        out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": face_on, "offImage": face_off, "buttonId": cell["id"],
+                                                   "numButtonsInGroup": cell["group"], "handleName": "Data", "gestureBehaviour": "Instant"},
+                         (0, 0, w, h), focus="No", show="Hide"))
     return out
 
 
@@ -386,15 +420,19 @@ def header_definitions(spec):
     comps, definitions, images = [], {}, {}
 
     title = next(p for p in parts if p["kind"] == "title")
-    comps.append(_label("Title", (title["rect"][0], m["padding"], title["rect"][2], m["content"]), 40.0, TEXT, [("Data", "HdrTitle")],
-                        kind="Name", justification="left verticallyCentred"))
-    power = next(p for p in parts if p["kind"] == "power")
-    pw, ph = power["rect"][2:]
-    on_name, off_name = f"hdr_power_on_{pw}x{ph}.png", f"hdr_power_off_{pw}x{ph}.png"
-    images[on_name], images[off_name] = power["on"], power["off"]
-    comps.append(_comp("Power", "Button", {"version": 2, "onImage": on_name, "offImage": off_name, "buttonId": 1, "numButtonsInGroup": 1,
-                                           "handleName": "Data", "gestureBehaviour": "Instant"},
-                       power["rect"], [("Data", "HdrPower")], page_gate, "Yes", "Hide"))
+    title_label = _label("Title", (title["rect"][0], m["padding"], title["rect"][2], m["content"]), 40.0, TEXT, [("Data", "HdrTitle")],
+                         kind="Name", justification="left verticallyCentred")
+    if skin.get("title_gate"):      # the title alone follows its own gate (the instance remaps HdrTitleGate)
+        title_label["bounds"] = _bounds(title["rect"][:1] + (m["padding"], title["rect"][2], m["content"]), ["HdrTitleGate"], show="Show")
+    comps.append(title_label)
+    power = next((p for p in parts if p["kind"] == "power"), None)   # a header without POWER (a screen of a modulator, the curve screens, Mod)
+    if power:
+        pw, ph = power["rect"][2:]
+        on_name, off_name = f"hdr_power_on_{pw}x{ph}.png", f"hdr_power_off_{pw}x{ph}.png"
+        images[on_name], images[off_name] = power["on"], power["off"]
+        comps.append(_comp("Power", "Button", {"version": 2, "onImage": on_name, "offImage": off_name, "buttonId": 1, "numButtonsInGroup": 1,
+                                               "handleName": "Data", "gestureBehaviour": "Instant"},
+                           power["rect"], [("Data", "HdrPower")], page_gate, "Yes", "Hide"))
 
     for zone in ("centre", "right"):
         slots = [s for s in view[zone] if s["kind"] != "more"]
@@ -403,9 +441,19 @@ def header_definitions(spec):
             rect = part["rect"]
             w, h = rect[2:]
             handle = _handle(slot)
+            if slot["kind"] == "label":      # a live value the host draws: a Label straight in the form, no picture, no cell
+                look = slot["skin"]["label"]
+                comps.append(_label(slot["role"].title(), rect, look["size"], look["colour"], [("Data", handle)], justification=look["justify"]))
+                continue
             face_on, face_off = _face_names(slot, w, h)
-            images[face_on], images[face_off] = part["on"], part["off"]
+            if slot["kind"] == "segment":
+                images[face_on], images[face_off] = part["selected"], part["on"]
+            elif power:
+                images[face_on], images[face_off] = part["on"], part["off"]
+            else:
+                images[face_on] = part["on"]
             for cell in slot["skin"]["cells"]:
+                handle = _handle(dict(slot, role=cell["role"])) if cell.get("role") else _handle(slot)    # alternatives of one slot may bind other parameters (Mod: source / target group)
                 gate = list(cell.get("gate", []))
                 page = page_gate if cell.get("page") else []
                 show = cell.get("show", "Show")
@@ -425,8 +473,8 @@ def header_definitions(spec):
                                        page + gate, "No", show))
                     continue
                 comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)],
-                                   ["HdrOn"] + page + gate, "No", show))
-                for child in _cell_children(slot, cell, w, h, False):       # the disabled look: inert pictures straight in the form
+                                   (["HdrOn"] if power else []) + page + gate, cell.get("hw_focus", "No"), show))
+                for child in (_cell_children(slot, cell, w, h, False) if power and slot["kind"] != "segment" else []):       # the disabled look: inert pictures straight in the form
                     cx, cy, cw, ch = map(int, child["bounds"]["bounds"].split())
                     b = child["bounds"]
                     child["bounds"] = _bounds((rect[0] + cx, rect[1] + cy, cw, ch), ["HdrOff"] + page + gate, b["acceptsHWFocus"],

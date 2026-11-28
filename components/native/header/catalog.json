@@ -561,6 +561,282 @@
         },
         "caption": "11 · Noise (minta): cím, POWER, KIND (a teljes szélességen, SOUND nincs); jobbra a Filter-útvonal legördülője",
         "alt": "Noise fejléc mintával: NOISE, POWER, KIND, Filter 1"
+      },
+      {
+        "id": "curve",
+        "file": "header-curve.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "FILTER NOTE",
+              "slot": 146
+            }
+          ],
+          "centre": [],
+          "right": [
+            {
+              "kind": "button",
+              "text": "INIT",
+              "role": "init",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Init",
+                    "def": "curveHeaderInit",
+                    "id": 8,
+                    "group": 13,
+                    "gate": [
+                      "RangedEnabling/3/4/5/Parameter 2842"
+                    ],
+                    "show": "Hide"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "button",
+              "text": "UNDO",
+              "role": "undo",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Undo",
+                    "def": "curveHeaderUndo",
+                    "id": 9,
+                    "group": 13,
+                    "gate": [
+                      "RangedEnabling/3/4/5/Parameter 2842"
+                    ],
+                    "show": "Hide"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "button",
+              "text": "DEL POINT",
+              "role": "delPoint",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Del Point",
+                    "def": "curveHeaderDelPoint",
+                    "id": 10,
+                    "group": 13,
+                    "gate": [
+                      "RangedEnabling/3/4/5/Parameter 2842"
+                    ],
+                    "show": "Hide"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "skin": {
+          "def": "curveHeader",
+          "title_gate": true
+        },
+        "caption": "12 · Note / Velo (görbe-képernyők, nincs POWER): cím (a két cím közül a szélesebb helye), jobbra INIT, UNDO, DEL POINT gombok",
+        "alt": "Note / Velo fejléc: FILTER NOTE, INIT, UNDO, DEL POINT"
+      },
+      {
+        "id": "mod",
+        "file": "header-mod.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "MOD MATRIX"
+            }
+          ],
+          "centre": [
+            {
+              "kind": "segment",
+              "text": "ALL",
+              "selected": true,
+              "role": "modeAll",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Mode ALL",
+                    "def": "modHeaderModeAll",
+                    "id": 1,
+                    "group": 4,
+                    "gate": [
+                      "RangedEnabling/1/3/4/Parameter 2936"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "segment",
+              "text": "BY SOURCE",
+              "role": "modeSource",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Mode BY SOURCE",
+                    "def": "modHeaderModeSource",
+                    "id": 2,
+                    "group": 4,
+                    "gate": [
+                      "RangedEnabling/1/3/4/Parameter 2936"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "segment",
+              "text": "BY DEST",
+              "role": "modeDest",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Mode BY DEST",
+                    "def": "modHeaderModeDest",
+                    "id": 3,
+                    "group": 4,
+                    "gate": [
+                      "RangedEnabling/1/3/4/Parameter 2936"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "dropdown",
+              "role": "group",
+              "value": "Env 1",
+              "width_px": 260,
+              "skin": {
+                "cells": [
+                  {
+                    "name": "Source Group",
+                    "def": "modHeaderGroupSource",
+                    "role": "groupSource",
+                    "overlay": "fx editor choice menu",
+                    "gate": [
+                      "IndexedEnabling/2/4/Parameter 2936"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  },
+                  {
+                    "name": "Target Group",
+                    "def": "modHeaderGroupTarget",
+                    "role": "groupTarget",
+                    "overlay": "fx editor choice menu",
+                    "gate": [
+                      "IndexedEnabling/3/4/Parameter 2936"
+                    ],
+                    "show": "Hide",
+                    "hw_focus": "Yes"
+                  }
+                ]
+              }
+            }
+          ],
+          "right": [
+            {
+              "kind": "label",
+              "role": "count",
+              "width_px": 180,
+              "skin": {
+                "label": {
+                  "size": 23.0,
+                  "colour": "ffaab2d8",
+                  "justify": "right verticallyCentred"
+                }
+              }
+            },
+            {
+              "kind": "button",
+              "text": "ADD",
+              "role": "add",
+              "skin": {
+                "cells": [
+                  {
+                    "name": "ADD",
+                    "def": "modHeaderAdd",
+                    "gate": [
+                      "RangedEnabling/1/3/4/Parameter 2936"
+                    ],
+                    "show": "Hide"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "skin": {
+          "def": "modHeader",
+          "title_gate": true
+        },
+        "caption": "13 · Mod mátrix oldal (nincs POWER): cím, ALL / BY SOURCE / BY DEST kapcsoló (a kijelölt kiemelve), forrás- vagy cél-csoport legördülő (egymás alternatívái), jobbra a slotok száma (kiolvasás) és ADD",
+        "alt": "Mod fejléc: MOD MATRIX, ALL, BY SOURCE, BY DEST, csoport, slotszám, ADD"
+      },
+      {
+        "id": "filter-screen",
+        "file": "header-filter-screen.png",
+        "width": "page",
+        "zones": {
+          "left": [
+            {
+              "kind": "title",
+              "text": "FILTER 1"
+            },
+            {
+              "kind": "power",
+              "state": "on"
+            }
+          ],
+          "centre": [
+            {
+              "kind": "dropdown",
+              "role": "chain",
+              "value": "Parallel",
+              "width_px": 150
+            },
+            {
+              "kind": "button",
+              "role": "dual",
+              "text": "F1 + F2"
+            },
+            {
+              "kind": "dropdown",
+              "role": "model",
+              "value": "Analog",
+              "width": "header.dropdown.min_width",
+              "fill": true
+            },
+            {
+              "kind": "dropdown",
+              "role": "style",
+              "value": "Low pass",
+              "width_px": 220
+            },
+            {
+              "kind": "button",
+              "role": "clean",
+              "text": "CLEAN"
+            }
+          ],
+          "right": []
+        },
+        "caption": "14 · Filter 1 / 2 (csak példa, a bőrbe NINCS bekötve): cím, POWER, CHAIN, F1 + F2, MODEL (kitölt), STYLE, CLEAN",
+        "alt": "Filter fejléc vázlat: FILTER 1, POWER, CHAIN, F1 + F2, MODEL, STYLE, CLEAN"
       }
     ]
   }

@@ -37,7 +37,7 @@ class HeaderCatalogTests(unittest.TestCase):
     def test_every_example_has_one_picture(self):
         self.assertEqual([e["id"] for e in EXAMPLES],
                          ["osc-a", "lfo-9", "env-1", "filter-1", "master", "osc-a-off",
-                          "osc-abc", "osc-abc-off", "osc-sub", "osc-noise", "osc-noise-sample"])
+                          "osc-abc", "osc-abc-off", "osc-sub", "osc-noise", "osc-noise-sample", "curve", "mod", "filter-screen"])
         for example in EXAMPLES:
             with Image.open(DIRECTORY / "img" / example["file"]) as image:
                 self.assertEqual(image.size, (header.header_width(example["width"]), 56), example["id"])
@@ -218,3 +218,21 @@ class HeaderSkinSpecTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeaderRolloutSkinTests(unittest.TestCase):
+    """The curve (Note / Velo) and Mod headers: the committed skin is what the tool writes from skin-curve.json / skin-mod.json; no POWER, no On / Off twins."""
+
+    def test_the_committed_skin_is_what_the_tool_writes(self):
+        by_id = {e["id"]: e for e in EXAMPLES}
+        for name in ("skin-curve.json", "skin-mod.json"):
+            spec = json.loads((DIRECTORY / name).read_text(encoding="utf-8"))
+            doc = json.loads((ROOT / spec["file"]).read_text(encoding="utf-8"))
+            committed = {e["key"]: e["value"] for e in doc["componentDefinitions"]["localComponentDefinitions"]}
+            for form in spec["forms"]:
+                built = header.header_definitions(by_id[form])
+                names = [c["componentData"]["name"] for c in dict(built["definitions"])[built["form"]]["componentsData"]]
+                self.assertNotIn("Power", names, form)
+                for key, definition in built["definitions"]:
+                    self.assertEqual(committed[key], definition, key)
+                    self.assertFalse(key.endswith("Off"), key)
