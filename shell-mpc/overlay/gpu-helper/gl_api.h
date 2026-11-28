@@ -117,6 +117,7 @@ struct Api
     X (EGLBoolean, eglSwapInterval, (EGLDisplay d, EGLint interval)) \
     X (EGLBoolean, eglQuerySurface, (EGLDisplay d, EGLSurface s, EGLint attr, EGLint* value)) \
     X (const char*, eglQueryString, (EGLDisplay d, EGLint name)) \
+    X (void*, eglGetProcAddress, (const char* name)) \
     X (EGLint, eglGetError, (void))
 #define SB_GL_FUNCS(X) \
     X (GLenum, glGetError, (void)) \

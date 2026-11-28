@@ -1719,16 +1719,18 @@ private:
     bool partialBoxes (std::vector<DamageRect>& out)
     {
         liveBoxes_.clear();
+        drawBox_.assign (draws_.size(), DrawBox {});   // empty boxes: never culled
         int clip[4] = {};
-        for (const Draw& d : draws_)
+        for (size_t di = 0; di < draws_.size(); ++di)
         {
+            const Draw& d = draws_[di];
             if (d.type == 4)
             {
                 for (int i = 0; i < 4; ++i)
                     clip[i] = d.clipBox[i];
                 continue;
             }
-            if (d.type != 0 || d.count <= 0 || (d.kind == 10 && d.tex >= 4))
+            if (d.type != 0 || d.count <= 0)
                 continue;
             float x0 = 1.0e9f, y0 = 1.0e9f, x1 = -1.0e9f, y1 = -1.0e9f;
             for (int i = d.first; i < d.first + d.count && i < static_cast<int> (verts_.size()); ++i)
@@ -1736,6 +1738,10 @@ private:
                 x0 = std::min (x0, verts_[static_cast<size_t> (i)].x); x1 = std::max (x1, verts_[static_cast<size_t> (i)].x);
                 y0 = std::min (y0, verts_[static_cast<size_t> (i)].y); y1 = std::max (y1, verts_[static_cast<size_t> (i)].y);
             }
+            if (x1 >= x0 && y1 >= y0)
+                drawBox_[di] = { x0, y0, x1, y1 };
+            if (d.kind == 10 && d.tex >= 4)
+                continue;                       // a layer blit: drawn where the layer changed, not a live op
             if (x1 >= x0 && y1 >= y0)
                 liveBoxes_.push_back ({ static_cast<int> (std::floor (x0)) - 2, static_cast<int> (std::floor (y0)) - 2, static_cast<int> (std::ceil (x1)) + 2, static_cast<int> (std::ceil (y1)) + 2 });
         }
@@ -1822,8 +1828,9 @@ private:
         clipOn_ = false;
         applyScissor();
         bool glowActive = false;
-        for (const Draw& d : draws_)
+        for (size_t di = 0; di < draws_.size(); ++di)
         {
+            const Draw& d = draws_[di];
             if (d.type == 2)
             {
                 glowActive = ensureGlow (d.divisor);
@@ -1849,6 +1856,8 @@ private:
             const bool glowPass = d.kind == 12 || d.kind == 13 || (d.kind == 10 && (d.tex == 1 || d.tex == 2));
             if ((d.target == 0 || d.target == 1 || glowPass) && ! glowActive)
                 continue;                       // the glow layer could not be made: its ops and passes are not drawn
+            if (cullBox_ != nullptr && d.type == 0 && d.target == -1 && ! glowPass && di < drawBox_.size() && drawBox_[di].outside (*cullBox_))
+                continue;                       // a draw of the picture that lies wholly outside the box painted now: the scissor would discard all of it (same pixels, no draw call)
             bindTarget (d.target);
             if (d.type == 1)
             {
@@ -1909,6 +1918,8 @@ private:
         lastPaintedPx_ = 0;
         if (partial)
         {
+            if (! sceneFeedback_ && ! prevFeedback_)
+                setDamageRegion (boxes);   // not with the afterglow: it copies the whole picture back (glCopyTexSubImage2D)
             for (const DamageRect& b : boxes)
             {
                 ClipGeom g;
@@ -1916,8 +1927,10 @@ private:
                 scissorBox (g, frameBox_);
                 frameBoxOn_ = true;
                 lastPaintedPx_ += static_cast<uint32_t> (std::max (0, frameBox_[2]) * std::max (0, frameBox_[3]));
+                cullBox_ = &b;
                 runDraws (false);
             }
+            cullBox_ = nullptr;
             frameBoxOn_ = false;
         }
         else
@@ -2095,6 +2108,47 @@ private:
         add (r.hist[b], 1u);
         add (r.count, 1u);
     }
+
+    /** EGL_KHR_partial_update: tells the driver which parts of the back buffer this picture paints (the boxes of the partial picture, GL / EGL surface pixels, origin bottom left: the
+        scissor boxes). Without it a tile-based GPU (Mali, Panfrost) must treat the whole buffer as drawn: it loads every tile of the preserved buffer and writes every tile back. Called
+        after the buffer age query (partialBoxes) and before the first draw into the surface, once a picture, only for a partial picture (a full picture damages the whole surface by
+        default). Looked up once; the extension missing, or the file /tmp/synthyboy-overlay-nodamage at the first picture, leaves the call out (the buffer age path alone, as before). */
+    void setDamageRegion (const std::vector<DamageRect>& boxes)
+    {
+        if (! damageLooked_)
+        {
+            damageLooked_ = true;
+            const char* ext = api_.eglQueryString (dpy_, 0x3055 /* EGL_EXTENSIONS */);
+            if (ext != nullptr && hasToken (ext, "EGL_KHR_partial_update") && ::access ("/tmp/synthyboy-overlay-nodamage", F_OK) != 0)
+                eglSetDamageRegion_ = reinterpret_cast<EGLBoolean (*) (EGLDisplay, EGLSurface, EGLint*, EGLint)> (api_.eglGetProcAddress ("eglSetDamageRegionKHR"));
+        }
+        if (eglSetDamageRegion_ == nullptr || boxes.empty())
+            return;
+        damageRects_.clear();
+        for (const DamageRect& b : boxes)
+        {
+            ClipGeom g;
+            g.x0 = b.x0; g.y0 = b.y0; g.x1 = b.x1; g.y1 = b.y1; g.on = true;
+            int r[4] = {};
+            scissorBox (g, r);
+            if (r[2] > 0 && r[3] > 0)
+                damageRects_.insert (damageRects_.end(), { r[0], r[1], r[2], r[3] });
+        }
+        if (! damageRects_.empty())
+            eglSetDamageRegion_ (dpy_, esurf_, damageRects_.data(), static_cast<EGLint> (damageRects_.size() / 4));
+    }
+    /** true: the space separated list holds the token (an extension string). */
+    static bool hasToken (const char* list, const char* token) noexcept
+    {
+        const size_t n = std::strlen (token);
+        for (const char* p = list; (p = std::strstr (p, token)) != nullptr; p += n)
+            if ((p == list || p[-1] == ' ') && (p[n] == ' ' || p[n] == '\0'))
+                return true;
+        return false;
+    }
+    bool damageLooked_ = false;
+    EGLBoolean (*eglSetDamageRegion_) (EGLDisplay, EGLSurface, EGLint*, EGLint) = nullptr;
+    std::vector<EGLint> damageRects_;
 
     /** Diagnostics (a file once): what the display's EGL says (extensions) and the age of the back buffer of the first pictures (EGL_EXT_buffer_age): how many pictures ago the buffer was last drawn. */
     void probeBufferAge()
@@ -2408,6 +2462,18 @@ private:
     int pictureTarget_ = -1;
     bool frameBoxOn_ = false;
     int frameBox_[4] = {};                       // the box (buffer pixels) of the part of the picture that is painted now
+    /** The canvas bounding box of a draw's vertices (empty: x1 < x0). A draw that lies outside the box of the partial picture painted now is left out (runDraws). */
+    struct DrawBox
+    {
+        float x0 = 1.0f, y0 = 1.0f, x1 = -1.0f, y1 = -1.0f;
+        bool outside (const DamageRect& b) const noexcept
+        {
+            constexpr float m = 2.0f;           // the scissor box is rounded outward from the canvas box: a margin keeps every draw that can touch it
+            return x1 >= x0 && y1 >= y0 && (x1 + m < static_cast<float> (b.x0) || x0 - m > static_cast<float> (b.x1) || y1 + m < static_cast<float> (b.y0) || y0 - m > static_cast<float> (b.y1));
+        }
+    };
+    std::vector<DrawBox> drawBox_;               // per draw of draws_, filled by partialBoxes
+    const DamageRect* cullBox_ = nullptr;        // the box of the partial picture painted now (runDraws), or none
     std::vector<DamageRect> layerDamage_, liveBoxes_;   // what changed in the layers this picture, where the live ops are
     uint32_t lastPaintedPx_ = 0;
     bool noSlot_ = true;                         // stride 1 without the slot wait
