@@ -10,10 +10,10 @@ namespace synthyboy_mpc { namespace overlay { namespace oscmodel {
 
 /** The place of a part in a preset: the owner finds a child by it (`KnobPanel::part (slot)`). */
 enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level, WarpMenu, Scan, Dens, Length, Offset, Dir, Pitch, Filter,
-                                 Mode, Stack, Width, Range, WtSpread, Warp1Spread, Warp2Spread, Amount, AmountRand, Skew, SkewRand, Shape, LengthRand, PanRand, LevelRand, Timbre, Start, Delay, Attack, Hold, Decay, Sustain, Release, Override,
+                                 Mode, Stack, Width, Range, WtSpread, Warp1Spread, Warp2Spread, Amount, AmountRand, Skew, SkewRand, Shape, Timbre, Start, Delay, Attack, Hold, Decay, Sustain, Release, Override,
                                  NoiseType, NoiseStart, NoiseRand, NoiseLoop, NoiseBounce,
                                  NoiseStereo, NoiseEnv1,
-                                 SubCrs, SubEnv1, SubMono, SubPhase, SubContig, SubDest, SubBlend, SubBus1, SubBus2,
+                                 SubCrs, SubEnv1, SubMono, SubPhase, SubContig, SubBlend,
                                  SampleScan, SpecPos, Span,
                                  Fin, NoisePitch, NoiseFine, NoiseKey,
                                  Count };
@@ -59,37 +59,6 @@ struct PanelPreset
 namespace presets
 {
 constexpr int kUnisonDisplayH = 170;   // the picture above the unison settings (the fan of the voices)
-// wavetable: WT POS, the unison box, DETUNE, BLEND in a row; the warp pair below; the separated right column PAN over LEVEL
-constexpr PanelItem kWavetableItems[] = {
-    { PartKind::Dial, PanelSlot::WtPos, "WT POS", 0, 0, 1, 1, false },
-    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
-    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 1, 4, 1, false },
-    { PartKind::Dial, PanelSlot::Pan, "PAN", 4, 0, 1, 1, true },
-    { PartKind::Dial, PanelSlot::Level, "LEVEL", 4, 1, 1, 1, false },
-};
-// granular: 2 rows x 6: WARP menu, SCAN, DENS, LENGTH, PAN, LEVEL / OFFSET, DIR, PITCH, and the RAND knobs under LENGTH, PAN, LEVEL (a KnobRandPair spans both rows)
-constexpr PanelItem kGranularItems[] = {
-    { PartKind::Menu, PanelSlot::WarpMenu, "WARP", 0, 0, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Scan, "SCAN", 1, 0, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Dens, "DENS", 2, 0, 1, 1, false },
-    { PartKind::RandPair, PanelSlot::Length, "LENGTH", 3, 0, 1, 2, false },
-    { PartKind::RandPair, PanelSlot::Pan, "PAN", 4, 0, 1, 2, true },
-    { PartKind::RandPair, PanelSlot::Level, "LEVEL", 5, 0, 1, 2, false },
-    { PartKind::Dial, PanelSlot::Offset, "OFFSET", 0, 1, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Dir, "DIR", 1, 1, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Pitch, "PITCH", 2, 1, 1, 1, true },
-};
-// noise: FILTER, PAN, LEVEL
-constexpr PanelItem kNoiseItems[] = {
-    { PartKind::Dial, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, false },
-    { PartKind::Dial, PanelSlot::Pan, "PAN", 1, 0, 1, 1, true },
-    { PartKind::Dial, PanelSlot::Level, "LEVEL", 2, 0, 1, 1, false },
-};
-constexpr PanelPreset kWavetable { "wavetable", 5, 2, 4, kWavetableItems, static_cast<int> (sizeof kWavetableItems / sizeof kWavetableItems[0]) };
-constexpr PanelPreset kGranular { "granular", 6, 2, -1, kGranularItems, static_cast<int> (sizeof kGranularItems / sizeof kGranularItems[0]) };
-constexpr PanelPreset kNoise { "noise", 3, 1, -1, kNoiseItems, static_cast<int> (sizeof kNoiseItems / sizeof kNoiseItems[0]) };
 // DetailPage presets: titled blocks (one Q group each), the same rules as the full screen. The unison settings: the MODE and STACK steppers (a row of their own, 64 px, with their names) over the WIDTH and
 // RANGE knobs, and the block of the three spreads over the voices (what WT POS and the two warps do from voice to voice). Knobs are one size on a page (a block's columns are as wide as the others').
 constexpr PanelItem kUnisonDetailItems[] = {

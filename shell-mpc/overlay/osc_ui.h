@@ -252,7 +252,6 @@ public:
             stack.openFull (kElementOsc);
         stackDepth_ = stack.depth();
         syncPages (stack, inst);
-        envSel_ = selectedEnv; lfoSel_ = selectedLfo;
         const int lastSel = inst.playLastSelector();
         selectedSource_ = lastSel == 1 ? envSource (selectedEnv) : lfoSource (selectedLfo);
         if (nowMs - modsAtMs_ >= kModsRefreshMs || modsDirty_)
@@ -334,7 +333,6 @@ public:
     /** The instance (1 Sub .. 5 Noise) and the type of the oscillator it shows (0 wavetable, 1 sample, 2 granular, 3 spectral, 4 multisample; -1 for Sub and Noise). */
     int selection() const noexcept { return sel_; }
     int typeRaw() const noexcept { return sel_ == playosc::kSub || sel_ == playosc::kNoise ? -1 : typeRaw_; }
-    const char* typeName() const noexcept { return typeName_; }
     /** The list of the targets of the active Q group (table indices, -1 none) and the name of the group. */
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
@@ -1367,13 +1365,6 @@ private:
         const bool sub = sel == playosc::kSub, noise = sel == playosc::kNoise;
         prefix_ = sub ? "sub." : (noise ? "noise." : std::string ("osc") + std::to_string (playosc::oscNumber (sel)) + ".");
         const oscmodel::Kind kind = kindOfRaw (raw);
-        const synthyboy::ParamInfo* ti = nullptr;
-        const int tp = typeParam (sel);
-        if (tp >= 0) ti = &info (tp);
-        if (ti != nullptr && ! sub && ! noise && raw >= 0 && raw < ti->numChoices)
-            ui::setText (typeName_, sizeof typeName_, ti->choices[raw]);
-        else
-            typeName_[0] = '\0';
         noiseSample_ = -1;
         if (noise)
         {
@@ -1571,9 +1562,6 @@ private:
             case PanelSlot::Skew: return "gran.window_skew";
             case PanelSlot::SkewRand: return "gran.rand_skew";
             case PanelSlot::Shape: return "gran.window_shape";
-            case PanelSlot::LengthRand: return "gran.rand_length";
-            case PanelSlot::PanRand: return "gran.rand_pan";
-            case PanelSlot::LevelRand: return "gran.rand_level";
             case PanelSlot::Timbre: return "multi.timbre";
             case PanelSlot::Start: return "sample.uni_start";
             case PanelSlot::Delay: return "multi.delay";
@@ -1599,10 +1587,7 @@ private:
             case PanelSlot::SubMono: return "mono";
             case PanelSlot::SubPhase: return "phase";
             case PanelSlot::SubContig: return "phase_contiguous";
-            case PanelSlot::SubDest: return "destination";
             case PanelSlot::SubBlend: return "filter_blend";
-            case PanelSlot::SubBus1: return "bus1_send";
-            case PanelSlot::SubBus2: return "bus2_send";
             case PanelSlot::SampleScan: return "sample.scan";
             case PanelSlot::SpecPos: return "spec.position";
             case PanelSlot::Span: return "sample.uni_span";
@@ -3061,12 +3046,12 @@ private:
     int pageSel_ = 0;   // the oscillator of a page of the OSC tab (setPage), 0: the Play page's UI
     int noiseSample_ = -1;
     int w_ = 1280, h_ = 628, sel_ = 2, typeRaw_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, pageLoaded_ = 0, qActive_ = 0;
-    int envSel_ = 1, lfoSel_ = 1, selectedSource_ = ui::kNoSource;
+    int selectedSource_ = ui::kNoSource;
     double modsAtMs_ = -1000.0;
     int tuneFocus_ = -1;
     std::array<int, 5> tuneTargets_ {{ -1, -1, -1, -1, -1 }};
     std::string prefix_ = "osc1.";
-    char typeName_[16] = {}, qName_[16] = {};
+    char qName_[16] = {};
     QSlots qSlots_;
 };
 
