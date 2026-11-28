@@ -73,15 +73,6 @@ struct QTable
     }
 };
 
-/** The row index with page id `id` in a table of n rows (-1: none). */
-inline int indexOfId (const Row* rows, int n, int id) noexcept
-{
-    for (int i = 0; i < n; ++i)
-        if (rows[i].id == id)
-            return i;
-    return -1;
-}
-
 // ---- value rules (pure): the same functions the page uses for the Q-Link turn, the wheel and the write of a native cell ----------------------------------------------------------------
 
 /** One Q-Link detent on a continuous row: 1 / 128 of the range (the hardware knob step). */
