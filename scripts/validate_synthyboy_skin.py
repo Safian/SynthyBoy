@@ -447,7 +447,10 @@ _MODIFIER_PREFIX_RE = re.compile(
     r"[A-Za-z][A-Za-z0-9_]*(?:\[[^\]]*\])?/)"
 )
 # Confirmed harmless B1 modifier-operand pairs: (source_loc, operand) -> reason.
-ALIAS_MODIFIER_ALLOWLIST = {}
+ALIAS_MODIFIER_ALLOWLIST = {
+    ("defs_osc.json:oscWarpChoices", "Local/7/synthyboyWarpPage"): "Direct SDK Local/<range>/<id> handle (skin/defs_osc.json:5830), not a remapped alias; synthyboyWarpPage is proven on Key 61 (validate_synthyboy_skin.py:29, docs/dsp-knowledge/skin-host-behaviour.md:81).",
+    ("defs_common.json:native keyboard overlay", "Local/3/layer"): "Direct UI-only SDK Local/<range>/<id> handle (skin/defs_common.json:3026, docs/dsp-knowledge/native-text-entry.md:7), not a remapped alias; non-proven Local id warning still applies.",
+}
 # Confirmed harmless B2 non-empty remap instances missing Data: (source_loc, component_type, entry_name) -> reason.
 MISSING_DATA_ALLOWLIST = {}
 
@@ -709,7 +712,7 @@ def tui_semantics(page, schema, skins, findings, sources=None):
     if len(page["tabs"]) > PROVEN_MAX_TABS:
         findings.warn("$.pageData.tabs", f"{len(page['tabs'])} tabs: the SDK note allows {SDK_MAX_TABS}, the proven skin runs {PROVEN_MAX_TABS} on both devices")
     check_label_covers(page, findings, sources=sources, as_error=True)
-    check_alias_rules(page, findings, sources=sources, as_error=False)
+    check_alias_rules(page, findings, sources=sources, as_error=True)
 
 
 def check_skin_schema(skins, label="skin"):

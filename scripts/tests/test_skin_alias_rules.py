@@ -148,6 +148,19 @@ class TestSkinAliasRules(unittest.TestCase):
             self.assertIn("B1\tTUI.json:Widget\tBtn\tgate\tNonZero/GateAlias\tGateAlias", proc.stdout)
             self.assertIn("B2\tTUI.json:tab:Tab1\tInst\tWidget\tGateAlias", proc.stdout)
 
+    def test_b1_allowlist_permits_proven_local_handle_but_rejects_alias(self):
+        defs = {
+            "oscWarpChoices": _definition([
+                _entry("Opt", "Button", gates=["IndexedEnabling/0/7/Local/7/synthyboyWarpPage"]),
+                _entry("Bad", "Button", gates=["IndexedEnabling/0/2/SomeAlias"]),
+            ]),
+        }
+        page = _page([_tab("Tab1", [])], defs=defs)
+        findings = validator.Findings()
+        validator.check_alias_rules(page, findings, sources={"oscWarpChoices": "defs_osc.json"}, as_error=True)
+        self.assertEqual(len(findings.errors), 1)
+        self.assertIn("SomeAlias", findings.errors[0][1])
+
 
 if __name__ == "__main__":
     unittest.main()
