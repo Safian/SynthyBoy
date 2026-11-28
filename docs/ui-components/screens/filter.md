@@ -8,7 +8,11 @@
 
 **Variants.** The filter model decides which controls apply: the Formant model shows the FORMANT dials, the Comb model the COMB dial; the VAR dial is the formant RESONANCE under the Formant model. The F1 + F2 view shows both filters' curves; the PZ curve editor applies to the selected filter.
 
-**Data (blocks of `native_ui_params.h`).** `kFilterBase` (the view), `kFilterValueBase` (28 value slots, `FilterSlot` in `shell-mpc/native_filter_controls.h`), `kFilterIndicatorBase` (5 indicators), `kFilterChainMenu` (the routing menu), `kPzAction` / `kPzSource` / `kPzAvailability` (PZ editor), `kModTargets`, `kNativeText`. Handles are the same for both tabs; the bound filter is the view index.
+**Definitions.** `skin/defs_filter.json` (22: `filterNativeChain`, `filterNativePzToolbar`, `filterNativeModel`, `filterNativeStyle`, the dial twins, `filterNativeEditorSurface`, `filterScreen`, `filterScreenTop`; four unused view/scalar chooser definitions were deleted).
+
+**Data (blocks of `native_ui_params.h`).** `kFilterBase` (the view), `kFilterValueBase` (28 value slots, `FilterSlot` in `shell-mpc/native_filter_controls.h`), `kFilterIndicatorBase` (5 indicators), `kFilterChainMenu` (the routing menu), `kPzAction` / `kPzSource` / `kPzAvailability` (PZ editor), `kModTargets`, `kNativeText`. Handles are the same for both tabs; the bound filter is the view index. Retired control IDs in C++: `kClose`, `kView`, `kExpand`, `kScalarView` (`filter_ui.h:67-73`).
+
+**Tab exit and page loading.** On `leftTab` (`shell-mpc/overlay/filter_ui.h:335-344`), `hideNativeControls()` resets `kFilterBase = 0`, `clearNativeTexts()` clears line strings, and targets, modulations, and the PZ toolbar are hidden. There is no read-only display cache on exit yet. `enteringLayout` in `synthyboy_mpc.cpp:2169` protects `0 -> >0` entry with `kNativePaintWindowMs = 150 ms`.
 
 **Q groups.** MAIN [CUTOFF, RESO, DRIVE, MIX], TRACK [KEYTRACK, ENV 1, VAR, COMB], OUT [BLEND, ROUTING, MODEL, STYLE], FORMANT [X, Y, TRANSPOSE, SPREAD].
 

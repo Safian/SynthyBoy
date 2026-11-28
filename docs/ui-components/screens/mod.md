@@ -27,4 +27,4 @@ Matrix: four groups, [ROW, SOURCE, TARGET, AMOUNT] of the selected slot, [UNI / 
 
 ## C++ owners
 
-`shell-mpc/overlay/mod_ui.h`, `mod_model.h`, `mod_rows_page.h`, `native_mod_targets_ui.h`, `q_publish_mod.h`; `shell-mpc/native_mod_controls.h`, `native_mod_targets.h`.
+`shell-mpc/overlay/mod_ui.h`, `mod_model.h`, `mod_rows_page.h`, `native_mod_targets_ui.h`, `q_publish_mod.h`; `shell-mpc/native_mod_controls.h`, `native_mod_targets.h`. Retired unreferenced C++ symbols (`b5183f24`): Matrix/Detail aperture helpers, write-only slot fields, and unused `ModUi` accessors/constants.

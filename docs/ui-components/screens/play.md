@@ -20,10 +20,14 @@ Texts: `Native Osc Missing Compact` (a source that is missing) and `Native Osc M
 
 The three selector parameters `Play Osc`, `Play Env`, `Play LFO` and the 24 Play proxies (the legacy prefix, [../../MPC.md](../../MPC.md), "Parameter order" and "Play selectors and proxies"); blocks of `shell-mpc/native_ui_params.h`: `kPlayOsc` (`native_play_osc.h`), `kPlayEnvLfo` (`native_play_env_lfo.h`), `kPlayLfoStandard`, `kPlayLfoStandardSync`, `kOscPower`, `kNativeText`. The Play page keeps its own selection, independent of the Env, LFO and Osc tabs.
 
+## Tab exit and page loading
+
+Play uses a read-only suspension pattern on exit (`suspendNativePlayOsc`, `suspendNativePlayEnvLfo`), disarming input while keeping compact oscillator, envelope, and LFO parameter bindings valid for host paint. On startup and after every program or chunk restore, `preparePlayPresentation` (`synthyboy_mpc.cpp:2256-2276,3715`) pre-populates these read-only bindings before host exposure, eliminating cold-load widget arrival lag.
+
 ## Q groups
 
 Four groups published together (`PlayView::publishQ`): the oscillator's Basic, the envelope's ADSR, the LFO's RATE, and a fourth [LFO SYNC, OSC POWER, LFO MONO, none] of the shown LFO and oscillator. All are stepped targets. The header dropdowns are not Q members.
 
 ## C++ owners
 
-`shell-mpc/overlay/play_view.h`, `play_osc.h`, `play_env_lfo.h`, `osc_ui.h` / `env_ui.h` / `lfo_ui.h` (their compact views), `shell-mpc/play_params.h`, `shell-mpc/native_play_osc.h`, `native_play_env_lfo.h`, `play_osc_native_contract.h`.
+`shell-mpc/overlay/play_view.h`, `play_osc.h`, `play_env_lfo.h`, `osc_ui.h` / `env_ui.h` / `lfo_ui.h` (their compact views), `shell-mpc/play_params.h`, `shell-mpc/native_play_osc.h`, `native_play_env_lfo.h`, `play_osc_native_contract.h`. Retired unreferenced symbols (`85e92dbb`): `compactLabelRect`, 40 dead skin definitions, and 15 orphaned images.

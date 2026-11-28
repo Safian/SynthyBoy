@@ -14,10 +14,14 @@ Ten strips left to right: SUB, A, B, C, NOISE (`mixerStripSourceFrame`), F1, F2 
 
 Blocks of `shell-mpc/native_ui_params.h`: `kMixerPeakBase`, `kMixerHoldBase` (the meters), `kMixerControl` (`mixer::kSolo`, `kMute`), `kMixerSoloVisual`, `kMixerMuteVisual`, `kMixerStereoBase` (PeakL, PeakR, HoldL, HoldR, ClipL, ClipR per strip). The faders, pans, sends and destinations bind engine parameters directly.
 
+## Tab exit and page loading
+
+On layout entry (`MixerUi::update`), `inst.setUiFullOpen(!nativeBase())` keeps the ordinary Overlay Instance frame for native root operation. On leaving the tab (`MixerUi::leftTab`, `shell-mpc/overlay/mixer_ui.h:242-251`), `inst.setNativeMixerActive(false)` is set, meters are zeroed, and `inst.setUiFullOpen(false)` is explicitly called to eliminate the Frame-24 exit leak into destination tabs (`d49bca22`).
+
 ## Q groups
 
 On the XL Q 1 .. Q 10 follow the ten LEVEL faders; the four-knob banks are [SUB, A, B, C], [NOISE, F1, F2, MAIN], [BUS 1, BUS 2]. PAN, sends and destinations are touch only.
 
 ## C++ owners
 
-`shell-mpc/overlay/mixer_ui.h` (rows, Q banks, meters); strip component: [../mixer_strip.md](../mixer_strip.md), [../native-mixer-strip.md](../native-mixer-strip.md).
+`shell-mpc/overlay/mixer_ui.h` (rows, Q banks, meters); strip component: [../mixer_strip.md](../mixer_strip.md), [../native-mixer-strip.md](../native-mixer-strip.md). Retired unreferenced C++ symbols (`b87ef437`): `kElementMixer`, cell geometry helpers, `formatRow`, `valueText`, `qGroupName`, `writeCell`, `listOpen`, and `peak_`.

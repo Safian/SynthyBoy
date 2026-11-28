@@ -6,9 +6,17 @@
 
 `envScreen`: the modulation editor and targets title (shared, `defs_common.json`) and `envNativeFullFields` (0 0 1280 628): the dials Attack, Decay, Sustain, Release, Delay, Hold, the three curve cells (attack, decay, release), the BEATS and RETRIG switches (the targets button is the Env header now). `envScreenTop`: the target tags (three tag dots and labels plus the "more" label, `Env Native Tag`) and the list pages (`oscNativeList`). The envelope graph with the live position is drawn by the plugin (`env-graph`, [../env-graph.md](../env-graph.md)).
 
+## Definitions
+
+`skin/defs_env.json` (9: `envNativeDial`, `envNativeCurve`, `envNativeBeatsSwitch`, `envNativeRetrigSwitch`, `envNativeFullFields`, `envScreen`, `envScreenTop`, `envHeaderTargets`, `envHeader`). Replaced controls: `envNativeTargets`, the captions, and retired instance choosers (`envNativeSelectorDropdown`, `envNativeInstanceChoiceMenu`).
+
 ## Data
 
 Blocks of `shell-mpc/native_ui_params.h`: `kEnvView` (the shown envelope), `kEnvFields` (`shell-mpc/native_env_controls.h`: the value of every cell), `kModTargets` (the targets pages), `kNativeText`/`kDrawText` (tags and captions). The shown envelope is bound by the view index of the tab; the screen's handles are the same for all six tabs. The Play page keeps its own envelope selection (see [play.md](play.md)).
+
+## Tab exit and page loading
+
+On leaving the tab (`EnvUi::leftTab`, `shell-mpc/overlay/env_ui.h:517-525`), `hideNativeTargets()` is called and `setNativeEnvEditor(false, nullptr)` resets `kEnvView` to 0. It does not retain a suspended read-only cache on exit. On the display thread, `nativeEnvPoll` reports values before `kEnvView` and invokes `requestNativeControlNames()`. Trailing-edge debounce (`ac8b3c34`) defers host-wide metadata refresh during rapid Env taps.
 
 ## Q groups
 

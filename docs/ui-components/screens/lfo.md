@@ -15,9 +15,17 @@ The LFO shape and the live cursor are drawn by the plugin; the top row is the He
 
 One component. The bound LFO (1 .. 10) or random LFO (11 .. 14) decides which fields apply: the random LFO shows the style grid, RATE, HZ / BPM / KEY, STEREO and the trigger; the shape editor applies to the LFOs. Availability of the optional editor fields is a published handle set (`lfoeditor::kAvailability`).
 
+## Definitions
+
+`skin/defs_lfo.json` (97 definitions: `lfoNativeFullEditor`, `lfoScreen`, `lfoScreenTop*`, `lfoNativePicks`, `lfoHeader*`; unreferenced `lfoNativeInstanceDropdown` and `ChoiceMenu` definitions deleted in commit `9fc32b0b`).
+
 ## Data
 
 Blocks: `kLfoBase` (per-LFO values), `kLfoEditor` (`lfoeditor::kView`, `kValues`, `kAvailability`, `kScale`; `shell-mpc/native_lfo_editor.h`), `kLfoDetail` (`native_lfo_detail.h`), `kLfoPick` (`native_lfo_pick.h`), `kLfoTargetsAction`, `kModTargets`, the text lines `kNativeText` / `kDrawText`, the keyboard handles `kTextEdit` (`native_text_entry.h`), the field cells `native_lfo_controls.h`. The screen's handles are the same for all 14 tabs.
+
+## Tab exit and page loading
+
+On leaving the tab (`LfoUi::leftTab`, `shell-mpc/overlay/lfo_ui.h:1076-1088`), `hideNativeTargets` hides targets, and `publishNativeEditor/Detail` and `setNativeLfoState({})` reset the layout to 0 (no read-only cache on tab exit yet). On the display thread, `switchingLfoLayout` (`synthyboy_mpc.cpp:2171-2174`) protects visible-to-visible switches between LFO and RND with `kNativePaintWindowMs = 150 ms`.
 
 ## Q groups
 
@@ -25,4 +33,4 @@ LFO: RATE, TIMING, MOTION, KEY FOLLOW (key follow sync only), SHAPE (SMOOTH, HOS
 
 ## C++ owners
 
-`shell-mpc/overlay/lfo_ui.h`, `lfo_layout.h`, `lfo_shape_files.h`, `native_marker_covers.h`; `shell-mpc/lfo_live.h`, `native_lfo_controls.h`, `native_lfo_editor.h`, `native_lfo_detail.h`, `native_lfo_pick.h`.
+`shell-mpc/overlay/lfo_ui.h`, `lfo_layout.h`, `lfo_shape_files.h`, `native_marker_covers.h`; `shell-mpc/lfo_live.h`, `native_lfo_controls.h`, `native_lfo_editor.h`, `native_lfo_detail.h`, `native_lfo_pick.h`. Retired unreferenced members (`9fc32b0b`): `kSyncTrip/kSyncDot/kHostPick`, `playCells`, `playDots`, `selector_`, `scan_`, `isSourceAssigned`, `compactBlock`, `gridOf`, `nativeDetailFields_`, `kStyleLast`.

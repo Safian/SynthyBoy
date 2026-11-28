@@ -6,6 +6,54 @@
 
 ---
 
+## Status (2026-11-28)
+
+Progress on the page-loading pattern and remediations across the screens:
+
+### What is done:
+- **Global / Metadata refresh & Status:**
+  - Trailing-edge debounce in `synthyboy_mpc.cpp:2839-2865` (`ac8b3c34`): `proxyNamesLastAt = steadyMs()` tracks the latest switch. `audioMasterUpdateDisplay` defers until `kPageSwitchSettleMs` (800 ms) after the latest request, capped at `kPageSwitchMaxMs` (2500 ms). Q 1..16 values are sent immediately via `audioMasterAutomate`.
+  - Immediate view status (`controller.h:639`, `ac8b3c34`): `statusDue_ = true` on view change forces `overlay-status.txt` to update immediately instead of waiting for the 1 s heartbeat.
+- **Mixer (Worst #5 partial):**
+  - Frame-24 exit leak eliminated in `mixer_ui.h:193,245` (`d49bca22`): layout entry sets `inst.setUiFullOpen(!nativeBase())` (ordinary overlay instance frame); `leftTab()` explicitly calls `inst.setUiFullOpen(false)`.
+- **Master & Tuning:**
+  - Obsolete `kMasterView` (`IndexedEnabling/{1,2}/3/Parameter 2879`) cross-tab gate dropped in `skin/TUI.json` (`96a2d791`). Tuning Header `HdrView` remapped to root frame gate `Parameter 2675`.
+- **Mod:**
+  - `ModUi::leftTab()` / `suspendNative()` (`shell-mpc/overlay/mod_ui.h:100,1246`, commit `b642c4be`): disarms input (`suspended_ = true`), clears `setUiFullOpen(false)`, and preserves published Matrix rows, navigation, detail, board, and `Mod*` `nativeText` lines without clearing other tabs' `nativeText` lines. `drainNativePending()` drains queued writes on return.
+- **Osc A / B / C / Sub / Noise (Worst #1 partial):**
+  - Read-only display cache (`96496be4`): `OscPageUi::leftTab()` calls `suspendNativeOsc()` and `suspendNativeOscRoot()`. `nativeui::osc::Bank`, `nativeui::osc::SettingsBank` (`native_osc_settings_bank.h`), and `nativeui::oscdetail::Bank` (`native_osc_detail.h`) retain published state for host reads while disarming writes. Stale gestures are rejected via `renewInputRevision()`.
+  - Paint-window protection on layout entry and source switches (`a366caa8`).
+  - Cold pre-population on startup and `effSetProgram`/chunk restore (`c7b6c475`).
+  - Skin round 1 (`44fda96a`): translucent veil (`oscNativeOffVeil`) replaces Off twins (−529 plain nodes).
+  - Skin round 2 (`8cd10a2d`): per-row tile variants carry only reachable menu kinds, dropping real expanded nodes from 3,631 → 2,631.
+
+### Measured numbers from device evidence:
+- **Key 61 Osc pattern & bisect (`.hw-local/mpc-perf/key61-osc-pattern-20261128/README.md`):**
+  - Baseline develop (arm32): `Env 1 -> Osc A` 1.24–1.34 s; `Osc A -> Env 1` 0.68–0.72 s.
+  - Veil package (Off twins replaced, 1377 plain nodes): `Env -> Osc` 1.23–1.58 s, `Osc -> Env` 0.55–0.60 s.
+  - Bisect with skin-only edits in installed package (3 samples each):
+    - Settings layer emptied: `Env -> Osc` 0.86–0.87 s, `Osc -> Env` 0.55–0.61 s.
+    - Only `oscNativeDetail` emptied: `Env -> Osc` 0.57–0.60 s, `Osc -> Env` 0.34–0.43 s.
+    - Settings layer AND `oscNativeDetail` emptied: `Env -> Osc` 0.22 s, `Osc -> Env` 0.40 s.
+    - Host DRM trace: Host frame stays on Env until ~1.1–1.2 s, then host paints Osc, overlay plane follows ~0.1 s later: the cost is the host building the tab.
+  - Repeats finding: Plain/Graph detail grids carry `"repeats": 8`, making `oscScreen` 3,631 real nodes (not 1,377); `oscNativeDetail` alone was 2,638 nodes. Closed layers cost full instantiation time (`oscNativeDetail` is closed by default, yet cost ~0.7 s).
+  - Round 2 (reachable menu kinds only, 2,631 real nodes): `Env -> Osc` 1.10–1.12 s (cold first 1.48 s), `Osc -> Env` 0.55–0.57 s.
+- **Key 61 Inactive tab cost independence (`.hw-local/mpc-perf/key61-inactive-tab-cost-20261128/README.md`):**
+  - `Env 1 <-> LFO 1` with full Osc (~2,631 nodes): `Env -> LFO` 0.42–0.50 s (cold 0.74 s), `LFO -> Env` 0.32–0.41 s.
+  - `Env 1 <-> LFO 1` with Osc settings and detail emptied (~ −2,300 nodes): `Env -> LFO` 0.50–0.52 s (cold 0.69 s), `LFO -> Env` 0.31–0.41 s.
+  - Result: No difference within noise. Tab switch latency is determined exclusively by the tree of the tab being entered; inactive tabs do not add to it.
+
+### Still open:
+- **Osc:** Detail sub-pages check on device (body tap); veil visual verification on an oscillator switched off; further node collapse (combining Plain/Graph 8×5 grids, ABC settings 3→1 retargeting, Tune 3→1).
+- **Mixer:** Stop blanking `nativeMixerSoloVisual` / `nativeMixerMuteVisual` on `leftTab()` in `synthyboy_mpc.cpp:1931-1946,2535-2556` to avoid blasting 100 zero writes; device measurement of Mix arrival.
+- **FX (Worst #2):** Collapse 32 `fxNativeHeader` instances to 1 retargeted header (−930 nodes); deduplicate `NativeInactive` parameter cells; add 4-bank `suspend()` on `leftTab()`.
+- **LFO 1–10 + RND 1–4 (Worst #3):** Collapse 36 `lfoNativePickTarget` instances; audit 95-node modal keyboard overlay across 14 tabs; add `suspend()` to `nativeLfo` on `leftTab()`.
+- **Filter 1–2 (Worst #4):** Collapse 20 `filterNativeStyle` instances; unify dial Off twins; add `suspend()` on `leftTab()`; protect `kFilterBase` layout transitions in `enteringLayout`.
+- **Mod:** Collapse `modNativeRowNormal` and `modNativeRowScroll` (~112 nodes); `enteringLayout` paint-window protection in `synthyboy_mpc.cpp`.
+- **Device timing:** Key 61 measurement of Master ↔ Tuning transition post-`kMasterView` drop, and trailing-edge debounce during rapid tab bursts.
+
+---
+
 ## 1. The GOOD Page-Loading Pattern
 
 The Key 61 measurements establish two distinct latency regimes:
