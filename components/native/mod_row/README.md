@@ -28,5 +28,4 @@ Host-native MPC compound component for modulation matrix rows. [Historical Mod s
 - **Touch Hitbox**: Every interactive control (Slider, Toggles, Selectors, MORE) has a height >= 56 px meeting MPC Rule 3.
 - **Handle Independence**: 7 matrix row instances resolve their handles independently without cross-row collision.
 - **Known Limitation - Live Deflection**: Live modulation deflection animation on the base row requires an active deflection handle not yet present in host skin data; dynamic modulation arc animation remains on the C++ overlay layer.
-- **Separate Overlay Elements**: `ModSourceBoard` (quick-add chips) and `ModSlotDetail` (full slot parameter page) remain on the overlay plane.
 - **Static Preview Distinction**: Offline previews and Sketch adapters render synthetic fixtures; hardware input forwarding must be verified on Akai MPC Key 61 and MPC XL devices.

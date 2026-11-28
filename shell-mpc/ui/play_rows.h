@@ -13,7 +13,7 @@
 namespace synthyboy_mpc { namespace ui { namespace playrows {
 
 constexpr int kMargin = 6;                 // the margin of a third at its sides, top and bottom
-constexpr int kSelectorH = 56;             // the selector row: the shared selector (a Stepper with its list) in every third; in the oscillator third it is the header row (power, selector, full screen, route)
+constexpr int kSelectorH = 56;             // the selector row: the shared selector (a dropdown with its list) in every third; in the oscillator third it is the header row (power, selector, full screen, route)
 constexpr int kSelectorGap = 8;            // between the selector row and the display
 constexpr int kControlGap = 8;             // the gap between two rows and two columns of the controls of a third (Play phase 2: one 8 px grid)
 constexpr int kControlsH = 196;            // from the controls line to the bottom margin: two rows of 94 px (dial rows, 56 px dial) and the 8 px gap, or the LFO's four 60 px rows with three 8 px gaps (the lane of the Q chips lies above the line)
@@ -28,14 +28,12 @@ inline Rect displayRect (const Rect& third) noexcept
 }
 // ---- the header band of a display: one height for the three thirds
 constexpr int kBandInset = 4;              // the buttons' distance from the top and the sides of the display
-constexpr int kBandRowH = 64;              // the row of the buttons: the route button is 64 x 64 (RouteButton::minSize); the 56 px buttons (power, full screen) are centred in the row
+constexpr int kBandRowH = 64;              // the row of the buttons: the route button is 64 x 64 (minimum size); the 56 px buttons (power, full screen) are centred in the row
 constexpr int kBandH = kBandInset + kBandRowH + kBandInset;   // the band: the inset above the buttons, the row, and the same inset below
 constexpr int kButtonW = 64, kButtonH = 56;                    // the power and the full screen button (touch targets of at least 56 px)
 constexpr int kBandGap = 8;                // between two buttons and between a button and the label
 constexpr int kPlotPadX = 14, kPlotPadTop = 10, kPlotPadBottom = 20;   // the plot area inside the display below the band: the margins hold the handles (8 px radius) and the time labels of the envelope graph
 
-/** The band at the top of a display (inside its frame). */
-inline Rect bandRect (const Rect& display) noexcept { return { display.x, display.y, display.w, std::min (kBandH, display.h) }; }
 /** The power button (oscillator only): the top left of the band. */
 inline Rect powerRect (const Rect& display) noexcept { return { display.x + kBandInset, display.y + kBandInset + (kBandRowH - kButtonH) / 2, kButtonW, kButtonH }; }
 /** The full screen button: the rightmost in the band, the same place in the three thirds. */

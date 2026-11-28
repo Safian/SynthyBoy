@@ -81,7 +81,7 @@ class CompactNativeDialTests(unittest.TestCase):
                 name_ctrl = components["name"]["componentData"]["data"]
                 self.assertEqual(name_ctrl["handleName"], "Caption")
                 self.assertEqual(name_ctrl["textStyle"]["font"]["height"], 14)
-                # the dial name as ui::Knob draws it: upper case, theme textDim
+                # the dial name: upper case, theme textDim
                 self.assertEqual(name_ctrl["textStyle"]["colour"], style.argb("text.caption"))
                 self.assertEqual(style.color("text.caption"), style.theme_colors("neon")["textDim"])
                 self.assertEqual(name_ctrl["textStyle"]["case"], "Upper Case")

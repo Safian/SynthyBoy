@@ -207,7 +207,7 @@ Kövessük az alábbi lépéseket az MPC standalone érintőképernyőjén a pad
 | MODULATION MATRIX                                          [ + ADD ]  |
 | Tabs: [ ALL ]  [ BY SOURCE ]  [ BY DEST ]                             |
 +-----------------------------------------------------------------------+
-| Üres mátrix nézet: 57 forrásos gyorsválasztó tábla (ModSourceBoard)   |
+| Üres mátrix nézet: 57 forrásos gyorsválasztó tábla   |
 | [ ENVELOPES ]  Env 1   Env 2   Env 3   Env 4   Env 5   Env 6          |
 | [ LFOS ]       LFO 1..10   RLFO 1..4                                  |
 | [ MACROS ]     Macro 1..8                                             |
@@ -225,7 +225,7 @@ Kövessük az alábbi lépéseket az MPC standalone érintőképernyőjén a pad
 - Nyomjuk meg a hardveres fizikai **Mod** funkciógombot, vagy érintsük meg a **Mod** fület az MPC érintőképernyőjén.
 
 ### 2. lépés: Válasszuk ki a forrást
-- **Ha a mátrixban 0 aktív hely (slot) van:** A SynthyBoy megjeleníti az 57 forrásos gyorsválasztó táblát (`ModSourceBoard`) ([a modulációs oldal](../../ui-map/mod.md)). Érintsük meg a **POLY AFTERTOUCH** mezőt a **PLAYER** kategóriában.
+- **Ha a mátrixban 0 aktív hely (slot) van:** A SynthyBoy megjeleníti az 57 forrásos gyorsválasztó táblát ([a modulációs oldal](../../ui-map/mod.md)). Érintsük meg a **POLY AFTERTOUCH** mezőt a **PLAYER** kategóriában.
 - **Ha már léteznek útvonalak:** Érintsük meg a jobb felső sarokban található **+ ADD** gombot. Az újonnan létrehozott sorban érintsük meg a **SOURCE** (Forrás) gombot (vagy forgassuk a **Q2** Q-Link potmétert). A forrásválasztó listában válasszuk ki a **Poly Aftertouch** lehetőséget (38. forrásválasztás).
 
 ### 3. lépés: Válasszuk ki a célpontot

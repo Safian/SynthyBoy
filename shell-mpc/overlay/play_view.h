@@ -34,9 +34,7 @@ namespace play
 constexpr int kPanels = 3;
 constexpr int kOscs = 3, kEnvs = 6, kLfos = 10;                 // the instances of the own engine (LiveValues::kNumEnvs / kNumLfos, three wavetable oscillators)
 constexpr int kOscSelections = playosc::kInstances;            // the oscillator selector: Sub, A, B, C, Noise (play_osc.h); the picture exists for A, B, C only
-constexpr int kInstancesOf[kPanels] = { kOscSelections, kEnvs, kLfos };
 constexpr int kPanelW = 400, kPanelGap = 17;                    // 3 * 400 + 2 * 17 = 1234 px: the region of the view
-constexpr float kTitleSize = 24.0f;                              // pixels per em of the titles
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
 constexpr int kEnvPoints = 256;
 constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
@@ -108,7 +106,7 @@ public:
                 changed = true;
             }
         }
-        // ---- oscillator: the picture of the display rectangle of the plugin-drawn oscillator UI (osc_display.h: the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the
+        // ---- oscillator: the picture of the display rectangle of the overlay oscillator UI (osc_display.h: the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the
         // spectrum of a spectral one, the noise colour, the sub oscillator's waveform, the live read-outs)
         if (! expandedOscActive_)
             changed = osd_.update (inst, sel_[0], in.targets, live, in.nowMs, counters_) || changed;
@@ -188,7 +186,7 @@ public:
             edgeX_ = in.panelEdgeX;
             changed = true;
         }
-        // ---- the plugin-drawn oscillator pages: they read their parameters and the Q group; what they draw changes the picture
+        // ---- the overlay oscillator pages: they read their parameters and the Q group; what they draw changes the picture
         if (usePageUi)
         {
             if (! osc_)
@@ -469,9 +467,6 @@ public:
         if (lfo_ != nullptr) lfo_->forgetQGroup();
         openElement_ = 0;
     }
-    OscUi* oscUi() noexcept { return osc_.get(); }
-    EnvUi* envUi() noexcept { return env_.get(); }
-    LfoUi* lfoUi() noexcept { return lfo_.get(); }
 
     uint32_t oscUiHash()
     {
@@ -658,7 +653,7 @@ private:
         return top + (1.0 - v01) * (bottom - top);
     }
 
-    /** The whole picture of the view as a scene: the Env and LFO panels, then the plugin-drawn oscillator UI with the cycle picture in its display rectangle. */
+    /** The whole picture of the view as a scene: the Env and LFO panels, then the overlay oscillator UI with the cycle picture in its display rectangle. */
     void build (gpu::SceneBuilder& sb) const
     {
         const ui::theme::Look& T = ui::theme::L();
@@ -775,7 +770,7 @@ private:
     {
         using namespace play;
         float v[kEnvPoints > LfoView::kPoints ? kEnvPoints : LfoView::kPoints];
-        for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the plugin-drawn compact view now (osc_ui.h)
+        for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the overlay compact view now (osc_ui.h)
         {
             if (p == 1 && env_ != nullptr)   // so is the envelope (env_ui.h): its own ground, the graph, the knobs; the running dots live
             {

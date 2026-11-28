@@ -20,7 +20,7 @@ constexpr bool kKey61HotSpotMeasured = true;
 constexpr int kKey61HotSpotX = 0, kKey61HotSpotY = 63;
 
 /** The arrow tip measured on a device: (rotation, panel size) -> the pixel of the pointer plane's picture. false: not measured (the default rule is used). The Key 61's (rotation 90, panel 800 x 1280) is
-    filled in from the measurement of the pointer plane's picture (docs/MPC.md "Mouse on the plugin-drawn pages"). */
+    filled in from the measurement of the pointer plane's picture (docs/MPC.md "Mouse on the overlay pages"). */
 inline bool measuredHotSpot (int rotation, int panelW, int panelH, int planeW, int planeH, HotSpot& out) noexcept
 {
     (void) planeW;

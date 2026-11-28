@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include "fakes.h"
-#include "fixtures/legacy_layout.h"
+#include "fixtures/test_layout.h"
 
 using namespace ovt;
 
@@ -36,7 +36,7 @@ static int runCase (int which)
     FakeFrame frame;
     CpuCurveRenderer renderer;
     FakeInstance inst;
-    frame.views = legacy::kViews;
+    frame.views = testlayout::kViews;
     Paths p = dir.paths();
     const std::string big = dir.path + "/big";
     {
@@ -52,7 +52,7 @@ static int runCase (int which)
         case 2: p.pointerHotSpot = big; break;
         case 3: p.gpuClock = big; break;
     }
-    SynthyBoyController ctl (plane, frame, renderer, p, Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
+    SynthyBoyController ctl (plane, frame, renderer, p, Timing(), 10.0, nullptr, nullptr, &testlayout::pageSet());
     inst.set ("filter1.cutoff", 1000.0f);
     inst.set ("filter1.resonance", 30.0f);
     ctl.attach (&inst);

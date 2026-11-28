@@ -1,7 +1,6 @@
 // SynthyBoy - MPC overlay: the GEOMETRY of the LFO pages (owner decision 2026-11-27: the C++ layer has no UI elements). The controls of the compact view of the Play page, of the full screen and of the LFO tab are native
 // cells of the host skin; the plugin only has to know the rectangles the skin puts them in (so that it leaves them open in its ground, does not swallow a touch on one and selects the Q group of the one that was
-// touched) and the rectangles of its own displays. Pure functions of the sizes: no state, no widget. Ported from the layout code of the deleted ui::LfoCompact and ui::LfoFullScreen
-// (git show d8cfc25f~1:shell-mpc/ui/lfo_screen.h, lfo_parts.h).
+// touched) and the rectangles of its own displays. Pure functions of the sizes: no state.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

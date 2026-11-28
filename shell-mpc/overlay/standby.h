@@ -481,7 +481,6 @@ public:
     /** What the held dim rests on: "backlight+picture" (the backlight dropped and the markers look dimmed), "picture" (the blurred markers alone: the XL, or no backlight node), "none" (not dimmed). */
     const char* evidence() const noexcept { return mode_ != Dimmed ? "none" : (evidence_ == 1 ? "backlight+picture" : "picture"); }
     int awakeBacklight() const noexcept { return baseline_; }
-    bool backlightLow() const noexcept { return low_; }
 
 private:
     enum Mode { Awake, Dimmed };

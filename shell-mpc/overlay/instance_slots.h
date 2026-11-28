@@ -26,7 +26,7 @@ inline const mpckit::InstanceColours& defaultInstanceColours() noexcept
 
 /** The frame of the film strip that shows `slot` (0 .. 15; any other number is "none", an instance without a slot): frame 0 is blank, frame slot + 1, frame 17 none. */
 constexpr int instanceFrameOfSlot (int slot) noexcept { return slot >= 0 && slot < mpckit::kMaxInstances ? slot + 1 : mpckit::kMaxInstances + 1; }
-/** The frame the instance reports while a plugin-drawn full screen is open: the skin hides the host widgets of the Play page at it (RangedEnabling in skin/TUI.json) and shows it as blank. */
+/** The frame the instance reports while a overlay full screen is open: the skin hides the host widgets of the Play page at it (RangedEnabling in skin/TUI.json) and shows it as blank. */
 constexpr int kFullScreenFrame = 24;
 constexpr float fullScreenParamValue() noexcept { return static_cast<float> (kFullScreenFrame) / static_cast<float> (mpckit::kInstanceSteps); }
 /** The value of the display parameter "Overlay Instance" (the host picks frame value * kInstanceSteps; every value is a multiple of 1/32, exact in a float). */

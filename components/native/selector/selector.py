@@ -11,7 +11,7 @@ Key features:
   and backdrop dismissal without modifying other instances.
 - Filter type 0 PNG encoding: uncompressed scanline filter 0 PNG assets compliant with Akai MPC
   hardware decoders (Rule: verified hardware assets).
-- Backward compatibility: fully compatible with legacy selector_definition callers and existing skins.
+- Backward compatibility: fully compatible with existing selector_definition callers and existing skins.
 """
 
 import copy
@@ -333,14 +333,14 @@ def dropdown_asset_name(width, height):
 
 # Dropdown face tokens per look: fill top, fill bottom, keyline top, keyline bottom, gradient span (start/end as a
 # fraction of the box height: constant above `start`, linear to `end`, constant below). "neon" is the skin's theme
-# (mod_row, FX). "legacy" is the Play-panel dropdown with the contrast of the catalogue's Voice selector (owner,
+# (mod_row, FX). "shaded" is the Play-panel dropdown with the contrast of the catalogue's Voice selector (owner,
 # 2026-11-27): fill #141a38 to #0b0f24, keyline #27306a, the same gradient shape as "neon". Only the catalogue and the
-# Header ask for "legacy"; other components keep "neon".
+# Header ask for "shaded"; other components keep "neon".
 DROPDOWN_LOOKS = {
     "neon": ("theme.neon.panel0", "theme.neon.panel1", "theme.neon.keyline", "theme.neon.keyline",
              "selector.dropdown.gradient.neon"),
-    "legacy": ("selector.dropdown.top", "selector.dropdown.bottom", "selector.dropdown.border",
-               "selector.dropdown.border.bottom", "selector.dropdown.gradient.legacy"),
+    "shaded": ("selector.dropdown.top", "selector.dropdown.bottom", "selector.dropdown.border",
+               "selector.dropdown.border.bottom", "selector.dropdown.gradient.shaded"),
 }
 
 
@@ -350,8 +350,8 @@ def render_dropdown_face(width, height, *, chevron=True, look="neon", size=None,
     `size` names a selector.dropdown.size.<height> token whose inset (0: the drawn box fills the slot) and chevron measures replace the default ones.
     `inset` overrides the inset (0: the box fills the slot, as the Play-panel selectors do). `radius` overrides the corner radius (the Play selectors use radius.control). `neutral` is the inactive / read-only
     face (selector.neutral.surface and border, flat grey): the Play OSC source selector and the disabled variants."""
-    if look == "neon" and _control_look() == "legacy":
-        look = "legacy"   # the skin default follows control.look (A/B: SYNTHYBOY_CONTROL_LOOK=flat)
+    if look == "neon" and _control_look() == "shaded":
+        look = "shaded"   # the skin default follows control.look (A/B: SYNTHYBOY_CONTROL_LOOK=flat)
     top_token, bottom_token, keyline_token, keyline_bottom_token, gradient_token = DROPDOWN_LOOKS[look]
     span = _style_size(gradient_token)
     geometry = _style_size("selector.dropdown")
@@ -1348,10 +1348,10 @@ def append_choice_rows(ctx, definition, labels, field, *, header_title=None, mar
         images = []
         for state in ("on", "off"):
             filename = f"{prefix}_{i}_{state}.png"
-            # A drawer row is the Button recipe (legacy face; the highlighted row is look "active"), centred in its row slot.
+            # A drawer row is the Button recipe (shaded face; the highlighted row is look "active"), centred in its row slot.
             from components.native.button.button import action_art
             face = (action_art(text=label, width=width, height=48, look="active", colour=_style_color("radio.active.text"))
-                    if state == "on" else action_art(text=label, width=width, height=48, look="legacy"))
+                    if state == "on" else action_art(text=label, width=width, height=48, look="shaded"))
             image = Image.new("RGBA", (width, height))
             image.alpha_composite(face, (0, (height - 48) // 2))
             image.save(ctx.skins_dir / filename)
@@ -1504,7 +1504,7 @@ def render_dropdown_variant(width, height, value, *, label=None, placement="none
         size, font_em = None, None
     # The recipe takes a TUI font height; the host draws em = height / font.host.height.per.em.
     tui = font_em * _style_size("font.host.height.per.em") if font_em else _style_size("selector.dropdown.preview_font")
-    box = render_selector_face(width, height, value=value, justification=justification, dropdown_look="legacy",
+    box = render_selector_face(width, height, value=value, justification=justification, dropdown_look="shaded",
                                dropdown_size=size, label_height=tui, ellipsis=True)
     if placement == "none":
         return box

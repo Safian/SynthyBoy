@@ -130,9 +130,9 @@ class DocsReleaseTests(unittest.TestCase):
         self.assertGreater(n_files, 0)
         self.assertGreater(n_pre, 0)
         # parameter sequence of the overlay build: engine + 4 cursors + 32 spectrum + 2 pad pressure + 1 instance + 3 selectors + 24 proxies + 16 Q
-        legacy = n_params + 4 + 32 + 2 + 1 + 3 + 24 + 16
-        self.assertEqual(legacy, 2719)
-        fx_base = legacy + 1 + 10 + 10 + 6
+        hostPrefix = n_params + 4 + 32 + 2 + 1 + 3 + 24 + 16
+        self.assertEqual(hostPrefix, 2719)
+        fx_base = hostPrefix + 1 + 10 + 10 + 6
         self.assertEqual(fx_base, 2746)
         filter_base = fx_base + 16 + 16 + 1 + 48 + 23
         self.assertEqual(filter_base, 2850)

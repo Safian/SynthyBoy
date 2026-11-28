@@ -1,10 +1,10 @@
-// MpcKit - what the overlay thread and the plugin-drawn pages may ask of ONE plugin instance (IInstance), and the shell-level settings of an instance that are saved in its chunk (IInstanceState,
+// MpcKit - what the overlay thread and the overlay pages may ask of ONE plugin instance (IInstance), and the shell-level settings of an instance that are saved in its chunk (IInstanceState,
 // SettingsStore).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // IInstance is the generic half of SynthyBoy's IInstanceView (shell-mpc/overlay/curve_source.h): the methods every page needs whatever the plugin is. SynthyBoy's IInstanceView will DERIVE from it
-// (migration plan, TEMPLATE.md) and keep only the engine specific methods (live values, content, spectrum, Play selectors, pad pressure, ...), so a page written against IInstance& runs unchanged on
+// and keep only the engine specific methods (live values, content, spectrum, Play selectors, pad pressure, ...), so a page written against IInstance& runs unchanged on
 // both. The signatures are exactly the ones of IInstanceView.
 //
 // THREADS. Every method is called from the OVERLAY thread (the page code) while the instance is registered with the overlay; it must be lock free and must not allocate (only qStatus () and the
@@ -89,7 +89,7 @@ public:
     virtual void diagnostics (std::string& /*out*/) const {}
 
     // ---- the overlay's own bookkeeping
-    /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets (the display parameter "Overlay Instance" takes the frame the skin hides them at). */
+    /** A overlay full screen page is open for this instance: the plugin hides the host widgets (the display parameter "Overlay Instance" takes the frame the skin hides them at). */
     virtual void setUiFullOpen (bool /*open*/) noexcept {}
     /** Asks the instance to report its display parameter "Overlay Instance" to the host again soon. It must only set a flag (the instance's display thread makes the call). */
     virtual void requestOverlayReport() noexcept {}
@@ -98,8 +98,6 @@ public:
     /** The plugin's LIVE block: a plain struct the plugin's engine writes and its own views read (SynthyBoy: synthyboy::LiveValues, the readout of the voices; a plugin without one keeps false). Copies it into
         `out` (`bytes` = sizeof the struct the caller expects: a different size copies nothing) and returns true when the engine has written one. Lock free. */
     virtual bool readLive (void* /*out*/, size_t /*bytes*/) const noexcept { return false; }
-    /** A list of things the plugin owns that a page shows (presets, samples): null when the plugin has none (content_source.h). */
-    virtual IContentSource* contentSource() noexcept { return nullptr; }
     /** The shell-level settings of this instance (null: none). */
     virtual IInstanceState* state() noexcept { return nullptr; }
     virtual const IInstanceState* state() const noexcept { return nullptr; }

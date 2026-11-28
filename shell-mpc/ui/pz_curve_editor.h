@@ -196,7 +196,6 @@ public:
                                        [] (auto a, auto b) { return a.x == b.x && a.y == b.y; }));
     }
     void setNativeToolbar (bool native) noexcept { nativeToolbar_ = native; }
-    bool nativeToolbar() const noexcept { return nativeToolbar_; }
     std::array<Rect, 4> toolbarRects() const noexcept
     {
         return { back.rect(), reset.rect(), remove.rect(), apply.rect() };

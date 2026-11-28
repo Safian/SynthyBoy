@@ -93,11 +93,6 @@ public:
         int g = 0, s = 0;
         return qTable().find (rowOf (strip, kLevel), g, s) ? g : 0;
     }
-    static int slotOfStrip (int strip) noexcept
-    {
-        int g = 0, s = 0;
-        return qTable().find (rowOf (strip, kLevel), g, s) ? s : 0;
-    }
 
     /** The engine parameter indices of one strip (resolved from the row keys; -1: the engine has no such parameter). */
     struct StripBinding
@@ -122,7 +117,6 @@ public:
 
     const StripBinding& binding (int strip) const noexcept { return bindings_[strip]; }
     int activeGroup() const noexcept { return activeGroup_; }
-    int selectedStrip() const noexcept { return selectedStrip_; }
     void setActiveGroup (int g)
     {
         if (g < 0 || g >= kMaxGroups)
@@ -182,8 +176,6 @@ public:
         }
     }
 
-    bool nativeCellsEnabled() const noexcept { return nativeCellsEnabled_; }
-    void setNativeCellsEnabled (bool on) noexcept { nativeCellsEnabled_ = on; }
 
     bool hostConfirmed() const noexcept
     {
@@ -192,15 +184,6 @@ public:
 
     bool nativeBase() const noexcept { return useNativeCells(); }
 
-    bool isNativeOwned (int strip, int controlType) const noexcept
-    {
-        if (! nativeBase() || strip < 0 || strip >= kStrips)
-            return false;
-        const auto& b = bindings_[strip];
-        const int targets[] = { b.powerParam, b.destParam, b.panParam, b.send1Param, b.send2Param, b.levelParam };
-        return controlType >= 0 && controlType < kTypes && targets[controlType] >= 0
-            && (controlType == 0 || b.powerInverted || powerOn_[strip]);
-    }
 
     int topPage() const noexcept { return 0; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
@@ -316,14 +299,6 @@ public:
         return false;
     }
 
-    bool nativeControlAt (int x, int y) const noexcept
-    {
-        for (int s = 0; s < kStrips; ++s)
-            for (int t = 0; t < kTypes; ++t)
-                if (isNativeOwned (s, t) && cellRect (s, t).contains (x, y))
-                    return true;
-        return false;
-    }
 
     void leftTab (IInstanceView& inst) noexcept
     {

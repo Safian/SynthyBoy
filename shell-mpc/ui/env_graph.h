@@ -38,7 +38,6 @@ struct Shape
     double curve[3] = { 0.0, -3.0, -3.0 };
 };
 
-constexpr double kSustainWidth = 1.4;
 constexpr double kMinStageW = 14.0;   // pixels: a stage with time is at least this wide, so the 13 pixel handles at its two ends never overlap
 
 inline double maxTimeMs (int stage) noexcept
@@ -65,8 +64,6 @@ inline double normFromTime (int stage, double t, bool beats) noexcept
     if (t <= 0.0) return 0.0;
     return std::clamp (std::pow (std::min (t, maxTime (stage, beats)) / maxTime (stage, beats), skewOf (stage)), 0.0, 1.0);
 }
-inline double timeMsFromNorm (int stage, double norm) noexcept { return timeFromNorm (stage, norm, false); }
-inline double normFromTimeMs (int stage, double ms) noexcept { return normFromTime (stage, ms, false); }
 /** The time of a stage 0 .. 4 (delay, attack, hold, decay, release) in the unit of the axis: ms, or beats. */
 inline double stageTime (const Shape& s, int stage, bool beats) noexcept
 {
@@ -149,7 +146,6 @@ public:
     Rect zoomRect() const noexcept { const Rect p = plot(); return compactChrome() || state.locked ? Rect {} : Rect { p.x, p.bottom() + 2, p.w, std::max (0, rect_.bottom() - p.bottom() - 2) }; }
     const Edit& edit() const noexcept { return edit_; }
     bool dragging() const noexcept { return drag_ != envgraph::None; }
-    int draggedHandle() const noexcept { return drag_; }
 
     /** The geometry the drawing and the touch use: x[0] = the left end of the curve, x[1 .. 6] = the ends of the six stages (delay, attack, hold, decay, sustain, release), the rows of level 1 and 0; cu[k] = the
         time (units of the axis) at x[k] (the sustain has none); pxPerUnit = the plain scale (width of the window / its time; the stages that are narrower than kMinStageW are widened); window = the time the plot stands for. */

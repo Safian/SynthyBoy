@@ -89,7 +89,7 @@ inline double noNegativeZero (double v, int decimals) noexcept
 
 /** A value as text with its unit for the pages: "35%", "+12 ct", "420 Hz", "1.20 s", "-6.0 dB" (at most 15 characters). Rates under 100 Hz keep their decimals; a value that rounds to zero has no sign;
     a pan (a percentage from -100 to 100 whose key is "pan" or ends in ".pan") reads C, L 50, R 50. It is the same function as ui_bind.h formatValue of SynthyBoy (the choice NAME of a stepped parameter
-    is the caller's business: the Binder prints it for a Stepper, hostText () for the host). */
+    is the caller's business: the page prints it, hostText () for the host). */
 inline void formatValue (const ParamDesc& pi, float plain, char* out, size_t cap) noexcept
 {
     if (out == nullptr || cap == 0)

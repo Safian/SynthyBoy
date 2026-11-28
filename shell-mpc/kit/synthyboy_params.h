@@ -16,7 +16,7 @@ namespace mpckit { namespace synthyboy_adapter {
 static_assert (static_cast<int> (synthyboy::Scale::stepped) == static_cast<int> (Scale::stepped), "the kit's Scale has the order of the engine's");
 static_assert (static_cast<int> (synthyboy::Unit::voices) == static_cast<int> (Unit::voices), "the kit's Unit has the order of the engine's");
 
-/** The ParamDesc of one ParamInfo (a copy of the fields: for the few places that hold a ParamInfo and not an index, e.g. uibind::formatValue (const ParamInfo&, ...) after migration step 3). */
+/** The ParamDesc of one ParamInfo (a copy of the fields: for the few places that hold a ParamInfo and not an index, e.g. uibind::formatValue (const ParamInfo&, ...)). */
 inline ParamDesc descOf (const synthyboy::ParamInfo& i) noexcept
 {
     ParamDesc d;

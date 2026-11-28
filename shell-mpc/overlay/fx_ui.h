@@ -161,11 +161,7 @@ public:
     int topPage() const noexcept { return 0; }
     /** The chain on the page: 0 the Main / Bus chain, 3 .. 9 the chain of that band rack (fxl::bandOfRack). */
     int scope() const noexcept { return scope_; }
-    /** The modules of a band rack (3 .. 9) in processing order, as of the last update. */
-    const std::vector<synthyboy::FxRackItem>& bandItems (int rack) const noexcept { return bandItems_[static_cast<size_t> (std::clamp (rack, ui::fxl::kFirstBandRack, ui::fxl::kNumRacks - 1) - ui::fxl::kFirstBandRack)]; }
-    const synthyboy::FxRackItem& selectedItem() const noexcept { return selectedItem_; }
     bool galleryShown() const noexcept { return ! editorShown_ && (galleryN_ > 0 || galleryNote_[0] != '\0'); }
-    bool editorShown() const noexcept { return editorShown_; }
 
     /** Reads the instance: the chain (only when its structure changed), the selected effect with its cells, display data and Q group. */
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)

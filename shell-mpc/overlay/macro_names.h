@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the names of the eight macros as the plugin-drawn pages show them (docs/ui-design/macro-names.md): the full name (the card of the Macros page, the pickers and the rows of the
+// SynthyBoy - MPC overlay: the names of the eight macros as the overlay pages show them (docs/ui-design/macro-names.md): the full name (the card of the Macros page, the pickers and the rows of the
 // Mod page, the title of a targets page) and the short form of at most six bytes (the chip on a knob, the row of the modulations page, the matrix). Pure: no OS headers.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

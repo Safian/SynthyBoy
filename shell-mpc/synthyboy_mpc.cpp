@@ -1099,7 +1099,7 @@ struct PluginInstance
         }
         return s;
     }
-    // ---- the drawn shapes of the LFOs the plugin-drawn LFO page writes (overlay/lfo_ui.h): the overlay thread posts the shape (the latest per LFO wins), the display thread puts it into the content (under `contentMutex`
+    // ---- the drawn shapes of the LFOs the overlay LFO page writes (overlay/lfo_ui.h): the overlay thread posts the shape (the latest per LFO wins), the display thread puts it into the content (under `contentMutex`
     // like every change of `content`), gives it to the engine and to the overlay's copy. A shape the content validation would refuse (it would make saveState drop the whole section) is not applied.
     std::mutex lfoShapeMutex;
     synthyboy::ContentLfoShape lfoShapeReq[synthyboy::kMaxContentLfoShapes];
@@ -1152,7 +1152,7 @@ struct PluginInstance
         engine->setContent (content);
         publishOverlayContent();
     }
-    // ---- the NOTE / VELO curves the plugin-drawn curve editor writes (overlay/scalar_curve_ui.h): the same hand-over as the LFO shapes (the overlay thread posts, the latest per source wins; the display thread puts the points into the
+    // ---- the NOTE / VELO curves the overlay curve editor writes (overlay/scalar_curve_ui.h): the same hand-over as the LFO shapes (the overlay thread posts, the latest per source wins; the display thread puts the points into the
     // content under `contentMutex`, gives it to the engine and to the overlay's copy; a curve the content validation would refuse is not applied and the old one stays).
     std::mutex scalarCurveMutex;
     std::vector<synthyboy::ContentPoint> scalarCurveReq[2];
@@ -1539,7 +1539,7 @@ struct PluginInstance
     }
 
 
-    // ---- the writes of the plugin-drawn pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
+    // ---- the writes of the overlay pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
     // own widgets follow. The overlay thread sets the dirty bit, the display thread reports it (one value per parameter, the latest).
     std::atomic<int> playLastSel { 0 };                          // 0 none, 1 envelope, 2 LFO: which of the two Play selectors was set last (the modulation source the UI calls "selected")
     std::atomic<uint64_t> uiDirty[synthyboy::kMaxParams / 64] {};
@@ -1572,7 +1572,7 @@ struct PluginInstance
     }
 
     // ---- the Q proxies (q_router.h, docs/MPC.md "Q proxies"): "Q 1" .. "Q 4" after the last Play proxy; what the four knobs of the plugin's own full-screen pages are mapped to ----
-    /** The sixteen proxies: the kit's bank over SynthyBoy's parameter table (kit/q_targets.h; migration step 11 of docs/ui-components/TEMPLATE.md). It reads the values through the overlay view (the parameter mirror). */
+    /** The sixteen proxies: the kit's bank over SynthyBoy's parameter table (kit/q_targets.h). It reads the values through the overlay view (the parameter mirror). */
     mpckit::QProxyBank qBank { mpckit::synthyboy_adapter::Params::get() };
     // Keep the revision and in-flight restore count in one atomic snapshot.
     // A completed restore cannot rearm Q while another restore is still loading.
@@ -2877,7 +2877,7 @@ struct PluginInstance
         flushProxyNames (e, steadyMs());
     }
     /** The group changed: the names, units and value texts of the Q proxies are other now. The host keeps what it read for good unless it is told (measured on the Key 61, docs/MPC.md "Q proxies and the
-        plugin-drawn pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
+        overlay pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
     void qNotifyGroup (AEffect* e)
     {
         audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
@@ -3054,7 +3054,7 @@ struct PluginInstance
     // when the display thread reports it (audioMasterAutomate): once after creation, when the value changes and whenever the overlay thread asks (requestOverlayReport).
     std::atomic<int> overlaySlot { -1 };                       // the slot the overlay service gave this instance (-1: none, the instance never shows the overlay)
     std::atomic<float> overlayValue { synthyboy_mpc::overlay::instanceParamValue (-1) };   // what getParameter says: slot, or what the debug file asks for
-    std::atomic<bool> uiFullOpen { false };                    // a plugin-drawn full screen page is open for this instance: the frame the skin hides the host widgets of the Play page at
+    std::atomic<bool> uiFullOpen { false };                    // a overlay full screen page is open for this instance: the frame the skin hides the host widgets of the Play page at
     std::atomic<bool> overlayReportDue { false };              // set by any thread; the display thread makes the host call
     std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
     std::chrono::steady_clock::time_point overlayNextFileCheck {};   // display thread only
@@ -3197,7 +3197,7 @@ struct PluginInstance
     }
 #endif
 
-    /** The display thread's whole life (called by startLive's thread). The thread is the kit's (kit/display_thread.h, migration step 11 of docs/ui-components/TEMPLATE.md): SynthyBoy REGISTERS its features below, in the
+    /** The display thread's whole life (called by startLive's thread). The thread is the kit's (kit/display_thread.h): SynthyBoy REGISTERS its features below, in the
         order they run each tick, and the class does the rest - every feature inside a PollGuard (poll_guard.h: an exception is caught, counted, written to the status file and, five times in a row, switches that feature
         off - it never leaves the thread: std::terminate would end the MPC application), the grid of ticks (a short period while a cursor or a spectrum column moves, a long one otherwise) and the scheduling of the
         thread (normal policy, nice 0, all CPUs: not lower than normal, this thread holds host locks while it is inside audioMasterAutomate, and a starved holder would make the host's own threads wait for it). */

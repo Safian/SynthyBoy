@@ -21,7 +21,6 @@ enum class Kind : uint8_t { Continuous, Toggle, Choice, Command };
 /** How the value is written as text (effGetParamDisplay, the cell value of the native bridge). Engine: the parameter's own unit and format (uibind::formatValue). The other rules are fixed by the row. */
 enum class Format : uint8_t { Engine, PanLR, Percent, Db, IntSigned, IntPlain, Decimal2, Degrees, ChoiceName };
 
-constexpr int kNoParam = -1;
 constexpr int kNoSlot = -1;
 
 /** One control of a page. `min` / `max` / `step` / `def` are in the plain unit of the parameter; `min == max` means "as the engine parameter table says" (the page reads ParamInfo). `qGroup` / `qSlot`: the Q-Link group of the
@@ -40,8 +39,6 @@ struct Row
     bool inverted = false;
 
     constexpr bool hasParam() const noexcept { return key != nullptr && key[0] != '\0'; }
-    constexpr bool hasRange() const noexcept { return max != min; }
-    constexpr bool hasQ() const noexcept { return qSlot >= 0; }
 };
 
 /** The Q-Link banks of a page: `rows[group][slot]` is the INDEX into the page's row table (-1: empty slot). Four slots per group, `groups` groups. No interface, no component: the router reads the table. */

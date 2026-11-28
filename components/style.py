@@ -36,12 +36,12 @@ def color(name):
     return value.lower()
 
 
-CONTROL_LOOKS = ("legacy", "flat")
+CONTROL_LOOKS = ("shaded", "flat")
 
 
 def control_look():
     """The look of the skin's controls (buttons, dropdowns, segmented faces): the token `control.look`
-    ("legacy": the old gradient/bubble design, the owner's decision of 2026-11-27), or "flat" for the A/B
+    ("shaded": the old gradient/bubble design, the owner's decision of 2026-11-27), or "flat" for the A/B
     comparison via the environment variable SYNTHYBOY_CONTROL_LOOK=flat."""
     import os
     look = os.environ.get("SYNTHYBOY_CONTROL_LOOK") or size("control.look")
@@ -85,7 +85,7 @@ def native_font_em(height):
     The host is JUCE: a Font height is ascent + descent (Titillium Web: 1133 + 388 per 1000
     em = font.host.height.per.em), so a TUI height of 15 draws 9.9 px em glyphs. The GPU
     overlay and Pillow take the size as the em. Previews of native labels use this to show
-    the device size; measured on the Key 61 (docs/review/NATIVE-COMPONENT-FIDELITY-2026-11-26.md).
+    the device size; measured on the Key 61.
     """
     return float(height) / size("font.host.height.per.em")
 

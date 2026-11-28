@@ -47,7 +47,6 @@ public:
     }
     const synthyboy::WavetableCatalogue& catalogue() const noexcept { return cat_; }
     bool atCategories() const noexcept { return level_ == 0; }
-    int categoryIndex() const noexcept { return category_; }
     /** The header of the list: "WAVETABLES" over the categories, the name of the category over its tables. */
     const std::string& title() const noexcept { return title_; }
     /** The rows as the list popup wants them (a pointer array that stays valid until the next change). */
@@ -99,7 +98,6 @@ public:
     const synthyboy::WavetableEntry& chosenEntry() const noexcept { return chosenEntry_; }
     int chosenCategory() const noexcept { return chosenCategory_; }
     int chosenIndex() const noexcept { return chosenIndex_; }
-    const std::string& refusalText() const noexcept { return refusal_; }
 
     /** A file the loader refused: its row says why from now on (the reason without the "not a wavetable file: " in front). */
     void markRefused (const std::string& pack, const std::string& file, const std::string& reason)

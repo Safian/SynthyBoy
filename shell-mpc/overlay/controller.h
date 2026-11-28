@@ -237,26 +237,16 @@ public:
         return slots_.slotOf (view);
     }
 
-    // ---- the plugin-drawn pages of an instance (ui_stack.h): main -> full(element) -> detail(page) ... Per instance (slot), never saved. The UI (the overlay thread) calls these; the lock makes them safe
+    // ---- the overlay pages of an instance (ui_stack.h): main -> full(element) -> detail(page) ... Per instance (slot), never saved. The UI (the overlay thread) calls these; the lock makes them safe
     // against attach / detach. The whole stack of an instance closes when its page is no longer on screen (closeUiWhenLeft).
     bool openFull (int slot, int element) { return withUi (slot, [&] (UiStack& u) { return u.openFull (element); }); }
     bool openDetail (int slot, int page) { return withUi (slot, [&] (UiStack& u) { return u.openDetail (page); }); }
     bool back (int slot) { return withUi (slot, [&] (UiStack& u) { return u.back(); }); }
     bool closeAll (int slot) { return withUi (slot, [&] (UiStack& u) { return u.closeAll(); }); }
-    /** A copy of the state of the instance in `slot` (main for a slot out of range). */
-    UiStack uiState (int slot)
-    {
-        std::lock_guard<std::mutex> g (mu_);
-        return slot >= 0 && slot < mpckit::kMaxInstances ? ui_[slot] : UiStack();
-    }
 
     /** The x the views cut their picture at (the left edge of what the host draws over the right part of the tab: its Q-Link panel; PanelKey::kNoKey: nothing), and how many times the key came or went (status file, tests). */
     int keyEdge() const noexcept { return keyEdge_; }
-    unsigned long keyChangeCount() const noexcept { return qlinkPanelChanges_; }
 
-    /** Touch events seen and the ones the plugin-drawn pages took (status file, tests). */
-    unsigned long touchEvents() const noexcept { return touchEvents_; }
-    unsigned long touchTaken() const noexcept { return touchTaken_; }
     /** One touch event (upright UI pixels), as the touch input hands it over (tests call it directly). */
     void touchEvent (const TouchEvent& ev, double nowMs)
     {
@@ -302,8 +292,6 @@ public:
         else
             mouse_.reset();
     }
-    unsigned long wheelEvents() const noexcept { return wheelEvents_; }
-    unsigned long wheelTaken() const noexcept { return wheelTaken_; }
     /** The mouse wheel at a point of the UI (upright UI pixels): the control under it takes it (tests call it directly). */
     void wheelEvent (int x, int y, int notches, double nowMs)
     {
@@ -355,11 +343,9 @@ public:
     /** The visible view's object (tests), or null. */
     const gpu::GuardRetry& guardRetry() const noexcept { return guardRetry_; }
     const IView* currentView() const noexcept { return current_ >= 0 ? views_[static_cast<size_t> (current_)].get() : nullptr; }
-    const IView* viewByName (const std::string& name) const noexcept { for (const auto& v : views_) if (name == v->name()) return v.get(); return nullptr; }
     int currentIndex() const noexcept { return current_; }
     /** The slot whose instance the visible view shows (-1 when nothing is shown), and the number of times the instances were asked to report their slot again. */
     int activeSlot() const noexcept { return activeSlot_; }
-    unsigned long rereports() const noexcept { return rereports_; }
     /** Optional: the CPU time of the calling thread in ms (the status file shows the overlay thread's load). */
     void setCpuClock (std::function<double()> clock) { cpuClock_ = std::move (clock); }
     /** Optional: extra "key: value" lines of the status file (the overlay thread's CPU plan, ...), asked for at every write. */
@@ -381,7 +367,7 @@ public:
             if (gpu_)
                 wait = guardRetry_.limit (wait, guardWatch_, guardWatchEpoch_);   // woken on the vblank timer ONLY while a guard is pending (counted); at rest the wait is the step's own
             if ((touchIn_ != nullptr || mouse_) && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
-                wait = std::min (wait, kTouchPollMs);   // the plugin-drawn pages are on screen: look at the touch screen often
+                wait = std::min (wait, kTouchPollMs);   // the overlay pages are on screen: look at the touch screen often
             tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - tickStartedAt_).count());
             return wait;
         }
@@ -617,7 +603,7 @@ private:
                 }
                 if (d.slot == kSlotUnknown && activeSlot_ >= 0 && slots_.at (activeSlot_) != nullptr && (! ui_[activeSlot_].isMain() || nowMs < blankGraceUntilMs_[activeSlot_]) && isUiPage (view))
                 {
-                    slot = activeSlot_;   // the plugin-drawn full screen is open for this instance (or was closed a moment ago): the instance reports the frame the skin hides the host widgets at (a blank picture), by design
+                    slot = activeSlot_;   // the overlay full screen is open for this instance (or was closed a moment ago): the instance reports the frame the skin hides the host widgets at (a blank picture), by design
                 }
                 else if (d.slot == kSlotUnknown)
                 {
@@ -1009,7 +995,7 @@ private:
         return factory_.make (pages_.page (i));   // (the plugin's factory: SynthyBoy's is in pages.h)
     }
 
-    /** The touch screen is read for the plugin-drawn pages only while a view of the Play page is on screen (by what the last page check said). */
+    /** The touch screen is read for the overlay pages only while a view of the Play page is on screen (by what the last page check said). */
     bool touchEligible() const noexcept { return ! nativeParameterModal_ && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0 && presenter_.opened(); }
 
     const char* nativeEditorStatus() const noexcept
@@ -1196,7 +1182,7 @@ private:
         needFrame_ = true;
     }
 
-    /** The mouse: like the touch screen only while a plugin-drawn page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
+    /** The mouse: like the touch screen only while a overlay page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
     void pollMouse (double nowMs)
     {
         if (! mouse_)
@@ -2006,7 +1992,7 @@ private:
 
     std::mutex mu_;
     InstanceSlots slots_;                    // under mu_
-    UiStack ui_[mpckit::kMaxInstances];      // under mu_: the plugin-drawn pages of the instance in each slot
+    UiStack ui_[mpckit::kMaxInstances];      // under mu_: the overlay pages of the instance in each slot
     int uiGroup_[mpckit::kMaxInstances];     // under mu_: the group of views (ensureUiPage) the stack of each slot belongs to; -1: none yet
     bool uiOpenSeen_[mpckit::kMaxInstances] = {};         // under mu_: the stack of each slot was not in main at the last page check
     double blankGraceUntilMs_[mpckit::kMaxInstances] = {};   // under mu_: until when a blank instance picture still keeps the page of that slot (the stack went to main at a check)

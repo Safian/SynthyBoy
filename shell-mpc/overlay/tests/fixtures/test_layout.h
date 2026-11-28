@@ -9,7 +9,7 @@
 #include "overlay_layout.h"
 #include "../../../kit/synthyboy_adapter.h"
 
-namespace synthyboy_mpc { namespace overlay { namespace legacy {
+namespace synthyboy_mpc { namespace overlay { namespace testlayout {
 
 using layout::View;
 constexpr int kNumViews = 16;
@@ -46,4 +46,4 @@ inline const mpckit::IPageSet& pageSet()
     static const mpckit::synthyboy_adapter::TablePageSet set (kViews, kNumViews);
     return set;
 }
-}}} // namespace synthyboy_mpc::overlay::legacy
+}}} // namespace synthyboy_mpc::overlay::testlayout

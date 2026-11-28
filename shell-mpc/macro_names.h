@@ -1,5 +1,5 @@
 // SynthyBoy - MPC shell: the names of the macros on the host's side (docs/ui-design/macro-names.md): the name a Q proxy reports to the host when its target is a macro, the queue of the renames the
-// plugin-drawn Macros page asks for, and the cut of a UTF-8 text into a buffer of the host. Pure: no host headers, no threads of its own (the queue has a mutex).
+// overlay Macros page asks for, and the cut of a UTF-8 text into a buffer of the host. Pure: no host headers, no threads of its own (the queue has a mutex).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -69,7 +69,7 @@ inline bool macroParamName (const std::shared_ptr<const synthyboy::StateContent>
     return true;
 }
 
-/** The renames the plugin-drawn pages ask for: the overlay thread posts (the latest per macro wins), the display thread takes them and applies them to the content. */
+/** The renames the overlay pages ask for: the overlay thread posts (the latest per macro wins), the display thread takes them and applies them to the content. */
 class MacroNameQueue
 {
 public:

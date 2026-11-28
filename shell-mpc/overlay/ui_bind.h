@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: what the plugin-drawn element UIs (env_ui.h, and the ones to come) share when they bind library components to the engine's parameters: the table lookups, the writes through
+// SynthyBoy - MPC overlay: what the overlay element UIs (env_ui.h, and the ones to come) share when they bind library components to the engine's parameters: the table lookups, the writes through
 // IInstanceView (normalised, the plugin tells the host), the text of a value with its unit, and the modulation matrix seen from a parameter (which slots move it) and from a source (which slots it drives).
 // Pure: no OS headers, no state. The same code is in osc_ui.h as private members (the oscillator UI was first); the element UIs use this file.
 // Copyright (C) 2026 Safian Szabolcs
@@ -25,8 +25,7 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace uibind {
 
-/** The parameters of SynthyBoy through the kit's parameter source (kit/param_source.h IParamSource): the lookups, the conversions and the text of a value are the kit's, so a page written on them runs on any plugin
-    (migration step 3 of docs/ui-components/TEMPLATE.md; `kit_parity_host` compares them with the old direct calls for every parameter). */
+/** The parameters of SynthyBoy through the kit's parameter source (kit/param_source.h IParamSource): the lookups, the conversions and the text of a value are the kit's, so a page written on them runs on any plugin. */
 inline const mpckit::IParamSource& params() noexcept { return mpckit::synthyboy_adapter::Params::get(); }
 
 inline int indexOfKey (const std::string& key) noexcept { return params().indexOfKey (key.c_str()); }   // (an empty key: -1)
@@ -308,7 +307,7 @@ inline void fillSelector (SelKind kind, const UsedScan& sc, const IInstanceView&
     selectorCandidates (kind, sc.used, sc.edited, sel);
     sel.setSelected (kind == SelKind::Env ? selectedEnv (v) : selectedLfo (v));
 }
-/** The cells of a selector as a list of positions: what the Play page's carousel steps over (the neighbours, the list of its name). It is made FROM the filled UsedSelector (`cellsFromSelector`), so the tab and the Play page cannot drift
+/** The cells of a selector as a list of positions: what the Play page's selector steps over (the neighbours, the list of its name). It is made FROM the filled SelectorSet (`cellsFromSelector`), so the tab and the Play page cannot drift
     apart: the same used items, the selected one and ONE `+`. `id[k]` is the candidate of cell k, `kPlusCell` (0) for the `+` cell; `names[k]` its row name ("ENV 3", "LFO 3", "RND 2", "+"). */
 struct SelectorCells
 {
@@ -404,35 +403,6 @@ constexpr int kMaxTargetSlots = synthyboy::kNumModSlots;   // the most slots a s
 
 struct ModRow { int slot = -1; int source = 0; };
 
-/** The modulations of the parameter `param`: a scan of the 64 slots (the slots whose destination is this parameter). `rows` (may be null) gets the slot of every entry. */
-inline ui::ModInput modsOf (const IInstanceView& v, int param, int selected, ModRow* rows)
-{
-    ui::ModInput mi;
-    mi.selectedSource = selected;
-    const size_t dest = synthyboy::modDestinationChoiceOf (static_cast<size_t> (param));
-    if (dest == 0)
-        return mi;
-    int n = 0;
-    for (int s = 0; s < synthyboy::kNumModSlots && n < ui::ModInput::kMaxMods; ++s)
-    {
-        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
-        if (sp.source < 0 || sp.destination < 0 || sp.amount < 0)
-            continue;
-        const int src = static_cast<int> (std::lround (v.param (sp.source)));
-        if (src <= 0 || static_cast<size_t> (std::lround (v.param (sp.destination))) != dest)
-            continue;
-        const double depth = std::clamp (static_cast<double> (v.param (sp.amount)) / 100.0, -1.0, 1.0);
-        const bool bi = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
-        const bool by = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
-        char name[7];
-        shortName (src, name);
-        mi.add (src, name, depth, bi, by, isMacroSource (src));
-        if (rows != nullptr)
-            rows[n] = { s, src };
-        ++n;
-    }
-    return mi;
-}
 /** The first slot without a source (-1: the matrix is full). */
 inline int freeSlot (const IInstanceView& v) noexcept
 {

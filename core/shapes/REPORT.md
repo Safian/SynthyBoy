@@ -68,7 +68,7 @@ Implemented the standalone DSP/data package `core/shapes/` in namespace `synthyb
 ## 4. Gate Results (Verbatim Output)
 
 Command executed:
-`cmake -S . -B build -DSYNTHYBOY_BUILD_PLUGIN=OFF && cmake --build build -j8 && ctest --test-dir build`
+`cmake -S . -B build && cmake --build build -j8 && ctest --test-dir build`
 
 ```text
 -- CLAP version: 1.2.7

@@ -107,7 +107,7 @@ for a in "${archs[@]}"; do
             *) STATIC=ON; LIBCXX=OFF; SECTIONS=OFF ;;
         esac
         cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG $CXX_EXTRA" \
-            -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF \
+            -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF \
             -DSYNTHYBOY_TIER_BENCH_STATIC=$STATIC -DSYNTHYBOY_TIER_BENCH_STATIC_LIBCXX=$LIBCXX -DSYNTHYBOY_SECTION_TIMING=$SECTIONS
         # the probes only when the tree has them (the script works before and after they exist)
         targets="$(cmake --build /build --target help 2>/dev/null || true)"

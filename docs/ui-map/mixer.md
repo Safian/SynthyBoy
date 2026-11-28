@@ -103,7 +103,7 @@ Note (bold cut, 2026-11-21): the MASTER strip (strip 9) has NO destination butto
 
 ## Q-Link groups
 
-Levels-only layout (Q-Link mapping extension, merged 2026-11-21; `docs/ui-map/q-link-audit.md` status row "Mixer levels-only layout", pictures `docs/screens/mixer.jpg`). The page has 3 groups, no longer one per strip (`MixerFullScreen::kMaxGroups = 3`, `kStripOfSlot`, `shell-mpc/ui/mixer_screen.h:130-134`; names `LEVELS SUB A B C`, `LEVELS NOISE F1 F2 MAIN`, `LEVELS BUS 1 2`, `shell-mpc/ui/mixer_screen.h:179-183`). The table below describes the four-knob banks. Every member is the LEVEL fader of a strip; PAN, B1, B2, the destinations and the power switches are touch only (no chip, no Q slot):
+Levels-only layout (Q-Link mapping extension, merged 2026-11-21; `docs/ui-map/q-link-audit.md` status row "Mixer levels-only layout", pictures `docs/screens/mixer.jpg`). The page has 3 groups, not one per strip (`MixerFullScreen::kMaxGroups = 3`, `kStripOfSlot`, `shell-mpc/ui/mixer_screen.h:130-134`; names `LEVELS SUB A B C`, `LEVELS NOISE F1 F2 MAIN`, `LEVELS BUS 1 2`, `shell-mpc/ui/mixer_screen.h:179-183`). The table below describes the four-knob banks. Every member is the LEVEL fader of a strip; PAN, B1, B2, the destinations and the power switches are touch only (no chip, no Q slot):
 
 | Group | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Frame |
 | --- | --- | --- | --- | --- | --- |

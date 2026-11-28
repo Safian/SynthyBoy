@@ -1,6 +1,6 @@
 # SynthyBoy for MPC - User Guide (second draft)
 
-Status: second draft, brought up to the plugin-drawn screens of the branch `feature/mpc-overlay` (the oscillator pages with five types and seven detail
+Status: second draft, brought up to the overlay screens of the branch `feature/mpc-overlay` (the oscillator pages with five types and seven detail
 pages, LED controls, the LFO editor with a grid, the 16 effect pages and the splitters, 16 Q-Link knobs, the mouse, and the per-device sound quality).
 It is written from the source code, the developer notes (`docs/MPC.md`), pictures rendered by the code and, for the Q-Link chips and the header, one XL screenshot;
 it is not the result of a full device session. What could not be confirmed is collected in chapter 11 ("To confirm on the device").

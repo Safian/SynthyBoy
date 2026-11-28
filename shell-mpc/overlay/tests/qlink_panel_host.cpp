@@ -8,7 +8,7 @@
 #include <functional>
 
 #include "fakes.h"
-#include "fixtures/legacy_layout.h"
+#include "fixtures/test_layout.h"
 
 using namespace ovt;
 
@@ -89,8 +89,8 @@ struct Rig
 
     Rig()
     {
-        frame.views = legacy::kViews;
-        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
+        frame.views = testlayout::kViews;
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &testlayout::pageSet());
         inst.set ("filter1.cutoff", 1000.0f);
         ctl->attach (&inst);
         host.all();

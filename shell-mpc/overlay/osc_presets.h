@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the PANEL PRESETS of the oscillator pages as plain DATA (owner decision 2026-11-27: the C++ layer has no UI elements): the slots of the parts, the grid cells and blocks of every full screen and detail
-// page of an oscillator, and the Q groups (four slots each). Moved unchanged from the former shell-mpc/ui/panel.h; nothing here draws or handles a control.
+// page of an oscillator, and the Q groups (four slots each). Nothing here draws or handles a control.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -17,7 +17,7 @@ enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level,
                                  SampleScan, SpecPos, Span,
                                  Fin, NoisePitch, NoiseFine, NoiseKey,
                                  Count };
-enum class PartKind : uint8_t { Dial, RandPair, Unison, WarpPair, Menu, Choice, Toggle, Number };   // Number: a NumberField (FIN, the noise's PITCH and FINE)
+enum class PartKind : uint8_t { Dial, RandPair, Unison, WarpPair, Menu, Choice, Toggle, Number };   // Number: a whole-number field (FIN, the noise's PITCH and FINE)
 
 /** One part of a preset: what, which slot, its label, and the cells it covers in the grid. */
 struct PanelItem
@@ -187,11 +187,8 @@ constexpr QSpec kNoiseSampleQ[] = { kNoiseGenQ[0], kNoiseGenQ[1],
     { { PanelSlot::NoiseStart, PanelSlot::NoiseRand, PanelSlot::NoiseLoop, PanelSlot::NoiseBounce } } };
 constexpr PanelPreset kNoiseSampleFull { "noise (full screen, sample)", 11, 1, -1, kNoiseSampleItems, 11, kNoiseSampleQ, 3, 0, kNoiseSampleBlocks, 3 };
 
-constexpr PanelPreset kNoiseFull = kNoiseGenFull;
-constexpr PanelItem kNoItems[] = { { PartKind::Dial, PanelSlot::Count, "", 0, 0, 1, 1, false } };
 constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 constexpr PanelPreset kGranularFull { "granular (full screen)", 7, 1, -1, kGranularFullItems, 7, kGranularFullQ, 2, 0, kGranularBlocks, 2 };
-constexpr PanelPreset kEmptyFull { "none (full screen)", 4, 1, -1, kNoItems, 0, nullptr, 0, 0 };
 constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 // the DetailPages of the unison settings of the three types, and the envelope of the multisample oscillator
 constexpr PanelItem kUnisonMsItems[] = {

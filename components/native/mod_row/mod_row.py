@@ -94,8 +94,8 @@ def _label_entry(kind, bounds_rect, justification="horizontallyCentred verticall
 
 
 def _button_surface_token():
-    """The flat toggle cell colour: the shared button gradient's top colour in the legacy control look."""
-    return "button.gradient.top" if _control_look() == "legacy" else "mod_row.button_surface"
+    """The flat toggle cell colour: the shared button gradient's top colour in the shaded control look."""
+    return "button.gradient.top" if _control_look() == "shaded" else "mod_row.button_surface"
 
 
 def build_cell_definition(kind, width, height, *, image_name=None, skins_dir=None, choice_menu="fx editor choice menu"):

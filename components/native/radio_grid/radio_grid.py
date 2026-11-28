@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """RADIO GRID: a group of text buttons in rows x columns, exactly one selected, with an optional group title.
 
-Every cell is the Button recipe (`button.action_art(text=..., look=...)`): unselected = the legacy gradient face
+Every cell is the Button recipe (`button.action_art(text=..., look=...)`): unselected = the shaded gradient face
 (`control.gradient`, `button.gradient.*`), selected = look "active" (accent fill `accent.cyan` to `radio.active.bottom`,
 keyline `radio.active.border`, text `radio.active.text`). Buttons are 32 / 40 / 48 px high and all equally wide; the grid
 fills `width`, with `radio_grid.gap` (= `header.gap`, 8 px) between cells. The title is the Label block-title style
@@ -54,7 +54,7 @@ def render_sample(sample):
         if index == sample["selected"]:
             face = action_art(text=text, width=button_width, height=height, look="active", colour=_style_color("radio.active.text"))
         else:
-            face = action_art(text=text, width=button_width, height=height, look="legacy")
+            face = action_art(text=text, width=button_width, height=height, look="shaded")
         image.alpha_composite(face, origin)
     return dim_artwork(image) if sample["state"] == "disabled" else image
 

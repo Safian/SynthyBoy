@@ -148,11 +148,9 @@ public:
             relayout();
     }
     ui::Rect displayRect() const noexcept { return display_; }
-    ui::Rect backRect() const noexcept { return { rect_.x + 4, rect_.y + 4, 120, kBarH - 8 }; }
 
     /** The blocks that are on the page now (a block with no visible control, or with page buttons only, is left out): the Q groups are theirs in this order. */
     int numGroups() const noexcept { return nGroups_; }
-    const char* groupTitle (int g) const noexcept { return g >= 0 && g < nGroups_ ? spec_->blocks[groupBlock_[g]].title : ""; }
     /** The index of the control that is member `slot` (0 .. 3) of group `g` (-1: none). */
     int member (int g, int slot) const noexcept { return g >= 0 && g < nGroups_ && slot >= 0 && slot < 4 ? members_[g][slot] : -1; }
     int groupOf (int ctl, int* slot = nullptr) const noexcept

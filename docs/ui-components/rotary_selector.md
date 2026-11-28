@@ -4,7 +4,7 @@ A stepped rotary dial with pictograms around it: 3 to 6 positions, the pointer j
 
 ## Structure
 
-- Dial: the [SteppedDial](stepped_dial.md) (the ui::Knob recipe without the gradient value arc: dark track, a dot per stop, white thumb and pointer), diameter 48 or 56 px (`height.medium` / `height.high`), N = 3 to 6 here. The pointer angle is `knob.start.degrees` (135) + i x `knob.sweep.degrees` (270) / (N - 1): N evenly spaced stops, discrete frames.
+- Dial: the [SteppedDial](stepped_dial.md) (the Level dial recipe without the gradient value arc: dark track, a dot per stop, white thumb and pointer), diameter 48 or 56 px (`height.medium` / `height.high`), N = 3 to 6 here. The pointer angle is `knob.start.degrees` (135) + i x `knob.sweep.degrees` (270) / (N - 1): N evenly spaced stops, discrete frames.
 - Pictograms: on a ring around the dial at the same angles, `rotary_selector.ring_gap` (4) clear of the dial. Boxes `rotary_selector.icon` 24 x 12. The selected one `accent.cyan`, the others `selector.wave`.
 - Title: Label dial-caption style (`pan.sub_dial_definition.style.font.height`, `text.caption`, upper case), centred on top, `title_gap` 4 above the ring.
 

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LEGACY_EXTRAS = 82   # the host parameters between docs/params.json and the first native handle (skin/TUI.json); not in the header
+HOST_EXTRAS = 82   # the host parameters between docs/params.json and the first native handle (skin/TUI.json); not in the header
 
 _NAMES = {
     "FILTER_STATE_OFFSET": "kFilterBase", "FX_CHAIN": "kFxChain", "MOD_DETAIL_RESERVED": "kModDetailReserved",
@@ -31,4 +31,4 @@ globals().update(_load())
 
 
 def native_base_index(param_count):
-    return param_count + LEGACY_EXTRAS
+    return param_count + HOST_EXTRAS

@@ -86,20 +86,6 @@ public:
 
     Size minSize() const override { return { 240, 140 }; }
 
-    double cutoffHzFor (int f) const noexcept
-    {
-        return state.dual ? (f == 2 ? state.cutoffHz2 : state.cutoffHz1) : state.cutoffHz;
-    }
-    double cutoffNorm() const noexcept
-    {
-        const double cut = state.dual ? (state.activeFilter == 2 ? state.cutoffHz2 : state.cutoffHz1) : state.cutoffHz;
-        return std::clamp (std::log10 (std::clamp (cut, kFMin, kFMax) / kFMin) / 3.0, 0.0, 1.0);
-    }
-    double resonanceNorm() const noexcept
-    {
-        const double res = state.dual ? (state.activeFilter == 2 ? state.resonancePct2 : state.resonancePct1) : state.resonancePct;
-        return std::clamp (res / 100.0, 0.0, 1.0);
-    }
     double formantXNorm() const noexcept
     {
         return std::clamp (state.formantX / 100.0, 0.0, 1.0);
@@ -414,7 +400,7 @@ protected:
         if (y < in.y)
             y = static_cast<int> (hy) + 14;
         const Rect box { std::max (in.x, x), std::min (std::max (in.y, y), in.bottom() - h), w, h };
-        p.control (box, false, true);
+        { p.rrect (box, T.rControl, p.c (T.panel1, 255)); p.rrect (box, T.rControl, p.c (T.keylineHi, 255), T.frame); }
         p.textCentered (box.inset (2), text, T.fValue - 4.0f, p.c (T.text, 255), T.fMin);
     }
 

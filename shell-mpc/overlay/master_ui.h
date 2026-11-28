@@ -434,9 +434,6 @@ public:
     int activeQ() const noexcept { return activeGroup_; }
     int activeGroup() const noexcept { return activeGroup_; }
     void setActiveGroup (int g) noexcept { activeGroup_ = std::clamp (g, 0, kMaxGroups - 1); }
-    bool bendLinked() const noexcept { return bendLinked_; }
-    bool mpeIsOn() const noexcept { return mpeOn_; }
-    bool padPressureIsOn() const noexcept { return padOn_; }
     int paramOfRow (int rowIndex) const noexcept { return rowIndex >= 0 && rowIndex < kNumRows ? params_[rowIndex] : -1; }
     /** The row index in slot `slot` of group `g` after the members that do not apply are left out and the others closed up (-1: empty). */
     int liveRow (int g, int slot) const noexcept
@@ -472,7 +469,6 @@ public:
     float holdR() const noexcept { return holdR_; }
     int activeVoices() const noexcept { return activeVoices_; }
     int polyphony() const noexcept { return polyphony_; }
-    bool clipActive() const noexcept { return clip_; }
 
 private:
     bool readOn (IInstanceView& inst, int rowIndex) const noexcept

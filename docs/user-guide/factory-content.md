@@ -37,7 +37,7 @@ All tables are written by `scripts/gen-content-pack.py` from small JSON recipes 
 
 <!-- wavetable-catalogue:begin -->
 
-_Edited by hand (the catalogue generator was removed on 2026-11-28)._
+_Edited by hand._
 
 ### Analog (12 tables)
 

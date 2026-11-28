@@ -47,12 +47,6 @@ struct Live
         return v >= 0 && v < 32 && ((set >> v) & 1u) != 0;
     }
     bool holds (float plainValue) const noexcept { return in (modes, plainValue); }
-    /** Is the control live: `valueOf (key)` the plain value of an engine key of the same effect. */
-    template <class ValueOf>
-    bool liveIn (ValueOf&& valueOf) const
-    {
-        return always() || (in (modes, static_cast<float> (valueOf (key))) && (key2 == nullptr || in (modes2, static_cast<float> (valueOf (key2)))));
-    }
 };
 
 /** One control of a cell: its engine key, when it is live, and a label where the one of the engine would not read well (nullptr: derived from the engine's name). */
@@ -91,7 +85,7 @@ struct Layout
     int defaultRows = 0;      // historical table metadata; panelsOf() owns current row-to-panel assignment
     Row row[kMaxRows];
     /** DISPLAY LEFT, CONTROLS RIGHT: the display takes the left half of the page over its whole height and the controls stand in two columns (cells of two per line) at the right (a Q group of four is a block of two
-        lines). Used when the visible rows of the panel fit the height at the right (FxSlotEditor::sideMode); otherwise the standard stacked layout applies. Effects with a
+        lines). Used when the visible rows of the panel fit the height at the right (side mode); otherwise the standard stacked layout applies. Effects with a
         display (Compressor, Delay, Distortion, EQ, FX Filter) have it. */
     bool side = false;
 };

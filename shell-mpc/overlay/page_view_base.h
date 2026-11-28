@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the generic PAGE view, the view of a tab that the plugin draws entirely (docs/MPC.md "Plugin-drawn pages"): the filter, the mixer, the FX chain, the modulation matrix, the macros, the
+// SynthyBoy - MPC overlay: the generic PAGE view, the view of a tab that the plugin draws entirely: the filter, the mixer, the FX chain, the modulation matrix, the macros, the
 // master page, the voice page, and the envelope / LFO pages of the instance the tab names. Like the Play view the region is the whole screen, the picture is one scene (CpuSink: the canvas,
 // SceneSink: the GPU helper's display list), the host's Q-Link panel stays visible (the view is transparent in its strip), and the page has NO host widget: they are hidden while the page is up (the
 // instance reports "Overlay Instance" frame 24, the skin hides the widgets at it) and the four Q-Links are the Q proxies Q 1 .. Q 4.
@@ -108,7 +108,7 @@ void drawGround (const Ui& ui, gpu::SceneBuilder& sb, long)
 }
 } // namespace page
 
-/** The hooks of a page view for a page that needs nothing of the plugin around it (a page of the kit: mpckit::PageBase over mpckit::IInstance): no names to load, no loading bar. A plugin with its own
+/** The hooks of a page view for a page that needs nothing of the plugin around it (a page of the kit over mpckit::IInstance): no names to load, no loading bar. A plugin with its own
     names, or a loading state, writes a class like MacroNameHooks (macro_names.h): `Instance`, `Input`, `update (IInstance&)`, `scope ()`, `loading (const IInstance&)`, `fill (Input&, const ViewInput&)`. */
 struct NoHooks
 {

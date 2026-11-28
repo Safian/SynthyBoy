@@ -9,8 +9,6 @@
       "binaryDir": "${sourceDir}/build-dev",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "SYNTHYBOY_BUILD_PLUGIN": "OFF",
-        "SYNTHYBOY_BITMAP_GUI": "OFF",
         "SYNTHYBOY_BUILD_TESTS": "ON"
       }
     }

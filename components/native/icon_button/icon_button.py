@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """ICON BUTTON: the Button recipe with an icon where the text is, square (width = height), catalogue pictures.
 
-The face is `button.action_art(icon=..., height=..., look=...)`: look "filled" is the Button's legacy face, "ghost"
+The face is `button.action_art(icon=..., height=..., look=...)`: look "filled" is the Button's shaded face, "ghost"
 has no fill and no keyline (icon only, transparent). Icons: the recipes POWER, EXPAND and CLOSE (an X). States: power on
 (accent.green) / off (text.icon), disabled (the disabled look of style.dim_artwork). Docs: docs/ui-components/icon_button.md.
 """
@@ -21,7 +21,7 @@ def render_sample(sample):
     colour = _style_color("accent.green" if (icon == "power" and state == "on") else "text.icon")
     height = sample["height"] if isinstance(sample["height"], int) else _style_size(sample["height"])
     face = action_art(icon=icon, height=height, colour=colour,
-                      look="legacy" if sample["look"] == "filled" else "ghost")
+                      look="shaded" if sample["look"] == "filled" else "ghost")
     return dim_artwork(face) if state == "disabled" else face
 
 

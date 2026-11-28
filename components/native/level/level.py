@@ -192,7 +192,7 @@ def _inactive_grey(rgb):
 
 
 def dial_geometry(diameter):
-    """ui::Knob::geom for a dial of `diameter` px: (radius, value stroke, track stroke) in px."""
+    """The geometry of a dial of `diameter` px: (radius, value stroke, track stroke) in px."""
     metrics = _style_size("theme." + DIAL_LOOK)
     stroke = max(_style_size("knob.stroke.min"), diameter * metrics["arcValue"])
     track = max(_style_size("knob.track.min"), diameter * metrics["arcTrack"])
@@ -201,7 +201,7 @@ def dial_geometry(diameter):
 
 
 def render_dial_frame(diameter, value, *, bipolar=False, active=True, value_arc=True, stops=0):
-    """One dial picture exactly as ui::Knob draws it (drawStatic + drawLive), from the shared tokens.
+    """One dial picture from the shared tokens.
 
     value_arc=False leaves out the gradient value arc (the SteppedDial face); stops=N (>= 2) adds a dot on the track at each of
     N evenly spaced angles. The defaults keep the Pan / Level pictures byte-identical.

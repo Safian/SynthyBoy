@@ -1,7 +1,7 @@
 # TextEntry
 
 ## What it is
-An on-screen keyboard page: a title, a text field with a caret, a QWERTY layer with shift / caps and a digit / symbol layer, SPACE, backspace, CLEAR, CANCEL, OK. The host offers no text entry to a plugin-drawn page, so this is the library's own. Use it to name something (a macro).
+An on-screen keyboard page: a title, a text field with a caret, a QWERTY layer with shift / caps and a digit / symbol layer, SPACE, backspace, CLEAR, CANCEL, OK. The host offers no text entry to a overlay page, so this is the library's own. Use it to name something (a macro).
 
 ## Header and types
 `shell-mpc/ui/text_entry.h`: `TextEntry`, `TextEntry::Key`, `TextEntry::Layer { Letters, Symbols }`, `TextEntry::Shift { Off, Once, Caps }`, `TextEntry::KeyKind { Char, ShiftKey, LayerKey, Backspace, Space, Clear, Cancel, Ok }`.

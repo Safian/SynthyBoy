@@ -90,11 +90,11 @@ DEFAULT_BTN_HEIGHT = _style_size('height.medium')
 DEFAULT_BTN_GAP = _style_size('gap.field')
 
 # Host parameter offset constants (shell-mpc/native_ui_params.h)
-LEGACY_EXTRAS = 82
+HOST_EXTRAS = 82
 
 
 def native_base_index(param_count):
-    return param_count + LEGACY_EXTRAS
+    return param_count + HOST_EXTRAS
 
 
 OSC_ABC_SETTINGS = 292
@@ -224,7 +224,7 @@ def resolve_native_base(base=None, param_count=None):
 
 
 def _gradient_button_face(size, scale, pad, *, pressed=False):
-    """The shared legacy button gradient (button.gradient.*, control.gradient) at the supersampled `size`;
+    """The shared shaded button gradient (button.gradient.*, control.gradient) at the supersampled `size`;
     a pressed face keeps its accent keyline."""
     line = (_style_rgb("button.gradient.border"), _style_rgb("button.gradient.border.bottom"))
     if pressed:
@@ -241,7 +241,7 @@ def render_tune_track_button(active=True, width=DEFAULT_COL_WIDTH, height=DEFAUL
     draw = ImageDraw.Draw(im)
 
     pad = scale // 2
-    if _control_look() == "legacy":
+    if _control_look() == "shaded":
         im, draw = _gradient_button_face((w, h), scale, pad)
     else:
         draw.rounded_rectangle(
@@ -283,7 +283,7 @@ def render_tune_more_button(pressed=False, width=DEFAULT_COL_WIDTH, height=DEFAU
     border_col = CYAN_ACCENT if pressed else BORDER_CELL
     text_col = _style_color("text.white") if pressed else TEXT_VALUE
 
-    if _control_look() == "legacy":
+    if _control_look() == "shaded":
         im, draw = _gradient_button_face((w, h), scale, pad, pressed=pressed)
     else:
         draw.rounded_rectangle(

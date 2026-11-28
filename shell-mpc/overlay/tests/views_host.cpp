@@ -8,7 +8,7 @@
 #include <sstream>
 
 #include "fakes.h"
-#include "fixtures/legacy_layout.h"
+#include "fixtures/test_layout.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/filter_response.h"
 #include "synthyboy/lfo_display.h"
@@ -402,11 +402,11 @@ int main()
     }
     {
         Plain p;
-        FakeFrame frame; frame.views = legacy::kViews;
-        const int ei = [] { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == "env2") return i; return -1; }();
+        FakeFrame frame; frame.views = testlayout::kViews;
+        const int ei = [] { for (int i = 0; i < testlayout::kNumViews; ++i) if (std::string (testlayout::kViews[i].name) == "env2") return i; return -1; }();
         check (ei >= 0, "the layout has env2");
-        EnvView v (2, legacy::kViews[ei]);
-        const layout::Rect& reg = legacy::kViews[ei].region;
+        EnvView v (2, testlayout::kViews[ei]);
+        const layout::Rect& reg = testlayout::kViews[ei].region;
         const int w = reg.w, h = reg.h;
         std::vector<uint32_t> cv (static_cast<size_t> (w) * h);
         auto input = [&] (const synthyboy::LiveValues* lv, double now)
@@ -457,16 +457,16 @@ int main()
         for (uint32_t q : cv) clear += q == 0;
         for (int m = 0; m < 2; ++m)
         {
-            const layout::Marker& mk = legacy::kViews[ei].markers[m];
+            const layout::Marker& mk = testlayout::kViews[ei].markers[m];
             covered += px (cv, w, mk.rect.x - reg.x + 1, mk.rect.y - reg.y + 1) == 0xff000000u + mk.cover;
         }
         check (covered == 2, "the two marker squares are painted over in the colour under them (the widget background)");
         {
-            const layout::Rect& ir = legacy::kViews[ei].instance;
+            const layout::Rect& ir = testlayout::kViews[ei].instance;
             bool all = true;
             for (int y = 0; y < ir.h; ++y)
                 for (int x = 0; x < ir.w; ++x)
-                    all = all && px (cv, w, ir.x - reg.x + x, ir.y - reg.y + y) == 0xff000000u + legacy::kViews[ei].markers[0].cover;
+                    all = all && px (cv, w, ir.x - reg.x + x, ir.y - reg.y + y) == 0xff000000u + testlayout::kViews[ei].markers[0].cover;
             check (all, "the instance picture (the colour of the slot) is painted over as well: the player never sees it");
         }
         check (clear > static_cast<int> (cv.size()) * 95 / 100, "the plane is transparent except for the dot and the two squares (" + std::to_string (100 * clear / static_cast<int> (cv.size())) + " % clear)");
@@ -555,10 +555,10 @@ int main()
     {
         TempDir dir;
         FakePlane plane;
-        FakeFrame frame; frame.views = legacy::kViews;
+        FakeFrame frame; frame.views = testlayout::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
+        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &testlayout::pageSet());
         inst.numTargets = 16;
         ctl.attach (&inst);
         double now = 0.0;
@@ -571,13 +571,13 @@ int main()
             if (q == std::string::npos) return "";
             return t.substr (q + std::strlen (key) + 2, t.find ('\n', q) - q - std::strlen (key) - 2);
         };
-        auto viewIndex = [] (const char* name) { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == name) return i; return -1; };
+        auto viewIndex = [] (const char* name) { for (int i = 0; i < testlayout::kNumViews; ++i) if (std::string (testlayout::kViews[i].name) == name) return i; return -1; };
         const int lfo2 = viewIndex ("lfo2"), f1 = viewIndex ("filter1");
         check (lfo2 >= 0 && f1 >= 0, "the layout has filter1 and lfo2");
         // the LFO 2 tab is on screen
         frame.setView (lfo2, true, 90);
         check (until ([&] { return plane.planeOn; }, 500) >= 0, "the markers of LFO 2: the plane is on");
-        const layout::Rect& r = legacy::kViews[lfo2].region;
+        const layout::Rect& r = testlayout::kViews[lfo2].region;
         check (plane.lastRect == uiRectToPanel (90, Rect { r.x, r.y, r.w, r.h }, 800, 1280), "the plane is the LFO 2 region");
         run (1200);
         check (line ("state") == "visible" && line ("view") == "lfo2" && ! line ("lfo_shape_hash").empty(), "the status file names the view (lfo2) and has its numbers");
@@ -622,7 +622,7 @@ int main()
     // ---- two instances with different settings: every view type shows the data of the instance whose slot colour is on screen ---------------------------------------------------
     {
         struct Shot { std::vector<uint32_t> picture; uint32_t hash = 0; };
-        auto viewIndex = [] (const char* name) { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == name) return i; return -1; };
+        auto viewIndex = [] (const char* name) { for (int i = 0; i < testlayout::kNumViews; ++i) if (std::string (testlayout::kViews[i].name) == name) return i; return -1; };
         // the setups of the two instances; the reference is a controller with ONE instance of the same settings
         auto setupA = [] (FakeInstance& i)
         {
@@ -643,8 +643,8 @@ int main()
         };
         auto shot = [&] (const char* view, auto setup)
         {
-            TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance inst; frame.views = legacy::kViews;
-            SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
+            TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance inst; frame.views = testlayout::kViews;
+            SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &testlayout::pageSet());
             setup (inst);
             ctl.attach (&inst);
             const int v = viewIndex (view);
@@ -656,8 +656,8 @@ int main()
             s.hash = ctl.currentView() ? ctl.currentView()->hash() : 0u;
             return s;
         };
-        TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance a, b; frame.views = legacy::kViews;
-        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
+        TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance a, b; frame.views = testlayout::kViews;
+        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &testlayout::pageSet());
         setupA (a); setupB (b);
         check (ctl.attach (&a) == 0 && ctl.attach (&b) == 1, "two instances: slots 0 and 1");
         double now = 0.0;

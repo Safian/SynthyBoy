@@ -158,12 +158,6 @@ public:
             syncLayoutMode();
     }
 
-    void setStandaloneFilter (int filterNum) noexcept
-    {
-        standaloneFilter_ = filterNum;
-        if (standaloneFilter_ >= 1 && standaloneFilter_ <= 2)
-            adoptSplitState (standaloneFilter_ - 1, scalarSel_, tabview::kFilterExpandedFilter);
-    }
     int standaloneFilter() const noexcept { return standaloneFilter_; }
     bool isStandalone() const noexcept { return standaloneFilter_ >= 1 && standaloneFilter_ <= 2; }
 
@@ -176,7 +170,6 @@ public:
         if (on)
             adoptSplitState (filterSel_, scalarSel_, tabview::kFilterExpandedFilter);
     }
-    bool isSubTab() const noexcept { return subTab_; }
 
     // Native controls are the only owner of the controls; there is no fallback switch.
     bool hasNativePower() const noexcept { return true; }
@@ -360,19 +353,14 @@ public:
 
     int view() const noexcept { return view_; }                       // 0 F1, 1 F2, 2 NOTE, 3 VELO (expanded compat)
 
-    int filterSelection() const noexcept { return filterSel_; }
-    int scalarSelection() const noexcept { return scalarSel_; }
-    int expandMode() const noexcept { return expandMode_; }
     bool isSplit() const noexcept { return ! isStandalone() && expandMode_ == tabview::kFilterSplit; }
     bool curveView() const noexcept { return ! isStandalone() && expandMode_ == tabview::kFilterExpandedCurve; }
     bool curveShown() const noexcept { return isSplit() || curveView(); }
     bool filterShown() const noexcept { return isSplit() || ! curveView(); }
-    int editFilter() const noexcept { return editFilter_; }           // 1 or 2: the filter the knobs belong to
     bool isDual() const noexcept { return dual_ && ! isSplit() && ! curveView(); }   // the F1+F2 view toggle
     /** The scalar curve editor of the selected scalar source (NOTE when scalarSel_ == 0, VELO when scalarSel_ == 1). */
     ScalarCurveUi& curveUi() noexcept { return curve_[scalarSel_ == 0 ? 1 : 0]; }
     const ScalarCurveUi& curveUi() const noexcept { return curve_[scalarSel_ == 0 ? 1 : 0]; }
-    ScalarCurveUi& curveUiOf (int which) noexcept { return curve_[which == 1 ? 1 : 0]; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
@@ -662,11 +650,7 @@ public:
     ui::ListPopup& destList() noexcept { return destList_; }
     ui::FilterDisplay& display() noexcept { return display_; }
     const CurveSource* curve (int filter) const noexcept { return filter == 2 ? curve2_.get() : curve1_.get(); }
-    const ui::ControlModel& pzEditorButton() const noexcept { return pzOpen_; }
-    const ui::PzCurveEditor& pzEditor() const noexcept { return pzEditor_; }
     int paramOf (int id, int filter) const noexcept { return paramForId (id, filter); }
-    const ModRow* modRows() const noexcept { return modRows_; }
-    bool selectedFilterOn() const noexcept { return powerOn_; }
     bool formantMode() const noexcept { return geo_.formantMode(); }
     bool combMode() const noexcept { return geo_.combMode(); }
     int activeGroup() const noexcept { return activeGroup_; }
@@ -1135,13 +1119,6 @@ private:
         }
     }
 
-    /** Compatibility entry for single-index callers (`0 F1, 1 F2, 2 NOTE, 3 VELO`). */
-    void adoptView (int v)
-    {
-        int f = filterSel_, s = scalarSel_, e = expandMode_;
-        tabview::decodeFilterSplit (std::clamp (v, 0, 3), f, s, e);
-        adoptSplitState (f, s, e);
-    }
 
     void assignIds()
     {
@@ -1227,7 +1204,7 @@ private:
         }
         openTargetsIfAsked (stack, inst);
     }
-    /** TARGETS of the editor was tapped: the ModTargetsPage of the source (23 velocity, 24 note) opens. */
+    /** TARGETS of the editor was tapped: the targets page of the source (23 velocity, 24 note) opens. */
     void openTargetsIfAsked (UiStack& stack, IInstanceView& inst)
     {
         for (ScalarCurveUi& cu : curve_)
@@ -2035,7 +2012,6 @@ private:
         p.textLeft ({ geo_.rect().x + 22, geo_.rect().y + 4, 400, 56 }, view_ == kViewNote ? "FILTER NOTE" : "FILTER VELO", ui::theme::kPageTitleSize, p.c (ui::theme::L().text, 255), ui::theme::L().fMin);
     }
 
-    static int paramForKey (int f, const char* key) { return uibind::indexOfKey ("filter" + std::to_string (f) + "." + key); }
 
     /** The groups of the page in reading order: the filter screen has MAIN, TRACK, OUT (and FORMANT with the Formant model); the modulation list one per row. The active group is on Q 1 .. 4, the
         next three (wrapping) on 5 .. 16. */

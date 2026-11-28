@@ -81,9 +81,6 @@ inline RowCells rowCells (const ui::Rect& r) noexcept
     return c;
 }
 
-/** The label the polarity / state cells carry for a value (the native cell shows it: the plugin only names it). */
-inline const char* polarityLabel (bool bipolar) noexcept { return bipolar ? "BI" : "UNI"; }
-inline const char* stateLabel (bool bypassed) noexcept { return bypassed ? "OFF" : "ON"; }
 
 // =============================================================================================================================================================
 /** The matrix of the 64 slots: the filter, the visible list, the scroll window and the selected row. */
@@ -242,7 +239,6 @@ public:
     int selectedRow() const noexcept { return selectedRow_; }
     int firstRow() const noexcept { return firstRow_; }
     void setFirstRow (int r) noexcept { firstRow_ = std::clamp (r, 0, maxScroll()); syncWindow(); }
-    void scrollByRows (int rows) noexcept { setFirstRow (firstRow_ + rows); }
     int activeSlots() const noexcept { return totalActive_; }
 
     /** The data of slot `slot` (the owner calls it for all 64; an empty name is a slot that is not used): amount -1 .. +1, `srcGroup` the group of the source and `destModule` the module of the target (the filters). */
@@ -276,7 +272,6 @@ public:
         else
             syncWindow();
     }
-    const SlotEntry& slotData (int slot) const noexcept { return slots_[std::clamp (slot, 0, kMaxSlots - 1)]; }
     int visibleSlotCount() const noexcept { return visibleSlotCount_; }
     int slotOfVisibleRow (int row) const noexcept { return row >= 0 && row < visibleSlotCount_ ? visibleSlots_[row] : -1; }
     int slotAtWindowIndex (int wIdx) const noexcept

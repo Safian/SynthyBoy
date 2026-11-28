@@ -25,20 +25,12 @@ constexpr int kFxSideX = 644, kFxSideStride = 318, kFxSideLane = 16, kFxSideLine
     no longer stretches a switch into a box of 190 px; the rows keep their pitch, the cell stands at the top of its row). The skin reads the cap from the contract ("cell_max_h"). */
 constexpr int kFxCellMaxH = 104;
 constexpr int fxStackedCellH (int rowH) noexcept { return rowH - kFxSideLane < 72 ? 72 : (rowH - kFxSideLane > kFxCellMaxH ? kFxCellMaxH : rowH - kFxSideLane); }
-/** Tab y of the first cell line of `row` of a side layout. */
-constexpr int fxSideRowY (const FxLayout& g, int row) noexcept
-{
-    int y = g.top;
-    for (int r = 0; r < row; ++r)
-        y += kFxSideLane + kFxSideLine * g.lines[r];
-    return y + kFxSideLane;
-}
 constexpr FxLayout kFxLayouts[] = {
     { 208, 2 }, { 208, 4 }, { 404, 2 }, { 360, 2 },
     { 344, 2 }, { 390, 1 }, { 424, 2 },
     { 208, 3 }, { 272, 2 }, { 272, 3 }, { 424, 3 }, { 272, 1 },
     { 208, 3, 1, { 2, 2, 1, 0 } },   // Distortion: the waveshaper at the left, TYPE / DRIVE / MIX / LEVEL, FILTER ORDER / CUTOFF / RESONANCE, BLEND / KEYTRACK at the right
-    // the side layouts of the FX screen review (2026-11-26): a side layout is named by the lines of the rows on the panel now (FxSlotEditor::nativeLayout)
+    // the side layouts of the FX screen review (2026-11-26): a side layout is named by the lines of the rows on the panel (nativeLayout)
     { 208, 2, 1, { 2, 2, 0, 0 } },   // Distortion without its filter (the FILTER SHAPE row is gone)
     { 272, 2, 1, { 2, 2, 0, 0 } },   // under the tabs, two blocks of four: Compressor MAIN / BANDS, Delay MAIN, EQ MAIN / TONE, FX Filter MAIN
     { 272, 2, 1, { 2, 1, 0, 0 } },   // Compressor UPWARD (multiband), FX Filter TONE (every model but Formant)

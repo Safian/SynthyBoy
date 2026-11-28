@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """RADIO LIST: rows of a small round LED plus a label, exactly one row selected (lit), catalogue pictures.
 
-Every row is the Button's legacy gradient face (`button.gradient_face`, `control.gradient`, `button.gradient.*`) at
+Every row is the Button's shaded gradient face (`button.gradient_face`, `control.gradient`, `button.gradient.*`) at
 32 / 40 / 48 px with that size's radius; the LED is `radio_list.led_ratio` (40%) of the row height, centred vertically,
 `radio_list.pad_x` from the left edge; the label is the Label component (`label.render_label`, `text.value`, the font
 of `button.size.<px>` as em) `radio_list.led_gap` right of the LED. Lit LED: `accent.cyan` with the `radio.active.border`

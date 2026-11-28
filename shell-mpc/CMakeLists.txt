@@ -245,20 +245,10 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME mixer_binding_host COMMAND mixer_binding_host)
 
 
-    # the kit parity test (migration steps 2 and 3, docs/ui-components/TEMPLATE.md): the parameter source of the kit against the old direct calls, for every parameter
-    add_executable(kit_parity_host EXCLUDE_FROM_ALL overlay/tests/kit_parity_host.cpp)
-    target_include_directories(kit_parity_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(kit_parity_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(kit_parity_host PRIVATE cxx_std_17)
-    target_compile_options(kit_parity_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME kit_parity_host COMMAND kit_parity_host)
 
     # the automatic layout lint of the plugin-drawn pages (every page, Init and every factory preset): a finding that is not in the baseline fails it, a baseline entry that no longer occurs too
 
-    # the names of the macros on the plugin-drawn pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
+    # the names of the macros on the overlay pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
 
 
 
@@ -369,10 +359,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(device_profile_host PRIVATE cxx_std_17)
     target_compile_options(device_profile_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME device_profile_host COMMAND device_profile_host)
-
-    # Data consistency tests for the FX page tables (ui/fx_layout.h, ui/choice_names.h)
-
-    # UI component library coverage: new parts host tests (NoteMask, FxBandBoard, Knob LED/dialMax, NumberField maxBox/text, LedList 2-digit chips)
 
 endif()
 

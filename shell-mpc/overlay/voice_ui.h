@@ -89,7 +89,6 @@ public:
     };
 #undef SB_VOICE_STEP
 #undef SB_VOICE_ROW
-    static constexpr int rowCount() noexcept { return kNumRowsTotal; }
     static constexpr int gridRowIndex (int row, int step) noexcept { return kGridFirst + step * kNumRows + row; }
     static int rowIndexOfId (int id) noexcept
     {
@@ -323,12 +322,9 @@ public:
     int activeQ() const noexcept { return activeGroup_; }
     int activeGroup() const noexcept { return activeGroup_; }
     void setActiveGroup (int g) noexcept { activeGroup_ = std::clamp (g, 0, kMaxGroups - 1); }
-    int selectedStep() const noexcept { return selectedStep_; }
     int activeRow() const noexcept { return activeRow_; }
     int length() const noexcept { return length_; }
-    uint8_t voiceStepMask() const noexcept { return voiceStepMask_; }
     int paramOfRow (int rowIndex) const noexcept { return rowIndex >= 0 && rowIndex < kNumRowsTotal ? params_[rowIndex] : -1; }
-    int qTarget (int group, int slot) const noexcept { return groupTarget (group, slot); }
     const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return QRouter::kCount; }
 

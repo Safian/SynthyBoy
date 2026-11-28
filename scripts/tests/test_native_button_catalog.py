@@ -1,6 +1,6 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Button and IconButton catalogue entries: legacy look (measured colours), sizes, ghost, disabled, order."""
+"""Button and IconButton catalogue entries: shaded look (measured colours), sizes, ghost, disabled, order."""
 import json
 import re
 import sys
@@ -46,7 +46,7 @@ class ButtonTests(unittest.TestCase):
         """Owner's '+ ADD' crop: keyline on top, fill (19,25,48) down to a third, then darkening to (13,17,34)."""
         top_line = style.rgb("button.gradient.border")
         for height in (32, 40, 48, 56):
-            face = button.action_art(text="+ ADD", height=height, look="legacy")
+            face = button.action_art(text="+ ADD", height=height, look="shaded")
             x = 8                              # in the padding, left of the text
             self.assertTrue(near(face.getpixel((x, 0)), top_line, 6), height)
             self.assertTrue(near(face.getpixel((x, 3)), (19, 25, 48)), height)
@@ -58,23 +58,23 @@ class ButtonTests(unittest.TestCase):
         self.assertEqual(style.color("button.gradient.bottom"), "#0d1122")
 
     def test_gradient_shape_is_shared_with_the_dropdown(self):
-        for look in ("neon", "legacy"):
+        for look in ("neon", "shaded"):
             self.assertEqual(style.size(f"selector.dropdown.gradient.{look}"), style.size("control.gradient"))
         from components.native.selector import selector
         self.assertIs(selector.gradient_face, button.gradient_face)
 
     def test_default_look_follows_control_look_and_flat_stays_available(self):
-        self.assertEqual(style.control_look(), "legacy")
+        self.assertEqual(style.control_look(), "shaded")
         face = button.action_art(icon="power").convert("RGB")
         self.assertEqual(face.size, (48, 48))
-        self.assertEqual(face, button.action_art(icon="power", look="legacy").convert("RGB"))
+        self.assertEqual(face, button.action_art(icon="power", look="shaded").convert("RGB"))
         flat = button.action_art(icon="power", look="flat").convert("RGB")
         self.assertEqual(flat.getpixel((6, 24)), style.rgb("button.surface"))
         self.assertNotEqual(face.getpixel((6, 24)), flat.getpixel((6, 24)))
 
     def test_text_fits_and_look_is_validated(self):
         for height in (32, 40, 48, 56):
-            face = button.action_art(text="+ ADD", height=height, look="legacy")
+            face = button.action_art(text="+ ADD", height=height, look="shaded")
             self.assertEqual(face.height, height)
             self.assertGreater(face.width, height)
         with self.assertRaises(ValueError):

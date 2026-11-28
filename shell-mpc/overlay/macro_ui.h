@@ -470,8 +470,6 @@ public:
     int targetsOf() const noexcept { return pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets) ? targetMacro_ : -1; }
 
     ui::TextEntry& keyboard() noexcept { return entry_; }
-    /** The macro whose name the keyboard page edits (0 .. 7), -1 when the page is not open. */
-    int editedMacro() const noexcept { return pageTop_ == kPageKeyboard ? editMacro_ : -1; }
     /** The text a card carries as its name: "MACRO n" for the default, else the name in capitals (the style of the labels of the pages). */
     std::string cardName (int m) const
     {
@@ -486,23 +484,12 @@ public:
     const ModRow& targetRow (int i) const noexcept { return targetRows_[std::clamp (i, 0, kPerPage - 1)]; }
     int bank() const noexcept { return bank_; }
     void setBank (int b) noexcept { bank_ = b == 1 ? 1 : 0; }
-    int macroParam (int m) const noexcept { return m >= 0 && m < kNumMacros ? macroParams_[m] : -1; }
     const SpectrumCurve* spectrum() const noexcept { return curve_.get(); }
 
-    // ---- the add-target list as data (the page kPageList): the groups of the destinations, then the parameters of a group
-    int listLevel() const noexcept { return listGroup_; }   // -1: the groups, else the group whose parameters are listed
     int listCount() const noexcept
     {
         const uibind::DestIndex& d = uibind::DestIndex::get();
         return listGroup_ < 0 ? static_cast<int> (d.groups.size()) : static_cast<int> (d.choices[static_cast<size_t> (listGroup_)].size());
-    }
-    const char* listName (int i) const noexcept
-    {
-        const uibind::DestIndex& d = uibind::DestIndex::get();
-        if (i < 0 || i >= listCount())
-            return "";
-        return listGroup_ < 0 ? d.groups[static_cast<size_t> (i)].c_str()
-                              : uibind::info (synthyboy::modDestinationParamIndex (static_cast<size_t> (d.choices[static_cast<size_t> (listGroup_)][static_cast<size_t> (i)]))).name;
     }
     /** The choice value of entry `i` for the picker (ModUi's coding: a group is -1 - group, a destination its choice). */
     int listChoice (int i) const noexcept

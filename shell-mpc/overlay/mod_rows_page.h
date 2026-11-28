@@ -156,7 +156,6 @@ public:
     }
     /** The block of knobs (QRouter::blockOfGroup) the row has while it is not the active one (-1: none). */
     void setRowBlock (int row, int block) noexcept { if (row >= 0 && row < kPerPage) rowBlock_[row] = block; }
-    int rowBlock (int row) const noexcept { return row >= 0 && row < kPerPage ? rowBlock_[row] : -1; }
 
     int rowY (int i) const noexcept { return rect_.y + kBarH + 8 + i * kRowH; }
     ui::Rect nameRect (int row) const noexcept { return { rect_.x + 8, rowY (row) + kRowH - kCtlH, kNameW - 16, kCtlH }; }

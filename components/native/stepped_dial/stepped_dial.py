@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """STEPPED DIAL: our dial face without the gradient value arc, with N stops (2..8), catalogue pictures.
 
-The face is `level.render_dial_frame(diameter, position / (N - 1), value_arc=False, stops=N)`: the ui::Knob recipe with only the
+The face is `level.render_dial_frame(diameter, position / (N - 1), value_arc=False, stops=N)`: the Level dial recipe with only the
 dark track ring, the white thumb and the pointer line, plus a dot on the track at each of the N stop angles of the 270 degree
 sweep (`knob.start.degrees`, `knob.sweep.degrees`); the selected stop is in the pointer colour, the others dim. The pointer jumps
 to the stop angle: N positions are N frames. Diameters: `stepped_dial.diameters` (36 / 40 / 48 / 56). Disabled: the inactive dial

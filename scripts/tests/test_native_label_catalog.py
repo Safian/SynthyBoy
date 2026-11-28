@@ -173,8 +173,8 @@ class DropdownTests(unittest.TestCase):
         self.assertEqual(face.tobytes(), plain.tobytes())
         self.assertEqual(face.height, 40)
 
-    def test_legacy_fill_has_the_voice_selector_contrast_and_neon_is_untouched(self):
-        face = selector.render_dropdown_face(220, 48, look="legacy", size="selector.dropdown.size.48").convert("RGB")
+    def test_shaded_fill_has_the_voice_selector_contrast_and_neon_is_untouched(self):
+        face = selector.render_dropdown_face(220, 48, look="shaded", size="selector.dropdown.size.48").convert("RGB")
         self.assertEqual(face.getpixel((20, 8)), (20, 26, 56))    # constant upper part: #141a38
         self.assertEqual(face.getpixel((20, 38)), (11, 15, 36))   # constant lower part: #0b0f24
         mid = face.getpixel((20, 26))                              # darkening between the two constant parts
@@ -184,7 +184,7 @@ class DropdownTests(unittest.TestCase):
         self.assertEqual(neon.convert("RGB").getpixel((20, 10)), (20, 26, 56))  # theme.neon.panel0 as before
         self.assertEqual(style.color("selector.dropdown.top"), "#141a38")
         self.assertEqual(style.color("selector.dropdown.bottom"), "#0b0f24")
-        self.assertEqual(style.size("selector.dropdown.gradient.legacy"), style.size("selector.dropdown.gradient.neon"))
+        self.assertEqual(style.size("selector.dropdown.gradient.shaded"), style.size("selector.dropdown.gradient.neon"))
 
     def test_invalid_combinations_are_refused(self):
         with self.assertRaises(ValueError):

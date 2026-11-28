@@ -39,7 +39,7 @@ def render_segmented_button_art(label, active, width, height, *, scale=_style_si
     pad = _style_size('radio_button.segmented_button_art.pad') * scale
     radius = _style_size('radius.control') * scale
 
-    if _control_look() == "legacy":
+    if _control_look() == "shaded":
         # The shared button gradient (button.gradient.*, control.gradient); the selected face is the accent on the same shape.
         if active:
             fill = (_style_rgb("accent.cyan"), _style_rgb("radio.active.bottom"))
@@ -76,7 +76,7 @@ def render_segmented_button_art(label, active, width, height, *, scale=_style_si
 
 
 def render_grid_cell_art(label, active, width, height, *, ends=(True, True), vertical=False):
-    """One cell of a RadioGrid-style row or column laid over a tiled hit slot: the Button recipe (action_art: legacy face,
+    """One cell of a RadioGrid-style row or column laid over a tiled hit slot: the Button recipe (action_art: shaded face,
     or look "active" for the selected cell), the largest button size that fits the slot, centred across the group, with the
     RadioGrid gap (`radio_grid.gap`) kept between neighbouring cells. `ends` marks the first / last cell of the group."""
     gap = _style_size("radio_grid")["gap"]

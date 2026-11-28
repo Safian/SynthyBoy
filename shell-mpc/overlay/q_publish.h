@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: how a plugin-drawn page publishes its Q slots. A page knows its Q GROUPS in reading order (four values each) and which one is active; QRouter::mapGroups puts the active group on the Q proxies
+// SynthyBoy - MPC overlay: how a overlay page publishes its Q slots. A page knows its Q GROUPS in reading order (four values each) and which one is active; QRouter::mapGroups puts the active group on the Q proxies
 // 1 .. 4 and the next groups of the page (wrapping, each once) on 5 .. 8, 9 .. 12 and 13 .. 16. The page asks for the slots of its groups with a callback and hands them over here; the router is told only when a slot changed.
 // A page that only knows one group publishes it with groups = 1 (the slots 5 .. 16 have no target). This header knows no engine: the helpers for the modulation rows (modRowTargets, setRowBlocks) are in q_publish_mod.h.
 // Copyright (C) 2026 Safian Szabolcs
@@ -15,35 +15,9 @@ namespace synthyboy_mpc { namespace overlay {
 /** Connects the router's device rule to the UI library's device flag (ui::QGroup::setWideDevice, set once by the overlay at start): one switch for the frames, the chips and the slot order. */
 inline const bool kQDeviceRule = (QRouter::wideProbe() = &ui::QGroup::wideDevice, true);
 
-/** The groups of a screen that have members, in index order (a screen can have a group that is empty for the instance on it, like the FORMANT block of a filter without formants): ids[k] is the index of the k-th one, the
-    result is how many there are; `activePos` gets the position of `active` among them (-1: the active group is none of them). */
-template <class Group>
-inline int usedGroups (const Group* groups, int n, int active, int* ids, int& activePos) noexcept
-{
-    int used = 0;
-    activePos = -1;
-    for (int g = 0; g < n; ++g)
-        if (groups[g].numMembers() > 0)
-        {
-            if (g == active)
-                activePos = used;
-            ids[used++] = g;
-        }
-    return used;
-}
 
-/** Tells every group of a screen which block of knobs it has (QGroup::setBlock) once the page's `used` groups (ids as above) are mapped with the active position `activePos`; the others get none. */
-template <class Group>
-inline void setBlocks (Group* groups, int n, const int* ids, int used, int activePos) noexcept
-{
-    for (int g = 0; g < n; ++g)
-        groups[g].setBlock (-1);
-    for (int k = 0; k < used; ++k)
-        groups[ids[k]].setBlock (QRouter::blockOfGroup (used, activePos, k));
-}
 
-/** The sixteen slots of a page and what was published of them. `Inst` is any instance interface with setQGroup (const int*, int): IInstanceView of SynthyBoy, mpckit::IInstance of the kit (migration
-    step 1 of docs/ui-components/TEMPLATE.md; the callers are unchanged: the type is deduced). */
+/** The sixteen slots of a page and what was published of them. `Inst` is any instance interface with setQGroup (const int*, int): IInstanceView of SynthyBoy, mpckit::IInstance of the kit (migration the callers are unchanged: the type is deduced). */
 struct QSlots
 {
     int target[QRouter::kCount];

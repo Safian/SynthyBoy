@@ -5,7 +5,7 @@ The chain and selected-effect header stay fixed. Small effects use one MAIN pane
 
 ![Current Chorus synthetic native TUI + C++ composite](../screens/fx.jpg)
 
-This is an offline1280×628 fixture, not a device screenshot. The old reference was removed after the functional native panel implementation was integrated.
+This is an offline1280×628 fixture, not a device screenshot.
 
 ## Purpose
 

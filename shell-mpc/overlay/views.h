@@ -485,7 +485,6 @@ public:
     int dotX() const noexcept { return dotX_; }
     int dotY() const noexcept { return dotY_; }
     unsigned long hits() const noexcept { return pointHits_ + polylineHits_; }
-    unsigned long pointHits() const noexcept { return pointHits_; }
     unsigned long polylineHits() const noexcept { return polylineHits_; }
     unsigned long misses() const noexcept { return misses_; }
     void writeStatus (std::ostream& o) const override
@@ -659,11 +658,6 @@ public:
 
     /** The row of a level (0 .. 1) on a canvas of height h. */
     static double levelToY (double level, int h) noexcept { return (h - kBottomMargin) - level * (h - kBottomMargin - kTopMargin); }
-    static uint32_t gradientStraight (bool top) noexcept
-    {
-        const unsigned rgb = top ? kFillTopRgb : kFillBottomRgb;
-        return gpu::rgba8 ((rgb >> 16) & 255u, (rgb >> 8) & 255u, rgb & 255u, static_cast<uint32_t> (top ? kFillTopAlpha : kFillBottomAlpha));
-    }
 
     void render (uint32_t* cv, int w, int h) override { renderLevels (curve_.level(), cv, w, h, ys_); }
     bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override

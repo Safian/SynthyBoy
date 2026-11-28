@@ -13,11 +13,6 @@ namespace synthyboy_mpc { namespace ui {
 namespace voicegrid
 {
 constexpr int kNumRows = 6, kNumSteps = 8;
-inline const char* rowName (int r) noexcept
-{
-    static const char* const kNames[kNumRows] = { "PAN", "DETUNE", "CUTOFF", "ENV", "MOD 1", "MOD 2" };
-    return r >= 0 && r < kNumRows ? kNames[r] : "";
-}
 /** The text of a row's value (val -1 .. +1): PAN L / R, DETUNE in cents, the others in percent. */
 inline void formatValue (int row, float val, char* out, size_t maxLen) noexcept
 {

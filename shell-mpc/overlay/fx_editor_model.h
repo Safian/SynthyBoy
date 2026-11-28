@@ -1,8 +1,7 @@
 // SynthyBoy - MPC overlay: the DATA of the effect page of the FX tab (owner decision 2026-11-27: the C++ layer has no UI elements). The page of the selected effect is a table of rows of four cells (ui/fx_layout.h);
 // every control of it is a native cell of the host skin. This header holds what the plugin still has to know about that page: which control stands in which cell (the table, the conditions under which a control is live,
 // the functional panels, the rows that close up), the engine parameter behind each control, how the skin lays the cells out (nativeLayout, the rectangles the page leaves open), the header facts (title, place, notice,
-// power, rack), the compressor's view-local band choice, the lanes of a splitter (data only) and the display (ui::FxDisplay, a graph the host cannot draw). No widget, no touch, no drawing of a control. Ported from the
-// deleted ui::FxSlotEditor (git show d8cfc25f~1:shell-mpc/ui/fx_slot_editor.h).
+// power, rack), the compressor's view-local band choice, the lanes of a splitter (data only) and the display (ui::FxDisplay, a graph the host cannot draw). No touch, no drawing of a control.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -78,7 +77,6 @@ public:
         const int x = path.x + static_cast<int> (std::ceil (ui::Pen::textWidth (name_, ui::theme::L().fTitle))) + 24;
         return { x, path.y, std::max (0, rackRect().x - 8 - x), kHeaderH };
     }
-    ui::Rect knobArea() const noexcept { return knobArea_; }
     ui::Rect displayRect() const noexcept { return displayRect_; }
 
     /** Calls `visit` with the rectangle of every native control of the page (they stay open in the overlay's ground). */
@@ -204,7 +202,6 @@ public:
         return std::clamp (rows, 1, ui::fxl::kMaxPageRows);
     }
     int numPages() const noexcept { return ui::fxl::panelsOf (kind_).count; }
-    const char* panelName (int p) const noexcept { return ui::fxl::panelsOf (kind_).names[std::clamp (p, 0, numPages() - 1)]; }
     int pageIndex() const noexcept { return page_; }
     bool isMoreView() const noexcept { return page_ != 0; }
     int firstRowOfPage() const noexcept { return panelStart_[page_]; }
@@ -214,11 +211,9 @@ public:
     void setPath (const char* path) { ui::setText (path_, sizeof path_, path != nullptr ? path : ""); }
     const char* path() const noexcept { return path_; }
     const char* title() const noexcept { return name_; }
-    const ui::fxl::Layout& layoutTable() const noexcept { return *lay_; }
     bool removable() const noexcept { return removable_; }
 
     const synthyboy::ParamInfo* infoOf (int p) const noexcept { return p >= 0 && p < kMaxParams ? ctl_[p].info : nullptr; }
-    const ui::fxl::Alt* altOf (int p) const noexcept { return p >= 0 && p < kMaxParams ? ctl_[p].alt : nullptr; }
     int controlOfKey (const char* key) const noexcept
     {
         for (int p = 0; p < kMaxParams; ++p)
@@ -239,7 +234,6 @@ public:
     int controlInCell (int row, int col) const noexcept { return row >= 0 && row < numVis_ && col >= 0 && col < 4 ? shown_[vis_[row]][col] : -1; }
     /** The live control in a cell: the members of the Q group of the row. */
     int memberControl (int row, int col) const noexcept { const int p = controlInCell (row, col); return p >= 0 && p < kMaxParams && ctl_[p].live ? p : -1; }
-    bool hasBandSelector() const noexcept { return hasBandSel_; }
     bool nativeBandShown() const noexcept { return moduleEnabled_ && hasBandSel_ && bandsMode_ != 3 && ! isMoreView(); }
     ui::Rect nativeBandRect() const noexcept
     {
@@ -249,7 +243,6 @@ public:
     /** The disabled bands of the selector as the native header publishes them: 4 (high) in Low band mode, 1 (low) in High band mode, else 0. */
     int bandDisabledMask() const noexcept { return (bandsMode_ == 2 ? 1 : 0) | (bandsMode_ == 1 ? 4 : 0); }
     int effectiveBand() const noexcept { return effBand_; }
-    int bandSelection() const noexcept { return bandSel_; }
     void setBand (int sel)
     {
         sel = std::clamp (sel, 0, 2);
@@ -287,7 +280,6 @@ public:
             return Kind::Toggle;
         return Kind::List;
     }
-    Kind kindOf (int p) const noexcept { return p >= 0 && p < kMaxParams ? ctl_[p].kind : Kind::Dial; }
 
     /** Disables the editing of the effect's parameters while POWER and the panel navigation stay (the module is off). */
     void setModuleEnabled (bool on)
@@ -297,7 +289,6 @@ public:
         if (changed)
             layout();
     }
-    bool moduleEnabled() const noexcept { return moduleEnabled_; }
 
     /** The effect on the page: `kind` is a type of the pool (1 .. 13) or a splitter (ui::fxl::kKindSplitter*), `removable` a slot of the pool. */
     void setType (int kind, bool removable)

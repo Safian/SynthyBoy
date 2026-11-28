@@ -40,7 +40,6 @@ inline uint32_t background() noexcept { return theme::L().bg1; }
 inline uint32_t panel() noexcept { return theme::L().panel1; }
 inline uint32_t rest() noexcept { return theme::L().keyline; }
 inline uint32_t accent() noexcept { return theme::L().flow[0]; }
-inline uint32_t accentDark() noexcept { return theme::L().negative; }
 inline uint32_t text() noexcept { return theme::L().textDim; }
 inline uint32_t white() noexcept { return theme::L().text; }
 inline uint32_t q() noexcept { return theme::L().q; }
@@ -55,7 +54,6 @@ inline Rect tabRect (const Rect& r, const char* name = "") noexcept
     const int w = std::clamp (static_cast<int> (std::ceil (tw)) + 10, 36, 56);
     return { r.x + 2, r.y + 2, std::min (w, std::max (0, r.w - 4)), std::min (18, std::max (0, r.h - 4)) };
 }
-inline Rect tabHitRect (const Rect& r) noexcept { return { r.x, r.y, std::min (r.w, 56), std::min (r.h, 52) }; }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 /** A cached cell of the scene around the drawing of a part of the picture (scene.h, CellBegin): the helper keeps what the cell drew from one picture to the next and draws it again only when its content
@@ -121,31 +119,6 @@ public:
         sb_.paintOff();
         rrect (r, t.rBlock, c (colour::rgba (hi ? t.keylineHi : t.keyline, 255)), t.frame);
     }
-    /** A control: smaller radius, the LEGACY GRADIENT face of the skin Button (owner, 2026-11-27: the old gradient/bubble design): flat at the top colour down to the start fraction of the height, linear to the bottom colour at the
-        end fraction, flat below; the keyline follows the same ramp (lighter blue at the top). The colours and the fractions are the skin recipe's tokens (button.gradient.*, control.gradient) through theme.h, so a Button token
-        change reaches every overlay control. A focused control (`hi`) takes the focus keyline. One Q-Link group is marked by ONE frame around the whole group (QGroup::draw) and the index chips; a member never draws a frame of its own, so
-        `q` (the member is in the active group) does not change the keyline: the rule lives here, once, for every page. */
-    void control (const Rect& r, bool /*q*/ = false, bool hi = false, bool greyGround = false)
-    {
-        const theme::Look& t = theme::L();
-        const auto ground = [&](uint32_t rgb) {
-            const uint32_t colour = c (rgb, 255);
-            return greyGround && ! grey_ ? inactiveGrey (colour) : colour;
-        };
-        const uint32_t top = ground (t.controlTop), bottom = ground (t.controlBottom);
-        // Four equal stops cover [y0, y1]: the flat/linear/flat shape of control.gradient is that range chosen so the 2nd and 3rd stop fall on start and end.
-        const float h = static_cast<float> (r.h), s0 = t.controlGradStart, s1 = t.controlGradEnd;
-        const float y0 = static_cast<float> (r.y) + (2.0f * s0 - s1) * h, y1 = y0 + 3.0f * (s1 - s0) * h;
-        sb_.paintY (y0, y1, top, top, bottom, bottom);
-        rrect (r, t.rControl, bottom);
-        const uint32_t lineTop = ground (t.controlBorder), lineBottom = ground (t.controlBorderBottom);
-        if (hi)
-            sb_.paintOff();
-        else
-            sb_.paintY (y0, y1, lineTop, lineTop, lineBottom, lineBottom);
-        rrect (r, t.rControl, hi ? ground (t.keylineHi) : lineBottom, t.frame);
-        sb_.paintOff();
-    }
     /** A string with the pen at (x, baseline), `size` pixels per em (the font of sdf_font.h; any length, UTF-8). */
     void text (float x, float baseline, float size, const char* s, uint32_t col, float tracking = 0.0f) { if (s[0] != '\0' && size > 0.0f) sb_.text (x, baseline, size, s, col, tracking); }
     static float textWidth (const char* s, float size) noexcept { return sdf::textWidth (s, size); }
@@ -210,26 +183,6 @@ public:
         line (p0x, p0y, p1x, p1y, width, col);
         line (p1x, p1y, p2x, p2y, width, col);
     }
-    /** The gear (a ring with eight teeth, about 24 px), the bell curve (about 28 x 20 px) and the route fork (about 24 px) around (cx, cy): the icons of the DetailButton. */
-    void iconGear (float cx, float cy, uint32_t col)
-    {
-        arc (cx, cy, 6.0f, 0.0f, 2.0f * kPi, 3.0f, col);
-        for (int i = 0; i < 8; ++i)
-        {
-            const float a = static_cast<float> (i) * kPi / 4.0f;
-            line (cx + 7.5f * std::cos (a), cy + 7.5f * std::sin (a), cx + 11.0f * std::cos (a), cy + 11.0f * std::sin (a), 3.0f, col);
-        }
-    }
-    void iconBell (float cx, float cy, uint32_t col)
-    {
-        float px = cx - 13.0f, py = cy + 8.0f;
-        for (int i = 1; i <= 10; ++i)
-        {
-            const float t = -1.0f + 0.2f * static_cast<float> (i), x = cx + 13.0f * t, y = cy + 8.0f - 16.0f * std::exp (-3.2f * t * t);
-            line (px, py, x, y, 2.0f, col);
-            px = x; py = y;
-        }
-    }
     void iconExpand (float cx, float cy, uint32_t col)   // four corner brackets: "full screen"
     {
         const float a = 10.0f, l = 6.0f;
@@ -246,36 +199,6 @@ public:
         const float x[6] = { -13.0f, -8.0f, -3.0f, 3.0f, 8.0f, 13.0f }, y[6] = { 8.0f, -8.0f, -2.0f, -2.0f, 8.0f, 8.0f };
         for (int i = 0; i < 5; ++i)
             line (cx + x[i], cy + y[i], cx + x[i + 1], cy + y[i + 1], 2.0f, col);
-    }
-    void iconRoute (float cx, float cy, uint32_t col)
-    {
-        line (cx - 11.0f, cy, cx - 2.0f, cy, 3.0f, col);
-        line (cx - 2.0f, cy, cx + 8.0f, cy - 7.0f, 3.0f, col);
-        line (cx - 2.0f, cy, cx + 8.0f, cy + 7.0f, 3.0f, col);
-        disc (cx + 10.0f, cy - 7.0f, 2.5f, col);
-        disc (cx + 10.0f, cy + 7.0f, 2.5f, col);
-    }
-    /** The modulation tab at the top left of `r` for a tab state (nothing when absent): a chip with the name of the source, in the colour of the selected source (grey: the keyline colour). */
-    void modTab (const Rect& r, TabState st, uint32_t srcColour, const char* name = "")
-    {
-        if (st == TabState::Absent)
-            return;
-        modTabBox (tabRect (r, name), st, srcColour, name);
-    }
-    /** The same chip in an exact rectangle (a knob puts it in its label row, right of the name: it never covers the dial). */
-    void modTabBox (const Rect& t, TabState st, uint32_t srcColour, const char* name = "")
-    {
-        if (st == TabState::Absent)
-            return;
-        if (t.w < 12 || t.h < 10)
-            return;
-        const theme::Look& T = theme::L();
-        if (st == TabState::Hollow)
-            rrect (t, 4.0f, c (colour::rgba (srcColour, 255)), 1.6f);
-        else
-            rrect (t, 4.0f, c (colour::rgba (st == TabState::Coloured ? srcColour : T.keylineHi, 255)));
-        const uint32_t tc = st == TabState::Coloured ? T.onBright : (st == TabState::Hollow ? srcColour : T.textDim);
-        textCentered ({ t.x + 2, t.y, std::max (0, t.w - 4), t.h }, name, 11.0f, c (colour::rgba (tc, 255)), 9.0f);
     }
     /** Place the marker on the top edge, clear of the highlighted control's interior. */
     static constexpr Rect qMarkerRect (const Rect& frame) noexcept
@@ -405,8 +328,6 @@ public:
     // ---- structure
     /** The rectangles that react to a touch (a stepper: its two halves). */
     virtual int touchTargets (Rect* out, int max) const { if (max > 0) { out[0] = rect_; return 1; } return 0; }
-    /** The leaves (base components) of this component, appended to out[n ..]; returns the new count (at most max). */
-    virtual int collectLeaves (Component** out, int n, int max) { if (n < max) out[n++] = this; return n; }
     /** The child a hardware knob turns when this component is a member of a Q group (null: the component itself; a composite: its primary child). */
     virtual Component* primaryChild() const { return nullptr; }
     ControlModel* primaryModel() const override { return primaryChild(); }
@@ -421,14 +342,11 @@ protected:
     bool captured_ = false, hostPainted_ = false;
 };
 
-/** Marks a ControlModel host-painted if it is a legacy drawable Component; no-op for pure models. */
+/** Marks a ControlModel host-painted if it is a drawable Component; no-op for pure models. */
 inline void setHostPainted (ControlModel* m, bool on) noexcept
 {
     if (auto* c = dynamic_cast<Component*> (m))
         c->setHostPainted (on);
 }
-
-/** The colour of a label: the accent in an active Q group, else the light grey. */
-inline uint32_t labelColour (bool qFrame) noexcept { return colour::rgba (qFrame ? colour::q() : colour::text(), 255); }
 
 }} // namespace synthyboy_mpc::ui

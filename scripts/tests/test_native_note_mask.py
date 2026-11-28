@@ -64,11 +64,11 @@ class NoteMaskTests(unittest.TestCase):
                    if is_accent(image.getpixel((x + w // 2, y + 4)))]
             self.assertEqual(lit, [n for n in range(12) if sample["mask"] >> n & 1], sample["id"])
 
-    def test_unlit_cell_is_the_button_legacy_face_and_lit_the_active_face(self):
+    def test_unlit_cell_is_the_button_shaded_face_and_lit_the_active_face(self):
         from components.native.button.button import action_art, in_slot
         sample, inset = BY_ID["c-major"], style.size("note_mask")["inset"]
         x, y, w, h = note_mask.layout(sample["width"])[1]   # C#, not in the set
-        face = in_slot(action_art(text="C#", width=w - 2 * inset, height=h, look="legacy"), (w, h))
+        face = in_slot(action_art(text="C#", width=w - 2 * inset, height=h, look="shaded"), (w, h))
         self.assertEqual(stored(sample["file"]).crop((x, y, x + w, y + h)).tobytes(), face.tobytes())
         x, y, w, h = note_mask.layout(sample["width"])[0]   # C, in the set
         lit = in_slot(action_art(text="C", width=w - 2 * inset, height=h, look="active", colour=style.color("radio.active.text")), (w, h))

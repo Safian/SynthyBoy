@@ -284,15 +284,6 @@ private:
         const double f = pos - k;
         return s_[static_cast<size_t> (k)] * (1.0 - f) + s_[static_cast<size_t> (k) + 1] * f;
     }
-    /** The integral of the interpolated S from bin 0 to the position. */
-    double integral (double pos) const noexcept
-    {
-        const int last = static_cast<int> (s_.size()) - 1;
-        pos = std::clamp (pos, 0.0, static_cast<double> (last));
-        const int k = std::min (static_cast<int> (pos), last - 1);
-        const double f = pos - k, a = s_[static_cast<size_t> (k)], b = s_[static_cast<size_t> (k) + 1];
-        return cum_[static_cast<size_t> (k)] + a * f + 0.5 * (b - a) * f * f;
-    }
 
     void smooth (double dtMs) noexcept
     {

@@ -17,7 +17,6 @@ When a theme token changes, change `theme_tokens.h` in the same commit: nothing 
 |---|---|
 | name | `name` (`const char*`: `"neon"`, `"aurora"`, `"plasma"`) |
 | surfaces | `bg0`, `bg1` (ground top, bottom), `panel0`, `panel1` (block fill), `keyline`, `keylineHi`, `track`, `grid` |
-| control face | `controlTop`, `controlBottom` (the face of `Pen::control`), `controlBorder`, `controlBorderBottom` (its keyline), `controlGradStart`, `controlGradEnd` (the flat / linear / flat shape, fractions of the height): generated from the skin Button tokens `button.gradient.top/bottom/border/border.bottom` and `control.gradient` (neon); aurora and plasma take their own `panel0`/`panel1`/`keyline` |
 | ink | `text`, `textDim`, `textFaint`, `onBright`, `q` (the Q-Link group colour, yellow `0xffc23d` in all looks) |
 | gradients and colours | `flow[4]` (the main signal gradient), `inst[5]` (Sub, A, B, C, Noise), `src[kNumSources = 8]` (env, lfo, velocity, key, wheel, pressure, macro, random), `env[2]`, `lfo[2]`, `filter[2]`, `negative` |
 | strokes | `curve`, `curveHi`, `curveBack`, `hair`, `arcTrack`, `arcValue`, `arcMod` (fractions of the dial diameter), `frame` |
@@ -68,4 +67,3 @@ Every component. `shell-mpc/overlay/page_view.h` uses `ui::theme::L()` for the g
 ## Limits and pitfalls
 - `g_look` and `g_detail` are plain global pointers, not atomics: set them from the thread that draws, or before drawing starts.
 - Never write a colour literal in a component; add it to the table (and to all three looks).
-- docs/MPC.md "UI components" still names an older palette (1e1d1e, ff2e63); `theme.h` is the truth (a neon dark blue palette).

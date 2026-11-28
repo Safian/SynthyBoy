@@ -43,7 +43,7 @@ Preserve functional hardware mappings and meaningful parameter values.
 The group itself takes no touch. The page makes a group active when a touch goes down on one of its members, and then calls `QGroup::turn`.
 
 ## Q-Link
-This is the Q-Link object. Members 1 to 4 = Q-Link 1 to 4 of the active group; a page with several groups publishes them in reading order (see [PAGES.md](PAGES.md)).
+This is the Q-Link object. Members 1 to 4 = Q-Link 1 to 4 of the active group; a page with several groups publishes them in reading order.
 
 ## Options and variants
 `frameless` for apart members; `setFrameRect`; `setBlock` and `setWideDevice` for hardware routing.

@@ -162,7 +162,7 @@ public:
     /** The same for a state that is about to be applied: builds, on the calling thread, the tables the plain values `plain[0 .. count)` (indexed like the parameter table) name, BEFORE the caller sets them,
         so that the parameters and the tables they name take effect for the audio thread together. A no-op for an engine that builds everything in prepare (). */
     virtual void readyContentFor (const float* /*plain*/, size_t /*count*/) noexcept {}
-    /** true while a table the current parameter values name is still being built (the plugin-drawn pages show a small "loading" mark); the sound is that of the table the oscillator had until then. Any thread. */
+    /** true while a table the current parameter values name is still being built (the overlay pages show a small "loading" mark); the sound is that of the table the oscillator had until then. Any thread. */
     virtual bool contentPending() const noexcept { return false; }
     /** Milliseconds this engine has spent building its built-in wavetables (summed over all threads that built them; 0: none or not known): the start-up record of the shell. Any thread. */
     virtual double wavetableBuildMs() const noexcept { return 0.0; }

@@ -47,8 +47,6 @@ struct Change
     /** Depth: the modulation depth (-1 .. +1, `value`) of the source `index` (its id) of a knob / number field changed (a drag that started on the tab). ModsRequest: a long press asks for the
         list of the modulations of the control. */
     static Change depth (int id, int source, double d) noexcept { Change c; c.kind = ChangeKind::Depth; c.id = id; c.index = source; c.value = d; return c; }
-    /** AddRequest: the owner is asked to add the modulation source `source` (the "add source" row of the modulations page). */
-    static Change addRequest (int id, int source) noexcept { Change c; c.kind = ChangeKind::AddRequest; c.id = id; c.index = source; return c; }
     static Change modsRequest (int id) noexcept { Change c; c.kind = ChangeKind::ModsRequest; c.id = id; return c; }
     static Change none() noexcept { return {}; }
     static Change normalised (int id, double v) noexcept { Change c; c.kind = ChangeKind::Value; c.id = id; c.value = v; return c; }
@@ -74,7 +72,7 @@ inline void setText (char* dst, size_t cap, const char* src) noexcept
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** The modulation input of a Knob and a NumberField: up to kMaxMods entries {source id (opaque), source name <= 6 characters, depth -1 .. +1 as a fraction of the full range, polarity,
+/** The modulation input of a dial and a number field: up to kMaxMods entries {source id (opaque), source name <= 6 characters, depth -1 .. +1 as a fraction of the full range, polarity,
     bypassed} and the selected source (kNoSource = none). */
 constexpr int kNoSource = INT32_MIN;
 struct ModEntry
@@ -111,15 +109,6 @@ struct ModInput
         return nullptr;
     }
 };
-/** The tab at the top left: Absent (no modulation entries), Grey (entries, but not the selected source), Coloured (the selected source is in the entries), Hollow (and it is bypassed). */
-enum class TabState : uint8_t { Absent, Grey, Coloured, Hollow };
-inline TabState tabState (const ModInput& m) noexcept
-{
-    if (m.numMods <= 0)
-        return TabState::Absent;
-    const ModEntry* e = m.selected();
-    return ! e ? TabState::Grey : (e->bypassed ? TabState::Hollow : TabState::Coloured);
-}
 /** The ends (0 .. 1) of the depth arc around the value position v: unidirectional v .. v + depth, bidirectional v - |depth| .. v + |depth|, clamped to the range; from <= to. false when
     the selected source is not in the entries or is bypassed (no arc). */
 inline bool depthArc (const ModInput& m, double v, double& from, double& to) noexcept
@@ -144,19 +133,9 @@ inline const char* tabName (const ModInput& m) noexcept
     return m.numMods > 0 ? m.mods[0].name : "";
 }
 
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** Parameter binding handle shared by models and pages: opaque page id, resolved engine parameter index, and static parameter key. */
-struct ParamHandle
-{
-    int id = 0;            // opaque page-local control id reported in Change::id
-    int param = -1;        // resolved engine parameter index (-1 = unbound / virtual)
-    const char* key = "";  // optional static parameter key
-
-    constexpr bool bound() const noexcept { return param >= 0; }
-};
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** Pure parameter/Q-Link/layout model contract: NO drawing, NO touch handling. Both native control models and legacy overlay Component widgets satisfy this contract. */
+/** Pure parameter/Q-Link/layout model contract: NO drawing, NO touch handling. Both the native control models and the drawable overlay Components satisfy this contract. */
 class ControlModel
 {
 public:
@@ -170,10 +149,6 @@ public:
     void setId (int id) noexcept { id_ = id; }
     int param() const noexcept { return param_; }
     void setParam (int p) noexcept { param_ = p; }
-    const char* paramKey() const noexcept { return paramKey_; }
-    void setParamKey (const char* k) noexcept { paramKey_ = k ? k : ""; }
-    ParamHandle paramHandle() const noexcept { return { id_, param_, paramKey_ }; }
-    void setParamHandle (const ParamHandle& h) noexcept { id_ = h.id; param_ = h.param; paramKey_ = h.key ? h.key : ""; }
 
     // ---- native cell layout
     Rect rect() const noexcept { return rect_; }
@@ -189,8 +164,6 @@ public:
     /** The INACTIVE look (a switched-off oscillator): still operable when enabled. */
     bool inactive() const noexcept { return inactive_; }
     virtual void setInactive (bool i) { inactive_ = i; }
-    bool qFrame() const noexcept { return qFrame_; }
-    int qIndex() const noexcept { return qIndex_; }
     /** The control belongs to the active Q-Link group (frame true) as member number `index` (1 .. 4, 0 = no badge). */
     virtual void setQ (bool frame, int index) { qFrame_ = frame; qIndex_ = frame ? index : 0; }
 

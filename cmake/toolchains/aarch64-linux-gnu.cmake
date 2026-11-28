@@ -4,7 +4,7 @@
 #
 # Debian/Ubuntu: sudo apt-get install g++-aarch64-linux-gnu gcc-aarch64-linux-gnu qemu-user ninja-build
 # cmake -S . -B build-aarch64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/aarch64-linux-gnu.cmake \
-#       -DSYNTHYBOY_BUILD_PLUGIN=OFF -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"
+#       -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"
 # (CI builds AArch64 natively on an arm runner; this file is for local cross builds)
 
 set(CMAKE_SYSTEM_NAME Linux)

@@ -150,7 +150,6 @@ public:
             if (macroNames_.load (content.get()))
                 namesDirty_ = true;
         }
-        const NamesScope namesScope (macroNames_);
         if (namesDirty_)
         {
             namesDirty_ = false;
@@ -399,16 +398,10 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
-    int openSlot() const noexcept { return openSlot_; }
 
     modmodel::Matrix& matrix() noexcept { return matrix_; }
     modmodel::Detail& detail() noexcept { return detail_; }
     ModRowsPage& targetsPage() noexcept { return targets_; }
-    /** The rows of the open list (the names the host list shows) and the choice value of each (0 NONE, a negative number a group). */
-    const std::vector<const char*>& listNames() const noexcept { return listNames_; }
-    const std::vector<int>& listChoices() const noexcept { return listChoices_; }
-    /** The source (the choice value of modNN.source) whose targets page is or was open last (0: none yet). */
-    int targetsSource() const noexcept { return targetsSource_; }
 
     void openSlotDetail (int slot, UiStack& stack)
     {
@@ -417,8 +410,6 @@ public:
         stack.openDetail (kPageDetail);
         pageTop_ = kPageDetail;
     }
-    ListKind listKind() const noexcept { return listKind_; }
-    int listSlot() const noexcept { return listSlot_; }
 
     /** Names. The matrix shows "" for a slot that has no source or no target. */
     /** The name of a source as the matrix rows and the detail page write it: the engine's name, except "Note-On Rand (Discrete)" (choice 54), which does not fit a row ("Note-On Rand (Discret..." was cut with an ellipsis, a layout-lint finding) and is written "Note-On Rand Disc.". */
@@ -453,11 +444,6 @@ public:
         if (std::strstr (grp, "LFO")) return 7;
         if (std::strstr (grp, "FX")) return 8;
         return 9;   // master and the others
-    }
-    static const char* destModuleName (int m) noexcept
-    {
-        static const char* const n[11] = { "ALL MODULES", "OSC A", "OSC B", "OSC C", "SUB / NOISE", "FILTER 1", "FILTER 2", "ENVELOPES", "LFOS", "FX", "MASTER" };
-        return m >= 0 && m < 11 ? n[m] : "";
     }
 
 private:
