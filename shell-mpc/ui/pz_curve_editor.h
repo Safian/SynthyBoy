@@ -201,6 +201,12 @@ public:
         return { back.rect(), reset.rect(), remove.rect(), apply.rect() };
     }
 
+    /** Where the page title and the hint stand (native Labels of the Filter tabs; the editor leaves them uncovered). */
+    std::array<Rect, 2> labelRects() const noexcept
+    {
+        return { Rect { rect_.x + 116, rect_.y + 8, 290, 31 }, Rect { rect_.x + 116, rect_.y + 43, 310, 22 } };
+    }
+
     Change touchDown (int x, int y, double nowMs) override
     {
         onCanvas_ = false;
@@ -223,11 +229,6 @@ public:
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen pen (sb, enabled_, inactive_);
-        {
-            Cell cell (sb, rect_);
-            drawExtra (pen);
-        }
         canvas.draw (sb);
     }
 
@@ -243,15 +244,6 @@ private:
         reset.place ({ remove.rect().x - 102, rect_.y + 12, 94, 56 });
         canvas.place ({ rect_.x + 12, rect_.y + 76, rect_.w - 24, rect_.h - 88 });
     }
-    void drawExtra (Pen& pen) const
-    {
-        const auto& t = theme::L();
-        pen.textLeft ({ rect_.x + 116, rect_.y + 8, 290, 31 }, filter_ == 2 ? "F2  PZ SVF CURVE" : "F1  PZ SVF CURVE",
-                      t.fTitle, pen.c (t.text, 255), t.fMin);
-        pen.textLeft ({ rect_.x + 116, rect_.y + 43, 310, 22 }, "Tap to add a point. Drag to move it.",
-                      t.fSmall, pen.c (t.textDim, 255), t.fMin);
-    }
-
     int filter_ = 1;
     bool onCanvas_ = false, nativeToolbar_ = false;
     std::vector<PzCurveCanvas::Point> initial_;

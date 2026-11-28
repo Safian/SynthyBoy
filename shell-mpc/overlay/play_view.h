@@ -660,7 +660,6 @@ private:
         {
             env_->drawPage (sb);
             env_->drawLive (sb);
-            env_->drawPopup (sb);
             return;
         }
         if (lfo_ != nullptr && ! lfo_->isMain())   // the full screen of the LFO likewise: its page (the editor, the targets), its cursors, its popups
@@ -716,7 +715,7 @@ private:
             if (live)
                 env_->drawLive (sb);
             else
-                env_->drawCompact (sb, true);
+                env_->drawCompact (sb);
         }
         if (usePageLfo_ && lfo_ != nullptr)
         {

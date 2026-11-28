@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Plugin-drawn layer (`shell-mpc/ui/`; it holds only graphs, meters, curve displays, animation, indicators, the binding data rows and Q tables, plus the kept `ListPopup`: controls are native components, there is no C++ widget library; owner 2026-11-27): instructions for AI coding agents are in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md); human docs in [docs/ui-components/README.md](docs/ui-components/README.md).
+Plugin-drawn layer (`shell-mpc/ui/`; it holds only graphs, meters, curve displays, animation, indicators, the binding data rows and Q tables: controls are native components, there is no C++ widget library; owner 2026-11-27): instructions for AI coding agents are in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md); human docs in [docs/ui-components/README.md](docs/ui-components/README.md).
 
 For native components follow [components/AGENTS.md](components/AGENTS.md). In `skin/TUI.json` each shared MPC component definition exists once and the instances bind to it, so the TUI contains one copy of the control subtree.
 

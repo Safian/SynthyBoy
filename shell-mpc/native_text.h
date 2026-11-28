@@ -29,6 +29,16 @@ enum Line
     OscDetailTitle, OscDetailBlock0, OscDetailBlock1, OscDetailBlock2, OscDetailBlock3, OscDetailBlock4, OscDetailBlock5, OscDetailBlock6, OscDetailBlock7,   // the title and the block titles of the oscillator detail pages
     OscMissingCompact, OscMissingPage, OscMessage,
     OscDetailGraph, OscDetailGraphBlock0, OscDetailGraphBlock1, OscDetailGraphBlock2, OscDetailGraphBlock3, OscDetailGraphBlock4, OscDetailGraphBlock5, OscDetailGraphBlock6, OscDetailGraphBlock7,   // a detail page with a graph: "1" and the block titles at the lower rows                                                         // the "content missing" line of the oscillator display (Play compact view, oscillator page)
+    // appended 2026-11-28 (ng/drawenvfx): the target tags of the Env page, the filter page title and block names, the NOTE / VELO used-by list, the FX gallery headline
+    EnvTag0, EnvTag1, EnvTag2, EnvTagMore,                                                // the first three targets and "+n"
+    FilterTitle, FilterTitleOff,                                                          // the page title of Filter 1 / 2 (on / off: the colour differs)
+    FilterBlock0, FilterBlock1, FilterBlock2, FilterBlock3,                               // the block names, dim
+    FilterBlockActive0, FilterBlockActive1, FilterBlockActive2, FilterBlockActive3,       // the block names of the active Q group
+    CurveUsed0, CurveUsed1, CurveUsed2, CurveUsed3,                                       // NOTE / VELO used-by: the destination of a row
+    CurveUsedFaint0, CurveUsedFaint1, CurveUsedFaint2, CurveUsedFaint3,                   // the same for a bypassed row
+    CurveUsedAmount0, CurveUsedAmount1, CurveUsedAmount2, CurveUsedAmount3,               // the depth of a row
+    CurveUsedMore, CurveUsedEmpty,                                                        // "+ n more", "NOT ROUTED: tap TARGETS to add"
+    FxGalleryHead,                                                                        // the headline (or the note) of the effect gallery
     kLines
 };
 constexpr int kDrawLines = kLines - kLegacyLines;
