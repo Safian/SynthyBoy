@@ -158,7 +158,7 @@ protected:
 
         // the field: the text, the caret at its end, the count
         const Rect f = fieldRect();
-        p.control (f, false, true);
+        { p.rrect (f, T.rControl, p.c (T.panel1, 255)); p.rrect (f, T.rControl, p.c (T.keylineHi, 255), T.frame); }
         const float size = T.fValue + 4.0f;
         const Rect inner { f.x + 16, f.y + 6, f.w - 32 - 90, f.h - 12 };
         float used = 0.0f;
@@ -273,7 +273,7 @@ private:
         }
         else
         {
-            p.control (b, false, false);
+            { p.rrect (b, T.rControl, p.c (T.panel1, 255)); p.rrect (b, T.rControl, p.c (T.keyline, 255), T.frame); }
         }
         const uint32_t ink = p.c (ok || (lit && ! down) ? T.onBright : T.text, 255);
         char label[16] = {};

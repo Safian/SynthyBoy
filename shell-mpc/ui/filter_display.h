@@ -414,7 +414,7 @@ protected:
         if (y < in.y)
             y = static_cast<int> (hy) + 14;
         const Rect box { std::max (in.x, x), std::min (std::max (in.y, y), in.bottom() - h), w, h };
-        p.control (box, false, true);
+        { p.rrect (box, T.rControl, p.c (T.panel1, 255)); p.rrect (box, T.rControl, p.c (T.keylineHi, 255), T.frame); }
         p.textCentered (box.inset (2), text, T.fValue - 4.0f, p.c (T.text, 255), T.fMin);
     }
 

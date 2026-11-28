@@ -1,4 +1,4 @@
-// Hand-maintained (no generator): edit this file directly; the single place of the colours and sizes of the plugin-drawn layer.
+// Hand-maintained (no generator): edit this file directly; the single place of the colours and sizes of the overlay display layer.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Included by theme.h inside its namespace, after the Look structure.
@@ -8,24 +8,6 @@ inline constexpr uint32_t kNativeCanvas = 0x090d19;
 /** The ONE page-title size: every page (host captions and overlay drawing) writes its title in it, in the text colour. */
 inline constexpr float kPageTitleSize = 26.0f;
 
-/** The dial recipe: the same tokens draw ui::Knob and the native knob filmstrips. */
-namespace knob {
-inline constexpr float kStartDegrees = 135.0f;
-inline constexpr float kSweepDegrees = 270.0f;
-inline constexpr float kStrokeMin = 2.4f;
-inline constexpr float kTrackMin = 2.0f;
-inline constexpr float kRadiusInset = 3.0f;
-inline constexpr float kPointerInner = 0.25f;
-inline constexpr float kPointerOuter = 0.6f;
-inline constexpr float kPointerStroke = 1.6f;
-inline constexpr int kPointerAlpha = 235;
-inline constexpr float kThumbRatio = 0.9f;
-inline constexpr float kThumbMin = 2.5f;
-inline constexpr float kCentreStroke = 1.5f;
-inline constexpr float kCentreOverhang = 2.0f;
-inline constexpr int kCentreAlpha = 200;
-} // namespace knob
-
 inline const Look kLook1 = {
     "neon",
     0x0b1026, // bg0
@@ -34,10 +16,6 @@ inline const Look kLook1 = {
     0x0c1026, // panel1
     0x27306a, // keyline
     0x4a5aa8, // keylineHi
-    0x131930, // controlTop
-    0x0d1122, // controlBottom
-    0x27306a, // controlBorder
-    0x182046, // controlBorderBottom
     0x1c2350, // track
     0x1a2250, // grid
     0xeef1ff, // text
@@ -73,8 +51,6 @@ inline const Look kLook1 = {
     6.0f, // rChip
     8, // gap
     12, // pad
-    0.3333333333333333f, // controlGradStart
-    0.6666666666666666f, // controlGradEnd
 };
 
 inline const Look kLook2 = {
@@ -85,10 +61,6 @@ inline const Look kLook2 = {
     0x0a1020, // panel1
     0x243058, // keyline
     0x4562a0, // keylineHi
-    0x121a30, // controlTop
-    0x0a1020, // controlBottom
-    0x243058, // controlBorder
-    0x243058, // controlBorderBottom
     0x182044, // track
     0x182046, // grid
     0xe6ecf8, // text
@@ -124,8 +96,6 @@ inline const Look kLook2 = {
     5.0f, // rChip
     8, // gap
     12, // pad
-    0.3333333333333333f, // controlGradStart
-    0.6666666666666666f, // controlGradEnd
 };
 
 inline const Look kLook3 = {
@@ -136,10 +106,6 @@ inline const Look kLook3 = {
     0x10081f, // panel1
     0x3a2764, // keyline
     0x6a4cc0, // keylineHi
-    0x1c1133, // controlTop
-    0x10081f, // controlBottom
-    0x3a2764, // controlBorder
-    0x3a2764, // controlBorderBottom
     0x2a1a50, // track
     0x2a1c52, // grid
     0xffffff, // text
@@ -175,6 +141,4 @@ inline const Look kLook3 = {
     8.0f, // rChip
     8, // gap
     12, // pad
-    0.3333333333333333f, // controlGradStart
-    0.6666666666666666f, // controlGradEnd
 };
