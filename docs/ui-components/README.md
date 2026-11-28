@@ -4,6 +4,8 @@ The controls of the plugin are the shared **native components**: the catalogue (
 
 [Képes komponenskatalógus (magyar)](kepes-katalogus.html)
 
+The screens built from these components (one page per screen component: what it shows, its skin definitions, bound data, Q groups, C++ owners): [screens/README.md](screens/README.md).
+
 ## A képes katalógus karbantartása
 
 A képes katalógus kizárólag az önálló MPC host natív skin-komponenseit mutatja. C++ overlay-vezérlő, kézzel utánrajzolt komponens vagy külön HTML/SVG/CSS-animáció nem kerülhet bele. Kép csak a használt natív komponensdefinícióból vagy annak tényleges skin-eszközéből, illetve az MPC hardverről származhat; eredetét meg kell nevezni. Az alábbi C++ osztálydokumentáció a plugin-rajzolt réteg belső fejlesztői referenciája, nem külső könyvtár.

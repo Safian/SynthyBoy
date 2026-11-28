@@ -1,0 +1,26 @@
+# Mod screen
+
+**Tab:** Mod (`mod`, function key Mod): one tab body. **Picture:** `../../screens/mod.jpg`.
+
+## What it shows
+
+- **Matrix page**: the mode switch ALL / BY SOURCE / BY DEST (`modNative_mode1/2/3`), the source and target group choosers (`modNative_group_260x56`), ADD, the count text and seven rows (`modNativeRowNormal`, or `modNativeRowScroll` with the scrollbar) with their column headers.
+- **Slot page** (one slot): BACK, DELETE, SOURCE, TARGET, AUX SOURCE lists, AMOUNT bar, POLARITY and ROUTE toggles, SCALE, INVERT, AUX CURVE, SHAPE CURVE, STEREO, RISE, FALL, DELAY / BEATS, SYNC (`modNative_*` dials, toggles, bars).
+- **Source board** (add a modulation): chips for ENV 1 .. 3, LFO 1 .. 4, MACRO 1 .. 4, WHEEL, VELO, AT, KEY, PITCH, FIXED and ALL SOURCES (the rest through the picker), then the picker (seven list rows, BACK, GROUPS, PREVIOUS, NEXT, title).
+- The modulation editor and targets keyline (shared), the texts (count, detail title, empty lines, block labels).
+
+## Definitions
+
+`skin/defs_mod.json` (24: `modNative_*` controls, `modNativeRowNormal`, `modNativeRowScroll`, `filterNativeGlide`, `filterNativeNv_151x60`, `filterNativeCurveSurface`), and the picker rows and the modulation editor in `defs_common.json`. The view is gated by `kModView` (`mod::View`: Hidden, Matrix, MatrixScroll, DetailDelay, DetailBeats).
+
+## Data
+
+Blocks of `shell-mpc/native_ui_params.h`: `kModView`, `kModRows`, `kModFields`, `kModNavigation`, `kModDetailControl` (`moddetail`), `kModBoardControl` (`modboard`), `kModTargets`, `kNativeText`. The slots are the engine parameters `modNN.*` (64 slots).
+
+## Q groups
+
+Matrix: four groups, [ROW, SOURCE, TARGET, AMOUNT] of the selected slot, [UNI / BI, ON / OFF, AUX SOURCE, AUX SCALE], and the two next visible rows as [SOURCE, TARGET, AMOUNT, UNI / BI] (`q_publish_mod.h`). Slot page: AUXILIARY SOURCE, SHAPE, TIME. Targets list: one group per row.
+
+## C++ owners
+
+`shell-mpc/overlay/mod_ui.h`, `mod_model.h`, `mod_rows_page.h`, `native_mod_targets_ui.h`, `q_publish_mod.h`; `shell-mpc/native_mod_controls.h`, `native_mod_targets.h`.
