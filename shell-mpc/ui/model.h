@@ -164,8 +164,6 @@ public:
     /** The INACTIVE look (a switched-off oscillator): still operable when enabled. */
     bool inactive() const noexcept { return inactive_; }
     virtual void setInactive (bool i) { inactive_ = i; }
-    bool qFrame() const noexcept { return qFrame_; }
-    int qIndex() const noexcept { return qIndex_; }
     /** The control belongs to the active Q-Link group (frame true) as member number `index` (1 .. 4, 0 = no badge). */
     virtual void setQ (bool frame, int index) { qFrame_ = frame; qIndex_ = frame ? index : 0; }
 

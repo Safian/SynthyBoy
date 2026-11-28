@@ -63,7 +63,6 @@ public:
                 slot_[i]->setQ (mark, i + 1);
     }
     void setFrameRect (const Rect& r) noexcept { frameRect_ = r; }
-    bool frameless() const noexcept { return frameless_; }
 
     /** The union of the members' rectangles. */
     Rect rect() const noexcept

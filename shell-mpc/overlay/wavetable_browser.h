@@ -98,7 +98,6 @@ public:
     const synthyboy::WavetableEntry& chosenEntry() const noexcept { return chosenEntry_; }
     int chosenCategory() const noexcept { return chosenCategory_; }
     int chosenIndex() const noexcept { return chosenIndex_; }
-    const std::string& refusalText() const noexcept { return refusal_; }
 
     /** A file the loader refused: its row says why from now on (the reason without the "not a wavetable file: " in front). */
     void markRefused (const std::string& pack, const std::string& file, const std::string& reason)

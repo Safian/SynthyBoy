@@ -33,8 +33,6 @@ constexpr int kButtonW = 64, kButtonH = 56;                    // the power and 
 constexpr int kBandGap = 8;                // between two buttons and between a button and the label
 constexpr int kPlotPadX = 14, kPlotPadTop = 10, kPlotPadBottom = 20;   // the plot area inside the display below the band: the margins hold the handles (8 px radius) and the time labels of the envelope graph
 
-/** The band at the top of a display (inside its frame). */
-inline Rect bandRect (const Rect& display) noexcept { return { display.x, display.y, display.w, std::min (kBandH, display.h) }; }
 /** The power button (oscillator only): the top left of the band. */
 inline Rect powerRect (const Rect& display) noexcept { return { display.x + kBandInset, display.y + kBandInset + (kBandRowH - kButtonH) / 2, kButtonW, kButtonH }; }
 /** The full screen button: the rightmost in the band, the same place in the three thirds. */
