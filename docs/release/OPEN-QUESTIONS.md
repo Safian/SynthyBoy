@@ -1,6 +1,6 @@
 # SynthyBoy - Open Questions, Unverified Items, Known Issues (MPC release)
 
-How this file is made. Part A is written by hand: every entry names its source as `file:line` (the line contains one of the search patterns) or a commit, and its state. Fixed bugs are not listed. Parts B and C are edited by hand like Part A (their generator was removed on 2026-11-28).
+How this file is made. Part A is written by hand: every entry names its source as `file:line` (the line contains one of the search patterns) or a commit, and its state. Fixed bugs are not listed. Parts B and C are edited by hand like Part A.
 
 Search that Part B runs (case-insensitive, per line):
 `not (yet )?(measured|verified|tested|seen|checked|tried|known|built)|was not built|unverified|TODO|known bug|GUESS|pending|(still|stays|remains?|is|are|left) open|open (bug|question|item|issue)`
