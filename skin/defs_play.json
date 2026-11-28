@@ -8183,35 +8183,6 @@
         "boundsType": "Absolute",
         "bounds": "0 0 200 16"
        }
-      },
-      {
-       "version": 2,
-       "componentData": {
-        "version": 1,
-        "name": "browse",
-        "type": "Button",
-        "data": {
-         "version": 2,
-         "onImage": "native_button_hit_disabled.png",
-         "offImage": "native_button_hit_disabled.png",
-         "buttonId": 2,
-         "numButtonsInGroup": 4,
-         "handleName": "Data",
-         "gestureBehaviour": "Instant"
-        }
-       },
-       "handle remapping": {
-        "version": 1,
-        "map": []
-       },
-       "bounds": {
-        "version": 1,
-        "acceptsHWFocus": "No",
-        "showWhenDataModelInvalid": "Hide",
-        "whenVisible": "Always",
-        "boundsType": "Absolute",
-        "bounds": "0 20 200 40"
-       }
       }
      ]
     }
