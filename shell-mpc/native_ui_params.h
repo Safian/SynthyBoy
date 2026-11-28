@@ -169,10 +169,9 @@ static_assert (kPlayList == 3902 - 2719, "Play List is Parameter 3902 in skin/de
 // choicelist::kSlotHandles; a skin Button writes 1 through ResetOnGestureEnd, never stored, getParameter is always 0). native_choice_list.h holds the table and the plain-data model.
 constexpr int kChoiceListOpen = kPlayList + 1;
 constexpr int kChoiceList = kChoiceListOpen + 1;
-constexpr int kChoiceListSlots = choicelist::kSlots;
+constexpr int kChoiceListSlots = choicelist::kFirstBlockSlots;
 static_assert (kChoiceListOpen == choicelist::kOpenParameter - 2719, "Choice List Open is Parameter 3903 in the skin (IndexedEnabling of nativeListModal)");
 static_assert (kChoiceList == choicelist::kFirstSlotParameter - 2719, "Choice List 0 is Parameter 3904 in the skin (the ListOpen handle of every opener)");
-constexpr bool isChoiceListOffset (int offset) noexcept { return offset >= kChoiceList && offset < kChoiceList + kChoiceListSlots; }
 // Appended 2026-11-28 (two-level list state): exact 0/1 facts of the open native list page (row arrows 0..6, deeper level, previous/next page).
 namespace liststate
 {
@@ -204,12 +203,25 @@ inline void copyRowName (char* out, size_t cap, const char* text) noexcept
 }
 }
 constexpr int kListState = kChoiceList + kChoiceListSlots;
-constexpr int kCount = kListState + liststate::kHandles;
+// Further choice-list openers appended after liststate (Parameter 4027 ..) so Parameter 4017 .. 4026 never renumber.
+constexpr int kChoiceListTail = kListState + liststate::kHandles;
+constexpr int kChoiceListTailSlots = choicelist::kSlots - kChoiceListSlots;
+static_assert (kChoiceListTail == choicelist::kTailSlotParameter - 2719, "Choice List tail starts at Parameter 4027 in the skin");
+constexpr int kCount = kChoiceListTail + kChoiceListTailSlots;
+constexpr bool isChoiceListOffset (int offset) noexcept
+{
+    return (offset >= kChoiceList && offset < kChoiceList + kChoiceListSlots)
+        || (offset >= kChoiceListTail && offset < kChoiceListTail + kChoiceListTailSlots);
+}
+constexpr int choiceListSlotOfOffset (int offset) noexcept
+{
+    return offset < kChoiceList + kChoiceListSlots ? offset - kChoiceList : kChoiceListSlots + (offset - kChoiceListTail);
+}
 constexpr int nativeTextHandle (int line) noexcept { return line < nativetext::kLegacyLines ? kNativeText + line : kDrawText + (line - nativetext::kLegacyLines); }
 constexpr bool isDrawTextOffset (int offset) noexcept { return offset >= kDrawText && offset < kTextEdit; }
 constexpr bool isTextEditOffset (int offset) noexcept { return offset >= kTextEdit && offset < kTextGate; }
 constexpr bool isTextGateOffset (int offset) noexcept { return offset >= kTextGate && offset < kPlayList; }
-constexpr bool isListStateOffset (int offset) noexcept { return offset >= kListState && offset < kCount; }
+constexpr bool isListStateOffset (int offset) noexcept { return offset >= kListState && offset < kChoiceListTail; }
 constexpr int nativeTextLine (int offset) noexcept { return offset < kNoteMask ? offset - kNativeText : nativetext::kLegacyLines + (offset - kDrawText); }
 constexpr bool isNativeTextOffset (int offset) noexcept { return (offset >= kNativeText && offset < kNoteMask) || isDrawTextOffset (offset); }
 constexpr bool isNoteMaskOffset (int offset) noexcept { return offset >= kNoteMask && offset < kNoteMask + kNoteMaskHandles; }
