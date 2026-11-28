@@ -355,16 +355,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME mixer_binding_host COMMAND mixer_binding_host)
 
 
-    # the kit parity test (migration steps 2 and 3, docs/ui-components/TEMPLATE.md): the parameter source of the kit against the old direct calls, for every parameter
-    add_executable(kit_parity_host EXCLUDE_FROM_ALL overlay/tests/kit_parity_host.cpp)
-    target_include_directories(kit_parity_host PRIVATE
-        "${CMAKE_SOURCE_DIR}/core/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(kit_parity_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(kit_parity_host PRIVATE cxx_std_17)
-    target_compile_options(kit_parity_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME kit_parity_host COMMAND kit_parity_host)
 
 
 

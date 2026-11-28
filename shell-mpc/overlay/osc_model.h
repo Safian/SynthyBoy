@@ -1,7 +1,7 @@
 // SynthyBoy - MPC overlay: the PLAIN DATA of the oscillator pages (owner decision 2026-11-27: the C++ layer has no UI elements). The controls of the oscillator pages are native cells of the host skin; this header holds what the plugin
 // still has to know about them: the state of a cell (`Cell`: its rectangle, whether it is shown / enabled, the value and the text the owner reads from the parameter), the rectangles of the native cells of the compact view, of the full
 // screen (the top row, the bottom band with its titled blocks, the unison box, the warp slots), of the detail pages (the grid of a preset under the display) and the detail pages of the types (`SpecPage`: which controls apply, the Q groups).
-// Pure functions of rectangles and flags: no drawing, no touch, no virtuals. The geometry is the one the former widget library laid out (the same numbers), the skin's native cells are placed into these rectangles.
+// Pure functions of rectangles and flags: no drawing, no touch, no virtuals. The skin's native cells are placed into these rectangles.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -50,7 +50,7 @@ inline void setLabel (Cell& c, const char* s) noexcept { ui::setText (c.label, s
 inline void setText (Cell& c, const char* s) noexcept { ui::setText (c.text, sizeof c.text, s != nullptr ? s : ""); }
 
 // =============================================================================================================================================================
-// the bottom band of a full screen / the grid of a detail page (the former KnobPanel): blocks, cells, the composites' parts
+// the bottom band of a full screen / the grid of a detail page : blocks, cells, the composites' parts
 constexpr int kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kOneRowH = 128, kMaxBlocks = 4, kMaxItems = 12, kSeparatorGap = 16, kPanelMargin = 4;
 constexpr int kUnisonGearH = 56, kWarpAmountW = 184, kWarpStepperMaxW = 300;
 

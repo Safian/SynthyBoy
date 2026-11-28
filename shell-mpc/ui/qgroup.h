@@ -182,7 +182,7 @@ public:
 private:
     static std::atomic<bool>& wideFlag() noexcept { static std::atomic<bool> f { false }; return f; }
     Rect frameRect_ = {};
-    int block_ = -1, wideOffset_ = 0;
+    int block_ = -1;
     bool frameless_ = false, inactive_ = false;
     ControlModel* slot_[kSlots] = {};
     bool active_ = false;

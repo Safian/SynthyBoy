@@ -1,7 +1,6 @@
 // SynthyBoy - MPC UI: the PICTURES of the effect types (a display, no control): a small picture of what an effect does to the sound (the transfer curve of the compressor and of the distortion, the frequency response of the
 // EQ, the filter, the flanger and the phaser, the echoes of the delay, the decaying tail of the reverb, the voices of the chorus and of the hyper dimension, the shifted lines of the frequency shifter, the impulse response of
-// the convolver, the gain line of the utility). The native cards of the effect gallery (the host skin) have the picture window the plugin draws into. Ported from the deleted ui::FxGallery::drawPicture
-// (git show d8cfc25f~1:shell-mpc/ui/fx_gallery.h); the models behind the EQ, the compressor and the distortion are the ones of the effect page's displays (FxDisplay).
+// the convolver, the gain line of the utility). The native cards of the effect gallery (the host skin) have the picture window the plugin draws into. The models behind the EQ, the compressor and the distortion are the ones of the effect page's displays (FxDisplay).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

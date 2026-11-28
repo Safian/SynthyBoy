@@ -72,7 +72,7 @@ inline void setText (char* dst, size_t cap, const char* src) noexcept
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** The modulation input of a Knob and a NumberField: up to kMaxMods entries {source id (opaque), source name <= 6 characters, depth -1 .. +1 as a fraction of the full range, polarity,
+/** The modulation input of a dial and a number field: up to kMaxMods entries {source id (opaque), source name <= 6 characters, depth -1 .. +1 as a fraction of the full range, polarity,
     bypassed} and the selected source (kNoSource = none). */
 constexpr int kNoSource = INT32_MIN;
 struct ModEntry

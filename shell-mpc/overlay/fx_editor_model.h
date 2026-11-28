@@ -1,8 +1,7 @@
 // SynthyBoy - MPC overlay: the DATA of the effect page of the FX tab (owner decision 2026-11-27: the C++ layer has no UI elements). The page of the selected effect is a table of rows of four cells (ui/fx_layout.h);
 // every control of it is a native cell of the host skin. This header holds what the plugin still has to know about that page: which control stands in which cell (the table, the conditions under which a control is live,
 // the functional panels, the rows that close up), the engine parameter behind each control, how the skin lays the cells out (nativeLayout, the rectangles the page leaves open), the header facts (title, place, notice,
-// power, rack), the compressor's view-local band choice, the lanes of a splitter (data only) and the display (ui::FxDisplay, a graph the host cannot draw). No widget, no touch, no drawing of a control. Ported from the
-// deleted ui::FxSlotEditor (git show d8cfc25f~1:shell-mpc/ui/fx_slot_editor.h).
+// power, rack), the compressor's view-local band choice, the lanes of a splitter (data only) and the display (ui::FxDisplay, a graph the host cannot draw). No touch, no drawing of a control.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

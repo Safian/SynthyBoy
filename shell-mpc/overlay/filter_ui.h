@@ -1204,7 +1204,7 @@ private:
         }
         openTargetsIfAsked (stack, inst);
     }
-    /** TARGETS of the editor was tapped: the ModTargetsPage of the source (23 velocity, 24 note) opens. */
+    /** TARGETS of the editor was tapped: the targets page of the source (23 velocity, 24 note) opens. */
     void openTargetsIfAsked (UiStack& stack, IInstanceView& inst)
     {
         for (ScalarCurveUi& cu : curve_)

@@ -170,7 +170,7 @@ public:
     enum class T : uint8_t
     {
         Dial,        // normalised 0 .. 1 of the parameter
-        Number,      // a NumberField in the units of the parameter
+        Number,      // a whole-number field in the units of the parameter
         NumberOct,   // transpose: OCT = steps of 12 semitones
         NumberSem,   // transpose: SEM = the remainder
         NumberDeg,   // a percent parameter shown as degrees (0 .. 100 % = 0 .. 360)
@@ -179,8 +179,8 @@ public:
         UpDown,
         Picto,       // the type pictograms of A, B, C
         PictoPlain,  // the waveform pictograms of the sub oscillator
-        DetailNorm,  // a DetailButton with a 0 .. 1 value
-        DetailInt,   // a DetailButton with an integer value
+        DetailNorm,  // a detail button with a 0 .. 1 value
+        DetailInt,   // a detail button with an integer value
         Route,       // the route button: the destination choice
         List,        // a short choice parameter (all options visible)
         Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
@@ -1549,7 +1549,7 @@ private:
             const std::string k = slotKey (it.slot);
             switch (it.kind)
             {
-                case oscmodel::PartKind::Number:   // FIN, the noise's PITCH and FINE: the ids of the former tuning column (their ranges and formats are set by id in configureNumberRanges)
+                case oscmodel::PartKind::Number:   // FIN, the noise's PITCH and FINE: the ids of the tuning column (their ranges and formats are set by id in configureNumberRanges)
                     id = it.slot == PanelSlot::NoisePitch ? kTuneCrs : kTuneFin;
                     if (base == kPanel)
                         bind (list, id, T::Number, k, it.label);

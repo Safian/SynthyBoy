@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the PANEL PRESETS of the oscillator pages as plain DATA (owner decision 2026-11-27: the C++ layer has no UI elements): the slots of the parts, the grid cells and blocks of every full screen and detail
-// page of an oscillator, and the Q groups (four slots each). Moved unchanged from the former shell-mpc/ui/panel.h; nothing here draws or handles a control.
+// page of an oscillator, and the Q groups (four slots each). Nothing here draws or handles a control.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -17,7 +17,7 @@ enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level,
                                  SampleScan, SpecPos, Span,
                                  Fin, NoisePitch, NoiseFine, NoiseKey,
                                  Count };
-enum class PartKind : uint8_t { Dial, RandPair, Unison, WarpPair, Menu, Choice, Toggle, Number };   // Number: a NumberField (FIN, the noise's PITCH and FINE)
+enum class PartKind : uint8_t { Dial, RandPair, Unison, WarpPair, Menu, Choice, Toggle, Number };   // Number: a whole-number field (FIN, the noise's PITCH and FINE)
 
 /** One part of a preset: what, which slot, its label, and the cells it covers in the grid. */
 struct PanelItem

@@ -57,9 +57,9 @@ public:
     enum Id : int
     {
         kClose = 1, kFullButton, kInstances, kGraph, kTargets, kCompactInstances,
-        kDial = 100,                        // 100 + Knob: the dials (the compact view and the full screen share the ids)
+        kDial = 100,                        // 100 + dial index: the dials (the compact view and the full screen share the ids)
         kBeats = 130, kLegato,
-        kDialBeats = 140,                   // 140 + Knob: the rows of the time dials in beats
+        kDialBeats = 140,                   // 140 + dial index: the rows of the time dials in beats
         kTargetsBack = 150, kTargetsPage, kTargetsAdd, kTargetsRow = 160,    // 160 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsBack = 600, kModsRow = 610, kModsAddStep = 660, kModsAdd, kModsPage,
         kList = 700, kListBackdrop, kListHeader

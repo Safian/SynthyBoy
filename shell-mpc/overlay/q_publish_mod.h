@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: the Q slots of the rows of the modulation lists (ModulationsPage, ModTargetsPage): the three knobs of a row (modRowTargets) and the blocks the rows have (setRowBlocks). SynthyBoy specific: it names the
+// SynthyBoy - MPC overlay: the Q slots of the rows of the modulation lists (the modulations and targets pages): the three knobs of a row (modRowTargets) and the blocks the rows have (setRowBlocks). SynthyBoy specific: it names the
 // parameters of a modulation slot (synthyboy/modulation.h); the generic part of the Q publishing is q_publish.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -49,7 +49,7 @@ inline void matrixGroupTargets (int group, int selected, int slot1, int slot2, i
     }
 }
 
-/** The rows of a list page (ModulationsPage, ModTargetsPage) are the groups: tells the page which block of knobs every row has (its idle chips show it). */
+/** The rows of a list page (the modulations and targets pages) are the groups: tells the page which block of knobs every row has (its idle chips show it). */
 template <class RowsPage>
 inline void setRowBlocks (RowsPage& page, int maxRows, int n, int active) noexcept
 {

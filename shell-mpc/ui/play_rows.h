@@ -13,7 +13,7 @@
 namespace synthyboy_mpc { namespace ui { namespace playrows {
 
 constexpr int kMargin = 6;                 // the margin of a third at its sides, top and bottom
-constexpr int kSelectorH = 56;             // the selector row: the shared selector (a Stepper with its list) in every third; in the oscillator third it is the header row (power, selector, full screen, route)
+constexpr int kSelectorH = 56;             // the selector row: the shared selector (a dropdown with its list) in every third; in the oscillator third it is the header row (power, selector, full screen, route)
 constexpr int kSelectorGap = 8;            // between the selector row and the display
 constexpr int kControlsH = 232;            // from the controls line to the bottom margin: LFO: SHAPE 56 + lane 16 + RATE 72 + lane 16 + the knob row 72 (its minimum); the oscillator: the type cells 56 + lane + the row (stepper, PAN, LEVEL); the envelope: two knob rows + lane
 constexpr int kDisplayGap = kQLane + 4;    // between the bottom of the display and the controls line: the lane of the Q index chips of the first members and a gap
@@ -27,7 +27,7 @@ inline Rect displayRect (const Rect& third) noexcept
 }
 // ---- the header band of a display: one height for the three thirds
 constexpr int kBandInset = 4;              // the buttons' distance from the top and the sides of the display
-constexpr int kBandRowH = 64;              // the row of the buttons: the route button is 64 x 64 (RouteButton::minSize); the 56 px buttons (power, full screen) are centred in the row
+constexpr int kBandRowH = 64;              // the row of the buttons: the route button is 64 x 64 (minimum size); the 56 px buttons (power, full screen) are centred in the row
 constexpr int kBandH = kBandInset + kBandRowH + kBandInset;   // the band: the inset above the buttons, the row, and the same inset below
 constexpr int kButtonW = 64, kButtonH = 56;                    // the power and the full screen button (touch targets of at least 56 px)
 constexpr int kBandGap = 8;                // between two buttons and between a button and the label
