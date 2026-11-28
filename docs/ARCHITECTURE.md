@@ -144,7 +144,7 @@ and the plugin GUI show the same string.
 
 ## 5. Content packs
 
-A **ContentPack** is a directory/zip with `contentpack.json` + data files, described in the plugin manifest (`plugin.json`, `contentPacks`):
+A **ContentPack** is a directory/zip with `contentpack.json` + data files, described by its own `contentpack.json`:
 
 ```
 { "id": "com.safian.synthyboy.factory-wavetables", "version": "0.1.0",
