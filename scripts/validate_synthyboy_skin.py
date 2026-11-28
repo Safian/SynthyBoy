@@ -51,9 +51,55 @@ def walk(value):
             yield from walk(child)
 
 
+def read_imports(tui_path, loader=lambda text: json.loads(text), fail=None):
+    """TUI.json with its importFiles merged in: the host's own importFiles split (docs/MPC.md, skin section). Returns the document whose
+    componentDefinitions.localComponentDefinitions is the union (TUI.json's own definitions first, then every import file in the listed
+    order) and whose importFiles is empty, so every other check sees one merged view. `fail(path, message)` reports a problem; default raises."""
+    tui_path = Path(tui_path)
+
+    def raise_error(path, message):
+        raise ValueError(f"{path}: {message}")
+
+    fail = fail or raise_error
+    doc = loader(tui_path.read_text(encoding="utf-8"))
+    try:
+        definitions = doc["pageData"]["componentDefinitions"]
+        names = definitions["importFiles"]
+        merged = list(definitions["localComponentDefinitions"])
+    except (KeyError, TypeError):  # a shape error: the schema check reports it
+        return doc
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        return doc
+    for name in names:
+        path = tui_path.parent / name
+        if "/" in name or "\\" in name or name in (tui_path.name, "Q-Links.json"):
+            fail("$.pageData.componentDefinitions.importFiles", f"import file '{name}' must be a flat file name at the skin root")
+            continue
+        if not path.is_file():
+            fail("$.pageData.componentDefinitions.importFiles", f"import file '{name}' is missing (the host would silently drop its definitions)")
+            continue
+        imported = loader(path.read_text(encoding="utf-8"))
+        try:
+            wrapped = imported["componentDefinitions"]
+            ok = (list(imported) == ["componentDefinitions"] and wrapped["version"] == 2 and wrapped["importFiles"] == []
+                  and isinstance(wrapped["localComponentDefinitions"], list))
+        except (KeyError, TypeError):
+            ok = False
+        if not ok:
+            fail(name, 'import file must have the wrapped shape {"componentDefinitions": {"version": 2, "importFiles": [], "localComponentDefinitions": [...]}}')
+            continue
+        merged += wrapped["localComponentDefinitions"]
+    for stray in sorted(tui_path.parent.glob("defs_*.json")):
+        if stray.name not in names:
+            fail(stray.name, "skin definitions file is not listed in TUI.json importFiles (the host would ignore it)")
+    definitions["localComponentDefinitions"] = merged
+    definitions["importFiles"] = []
+    return doc
+
+
 def current_hashes(tui_path):
-    """sha256 of the canonical JSON of every localComponentDefinitions entry, by key."""
-    definitions = json.loads(Path(tui_path).read_bytes())["pageData"]["componentDefinitions"]["localComponentDefinitions"]
+    """sha256 of the canonical JSON of every localComponentDefinitions entry (TUI.json plus its import files), by key."""
+    definitions = read_imports(tui_path)["pageData"]["componentDefinitions"]["localComponentDefinitions"]
     return {d["key"]: hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
             for d in definitions}
 
@@ -173,6 +219,11 @@ def load_skin_json(path, findings):
     return dedupe(json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=_Pairs), [], findings)
 
 
+def load_skin_tui(path, findings):
+    """TUI.json plus its import files as one merged document (importFiles emptied); each file is parsed and duplicate-checked like TUI.json."""
+    return read_imports(path, loader=lambda text: dedupe(json.loads(text, object_pairs_hook=_Pairs), [], findings), fail=findings.error)
+
+
 def schema_errors(schema_path, document, findings):
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     for err in sorted(Draft7Validator(schema).iter_errors(document), key=lambda e: [str(p) for p in e.absolute_path]):
@@ -280,7 +331,7 @@ def tui_semantics(page, schema, skins, findings):
 def check_skin_schema(skins, label="skin"):
     """Schema + semantic checks of TUI.json and Q-Links.json in `skins`. Returns Findings; prints every finding with its JSON path."""
     findings = Findings()
-    tui = load_skin_json(skins / "TUI.json", findings)
+    tui = load_skin_tui(skins / "TUI.json", findings)
     qlinks = load_skin_json(skins / "Q-Links.json", findings)
     tui_schema = schema_errors(TUI_SCHEMA, tui, findings)
     schema_errors(QLINKS_SCHEMA, qlinks, findings)
@@ -309,7 +360,7 @@ def validate_package(package, *, check_live=False):
     findings = check_skin_schema(skins)
     if findings.errors:
         raise ValueError(f"{len(findings.errors)} schema/semantic errors in TUI.json / Q-Links.json (listed above, with JSON paths)")
-    page = json.loads((skins / "TUI.json").read_bytes())["pageData"]
+    page = read_imports(skins / "TUI.json")["pageData"]
     qlinks = json.loads((skins / "Q-Links.json").read_bytes())
     check_parameter_handles(page)
     check_handle_list_shape(page)
@@ -322,8 +373,6 @@ def validate_package(package, *, check_live=False):
     if page["info"] != {"version": 1, "type": "CompleteDescription"} or qlinks["info"] != page["info"]:
         raise ValueError("expected a complete native page description and Q-Link map")
     definitions = page["componentDefinitions"]
-    if definitions["importFiles"]:
-        raise ValueError("native components must be self-contained")
     keys = [item["key"] for item in definitions["localComponentDefinitions"]]
     local = set(keys)
     if len(local) != len(keys) or local & (SDK_TEMPLATES | BUILTINS):

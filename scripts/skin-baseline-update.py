@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rewrite scripts/skin-baseline/TUI.keys.json from skin/TUI.json.
+"""Rewrite scripts/skin-baseline/TUI.keys.json from skin/TUI.json plus its import files (skin/defs_*.json).
 
 Run it only after the owner has proven the skin on the Key 61 (see docs/MPC.md, skin section)."""
 import sys

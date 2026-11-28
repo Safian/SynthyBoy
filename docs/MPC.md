@@ -45,7 +45,7 @@ The output folder is named `Safian - VST - SynthyBoy` and contains:
 
 Skin install checks (`scripts/validate_synthyboy_skin.py`, run by `scripts/install-mpc-package.sh` before every install):
 - Every `Parameter N` handle in `TUI.json` must be below the plugin parameter count: `docs/params.json` count plus the MPC extras that `shell-mpc/synthyboy_mpc.cpp` adds to `numParams`, computed by compiling `scripts/skin-param-extra.cpp` against the committed headers (needs `c++`; no binary is read).
-- Every `localComponentDefinitions` entry is compared by key (sha256 of its canonical JSON) with the known-good `scripts/skin-baseline/TUI.keys.json`: added keys pass, changed or removed keys fail with the list.
+- Every `localComponentDefinitions` entry (the union of `TUI.json` and its `defs_*.json` import files) is compared by key (sha256 of its canonical JSON) with the known-good `scripts/skin-baseline/TUI.keys.json`: added keys pass, changed or removed keys fail with the list.
 - An intended edit needs `SYNTHYBOY_SKIN_ACCEPT_CHANGES=1` for that run.
 - After the owner has proven the skin on the Key 61, run `scripts/skin-baseline-update.py` and commit the new baseline.
 
@@ -579,7 +579,9 @@ On the Key 61 (MPC 3.10.1.12), a static native `Text` label needed a valid `Data
 
 ## Function keys and sub-tabs
 
-The skin (`skin/TUI.json`, `skin/Q-Links.json`) is edited directly.
+The skin (`skin/TUI.json`, `skin/defs_<family>.json`, `skin/Q-Links.json`) is edited directly.
+
+**Where the definitions live.** `skin/TUI.json` holds the tabs, `info` and `replacementStrings`; its `importFiles` lists the definition files (flat, at the skin root next to the PNGs, so image paths resolve) and its `localComponentDefinitions` is empty. Each `skin/defs_<family>.json` has the wrapped shape `{"componentDefinitions": {"version": 2, "importFiles": [], "localComponentDefinitions": [...]}}` (the unwrapped SDK shape does not load). The family is the screen group that uses the definition (via the tab instances and the definitions they reference); a definition used by several families, or by none, without a family key prefix, is in `defs_common.json`. Keys must stay unique across all files (a local definition would win over an imported one). To add a family: create `skin/defs_<name>.json` and list it in `importFiles`; the validator rejects a listed file that is missing or not wrapped, and a `defs_*.json` that is not listed (the host drops it silently). Rule: edit the family file, then run `python3 scripts/skin-format.py`. The validator, the schema check and the baseline (`scripts/skin-baseline-update.py`) work on the merged union of all definitions; the package copies the whole `skin/` folder, so the files are in the package and in the install hash list (`find 'Plugin Skins' -type f`).
 
 The skin groups its tabs under function keys. Several tabs with the same `fnKeyIndex` and the sub-tab indexes `fnKeySubIndex` 0, 1, 2 ... are sub-tabs of one key; the host steps to the next sub-tab when the key is pressed again, the key shows the `tabName` of the current sub-tab, and `Q-Links.json` has an entry with `Tab` = `fnKeyIndex` + 1 and `SubTab` = `fnKeySubIndex` + 1 for every one of them (observed on the Key 61: sub-tabs work; the SDK allows at most 8 sub-tabs per key and says "at most 32 tabs in total", see below).
 

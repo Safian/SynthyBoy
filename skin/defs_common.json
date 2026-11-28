@@ -1,0 +1,6393 @@
+{
+ "componentDefinitions": {
+  "version": 2,
+  "importFiles": [],
+  "localComponentDefinitions": [
+   {
+    "key": "fx editor choice menu",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "ff1e1d1e",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "ff1e1d1e",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "overlay",
+        "type": "MenuOverlay",
+        "data": {
+         "version": 1,
+         "version": 1,
+         "actions": [
+          {
+           "version": 1,
+           "onAction": "Focus Lost",
+           "handler": "Focus Lost",
+           "handleName": "Focus Lost",
+           "additionalData": ""
+          }
+         ],
+         "withNumbers": false,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 800"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Native Modal Markers",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "native_modal_markers.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "16 120 30 6"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "fx editor number menu",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "ff1e1d1e",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "ff1e1d1e",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "overlay",
+        "type": "NumericOverlay",
+        "data": {
+         "version": 1,
+         "version": 1,
+         "actions": [
+          {
+           "version": 1,
+           "onAction": "Focus Lost",
+           "handler": "Focus Lost",
+           "handleName": "Focus Lost",
+           "additionalData": ""
+          }
+         ],
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1280 800"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Native Modal Markers",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "native_modal_markers.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "16 120 30 6"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "oscNativeSetting_action",
+    "value": {
+     "version": 2,
+     "actions": [
+      {
+       "version": 1,
+       "onAction": "Mouse Down",
+       "handler": "Toggle Switch",
+       "handleName": "Data",
+       "additionalData": ""
+      },
+      {
+       "version": 1,
+       "onAction": "Enter Pressed",
+       "handler": "Toggle Switch",
+       "handleName": "Data",
+       "additionalData": ""
+      }
+     ],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "type": "Name",
+         "handleName": "Caption",
+         "textStyle": {
+          "version": 1,
+          "colour": "ffaab2d8",
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 13
+          },
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         }
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0.04 0.04 0.92 0.92"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "modNative_list_1200x56",
+    "value": {
+     "version": 2,
+     "actions": [
+      {
+       "version": 1,
+       "onAction": "Mouse Down",
+       "handler": "Toggle Switch",
+       "handleName": "Data",
+       "additionalData": ""
+      },
+      {
+       "version": 1,
+       "onAction": "Enter Pressed",
+       "handler": "Toggle Switch",
+       "handleName": "Data",
+       "additionalData": ""
+      }
+     ],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Selector face",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "selector_dropdown_1200x56.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 0 1200 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 26.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "5 5 1164 46"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "masterNativeBlockKeyline",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "ff1d2855",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "ff1d2855",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": true,
+     "componentsData": []
+    }
+   },
+   {
+    "key": "compactNativeDial",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "focus",
+        "type": "Focus",
+        "data": {
+         "version": 1,
+         "backgroundColour": "19ffffff",
+         "outlineColour": "ff19c6e0",
+         "backgroundInset": 2.0,
+         "outlineThickness": 1.0
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "WhenFocussed",
+        "boundsType": "Absolute",
+        "bounds": "0 0 192 108"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "knob",
+        "type": "Knob",
+        "data": {
+         "version": 3,
+         "knobType": "FilmStrip",
+         "filmStrip": "play_sub_level_90.png",
+         "numFrames": 127,
+         "invert": false,
+         "dragOrientation": "Vertical",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "2 9 90 90"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Upper Case"
+         },
+         "type": "Name",
+         "handleName": "Caption"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "96 32 92 22"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "96 54 92 32"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "compactNativeRiseDial",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "focus",
+        "type": "Focus",
+        "data": {
+         "version": 1,
+         "backgroundColour": "19ffffff",
+         "outlineColour": "ff19c6e0",
+         "backgroundInset": 2.0,
+         "outlineThickness": 1.0
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "WhenFocussed",
+        "boundsType": "Absolute",
+        "bounds": "0 0 196 72"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "knob",
+        "type": "Knob",
+        "data": {
+         "version": 3,
+         "knobType": "FilmStrip",
+         "filmStrip": "play_sub_level_60.png",
+         "numFrames": 127,
+         "invert": false,
+         "dragOrientation": "Vertical",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "2 6 60 60"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Upper Case"
+         },
+         "type": "Name",
+         "handleName": "Caption"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "68 12 124 22"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "68 34 124 28"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "compactNativeSmoothWithIndicator",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "focus",
+        "type": "Focus",
+        "data": {
+         "version": 1,
+         "backgroundColour": "19ffffff",
+         "outlineColour": "ff19c6e0",
+         "backgroundInset": 2.0,
+         "outlineThickness": 1.0
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "WhenFocussed",
+        "boundsType": "Absolute",
+        "bounds": "0 0 196 72"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "knob",
+        "type": "Knob",
+        "data": {
+         "version": 3,
+         "knobType": "FilmStrip",
+         "filmStrip": "play_sub_level_60.png",
+         "numFrames": 127,
+         "invert": false,
+         "dragOrientation": "Vertical",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "2 6 60 60"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "active_text_on.png",
+         "offImage": "active_text_off.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Active",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "66 8 60 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "Regular",
+           "height": 20.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "130 22 62 28"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "compactNativeSmoothReadout",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "focus",
+        "type": "Focus",
+        "data": {
+         "version": 1,
+         "backgroundColour": "19ffffff",
+         "outlineColour": "ff19c6e0",
+         "backgroundInset": 2.0,
+         "outlineThickness": 1.0
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "WhenFocussed",
+        "boundsType": "Absolute",
+        "bounds": "0 0 196 72"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "knob",
+        "type": "Knob",
+        "data": {
+         "version": 3,
+         "knobType": "FilmStrip",
+         "filmStrip": "play_sub_level_60_inactive.png",
+         "numFrames": 127,
+         "invert": false,
+         "dragOrientation": "None",
+         "handleName": "Data",
+         "ignoreMousePresses": true
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "2 6 60 60"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "active_text_on.png",
+         "offImage": "active_text_off.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Active",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "66 8 60 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "Regular",
+           "height": 20.0
+          },
+          "colour": "ffa3a3a3",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "130 22 62 28"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeControl Button8a242b5402cd",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Control",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_cee30d0eec88a3757a7d.png",
+         "offImage": "native_action_cee30d0eec88a3757a7d.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeInactive Button8a242b5402cd",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Control",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_cee30d0eec88a3757a7d_disabled.png",
+         "offImage": "native_action_cee30d0eec88a3757a7d_disabled.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeActive Button8a242b5402cd",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "State",
+        "type": "NativeInactive Button8a242b5402cd",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1",
+        "additionalInvalidatingHandles": [
+         "NativeActiveGate0"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "State",
+        "type": "NativeControl Button8a242b5402cd",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1",
+        "additionalInvalidatingHandles": [
+         "NativeActiveGate1"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeInactive compactNativeDial",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "knob",
+        "type": "Knob",
+        "data": {
+         "version": 3,
+         "knobType": "FilmStrip",
+         "filmStrip": "play_sub_level_90_disabled.png",
+         "numFrames": 127,
+         "invert": false,
+         "dragOrientation": "None",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "2 9 90 90"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffa3a3a3",
+          "justification": "left verticallyCentred",
+          "case": "Upper Case"
+         },
+         "type": "Name",
+         "handleName": "Caption"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "96 32 92 22"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffa3a3a3",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "96 54 92 32"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeActive compactNativeDial",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "State",
+        "type": "NativeInactive compactNativeDial",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1",
+        "additionalInvalidatingHandles": [
+         "NativeActiveGate0"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "State",
+        "type": "compactNativeDial",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1",
+        "additionalInvalidatingHandles": [
+         "NativeActiveGate1"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeInactive compactNativeRiseDial",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": true,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "knob",
+        "type": "Knob",
+        "data": {
+         "version": 3,
+         "knobType": "FilmStrip",
+         "filmStrip": "play_sub_level_60_disabled.png",
+         "numFrames": 127,
+         "invert": false,
+         "dragOrientation": "None",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "2 6 60 60"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "name",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffa3a3a3",
+          "justification": "left verticallyCentred",
+          "case": "Upper Case"
+         },
+         "type": "Name",
+         "handleName": "Caption"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "68 12 124 22"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 20.0
+          },
+          "colour": "ffa3a3a3",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "68 34 124 28"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "NativeActive compactNativeRiseDial",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "State",
+        "type": "NativeInactive compactNativeRiseDial",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1",
+        "additionalInvalidatingHandles": [
+         "NativeActiveGate0"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "State",
+        "type": "compactNativeRiseDial",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Proportional",
+        "bounds": "0 0 1 1",
+        "additionalInvalidatingHandles": [
+         "NativeActiveGate1"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "modNative_bar_712x56",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "ff202a44",
+       "image": "mod_amount_712x56.png"
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": "mod_amount_712x56.png"
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "track_bg",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "mod_slider_track_596x56.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "10 0 596 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "amount",
+        "type": "Slider",
+        "data": {
+         "version": 4,
+         "sliderType": "TrackAndThumb",
+         "direction": "Horizontal",
+         "thumbImage": "mod_slider_thumb_56.png",
+         "revealedImage": "mod_slider_revealed_596x56.png",
+         "thumbTrackVisible": false,
+         "revealType": "Bipolar",
+         "backgroundColour": "0",
+         "outlineColour": "0",
+         "valueColour": "ff2ee6f0",
+         "isBipolar": true,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "10 0 596 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "value",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 34.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "right verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "616 0 82 56"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "nativeModulationRoute",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Target",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "type": "Name",
+         "handleName": "Amount",
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 19
+          },
+          "colour": "ffe6e6e6",
+          "justification": "leftJustified verticallyCentred",
+          "case": "Original"
+         }
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "8 0 324 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Present"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Amount",
+        "type": "modNative_bar_712x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Amount"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "344 0 712 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Polarity",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "mod_targets_polarity_on.png",
+         "offImage": "mod_targets_polarity_off.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Polarity"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1060 0 72 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Active",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "mod_targets_active_on.png",
+         "offImage": "mod_targets_active_off.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Active"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1136 0 72 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Remove",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "mod_targets_remove_on.png",
+         "offImage": "mod_targets_remove_on.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Remove"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1212 0 64 56"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "nativeModulationEditor",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "BACK",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "mod_targets_back.png",
+         "offImage": "mod_targets_back.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Parameter 3485"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "4 32 120 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Add",
+        "type": "oscNativeSetting_action",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Parameter 3486"
+         },
+         {
+          "key": "Caption",
+          "value": "Parameter 3486"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1076 32 200 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Page arrows",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "FilmStrip",
+         "image": "mod_targets_pages.png",
+         "colour": "0",
+         "numFrames": 4,
+         "handleName": "Parameter 3513"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 32 208 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3513"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Page",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "type": "Value",
+         "handleName": "Parameter 3487",
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 19
+          },
+          "colour": "ffe6e6e6",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         }
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "904 32 128 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3513"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Previous",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 4,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "WithName[Previous Page]/FromGesture/Parameter 3487"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 32 104 56",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/1/2/4/Parameter 3513"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Next",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_button_hit.png",
+         "offImage": "native_button_hit.png",
+         "buttonId": 2,
+         "numButtonsInGroup": 4,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "WithName[Next Page]/FromGesture/Parameter 3487"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "968 32 104 56",
+        "additionalInvalidatingHandles": [
+         "RangedEnabling/2/3/4/Parameter 3513"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route 1",
+        "type": "nativeModulationRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3514"
+         },
+         {
+          "key": "Present",
+          "value": "Parameter 3514"
+         },
+         {
+          "key": "Amount",
+          "value": "Parameter 3488"
+         },
+         {
+          "key": "Polarity",
+          "value": "Parameter 3489"
+         },
+         {
+          "key": "Active",
+          "value": "Parameter 3490"
+         },
+         {
+          "key": "Remove",
+          "value": "Parameter 3491"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 116 1280 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3514"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route 2",
+        "type": "nativeModulationRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3515"
+         },
+         {
+          "key": "Present",
+          "value": "Parameter 3515"
+         },
+         {
+          "key": "Amount",
+          "value": "Parameter 3492"
+         },
+         {
+          "key": "Polarity",
+          "value": "Parameter 3493"
+         },
+         {
+          "key": "Active",
+          "value": "Parameter 3494"
+         },
+         {
+          "key": "Remove",
+          "value": "Parameter 3495"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 188 1280 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3515"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route 3",
+        "type": "nativeModulationRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3516"
+         },
+         {
+          "key": "Present",
+          "value": "Parameter 3516"
+         },
+         {
+          "key": "Amount",
+          "value": "Parameter 3496"
+         },
+         {
+          "key": "Polarity",
+          "value": "Parameter 3497"
+         },
+         {
+          "key": "Active",
+          "value": "Parameter 3498"
+         },
+         {
+          "key": "Remove",
+          "value": "Parameter 3499"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 260 1280 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3516"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route 4",
+        "type": "nativeModulationRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3517"
+         },
+         {
+          "key": "Present",
+          "value": "Parameter 3517"
+         },
+         {
+          "key": "Amount",
+          "value": "Parameter 3500"
+         },
+         {
+          "key": "Polarity",
+          "value": "Parameter 3501"
+         },
+         {
+          "key": "Active",
+          "value": "Parameter 3502"
+         },
+         {
+          "key": "Remove",
+          "value": "Parameter 3503"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 332 1280 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3517"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route 5",
+        "type": "nativeModulationRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3518"
+         },
+         {
+          "key": "Present",
+          "value": "Parameter 3518"
+         },
+         {
+          "key": "Amount",
+          "value": "Parameter 3504"
+         },
+         {
+          "key": "Polarity",
+          "value": "Parameter 3505"
+         },
+         {
+          "key": "Active",
+          "value": "Parameter 3506"
+         },
+         {
+          "key": "Remove",
+          "value": "Parameter 3507"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 404 1280 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3518"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Route 6",
+        "type": "nativeModulationRoute",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Parameter 3519"
+         },
+         {
+          "key": "Present",
+          "value": "Parameter 3519"
+         },
+         {
+          "key": "Amount",
+          "value": "Parameter 3508"
+         },
+         {
+          "key": "Polarity",
+          "value": "Parameter 3509"
+         },
+         {
+          "key": "Active",
+          "value": "Parameter 3510"
+         },
+         {
+          "key": "Remove",
+          "value": "Parameter 3511"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Children",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "0 476 1280 56",
+        "additionalInvalidatingHandles": [
+         "NonZero/Parameter 3519"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "oscNativeList",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "0",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": true,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 1",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row0"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row0"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 96 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate0"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 2",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row1"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row1"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 156 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate1"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 3",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row2"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row2"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 216 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate2"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 4",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row3"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row3"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 276 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate3"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 5",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row4"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row4"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 336 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate4"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 6",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row5"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row5"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 396 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate5"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Row 7",
+        "type": "modNative_list_1200x56",
+        "data": {
+         "version": 1,
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Row6"
+         },
+         {
+          "key": "Caption",
+          "value": "WithName[]/Row6"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 456 1200 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Gate6"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "BACK",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_016dcd3823d3a8350b30.png",
+         "offImage": "native_action_016dcd3823d3a8350b30.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Back"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 12 120 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "PREVIOUS",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_b807511dedf7f804b560.png",
+         "offImage": "native_action_b807511dedf7f804b560.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Prev"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "40 548 150 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "NEXT",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_7968786b3e2720a2d176.png",
+         "offImage": "native_action_7968786b3e2720a2d176.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Next"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1090 548 150 56"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "GROUPS",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_f8f7e86150ac977365d8.png",
+         "offImage": "native_action_f8f7e86150ac977365d8.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Groups"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "170 12 100 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/2/Title"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "UP",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_action_b82b5235289aa9b425c4.png",
+         "offImage": "native_action_b82b5235289aa9b425c4.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 1,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "FromGesture/Groups"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "170 12 100 56",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/2/Title"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 18.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "horizontallyCentred verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Data"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Title"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "280 12 720 56"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "key": "native keyboard overlay",
+    "value": {
+     "version": 2,
+     "actions": [],
+     "backgroundData": {
+      "version": 1,
+      "focussed": {
+       "version": 1,
+       "colour": "c0000000",
+       "image": ""
+      },
+      "unfocussed": {
+       "version": 1,
+       "colour": "c0000000",
+       "image": ""
+      }
+     },
+     "ignoreMousePresses": false,
+     "disableCoarseDataWheel": false,
+     "componentsData": [
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Keyboard Panel Box",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "native_kbd_bg_4054647d803b45aa6657.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "164 220 952 340"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Keyboard Title",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 14.0
+          },
+          "colour": "ffaab2d8",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Parameter 3897"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 236 824 24"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Keyboard Header Close",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_aa4638908c1a892fcc7f.png",
+         "offImage": "native_kbd_aa4638908c1a892fcc7f.png",
+         "buttonId": 99,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "1044 232 32 32"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Keyboard Text Field Frame",
+        "type": "Image",
+        "data": {
+         "version": 2,
+         "imageType": "Regular",
+         "colour": "0",
+         "image": "native_kbd_bg_52f05d8358c5d6fe39be.png"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 268 872 44"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Keyboard Text Display",
+        "type": "Label",
+        "data": {
+         "version": 1,
+         "textStyle": {
+          "version": 1,
+          "font": {
+           "version": 1,
+           "name": "Titillium Web",
+           "style": "SemiBold",
+           "height": 18.0
+          },
+          "colour": "ffeef1ff",
+          "justification": "left verticallyCentred",
+          "case": "Original"
+         },
+         "type": "Value",
+         "handleName": "Parameter 3899"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": []
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "No",
+        "showWhenDataModelInvalid": "Show",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "220 270 840 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 q",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_f51ebdfb2ef60f51aafb.png",
+         "offImage": "native_kbd_f51ebdfb2ef60f51aafb.png",
+         "buttonId": 82,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 Q",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_cbf2097c4413606b7da5.png",
+         "offImage": "native_kbd_cbf2097c4413606b7da5.png",
+         "buttonId": 50,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 1",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_0eb70ce9c73c188da242.png",
+         "offImage": "native_kbd_0eb70ce9c73c188da242.png",
+         "buttonId": 18,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 w",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_e8f30d1c3c33252fdb2d.png",
+         "offImage": "native_kbd_e8f30d1c3c33252fdb2d.png",
+         "buttonId": 88,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "292 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 W",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_668205d1d48fa9a7f6b2.png",
+         "offImage": "native_kbd_668205d1d48fa9a7f6b2.png",
+         "buttonId": 56,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "292 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 2",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_86cb03eaccff3855622b.png",
+         "offImage": "native_kbd_86cb03eaccff3855622b.png",
+         "buttonId": 19,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "292 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 e",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_dfd455b46a95ce546bd5.png",
+         "offImage": "native_kbd_dfd455b46a95ce546bd5.png",
+         "buttonId": 70,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "380 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 E",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_f42b011cde9ca46aadc8.png",
+         "offImage": "native_kbd_f42b011cde9ca46aadc8.png",
+         "buttonId": 38,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "380 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 3",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_e2464236f8c1b5ad4b26.png",
+         "offImage": "native_kbd_e2464236f8c1b5ad4b26.png",
+         "buttonId": 20,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "380 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 r",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_bd749071156773095318.png",
+         "offImage": "native_kbd_bd749071156773095318.png",
+         "buttonId": 83,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "468 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 R",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_003bf162fb7c3ae20449.png",
+         "offImage": "native_kbd_003bf162fb7c3ae20449.png",
+         "buttonId": 51,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "468 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 4",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_d606dea436a720911cd6.png",
+         "offImage": "native_kbd_d606dea436a720911cd6.png",
+         "buttonId": 21,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "468 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 t",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_4d398a5d31b2c3fbbb2f.png",
+         "offImage": "native_kbd_4d398a5d31b2c3fbbb2f.png",
+         "buttonId": 85,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "556 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 T",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_03992e1aa0b500df305a.png",
+         "offImage": "native_kbd_03992e1aa0b500df305a.png",
+         "buttonId": 53,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "556 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 5",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_07b886d6f8570d01135c.png",
+         "offImage": "native_kbd_07b886d6f8570d01135c.png",
+         "buttonId": 22,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "556 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 y",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_9780ff532e49375158b9.png",
+         "offImage": "native_kbd_9780ff532e49375158b9.png",
+         "buttonId": 90,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "644 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 Y",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_80d179e6e6bab3b87062.png",
+         "offImage": "native_kbd_80d179e6e6bab3b87062.png",
+         "buttonId": 58,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "644 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 6",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_e216ff498b6eaeadca4a.png",
+         "offImage": "native_kbd_e216ff498b6eaeadca4a.png",
+         "buttonId": 23,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "644 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 u",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_52b17fe957acfd9b6ca9.png",
+         "offImage": "native_kbd_52b17fe957acfd9b6ca9.png",
+         "buttonId": 86,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "732 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 U",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_4bcd69234d7584bd43af.png",
+         "offImage": "native_kbd_4bcd69234d7584bd43af.png",
+         "buttonId": 54,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "732 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 7",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_33316802ac0233903995.png",
+         "offImage": "native_kbd_33316802ac0233903995.png",
+         "buttonId": 24,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "732 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 i",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_ae32cbec9749af9dd919.png",
+         "offImage": "native_kbd_ae32cbec9749af9dd919.png",
+         "buttonId": 74,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "820 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 I",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_330b6ee9c9a747ff41f4.png",
+         "offImage": "native_kbd_330b6ee9c9a747ff41f4.png",
+         "buttonId": 42,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "820 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 8",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_338e123abcb9a4bbb221.png",
+         "offImage": "native_kbd_338e123abcb9a4bbb221.png",
+         "buttonId": 25,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "820 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 o",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_71b3bba51cdef995fda6.png",
+         "offImage": "native_kbd_71b3bba51cdef995fda6.png",
+         "buttonId": 80,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "908 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 O",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_c2f1a7854ae2b1101fc5.png",
+         "offImage": "native_kbd_c2f1a7854ae2b1101fc5.png",
+         "buttonId": 48,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "908 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 9",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_5b3bc7f289562c1e6e91.png",
+         "offImage": "native_kbd_5b3bc7f289562c1e6e91.png",
+         "buttonId": 26,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "908 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 p",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_f4c3466d0e00a3aa9147.png",
+         "offImage": "native_kbd_f4c3466d0e00a3aa9147.png",
+         "buttonId": 81,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "996 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 P",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_adf6bec12360be0507b0.png",
+         "offImage": "native_kbd_adf6bec12360be0507b0.png",
+         "buttonId": 49,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "996 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 0",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_7cf41a18c77acc52ef11.png",
+         "offImage": "native_kbd_7cf41a18c77acc52ef11.png",
+         "buttonId": 17,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "996 320 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 a",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_496049866dcb5a5f75f0.png",
+         "offImage": "native_kbd_496049866dcb5a5f75f0.png",
+         "buttonId": 66,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "248 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 A",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_1251fe3a878acff74880.png",
+         "offImage": "native_kbd_1251fe3a878acff74880.png",
+         "buttonId": 34,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "248 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 !",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_101599c0c3515b2a4460.png",
+         "offImage": "native_kbd_101599c0c3515b2a4460.png",
+         "buttonId": 2,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "248 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 s",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_1265118d5b1b6202591a.png",
+         "offImage": "native_kbd_1265118d5b1b6202591a.png",
+         "buttonId": 84,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "336 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 S",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_b5f60e61f8554cebc697.png",
+         "offImage": "native_kbd_b5f60e61f8554cebc697.png",
+         "buttonId": 52,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "336 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 @",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_f3284a398bac02e27db4.png",
+         "offImage": "native_kbd_f3284a398bac02e27db4.png",
+         "buttonId": 33,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "336 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 d",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_a54f6e77e14da31fae6b.png",
+         "offImage": "native_kbd_a54f6e77e14da31fae6b.png",
+         "buttonId": 69,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "424 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 D",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_9b210608a1bcfb2897d9.png",
+         "offImage": "native_kbd_9b210608a1bcfb2897d9.png",
+         "buttonId": 37,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "424 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 #",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_dbd79ea2c8005b012701.png",
+         "offImage": "native_kbd_dbd79ea2c8005b012701.png",
+         "buttonId": 4,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "424 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 f",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_a33cc36e775d03bc5d99.png",
+         "offImage": "native_kbd_a33cc36e775d03bc5d99.png",
+         "buttonId": 71,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "512 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 F",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_05c6293188f5ba40e32a.png",
+         "offImage": "native_kbd_05c6293188f5ba40e32a.png",
+         "buttonId": 39,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "512 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 $",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_6f093cb8b7cb03b9c53d.png",
+         "offImage": "native_kbd_6f093cb8b7cb03b9c53d.png",
+         "buttonId": 5,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "512 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 g",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_7f2c595d399d3c5f1886.png",
+         "offImage": "native_kbd_7f2c595d399d3c5f1886.png",
+         "buttonId": 72,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "600 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 G",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_e335df947a536350cbdd.png",
+         "offImage": "native_kbd_e335df947a536350cbdd.png",
+         "buttonId": 40,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "600 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 %",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_134476fd2aab26212961.png",
+         "offImage": "native_kbd_134476fd2aab26212961.png",
+         "buttonId": 6,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "600 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 h",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_78d578980373f2e0c428.png",
+         "offImage": "native_kbd_78d578980373f2e0c428.png",
+         "buttonId": 73,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "688 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 H",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_9b57bd141e0a2dee7cdb.png",
+         "offImage": "native_kbd_9b57bd141e0a2dee7cdb.png",
+         "buttonId": 41,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "688 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 &",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_a436baf1dac25d90de54.png",
+         "offImage": "native_kbd_a436baf1dac25d90de54.png",
+         "buttonId": 7,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "688 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 j",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_3c921b9c6ab99c178468.png",
+         "offImage": "native_kbd_3c921b9c6ab99c178468.png",
+         "buttonId": 75,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "776 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 J",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_ee7934f7251cdd9138ee.png",
+         "offImage": "native_kbd_ee7934f7251cdd9138ee.png",
+         "buttonId": 43,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "776 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 *",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_943a3ab4adc9aa079f62.png",
+         "offImage": "native_kbd_943a3ab4adc9aa079f62.png",
+         "buttonId": 11,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "776 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 k",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_8c3024418f8b87f084e3.png",
+         "offImage": "native_kbd_8c3024418f8b87f084e3.png",
+         "buttonId": 76,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 K",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_bc64562b4b7bb6861124.png",
+         "offImage": "native_kbd_bc64562b4b7bb6861124.png",
+         "buttonId": 44,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 (",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_8ac3391d3d64683e1262.png",
+         "offImage": "native_kbd_8ac3391d3d64683e1262.png",
+         "buttonId": 9,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 l",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_7ce5c34fe50a34868a5f.png",
+         "offImage": "native_kbd_7ce5c34fe50a34868a5f.png",
+         "buttonId": 77,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "952 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 L",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_459dd5f751fa62223231.png",
+         "offImage": "native_kbd_459dd5f751fa62223231.png",
+         "buttonId": 45,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "952 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 )",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_4057a15a5b6a20f37e85.png",
+         "offImage": "native_kbd_4057a15a5b6a20f37e85.png",
+         "buttonId": 10,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "952 368 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Shift L0",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_43d90bb222200742d12a.png",
+         "offImage": "native_kbd_43d90bb222200742d12a.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 3,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Local/3/layer"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 416 124 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Shift L1",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_c4394505c11dddd520d4.png",
+         "offImage": "native_kbd_c4394505c11dddd520d4.png",
+         "buttonId": 0,
+         "numButtonsInGroup": 3,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Local/3/layer"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 416 124 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key ABC L2",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_01e47d9e2bf95b28796b.png",
+         "offImage": "native_kbd_01e47d9e2bf95b28796b.png",
+         "buttonId": 0,
+         "numButtonsInGroup": 3,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Local/3/layer"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 416 124 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 z",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_1e6a5a7d43f777708d3a.png",
+         "offImage": "native_kbd_1e6a5a7d43f777708d3a.png",
+         "buttonId": 91,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "336 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 Z",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_ee8b0165175d656e57fd.png",
+         "offImage": "native_kbd_ee8b0165175d656e57fd.png",
+         "buttonId": 59,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "336 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 -",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_19586a5ef4859dc477a1.png",
+         "offImage": "native_kbd_19586a5ef4859dc477a1.png",
+         "buttonId": 14,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "336 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 x",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_18716f5dd13505e61d05.png",
+         "offImage": "native_kbd_18716f5dd13505e61d05.png",
+         "buttonId": 89,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "424 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 X",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_530040e21209fb6e70b6.png",
+         "offImage": "native_kbd_530040e21209fb6e70b6.png",
+         "buttonId": 57,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "424 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 _",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_b4b324bcf41447e6ad34.png",
+         "offImage": "native_kbd_b4b324bcf41447e6ad34.png",
+         "buttonId": 64,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "424 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 c",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_0f757efe37baf070577a.png",
+         "offImage": "native_kbd_0f757efe37baf070577a.png",
+         "buttonId": 68,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "512 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 C",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_5d512f07cb94880062fc.png",
+         "offImage": "native_kbd_5d512f07cb94880062fc.png",
+         "buttonId": 36,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "512 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 /",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_163207efb5df15f7e554.png",
+         "offImage": "native_kbd_163207efb5df15f7e554.png",
+         "buttonId": 16,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "512 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 v",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_f32a147418a2faded8ad.png",
+         "offImage": "native_kbd_f32a147418a2faded8ad.png",
+         "buttonId": 87,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "600 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 V",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_d34412f6e0ed326d68ad.png",
+         "offImage": "native_kbd_d34412f6e0ed326d68ad.png",
+         "buttonId": 55,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "600 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 :",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_d0f57b608bac0e82e146.png",
+         "offImage": "native_kbd_d0f57b608bac0e82e146.png",
+         "buttonId": 27,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "600 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 b",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_1efb511f5fef1822b310.png",
+         "offImage": "native_kbd_1efb511f5fef1822b310.png",
+         "buttonId": 67,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "688 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 B",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_20f0c152eacc9fd5d48e.png",
+         "offImage": "native_kbd_20f0c152eacc9fd5d48e.png",
+         "buttonId": 35,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "688 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 ;",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_aeecefda80cd7c4d3eb1.png",
+         "offImage": "native_kbd_aeecefda80cd7c4d3eb1.png",
+         "buttonId": 28,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "688 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 n",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_4ca926ddb1f612ddb18b.png",
+         "offImage": "native_kbd_4ca926ddb1f612ddb18b.png",
+         "buttonId": 79,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "776 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 N",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_936d54b04006714cb699.png",
+         "offImage": "native_kbd_936d54b04006714cb699.png",
+         "buttonId": 47,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "776 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 ,",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_cd50b17a31e9228ac838.png",
+         "offImage": "native_kbd_cd50b17a31e9228ac838.png",
+         "buttonId": 13,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "776 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L0 m",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_021ef9870c12ed3a6d12.png",
+         "offImage": "native_kbd_021ef9870c12ed3a6d12.png",
+         "buttonId": 78,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L1 M",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_b45377820d757fcf2838.png",
+         "offImage": "native_kbd_b45377820d757fcf2838.png",
+         "buttonId": 46,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key L2 .",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_f48b28b12adc928458e3.png",
+         "offImage": "native_kbd_f48b28b12adc928458e3.png",
+         "buttonId": 15,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "864 416 80 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Backspace",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_35a67bf17bd0cd1481c7.png",
+         "offImage": "native_kbd_35a67bf17bd0cd1481c7.png",
+         "buttonId": 96,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "952 416 124 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Switch To Sym L0",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_6342c474c1504937dc06.png",
+         "offImage": "native_kbd_6342c474c1504937dc06.png",
+         "buttonId": 2,
+         "numButtonsInGroup": 3,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Local/3/layer"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 464 120 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/0/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Switch To Sym L1",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_6342c474c1504937dc06.png",
+         "offImage": "native_kbd_6342c474c1504937dc06.png",
+         "buttonId": 2,
+         "numButtonsInGroup": 3,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Local/3/layer"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 464 120 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/1/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Switch To ABC L2",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_e6f76dd765bd0d08ac85.png",
+         "offImage": "native_kbd_e6f76dd765bd0d08ac85.png",
+         "buttonId": 0,
+         "numButtonsInGroup": 3,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "Local/3/layer"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 2,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "204 464 120 40",
+        "additionalInvalidatingHandles": [
+         "IndexedEnabling/2/3/Local/3/layer"
+        ]
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Clear",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_21f2a750b69c7d1a4507.png",
+         "offImage": "native_kbd_21f2a750b69c7d1a4507.png",
+         "buttonId": 97,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "332 464 100 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Space",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_170958cac4c3f564a086.png",
+         "offImage": "native_kbd_170958cac4c3f564a086.png",
+         "buttonId": 1,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "440 464 360 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key Cancel",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_3327a24449e9eb3bb813.png",
+         "offImage": "native_kbd_3327a24449e9eb3bb813.png",
+         "buttonId": 99,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "808 464 120 40"
+       }
+      },
+      {
+       "version": 2,
+       "componentData": {
+        "version": 1,
+        "name": "Key OK",
+        "type": "Button",
+        "data": {
+         "version": 2,
+         "onImage": "native_kbd_74d0fa98314dc0317935.png",
+         "offImage": "native_kbd_74d0fa98314dc0317935.png",
+         "buttonId": 98,
+         "numButtonsInGroup": 100,
+         "handleName": "Data",
+         "gestureBehaviour": "Instant"
+        }
+       },
+       "handle remapping": {
+        "version": 1,
+        "map": [
+         {
+          "key": "Data",
+          "value": "ResetOnGestureEnd/Parameter 3898"
+         }
+        ]
+       },
+       "bounds": {
+        "version": 1,
+        "acceptsHWFocus": "Yes",
+        "showWhenDataModelInvalid": "Hide",
+        "whenVisible": "Always",
+        "boundsType": "Absolute",
+        "bounds": "936 464 140 40"
+       }
+      }
+     ]
+    }
+   }
+  ]
+ }
+}

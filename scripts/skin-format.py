@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Rewrite skin/TUI.json with one JSON element per line (lossless: only whitespace changes, duplicate keys and key order are kept).
+"""Rewrite every skin/*.json (TUI.json, the skin/defs_<family>.json definition files, Q-Links.json) with one JSON element per line (lossless: only whitespace changes, duplicate keys and key order are kept).
 
-Why: with one element per line git merges edits of different screens (tabs) without conflicts. Run it after every hand edit of skin/TUI.json:
-    python3 scripts/skin-format.py [path]            # default skin/TUI.json
+Why: with one element per line git merges edits of different screens (tabs) without conflicts. Run it after every hand edit of the skin:
+    python3 scripts/skin-format.py [path ...]        # default: every skin/*.json
 """
 import json
 import sys
@@ -58,18 +58,23 @@ def strip(text):
     return ''.join(res)
 
 
-def main():
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent / 'skin' / 'TUI.json'
+def format_file(path):
     raw = path.read_text(encoding='utf-8')
     data = json.loads(raw, object_pairs_hook=lambda p: Obj(tuple(x) for x in p))
     out = []
     dump(data, 0, out)
     text = ''.join(out) + '\n'
     if strip(raw) != strip(text):
-        raise SystemExit('skin-format: not lossless, nothing written')
+        raise SystemExit(f'skin-format: {path}: not lossless, nothing written')
     if text != raw:
         path.write_text(text, encoding='utf-8')
         print('skin-format: rewritten', path)
+
+
+def main():
+    paths = [Path(a) for a in sys.argv[1:]] or sorted((Path(__file__).resolve().parent.parent / 'skin').glob('*.json'))
+    for path in paths:
+        format_file(path)
 
 
 if __name__ == '__main__':
