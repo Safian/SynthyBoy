@@ -1582,7 +1582,9 @@ struct PluginInstance
     bool pageSwitchNamesPending = false;
     bool nativeNamesAwaitingPaint = false;
     long long nativePagePaintUntil = -1;
-    long long proxyNamesRequestedAt = -1;   // display thread only
+    long long proxyNamesRequestedAt = -1;   // display thread only: the first request of the pending refresh
+    long long proxyNamesLastAt = -1;        // display thread only: the latest request (trailing-edge settle of a page-switch burst)
+    static constexpr long long kPageSwitchMaxMs = 2500;   // a burst of page switches defers the metadata refresh at most this long
     std::array<std::atomic<int>, nativeui::kMixerStrips> nativeMixerSoloVisual {};
     std::array<std::atomic<int>, nativeui::kMixerStrips> nativeMixerMuteVisual {};
     nativeui::FxCellBank nativeFxCells;
@@ -2837,8 +2839,9 @@ struct PluginInstance
 
     void requestProxyNames ()
     {
+        proxyNamesLastAt = steadyMs();
         if (proxyNamesRequestedAt < 0)
-            proxyNamesRequestedAt = steadyMs();
+            proxyNamesRequestedAt = proxyNamesLastAt;
     }
 
     void flushProxyNames (AEffect* e, long long nowMs)
@@ -2851,7 +2854,9 @@ struct PluginInstance
         if ((nativeNamesAwaitingPaint && nowMs - proxyNamesRequestedAt < kNativePaintWindowMs)
             || (nowMs < nativePagePaintUntil && nowMs - proxyNamesRequestedAt < maxWaitMs))
             return;
-        if (pageSwitchNamesPending && nowMs - proxyNamesRequestedAt < kPageSwitchSettleMs)
+        // Trailing edge: every further page switch of a rapid burst moves the deadline, so the host-wide metadata refresh
+        // (audioMasterUpdateDisplay, it stalls the host main thread) runs once after the taps stop, at most kPageSwitchMaxMs after the first.
+        if (pageSwitchNamesPending && nowMs - proxyNamesLastAt < kPageSwitchSettleMs && nowMs - proxyNamesRequestedAt < kPageSwitchMaxMs)
             return;
         pageSwitchNamesPending = false;
         nativeNamesAwaitingPaint = false;

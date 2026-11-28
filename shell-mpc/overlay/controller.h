@@ -639,6 +639,7 @@ private:
                 current_ = view;
                 activeSlot_ = slot;
                 needFrame_ = true;
+                statusDue_ = true;   // the status file names the view: right away, not at the next second
             }
             {
                 // A view with a background in the host's skin stays OPAQUE (it draws everything, ground included) until the sentinel of that background is read on the host's framebuffer; a page change,
