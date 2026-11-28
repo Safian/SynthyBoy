@@ -405,7 +405,6 @@ public:
         const int active = highlight_ - 1;
         osc_->setCompactBlock (QRouter::blockOfGroup (kGroups, active, 0));
         env_->setCompactBlock (QRouter::blockOfGroup (kGroups, active, 1));
-        lfo_->setCompactBlock (QRouter::blockOfGroup (kGroups, active, 2));
         qs_.publish (*io, kGroups, active, [&] (int g, int* t)
         {
             if (g == 0) osc_->compactTargets (t); else if (g == 1) env_->compactTargets (t); else if (g == 2) lfo_->compactTargets (t); else extraTargets (t);

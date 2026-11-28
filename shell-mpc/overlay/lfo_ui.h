@@ -81,7 +81,7 @@ public:
     // ---- the ids of the controls (the page-local id of a row of the native bridge)
     enum Id : int
     {
-        kInstance = 2, kSyncMode = 4, kSyncTrip, kSyncDot, kTargets, kPicker, kPagePicker, kSmoothPick, kHostPick, kEdit,   // kInstance: compact choice
+        kInstance = 2, kSyncMode = 4, kTargets = 7, kPicker, kPagePicker, kSmoothPick, kEdit = 12,   // kInstance: compact choice
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdRedo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCycleLink, kEdLoopLink, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
         kTgBack = 300, kTgAdd, kTgPage, kTgRow = 310,    // the cells of the targets page (310 + 4 * row + 0 depth, 1 polarity, 2 on / off, 3 remove)
@@ -107,7 +107,7 @@ public:
         { kShape, "shape", "", T::Choice },           { kStyle, "", "style", T::Choice },             { kRate, "rate", "rate", T::Dial },
         { kDivision, "division", "division", T::Choice }, { kRise, "fade_in", "", T::Dial },             { kSmoothTime, "smooth_time", "", T::Dial },
         { kSync, "sync", "sync", T::Choice },         { kStereoToggle, "", "stereo", T::Toggle },      { kPicker, "shape", "style", T::Picker },
-        { kPagePicker, "shape", "style", T::Choice }, { kSmoothPick, "smooth", "", T::Toggle },        { kHostPick, "host", "", T::Toggle },
+        { kPagePicker, "shape", "style", T::Choice }, { kSmoothPick, "smooth", "", T::Toggle },
         { kMode, "sync_type", "", T::Choice },        { kModeList, "", "sync_type", T::List },         { kPhase, "phase", "", T::Dial },
         { kDelay, "delay", "", T::Dial },              { kDirection, "direction", "", T::List },        { kSwing, "swing", "", T::Dial },
         { kStereo, "stereo", "", T::Dial },            { kMono, "mono", "", T::Toggle },                { kKeyTranspose, "keytrack_transpose", "keytrack_transpose", T::Number },
@@ -151,7 +151,6 @@ public:
     /** Reads the instance: the selected LFO (the type and the number), every value of the visible controls, the modulations of the knobs, the pages of the stack, the shape, the cursors of the voices, the Q group. */
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
-        highlight_ = highlight;
         adoptSelection (inst);   // the page of a tab: the LFO of its hardware sub-tab; the compact view of the Play page: the Play selection (Play LFO + mpcTabView.rnd, chunk saved)
         const bool open = stack.depth() > 0 && stack.element() == kElementLfo;
         if (open && stack.top() == kPageMods)
@@ -177,15 +176,6 @@ public:
             refreshMods (inst);
             modsAtMs_ = nowMs;
             modsDirty_ = false;
-        }
-        if (! page_)   // the page of a tab has no selector: the hardware sub-tab names the LFO
-        {
-            uibind::fillSelector (uibind::SelKind::Lfo, scan_, inst, selector_);
-            uibind::cellsFromSelector (uibind::SelKind::Lfo, selector_, playCells_);   // the Play page's choice: the cells of its selector
-            playDots_ = 0;
-            for (int k = 0; k < playCells_.n && k < 32; ++k)
-                if (isSourceAssigned (playCells_.id[k]))
-                    playDots_ |= (1u << k);
         }
         pull (inst);
         updateDisplay (inst, live, nowMs);
@@ -596,7 +586,6 @@ public:
         d.area = ui::playrows::compactPlotRect (compG_.display);
         return d;
     }
-    int gridOf (int lfo) const noexcept { return gridXOf (lfo); }
     int gridXOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridX_[lfo - 1] : 8; }
     int gridYOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridY_[lfo - 1] : 8; }
 
@@ -1033,14 +1022,6 @@ private:
     int underList_ = 0;
     std::vector<std::string> listText_;
     void placePageList() { menu_.parent = { 0, kTabY, w_, kTabH }; menu_.first = 0; }
-    bool isSourceAssigned (int id) const noexcept
-    {
-        if (id >= 1 && id <= kLfos)
-            return scan_.used[uibind::lfoSource (id)];
-        if (id > uibind::kRndBase && id <= uibind::kRndBase + uibind::kSelRnds)
-            return scan_.used[uibind::rndSource (id - uibind::kRndBase)];
-        return false;
-    }
     /** The names of the editor list that is open. */
     void fillList (const IInstanceView* v)
     {
@@ -1065,12 +1046,6 @@ private:
             editorListChosen (index, stack, v);
     }
 
-    static const char* const* instanceNames() noexcept
-    {
-        static const char* const n[kInstances] = { "LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4" };
-        return n;
-    }
-    static const char* instanceName (int i) noexcept { return instanceNames()[std::clamp (i, 0, kInstances - 1)]; }
     /** The instance as one number 0 .. 13: LFO 1 .. 10, then RND 1 .. 4. */
     int slot() const noexcept { return rnd_ != 0 ? kLfos + rnd_ - 1 : lfoNum_ - 1; }
     /** The shown LFO: on the page of a tab the one of its sub-tab; on the compact view of the Play page the shared view state (Play LFO and mpcTabView.rnd): a change reconfigures the page. */
@@ -1096,10 +1071,7 @@ private:
         }
     }
     int pageSlot_ = -1;   // the page of a tab: the LFO of its sub-tab (0 .. 13: LFO 1 .. 10, RND 1 .. 4); -1 in the compact view of the Play page
-    uibind::SelectorCells playCells_;
-    unsigned playDots_ = 0;
 public:
-    const uibind::SelectorCells& playCells() const noexcept { return playCells_; }
     /** The LFO tab was left (page_view_base.h): a selected LFO or random LFO that is neither used nor edited (a `+` pick the user did not touch) falls back to the last used one (uibind::fallbackSelection). */
     void leftTab (IInstanceView& v)
     {
@@ -1184,7 +1156,6 @@ private:
     }
     void refreshMods (const IInstanceView& v)
     {
-        scan_ = uibind::scanUsed (v);   // which LFOs the selector shows
         if (pageTop_ == kPageTargets)
             loadTargets (v, false);
         else if (pageTop_ == kPageMods && modsTargetParam_ >= 0)
@@ -2714,7 +2685,6 @@ private:
         menu_.reserveZone = pageTop_ == kPageList;
         v.setNativeLfoDetail (state);
         nativeDetailView_ = state.context.view;
-        nativeDetailFields_ = state.fields;
     }
 
     void updateNativeDetail (IInstanceView& v, UiStack& stack, double nowMs)
@@ -3153,7 +3123,6 @@ public:
         if (compactNativeKey_)
             t[1] = -1;
     }
-    void setCompactBlock (int block) noexcept { compactBlock_ = block; }
 private:
     /** The groups of the page in reading order, published to the sixteen Q slots (q_publish.h): the compact view has RATE (RANDOM); the full screen its blocks (RATE, TIMING, MOTION, KEY when it is there, SHAPE; RANDOM,
         TRIGGER, KEY for a random LFO), the active one on Q 1 .. 4, the next on 5 .. 16; the editor its four virtual knobs; the targets and modulation pages one group per row. */
@@ -3315,7 +3284,6 @@ private:
     ModRowsPage targetsView_ { ModRowsPage::Kind::Targets }, modsView_ { ModRowsPage::Kind::Modulations };
     lfolayout::Menu menu_;
     LfoShapeLibrary lib_;
-    binding::SelectorSet selector_;
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     std::vector<Item> items_;
     Gesture gesture_ = Gesture::None;
@@ -3325,7 +3293,6 @@ private:
     uint32_t nativeFields_ = 0;
     bool nativePublished_ = false;
     bool compactNativeKey_ = false;
-    int compactBlock_ = -1;
     int sync_ = 0;
     ui::lfo::SyncMode syncMode_ = ui::lfo::SyncMode::Hz;
     uint64_t nativeEditorShape_ = 0;
@@ -3333,7 +3300,6 @@ private:
     nativeui::lfodetail::View nativeDetailView_ = nativeui::lfodetail::Hidden;
     int pickGroup_ = 0;      // the group chosen by ADD TARGET (0 none, 1 ..): the view state of the choice
     bool pickShown_ = false;
-    uint16_t nativeDetailFields_ = 0;
     uint64_t nativeMenuRevision_ = 0;
     // the editor: the lists (SHAPES, MORE), the name keyboard, the modulation page
     Ed ed_ = Ed::None;
@@ -3352,8 +3318,7 @@ private:
     static constexpr double kStatusMs = 3500.0, kTurnGapMs = 600.0;
     static constexpr int kMaxShapeName = 40;
     bool page_ = false, nativeGround_ = false;   // standalone LFO and its confirmed host background
-    uibind::UsedScan scan_;   // the last scan of the matrix and the parameters (selector candidates)
-    int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
+    int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
     int targetsPageIndex_ = 0, syncType_ = 0, direction_ = 0, shapeIdx_ = 0, editorShapeIdx_ = -1;
     float swing_ = 0.0f;
     int gridX_[kLfos] = {}, gridY_[kLfos] = {};   // the grid of the editor of every LFO (0: not chosen yet: the grid the shape was drawn on; stored with the shape, state version 5)
