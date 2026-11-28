@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Plugin-drawn layer (`shell-mpc/ui/`; it holds only graphs, meters, curve displays, animation, indicators and the Q-Link/parameter model: controls are native components, no C++ widget library for others; owner 2026-11-27): instructions for AI coding agents are in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md); human docs in [docs/ui-components/README.md](docs/ui-components/README.md).
+Plugin-drawn layer (`shell-mpc/ui/`; it holds only graphs, meters, curve displays, animation, indicators, the binding data rows and Q tables, plus the kept `ListPopup` and C++ `TextEntry` keyboard: controls are native components, there is no C++ widget library; owner 2026-11-27): instructions for AI coding agents are in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md); human docs in [docs/ui-components/README.md](docs/ui-components/README.md).
 
-For native components follow [components/AGENTS.md](components/AGENTS.md). Screen hooks register each shared MPC component definition once and bind instances to it so the serialized TUI contains one copy of the control subtree.
+For native components follow [components/AGENTS.md](components/AGENTS.md). In `skin/TUI.json` each shared MPC component definition exists once and the instances bind to it, so the TUI contains one copy of the control subtree.
 
 ## Product scope (owner, 2026-11-23)
 
@@ -32,7 +32,7 @@ Develop and release SynthyBoy exclusively for standalone Akai MPC hardware. Foll
 For every current MPC screen capture or photo refresh, use the [mpc-screen-photo skill](.agents/skills/mpc-screen-photo/SKILL.md).
 
 - After changing a screen, refresh its current image from the deployed hardware when it is available. Capture the host and overlay together so the image shows what the owner sees.
-- All project screen captures and full-screen previews live only in `docs/screens/`. This is one flat directory: no aliases, metadata, README, comparison sheets, state variants or other files. The only subdirectory is `docs/screens/old/` (owner, 2026-11-27): a safety archive of earlier screens, one `<name>_old.jpg` per screen (copies of the earlier current images and old-UI hardware captures, including popups and zoomed views; validated by `scripts/validate-screen-images.py`). The flat `<screen>_old.jpg` references stay where they are.
+- All project screen captures and full-screen previews live only in `docs/screens/`. This is one flat directory: no aliases, metadata, README, comparison sheets, state variants or other files. The only subdirectory is `docs/screens/old/` (owner, 2026-11-27): a safety archive of earlier screens, one `<name>_old.jpg` per screen (copies of the earlier current images and old-UI hardware captures, including popups and zoomed views). The flat `<screen>_old.jpg` references stay where they are.
 - Each screen has one current image named `<screen>.jpg` and, when available, one fixed historical reference named `<screen>_old.jpg`. `_old` means the chosen historical reference; never overwrite it with a previous current image or update it during rendering. Screen names and provenance metadata belong outside the image directory.
 - Screen renderers write their canonical current image to that one path. Documentation and HTML link directly to it. Do not create copies in `docs/ui-map`, `docs/user-guide/img`, `docs/ui-components/komponensek` or elsewhere in the project. Alternative states, comparison renders and debugging captures must use explicit temporary paths outside the repository.
 - Component artwork remains in `components/native/<name>/img/`. Icons, fonts, filmstrips and actual runtime skin/overlay background assets are not screen captures; keep their production paths. Do not present an unverified or rejected preview as an approved current hardware capture.
@@ -50,7 +50,7 @@ Finished packages live outside the repository in `/Users/szabi/Documents/Project
 
 ## Control look: the old gradient design, not flat (owner, 2026-11-27)
 
-Dropdowns (Selector) keep the old look: a dark blue fill with a subtle vertical gradient (a thin highlight line at the top, the lower half darkening slightly: measured #131930 at the top to #0d1122 at the bottom on the page ground #0c0f18, a lighter blue border), a "bubble" effect that is not loud. Do not replace it with a flat fill. The gradient colours and where it starts are tokens (`selector.surface`, `selector.border` and the gradient parameters), never literals. Whether the other controls (buttons, ActiveText, fields) get the same treatment is decided per component when its design is reviewed. The overlay controls drawn through `Pen::control` already take the Button gradient from the same tokens (generated `theme_tokens.h`: `controlTop`, `controlBottom`, `controlBorder`, `controlBorderBottom`, `controlGradStart/End`).
+Dropdowns (Selector) keep the old look: a dark blue fill with a subtle vertical gradient (a thin highlight line at the top, the lower half darkening slightly: measured #131930 at the top to #0d1122 at the bottom on the page ground #0c0f18, a lighter blue border), a "bubble" effect that is not loud. Do not replace it with a flat fill. The gradient colours and where it starts are tokens (`selector.surface`, `selector.border` and the gradient parameters), never literals. Whether the other controls (buttons, ActiveText, fields) get the same treatment is decided per component when its design is reviewed. The overlay controls drawn through `Pen::control` already take the Button gradient from the same tokens (`shell-mpc/ui/theme_tokens.h`, hand-kept: `controlTop`, `controlBottom`, `controlBorder`, `controlBorderBottom`, `controlGradStart/End`).
 
 ## Dropdowns replace left/right selectors (owner, 2026-11-27)
 
@@ -62,7 +62,7 @@ The old RadioButton (segmented faces) takes too much room and is being phased ou
 
 ## Every control comes from its component (owner, 2026-11-27)
 
-A screen never draws a control face with its own code: buttons, dropdowns, selectors, fields, radios, dials and sliders are drawn by their shared component recipe (`components/native/<name>`; in the plugin-drawn layer, while any control remains there, by `Pen::control`, driven by the same tokens; the removal status is in `docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md`). Test: change the component's tokens loudly and regenerate; every control of that kind on every screen must change. A control that does not change bypasses the component and is a defect to fix (see `docs/review/BUTTON-MUTATION-AUDIT-2026-11-27.md`). If a control needs a variant the component does not have, add the variant to the component and its catalogue entry, not to the screen file.
+A screen never draws a control face with its own code: buttons, dropdowns, selectors, fields, radios, dials and sliders are drawn by their shared component recipe (`components/native/<name>`; in the plugin-drawn layer, while any control remains there, by `Pen::control`, driven by the same tokens; the removal status is in `docs/review/OVERLAY-CONTROLS-REMOVAL-2026-11-27.md`). Test: change the component's tokens loudly and rebuild the skin images; every control of that kind on every screen must change. A control that does not change bypasses the component and is a defect to fix (see `docs/review/BUTTON-MUTATION-AUDIT-2026-11-27.md`). If a control needs a variant the component does not have, add the variant to the component and its catalogue entry, not to the screen file.
 
 ## Lists keep the factory behaviour (owner, 2026-11-27)
 
@@ -80,6 +80,10 @@ Everything about the MPC host, the SDK, the skin and the hardware goes to the `m
 2. If research cannot settle it, the expert and the coordinator define ONE minimal measurement (the exact question, the smallest test), it is run once, and the result is written by the expert into its knowledge: `docs/dsp-knowledge/skin-host-behaviour.md` (or the matching topic page) with the raw evidence under `.hw-local/mpc-perf/`, then `mpc-expert index`.
 3. From then on the question is answered from the knowledge base; the same thing is never asked, researched or measured twice. A result that exists only in `/tmp`, `TODO.md` or a chat does not count: it must be in the expert's knowledge before the task is called done.
 A task brief that touches the host or the skin tells the worker to run `mpc-expert start "<keywords>" --prepare` first.
+
+## No tests during UI rewrites (owner decision)
+
+While controls are being removed from the plugin layer or pages are converted to native cells, run no tests and no builds; the next integration round's compile is the check (details in [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md)).
 
 ## Mechanical changes: bulk find-and-replace, not file-by-file editing (owner, 2026-11-27)
 
