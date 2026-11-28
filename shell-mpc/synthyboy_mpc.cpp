@@ -780,6 +780,24 @@ struct PluginInstance
                 inst.nativeListText.clear();
             inst.nativeModBoardDue.store (true, std::memory_order_release);
         }
+        void setNativeListState (const nativeui::liststate::State& state) noexcept override
+        {
+            uint32_t bits = 0;
+            if (state.active)
+            {
+                for (int r = 0; r < nativeui::modboard::kListRows; ++r)
+                    if (state.rowOpensLevel[r])
+                        bits |= (1u << (nativeui::liststate::kRowArrow + r));
+                if (state.deeperLevel)
+                    bits |= (1u << nativeui::liststate::kDeeperLevel);
+                if (state.hasPrev)
+                    bits |= (1u << nativeui::liststate::kHasPrev);
+                if (state.hasNext)
+                    bits |= (1u << nativeui::liststate::kHasNext);
+            }
+            if (inst.nativeListStateBits.exchange (bits, std::memory_order_release) != bits)
+                inst.nativeModBoardDue.store (true, std::memory_order_release);
+        }
         void setNativeNoteMask (bool shown, const nativeui::FxCell* fields) noexcept override
         {
             const auto preset = stateGeneration();
@@ -1725,6 +1743,7 @@ struct PluginInstance
     synthyboy_mpc::nativeui::playlist::RequestPort playListRequests;   // the "Play List" codes the host wrote (debounced), taken by the Play page (native_play_list.h)
     std::atomic<float> nativeMacroSubpage { 0.0f };   // exactly 0 on the cards page of the Macros tab, exactly 1 while its targets / list / keyboard page is open (the gate of the native base page)
     nativeui::nativetext::ListText nativeListText;    // the rows of the lists of the oscillator pages (the modulation picker's cells)
+    std::atomic<uint32_t> nativeListStateBits { 0 };  // 0/1 flags of the open list page (nativeui::liststate): row arrows 0..6, deeper level, has prev, has next
     nativeui::NativeCellBank<nativeui::kNoteMaskHandles> nativeNoteMask;   // the twelve notes of the transpose snap and the gate
     std::atomic<uint64_t> nativeNoteMaskPreset { 0 };
     std::atomic<bool> nativeNoteMaskDue { false };
@@ -1945,7 +1964,8 @@ struct PluginInstance
             return nativeText.value (nativeui::textGateLine (offset - nativeui::kTextGate)) > 0.0f ? 1.0f : 0.0f;
         if (offset == nativeui::kTextEditContext)
             return synthyboy_mpc::textentry::valueOfContext (nativeTextEntryContext.load (std::memory_order_relaxed), nativeui::kTextEditContexts);
-        if (offset == nativeui::kTextEditKey || offset == nativeui::kPlayList)
+        if (offset == nativeui::kTextEditKey || offset == nativeui::kPlayList
+            || offset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (offset))
             return 0.0f;
         if (offset == nativeui::kTextEditText)
             return nativeTextEntryLines.value (1);
@@ -1988,11 +2008,14 @@ struct PluginInstance
                 return nativeModBoard.layout() == 1 ? 1.0f : 0.0f;
             if (field == nativeui::modboard::ListGate)
                 return nativeModBoard.layout() == 2 ? 1.0f : 0.0f;
-            if (field == nativeui::modboard::ListTitle)
-                return nativeModBoard.layout() == 2 && nativeListText.up() ? 1.0f : 0.0f;   // 1: the header of the list is a way UP (a browser), 0: the groups of the sources
             if (field >= nativeui::modboard::ListRowGate)
                 return nativeModBoard.layout() == 2 && nativeModBoard.at (field).cell().target >= 0 ? 1.0f : 0.0f;
             return 0.0f;
+        }
+        if (nativeui::isListStateOffset (offset))
+        {
+            const int bit = offset - nativeui::kListState;
+            return (nativeListStateBits.load (std::memory_order_acquire) & (1u << bit)) != 0 ? 1.0f : 0.0f;
         }
         if (nativeui::isMixerSoloVisualOffset (offset))
         {
@@ -2720,6 +2743,8 @@ struct PluginInstance
                                    nativeModBoard.needsReport (link));
                 nativeModBoard.report (link);
             }
+            for (int i = 0; i < nativeui::liststate::kHandles; ++i)
+                reportNativeValue (e, nativeui::kListState + i, nativeUiValue (nativeui::kListState + i));
         }
         for (int line = 0; line < nativeui::nativetext::kLines; ++line)
             reportNativeValue (e, nativeui::nativeTextHandle (line), nativeText.value (line));
@@ -3943,6 +3968,41 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 if (opcode == effGetParamName)
                     synthyboy_mpc::putBounded (buf, kCap, "Play List");
                 return 1;   // the display stays empty
+            }
+            if (offset == nativeui::kChoiceListOpen)
+            {
+                if (opcode == effGetParamName)
+                    synthyboy_mpc::putBounded (buf, kCap, "Choice List Open");
+                else if (opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "On" : "Off");
+                return 1;
+            }
+            if (nativeui::isChoiceListOffset (offset))
+            {
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, kCap, "Choice List %d", offset - nativeui::kChoiceList);
+                else
+                    buf[0] = '\0';
+                return 1;
+            }
+            if (nativeui::isListStateOffset (offset))
+            {
+                namespace ls = nativeui::liststate;
+                const int field = offset - nativeui::kListState;
+                if (opcode == effGetParamName)
+                {
+                    if (field < ls::kDeeperLevel)
+                        std::snprintf (buf, kCap, "List Row Arrow %d", field + 1);
+                    else if (field == ls::kDeeperLevel)
+                        synthyboy_mpc::putBounded (buf, kCap, "List Deeper Level");
+                    else
+                        synthyboy_mpc::putBounded (buf, kCap, field == ls::kHasPrev ? "List Has Previous" : "List Has Next");
+                }
+                else if (opcode == effGetParamDisplay)
+                    synthyboy_mpc::putBounded (buf, kCap, inst->nativeUiValue (offset) > 0.0f ? "On" : "Off");
+                else
+                    buf[0] = '\0';
+                return 1;
             }
             if (nativeui::isNoteMaskOffset (offset))
             {
@@ -5435,6 +5495,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / props->maxInteger;
             return 1;
         }
+        if (nativeOffset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (nativeOffset) || nativeui::isListStateOffset (nativeOffset))
+        {
+            std::memset (props, 0, sizeof (*props));
+            props->flags = kVstParameterUsesIntegerMinMax | kVstParameterIsSwitch;
+            props->maxInteger = 1;
+            props->stepInteger = 1;
+            props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+            return 1;
+        }
         if (nativeui::isMixerControlOffset (nativeOffset))
         {
             std::memset (props, 0, sizeof (*props));
@@ -6260,6 +6329,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                     }
                     return;
                 }
+                if (offset == nativeui::kChoiceListOpen || nativeui::isChoiceListOffset (offset) || nativeui::isListStateOffset (offset))
+                    return;
                 if (nativeui::isModBoardControlOffset (offset))
                 {
                     const int field = offset - nativeui::kModBoardControl;

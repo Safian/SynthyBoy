@@ -995,7 +995,7 @@ private:
         listGroup_ = -1;
         fillList();
     }
-    void fillList()
+    void fillList (int focusGroup = -1)
     {
         const DestIndex& d = DestIndex::get();
         listNames_.clear();
@@ -1013,7 +1013,10 @@ private:
             listHeader_ = d.groups[static_cast<size_t> (listGroup_)].c_str();
             listHeaderBack_ = true;
         }
-        listCells_.restart();
+        if (listGroup_ < 0 && focusGroup >= 0 && focusGroup < static_cast<int> (listNames_.size()))
+            listCells_.showRow (focusGroup);
+        else
+            listCells_.restart();
     }
     /** The add-target / add-source list is on the screen as the native picker cells (nativeui::modboard; the skin instance `Osc Native List`). */
     bool listShown() const noexcept { return pageTop_ == kPageList || (pageTop_ == kPageMods && pickingSource_); }
@@ -1030,6 +1033,7 @@ private:
         data.items = listNames_.data();
         data.count = static_cast<int> (listNames_.size());
         data.headerBack = listHeaderBack_;
+        data.allRowsOpenLevel = ! pickingSource_ && listGroup_ < 0;
         listCells_.publish (inst, data,
             [&] (int index) { handle (ui::Change::indexed (kList, index, 1.0), stack, inst); },
             [&] { if (pickingSource_) pickingSource_ = false; else handle (ui::Change::request (kListBackdrop), stack, inst); },
@@ -1147,7 +1151,7 @@ private:
                 case kTargetsBack: case kListBackdrop: pickingSource_ = false; stack.back(); return;
                 case kTargets: stack.openDetail (kPageTargets); return;
                 case kTargetsAdd: stack.openDetail (kPageList); return;
-                case kListHeader: listGroup_ = -1; fillList(); return;
+                case kListHeader: { const int leftGroup = listGroup_; listGroup_ = -1; fillList (leftGroup); return; }
                 case kGraph: applyViewEdit ((stackDepth_ == 0 ? compactGraph_ : fullGraph_).edit()); return;   // the graph asks: a handle was touched, LOCK was tapped, the ruler was dragged
                 default: break;
             }
