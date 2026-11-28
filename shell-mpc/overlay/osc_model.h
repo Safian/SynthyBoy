@@ -359,7 +359,6 @@ inline FullLayout layoutFull (const Rect& rect, const FullState& s, const bool* 
     const bool oneRow = sub || noise;
     const bool isTab = H <= 650;
     const int topH = isTab ? 78 : 88;
-    const int bottomRow = nativeStrip (s) ? 48 : 0;
     const bool tune = hasNativeTune (s);
     const int bottomH = oneRow ? kBlockTitleH + kOneRowH + kBlockPad : (s.nativeSelector && tune ? 176 : isTab ? 216 : kBottomH);
     const int lane = isTab ? 22 : (m + kQLane + 2);
@@ -369,7 +368,7 @@ inline FullLayout layoutFull (const Rect& rect, const FullState& s, const bool* 
     layoutRow (topR, fixed, weight, 4, kGap, r);
     L.selectorArea = { r[0].x, topR.y + (topH - 56) / 2, r[0].w, 56 };
     if (s.nativeSelector)
-        L.selectorArea = nativeStrip (s) ? Rect { rect.x, rect.bottom() - 48, W, 48 } : Rect {};   // a page of a tab has no strip: the hardware sub-tab names the oscillator
+        L.selectorArea = {};   // a page of a tab has no strip: the hardware sub-tab names the oscillator
     const bool column = s.nativeSelector && tune;
     L.top = column ? Rect { rect.x, rect.y, W, 194 } : r[2];
     // ---- the top row
@@ -435,7 +434,7 @@ inline FullLayout layoutFull (const Rect& rect, const FullState& s, const bool* 
     L.routingArea = { r[3].x, topR.y + (topH - routeH) / 2, r[3].w, routeH };
     L.mix = { r[3].x, topR.y + 7, r[3].w, topH - 14 };
     const int gap = kGap + 4;
-    const int panelY = rect.bottom() - (s.nativeSelector ? 48 + bottomRow : isTab ? 0 : m) - bottomH;
+    const int panelY = rect.bottom() - (s.nativeSelector ? 48 : isTab ? 0 : m) - bottomH;
     const int midY = column ? rect.y + 64 : L.top.bottom() + gap;
     L.display = { rect.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
     if (tune)

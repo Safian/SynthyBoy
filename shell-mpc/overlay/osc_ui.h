@@ -94,8 +94,8 @@ public:
     bool hasNativePower() const noexcept { return s_.nativePower; }
     bool hasNativeTune() const noexcept { return oscmodel::hasNativeTune (s_); }
     ui::Rect tuneArea() const noexcept { return tuneAreaAt (rect_.x, rect_.y); }
-    ui::Rect panArea() const noexcept { return { rect_.right() - 416, rect_.bottom() - 48 - (oscmodel::nativeStrip (s_) ? 48 : 0), 202, 48 }; }
-    ui::Rect levelArea() const noexcept { return { rect_.right() - 210, rect_.bottom() - 48 - (oscmodel::nativeStrip (s_) ? 48 : 0), 202, 48 }; }
+    ui::Rect panArea() const noexcept { return { rect_.right() - 416, rect_.bottom() - 48, 202, 48 }; }
+    ui::Rect levelArea() const noexcept { return { rect_.right() - 210, rect_.bottom() - 48, 202, 48 }; }
     bool isNativeRouting (int x, int y) const noexcept
     {
         return isNativeRoutingActive() && (panArea().contains (x, y) || levelArea().contains (x, y) || L_.routingArea.contains (x, y));
