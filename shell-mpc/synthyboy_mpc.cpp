@@ -57,6 +57,7 @@
 #include "program_list.h"
 #include "native_ui_params.h"
 #include "native_osc_settings_bank.h"
+#include "warp_choice_groups.h"
 
 #ifndef SYNTHYBOY_VST2_VERSION
 #error "SYNTHYBOY_VST2_VERSION must come from the build"
@@ -1753,6 +1754,8 @@ struct PluginInstance
     int choiceListScreen = -1;       // display thread only: the overlay view it was opened on (-1: not known)
     int choiceListSerial = 0;        // display thread only: a new identity of the cells per page (the host reads the names again)
     bool choiceItems (int hostIndex, nativeui::choicelist::Items& items, int& current) const;
+    bool buildWarpItems (int paramIndex, nativeui::choicelist::Items& items, int& current) const;
+    static bool isWarpTypeParam (int paramIndex) noexcept;
     void choiceListPoll (AEffect* e);
     void choiceListPublish() noexcept;
     /** Stores the 0/1 flags of the open list page (nativeui::liststate) and marks the cells due when they changed; the caller holds choiceListMutex. */
@@ -4051,7 +4054,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     if (offset == nativeui::kChoiceListOpen)
                         synthyboy_mpc::putBounded (buf, kCap, "Choice List Open");
                     else
-                        std::snprintf (buf, kCap, "Choice List %d", offset - nativeui::kChoiceList);
+                        std::snprintf (buf, kCap, "Choice List %d", nativeui::choiceListSlotOfOffset (offset));
                 }
                 return 1;   // the display stays empty
             }
@@ -6314,7 +6317,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
                 if (nativeui::isChoiceListOffset (offset))   // an opener of a choice list: one tap comes as 1.0 (twice, the port debounces it) and 0.0 at the end of the gesture; never stored
                 {
                     if (parameter > 0.5f)
-                        inst->choiceListRequests.post (offset - nativeui::kChoiceList);
+                        inst->choiceListRequests.post (nativeui::choiceListSlotOfOffset (offset));
                     return;
                 }
                 if (offset == nativeui::kChoiceListOpen)   // the plugin's gate
@@ -6751,6 +6754,68 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
 // Native choice lists (native_choice_list.h): the rows of a control, the driver on the display thread
 // ---------------------------------------------------------------------------
 
+bool PluginInstance::isWarpTypeParam (int paramIndex) noexcept
+{
+    if (paramIndex < 0 || paramIndex >= static_cast<int> (synthyboy::paramCount()))
+        return false;
+    const char* key = synthyboy::paramTable()[paramIndex].key;
+    if (key == nullptr || std::strncmp (key, "osc", 3) != 0)
+        return false;
+    const size_t len = std::strlen (key);
+    auto endsWith = [key, len] (const char* suffix) noexcept
+    {
+        const size_t slen = std::strlen (suffix);
+        return len >= slen && std::strcmp (key + len - slen, suffix) == 0;
+    };
+    return endsWith (".warp.type") || endsWith (".warp2.type");
+}
+
+bool PluginInstance::buildWarpItems (int paramIndex, nativeui::choicelist::Items& items, int& current) const
+{
+    namespace wg = nativeui::warpgroups;
+    static_assert (wg::kNumWarpTypes == synthyboy::kNumWarpTypes);
+    static_assert (wg::kFirstSpectralWarp == synthyboy::kFirstSpectralWarp);
+    if (paramIndex < 0 || paramIndex >= static_cast<int> (synthyboy::paramCount()))
+        return false;
+    const auto& info = synthyboy::paramTable()[paramIndex];
+    if (info.choices == nullptr || info.numChoices != synthyboy::kNumWarpTypes)
+        return false;
+    int oscType = synthyboy::kOscTypeWavetable;
+    if (info.key != nullptr && std::strncmp (info.key, "osc", 3) == 0 && info.key[3] >= '1' && info.key[3] <= '3')
+    {
+        static const int kOscTypeIdx[3] = {
+            synthyboy::findParamIndex (synthyboy::hashKey ("osc1.type")),
+            synthyboy::findParamIndex (synthyboy::hashKey ("osc2.type")),
+            synthyboy::findParamIndex (synthyboy::hashKey ("osc3.type")),
+        };
+        const int typeIdx = kOscTypeIdx[info.key[3] - '1'];
+        if (typeIdx >= 0)
+            oscType = static_cast<int> (std::lround (paramMirror[typeIdx].load (std::memory_order_relaxed)));
+    }
+    const synthyboy::EngineCapsMask caps = engine != nullptr ? engine->capabilities() : synthyboy::kCapNone;
+    const synthyboy::EngineCaps2Mask caps2 = engine != nullptr ? engine->capabilities2() : synthyboy::kCap2None;
+    if (! wg::populateWarpItems (
+            items,
+            [&] (int idx) { return synthyboy_mpc::ui::shownChoice (info.key, idx, info.choices[idx]); },
+            [&] (int idx) { return synthyboy::toNormalised (info, info.min + static_cast<float> (idx)); },
+            [&] (int idx)
+            {
+                const float plain = info.min + static_cast<float> (idx);
+                if (! synthyboy::capsCover (caps, synthyboy::requiredCapsForValue (static_cast<size_t> (paramIndex), plain)))
+                    return false;
+                if (! synthyboy::capsCover2 (caps2, synthyboy::requiredCapsForValue2 (static_cast<size_t> (paramIndex), plain)))
+                    return false;
+                // Spectral warps (76..98) only act on the Spectral oscillator (core/include/synthyboy/params.h:128, core/src/param_table.cpp:57).
+                if (idx >= synthyboy::kFirstSpectralWarp && oscType != synthyboy::kOscTypeSpectral)
+                    return false;
+                return true;
+            }))
+        return false;
+    current = std::clamp (static_cast<int> (std::lround (paramMirror[paramIndex].load (std::memory_order_relaxed) - info.min)),
+                          0, synthyboy::kNumWarpTypes - 1);
+    return true;
+}
+
 /** The rows of the control whose Data handle is host parameter `hostIndex` and the row it shows now (`current`). Every name comes from the source the host's display of that handle reads (the engine
     display text, the native handle's effGetParamDisplay branch, the name tables of the domains and picks), and every value is exactly the normalised value the host writes into that handle for the choice
     (its effGetParameterProperties integer range). false: the control lists nothing now (unbound, unavailable or no names); no list opens. Display thread; it reads atomics and snapshots only. */
@@ -6776,6 +6841,8 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
     // ---- an engine parameter: its stepped choices; the row reads as effGetParamDisplay, the value is the normalised plain value (what getParameter reports for it)
     if (hostIndex >= 0 && hostIndex < static_cast<int> (synthyboy::paramCount()))
     {
+        if (isWarpTypeParam (hostIndex))
+            return buildWarpItems (hostIndex, items, current);
         const auto& info = synthyboy::paramTable()[hostIndex];
         if (info.scale != synthyboy::Scale::stepped || info.choices == nullptr || info.numChoices < 2)
             return false;
@@ -6918,6 +6985,18 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
         return true;
     }
 
+    // ---- the standalone Osc A/B/C main-page settings (e.g. AbcWarp1Type / AbcWarp2Type): open the bound engine parameter's list while powered
+    if (const int field = nativeOscSettingField (offset); field >= 0)
+    {
+        const auto cell = nativeOscSettings.at (field).cell();
+        if (cell.target < 0 || ! nativeOsc.snapshot().powered()
+            || nativeOscSettings.layout() < nativeui::osc::SettingsWavetable)
+            return false;
+        if (isWarpTypeParam (cell.target))
+            return buildWarpItems (cell.target, items, current);
+        return false;
+    }
+
     // ---- a menu of the oscillator detail page: the choices of the engine parameter bound to it (ui::shownChoice, as effGetParamDisplay)
     if (nativeui::isOscDetailOffset (offset) && offset - nativeui::kOscDetail >= nativeui::oscdetail::kMenusBase)
     {
@@ -6925,6 +7004,8 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
         const auto cell = oscDetailCell (offset - nativeui::kOscDetail);
         if (cell.target < 0 || cell.kind == n::Action || cell.kind == n::Semitone || cell.kind == n::Snap || cell.kind == n::Phase)
             return false;
+        if (isWarpTypeParam (cell.target))
+            return buildWarpItems (cell.target, items, current);
         const auto& info = synthyboy::paramTable()[cell.target];
         if (info.choices == nullptr || info.numChoices < 2)
             return false;
@@ -6986,13 +7067,13 @@ bool PluginInstance::choiceItems (int hostIndex, nativeui::choicelist::Items& it
 }
 
 /** Publishes the page of the open list into the modulation picker's list cells exactly as NativeListCells::publish does (the names first, then the cells: rows with kChoiceBias + index, their gates, BACK,
-    PREVIOUS, NEXT, GROUPS, the list gate and the title, all with a fresh identity per page so the host reads the names again; the header is no way up). Display thread, under choiceListMutex. */
+    PREVIOUS, NEXT, GROUPS / back arrow, the list gate and the title, all with a fresh identity per page so the host reads the names again). Display thread, under choiceListMutex. */
 void PluginInstance::choiceListPublish() noexcept
 {
     namespace nb = nativeui::modboard;
     const auto& session = *choiceSession;
     nativeui::nativetext::ListPage page;
-    std::snprintf (page.title, sizeof page.title, "%s", session.items.title);
+    std::snprintf (page.title, sizeof page.title, "%s", session.title());
     page.up = false;
     page.count = session.rowsOnPage();
     for (int row = 0; row < page.count; ++row)
@@ -7011,7 +7092,7 @@ void PluginInstance::choiceListPublish() noexcept
     const auto preset = stateGeneration.load (std::memory_order_acquire);
     if (nativeModBoardPreset.load (std::memory_order_relaxed) != preset)
         nativeModBoard.invalidate();
-    nativeui::liststate::State state;   // a choice list is one flat level of final items: no row arrows, no back arrow; PREVIOUS / NEXT only where a page exists
+    nativeui::liststate::State state;   // row arrows, deeper-level header back arrow and PREVIOUS / NEXT flags from the active session level
     state.active = true;
     state.deeperLevel = session.deeperLevel();
     state.hasPrev = session.hasPrevious();
@@ -7100,6 +7181,8 @@ void PluginInstance::choiceListPoll (AEffect* e)
                 apply = session.choose (field - nb::ListRow, chosen);
             else if (field == nb::ListBack)
                 session.close();
+            else if (field == nb::ListGroups)
+                session.up();
             else if (field == nb::ListPrev)
                 session.previous();
             else if (field == nb::ListNext)
