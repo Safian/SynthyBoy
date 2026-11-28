@@ -23,6 +23,7 @@ except ImportError:
 ZONES = ("left", "centre", "right")
 CENTRE_KINDS = ("dropdown", "button", "field")
 RIGHT_KINDS = ("more", "dropdown")
+SLOT_KINDS = {"left": ("title", "power"), "centre": CENTRE_KINDS, "right": RIGHT_KINDS}
 POWER_STATES = ("on", "off")
 WIDTHS = ("page", "panel")
 
@@ -109,7 +110,29 @@ def centre_face(item, content, *, enabled=True):
     return face if enabled else dim_artwork(face)
 
 
-def layout(example):
+def flat(spec):
+    """The flat view of a spec: {width, title, title_slot, power, centre, right} from its zones.
+
+    A spec is {"id", "file", "alt", "caption", "width", "zones": {"left": [...], "centre": [...], "right": [...]}, "skin"?}; every zone is
+    a list of slot dicts ({"kind": title|power|dropdown|field|button|more, ...}, see docs/ui-components/header.md). The layout and the
+    renderers below work on this view."""
+    zones = spec.get("zones", {})
+    left = zones.get("left", [])
+    out = {"id": spec.get("id"), "width": spec["width"], "centre": list(zones.get("centre", [])), "right": list(zones.get("right", []))}
+    for slot in left:
+        kind = slot.get("kind")
+        if kind == "title":
+            out["title"] = slot["text"]
+            if slot.get("slot"):
+                out["title_slot"] = slot["slot"]
+        elif kind == "power":
+            out["power"] = slot.get("state", "on")
+        else:
+            raise ValueError(f"left slot must be title or power: {kind!r}")
+    return out
+
+
+def layout(spec):
     """Place the faces of one example; returns (header width, [Placed]) with every face inside the padded row.
 
     LEFT is the title first (at the side padding), then POWER one gap after the title's width. CENTRE follows after
@@ -117,6 +140,7 @@ def layout(example):
     flexible (`"fill": true`): it takes all the room between the left and the right group (its width token is the
     minimum); every other face keeps its size. A header without POWER (a modulator) is just the title.
     """
+    example = flat(spec)
     m = metrics()
     width = header_width(example["width"])
     y, gap = m["padding"], m["gap"]
@@ -168,9 +192,9 @@ def layout(example):
     return width, placed
 
 
-def render_header(example):
+def render_header(spec):
     """The header row as one transparent picture: header.page.width / header.panel.width by header.height."""
-    width, placed = layout(example)
+    width, placed = layout(spec)
     row = Image.new("RGBA", (width, metrics()["height"]))
     for item in placed:
         row.alpha_composite(item.face, (item.x, item.y))
@@ -178,9 +202,9 @@ def render_header(example):
 
 
 def header_examples(entry):
-    """The examples of a catalogue "header" entry, validated: id, file, alt, caption, width, title/power/centre/right."""
-    required = {"id", "file", "alt", "caption", "width"}
-    optional = {"title", "title_slot", "power", "centre", "right"}
+    """The examples (= specs) of a catalogue "header" entry, validated: id, file, alt, caption, width, zones (+ optional skin)."""
+    required = {"id", "file", "alt", "caption", "width", "zones"}
+    optional = {"skin"}
     if not isinstance(entry, dict) or set(entry) != {"examples"} or not entry["examples"]:
         raise ValueError("header entry needs a nonempty examples list")
     ids = [e.get("id") for e in entry["examples"]]
@@ -190,15 +214,20 @@ def header_examples(entry):
         if not required <= set(example) or not set(example) <= required | optional:
             raise ValueError(f"header example {example.get('id')!r}: fields must be {sorted(required)} plus any of {sorted(optional)}")
         header_width(example["width"])
-        if example.get("power") is not None and example["power"] not in POWER_STATES:
+        zones = example["zones"]
+        if not isinstance(zones, dict) or not set(zones) <= set(ZONES):
+            raise ValueError(f"header example {example['id']!r}: zones must be a dict of {ZONES}")
+        for zone, slots in zones.items():
+            for slot in slots:
+                if slot.get("kind") not in SLOT_KINDS[zone]:
+                    raise ValueError(f"header example {example['id']!r}: {zone} slot kind must be one of {SLOT_KINDS[zone]}: {slot.get('kind')!r}")
+        view = flat(example)
+        if view.get("power") is not None and view["power"] not in POWER_STATES:
             raise ValueError(f"header example {example['id']!r}: power must be one of {POWER_STATES}")
-        if not (example.get("title") or example.get("power") or example.get("centre")):
+        if not (view.get("title") or view.get("power") or view.get("centre")):
             raise ValueError(f"header example {example['id']!r}: needs a title, a power button or centre controls")
-        if sum(1 for item in example.get("centre", []) if item.get("fill")) > 1:
+        if sum(1 for item in view.get("centre", []) if item.get("fill")) > 1:
             raise ValueError(f"header example {example['id']!r}: at most one centre control may fill")
-        for kind in (_right_item(item)["kind"] for item in example.get("right", [])):
-            if kind not in RIGHT_KINDS:
-                raise ValueError(f"header example {example['id']!r}: right button must be one of {RIGHT_KINDS}")
     return entry["examples"]
 
 
@@ -214,9 +243,11 @@ def skin_parts(example):
     catalogue picture, but every dropdown / field value is blank (the host draws the live value in a Label) and every
     face also comes in its disabled look (power off). Returns [{zone, kind, rect, on, off}]; the title has no face
     (the skin draws it as a Label in the slot `rect`)."""
-    blank = dict(example,
-                 centre=[dict(i, value="") if i["kind"] in ("dropdown", "field") else i for i in example.get("centre", [])],
-                 right=[dict(_right_item(i), value="") if _right_item(i)["kind"] == "dropdown" else i for i in example.get("right", [])])
+    view = flat(example)
+    zones = {"left": example["zones"].get("left", []),
+             "centre": [dict(i, value="") if i["kind"] in ("dropdown", "field") else i for i in view["centre"]],
+             "right": [dict(i, value="") if i["kind"] == "dropdown" else i for i in view["right"]]}
+    blank = dict(example, zones=zones)
     parts = []
     for item in layout(blank)[1]:
         on = item.face
@@ -228,3 +259,182 @@ def skin_parts(example):
             off = dim_artwork(on)
         parts.append({"zone": item.zone, "kind": item.kind, "rect": item.rect, "on": on, "off": off})
     return parts
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Skin: ONE entry point turns a spec into the skin definitions (hand-run by scripts/header-skin.py; nothing at build time)
+# ---------------------------------------------------------------------------------------------------------------------
+
+DIM_TEXT = "ffb9bdc9"          # the value text of a disabled (POWER off) control
+TEXT = "ffeef1ff"
+FIELD_TEXT = "ffebeffe"
+HIT_IMAGE = "native_button_hit.png"
+EMPTY_BACKGROUND = {"version": 1, "focussed": {"version": 1, "colour": "0", "image": ""}, "unfocussed": {"version": 1, "colour": "0", "image": ""}}
+FOCUS_DATA = {"version": 1, "backgroundColour": "19ffffff", "outlineColour": "ff19c6e0", "backgroundInset": 2.0, "outlineThickness": 1.0}
+
+
+def _bounds(rect, gates=(), focus="No", show="Show", visible="Always", kind="Absolute"):
+    b = {"version": 2 if gates else 1, "acceptsHWFocus": focus, "showWhenDataModelInvalid": show,
+         "whenVisible": visible, "boundsType": kind, "bounds": " ".join(map(str, rect))}
+    if gates:
+        b["additionalInvalidatingHandles"] = list(gates)
+    return b
+
+
+def _comp(name, typ, data, rect, remap=(), gates=(), focus="No", show="Show", visible="Always", kind="Absolute"):
+    return {"version": 2, "componentData": {"version": 1, "name": name, "type": typ, "data": data},
+            "handle remapping": {"version": 1, "map": [{"key": k, "value": v} for k, v in remap]},
+            "bounds": _bounds(rect, gates, focus, show, visible, kind)}
+
+
+def _image(name, file, rect):
+    return _comp(name, "Image", {"version": 2, "imageType": "Regular", "colour": "0", "image": file}, rect)
+
+
+def _label(name, rect, size, colour, remap=(), kind="Value", justification="horizontallyCentred verticallyCentred"):
+    data = {"version": 1, "textStyle": {"version": 1, "font": {"version": 1, "name": "Titillium Web", "style": "SemiBold", "height": size},
+                                        "colour": colour, "justification": justification, "case": "Original"},
+            "type": kind, "handleName": "Data"}
+    return _comp(name, "Label", data, rect, remap)
+
+
+def _definition(children, actions=(), inert=False, ignore_presses=None):
+    return {"version": 2, "actions": list(actions), "backgroundData": EMPTY_BACKGROUND,
+            "ignoreMousePresses": inert if ignore_presses is None else ignore_presses,
+            "disableCoarseDataWheel": inert, "componentsData": list(children)}
+
+
+def _actions(cell):
+    """Show Overlay (a dropdown or number list) or Toggle Switch on both triggers, or none (a Button is the control)."""
+    if cell.get("overlay"):
+        handler, extra = "Show Overlay", cell["overlay"]
+    elif cell.get("toggle"):
+        handler, extra = "Toggle Switch", ""
+    else:
+        return []
+    return [{"version": 1, "onAction": trigger, "handler": handler, "handleName": "Data", "additionalData": extra}
+            for trigger in ("Mouse Down", "Enter Pressed")]
+
+
+def _handle(slot):
+    role = slot["role"]
+    return "Hdr" + role[0].upper() + role[1:]
+
+
+def _face_names(slot, w, h):
+    prefix = "hdr_dd" if slot["kind"] == "dropdown" else "hdr_" + slot["role"].lower()
+    return f"{prefix}_{w}x{h}.png", f"{prefix}_{w}x{h}_off.png"
+
+
+def _dropdown_geometry(h):
+    size = _style_size("selector.dropdown.size.%d" % h)
+    font = round(size["font_em"] * _style_size("font.host.height.per.em"), 1)
+    return size["pad_x"], _style_size("selector.dropdown")["chevron_lane"], _style_size("selector.dropdown.chevron_gap"), font
+
+
+def _cell_children(slot, cell, w, h, on):
+    """The children of one cell in its enabled look (on) or the inert pictures of its disabled look (not on); coordinates inside the cell."""
+    face_on, face_off = _face_names(slot, w, h)
+    face = face_on if on else face_off
+    kind = slot["kind"]
+    out = []
+    if kind == "dropdown":
+        pad, lane, gap, font = _dropdown_geometry(h)
+        if on and cell.get("focus"):
+            out.append(_comp("focus", "Focus", FOCUS_DATA, (0, 0, w, h), visible="WhenFocussed"))
+        out.append(_image("Selector face", face, (0, 0, w, h)))
+        out.append(_label("Title", (pad, 0, w - pad - lane - gap, h), font, TEXT if on else DIM_TEXT))
+        if on and cell.get("hit"):
+            hit = cell["hit"]
+            out.append(_comp("Open", "Button", {"version": 2, "onImage": HIT_IMAGE, "offImage": HIT_IMAGE, "buttonId": hit["id"],
+                                                "numButtonsInGroup": hit["group"], "handleName": "Data", "gestureBehaviour": "Instant"},
+                             (0, 0, w, h), focus="Yes", show="Hide"))
+    elif kind == "field":
+        box = slot.get("box_px", 68)
+        if on:
+            out.append(_comp("focus", "Focus", FOCUS_DATA, (w - box, 0, box, h), visible="WhenFocussed"))
+        out.append(_image("Face", face, (0, 0, w, h)))
+        out.append(_label("value", (w - box, 0, box, h), 16.0, FIELD_TEXT if on else DIM_TEXT))
+    elif kind == "button":
+        if on:
+            out.append(_comp(slot["text"], "Button", {"version": 2, "onImage": face, "offImage": face, "buttonId": 1, "numButtonsInGroup": 1,
+                                                       "handleName": "Data", "gestureBehaviour": "Instant"}, (0, 0, w, h), focus="Yes", show="Hide"))
+        else:
+            out.append(_image(slot["text"], face, (0, 0, w, h)))
+    return out
+
+
+def header_definitions(spec):
+    """The skin definitions of ONE header spec (a catalogue example with a "skin" block): returns
+    {"form": key, "definitions": [(key, definition)], "images": {file: PIL image}}.
+
+    * the form (spec["skin"]["def"]) is one 1280 x 56 definition holding the title Label, the POWER Button and, per slot,
+      the cell instance(s) of the enabled look plus the inert pictures (Image + Label) of the disabled look. Both power
+      states live in this ONE definition, switched by the handle names HdrOn / HdrOff (IndexedEnabling/1|0/2/<power>) that
+      the instance remaps: there is no `...Off` twin of the form or of any cell.
+    * a cell definition (slot["skin"]["cells"][i]["def"]) holds only the enabled look with its actions: one per role and
+      width; every form and instance that names it shares it.
+    * a cell with "wrapper" keeps the proven NativeActive / NativeInactive pattern (its disabled look follows another gate
+      than POWER; see docs/ui-components/header.md).
+    The instance supplies the names HdrTitle, HdrPower, HdrOn, HdrOff, the page gate names and one Hdr<Role> per slot."""
+    skin = spec["skin"]
+    form_key = skin["def"]
+    page_gate = list(skin.get("page_gate", []))
+    parts = skin_parts(spec)
+    view = flat(spec)
+    m = metrics()
+    comps, definitions, images = [], {}, {}
+
+    title = next(p for p in parts if p["kind"] == "title")
+    comps.append(_label("Title", (title["rect"][0], m["padding"], title["rect"][2], m["content"]), 40.0, TEXT, [("Data", "HdrTitle")],
+                        kind="Name", justification="left verticallyCentred"))
+    power = next(p for p in parts if p["kind"] == "power")
+    pw, ph = power["rect"][2:]
+    on_name, off_name = f"hdr_power_on_{pw}x{ph}.png", f"hdr_power_off_{pw}x{ph}.png"
+    images[on_name], images[off_name] = power["on"], power["off"]
+    comps.append(_comp("Power", "Button", {"version": 2, "onImage": on_name, "offImage": off_name, "buttonId": 1, "numButtonsInGroup": 1,
+                                           "handleName": "Data", "gestureBehaviour": "Instant"},
+                       power["rect"], [("Data", "HdrPower")], page_gate, "Yes", "Hide"))
+
+    for zone in ("centre", "right"):
+        slots = [s for s in view[zone] if s["kind"] != "more"]
+        placed = [p for p in parts if p["zone"] == zone and p["kind"] != "more"]
+        for slot, part in zip(slots, placed):
+            rect = part["rect"]
+            w, h = rect[2:]
+            handle = _handle(slot)
+            face_on, face_off = _face_names(slot, w, h)
+            images[face_on], images[face_off] = part["on"], part["off"]
+            for cell in slot["skin"]["cells"]:
+                gate = list(cell.get("gate", []))
+                page = page_gate if cell.get("page") else []
+                show = cell.get("show", "Show")
+                key = cell["def"]
+                wrapper = cell.get("wrapper")
+                definitions[key] = _definition(_cell_children(slot, cell, w, h, True), _actions(cell))
+                if wrapper:
+                    definitions["NativeInactive " + key] = _definition(_cell_children(slot, cell, w, h, False), inert=True)
+                    definitions[wrapper + " " + key] = _definition([
+                        _comp("State", "NativeInactive " + key, {"version": 1, "handleName": "Data"}, (0, 0, 1, 1),
+                              gates=["NativeActiveGate1"], show="Hide", kind="Proportional"),
+                        _comp("State", key, {"version": 1, "handleName": "Data"}, (0, 0, 1, 1),
+                              gates=["NativeActiveGate2"], focus="Children", show="Hide", kind="Proportional")],
+                        ignore_presses=True)       # the proven NativeActive wrapper: the wrapper ignores presses, its active child takes them
+                    comps.append(_comp(cell["name"], wrapper + " " + key, {"version": 1, "handleName": "Data"}, rect,
+                                       [("Data", handle), ("NativeActiveGate1", "HdrGate1"), ("NativeActiveGate2", "HdrGate2")],
+                                       page + gate, "No", show))
+                    continue
+                comps.append(_comp(cell["name"], key, {"version": 1, "handleName": "Data"}, rect, [("Data", handle)],
+                                   ["HdrOn"] + page + gate, "No", show))
+                for child in _cell_children(slot, cell, w, h, False):       # the disabled look: inert pictures straight in the form
+                    cx, cy, cw, ch = map(int, child["bounds"]["bounds"].split())
+                    b = child["bounds"]
+                    child["bounds"] = _bounds((rect[0] + cx, rect[1] + cy, cw, ch), ["HdrOff"] + page + gate, b["acceptsHWFocus"],
+                                              b["showWhenDataModelInvalid"], b["whenVisible"])
+                    child["componentData"]["name"] = cell["name"] + " off " + child["componentData"]["name"]
+                    if child["componentData"]["type"] == "Label":
+                        child["handle remapping"] = {"version": 1, "map": [{"key": "Data", "value": handle}]}
+                    comps.append(child)
+    definitions[form_key] = _definition(comps)
+    ordered = [(k, v) for k, v in definitions.items() if k != form_key] + [(form_key, definitions[form_key])]
+    return {"form": form_key, "definitions": ordered, "images": images}
