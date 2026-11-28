@@ -187,7 +187,6 @@ constexpr QSpec kNoiseSampleQ[] = { kNoiseGenQ[0], kNoiseGenQ[1],
     { { PanelSlot::NoiseStart, PanelSlot::NoiseRand, PanelSlot::NoiseLoop, PanelSlot::NoiseBounce } } };
 constexpr PanelPreset kNoiseSampleFull { "noise (full screen, sample)", 11, 1, -1, kNoiseSampleItems, 11, kNoiseSampleQ, 3, 0, kNoiseSampleBlocks, 3 };
 
-constexpr PanelItem kNoItems[] = { { PartKind::Dial, PanelSlot::Count, "", 0, 0, 1, 1, false } };
 constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 constexpr PanelPreset kGranularFull { "granular (full screen)", 7, 1, -1, kGranularFullItems, 7, kGranularFullQ, 2, 0, kGranularBlocks, 2 };
 constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 2, 1, -1, kWavetableFullItems, 4, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };

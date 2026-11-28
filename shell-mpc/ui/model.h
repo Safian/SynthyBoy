@@ -109,8 +109,6 @@ struct ModInput
         return nullptr;
     }
 };
-/** The tab at the top left: Absent (no modulation entries), Grey (entries, but not the selected source), Coloured (the selected source is in the entries), Hollow (and it is bypassed). */
-enum class TabState : uint8_t { Absent, Grey, Coloured, Hollow };
 /** The ends (0 .. 1) of the depth arc around the value position v: unidirectional v .. v + depth, bidirectional v - |depth| .. v + |depth|, clamped to the range; from <= to. false when
     the selected source is not in the entries or is bypassed (no arc). */
 inline bool depthArc (const ModInput& m, double v, double& from, double& to) noexcept

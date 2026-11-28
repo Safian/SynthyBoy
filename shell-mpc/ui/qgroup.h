@@ -24,8 +24,6 @@ public:
     /** The sixteen-knob device maps all four banks at once. The four-knob device has one active bank. */
     static void setWideDevice (bool wide) noexcept { wideFlag().store (wide, std::memory_order_relaxed); }
     static bool wideDevice() noexcept { return wideFlag().load (std::memory_order_relaxed); }
-    /** Which block of four knobs the group has while it is not the active one (QRouter::blockOfGroup): 0 the active group, 1 .. 3 the next groups of the page, -1 no knobs (the default). The page sets it for every group it publishes. */
-    void setBlock (int block) noexcept { block_ = block; wideOffset_ = 0; }
     /** The frame and marker follow the inactive look of a switched-off oscillator. */
     void setInactive (bool i) noexcept { inactive_ = i; }
     bool inactive() const noexcept { return inactive_; }

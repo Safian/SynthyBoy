@@ -184,15 +184,6 @@ public:
 
     bool nativeBase() const noexcept { return useNativeCells(); }
 
-    bool isNativeOwned (int strip, int controlType) const noexcept
-    {
-        if (! nativeBase() || strip < 0 || strip >= kStrips)
-            return false;
-        const auto& b = bindings_[strip];
-        const int targets[] = { b.powerParam, b.destParam, b.panParam, b.send1Param, b.send2Param, b.levelParam };
-        return controlType >= 0 && controlType < kTypes && targets[controlType] >= 0
-            && (controlType == 0 || b.powerInverted || powerOn_[strip]);
-    }
 
     int topPage() const noexcept { return 0; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
